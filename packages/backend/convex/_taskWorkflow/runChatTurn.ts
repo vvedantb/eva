@@ -13,7 +13,7 @@ import { clearStreamingActivity, upsertActivityLog } from "./helpers";
  */
 
 /** What started a run, as the chat's user row says it. */
-export function runChatPrompt(p: {
+function runChatPrompt(p: {
   task: Pick<Doc<"agentTasks">, "title" | "description">;
   mode: Doc<"agentRuns">["mode"];
   isFirstRun: boolean;
@@ -98,7 +98,7 @@ export async function runStreamingEntityId(
 }
 
 /** A settled run's reply: the agent's last text, then the error if it failed. */
-export function runReplyContent(run: Doc<"agentRuns">): string {
+function runReplyContent(run: Doc<"agentRuns">): string {
   const error =
     run.status === "error"
       ? `Error: ${run.error || "Unknown error during execution."}`
