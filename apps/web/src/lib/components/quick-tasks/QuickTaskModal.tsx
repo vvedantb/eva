@@ -818,7 +818,7 @@ export function QuickTaskModal({
     "submitComposerForm",
     (e) => {
       e.preventDefault();
-      void handleSubmit(true);
+      void handleSubmit(false);
     },
     { enabled: isOpen },
   );
@@ -993,17 +993,17 @@ export function QuickTaskModal({
             <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
-                onClick={() => void handleSubmit(false)}
-                disabled={!canSubmit}
-              >
-                Save
-              </Button>
-              <Button
                 onClick={() => void handleSubmit(true)}
                 disabled={!canSubmit}
               >
-                {isLoading && <Spinner size="sm" />}
                 Save and Run
+              </Button>
+              <Button
+                onClick={() => void handleSubmit(false)}
+                disabled={!canSubmit}
+              >
+                {isLoading && <Spinner size="sm" />}
+                Save
                 <ShortcutKbd
                   id="submitComposerForm"
                   className="ml-1.5 border-0 bg-transparent p-0 text-current opacity-60"
