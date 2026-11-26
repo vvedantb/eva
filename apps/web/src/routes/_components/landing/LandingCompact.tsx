@@ -3,36 +3,25 @@
 import { SignInButton } from "@clerk/clerk-react";
 import { cn } from "@eva/ui";
 import { Button, FloatingBar } from "@vvedantb/ui";
-import { BrandMark } from "./BrandMark";
 import { LandingBrand } from "./LandingBrand";
 import { LandingHero } from "./LandingHero";
 import { markLandingRoot } from "./markLandingRoot";
-import {
-  LANDING_AGENTS,
-  LANDING_HERO_CAPABILITIES,
-  LANDING_PILLARS,
-  LANDING_STACK,
-} from "./landingContent";
-import {
-  LANDING_CARD,
-  LandingCapabilityLine,
-  LandingEyebrow,
-} from "./LandingPrimitives";
+import { LANDING_PILLARS } from "./landingContent";
+import { LANDING_CARD, LandingEyebrow } from "./LandingPrimitives";
 
 /**
  * The marketing page when `VITE_NEW_LANDING` is off.
  *
- * One screen of content rather than the full page's long scroll: the same
- * headline, the four stages of the workflow with their features named, and the
- * stack. It reads from `landingContent.ts` and `LandingPrimitives.tsx` like the
- * full page does, so copy and type stay in one place and neither version can
- * drift from the other.
+ * One screen of content rather than the full page's long scroll: the hero and
+ * the four stages of the workflow with their features named. It reads from
+ * `landingContent.ts` and `LandingPrimitives.tsx` like the full page does, so
+ * copy and type stay in one place and neither version can drift from the other.
  *
- * Deliberately static — no previews, no motion, no auto-cycling tabs. Anything
- * that needed those belongs on the full page.
+ * Deliberately static — no previews, no motion, no auto-cycling tabs, no
+ * footer. Anything that needed those belongs on the full page.
  *
- * The hero is the shared `ProductHero`, as on the full page. Sign-in is the
- * only call to action here. There is no sign-up, no link to the
+ * The hero is the shared `ProductHero` with a short plain-words lede. Sign-in
+ * is the only call to action here. There is no sign-up, no link to the
  * repository and no licence line — the full page carries all of that, and this
  * version is for instances that want a door rather than a pitch.
  */
@@ -56,31 +45,8 @@ export function LandingCompact() {
         </FloatingBar>
 
         <div className="relative z-10">
-          <LandingHero signInOnly />
+          <LandingHero compact />
         </div>
-
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20 lg:px-10">
-          <div className={cn(LANDING_CARD, "bg-card/80 p-6 backdrop-blur-sm")}>
-            <p className="text-xs text-muted-foreground">In every sandbox</p>
-            <LandingCapabilityLine
-              items={LANDING_HERO_CAPABILITIES}
-              className="mt-3 text-foreground"
-            />
-            <p className="mt-6 text-xs text-muted-foreground">
-              Bring your agent
-            </p>
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {LANDING_AGENTS.map((agent) => (
-                <li
-                  key={agent}
-                  className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground"
-                >
-                  {agent}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
       </div>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 pb-16 pt-4 sm:px-8 lg:px-10">
@@ -125,23 +91,6 @@ export function LandingCompact() {
           ))}
         </ol>
       </main>
-
-      <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
-          <p className="text-sm text-muted-foreground">Built on</p>
-          <ul className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {LANDING_STACK.map((item) => (
-              <li
-                key={item.name}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground"
-              >
-                <BrandMark name={item.brand} size={14} />
-                {item.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </footer>
     </div>
   );
 }

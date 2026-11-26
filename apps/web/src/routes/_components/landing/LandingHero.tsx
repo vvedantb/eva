@@ -6,10 +6,10 @@ import { EVA_GITHUB_URL, LANDING_HERO } from "./landingContent";
 
 type LandingHeroProps = {
   /**
-   * The compact page is a door, not a pitch: its only action is sign-in, with
-   * no sign-up and no link to the repository.
+   * The compact page is a door, not a pitch: a short plain-words lede and
+   * sign-in as the only action, with no sign-up and no link to the repository.
    */
-  signInOnly?: boolean;
+  compact?: boolean;
 };
 
 /**
@@ -17,15 +17,15 @@ type LandingHeroProps = {
  * of the landing page. The product mock is not a hero visual; on the full page
  * it sits in `LandingPreview` directly below.
  */
-export function LandingHero({ signInOnly = false }: LandingHeroProps) {
+export function LandingHero({ compact = false }: LandingHeroProps) {
   const clerk = useClerk();
 
   return (
     <ProductHero
       title={`${LANDING_HERO.headlineLead} ${LANDING_HERO.headlineTail}`}
-      tagline={LANDING_HERO.lede}
+      tagline={compact ? LANDING_HERO.compactLede : LANDING_HERO.lede}
       primaryCta={
-        signInOnly
+        compact
           ? {
               label: "Sign in",
               onClick: () => {
@@ -40,7 +40,7 @@ export function LandingHero({ signInOnly = false }: LandingHeroProps) {
             }
       }
       secondaryCta={
-        signInOnly
+        compact
           ? undefined
           : {
               label: "Star on GitHub",
