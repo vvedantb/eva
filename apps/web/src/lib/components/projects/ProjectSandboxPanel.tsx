@@ -40,8 +40,14 @@ import {
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { useProjectDocuments } from "./useProjectDocuments";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
-import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
+import {
+  isProjectSandboxTab,
+  isProjectTaskTab,
+  type ProjectSandboxTab,
+} from "./projectSandboxTabs";
 import { useProjectTaskStatus } from "./useProjectStatus";
+import { ProjectTaskPane } from "./ProjectTaskPane";
+import { useOpenProjectTask } from "./useOpenProjectTask";
 
 /** Sandbox tabs a task's sandbox has but the coordinator's does not. */
 const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
@@ -89,6 +95,10 @@ interface ProjectSandboxPanelProps {
   title: string;
   /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
   onCloseThread: () => void;
+  /** Opens a task in this panel (`?task=`), on its Chat tab. */
+  onOpenTask: (taskNumId: number) => void;
+  /** ✕ on an open task: drops its tabs and returns to Tasks. */
+  onCloseTask: () => void;
 }
 
 export function ProjectSandboxPanel({
@@ -112,6 +122,8 @@ export function ProjectSandboxPanel({
   onToggle,
   title,
   onCloseThread,
+  onOpenTask,
+  onCloseTask,
 }: ProjectSandboxPanelProps) {
   // An open reply thread adds the Replies tab (projects v2, PR D).
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -126,17 +138,24 @@ export function ProjectSandboxPanel({
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
+  const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { tasks, status: taskStatus } = useProjectTaskStatus(
+    projectId,
+    repoId,
+  );
+  const openTask = useOpenProjectTask(projectId, tasks);
   // The coordinator only reads code and delegates: no dev server, no edits,
   // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
-  // Replies without an open thread (an old link) lands on Tasks too.
+  // Replies without an open thread (an old link) lands on Tasks too, as
+  // does a task tab without an open task.
   const activeTab: ProjectSandboxTab =
     COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
     (sandboxTab === "replies" && !threadId)
       ? "tasks"
-      : sandboxTab;
-  const projectDocuments = useProjectDocuments(projectId, repoId);
-  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
+      : isProjectTaskTab(sandboxTab)
+        ? openTask.resolveTab(sandboxTab)
+        : sandboxTab;
   const triageCount = taskStatus?.counts.triage ?? 0;
   // Tasks leads the rail; its badge counts what waits in Triage.
   const tasksTab: SandboxTabDescriptor = {
@@ -227,6 +246,7 @@ export function ProjectSandboxPanel({
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
             leadingTabs={threadId ? [tasksTab, REPLIES_TAB] : [tasksTab]}
+            leadingGroup={openTask.railGroup}
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
@@ -248,8 +268,24 @@ export function ProjectSandboxPanel({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
+              openTaskId={openTask.row?._id}
+              onOpenTask={onOpenTask}
             />
           </KeepAlivePane>
+          {openTask.row && projectPathSegment ? (
+            <ProjectTaskPane
+              key={openTask.row._id}
+              taskId={openTask.row._id}
+              numId={openTask.row.numId}
+              title={openTask.row.title}
+              prUrl={openTask.row.prUrl}
+              tab={isProjectTaskTab(activeTab) ? activeTab : null}
+              fullPageHref={`${basePath}/projects/${projectPathSegment}/${openTask.row.numId}`}
+              collapsed={collapsed}
+              onSelectTab={navigateToSandboxTab}
+              onClose={onCloseTask}
+            />
+          ) : null}
           <div
             className={
               activeTab === "replies"

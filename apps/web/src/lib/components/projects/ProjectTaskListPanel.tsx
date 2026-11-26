@@ -45,6 +45,8 @@ const PULL_REQUESTS = "pull_requests";
 /** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The task open in the project's panel: its row is marked. */
+  openTaskId: Id<"agentTasks"> | undefined;
   failedTaskIds: ReadonlySet<string>;
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
@@ -74,7 +76,9 @@ function ProjectTaskRowFor({
     <ProjectTaskRow
       task={row}
       view={view}
+      open={row._id === context.openTaskId}
       line={projectTaskSummaryLine(row, view, {
+        open: row._id === context.openTaskId,
         notes: context.notesByTask.get(row._id),
         failed: context.failedTaskIds.has(row._id),
         authorName:
@@ -138,6 +142,8 @@ interface ProjectTaskListPanelProps {
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The task open in the project's panel (`?task=`). */
+  openTaskId?: Id<"agentTasks">;
   /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
@@ -154,6 +160,7 @@ export function ProjectTaskListPanel({
   readOnly,
   failedTaskIds,
   onSelectTask,
+  openTaskId,
   homeRepoId,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
@@ -234,6 +241,7 @@ export function ProjectTaskListPanel({
 
   const context: RowContext = {
     onSelectTask,
+    openTaskId,
     failedTaskIds,
     notesByTask,
     basePath,

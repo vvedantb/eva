@@ -476,6 +476,9 @@ export const subagentParser = parseAsString.withOptions(tabOptions);
 /** The open reply thread in a coordinator chat: its root message id. */
 export const replyThreadParser = parseAsString.withOptions(tabOptions);
 
+/** The task open in a project's side panel (`?task=`): its numId. */
+export const projectPanelTaskParser = parseAsInteger.withOptions(tabOptions);
+
 export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);

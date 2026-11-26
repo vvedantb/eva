@@ -32,3 +32,12 @@
 
 - tsc (web), lint, web tests, `design-check` and `compiler-check` scripts.
 - Browser: open a task from the Tasks tab, switch its tabs, Expand, ✕, switch to another task, reload with `?task=` set, an archived task (read-only, as on its full page).
+
+## Changes while building
+
+- Task links in the coordinator chat point at `/quick-tasks/<numId>` (markdown links and `@` chips), not at the project task page, so they keep their behaviour.
+- A project whose coordinator session does not exist yet has no rail: its Tasks rows still open the full page.
+- The panel has no Files, Agents or terminal: chat actions that open them (and diffs while the task has no PR) expand to the full page with `?file=` / `?diffFile=`.
+- Review uses the task row's own `prUrl`. The full page passes the project's PR for a project task (`taskPrUrl`); it is unchanged.
+- "Sandbox runs" is the row's `sandboxStatus === "active"`. When the sandbox stops on Preview or Browser, the panel falls back to the task's Chat.
+- The full page finds a task only in the non-archived list, so it shows "not found" for an archived task; the panel also reads the archived list. The full page is left unchanged.

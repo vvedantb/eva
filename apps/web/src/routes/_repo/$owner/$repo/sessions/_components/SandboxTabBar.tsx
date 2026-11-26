@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment, type ReactNode } from "react";
 import {
   IconWorld,
   IconWorldFilled,
@@ -94,6 +95,14 @@ interface SandboxTabBarProps {
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
   /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
   leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
+  /**
+   * A group above every other tab (a task open in a project's panel): its
+   * header, its tabs, then a divider before the owner's own tabs.
+   */
+  leadingGroup?: {
+    header: ReactNode;
+    tabs: ReadonlyArray<SandboxTabDescriptor>;
+  };
   /** When set (and fresh), shows a pulse on the Browser tab. */
   agentBrowsingAt?: number;
   /** When false, view hotkeys are inert (inactive cached session shells). */
@@ -130,6 +139,7 @@ export function SandboxTabBar({
   enabledTabs,
   customTabs,
   leadingTabs = [],
+  leadingGroup,
   agentBrowsingAt,
   hotkeysEnabled = true,
   className,
@@ -161,7 +171,9 @@ export function SandboxTabBar({
     slugifyAppTabName(tab.name),
   );
 
+  const groupTabs = leadingGroup?.tabs ?? [];
   const tabDescriptors = [
+    ...groupTabs,
     ...leadingTabs,
     ...buildSandboxTabDescriptors({
     baseTabs: tabs,
@@ -229,7 +241,7 @@ export function SandboxTabBar({
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
-    leadingTabSlugs: leadingTabs.map((tab) => tab.value),
+    leadingTabSlugs: [...groupTabs, ...leadingTabs].map((tab) => tab.value),
     showComputerTab: showDesktopItem,
     showEditorTab: showEditorItem,
     enabled: hotkeysEnabled,
@@ -274,27 +286,35 @@ export function SandboxTabBar({
           onValueChange={handleTabChange}
           labelled={showLabels}
         >
+          {leadingGroup?.header}
           {tabDescriptors.map((tab, index) => (
-            <ListEnter
-              key={tab.value}
-              index={index}
-              fast
-              /* The stacked chip fills the rail, so its wrapper has to as
-                 well — an `inline-flex` box is content-sized. */
-              className={cn(
-                "inline-flex",
-                showLabels ? "md:w-full" : undefined,
-              )}
-            >
-              <SandboxTabTrigger
-                tab={tab}
-                onReselect={onActiveTabClick}
-                reselectHint={
-                  tab.value === resolvedTab ? activeTabHint : undefined
-                }
-                layout={tabLayout(tab.value)}
-              />
-            </ListEnter>
+            <Fragment key={tab.value}>
+              {index > 0 && index === groupTabs.length ? (
+                <span
+                  aria-hidden
+                  className="h-4 w-px shrink-0 self-center bg-muted-foreground/25 md:h-px md:w-4"
+                />
+              ) : null}
+              <ListEnter
+                index={index}
+                fast
+                /* The stacked chip fills the rail, so its wrapper has to as
+                   well — an `inline-flex` box is content-sized. */
+                className={cn(
+                  "inline-flex",
+                  showLabels ? "md:w-full" : undefined,
+                )}
+              >
+                <SandboxTabTrigger
+                  tab={tab}
+                  onReselect={onActiveTabClick}
+                  reselectHint={
+                    tab.value === resolvedTab ? activeTabHint : undefined
+                  }
+                  layout={tabLayout(tab.value)}
+                />
+              </ListEnter>
+            </Fragment>
           ))}
         </SidePanelTabs.List>
         {simpleView ? null : (

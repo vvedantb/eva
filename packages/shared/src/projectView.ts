@@ -341,11 +341,14 @@ export function projectTaskSummaryLine(
     otherRepoLabel: string | undefined;
     /** The task number of a task, by id: names a merged item's target. */
     numIdOf?: (taskId: string) => number | undefined;
+    /** The task is open in the project's side panel (web). */
+    open?: boolean;
   },
 ): string {
   const reports = extra.notes?.reports.length ?? 0;
   return [
     row.numId !== undefined ? `#${row.numId}` : undefined,
+    extra.open === true ? "Open" : undefined,
     projectTaskReason(row, view, {
       ask: extra.notes?.ask,
       failed: extra.failed,

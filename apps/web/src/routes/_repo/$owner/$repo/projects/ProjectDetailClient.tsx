@@ -105,6 +105,31 @@ export function ProjectDetailClient({
     });
   };
 
+  // A task opens in the rail on its Chat tab (`?task=`), beside the
+  // coordinator's chat.
+  const openTask = (taskNumId: number) => {
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/task-chat`,
+      ),
+      search: (prev) => ({ ...prev, task: taskNumId }),
+    });
+    setExpandRightSignal((n) => n + 1);
+  };
+
+  // ✕ on the task drops its tabs and returns to Tasks.
+  const closeTask = () => {
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/tasks`,
+      ),
+      search: (prev) => ({ ...prev, task: undefined }),
+      replace: true,
+    });
+  };
+
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
@@ -215,6 +240,8 @@ export function ProjectDetailClient({
             expandRightSignal={expandRightSignal}
             onThreadOpen={openThread}
             onCloseThread={closeThread}
+            onOpenTask={openTask}
+            onCloseTask={closeTask}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}
