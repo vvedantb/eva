@@ -133,7 +133,7 @@ export function MessageToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      <span className="px-1.5 text-2xs tabular-nums text-muted-foreground">
+      <span className="whitespace-nowrap px-1.5 text-2xs tabular-nums text-muted-foreground">
         {time}
       </span>
     </div>
