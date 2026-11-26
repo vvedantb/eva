@@ -2,7 +2,7 @@ import { api, type Doc } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { toast } from "@vvedantb/ui";
-import { MAX_PARALLEL_CHATS } from "@eva/shared";
+import { waitingForSlotLabel } from "@eva/shared";
 import { proposedPlanForMessage } from "@eva/shared/proposedPlan";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -180,11 +180,11 @@ export function ChatPanel({
       // Queued on this chat while the session's run slots are all taken: the
       // server parked the send instead of starting it (see `startExecute`).
       transcriptTail={(state) =>
-        !state.isExecuting &&
-        state.queuedCount > 0 &&
-        runningChatCount >= MAX_PARALLEL_CHATS
-          ? `Waiting for a free slot — ${runningChatCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`
-          : undefined
+        waitingForSlotLabel({
+          isExecuting: state.isExecuting,
+          queuedCount: state.queuedCount,
+          runningChatCount,
+        })
       }
       afterMessage={(messageId, state) => {
         // Only plans captured on a message render in the transcript, so a
