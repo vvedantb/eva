@@ -64,7 +64,9 @@ export function ChatPageWrapper({
         ) : (
           <m.div
             key="session-header"
-            className="w-full flex items-center justify-between gap-1 p-2 sm:gap-2 sm:p-3"
+            // `sm:py-2` matches the side panel's `md:my-2`: the tallest
+            // header control starts on the panel's top edge.
+            className="w-full flex items-center justify-between gap-1 p-2 sm:gap-2 sm:px-3 sm:py-2"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
