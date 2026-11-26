@@ -1,12 +1,10 @@
-import { startQuickTaskRun } from "../_agentTasks/taskRunTurn";
-import { hasActiveQuickTaskRun } from "../_agentTasks/taskRunStatus";
+import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
+import { hasActiveTaskRun } from "../_agentTasks/taskRunStatus";
 import { v } from "convex/values";
-import { startTaskRun, taskWorkSessionBusy } from "./startRun";
 import { internalMutation } from "../_generated/server";
 import {
   getActiveTaskRun,
   hasActiveRun,
-  isFirstTaskOnBranch,
 } from "../functions";
 import {
   buildQuickTaskRetryDelayMs,
@@ -15,7 +13,6 @@ import {
   TASK_CHAT_BUSY_ERROR,
   TASK_CHAT_BUSY_RETRY_MS,
 } from "./recovery";
-import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   finishTaskRun,
   fireTaskRunSchedule,
@@ -95,13 +92,13 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
   },
 });
 
-/** Executes a previously scheduled task retry by creating a new run and starting the workflow. */
+/** Runs a task whose schedule (or retry time) came: a task-mode turn in its chat. */
 export const executeScheduledTask = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
     scheduledAt: v.optional(v.number()),
   },
-  returns: v.union(v.id("agentRuns"), v.null()),
+  returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
@@ -111,42 +108,16 @@ export const executeScheduledTask = internalMutation({
     if (!fired.ok) return null;
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
-    // A quick task queues its run in its chat; a busy chat just runs it next.
-    if (task.projectId === undefined) {
-      if (await hasActiveQuickTaskRun(ctx.db, task)) return null;
-      await startQuickTaskRun(ctx, task, { userId: task.createdBy });
+    // The run queues in the task's chat; a busy chat just runs it next. A
+    // run started before runs became chat turns may still be going.
+    if (
+      (await hasActiveTaskRun(ctx.db, task)) ||
+      (await hasActiveRun(ctx.db, args.taskId))
+    ) {
       return null;
     }
-    if (await hasActiveRun(ctx.db, args.taskId)) return null;
-    // The task's chat is mid-reply on its sandbox: try again shortly instead of failing the schedule (`startTaskRun`
-    // refuses a busy chat).
-    if (await taskWorkSessionBusy(ctx.db, task)) {
-      await scheduleTaskRun(
-        ctx,
-        args.taskId,
-        "scheduleRetry",
-        Date.now() + TASK_CHAT_BUSY_RETRY_MS,
-      );
-      return null;
-    }
-
-    const repo = await ctx.db.get(task.repoId);
-    if (!repo) return null;
-
-    const runId = await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: task.createdBy,
-      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
-      isFirstTaskOnBranch: await isFirstTaskOnBranch(ctx.db, args.taskId),
-      // Carry through any parked change-request comment so a re-run started via
-      // the scheduler is still labelled "made changes" on the timeline.
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
-    });
-
-    return runId;
+    await startTaskRunTurn(ctx, task, { userId: task.createdBy });
+    return null;
   },
 });
 

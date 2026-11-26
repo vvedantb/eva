@@ -1,4 +1,4 @@
-import { quickTaskRunFailedAt } from "./_agentTasks/taskRunStatus";
+import { taskRunFailedAt } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { entityHref, repoBasePath } from "@eva/shared";
 import {
@@ -275,7 +275,7 @@ async function quickTaskRows(
   const todoTasks = quick(todo);
   // A quick task runs as task-mode turns in its chat (`taskRunStatus.ts`).
   const failedAts = await Promise.all(
-    todoTasks.map((task) => quickTaskRunFailedAt(db, task)),
+    todoTasks.map((task) => taskRunFailedAt(db, task)),
   );
   const candidates = [
     ...quick([...codeReview, ...businessReview]).map((task) => ({

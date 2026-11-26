@@ -1,4 +1,4 @@
-import { autoStartQuickTask } from "./_agentTasks/taskRunTurn";
+import { autoStartTaskRun } from "./_agentTasks/taskRunTurn";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
@@ -141,7 +141,7 @@ export const autoStartTask = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await autoStartQuickTask(ctx, args.taskId, args.userId);
+    await autoStartTaskRun(ctx, args.taskId, args.userId);
     return null;
   },
 });
