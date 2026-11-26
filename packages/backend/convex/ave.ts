@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { authMutation, authQuery } from "./functions";
-import { aveMessageFields } from "./_validators/tableFields";
+import {
+  aveMessageFields,
+  avePageContextValidator,
+} from "./_validators/tableFields";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import {
   findLiveThread,
@@ -15,6 +18,8 @@ import {
  */
 
 const MAX_MESSAGE_CHARS = 20_000;
+/** Page path, title and zone are short; cap them so a bad client cannot bloat context. */
+const MAX_PAGE_FIELD_CHARS = 500;
 /** The chat shows the recent conversation; older rows stay in the table. */
 const LIST_LIMIT = 200;
 
@@ -97,7 +102,11 @@ export const getStreaming = authQuery({
 });
 
 export const send = authMutation({
-  args: { content: v.string(), clientId: v.string() },
+  args: {
+    content: v.string(),
+    clientId: v.string(),
+    pageContext: avePageContextValidator,
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const content = args.content.trim();
@@ -113,6 +122,11 @@ export const send = authMutation({
       timestamp: Date.now(),
       userId: ctx.userId,
       clientId: args.clientId,
+      pageContext: {
+        path: args.pageContext.path.slice(0, MAX_PAGE_FIELD_CHARS),
+        title: args.pageContext.title.slice(0, MAX_PAGE_FIELD_CHARS),
+        timeZone: args.pageContext.timeZone.slice(0, MAX_PAGE_FIELD_CHARS),
+      },
     });
     await requestRun(ctx, thread);
     return null;

@@ -1,4 +1,6 @@
 import { modelMessageSchema, type ModelMessage } from "ai";
+import type { Infer } from "convex/values";
+import type { avePageContextValidator } from "../_validators/tableFields";
 
 /**
  * Turns stored Manager Ave rows into the model's conversation. Pure so the
@@ -20,7 +22,21 @@ export type AveContextRow = {
   content: string;
   isSystemAlert?: boolean;
   modelMessages?: string;
+  pageContext?: AvePageContext;
 };
+
+export type AvePageContext = Infer<typeof avePageContextValidator>;
+
+/**
+ * Each user turn carries the page it was sent from, so "this", "here" or
+ * "the one I'm looking at" resolve without a follow-up question.
+ */
+function userTurnContent(row: AveContextRow): string {
+  const page = row.pageContext;
+  if (page === undefined) return row.content;
+  const title = page.title.trim() === "" ? "" : ` — "${page.title}"`;
+  return `[User was on Eva page ${page.path}${title} · time zone ${page.timeZone}]\n\n${row.content}`;
+}
 
 /** `modelMessageSchema` is the SDK's own (Zod 4) schema, so each entry is checked with it directly. */
 function parseReplay(raw: string): ModelMessage[] | null {
@@ -41,7 +57,9 @@ function parseReplay(raw: string): ModelMessage[] | null {
 }
 
 function rowMessages(row: AveContextRow): ModelMessage[] {
-  if (row.role === "user") return [{ role: "user", content: row.content }];
+  if (row.role === "user") {
+    return [{ role: "user", content: userTurnContent(row) }];
+  }
   if (row.modelMessages !== undefined) {
     const replay = parseReplay(row.modelMessages);
     if (replay !== null && replay.length > 0) return replay;

@@ -70,6 +70,15 @@ import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 import { sessionOwnerValidator } from "../_sessions/owner";
 
+/** Where the user was in Eva when they messaged Manager Ave. */
+export const avePageContextValidator = v.object({
+  /** Path plus search, e.g. `/acme/web/sessions/abc?tab=diff`. */
+  path: v.string(),
+  title: v.string(),
+  /** IANA zone, e.g. `Europe/London`. */
+  timeZone: v.string(),
+});
+
 export const userFields = {
   clerkId: v.optional(v.string()),
   email: v.optional(v.string()),
@@ -1527,6 +1536,8 @@ export const aveMessageFields = {
    * capped results), replayed as model context on later runs.
    */
   modelMessages: v.optional(v.string()),
+  /** User rows: the Eva page the user had open when they sent it. */
+  pageContext: v.optional(avePageContextValidator),
 };
 
 export const queuedMessageFields = {
