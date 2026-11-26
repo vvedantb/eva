@@ -797,20 +797,29 @@
    * Experimental "Disable page animations" (`html[data-page-motion=off]`):
    * every CSS animation and transition is instant. Durations go to 0s (not
    * `animation: none`) so `animationend` / `transitionend` still fire and
-   * Radix Presence still unmounts. Only loading indicators keep running
-   * (`.animate-spin`, `.animate-pulse`, `.shimmer-*`), so a load never looks
-   * frozen. Motion (JS) is made instant in `PageMotionProvider.tsx`.
+   * Radix Presence still unmounts. Only loading and live indicators keep
+   * running — spinners (`.animate-spin`, the BorderBeam `.beam::before`),
+   * pulses (`.animate-pulse` / `-ping` / `-bounce`, `.landing-pulse-dot`,
+   * `.landing-preview-pulse`, `.animate-indeterminate`) and shimmers
+   * (`.shimmer-*`) — so a load never looks frozen. LoadingState's pixel grid
+   * runs on WAAPI, so this rule never reaches it. Motion (JS) is made
+   * instant in `PageMotionProvider.tsx`.
    */
   html[data-page-motion="off"]
     *:not(
       .animate-spin,
       .animate-pulse,
+      .animate-ping,
+      .animate-bounce,
+      .animate-indeterminate,
+      .landing-pulse-dot,
+      .landing-preview-pulse,
       .shimmer-text,
       .shimmer-overlay,
       .shimmer-band,
       .shimmer-copy
     ),
-  html[data-page-motion="off"] *::before,
+  html[data-page-motion="off"] *:not(.beam)::before,
   html[data-page-motion="off"] *::after {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
