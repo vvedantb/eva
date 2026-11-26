@@ -15,39 +15,38 @@ export function AssistantQuestionRecord({ step }: { step: ActivityStep }) {
   if (!current) return null;
   const total = questions.length;
   return (
-    <div className="relative my-2 rounded-surface bg-card">
+    <div className="my-2">
       <ActivityQuestionCard
         questions={[current]}
         {...(step.answers ? { answers: step.answers } : {})}
+        headerAction={
+          total > 1 ? (
+            <>
+              <span className="mr-1 text-2xs font-medium tabular-nums text-muted-foreground">
+                {index + 1}/{total}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Previous question"
+                disabled={index === 0}
+                onClick={() => setIndex(index - 1)}
+              >
+                <IconChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Next question"
+                disabled={index === total - 1}
+                onClick={() => setIndex(index + 1)}
+              >
+                <IconChevronRight size={14} />
+              </Button>
+            </>
+          ) : undefined
+        }
       />
-      {/* Sits over the right end of the card's "Question" header row (p-3 +
-          16px row → centred 28px buttons at top-1.5). The card is from
-          @vvedantb/ui and has no header slot. */}
-      {total > 1 ? (
-        <div className="absolute top-1.5 right-2 flex items-center gap-1">
-          <span className="mr-1 text-2xs font-medium tabular-nums text-muted-foreground">
-            {index + 1}/{total}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Previous question"
-            disabled={index === 0}
-            onClick={() => setIndex(index - 1)}
-          >
-            <IconChevronLeft size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Next question"
-            disabled={index === total - 1}
-            onClick={() => setIndex(index + 1)}
-          >
-            <IconChevronRight size={14} />
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
