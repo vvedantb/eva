@@ -39,43 +39,49 @@ export function ProjectChatTabs({
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   return (
     <>
-      <ChatTabStrip label="Chats" className="pt-2">
-        <ChatTab
-          selected={selected === null}
-          running={evaRunning}
-          label="Eva"
-          onSelect={() => onSelect(null)}
-        />
-        {rows.map(({ numId, row, running }) => {
-          const numLabel = formatEntityNumLabel({ numId });
-          return (
-            <ChatTab
-              key={row._id}
-              selected={numId === selected}
-              running={running}
-              hint={row.title}
-              label={
-                <>
-                  <span className="font-mono tabular-nums text-muted-foreground">
-                    {numLabel}
-                  </span>{" "}
-                  {row.title}
-                </>
-              }
-              onSelect={() => onSelect(numId)}
-              onClose={() => onClose(numId)}
-              closeLabel={`Close ${numLabel ?? "task"}`}
-            />
-          );
-        })}
-        {isArchived ? null : (
-          <ChatTabAddButton
-            label="New task"
-            tooltip="New task"
-            onClick={() => setCreateTaskOpen(true)}
+      {/* Eva stays pinned on the left; only the task tabs scroll. */}
+      <div className="flex min-w-0 shrink-0 items-center pt-2">
+        <div className="shrink-0 pb-1.5 pl-2">
+          <ChatTab
+            selected={selected === null}
+            running={evaRunning}
+            label="Eva"
+            onSelect={() => onSelect(null)}
           />
-        )}
-      </ChatTabStrip>
+        </div>
+        <ChatTabStrip label="Task chats" className="min-w-0 flex-1 pl-1">
+          {rows.map(({ numId, row, running }) => {
+            const numLabel = formatEntityNumLabel({ numId });
+            return (
+              <ChatTab
+                key={row._id}
+                selected={numId === selected}
+                running={running}
+                hint={row.title}
+                label={
+                  <>
+                    <span className="font-mono tabular-nums text-muted-foreground">
+                      {numLabel}
+                    </span>{" "}
+                    {row.title}
+                  </>
+                }
+                onSelect={() => onSelect(numId)}
+                onClose={() => onClose(numId)}
+                closeLabel={`Close ${numLabel ?? "task"}`}
+                narrow
+              />
+            );
+          })}
+          {isArchived ? null : (
+            <ChatTabAddButton
+              label="New task"
+              tooltip="New task"
+              onClick={() => setCreateTaskOpen(true)}
+            />
+          )}
+        </ChatTabStrip>
+      </div>
       <ProjectNewTaskModal
         projectId={projectId}
         repoId={repoId}

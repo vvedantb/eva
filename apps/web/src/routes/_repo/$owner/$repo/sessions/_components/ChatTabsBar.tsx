@@ -196,6 +196,7 @@ export function ChatTab({
   onSelect,
   onClose,
   closeLabel,
+  narrow = false,
   className,
   ...root
 }: ComponentProps<"div"> & {
@@ -207,6 +208,8 @@ export function ChatTab({
   onSelect: () => void;
   onClose?: () => void;
   closeLabel?: string;
+  /** A tighter label cap, for tab rows in a narrow column (project task tabs). */
+  narrow?: boolean;
 }) {
   return (
     <div
@@ -227,12 +230,17 @@ export function ChatTab({
         ref={
           selected
             ? (el) => {
-                el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+                // The whole pill (label and ✕), not just the label button.
+                el?.parentElement?.scrollIntoView({
+                  block: "nearest",
+                  inline: "nearest",
+                });
               }
             : undefined
         }
         className={cn(
-          "motion-press flex h-full min-w-20 max-w-48 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
+          "motion-press flex h-full min-w-20 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
+          narrow ? "max-w-32" : "max-w-48",
           onClose ? "pr-1" : undefined,
           selected
             ? "text-foreground"
