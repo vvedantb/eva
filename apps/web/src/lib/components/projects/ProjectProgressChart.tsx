@@ -42,7 +42,8 @@ function token(name: string): string {
 /** The three series: one colour each, the same in the legend, bars and line. */
 const SERIES = {
   shipped: { label: "Shipped", color: "success" },
-  archived: { label: "Archived", color: "muted-foreground" },
+  // Tailwind v4 names the grey text token `--color-muted-foreground`.
+  archived: { label: "Archived", color: "color-muted-foreground" },
   open: { label: "Open", color: "cat-2" },
 } as const;
 
@@ -63,7 +64,7 @@ function ProgressCanvas({
   const archived = token(SERIES.archived.color);
   const open = token(SERIES.open.color);
   const grid = token("border");
-  const ink = token("muted-foreground");
+  const ink = token("color-muted-foreground");
   // The picked day stays full colour; the rest dim, so the list below reads as its own.
   const dimmed = (color: string, index: number) =>
     selected === null || selected === index
