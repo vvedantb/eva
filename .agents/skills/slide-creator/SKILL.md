@@ -166,7 +166,7 @@ deck is the model):
 - teach from zero: the normal painful way first, then what changes, then why;
 - start the line where a build step lands with `→ `, so the presenter can keep
   in time with the auto-build;
-- end with the spoken hand-off to the next slide;
+- end on the slide's own point. Add a bridge to the next slide only when the link adds meaning (a section change, a "but" or "so that's why"). Never announce the next slide's title ("Next, X"), so its reveal still lands;
 - no `If asked:`, `Detail:` or `Next:` sections: the note is only what the
   presenter says;
 - a blank opening slide has no note.
@@ -179,7 +179,7 @@ top of their head"). When unsure what they would say, ask.
 
 When slides move, are added or are removed:
 
-1. Rewrite the hand-off lines on both sides of each gap.
+1. Check any bridge lines on both sides of each gap still make sense.
 2. Fix any "slide 23" style number references.
 
 ## 8. Verify and finish

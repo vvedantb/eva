@@ -20,8 +20,7 @@ There's twelve changes on here, so I won't read them all out, I'll just give you
 → In July, the workspace filled out: a follow-up queue, a built-in browser, a files explorer, tabs and plan mode.
 → In August, it got much better at telling you what's going on: an inbox badge and chime, working on mobile, usage limits shown up front, and auto-archive notices.
 → And in September, it got better at recovering by itself, like switching account when a limit hits, and fewer stuck turns, instead of just stalling.
-So by the end of the summer, a session had gone from a chat box to a proper place to work.
-Now let me put the whole story on one line.`,
+So by the end of the summer, a session had gone from a chat box to a proper place to work.`,
 
   "05-simple-mode": `So the answer for non-engineers was to take machinery away, not add more explanation.
 Simple Mode is just a setting, not a separate product, and it hides the files, consoles, settings and meters, so you're left with the conversation.
@@ -249,8 +248,7 @@ You set the line, and anything above it, Eva acts on.
 Cos the question's fixed, the same item gets the same judgement every time, which is what makes it safe to automate.
 → And cos Jev's so small, each check costs fractions of a penny, by our own estimate, and comes back in under a second.
 That's what lets Eva run it on every item, every time, rather than on a sample.
-The items and scores here are just an illustration, not a real call.
-So here's Jev inside CarePulse.`,
+The items and scores here are just an illustration, not a real call.`,
 
   "friday-b17-jev": `Ten small decisions inside Eva, all made by the same model.
 → Step 1: the three you will notice. Before a quick task runs, Jev checks the prompt says where the change goes, what should happen, and what is wrong today, and nudges you if not. As you type, it picks the skill that fits. And when an agent has a question for the team, Jev picks who should answer it, one yes or no per teammate.
@@ -277,8 +275,7 @@ Three of them were on record before the first model on the ladder even arrived, 
 Like in March, a quick task hung on "Generating response", and in September we still had a turn left stalled.
 And the lanes show what got written about, not how often it happened.
 → So if better models alone fixed these, the lines would end, and they don't.
-To me that suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.
-So here are two lessons from the year, in the project's own words.`,
+To me that suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.`,
 
   // ---------------------------------------------------------------------------
   // Bee deck
@@ -419,8 +416,7 @@ It starts with an empty repository on 11 January.
 These dates come from Eva's own records of the first ones actually created, which is why they're later than the week-one dates, cos those are when the code landed.
 → Then in July the work moves to the cloud, and in August Eva starts opening its own work.
 → And the line just keeps running on to today, cos it's still going.
-So that's how we got from an empty repository to most of how we build software.
-And here's what it's actually produced.`,
+So that's how we got from an empty repository to most of how we build software.`,
 
   "a03-numbers": `So this is what the year's produced, from Eva's own records and the project history, up to this week.
 The top row is output: 5,673 changes shipped, 1,015 quick tasks raised, 767 sessions and 1,891 sets of release notes.
@@ -437,8 +433,7 @@ The early months are small, and June's a genuine zero, not missing data.
 → Then from July it lights up, and that's when the work moved to the cloud.
 From July, monthly sessions roughly tripled, and they've kept climbing since.
 November only runs up to this week, and it leaves out the old quick tasks we moved into sessions on 11 November, cos counting those would make the bar look much bigger than it really is.
-And I'm pointing out the June gap on purpose, cos being upfront about it is what makes the rest believable.
-And it's not just one codebase either: every work codebase now runs on Eva.`,
+And I'm pointing out the June gap on purpose, cos being upfront about it is what makes the rest believable.`,
 
   "a06-impact": `So the easy answer is that AI makes developers type faster, but that's not really what changed.
 Three things changed, and none of them's typing speed.
@@ -465,8 +460,7 @@ Every item here is a change that went into CarePulse's main branch, quarter by q
 → March to May: mobilisation status on the provider homepage, CQC notifications filtered to AQP homes only and cleared when you dismiss them, and a tidy-up of the resource centre.
 → June to August: the domiciliary care quality dashboards, with tabs, an admin page for responses, a location breakdown and exports, plus SUPA archives for nursing homes and domiciliary care, and the referral portal dashboard and filters.
 → And September to November was the busiest stretch: the provider homepage redesign, the central contact overview, the SUPA tracker, the Jev PID checker on the care package finder and the referral portal, and comments on the nursing home quality dashboard.
-So the point is, all the tooling I've shown you was in service of this work, not instead of it.
-And behind a lot of it is teaching the agent our codebase.`,
+So the point is, all the tooling I've shown you was in service of this work, not instead of it.`,
 
   "a09-design": `So this slide's about doing the design on paper before writing any code.
 The proof is the biggest change of the year: swapping out the engine that every workspace in Eva runs on.
@@ -498,8 +492,7 @@ The loading shimmer went from 32.6 milliseconds of work every second to 1.9, its
 But the method's the bit I'd defend: a fresh tab for every run, medians of three, and I proved it still looked the same by comparing paused frames.
 And I'll be honest about the limit: the test machine had no GPU, so only the main-thread figures carry over.
 → So these are the habits behind the numbers: live traffic is searchable, decisions are written down, there's one design system, and accessibility problems get fixed.
-→ And the honest gap is page scores: there's a Lighthouse setup, which is Google's page speed checker, but no scores are recorded in the release notes yet, so it's set up, not a habit.
-So next is the same method, applied to the waits everyone pays.`,
+→ And the honest gap is page scores: there's a Lighthouse setup, which is Google's page speed checker, but no scores are recorded in the release notes yet, so it's set up, not a habit.`,
 
   "a12-quality": `So the standard here is enforced by the machine, cos a standard that relies on people remembering isn't really a standard.
 These numbers are from the repo in mid-September: 303 test files, 79 contract tests, 46 nightly runs that went back and filled in tests, and 4 custom rules.
@@ -524,8 +517,7 @@ Simple Mode hid the reviews, diffs and token meters, so you're left with the con
 The long list of models became one slider, cos even the trimmed list was still the advanced bit.
 PRD got renamed to Plan, cos that's what people actually meant, and the daily summary got rewritten in plain language, with a hard ban on file names and commit hashes.
 → And then three more: every screen made usable on a phone across two audits, shortcuts made visible and rebindable, and pages that just said "pick something from the sidebar" removed, cos on a phone the sidebar's a closed drawer.
-→ So none of this made the tool cleverer, it just made it usable.
-So here's the slider those choices produced.`,
+→ So none of this made the tool cleverer, it just made it usable.`,
 
   "a08-ahead": `So Eva now finishes work faster than we can check it in, and that changes where the hard part is.
 It used to be building the thing; now it's deciding, and checking, either side of the build.
@@ -546,47 +538,39 @@ Every Eva slide stays in this purple and blue, and each later section gets its o
 And it all started on one evening in January.`,
 
   "annual-s02-carepulse": `So that's Eva, and now the second section: CarePulse.
-It's the product Eva was built to serve in the first place.
-So let's look at CarePulse this year.`,
+It's the product Eva was built to serve in the first place.`,
 
   "annual-s03-vmem": `So the side projects start here, and I want to say it plainly: all four were built in my own time, alongside Eva, with no company time spent on them.
-The first one, vmem, is my BSc final-year project at City St George's, University of London.
-So what is vmem?`,
+The first one, vmem, is my BSc final-year project at City St George's, University of London.`,
 
   "annual-f01-vmem": `So normally every AI tool you use starts from scratch, you tell ChatGPT something, then Claude has no idea, and you end up explaining yourself again and again.
 vmem's a memory layer for AI: you tell it something once, and any AI tool can recall it.
 → So what I built saves chats, files and notes in one place, links the people and projects they mention into a graph, so it knows how things connect, and any AI tool can read it over MCP, which is just a standard way for AI tools to plug into other tools.
 → And what it changed: it's live and hosted, with a Chrome extension, and Jev, the judging model from the CarePulse section, ranks what it recalls.
 It was my final-year degree project, and it got 80%.
-I did that alongside full-time work on Eva, so it took a lot of time management.
-Next side project, flowtape.`,
+I did that alongside full-time work on Eva, so it took a lot of time management.`,
 
-  "annual-s04-flowtape": `So the next side project is flowtape.
-Let's look at what it does.`,
+  "annual-s04-flowtape": `So the next side project is flowtape.`,
 
   "annual-f02-flowtape": `So normally, to get an automated test of a journey through an app, someone has to sit down and write it as code, which takes ages, so most journeys never get one.
 flowtape turns a journey you click through into a test an agent can run.
 → So what I built records a journey through an app, turns it into a prompt an agent can replay and explore, and hides passwords and personal details like NHS numbers before anything's saved.
-→ And what it changed: tests come from clicking, not writing code, and it's published on npm, the public place JavaScript packages live, so anyone can install it.
-Next side project, Redline.`,
+→ And what it changed: tests come from clicking, not writing code, and it's published on npm, the public place JavaScript packages live, so anyone can install it.`,
 
-  "annual-s05-redline": `So the next side project is Redline.
-Let's look at what it does.`,
+  "annual-s05-redline": `So the next side project is Redline.`,
 
   "annual-f03-redline": `So normally, after a change, someone clicks through the app by eye to check nothing's broken, and it's easy to miss a page.
 Redline shows what a change did to every page of an app.
 → So what I built builds the app before and after a change, screenshots every page at both, and points to the files most likely responsible for what changed.
-→ And what it changed: visual checks are done by a tool, not by eye, it's used in Eva's own development, and it's published on npm.
-The last side project is Bee.`,
+→ And what it changed: visual checks are done by a tool, not by eye, it's used in Eva's own development, and it's published on npm.`,
 
-  "annual-s06-bee": `So the last side project is Bee.
-Let's look at what it does.`,
+  "annual-s06-bee": `So the last side project is Bee.`,
 
   "annual-f04-bee": `So we've all been in a meeting where someone asks something and you're stuck searching your notes while everyone waits.
 Bee answers questions during the meeting, from your own notes and the web.
 → So what I built is a desktop app for Windows and Mac that listens in a meeting, and finds your own notes and short answers, in a small bar at the top of the screen.
 → And what it changed: I presented it to the company this month, and it's still in progress, so it's open to anyone who wants to test it.
-And before the framework, one personal bit: what AI unlocked for me.`,
+And before the framework, one personal bit.`,
 
   "annual-g02-checks": `So the business team shouldn't have to read code to know if a piece of work is ready.
 Otherwise you're asking a developer, or trying to read the changes yourself, just to find out if it's done.
@@ -610,7 +594,7 @@ So I wrote skills for CarePulse, which are basically written instructions the ag
 Each one matches how the codebase is actually built, so the agent follows that instead of making it up.
 → And for design review, I got Zuza to write a skill, so the agent follows CarePulse's design standards too.
 → So the agent writes code the way the team would.
-But skills help it write the code, the understanding still has to come from me: AI writes the code, not the understanding.`,
+But skills help it write the code; the understanding still has to come from me.`,
 
   "annual-g04-feedback": `So Eva now learns from how people react to it, and cos we own the data, we can actually act on it.
 → First, it's captured: Eva leaves feedback on its own when someone's clearly frustrated or clearly happy in a chat, and anyone can give a thumbs up or down on a reply.
@@ -640,7 +624,7 @@ When the AI missed that, I asked "why did you not do this in the first place?", 
 → The Jev PID checker: now it exists, the end result could probably be built in one prompt, but the questions, the trade-offs and the decisions along the way couldn't.
 One of my questions was "so this entire time you weren't using Jev?", which exposed a silent fallback, and after the fix Jev got 59 out of 59 test cases right, where the old pattern rules missed 22 of 39.
 → So that understanding is why those pull requests got to a state where I only skimmed the code, and different AIs find different things, Amp and Codex both found issues, so the next step is checks good enough that we don't need to read it at all.
-And understanding is where the judgement calls come from, cos the judgement is still ours.`,
+And understanding is where the judgement calls come from.`,
 
   "annual-g07-live-data": `So normally, if you want numbers out of the database, you ask a developer and wait for them to pull it.
 Eva's connector opened that up to everyone.
@@ -659,8 +643,7 @@ TfL's own developers told me several keys can be used at once, so we use two, pa
 → And Mapbox for driving, which sits inside its free tier: the first 100,000 lookups a month are free, and we expect about 73,450.
 The Google code's still there too, so we can swap provider if we need to, and it shipped in October.
 → So the AI never raised either problem on its own, cost and rate limits only came up cos I put them in the brief and kept pushing.
-It's still up to a person to think through these edge cases and make the call.
-And one tool from that work gets used in both Eva and CarePulse, so what Jev is.`,
+It's still up to a person to think through these edge cases and make the call.`,
 
   "annual-g09-catching": `So a lot of my job now is asking the AI the question it didn't ask itself.
 Here are three, in my own words from the chats.
@@ -679,8 +662,7 @@ Now, one lesson from the last few months is that the system includes the package
 Normally, before you can touch a codebase, someone has to get it set up and running on their own laptop.
 → Every codebase we work on is set up in Eva: Eva itself, CarePulse v3, which is the current web app, CarePulse v2, the Django backend, eProcurement, and the cost model.
 So anyone can open a session or a quick task on any of them, and the setup's already done.
-I checked that list on 22 November.
-Now let me show you the people behind those numbers, and what they built.`,
+I checked that list on 22 November.`,
 
   "annual-g11-configurable": `So Eva isn't like Amp or Cursor, where the audience is only developers.
 The business team uses it too, so it had to be simple by default and configurable for the people who want more.
@@ -707,8 +689,7 @@ Things that used to take me weeks now take days, and I'm putting out far more th
 I haven't opened an IDE in about eight months, and I haven't written a line of code by hand in about six.
 I still read the plans, ask the questions and make the calls, that's the job now, but the typing is the AI's.
 So I definitely love AI, and I can't imagine going back.
-Hopefully that shows through all of this work.
-So here's how all of it maps to the framework: senior engineer, mapped.`,
+Hopefully that shows through all of this work.`,
 
   "a15-framework": `So this is the map: the senior engineer framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
 → So the proof lands under every one.
@@ -719,7 +700,7 @@ Improving the process, with Eva running many agents in parallel without conflict
 Identifying work, like taking critical warnings from 2 to 0 and high from 48 to 2, and next, automating the release, and business and user empathy, with Simple Mode's five-step slider and the PID checker for referral brokers.
 And on Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and a weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, which was Zuza's idea too.
 Getting buy-in, for Vercel Sandbox for Eva and Claude usage for Bee, and mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
-And one last thing about how this deck was made: built in Eva, by Eva.`,
+And one last thing, about how this deck was made.`,
 
   "annual-b01-day-one": `So this is day one, 11 January.
 → These are the first three commits: the very first one, then the schema for projects and tasks, then the queries and mutations behind it.
@@ -727,8 +708,7 @@ A schema's just the shape of the data, so what gets stored and how it links up, 
 The first commit went in at 16:36, and the schema at 20:15 the same evening, so it really was day one.
 I've put the commit hashes up cos anyone can look them up and check.
 → So the foundation Eva still runs on was chosen that first day.
-That same schema, extended loads of times since, still stores every session, quick task and project, and nothing since has made me unpick it.
-And within four days, the two ideas the whole product rests on were in place.`,
+That same schema, extended loads of times since, still stores every session, quick task and project, and nothing since has made me unpick it.`,
 
   "annual-b02-first-week": `So the whole product rests on two ideas, and both turned up in the first four days.
 → Quick tasks landed on 12 January, one day after the first commit.
@@ -736,24 +716,21 @@ A quick task is one job, start to finish: you give it one prompt and you get one
 → Then sessions landed on 14 January.
 A session's a running conversation about one codebase, so you can keep going back and forth with it, like you would with a colleague.
 Projects and automations came later, but they're built out of quick tasks and sessions, not alongside them.
-So we've never needed a third idea, and everything since has built on these two.
-Then in the second quarter, Eva stopped being a one-person tool.`,
+So we've never needed a third idea, and everything since has built on these two.`,
 
   "annual-b05-q2": `So chapter two was the quietest quarter, but it wasn't a slow one.
 It's the quarter Eva stopped being single-player, so something the whole team could work in together.
 → First, documents, on 10 June: you can comment on a specific passage, suggest edits, and see the version history, and all three landed the same day.
 → Then on 17 June, the projects roadmap, so several pieces of work in order become one thing you can actually see.
 → And that same day, Testing Arena opened up to everyone, so trying out a change stopped being something only developers did.
-So these months went on making the existing work solid and shared, rather than piling on new things.
-And the next chapter was the busiest of the three, cos that's where we made it dependable.`,
+So these months went on making the existing work solid and shared, rather than piling on new things.`,
 
   "annual-b06-q3": `So chapter three, July to September, was all about dependability: the same product, made safe to rely on.
 → July was almost all the sandbox cutover.
 A sandbox is the cloud workspace every job runs in, and we swapped out the engine underneath all of them, which I'll take apart phase by phase a bit later.
 → Then August: durable turns, so a long run survives an interruption instead of just stalling, plus security work, and the design system the interface now sits on.
 → And September: multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
-So none of this adds a new thing to do, it just makes the existing things safe to depend on.
-Now let's look at that same stretch from inside one session.`,
+So none of this adds a new thing to do, it just makes the existing things safe to depend on.`,
 
   "annual-d01-security": `So signing in was never the problem, the problem was knowing whose data you were seeing once you were in.
 The Locked down by design slide built security into a new interface, and this one's about hardening the old ones.
@@ -862,8 +839,7 @@ That works through MCP, which is just a standard way for AI tools to plug into o
 → And the newest ring: typed judgements, so a calibrated score or category applied the same way every time, and interactive panels drawn straight into a chat.
 That's how one agent can supervise others, which is what Manager Ave does.
 For the business, it means Eva plugs into what we already run, rather than being a closed box.
-Most of that landed between late August and late September.
-And that same connector gives everyone live data.`,
+Most of that landed between late August and late September.`,
 
   "annual-c06-mcp-security": `So letting other tools into Eva is only safe if we actually check who's asking, rather than just assuming.
 The risk is that another tool could act as you, so the fix is short-lived passes, checked twice.
@@ -871,8 +847,7 @@ The risk is that another tool could act as you, so the fix is short-lived passes
 So even if something did leak, it wouldn't be useful for long.
 → And every request is tied to one person, and that's checked twice: once at the door, and again at the data itself.
 Sign-in uses the standard flow with an extra proof step, so a stolen code's useless without the matching secret.
-And there's two separate secrets, so one leak doesn't give away the other.
-Now, the workspaces themselves: first how fast they start, then how they stay cheap.`,
+And there's two separate secrets, so one leak doesn't give away the other.`,
 
   "annual-c07-sandbox-economics": `So every piece of work gets its own cloud workspace, which is great, but it means they can't just quietly pile up.
 → While the work's still going, its snapshot never expires, and we only keep the latest one.
@@ -891,7 +866,7 @@ These bars are retries, where a write fails cos something else changed the same 
 → So the fix comes down to two figures, and both landed on 24 August.
 Lease renewals, which is a running job saying "I'm still here", went from about 6.7 writes a second while streaming to roughly one a minute, cos now they only write when something changes or less than half the lease is left.
 And live cursor writes went from 20 a second to at most 6.7, cos they're throttled and ignore movement too small to see.
-And under a lot of the "it's stuck" reports there was one more structural fault, which is the next slide, Finishing what it starts.`,
+And under a lot of the "it's stuck" reports there was one more structural fault.`,
 
   "intro-01-title": `Welcome, and the one line to open on: Eva is a platform for AI agents that actually ship code.
 Detail: Eva is an open-source AI dev platform. Say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,
