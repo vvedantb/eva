@@ -163,7 +163,7 @@ script the presenter reads out, in their own voice
 deck is the model):
 
 - one spoken sentence per line, opening with "So…", contractions, "cos";
-- teach from zero: the normal painful way first, then what changes, then why;
+- match the audience. Ask who is in the room before writing notes. For a technical audience (a manager, other developers), tell the story (the problem, the decision, the trade-off, what changed) and never define common terms. Teach from zero only for a non-technical room (the Bee deck);
 - start the line where a build step lands with `→ `, so the presenter can keep
   in time with the auto-build;
 - end on the slide's own point. Add a bridge to the next slide only when the link adds meaning (a section change, a "but" or "so that's why"). Never announce the next slide's title ("Next, X"), so its reveal still lands;
