@@ -311,6 +311,7 @@ async function quickTaskRows(
     ...quick([...codeReview, ...businessReview]).map((task) => ({
       task,
       lastRunFailed: false,
+      runError: undefined,
       at: task.updatedAt,
     })),
     ...todoTasks.map((task, index) => {
@@ -318,11 +319,13 @@ async function quickTaskRows(
       return {
         task,
         lastRunFailed: failedAt !== null,
+        // Runs are chat turns now (#1557); the failed turn's error is not read here yet.
+        runError: undefined,
         at: failedAt ?? task.updatedAt,
       };
     }),
   ];
-  return candidates.flatMap(({ task, lastRunFailed, at }): NeedsYouRow[] => {
+  return candidates.flatMap(({ task, lastRunFailed, runError, at }): NeedsYouRow[] => {
     const group = needsYouGroupForQuickTask({
       status: task.status,
       prState: task.prState,
@@ -334,12 +337,11 @@ async function quickTaskRows(
         key: `${group}:${task._id}`,
         group,
         title: task.title,
+        // The source line already names "#N"; a failed run says why.
         detail:
           group === "review" && task.prUrl
             ? `PR ${prLabel(task.prUrl)}`
-            : task.numId !== undefined
-              ? `#${task.numId}`
-              : undefined,
+            : runError,
         source: "quick_task",
         taskId: task._id,
         prUrl: group === "review" ? task.prUrl : undefined,

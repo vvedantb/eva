@@ -10,8 +10,9 @@ import type { InboxRow } from "@/lib/components/inbox/useInboxDone";
 
 /**
  * The bar under the Inbox pane: the row's one action (Answer, Review PR,
- * Retry), Reply for a chat, Open as a full page, and Done. The keys
- * (Q, R, Enter, E) do the same from the list.
+ * Retry), Reply for a chat, Done, and Open as a full page. The keys
+ * (Q, R, E, Enter) do the same from the list. All on the left: the floating
+ * Eva launcher sits in the bottom-right corner and would cover a right edge.
  */
 export function InboxActionBar({
   row,
@@ -23,7 +24,8 @@ export function InboxActionBar({
   row: InboxRow;
   onAnswer: () => void;
   onReply: () => void;
-  onOpen: () => void;
+  /** Undefined when the row has no page to open. */
+  onOpen: (() => void) | undefined;
   /** Undefined when Done cannot act on the row: it leaves once someone acts on it. */
   onDone: (() => void) | undefined;
 }) {
@@ -67,16 +69,17 @@ export function InboxActionBar({
           <Kbd hotkey="R" />
         </Button>
       ) : null}
-      <span className="flex-1" />
-      <Button size="sm" variant="ghost" className={buttonClass} onClick={onOpen}>
-        Open
-        <IconArrowUpRight size={14} />
-      </Button>
       {onDone ? (
         <Button size="sm" variant="outline" className={buttonClass} onClick={onDone}>
           <IconCheck size={14} />
           Done
           <Kbd hotkey="E" />
+        </Button>
+      ) : null}
+      {onOpen ? (
+        <Button size="sm" variant="ghost" className={buttonClass} onClick={onOpen}>
+          Open
+          <IconArrowUpRight size={14} />
         </Button>
       ) : null}
     </div>

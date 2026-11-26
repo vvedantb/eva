@@ -132,13 +132,24 @@ export function InboxClient({
                 chatOnly={selected.kind === "chat"}
                 frameRef={frameRef}
               />
+            ) : selected ? (
+              // No page to show (a notification without a link): its own text.
+              <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
+                <div className="mx-auto w-full max-w-2xl space-y-2 px-6 py-6">
+                  <h2 className="text-lg font-semibold tracking-[-0.01em] text-balance text-foreground">
+                    {selected.title}
+                  </h2>
+                  {selected.preview ? (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {selected.preview}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
             ) : (
-              // No page to show (a notification without a link): its message.
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
                 <IconInbox className="size-8 text-muted-foreground" />
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  {selected?.preview ?? "Nothing new since you looked"}
-                </p>
+                <p className="text-sm text-muted-foreground">Nothing new since you looked</p>
               </div>
             )}
             {selected ? (
@@ -146,7 +157,11 @@ export function InboxClient({
                 row={selected}
                 onAnswer={() => focusInboxFrame(frameRef.current, "question")}
                 onReply={() => focusInboxFrame(frameRef.current, "composer")}
-                onOpen={() => open(selected)}
+                onOpen={
+                  selected.href && isInternalAppHref(selected.href)
+                    ? () => open(selected)
+                    : undefined
+                }
                 onDone={inboxDoneTarget(selected) ? () => done(selected) : undefined}
               />
             ) : null}

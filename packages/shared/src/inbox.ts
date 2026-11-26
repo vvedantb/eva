@@ -109,7 +109,9 @@ export function inboxPreview(text: string): string {
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[*_`#>~]/g, "")
+    // Line-start marks only: "#902" in a sentence is a task number, not a heading.
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
+    .replace(/(\*\*|__|~~|`)/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return plain.length > INBOX_PREVIEW_LENGTH
