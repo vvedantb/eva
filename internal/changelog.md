@@ -1,5 +1,11 @@
 # Changelog
 
+## Coordinator chat: toolbar sits above the bubble
+
+Date: 2026-11-26
+
+The hover toolbar moves from 16px to 24px above the bubble's top edge (`MessageToolbar`), so it sits in the 20px message gap and covers only the bubble's top padding, not its first line of text.
+
 ## Schema: drop projectCoordinatorWakes.heldAt
 
 Date: 2026-11-25
