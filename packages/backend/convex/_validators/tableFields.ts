@@ -1393,6 +1393,18 @@ export const logFields = {
   ...logUsageFields,
 };
 
+/**
+ * Where a preview annotation points ("Select element" in the preview). Set on
+ * the user row (and its queued row) so the preview comments drawer can list a
+ * chat's annotations without reading the chat text. `selector` is unset on
+ * rows the backfill recovered from that text.
+ */
+export const previewAnnotationValidator = v.object({
+  pagePath: v.string(),
+  element: v.string(),
+  selector: v.optional(v.string()),
+});
+
 export const messageFields = {
   role: roleValidator,
   content: v.string(),
@@ -1405,6 +1417,8 @@ export const messageFields = {
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
+  /** User rows sent from the preview's "Select element" tool. */
+  annotation: v.optional(previewAnnotationValidator),
   isSystemAlert: v.optional(v.boolean()),
   // System alerts that did not fail the session (it keeps running) render
   // amber. Unset alerts with `errorDetail` render as errors.
@@ -1534,6 +1548,8 @@ export const queuedMessageFields = {
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
+  /** Copied to the user row when the queue starts it (see messageFields). */
+  annotation: v.optional(previewAnnotationValidator),
   createdAt: v.number(),
   // Sort key for queue run order. Enqueue sets Date.now() (appends to the end);
   // the reorder mutation rewrites this to 0-based positions. Optional so the

@@ -101,7 +101,7 @@ export function TaskSandboxPanel({
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
   const chatBinding = useTaskChatBinding(taskId);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const annotationTarget = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
@@ -250,7 +250,7 @@ export function TaskSandboxPanel({
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             autoWakeEligible={autoWakeEligible}
-            onAnnotationSubmit={submitAnnotation}
+            annotation={annotationTarget}
             // A collapsed rail is not on screen: no presence beacon, no auto-wake.
             presenceEnabled={!collapsed}
             // A collapsed rail keeps its preview parked.

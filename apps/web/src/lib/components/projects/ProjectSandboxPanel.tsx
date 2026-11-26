@@ -145,7 +145,7 @@ export function ProjectSandboxPanel({
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const chatBinding = useProjectChatBinding(projectId, projectSession);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const annotationTarget = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
@@ -379,7 +379,7 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
-              onAnnotationSubmit={submitAnnotation}
+              annotation={annotationTarget}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
               // A collapsed rail keeps its preview parked.

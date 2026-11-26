@@ -226,6 +226,9 @@ const schema = defineSchema({
     .index("by_reply_to", ["replyTo"])
     // A chat's thread roots (only roots carry `lastReplyAt`).
     .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
+    // Preview annotations of a chat (the preview comments drawer). Rows with
+    // no annotation sort as undefined, before any path.
+    .index("by_parent_and_annotation_page", ["parentId", "annotation.pagePath"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",

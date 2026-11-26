@@ -1,4 +1,8 @@
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+import {
+  buildAnnotationDisplay as buildDisplayText,
+  type PreviewAnnotation,
+} from "@eva/shared/previewAnnotationDisplay";
 
 export interface PreviewAnnotationContext {
   tagName: string;
@@ -301,12 +305,21 @@ export function elementChip(ctx: PreviewAnnotationContext): string {
   return `<${ctx.tagName}${cls}>`;
 }
 
+/** Where an annotation points, stored on its chat row (comments drawer). */
+export function annotationRef(ctx: PreviewAnnotationContext): PreviewAnnotation {
+  return {
+    pagePath: ctx.pagePath,
+    element: elementChip(ctx),
+    selector: ctx.selector,
+  };
+}
+
 /** Compact chat-display line for an annotation submission. */
 export function buildAnnotationDisplay(
   feedback: string,
   ctx: PreviewAnnotationContext,
 ): string {
-  return `${feedback.trim()}\n\n[Annotated ${elementChip(ctx)} on ${ctx.pagePath}]`;
+  return buildDisplayText(feedback, annotationRef(ctx));
 }
 
 /** Rich agent prompt with element context for the session workflow. */

@@ -25,9 +25,15 @@ import {
   usePreviewMiniPlayer,
   type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
-import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import type { PreviewAnnotationTarget } from "@/lib/components/sandbox/annotationSend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useQueryState } from "nuqs";
+import { api, type Id } from "@eva/backend";
+import { messageLinkParser } from "@/lib/search-params";
+import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
 import { PreviewActionBar } from "./_components/PreviewActionBar";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
+import { PreviewCommentsDrawer } from "./_components/PreviewCommentsDrawer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
@@ -82,10 +88,10 @@ interface WebPreviewPanelProps {
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
-   * Submit compact display + rich agent prompt for a preview annotation into
-   * the owner's chat. When absent, the select-element toggle is hidden.
+   * The owner chat's preview annotations: Select element sends into it, the
+   * Comments drawer lists it. When absent, both tools are hidden.
    */
-  onAnnotationSubmit?: AnnotationSubmit;
+  annotation?: PreviewAnnotationTarget;
   /**
    * Set while this pane is the visible preview: lets it float into the
    * mini-player when the user leaves the preview or pops it out.
@@ -112,12 +118,23 @@ export function WebPreviewPanel({
   onPathChange,
   onStartSandbox,
   isSandboxStarting = false,
-  onAnnotationSubmit,
+  annotation,
   miniPlayer,
   externalHrefForPath,
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  // One subscription per chat: every pane of it shares the cached result.
+  const comments =
+    useQuery(
+      api.previewComments.list,
+      annotation?.chatId ? { chatId: annotation.chatId } : "skip",
+    ) ?? [];
+  const [linkedMessageId, setLinkedMessageId] = useQueryState(
+    MESSAGE_LINK_PARAM,
+    messageLinkParser,
+  );
   const [sketchMode, setSketchMode] = useState(false);
   // Sketch hands its image to a composer through this context; without one
   // there is nowhere for it to go.
@@ -214,6 +231,18 @@ export function WebPreviewPanel({
 
   function handlePathChange(next: string) {
     onPathChange(normalizePreviewPath(next));
+  }
+
+  // The chat follows `?message=` (scroll + flash). Fullscreen hides the chat,
+  // so leave it first. Re-linking the same row clears the param once so the
+  // chat scrolls to it again.
+  function viewInChat(messageId: Id<"messages">) {
+    if (isFullscreen) toggleFullscreen();
+    if (linkedMessageId === messageId) {
+      void setLinkedMessageId(null).then(() => setLinkedMessageId(messageId));
+      return;
+    }
+    void setLinkedMessageId(messageId);
   }
 
   if (!isActive || !sandboxId) {
@@ -324,10 +353,19 @@ export function WebPreviewPanel({
         // Sketch brings its own toolbar to the same spot, with Close.
         hidden={showPlaceholder || sketchMode}
         selectElement={
-          onAnnotationSubmit
+          annotation
             ? {
                 active: annotationMode,
                 onToggle: () => setAnnotationMode(!annotationMode),
+              }
+            : undefined
+        }
+        comments={
+          annotation
+            ? {
+                active: commentsOpen,
+                onToggle: () => setCommentsOpen(!commentsOpen),
+                count: comments.length,
               }
             : undefined
         }
@@ -414,11 +452,20 @@ export function WebPreviewPanel({
               onClose={() => setSketchMode(false)}
             />
           ) : null}
-          {onAnnotationSubmit ? (
+          {annotation ? (
             <PreviewAnnotationLayer
               mode={annotationMode}
               onModeChange={setAnnotationMode}
-              onSubmit={onAnnotationSubmit}
+              onSubmit={annotation.submit}
+            />
+          ) : null}
+          {annotation && commentsOpen && !sketchMode ? (
+            <PreviewCommentsDrawer
+              iframeElement={iframeElement}
+              comments={comments}
+              previewPath={previewPath}
+              onViewInChat={viewInChat}
+              onClose={() => setCommentsOpen(false)}
             />
           ) : null}
         </div>

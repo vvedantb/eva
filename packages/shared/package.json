@@ -39,6 +39,7 @@
     "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
+    "./previewAnnotationDisplay": "./src/previewAnnotationDisplay.ts",
     "./previewFrameMessages": "./src/previewFrameMessages.ts",
     "./projectStatus": "./src/projectStatus.ts",
     "./projectView": "./src/projectView.ts",

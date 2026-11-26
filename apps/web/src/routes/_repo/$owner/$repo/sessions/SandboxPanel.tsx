@@ -129,7 +129,7 @@ export function SandboxPanel({
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(
+  const annotationTarget = useSessionAnnotationSend(
     sessionId,
     chatId,
     isRouteActive,
@@ -407,7 +407,7 @@ export function SandboxPanel({
             runConsoleDevCommandOnConnect={false}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
-            onAnnotationSubmit={submitAnnotation}
+            annotation={annotationTarget}
             // Only the session on screen holds the idle-pause presence beacon;
             // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}

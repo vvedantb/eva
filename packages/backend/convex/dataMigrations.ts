@@ -1,4 +1,5 @@
 import { Migrations } from "@convex-dev/migrations";
+import { parseAnnotationDisplay } from "@eva/shared/previewAnnotationDisplay";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
@@ -347,3 +348,24 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * Fills `annotation` on preview-annotation rows sent before the field
+ * existed, read back from their `[Annotated <el> on /path]` chat text, so the
+ * preview comments drawer lists them too. A row that does not parse is left
+ * alone. Small batches: assistant rows can carry large activity logs.
+ *
+ * `npx convex run dataMigrations:run '{fn:"dataMigrations:backfillPreviewAnnotations"}'`
+ */
+export const backfillPreviewAnnotations = dataMigrations.define({
+  table: "messages",
+  batchSize: 50,
+  migrateOne: (_ctx, doc) => {
+    if (doc.role !== "user" || doc.annotation !== undefined) return;
+    const parsed = parseAnnotationDisplay(doc.content);
+    if (!parsed) return;
+    return {
+      annotation: { pagePath: parsed.pagePath, element: parsed.element },
+    };
+  },
+});

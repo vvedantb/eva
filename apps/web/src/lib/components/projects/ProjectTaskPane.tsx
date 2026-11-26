@@ -232,7 +232,7 @@ function ProjectTaskSandboxPanes({
     terminalPanes: sandbox.terminalPanes,
   });
   const chatBinding = useTaskChatBinding(taskId);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const annotationTarget = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
@@ -267,7 +267,7 @@ function ProjectTaskSandboxPanes({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
-          onAnnotationSubmit={submitAnnotation}
+          annotation={annotationTarget}
           // Only the pane on screen holds the presence beacon or auto-wakes.
           presenceEnabled={visible}
           onScreen={visible}
