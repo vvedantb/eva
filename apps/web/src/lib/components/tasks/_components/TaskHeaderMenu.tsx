@@ -80,9 +80,7 @@ export function TaskHeaderMenu({
       void navigate({ to: toInternalRepoHref(tasksPath) });
     },
   });
-  const { showResolveConflicts, hasSandboxCommandItems } =
-    sandboxItems.visibility;
-  const hasCommands = showResolveConflicts || hasSandboxCommandItems;
+  const hasCommands = sandboxItems.visibility.showResolveConflicts;
   const recapChat = useRecapChat(chatId);
 
   return (

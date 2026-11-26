@@ -60,15 +60,11 @@ interface TaskFooterProps {
   isSandboxStopping: boolean;
   /** The task's sandbox checkout (a quick task's lives on its session). */
   sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
-  isRunningDevServer: boolean;
-  isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunDevServer: () => void;
-  onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
   onResolveConfirm: () => void;
   variant?: "footer" | "header";
@@ -172,15 +168,11 @@ export function TaskFooter({
   isSandboxStarting,
   isSandboxStopping,
   sandbox,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
   canCreatePr,
   isCreatingPr,
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunDevServer,
-  onRunBackgroundCommands,
   onStartExecution,
   onResolveConfirm,
   variant = "footer",
@@ -219,8 +211,6 @@ export function TaskFooter({
     simpleView,
     hasActiveRun,
     status,
-    canStartSandbox,
-    isSandboxActive,
     isHeader,
     hasPrItems: prLinks.hasItems,
   });
@@ -286,11 +276,7 @@ export function TaskFooter({
               }}
               visibility={moreMenu}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : moreMenu.showMoreMenu ? (
             <TaskFooterMoreMenu
@@ -299,11 +285,7 @@ export function TaskFooter({
               buttonSize={buttonSize}
               iconSize={iconSize}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : null}
           <SandboxCommitPushButton

@@ -15,10 +15,7 @@ import {
 } from "./TaskDetailsPane";
 import { TaskDetailsRailFrame } from "./TaskDetailsRailFrame";
 import { TaskFooter } from "./_components/TaskFooter";
-import {
-  ResolveConfirmDialog,
-  RunDevServerConfirmDialog,
-} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
+import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { useTaskAgentActive } from "./taskAgentActivity";
@@ -122,8 +119,6 @@ export function TaskDetailInline({
     executionError,
     showResolveConfirm,
     setShowResolveConfirm,
-    showRunDevServerConfirm,
-    setShowRunDevServerConfirm,
     isStarting,
     handleStartExecution,
     handleResolveConflicts,
@@ -138,11 +133,6 @@ export function TaskDetailInline({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
-    handleRunDevServer,
-    isRunningDevServer,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
-    devServerCommandLabel,
     sandboxId,
     canCreatePr,
     isCreatingPr,
@@ -459,15 +449,6 @@ export function TaskDetailInline({
         onCreatePr={handleCreatePr}
         onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        onRunDevServer={() =>
-          requestConfirm(
-            () => setShowRunDevServerConfirm(true),
-            handleRunDevServer,
-          )
-        }
-        isRunningDevServer={isRunningDevServer}
-        onRunBackgroundCommands={handleRunBackgroundCommands}
-        isRunningBackgroundCommands={isRunningBackgroundCommands}
         onStartExecution={handleStartExecution}
         onResolveConfirm={() =>
           requestConfirm(
@@ -517,13 +498,6 @@ export function TaskDetailInline({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isStarting}
-      />
-      <RunDevServerConfirmDialog
-        open={showRunDevServerConfirm}
-        onOpenChange={setShowRunDevServerConfirm}
-        onConfirm={handleRunDevServer}
-        isLoading={isRunningDevServer}
-        devCommandLabel={devServerCommandLabel}
       />
     </>
   );
