@@ -1,0 +1,73 @@
+# v2.5 — Notifications for chats, threads and comments
+
+**Date:** 26 November 2026
+**Status:** DRAFT. Open questions at the end.
+**Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
+
+## Today (inventory, origin/main, 26 November 2026)
+
+- **Records:** one `notifications` row per person per event (`notifications.ts` `createNotification`, fan-out `notifyUsers`). Types include `mention`, `comment_reply`, `comment_added`, `task_assigned`, `status_changed`, `task_complete`, `routed_question`, `session_archived`, `system`. Five types are never created (`routine_complete`, `export_ready`, `run_completed`, `run_failed`, `rate_limit`).
+- **Channels:** Inbox (Needs you + Updates, web and phone); web toasts, bell and desktop pop-ups (`NotificationToastStream.tsx`); tab/favicon/rail badge = Needs you count; phone push (Expo) for `mention` and `routed_question`; email via SendGrid — instant (15-minute debounce) for mention, reply, comment, assignment, routed question; daily digest 08:00 UTC Monday–Friday.
+- **Chat mention urgency:** Jev classifies each chat mention as reply / fyi / none → high (push + email in 60 s) / normal (push + digest) / low (inbox only).
+- **Preferences:** one switch, `users.emailNotificationsEnabled` (off by default). No per-type or per-channel choice. No push setting in the phone app.
+- **Unread:** chats are unread only when an **Eva turn** finishes after your last read (`chatReads`, `lastTurnFinishedAt`). No unread state for threads, task comments or doc comments.
+
+## Gaps found
+
+1. **Teammate messages are invisible.** A message from a person with no @mention (including v2 "quiet comments") notifies nobody and lights no unread dot.
+2. **Threads:**
+   - Reply notifications open the chat, not the thread (no root id on the notification).
+   - Only the root author and the 3 latest repliers are notified; earlier repliers drop off.
+   - Replies to a thread under Eva's message notify nobody who took part.
+   - Eva's answer in a thread notifies nobody.
+   - No per-thread unread; replies don't push and aren't in Needs you.
+3. **Comment mentions:** task/doc comment mentions never toast or pop up on desktop, and are not emailed on their own (only swept along with other emails or in the digest). A chat mention whose routing failed never toasts either.
+4. **Clearing:** posting anything in a chat clears all your mentions there; opening the chat (or the thread) does not.
+5. **Email:** the digest does not stamp `emailedAt` (an item can arrive twice); Friday 08:00 → Sunday 08:00 items are never digested.
+6. **Coverage:** `routed_question` and `notify_user` rows are not in Needs you. Editing a comment to add a mention notifies no one. Doc comments have no subscribe UI.
+7. **Phone:** no app-icon badge, no push setting.
+
+## Proposed design
+
+One rule for every event: **who** gets it (participants), **how urgent** it is, and from that **where** it goes.
+
+| Event | Who | Inbox | Toast / desktop | Push | Email |
+|---|---|---|---|---|---|
+| @mention of you (chat, thread, comment) | you | Needs you | yes | yes | instant (per your setting) |
+| Reply in a thread you're in | thread participants | Updates | yes | yes | digest |
+| Eva answered your thread question | the asker | Updates | yes | yes | digest |
+| Teammate message in a chat you're in (no mention) | chat participants | — (unread dot only) | no | no | no |
+| Comment on a task you follow | followers | Updates | yes | no | digest |
+| Reply to your comment | comment author | Updates | yes | yes | instant |
+| Assigned to you | assignee | Updates | yes | yes | instant |
+| Eva asks you / routed question | you | Needs you | yes | yes | instant |
+| Task done / status change | followers | Updates | no | no | digest |
+
+(Jev's urgency for chat mentions stays and can lower a mention to fyi/low.)
+
+### Building blocks
+
+1. **Participants.** A `threadParticipants` row per person per reply thread (root author, every replier, anyone mentioned in it, the person whose question Eva answers). Same idea as `taskSubscribers`; chats use who has posted or been mentioned. Mute per thread / per chat ("Unfollow").
+2. **Unread for people's messages.** `chatReads` compares against the chat's last activity from anyone (Eva turn or person message), not only Eva turns. Per-thread read state (`threadReads`: lastReadAt per person per root). "N replies" shows a dot when a thread has unread replies.
+3. **Deep links.** Notifications carry `threadRootId`; web opens the Replies tab on that thread, phone opens `chat/[target]/thread/[rootId]`.
+4. **Clearing.** Opening a chat clears your mentions in its main transcript; opening a thread clears that thread's mentions and replies. Posting no longer clears mentions elsewhere.
+5. **Delivery fixes.** Comment mentions route like chat mentions (toast + email); failed routing falls back to `normal` (toast + push). Digest stamps `emailedAt`; digest window covers weekends (Monday includes Saturday and Sunday).
+6. **Preferences (web and phone).** Per channel: Email (instant for mentions and direct replies / daily digest / off), Push (on/off, phone), Desktop (on/off, per device, as today). Defaults per the table.
+7. **Phone badge.** App-icon badge = Needs you count, as the web tab.
+8. **Cleanups.** Remove the five dead types. Mentions added by editing a comment notify. `routed_question` and `notify_user` show in Needs you.
+
+## Split (PRs)
+
+- **A — Threads:** participants, thread unread, deep links, clearing rules, reply/Eva-answer notifications.
+- **B — Chat unread for people's messages:** unread dot and NEW divider for teammate messages; quiet comments light the dot.
+- **C — Delivery:** one routing table (above), comment mention fixes, failed-routing fallback, digest fixes, Needs you coverage, dead types.
+- **D — Preferences and phone badge:** settings UI web + phone, push toggle, app badge.
+
+Each PR ships on web and phone together.
+
+## Open questions
+
+1. Teammate messages with no mention: unread dot only (as in the table), or also a quiet Updates row?
+2. Thread participation: automatic (anyone who posts, is mentioned, or authored the root) with an Unfollow, or only people who press Follow?
+3. Email defaults: keep email off until a person turns it on, or default to "instant for mentions and direct replies, digest for the rest"?
+4. Order: A → B → C → D, or C (delivery fixes) first because it is mostly bug fixes?
