@@ -31,14 +31,6 @@ export type NotificationRoute = {
   email: NotificationEmail;
 };
 
-/** Types no code creates any more. Inbox only until `dataMigrations:deleteDeadNotifications` removes their rows. */
-const LEGACY: NotificationRoute = {
-  inbox: "updates",
-  toast: false,
-  push: false,
-  email: "none",
-};
-
 export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
   {
     // @mention of you (chat or comment).
@@ -99,9 +91,6 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
     // An agent's `notify_user`, an automation's email draft. An agent message
     // about a chat also asks for you (`isNeedsYouNotification`).
     system: { inbox: "updates", toast: true, push: false, email: "digest" },
-    routine_complete: LEGACY,
-    run_completed: LEGACY,
-    run_failed: LEGACY,
   };
 
 /** The fields routing reads off a notification row. */

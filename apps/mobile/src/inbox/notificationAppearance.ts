@@ -4,7 +4,6 @@ import {
   IconArchive,
   IconAt,
   IconCheck,
-  IconExclamationCircle,
   IconGitMerge,
   IconGitPullRequestClosed,
   IconInfoCircle,
@@ -12,9 +11,7 @@ import {
   IconMessageQuestion,
   IconMessageReply,
   IconPencil,
-  IconPlayerPlay,
   IconProgress,
-  IconRepeat,
   IconUserPlus,
   type IconProps,
 } from "@tabler/icons-react-native";
@@ -27,7 +24,6 @@ import type { Scheme } from "@/ui/theme";
  * each type's icon name, label and tone (the same map as the web inbox).
  */
 export const NOTIFICATION_ICONS: Record<NotificationIconName, ComponentType<IconProps>> = {
-  Repeat: IconRepeat,
   Check: IconCheck,
   UserPlus: IconUserPlus,
   Progress: IconProgress,
@@ -35,8 +31,6 @@ export const NOTIFICATION_ICONS: Record<NotificationIconName, ComponentType<Icon
   Pencil: IconPencil,
   MessageReply: IconMessageReply,
   At: IconAt,
-  PlayerPlay: IconPlayerPlay,
-  ExclamationCircle: IconExclamationCircle,
   InfoCircle: IconInfoCircle,
   Archive: IconArchive,
   GitMerge: IconGitMerge,

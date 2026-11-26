@@ -17,7 +17,6 @@ export type NotificationTone =
 
 /** The Tabler icon, by its component name without the `Icon` prefix. */
 export type NotificationIconName =
-  | "Repeat"
   | "Check"
   | "UserPlus"
   | "Progress"
@@ -25,8 +24,6 @@ export type NotificationIconName =
   | "Pencil"
   | "MessageReply"
   | "At"
-  | "PlayerPlay"
-  | "ExclamationCircle"
   | "InfoCircle"
   | "Archive"
   | "GitMerge"
@@ -58,14 +55,6 @@ const TYPE_APPEARANCE: Record<
     icon: "MessageQuestion",
     label: "Question",
     tone: "primary",
-  },
-  // Legacy rows, until `dataMigrations:deleteDeadNotifications` deletes them.
-  routine_complete: { icon: "Repeat", label: "Routine", tone: "secondary" },
-  run_completed: { icon: "PlayerPlay", label: "Run Done", tone: "success" },
-  run_failed: {
-    icon: "ExclamationCircle",
-    label: "Run Failed",
-    tone: "destructive",
   },
 };
 
