@@ -1,7 +1,7 @@
 # v2.5 — Notifications for chats, threads and comments
 
 **Date:** 26 November 2026
-**Status:** C built (26 November 2026). A built (26 November 2026; mock `notifications-v2-5-threads-mock.html`). B, D TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
+**Status:** C built (26 November 2026). A built (26 November 2026; mock `notifications-v2-5-threads-mock.html`). D built (26 November 2026). B TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
 **Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
 
 ## Today (inventory, origin/main, 26 November 2026)
@@ -98,3 +98,12 @@ Each PR ships on web and phone together.
 - "N new" shows only for followers. Opening a thread you are not in does not make you a participant; Follow does (read up to the newest reply).
 - The "New" line in a thread reuses the chat's NEW divider, so it uses the accent colour like the chat, not a fixed blue. The "N new" pill uses the mention blue (`--mention`, `EVA_THEME.mention`).
 - Existing threads: `dataMigrations:backfillThreadParticipants` makes root authors, repliers and the people they mention followers, read up to the migration.
+
+### Part D — changes while building (26 November 2026)
+
+- Email is one choice per person, not per type: Instant (the table), Daily digest (every emailable row waits for the digest), Off (nothing). Push is one switch. Stored sparse in `users.notificationPrefs`; defaults in `resolveNotificationPrefs` (`@eva/shared/notificationRouting`).
+- Push "off" also stops the agent-question push (`pendingQuestions`): the check sits in `push.ts` `schedulePush`, which every push goes through.
+- `emailNotificationsEnabled === false` maps to "off": only the settings switch ever wrote `false` (signup never wrote the field; onboarding wrote only `true`), so it is a person's choice.
+- Broadcasts (weekly changelog, automation emails) follow the same email choice: everyone not "off" gets them, including people who never chose. Before, they were opt-in.
+- The phone badge is set by the app while it runs (`useAppBadge`). Push payloads carry no badge: the `@vvedantb/server` Expo message has no `badge` field.
+- The migration is tested through its mapping (`notificationPrefsFromLegacy`): convex-test cannot run the migrations component.

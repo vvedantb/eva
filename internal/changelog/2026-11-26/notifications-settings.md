@@ -1,0 +1,10 @@
+# Notifications v2.5 (D): email and push settings, email on by default, phone badge
+
+- New `users.notificationPrefs` (`{ email?: "instant" | "digest" | "off"; push?: boolean }`, sparse). Defaults live in one place, `resolveNotificationPrefs` in `@eva/shared/notificationRouting`: email "instant", push on. Desktop pop-ups stay per device (`desktopNotifications.ts`).
+- Email "instant" follows the routing table; "digest" sends every emailable row in the daily digest only; "off" sends no notification email and no digest (`notificationEmailFor`). The instant sweep (`getUnreadEmailableForUser`), the digest (`getDigestRecipients`) and the scheduling in `createNotification` / routed mentions all read it.
+- Push "off" stops every phone push: `push.ts` `schedulePush` now checks the choice, so notification pushes and an agent's blocking question both respect it.
+- Broadcasts (weekly changelog, automation emails) go to everyone whose email is not "off" (`users.ts` `toEmailRecipient`). So people who never chose now get them too, as the email default is on.
+- API: `auth.getNotificationPrefs` / `auth.setNotificationPrefs` replace `getEmailNotificationsEnabled` / `setEmailNotificationsEnabled` (deleted; old phone builds lose the email switch).
+- Web settings → Notifications: Email → Delivery is Instant / Daily digest / Off (shared `EmailPreferenceTabs`, also in the onboarding step); Desktop pop-ups unchanged. Phone settings: the same Email choice (`SegmentedTabs`) and a Push switch, in place of "Turn them off in Android settings".
+- Phone app-icon badge = Needs you count (`useAppBadge` in `push.ts`, `setBadgeCountAsync`), cleared on sign-out. Push payloads carry no badge: `@vvedantb/server`'s Expo message has no `badge` field.
+- Deploy: schema widening only. Right after deploy run `npx convex run --prod dataMigrations:migrateNotificationPrefs` (idempotent): `emailNotificationsEnabled` true → "instant", false → "off" (only the settings switch ever wrote false, so it is a choice), unset stays unset; it clears the legacy field. A later PR drops `emailNotificationsEnabled` from the schema. Ship the phone release with the deploy.

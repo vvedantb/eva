@@ -163,6 +163,56 @@ export function notificationEmail(
   return NOTIFICATION_ROUTES[notification.type].email;
 }
 
+type StoredNotificationPrefs = Doc<"users">["notificationPrefs"];
+
+/** A person's email choice (settings → Notifications). */
+export type EmailPreference = NonNullable<
+  NonNullable<StoredNotificationPrefs>["email"]
+>;
+
+/** Email choices in the order the settings show them. */
+export const EMAIL_PREFERENCE_OPTIONS: ReadonlyArray<{
+  value: EmailPreference;
+  label: string;
+}> = [
+  { value: "instant", label: "Instant" },
+  { value: "digest", label: "Daily digest" },
+  { value: "off", label: "Off" },
+];
+
+export function isEmailPreference(value: string): value is EmailPreference {
+  return EMAIL_PREFERENCE_OPTIONS.some((option) => option.value === value);
+}
+
+/** A person's notification channels with the defaults filled in. */
+export type NotificationPrefs = { email: EmailPreference; push: boolean };
+
+/**
+ * The stored choices with defaults: email `instant` (decision 3, plan
+ * `notifications-v2-5.md`) and push on. Desktop pop-ups are per device
+ * (web `desktopNotifications.ts`), not stored here.
+ */
+export function resolveNotificationPrefs(
+  prefs: StoredNotificationPrefs,
+): NotificationPrefs {
+  return { email: prefs?.email ?? "instant", push: prefs?.push ?? true };
+}
+
+/**
+ * How a notification is emailed to a person with this email choice: `off`
+ * sends nothing, `digest` moves instant email to the digest, `instant`
+ * follows the route.
+ */
+export function notificationEmailFor(
+  notification: RoutableNotification,
+  preference: EmailPreference,
+): NotificationEmail {
+  const routed = notificationEmail(notification);
+  if (preference === "off") return "none";
+  if (preference === "digest" && routed === "instant") return "digest";
+  return routed;
+}
+
 /**
  * Whether an unread, unarchived row is an Inbox → Needs you question: a
  * mention or routed question, or an agent message (`notify_user`) about a

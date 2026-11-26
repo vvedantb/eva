@@ -465,6 +465,27 @@ export const notificationUrgencyValidator = v.union(
   v.literal("high"),
 );
 
+/**
+ * How a person wants notification email (`users.notificationPrefs.email`).
+ * Unset means `instant` (`@eva/shared/notificationRouting`):
+ *
+ * - `instant`: each notification follows its route (instant or digest).
+ * - `digest`: everything emailable waits for the daily digest.
+ * - `off`: no notification email and no digest.
+ */
+export const emailPreferenceValidator = v.union(
+  v.literal("instant"),
+  v.literal("digest"),
+  v.literal("off"),
+);
+
+/** A person's notification channels. Sparse: a missing key is the default. */
+export const notificationPrefsValidator = v.object({
+  email: v.optional(emailPreferenceValidator),
+  /** Phone push. Unset means on. */
+  push: v.optional(v.boolean()),
+});
+
 export const presentationStatusValidator = v.union(
   v.literal("live"),
   v.literal("ended"),

@@ -5,6 +5,7 @@ import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { collectDirectoryUserIds, isDirectoryPeer } from "./_users/directory";
+import { resolveNotificationPrefs } from "@eva/shared/notificationRouting";
 
 /** Returns the Clerk ID for a user (internal use only). */
 export const getInternal = internalQuery({
@@ -74,9 +75,16 @@ export const get = authQuery({
 
 type EmailRecipient = { userId: Id<"users">; email: string; name?: string };
 
-/** The user as a broadcast recipient, or null without an email or opt-in. */
+/**
+ * The user as a broadcast recipient (weekly changelog, automation emails), or
+ * null without an email address or with email turned off. Broadcasts follow
+ * the one email choice, so its default (instant) includes them.
+ */
 function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
-  if (!user?.email || user.emailNotificationsEnabled !== true) return null;
+  if (!user?.email) return null;
+  if (resolveNotificationPrefs(user.notificationPrefs).email === "off") {
+    return null;
+  }
   return {
     userId: user._id,
     email: user.email,
@@ -85,7 +93,7 @@ function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
 }
 
 /**
- * Every user with an email address and email notifications enabled, across
+ * Every user with an email address and email not turned off, across
  * all teams. Only the weekly changelog broadcast may use this.
  */
 export async function collectEmailRecipients(
@@ -95,7 +103,7 @@ export async function collectEmailRecipients(
   return users.flatMap((user) => toEmailRecipient(user) ?? []);
 }
 
-/** The given users that have an email address and email notifications enabled. */
+/** The given users that have an email address and email not turned off. */
 export async function collectEmailRecipientsAmong(
   db: DatabaseReader,
   userIds: ReadonlyArray<Id<"users">>,
@@ -108,8 +116,8 @@ export async function collectEmailRecipientsAmong(
 
 /**
  * Email and display name for one user, the recipient lookup for the MCP
- * `send_email` tool. It ignores `emailNotificationsEnabled` because that flag
- * governs broadcasts, not mail the user's own agent was asked to send.
+ * `send_email` tool. It ignores `notificationPrefs` because those choices
+ * govern notifications and broadcasts, not mail the user's own agent was asked to send.
  */
 export const getEmailRecipientById = internalQuery({
   // A string, not v.id: MCP's getContext hands back the user id as a string.

@@ -8,3 +8,7 @@ export async function getPushToken(_options: { ask: boolean }): Promise<string |
 }
 
 export function usePush() {}
+
+export function useAppBadge() {}
+
+export async function clearAppBadge(): Promise<void> {}

@@ -2,6 +2,7 @@ import { mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import {
   themeValidator,
+  emailPreferenceValidator,
   roleUserValidator,
   customThemeValidator,
   userFields,
@@ -15,6 +16,7 @@ import { getCurrentUserId, userAuth } from "./_auth/currentUser";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import type { ExperimentalFlagKey } from "./_auth/experimentalFlags";
 import type { Doc } from "./_generated/dataModel";
+import { resolveNotificationPrefs } from "@eva/shared/notificationRouting";
 
 /** Returns the Clerk ID for a given user, or null if the user doesn't exist. */
 export const getUserClerkId = internalQuery({
@@ -195,25 +197,28 @@ export const setTheme = authMutation({
   },
 });
 
-/**
- * Returns whether the current user has opted in to email notifications
- * (daily summary + weekly changelog). Defaults to false (opt-in).
- */
-export const getEmailNotificationsEnabled = authQuery({
+/** The current user's email and push choices, defaults filled in. */
+export const getNotificationPrefs = authQuery({
   args: {},
-  returns: v.boolean(),
+  returns: v.object({ email: emailPreferenceValidator, push: v.boolean() }),
   handler: async (ctx) => {
     const user = await ctx.db.get(ctx.userId);
-    return user?.emailNotificationsEnabled ?? false;
+    return resolveNotificationPrefs(user?.notificationPrefs);
   },
 });
 
-/** Updates the current user's email notification opt-in preference. */
-export const setEmailNotificationsEnabled = authMutation({
-  args: { enabled: v.boolean() },
+/** Sets the given notification choices; a missing key keeps its value. */
+export const setNotificationPrefs = authMutation({
+  args: {
+    email: v.optional(emailPreferenceValidator),
+    push: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(ctx.userId, { emailNotificationsEnabled: args.enabled });
+    const user = await ctx.db.get(ctx.userId);
+    await ctx.db.patch(ctx.userId, {
+      notificationPrefs: { ...user?.notificationPrefs, ...args },
+    });
     return null;
   },
 });
