@@ -1,3 +1,5 @@
+import { startQuickTaskRun } from "../_agentTasks/taskRunTurn";
+import { hasActiveQuickTaskRun } from "../_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { startTaskRun, taskWorkSessionBusy } from "./startRun";
 import { internalMutation } from "../_generated/server";
@@ -109,6 +111,12 @@ export const executeScheduledTask = internalMutation({
     if (!fired.ok) return null;
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
+    // A quick task queues its run in its chat; a busy chat just runs it next.
+    if (task.projectId === undefined) {
+      if (await hasActiveQuickTaskRun(ctx.db, task)) return null;
+      await startQuickTaskRun(ctx, task, { userId: task.createdBy });
+      return null;
+    }
     if (await hasActiveRun(ctx.db, args.taskId)) return null;
     // The task's chat is mid-reply on its sandbox: try again shortly instead of failing the schedule (`startTaskRun`
     // refuses a busy chat).

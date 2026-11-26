@@ -92,7 +92,7 @@ export function TaskDetailInline({
     hasRuns,
     latestPrUrl,
     latestPrError,
-    latestDeployment,
+    deploymentStatus,
     executionError,
     showResolveConfirm,
     setShowResolveConfirm,
@@ -397,7 +397,7 @@ export function TaskDetailInline({
         hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
         latestPrError={latestPrError}
-        latestDeployment={latestDeployment}
+        deploymentStatus={deploymentStatus}
         executionError={executionError}
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}

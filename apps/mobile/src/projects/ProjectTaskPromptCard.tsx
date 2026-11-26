@@ -33,15 +33,15 @@ export function ProjectTaskPromptCard({
   const theme = EVA_THEME[useScheme()];
   const users = useQuery(api.users.listAll, {});
   const currentUserId = useQuery(api.auth.me, {});
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
   const attachments = useQuery(api.agentTasks.listAttachments, { taskId: task._id });
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [busy, setBusy] = useState(false);
-  const hasActiveRun = runs?.some((run) => run.status === "queued" || run.status === "running") ?? false;
-  const editable = !readOnly && runs !== undefined && canEditTaskText(task.status, hasActiveRun);
-  const action = runs === undefined ? undefined : projectTaskPromptAction(task, { hasActiveRun, readOnly });
+  const hasActiveRun = runFacts?.hasActiveRun ?? false;
+  const editable = !readOnly && runFacts !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const action = runFacts === undefined ? undefined : projectTaskPromptAction(task, { hasActiveRun, readOnly });
   const update = (fields: Omit<FunctionArgs<typeof api.agentTasks.update>, "id">, failure: string) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -54,7 +54,7 @@ export function ProjectTaskPromptCard({
       <TaskTitle
         title={task.title}
         editable={editable}
-        lockReason={runs === undefined ? undefined : taskTextLockReason(hasActiveRun, "Title")}
+        lockReason={runFacts === undefined ? undefined : taskTextLockReason(hasActiveRun, "Title")}
         onSave={(title) => update({ title }, "Couldn't rename the task")}
       />
       <TaskDescription

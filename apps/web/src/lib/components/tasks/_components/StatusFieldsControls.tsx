@@ -59,9 +59,10 @@ import type {
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
+/** The task branch's latest deployment (`agentTasks.getRunFacts`). */
+export type TaskDeploymentStatus = NonNullable<
+  FunctionReturnType<typeof api.agentTasks.getRunFacts>
+>["deploymentStatus"];
 type Users = FunctionReturnType<typeof api.users.listAll> | undefined;
 type ProjectOptions = FunctionReturnType<typeof api.projects.list>;
 type TaskDoc = Doc<"agentTasks"> | undefined;
@@ -402,14 +403,14 @@ export function BaseBranchRow({
 
 export function DeploymentRow({
   viewVercelDeployment,
-  latestDeployment,
+  deploymentStatus,
 }: {
   viewVercelDeployment: boolean;
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
 }) {
   return (
     <AnimatePresence initial={false}>
-      {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
+      {viewVercelDeployment && deploymentStatus ? (
         <m.div
           key="vercel-deployment"
           className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}
@@ -421,12 +422,12 @@ export function DeploymentRow({
           <IconBrandVercelFilled
             size={14}
             className={
-              DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+              DEPLOYMENT_STATUS_CONFIG[deploymentStatus]
                 ?.iconColor ?? "text-muted-foreground"
             }
           />
           <span>
-            {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+            {DEPLOYMENT_STATUS_CONFIG[deploymentStatus]
               ?.label ?? "Unknown"}
           </span>
         </m.div>

@@ -61,8 +61,8 @@ async function adoptProjectRunSettings(
 }
 
 /**
- * The one way to start a task run (a quick task or a project's child task,
- * each on its own session, branch and PR). Queues an
+ * The one way to start a project task's run (on its own session, branch and
+ * PR; a quick task runs in its chat, `_agentTasks/taskRunTurn.ts`). Queues an
  * `agentRuns` row, stamps the task's run summary, moves the task to
  * `in_progress` and starts `taskExecutionWorkflow`. A failed start marks the
  * run `workflow_start_failed`, rolls the task back to `rollbackStatus` and
@@ -87,6 +87,9 @@ export async function startTaskRun(
   },
 ): Promise<Id<"agentRuns">> {
   const { repo } = p;
+  if (p.task.projectId === undefined) {
+    throw new Error("A quick task runs in its chat (startQuickTaskRun)");
+  }
   // One agent per sandbox: a run waits while its session's chat is mid-reply,
   // as a chat message waits behind a run.
   if (await taskWorkSessionBusy(ctx.db, p.task)) {

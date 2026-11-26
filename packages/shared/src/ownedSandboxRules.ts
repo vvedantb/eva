@@ -36,12 +36,12 @@ export function taskCanResolveConflicts(
 /** Create PR: a task that has run, with no run going and no PR yet (the task's, or its project's). */
 export function taskCanCreatePr({
   latestPrUrl,
-  runCount,
+  hasRuns,
   hasActiveRun,
 }: {
   latestPrUrl: string | undefined;
-  runCount: number;
+  hasRuns: boolean;
   hasActiveRun: boolean;
 }): boolean {
-  return !latestPrUrl && runCount > 0 && !hasActiveRun;
+  return !latestPrUrl && hasRuns && !hasActiveRun;
 }

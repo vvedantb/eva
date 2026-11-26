@@ -2,8 +2,7 @@
 
 import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useRef } from "react";
-import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { taskScheduledAt, type Doc, type Id } from "@eva/backend";
 import {
   Button,
   Tooltip,
@@ -34,10 +33,8 @@ import {
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
 import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
+import type { TaskDeploymentStatus } from "./StatusFieldsControls";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
 
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
@@ -51,7 +48,7 @@ interface TaskFooterProps {
   hasRuns: boolean;
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
   executionError: string | null;
   isStarting: boolean;
   canStartSandbox: boolean;
@@ -160,7 +157,7 @@ export function TaskFooter({
   hasRuns,
   latestPrUrl,
   latestPrError,
-  latestDeployment,
+  deploymentStatus,
   executionError,
   isStarting,
   canStartSandbox,
@@ -205,7 +202,7 @@ export function TaskFooter({
     },
     prUrl: latestPrUrl,
     owner: { kind: "task", taskId },
-    hasDeployment: Boolean(latestDeployment?.deploymentStatus),
+    hasDeployment: deploymentStatus !== undefined,
   });
   const moreMenu = getMoreMenuVisibility({
     simpleView,
