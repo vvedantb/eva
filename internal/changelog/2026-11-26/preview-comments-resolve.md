@@ -5,3 +5,4 @@
 - The toolbar badge counts open comments only.
 - Backend: `annotation.resolvedAt` / `annotation.resolvedBy` on the user row (`storedPreviewAnnotationValidator`; sends still use `previewAnnotationValidator`, so a send cannot set them). New mutation `previewComments.setResolved`; `previewComments.list` returns `resolved: { at, byName }`.
 - People only: Eva cannot resolve a comment yet (no MCP tool).
+- The drawer's two filters and doc comments' Open / Resolved use the segmented `Tabs` (`tabs-segmented`) instead of the hand-made `CommentFilterTab`, which is deleted.

@@ -6,13 +6,19 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docCommentFilterParser } from "@/lib/search-params";
-import { Button, tokenTransition, ListEnter } from "@vvedantb/ui";
+import {
+  Button,
+  ListEnter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconX } from "@tabler/icons-react";
 import { DocCommentThread } from "./DocCommentThread";
 import { DocNewCommentComposer } from "./DocNewCommentComposer";
 import { DOC_SIDE_PANEL_CLASS } from "./docSidePanel";
-import { CommentFilterTab } from "@/lib/components/CommentFilterTab";
 
 
 export function DocCommentsPanel({
@@ -69,19 +75,24 @@ export function DocCommentsPanel({
         </Button>
       </div>
 
-      <div className="flex items-center gap-1 border-b border-border px-3 max-sm:py-1.5 max-sm:gap-2.5">
-        <CommentFilterTab
-          active={filter === "open"}
-          onSelect={() => void setFilter("open")}
+      <div className="px-3 pb-1.5">
+        <Tabs
+          value={filter}
+          onValueChange={(value) => {
+            if (value === "open" || value === "resolved") void setFilter(value);
+          }}
         >
-          Open ({openRoots.length})
-        </CommentFilterTab>
-        <CommentFilterTab
-          active={filter === "resolved"}
-          onSelect={() => void setFilter("resolved")}
-        >
-          Resolved ({resolvedRoots.length})
-        </CommentFilterTab>
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Open or resolved"
+          >
+            <TabsTrigger value="open">Open ({openRoots.length})</TabsTrigger>
+            <TabsTrigger value="resolved">
+              Resolved ({resolvedRoots.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto">
