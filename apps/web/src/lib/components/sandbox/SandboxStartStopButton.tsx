@@ -132,12 +132,15 @@ export function SandboxChatHeaderActions({
     </div>
   );
   if (left === undefined) {
-    return <div className="flex shrink-0 justify-end px-2 py-1">{actions}</div>;
+    // `pt-2` matches the side panel's `md:my-2`, so the chip's top lines up with the panel's.
+    return <div className="flex shrink-0 justify-end px-2 pt-2 pb-1">{actions}</div>;
   }
   return (
-    <div className="flex min-w-0 shrink-0 items-center gap-2 pr-2">
+    // Top-aligned: the tabs carry their own `pt-2`, and the chip takes the
+    // same, so both start on the side panel's top edge.
+    <div className="flex min-w-0 shrink-0 items-start gap-2 pr-2">
       <div className="min-w-0 flex-1">{left}</div>
-      <div className="shrink-0">{actions}</div>
+      <div className="shrink-0 pt-2">{actions}</div>
     </div>
   );
 }

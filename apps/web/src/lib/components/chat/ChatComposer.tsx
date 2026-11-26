@@ -376,7 +376,9 @@ export function ChatComposer({
   return (
     // `relative` anchors the absolutely positioned typing indicator to the
     // composer, so it floats just above it instead of a distant ancestor.
-    <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
+    // Desktop bottom `pb-2` matches the side panel's `md:my-2`: the composer's
+    // last row ends on the panel's bottom edge.
+    <div className="relative p-3 md:px-4 md:pt-4 md:pb-2 max-w-3xl mx-auto w-full">
       {preInputContent}
       {/* One chip row on the input: status chips first, then skill
           suggestions. Same inset as the stash dock, so it lines up with the
