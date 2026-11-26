@@ -65,7 +65,7 @@ export function computeHasUnread(input: {
   );
 }
 
-function getReadRow(
+export function getReadRow(
   db: DatabaseReader,
   userId: Id<"users">,
   parentId: ChatEntityId,
@@ -198,28 +198,39 @@ export const isUnread = authQuery({
 /** `lastVisitedAt` moves at most this often; recaps need minutes, not seconds. */
 const VISIT_WRITE_INTERVAL_MS = 60_000;
 
-/** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
+/**
+ * Upserts the user's read row for one chat entity, skipping repeat calls past
+ * its watermark. `seen`: the user read it (not just posted in it), so new
+ * activity it had stamps `seenNewAt` (the Inbox keeps the chat until Done).
+ */
 async function upsertReadRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   entity: ChatEntity,
+  seen: boolean,
 ): Promise<void> {
   // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
   if (entity.repoId === undefined) return;
   const row = await getReadRow(ctx.db, userId, entity._id);
   const lastReadAt = Date.now();
+  const activityAt = lastChatActivityAt(entity);
   if (!row) {
     await ctx.db.insert("chatReads", {
       userId,
       parentId: entity._id,
       repoId: entity.repoId,
       lastReadAt,
+      ...(seen && activityAt !== undefined ? { seenNewAt: lastReadAt } : {}),
     });
     return;
   }
   // Already past the watermark: skip, so repeat calls on mount do not churn.
-  if (row.lastReadAt >= (lastChatActivityAt(entity) ?? 0)) return;
-  await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
+  if (row.lastReadAt >= (activityAt ?? 0)) return;
+  await ctx.db.patch(row._id, {
+    lastReadAt,
+    repoId: entity.repoId,
+    ...(seen ? { seenNewAt: lastReadAt } : {}),
+  });
 }
 
 /**
@@ -297,20 +308,39 @@ export async function recordPersonChatPost(
   const joinAsReader = async (userId: Id<"users">, entity: ChatEntity) => {
     const { repoId } = entity;
     if (repoId === undefined) return;
-    if (await getReadRow(ctx.db, userId, entity._id)) return;
+    const row = await getReadRow(ctx.db, userId, entity._id);
+    if (row) {
+      await markJoined(ctx, row, now);
+      return;
+    }
     await ctx.db.insert("chatReads", {
       userId,
       parentId: entity._id,
       repoId,
       lastReadAt: now - 1,
+      joinedAt: now,
     });
+  };
+  const authorReads = async (entity: ChatEntity) => {
+    await upsertReadRow(ctx, params.authorId, entity, false);
+    const row = await getReadRow(ctx.db, params.authorId, entity._id);
+    if (row) await markJoined(ctx, row, now);
   };
   await Promise.all(
     chain.flatMap((entity) => [
-      upsertReadRow(ctx, params.authorId, entity),
+      authorReads(entity),
       ...mentioned.map((userId) => joinAsReader(userId, entity)),
     ]),
   );
+}
+
+/** The first post or mention in a chat makes the user part of it (the Inbox's "took part" rule). */
+async function markJoined(
+  ctx: MutationCtx,
+  row: Doc<"chatReads">,
+  now: number,
+): Promise<void> {
+  if (row.joinedAt === undefined) await ctx.db.patch(row._id, { joinedAt: now });
 }
 
 /**
@@ -350,7 +380,7 @@ export const markRead = authMutation({
     const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
     // Reading a chat also reads the rows that show its dot (`loadChatChain`).
     await Promise.all(
-      chain.map((link) => upsertReadRow(ctx, ctx.userId, link)),
+      chain.map((link) => upsertReadRow(ctx, ctx.userId, link, true)),
     );
     // Recaps belong to one visit: an open expires the last one, then may
     // write a new one. A reply landing while the chat is watched does neither.

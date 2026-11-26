@@ -84,6 +84,7 @@ export function QuickTasksListSplit({
       <div className="min-h-0 flex-1 overflow-hidden">
         <ResizablePanelLayout
           storageKey="quick-tasks-split"
+          chatPane="right"
           leftDefaultSize="33%"
           leftMinWidthPx={260}
           rightMinWidthPx={360}

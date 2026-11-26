@@ -302,6 +302,7 @@ export function TaskDetailInline({
       // Remount per task: the open flag is read once at mount.
       key={taskId}
       storageKey="task-sandbox-panel"
+      chatPane="left"
       collapsedStorageKey={`task-sandbox-panel:${taskId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}

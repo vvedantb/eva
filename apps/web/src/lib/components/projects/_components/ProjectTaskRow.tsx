@@ -149,10 +149,9 @@ export function ProjectTaskRow({
         if (!hasDialogOpen) onSelectTask(task._id);
       }}
       aria-label={task.title}
-      selected={open}
-      accentClassName={open ? "bg-primary" : undefined}
-      // The tint and stripe mark it; no ring.
-      className={open ? "ring-0" : FLAT_ROW_CLASS}
+      aria-current={open ? "true" : undefined}
+      // The open task is a muted background, as a selected Inbox row: no stripe, no ring.
+      className={open ? "bg-muted hover:bg-muted" : FLAT_ROW_CLASS}
       contentClassName={FLAT_ROW_CONTENT_CLASS}
     >
       <ProjectFlatRowBody

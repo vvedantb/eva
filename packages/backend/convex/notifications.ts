@@ -392,14 +392,15 @@ async function ownedNotifications(
 }
 
 /**
- * Lists the current user's inbox: the 100 most recent notifications, then
- * split by archive state (`archived: true` returns only archived rows, the
- * default only unarchived ones). The window is taken before the split, so a
- * large run of archived rows shortens the list rather than paging past them —
- * acceptable while archiving is an inbox-sized action.
+ * The current user's 100 most recent notifications that are not archived
+ * (the web's new-notification toasts). The window is taken before the archive
+ * filter, so a run of archived rows shortens it rather than paging past them.
  */
 export const list = authQuery({
-  args: { archived: v.optional(v.boolean()) },
+  args: {
+    /** The Inbox's History: every notification, read and archived (Done) ones too. */
+    history: v.optional(v.boolean()),
+  },
   returns: v.array(notificationValidator),
   handler: async (ctx, args) => {
     const recent = await ctx.db
@@ -407,19 +408,9 @@ export const list = authQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
-    const wantArchived = args.archived === true;
-    return recent.filter((n) => (n.archivedAt !== undefined) === wantArchived);
-  },
-});
-
-/** Fetches a single notification by ID, only if it belongs to the current user. */
-export const get = authQuery({
-  args: { id: v.id("notifications") },
-  returns: v.union(notificationValidator, v.null()),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId) return null;
-    return notification;
+    return args.history === true
+      ? recent
+      : recent.filter((n) => n.archivedAt === undefined);
   },
 });
 
@@ -452,73 +443,6 @@ export const markAsRead = authMutation({
       throw new Error("Not found");
     if (!notification.read) {
       await ctx.db.patch(args.id, { read: true });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks a single notification as unread again (inbox right-click menu). Read
- * state is the `read` boolean alone — there is no timestamp to clear.
- */
-export const markAsUnread = authMutation({
-  args: { id: v.id("notifications") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId)
-      throw new Error("Not found");
-    if (notification.read) {
-      await ctx.db.patch(args.id, { read: false });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks all unread notifications as read for the current user. Archived rows
- * are left alone: they are out of the inbox, and touching them here would
- * quietly change what the archived view shows.
- */
-export const markAllAsRead = authMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const unread = await ctx.db
-      .query("notifications")
-      .withIndex("by_user_and_read", (q) =>
-        q.eq("userId", ctx.userId).eq("read", false),
-      )
-      .collect();
-    for (const n of unread) {
-      if (n.archivedAt !== undefined) continue;
-      await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as read (inbox bulk bar). */
-export const markManyAsRead = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (!n.read) await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as unread. */
-export const markManyAsUnread = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (n.read) await ctx.db.patch(n._id, { read: false });
     }
     return null;
   },

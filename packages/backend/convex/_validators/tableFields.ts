@@ -1678,6 +1678,21 @@ export const chatReadFields = {
   lastReadAt: v.number(),
   /** Last time the chat was on screen, read or not (chat rows only; recaps). */
   lastVisitedAt: v.optional(v.number()),
+  /**
+   * When the user pressed Done on the chat in the Inbox: it leaves "New since
+   * you looked" until something newer happens in it (see inbox.ts).
+   */
+  doneAt: v.optional(v.number()),
+  /**
+   * When the user last read new activity in the chat (`chatReads.markRead`).
+   * Later than `doneAt`: the chat stays in the Inbox, read, until Done.
+   */
+  seenNewAt: v.optional(v.number()),
+  /**
+   * When the user first posted in the chat or was @mentioned in it
+   * (`recordPersonChatPost`): the Inbox's "took part" rule.
+   */
+  joinedAt: v.optional(v.number()),
 };
 
 // One row per (user, repo): when the user last opened the repo's Today page,
