@@ -28,6 +28,8 @@ async function fixture() {
       name: "eva",
       installationId: 1,
       connectedBy: userId,
+      // The task's chat starts on the repo's default.
+      defaultModel: "claude:opus",
     });
     const taskId = await ctx.db.insert("agentTasks", {
       repoId,
@@ -38,7 +40,6 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      model: "claude:opus",
     });
     return { userId, repoId, taskId };
   });

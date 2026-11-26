@@ -42,11 +42,10 @@ async function fixture() {
       sandboxId: "sbx_source",
       baseBranch: "develop",
       branchName: "eva/session-source",
-      lastModel: "claude:opus",
       planContent: "# Seed plan",
       lastInteractionMode: "plan",
     });
-    // Composer picks live on the chat; the session's `lastModel` is stale.
+    // Composer picks live on the chat.
     const mainChatId = await ctx.db.insert("sessionChats", {
       sessionId: id,
       repoId,
