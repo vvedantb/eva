@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, ListEnter } from "@vvedantb/ui";
+import {
+  Button,
+  ListEnter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
-import { CommentFilterTab } from "@/lib/components/CommentFilterTab";
 import {
   PreviewCommentCard,
   type PreviewComment,
@@ -144,33 +149,42 @@ function DrawerPanel({
           <IconX size={14} aria-hidden />
         </Button>
       </div>
-      <div className="flex items-center gap-1 px-3 py-1.5 max-sm:gap-2.5">
-        <CommentFilterTab
-          active={scope === "page"}
-          onSelect={() => setScope("page")}
+      {/* Two segmented tracks, one per filter axis (docs/eva-ui.md). */}
+      <div className="flex flex-col items-start gap-1.5 px-3 pb-1.5">
+        <Tabs
+          value={scope}
+          onValueChange={(value) => {
+            if (value === "page" || value === "all") setScope(value);
+          }}
         >
-          On this page ({onPageCount})
-        </CommentFilterTab>
-        <CommentFilterTab
-          active={scope === "all"}
-          onSelect={() => setScope("all")}
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Which pages"
+          >
+            <TabsTrigger value="page">On this page ({onPageCount})</TabsTrigger>
+            <TabsTrigger value="all">
+              All comments ({withStatus.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Tabs
+          value={status}
+          onValueChange={(value) => {
+            if (value === "open" || value === "resolved") setStatus(value);
+          }}
         >
-          All comments ({withStatus.length})
-        </CommentFilterTab>
-      </div>
-      <div className="flex items-center gap-1 px-3 pb-1.5 max-sm:gap-2.5">
-        <CommentFilterTab
-          active={status === "open"}
-          onSelect={() => setStatus("open")}
-        >
-          Open ({withScope.length - resolvedCount})
-        </CommentFilterTab>
-        <CommentFilterTab
-          active={status === "resolved"}
-          onSelect={() => setStatus("resolved")}
-        >
-          Resolved ({resolvedCount})
-        </CommentFilterTab>
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Open or resolved"
+          >
+            <TabsTrigger value="open">
+              Open ({withScope.length - resolvedCount})
+            </TabsTrigger>
+            <TabsTrigger value="resolved">Resolved ({resolvedCount})</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto p-3">
         {shown.length === 0 ? (
