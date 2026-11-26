@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, ListEnter } from "@vvedantb/ui";
+import {
+  Button,
+  ListEnter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
-import { CommentFilterTab } from "@/lib/components/CommentFilterTab";
 import {
   PreviewCommentCard,
   type PreviewComment,
@@ -19,6 +24,14 @@ const DRAWER_MAX_SHARE = 0.62;
 /** The drawer's width over an iframe box; the action bar centres beside it. */
 export function previewCommentsDrawerWidth(box: IframeBox): number {
   return Math.min(DRAWER_MAX_WIDTH, Math.round(box.width * DRAWER_MAX_SHARE));
+}
+
+/** Gap between the floating drawer and the preview's edges. */
+const DRAWER_INSET = 8;
+
+/** The preview width the drawer covers, gap included; the action bar centres beside it. */
+export function previewCommentsDrawerSpace(box: IframeBox): number {
+  return previewCommentsDrawerWidth(box) + DRAWER_INSET;
 }
 
 /** Path only: `/a/?x=1#y` and `/a` are the same page. */
@@ -119,12 +132,14 @@ function DrawerPanel({
   return createPortal(
     <div
       data-testid="preview-comments-drawer"
-      className="fixed z-50 flex flex-col bg-background smooth-shadow-ring-lg"
+      // Floats inside the preview with a gap, rounded like the other preview
+      // overlays, so the page's corners stay visible around it.
+      className="fixed z-50 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-lg"
       style={{
-        left: box.left + box.width - width,
-        top: box.top,
+        left: box.left + box.width - width - DRAWER_INSET,
+        top: box.top + DRAWER_INSET,
         width,
-        height: box.height,
+        height: box.height - DRAWER_INSET * 2,
       }}
       // Only while focus is in the drawer: keys typed into the preview go to
       // the iframe's own document.
@@ -144,33 +159,42 @@ function DrawerPanel({
           <IconX size={14} aria-hidden />
         </Button>
       </div>
-      <div className="flex items-center gap-1 px-3 py-1.5 max-sm:gap-2.5">
-        <CommentFilterTab
-          active={scope === "page"}
-          onSelect={() => setScope("page")}
+      {/* Two segmented tracks, one per filter axis (docs/eva-ui.md). */}
+      <div className="flex flex-col items-start gap-1.5 px-3 pb-1.5">
+        <Tabs
+          value={scope}
+          onValueChange={(value) => {
+            if (value === "page" || value === "all") setScope(value);
+          }}
         >
-          On this page ({onPageCount})
-        </CommentFilterTab>
-        <CommentFilterTab
-          active={scope === "all"}
-          onSelect={() => setScope("all")}
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Which pages"
+          >
+            <TabsTrigger value="page">On this page ({onPageCount})</TabsTrigger>
+            <TabsTrigger value="all">
+              All comments ({withStatus.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Tabs
+          value={status}
+          onValueChange={(value) => {
+            if (value === "open" || value === "resolved") setStatus(value);
+          }}
         >
-          All comments ({withStatus.length})
-        </CommentFilterTab>
-      </div>
-      <div className="flex items-center gap-1 px-3 pb-1.5 max-sm:gap-2.5">
-        <CommentFilterTab
-          active={status === "open"}
-          onSelect={() => setStatus("open")}
-        >
-          Open ({withScope.length - resolvedCount})
-        </CommentFilterTab>
-        <CommentFilterTab
-          active={status === "resolved"}
-          onSelect={() => setStatus("resolved")}
-        >
-          Resolved ({resolvedCount})
-        </CommentFilterTab>
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Open or resolved"
+          >
+            <TabsTrigger value="open">
+              Open ({withScope.length - resolvedCount})
+            </TabsTrigger>
+            <TabsTrigger value="resolved">Resolved ({resolvedCount})</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto p-3">
         {shown.length === 0 ? (
