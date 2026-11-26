@@ -206,11 +206,8 @@ export const notificationTypeValidator = v.union(
   v.literal("session_archived"),
   // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
-  // Legacy: no code creates these. `dataMigrations:deleteDeadNotifications`
-  // deletes their rows; drop them once it has run on prod.
-  v.literal("routine_complete"),
-  v.literal("run_completed"),
-  v.literal("run_failed"),
+  // routine_complete, run_completed and run_failed removed: no code created
+  // them. schema-narrowing-ok: deleteDeadNotifications
 );
 
 /** The chat surfaces: a session, a quick task or a project. */

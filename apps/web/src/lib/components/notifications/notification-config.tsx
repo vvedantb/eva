@@ -2,15 +2,12 @@
 
 import {
   type IconBell,
-  IconRepeat,
   IconCheck,
-  IconExclamationCircle,
   IconInfoCircle,
   IconUserPlus,
   IconMessage,
   IconMessageReply,
   IconAt,
-  IconPlayerPlay,
   IconProgress,
   IconPencil,
   IconArchive,
@@ -43,7 +40,6 @@ export type NotificationAppearance = {
 
 /** The Tabler component for each shared icon name. */
 const ICONS: Record<NotificationIconName, typeof IconBell> = {
-  Repeat: IconRepeat,
   Check: IconCheck,
   UserPlus: IconUserPlus,
   Progress: IconProgress,
@@ -51,8 +47,6 @@ const ICONS: Record<NotificationIconName, typeof IconBell> = {
   Pencil: IconPencil,
   MessageReply: IconMessageReply,
   At: IconAt,
-  PlayerPlay: IconPlayerPlay,
-  ExclamationCircle: IconExclamationCircle,
   InfoCircle: IconInfoCircle,
   Archive: IconArchive,
   GitMerge: IconGitMerge,
