@@ -59,7 +59,7 @@ import type {
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
-import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
+import { useQueuedMessageMutations } from "@eva/shared/queuedMessageMutations";
 import { PendingSketchDrain } from "@/lib/components/chat/_components/PendingSketchDrain";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
@@ -204,7 +204,7 @@ export function ChatComposer({
     deleteQueuedMessage,
     reorderQueuedMessages,
     steerQueuedMessage,
-  } = useQueuedMessageMutations(queuedMessages);
+  } = useQueuedMessageMutations(queuedMessages[0]?.parentId);
   // Convex draft wins when both are passed (existing sessions).
   const seed = draft ?? localDraft;
 

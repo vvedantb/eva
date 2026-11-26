@@ -3,17 +3,22 @@ import { IconX } from "@tabler/icons-react";
 import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
-interface ActiveFiltersBarProps<K extends string> {
-  filters: Array<{ key: K; label: ReactNode }>;
-  onClearFilter: (key: K) => void;
-  onClearAll: () => void;
+export interface ActiveFilterChip<K extends string> {
+  key: K;
+  /** May hold a person's name marked `data-pii`. */
+  label: ReactNode;
 }
 
+/** The "Filtered by" chips above a list (quick tasks, projects): a click clears one filter. */
 export function ActiveFiltersBar<K extends string>({
   filters,
   onClearFilter,
   onClearAll,
-}: ActiveFiltersBarProps<K>) {
+}: {
+  filters: ReadonlyArray<ActiveFilterChip<K>>;
+  onClearFilter: (key: K) => void;
+  onClearAll: () => void;
+}) {
   return (
     // Chips are 20px tall on a pointer device, which is not a tap target. They
     // grow to the 40px floor below `sm` rather than taking `hit-target`:
@@ -38,6 +43,8 @@ export function ActiveFiltersBar<K extends string>({
             onClick={() => onClearFilter(f.key)}
             className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
           >
+            {/* The name reads "Remove filter <label>". Not an `aria-label`:
+                that would copy a person's name out of its `data-pii` span. */}
             <span className="sr-only">Remove filter</span>
             <span className="max-sm:truncate">{f.label}</span>
             <IconX

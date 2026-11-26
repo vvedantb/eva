@@ -1,9 +1,12 @@
 "use client";
 
 import { Badge } from "@vvedantb/ui";
-import type {
-  ProjectStage,
-  ProjectTaskDisplayStatus,
+import {
+  PROJECT_STAGE_TONE,
+  PROJECT_TASK_DISPLAY_STATUS_TONE,
+  type ProjectStage,
+  type ProjectTaskDisplayStatus,
+  type ProjectTone,
 } from "@eva/shared/projectStatus";
 import {
   PROJECT_STAGE_LABELS,
@@ -28,85 +31,89 @@ export interface PhaseStyle {
   icon: typeof IconCircle;
 }
 
-/** To Do: matches the quick-task To Do column. */
-const todoStyle: PhaseStyle = {
-  bg: "bg-secondary",
-  cardBg: "bg-secondary/40",
-  bar: "bg-foreground/50",
-  barColor: "color-mix(in oklab, var(--foreground) 50%, transparent)",
-  text: "text-muted-foreground",
-  label: PROJECT_STAGE_LABELS.todo,
-  icon: IconCircle,
-};
-
-const inProgressStyle: PhaseStyle = {
-  bg: "bg-status-progress-bg",
-  cardBg: "bg-status-progress-subtle/40",
-  bar: "bg-status-progress-bar",
-  barColor: "var(--status-progress-bar)",
-  text: "text-status-progress",
-  label: PROJECT_STAGE_LABELS.in_progress,
-  icon: IconClock,
-};
-
-const doneStyle: PhaseStyle = {
-  bg: "bg-status-done-bg",
-  cardBg: "bg-status-done-subtle/40",
-  bar: "bg-status-done-bar",
-  barColor: "var(--status-done-bar)",
-  text: "text-status-done",
-  label: PROJECT_STAGE_LABELS.done,
-  icon: IconCircleCheck,
-};
-
-const cancelledStyle: PhaseStyle = {
-  bg: "bg-status-cancelled-bg",
-  cardBg: "bg-status-cancelled-subtle/40",
-  bar: "bg-status-cancelled-bar",
-  barColor: "var(--status-cancelled-bar)",
-  text: "text-status-cancelled",
-  label: PROJECT_TASK_DISPLAY_STATUS_LABELS.archived,
-  icon: IconCircleX,
-};
-
 /**
- * A child task's display status (`projectTaskDisplayStatus`): the task list
- * groups and rows, and a project's task counts and progress bar. Working
- * looks as In Progress, Needs you (`blocked`) as the warning, Idle as To Do,
- * Archived as cancelled.
+ * Each shared tone's classes (`ProjectTone`); the phone maps the same tones in
+ * `phaseAppearance.ts`. To Do matches the quick-task To Do column.
  */
-export const projectTaskDisplayStatusConfig: Record<
-  ProjectTaskDisplayStatus,
-  PhaseStyle
-> = {
-  working: {
-    ...inProgressStyle,
-    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,
+const TONE_STYLE: Record<ProjectTone, Omit<PhaseStyle, "label">> = {
+  todo: {
+    bg: "bg-secondary",
+    cardBg: "bg-secondary/40",
+    bar: "bg-foreground/50",
+    barColor: "color-mix(in oklab, var(--foreground) 50%, transparent)",
+    text: "text-muted-foreground",
+    icon: IconCircle,
   },
-  blocked: {
+  in_progress: {
+    bg: "bg-status-progress-bg",
+    cardBg: "bg-status-progress-subtle/40",
+    bar: "bg-status-progress-bar",
+    barColor: "var(--status-progress-bar)",
+    text: "text-status-progress",
+    icon: IconClock,
+  },
+  done: {
+    bg: "bg-status-done-bg",
+    cardBg: "bg-status-done-subtle/40",
+    bar: "bg-status-done-bar",
+    barColor: "var(--status-done-bar)",
+    text: "text-status-done",
+    icon: IconCircleCheck,
+  },
+  cancelled: {
+    bg: "bg-status-cancelled-bg",
+    cardBg: "bg-status-cancelled-subtle/40",
+    bar: "bg-status-cancelled-bar",
+    barColor: "var(--status-cancelled-bar)",
+    text: "text-status-cancelled",
+    icon: IconCircleX,
+  },
+  warning: {
     bg: "bg-warning-bg",
     cardBg: "bg-warning/5",
     bar: "bg-warning",
     barColor: "var(--warning)",
     text: "text-warning",
-    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.blocked,
     icon: IconAlertTriangle,
   },
-  idle: {
-    ...todoStyle,
-    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.idle,
-  },
-  archived: cancelledStyle,
+};
+
+function displayStatusStyle(status: ProjectTaskDisplayStatus): PhaseStyle {
+  return {
+    ...TONE_STYLE[PROJECT_TASK_DISPLAY_STATUS_TONE[status]],
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS[status],
+  };
+}
+
+function stageStyle(stage: ProjectStage): PhaseStyle {
+  return {
+    ...TONE_STYLE[PROJECT_STAGE_TONE[stage]],
+    label: PROJECT_STAGE_LABELS[stage],
+  };
+}
+
+/**
+ * A child task's display status (`projectTaskDisplayStatus`): the task list
+ * groups and rows, and a project's task counts and progress bar.
+ */
+export const projectTaskDisplayStatusConfig: Record<
+  ProjectTaskDisplayStatus,
+  PhaseStyle
+> = {
+  working: displayStatusStyle("working"),
+  blocked: displayStatusStyle("blocked"),
+  idle: displayStatusStyle("idle"),
+  archived: displayStatusStyle("archived"),
 };
 
 /**
  * A project's derived stage (`projectStatus`): kanban columns, list
- * sections, badges. Done looks as Completed.
+ * sections, badges.
  */
 export const projectStageConfig: Record<ProjectStage, PhaseStyle> = {
-  todo: todoStyle,
-  in_progress: inProgressStyle,
-  done: doneStyle,
+  todo: stageStyle("todo"),
+  in_progress: stageStyle("in_progress"),
+  done: stageStyle("done"),
 };
 
 /** The project's derived stage, in the phase badge's look. */

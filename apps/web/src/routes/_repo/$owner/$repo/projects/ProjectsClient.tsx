@@ -51,6 +51,7 @@ import {
   toggleHiddenProjectPhase,
   archiveCopy,
   type ArchiveListMode,
+  type ProjectFilterKey,
 } from "@eva/shared";
 import type { ProjectStage } from "@eva/shared/projectStatus";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
@@ -60,10 +61,10 @@ import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
 import { ProjectArchiveDialog } from "./_components/ProjectArchiveDialog";
 import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
 import { ProjectsBulkBar } from "./_components/ProjectsBulkBar";
-import { useProjectsSelection } from "./_components/useProjectsSelection";
+import { useListSelection } from "@/lib/components/quick-tasks/useListSelection";
 import { useProjectArchive } from "./_components/useProjectArchive";
 import { ListModeTabs } from "@/lib/components/ListModeTabs";
-import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
+import { ActiveFiltersBar } from "@/lib/components/ActiveFiltersBar";
 import { useProjectFilters, type ProjectView } from "./_utils";
 
 const VIEW_OPTIONS: {
@@ -134,7 +135,7 @@ export function ProjectsClient() {
   const visiblePhases = new Set<ProjectStage>(
     PROJECT_STAGES.filter((c) => !hiddenPhaseSet.has(c)),
   );
-  const selection = useProjectsSelection(
+  const selection = useListSelection(
     (projects ?? []).map((project) => project._id),
   );
   const exitSelectMode = () => {
@@ -182,9 +183,8 @@ export function ProjectsClient() {
     PROJECT_STAGES,
   );
 
-  const clearFilter = (key: string) => {
-    const chip = activeFilterLabels.find((filter) => filter.key === key);
-    if (chip) setParams(clearedProjectFilter(chip.key));
+  const clearFilter = (key: ProjectFilterKey) => {
+    setParams(clearedProjectFilter(key));
   };
 
   const toolbarContent = (

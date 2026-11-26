@@ -201,8 +201,10 @@ export {
   chatSourceKindLabel,
   chatSourceLabel,
   chatSourceShortLabel,
+  ownerLabel,
   type ChatSourceKind,
   type ChatSourceLabelFields,
+  type OwnerLabelKind,
 } from "./chatSourceLabel";
 export { standupEntryHeading, standupEntryTime } from "./standup";
 export {
@@ -336,7 +338,12 @@ export {
   type TimelineEvent,
   type TimelineRow,
 } from "./prTimeline";
-export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
+  sandboxComposerState,
+  waitingForSlotLabel,
+} from "./sandboxComposer";
 export {
   QUEUE_PANEL_LABEL,
   moveQueuedId,

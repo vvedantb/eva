@@ -1,3 +1,5 @@
+import { MAX_PARALLEL_CHATS } from "./sessionChats";
+
 /**
  * One wording for the sandbox across every chat panel (session, quick task,
  * project), on the web and the phone. The header buttons already say "Wake up
@@ -22,6 +24,50 @@ export const SANDBOX_CHAT_COPY = {
   activeDescription:
     "Type / for skills, @ to mention, or drop files to attach.",
 } as const;
+
+/**
+ * An empty sandbox chat's title and description; they follow the sandbox:
+ * awake, going to sleep, waking, or asleep (a send wakes it). `activeTitle`
+ * is the surface's own invitation. Waking or sleeping is the whole story, so
+ * those states have no description.
+ */
+export function sandboxChatEmptyState({
+  isSandboxActive,
+  isSandboxStopping = false,
+  isSandboxToggling,
+  activeTitle,
+}: {
+  isSandboxActive: boolean;
+  isSandboxStopping?: boolean;
+  isSandboxToggling: boolean;
+  activeTitle: string;
+}): { title: string; description: string } {
+  if (isSandboxActive) {
+    return { title: activeTitle, description: SANDBOX_CHAT_COPY.activeDescription };
+  }
+  if (isSandboxStopping) return { title: SANDBOX_CHAT_COPY.stoppingTitle, description: "" };
+  if (isSandboxToggling) return { title: SANDBOX_CHAT_COPY.startingTitle, description: "" };
+  return { title: SANDBOX_CHAT_COPY.asleepTitle, description: SANDBOX_CHAT_COPY.asleepDescription };
+}
+
+/**
+ * The transcript line while this chat's queue waits for one of the session's
+ * `MAX_PARALLEL_CHATS` run slots: the server parked the send rather than start
+ * it. Undefined when the chat runs, has nothing queued, or a slot is free.
+ */
+export function waitingForSlotLabel({
+  isExecuting,
+  queuedCount,
+  runningChatCount,
+}: {
+  isExecuting: boolean;
+  queuedCount: number;
+  /** The session's chats with a turn running, this one included. */
+  runningChatCount: number;
+}): string | undefined {
+  if (isExecuting || queuedCount === 0 || runningChatCount < MAX_PARALLEL_CHATS) return undefined;
+  return `Waiting for a free slot — ${runningChatCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`;
+}
 
 /**
  * Whether a sandbox chat composer accepts input, where its sends go, and the

@@ -174,6 +174,29 @@ export function projectTaskDisplayStatus(
   return stage === "in_progress" ? "working" : "idle";
 }
 
+/**
+ * The look a project stage or a child task's display status takes, on the web
+ * and the phone. Data only, as `notificationAppearance`: each app maps a tone
+ * to its own icon and colours. Todo, in_progress, done and cancelled are the
+ * quick-task status looks; warning is "Needs you".
+ */
+export type ProjectTone = "todo" | "in_progress" | "done" | "cancelled" | "warning";
+
+/** A stage's tone: each stage looks as the quick-task status of its name. */
+export const PROJECT_STAGE_TONE: Record<ProjectStage, ProjectTone> = {
+  todo: "todo",
+  in_progress: "in_progress",
+  done: "done",
+};
+
+/** Working looks as In Progress, Needs you as the warning, Idle as To Do, Archived as Cancelled. */
+export const PROJECT_TASK_DISPLAY_STATUS_TONE: Record<ProjectTaskDisplayStatus, ProjectTone> = {
+  working: "in_progress",
+  blocked: "warning",
+  idle: "todo",
+  archived: "cancelled",
+};
+
 export interface ProjectStatus {
   stage: ProjectStage;
   /** The project's tasks by display status (`projectTaskDisplayStatus`). */

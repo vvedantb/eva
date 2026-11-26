@@ -12,14 +12,15 @@ import {
   getSessionReadOnlyMessage,
   formatForkPrompt,
   isOtherUserChatMessage,
-  MAX_PARALLEL_CHATS,
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
   appendReviewCommentsToPrompt,
   prNumberFromGithubUrl,
   SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
   sandboxComposerState,
+  waitingForSlotLabel,
   type SessionMenuAction,
   tokenizedToDisplayText,
   turnErrorTitle,
@@ -237,20 +238,22 @@ export default function ChatScreen() {
 
   const working = turn !== undefined && turn !== null;
   const { canReply } = chat;
-  // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
-  const runningCount = runningChats?.length ?? 0;
-  const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
-  // The web empty state follows the sandbox: awake, waking, going to sleep, or asleep (a send wakes it).
+  // Queued here while the session's run slots are all taken: the server parked the send.
+  const waitingForSlot = waitingForSlotLabel({
+    isExecuting: working,
+    queuedCount: queued?.length ?? 0,
+    runningChatCount: runningChats?.length ?? 0,
+  });
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
-  const emptyTitle = sandboxAwake
-    ? "No messages yet. Start the conversation!"
-    : sandbox.isStopping
-      ? SANDBOX_CHAT_COPY.stoppingTitle
-      : sandbox.isToggling
-        ? SANDBOX_CHAT_COPY.startingTitle
-        : SANDBOX_CHAT_COPY.asleepTitle;
-  // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
-  const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
+  const empty = sandboxChatEmptyState({
+    isSandboxActive: sandboxAwake,
+    isSandboxStopping: sandbox.isStopping,
+    isSandboxToggling: sandbox.isToggling,
+    activeTitle: "No messages yet. Start the conversation!",
+  });
+  // Awake, the web line teaches desktop drop, so the phone keeps the title alone.
+  const emptyTitle = empty.title;
+  const emptyDescription = sandboxAwake ? "" : empty.description;
   // Why a closed chat takes no message: its task or project is archived, or its session's PR merged or closed, or it was archived (the web banner).
   const closedReason = chat.archived
     ? archiveCopy(chat.archived).readOnly
@@ -492,9 +495,9 @@ export default function ChatScreen() {
                   <Shimmer>Working…</Shimmer>
                 </View>
               ) : null}
-              {waitingForSlot ? (
+              {waitingForSlot !== undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <Shimmer>{`Waiting for a free slot — ${runningCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`}</Shimmer>
+                  <Shimmer>{waitingForSlot}</Shimmer>
                 </View>
               ) : null}
               {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}

@@ -4,7 +4,7 @@ import type { ProjectChatTaskCards } from "@/lib/components/projects/ProjectChat
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
+import { sandboxChatEmptyState, sandboxComposerState } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -159,6 +159,11 @@ export function SandboxChatPanel({
     isExecuting,
     isUsageLimitHeld: queueGate.isUsageLimitHeld,
   });
+  const empty = sandboxChatEmptyState({
+    isSandboxActive,
+    isSandboxToggling,
+    activeTitle: `Ask Eva anything about this ${ownerLabel}'s running sandbox.`,
+  });
 
   const { handleSend, handleCancel, hasPendingReviewComments } = useChatSend({
     ports: binding.ports,
@@ -244,16 +249,8 @@ export function SandboxChatPanel({
           isInputDisabled={composer.isInputDisabled}
           isArchived={isArchived}
           placeholder={composer.placeholder}
-          emptyStateTitle={
-            isSandboxActive
-              ? `Ask Eva anything about this ${ownerLabel}'s running sandbox.`
-              : SANDBOX_CHAT_COPY.asleepTitle
-          }
-          emptyStateDescription={
-            isSandboxActive
-              ? SANDBOX_CHAT_COPY.activeDescription
-              : SANDBOX_CHAT_COPY.asleepDescription
-          }
+          emptyStateTitle={empty.title}
+          emptyStateDescription={empty.description}
           emptyState={emptyState}
           disabledReason={composer.disabledReason}
           onStartSandbox={startSandboxHandler(

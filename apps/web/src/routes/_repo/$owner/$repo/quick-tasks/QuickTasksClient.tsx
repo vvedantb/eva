@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
 import {
   CenteredSpinner,
   TabsTransition,
@@ -31,7 +30,7 @@ import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
 import { IconArchive, IconChecklist, IconPlus } from "@tabler/icons-react";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
-import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
+import { ActiveFiltersBar } from "@/lib/components/ActiveFiltersBar";
 import {
   QuickTasksBulkBar,
   type BulkAction,
@@ -54,10 +53,7 @@ import {
   type ArchiveListMode,
   type QuickTaskFilterKey,
 } from "@eva/shared";
-import {
-  rangeBetween,
-  type SelectionToggleOptions,
-} from "@/lib/components/quick-tasks/selectionRange";
+import { useListSelection } from "@/lib/components/quick-tasks/useListSelection";
 import { useTaskArchive } from "@/lib/components/quick-tasks/_components/ArchiveTaskDialog";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
@@ -97,12 +93,8 @@ export function QuickTasksClient() {
     : undefined;
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<Id<"agentTasks">>>(
-    new Set(),
-  );
-  // Where the next shift-click measures from: the last row toggled on its own.
-  const [anchorId, setAnchorId] = useState<Id<"agentTasks"> | null>(null);
+  const selection = useListSelection((tasks ?? []).map((task) => task._id));
+  const { isSelecting, selectedIds } = selection;
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
@@ -137,65 +129,11 @@ export function QuickTasksClient() {
     (tasks ?? []).length > 0 || (!isArchivedList && (drafts ?? []).length > 0);
   const hasQuickTasks = quickTasks.length > 0 || todoDrafts.length > 0;
 
-  const taskIdSet = (() => {
-    const set = new Set<string>();
-    if (tasks) {
-      for (const t of tasks) set.add(t._id);
-    }
-    return set;
-  })();
-
-  // Drop selections for tasks that disappeared (adjust during render).
-  if (isSelecting) {
-    let needsPrune = false;
-    for (const id of selectedIds) {
-      if (!taskIdSet.has(id)) {
-        needsPrune = true;
-        break;
-      }
-    }
-    if (needsPrune) {
-      const next = new Set<Id<"agentTasks">>();
-      for (const id of selectedIds) {
-        if (taskIdSet.has(id)) next.add(id);
-      }
-      setSelectedIds(next);
-    }
-  }
-
   const selectedTasks = quickTasks.filter((t) => selectedIds.has(t._id));
-
-  const toggleSelect = (
-    id: Id<"agentTasks">,
-    options?: SelectionToggleOptions<Id<"agentTasks">>,
-  ) => {
-    // A range only ever adds: shift-clicking back over a span you just selected
-    // should not punch holes in it.
-    if (options?.range) {
-      const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        for (const rangeId of range) next.add(rangeId);
-        return next;
-      });
-      return;
-    }
-    setAnchorId(id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  const toggleSelect = selection.toggle;
 
   const exitSelectMode = () => {
-    setIsSelecting(false);
-    setSelectedIds(new Set());
-    setAnchorId(null);
+    selection.exit();
     setActiveBulkAction(null);
   };
 
@@ -380,7 +318,7 @@ export function QuickTasksClient() {
             onSearchChange={(v) => setParams({ q: v ?? "" })}
             hasQuickTasks={hasAnyTasks}
             isSelecting={isSelecting}
-            onStartSelecting={() => setIsSelecting(true)}
+            onStartSelecting={selection.enter}
             onCreateTask={() => setIsCreating(true)}
             onImport={() => setIsImporting(true)}
             users={users}
@@ -509,12 +447,9 @@ export function QuickTasksClient() {
               totalCount={quickTasks.length}
               onExitSelect={exitSelectMode}
               onSelectAll={() =>
-                setSelectedIds(new Set(quickTasks.map((t) => t._id)))
+                selection.selectAll(quickTasks.map((t) => t._id))
               }
-              onClearSelection={() => {
-                setSelectedIds(new Set());
-                setAnchorId(null);
-              }}
+              onClearSelection={selection.clear}
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
               onSkipConfirm={{

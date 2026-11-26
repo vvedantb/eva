@@ -1,4 +1,5 @@
 import type { NeedsYouGroup } from "./needsYou";
+import { ownerLabel } from "./chatSourceLabel";
 import { parseEvaEntityLink } from "./repoPath";
 import type { Doc, Id } from "@eva/backend";
 import { getNotificationAppearance } from "./notificationAppearance";
@@ -155,9 +156,8 @@ export function inboxContextLabel(row: {
     // No task number: the project's own chat, with Eva.
     return `${row.projectTitle ?? "Project"} · ${number ?? "Eva"}`;
   }
-  if (row.source === "quick_task") return number ? `Quick task ${number}` : "Quick task";
-  if (row.source === "session") return number ? `Session ${number}` : "Session";
-  return row.contextLabel ?? "Notification";
+  if (row.source === "alert") return row.contextLabel ?? "Notification";
+  return ownerLabel(row.source, row.numId);
 }
 
 /**
