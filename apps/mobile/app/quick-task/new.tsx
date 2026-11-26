@@ -300,13 +300,13 @@ function NewQuickTaskForm({
             }}
           />
           <View className="min-w-0 flex-1">
-            <Button variant="secondary" onPress={() => void submit(false)} disabled={!canSubmit} loading={saving === "save"}>
-              Save
+            <Button variant="secondary" onPress={() => void submit(true)} disabled={!canSubmit} loading={saving === "run"}>
+              Save and Run
             </Button>
           </View>
           <View className="min-w-0 flex-1">
-            <Button onPress={() => void submit(true)} disabled={!canSubmit} loading={saving === "run"}>
-              Save and Run
+            <Button onPress={() => void submit(false)} disabled={!canSubmit} loading={saving === "save"}>
+              Save
             </Button>
           </View>
         </View>
