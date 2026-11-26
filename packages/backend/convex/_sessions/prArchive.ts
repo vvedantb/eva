@@ -9,6 +9,7 @@ import {
   type PrState,
 } from "../_pullRequests/store";
 import { requestSessionSandboxStop } from "./sandbox";
+import { isStandaloneSession } from "./owner";
 
 /**
  * A session auto-archives only once every PR it holds is terminal (merged or
@@ -64,7 +65,7 @@ export function sessionPrArchiveNotificationCopy(args: {
   };
 }
 
-/** Inbox-only notice to the session owner. Never emails (see DIGEST_EXCLUDED_TYPES). */
+/** Inbox-only notice to the session owner. Never emails (`@eva/shared/notificationRouting`). */
 async function notifySessionOwnerOfPrArchive(
   ctx: MutationCtx,
   session: Doc<"sessions">,
@@ -108,7 +109,9 @@ export async function reconcileSessionArchiveState(
   sessionId: Id<"sessions">,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  if (!session) return;
+  // A task's or project's session follows its owner (`retireOwnedSession`),
+  // never its linked repos' PRs alone.
+  if (!session || !isStandaloneSession(session)) return;
   const rows = await listOwnerPullRequests(ctx.db, {
     kind: "session",
     sessionId,

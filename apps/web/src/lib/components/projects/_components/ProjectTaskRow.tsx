@@ -91,11 +91,13 @@ export function RowAge({
  * and Approve in place of its age on hover. Right-click opens the task menu
  * (Unarchive on a task archived on its own). A read-only (archived) project's
  * row has neither. A task in a repo the reader cannot open is a locked row
- * with no link.
+ * with no link. A task open as a chat tab is marked: a tint and
+ * an accent stripe.
  */
 export function ProjectTaskRow({
   task,
   view,
+  open = false,
   line,
   onSelectTask,
   basePath,
@@ -103,6 +105,8 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
+  /** Open as a chat tab beside Eva. */
+  open?: boolean;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
@@ -160,7 +164,10 @@ export function ProjectTaskRow({
         if (!hasDialogOpen) onSelectTask(task._id);
       }}
       aria-label={task.title}
-      className={FLAT_ROW_CLASS}
+      selected={open}
+      accentClassName={open ? "bg-primary" : undefined}
+      // The tint and stripe mark it; no ring.
+      className={open ? "ring-0" : FLAT_ROW_CLASS}
       contentClassName={FLAT_ROW_CONTENT_CLASS}
     >
       <ProjectFlatRowBody

@@ -150,7 +150,17 @@ export function NewSessionComposer() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center p-4 sm:p-6">
+    <div className="relative isolate flex h-full items-center justify-center p-4 sm:p-6">
+      {/* Own clip box: the blobs drift past the edges, and the content
+          must keep its normal overflow. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      >
+        <div className="eva-blob -top-[25%] -right-[15%] [--eva-blob-path:eva-blob-a] [--eva-blob-tone:var(--eva-brand-blue)]" />
+        <div className="eva-blob top-[5%] -left-[20%] [--eva-blob-path:eva-blob-b] [--eva-blob-tone:var(--eva-brand-purple)]" />
+        <div className="eva-blob -top-[30%] left-[20%] [--eva-blob-duration:9s] [--eva-blob-path:eva-blob-c] [--eva-blob-tone:var(--chart-5)]" />
+      </div>
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />
         <h1 className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xl font-semibold tracking-tight text-foreground sm:text-2xl">

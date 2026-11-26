@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import type { Doc, Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@vvedantb/ui";
-import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 
@@ -77,51 +77,19 @@ export function ChatTabsBar({
 
   return (
     <>
-      <div
-        className="flex shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin"
-        role="tablist"
-        aria-label="Chats"
-      >
+      <ChatTabStrip label="Chats">
         {openChats.map((chat) => {
           const selected = chat._id === activeChatId;
           const running = runningChatIds.has(chat._id);
           return (
             <ContextMenu key={chat._id}>
               <ContextMenuTrigger asChild>
-                <div
-                  className={cn(
-                    "flex h-8 shrink-0 items-center rounded-lg motion-base",
-                    selected ? "bg-card" : "hover:bg-muted/80",
-                  )}
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    className={cn(
-                      "motion-press flex h-full min-w-20 max-w-48 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
-                      selected
-                        ? "text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    onClick={() => onSelect(chat)}
-                  >
-                    {running ? (
-                      <span
-                        className="flex shrink-0 items-center"
-                        title="Working"
-                      >
-                        <LoadingState
-                          label="Working"
-                          variant="Drive"
-                          size="sm"
-                          iconOnly
-                        />
-                      </span>
-                    ) : null}
-                    <span className="truncate">{chat.title}</span>
-                  </button>
-                </div>
+                <ChatTab
+                  selected={selected}
+                  running={running}
+                  label={chat.title}
+                  onSelect={() => onSelect(chat)}
+                />
               </ContextMenuTrigger>
               <ContextMenuContent onClick={(e) => e.stopPropagation()}>
                 <ContextMenuItem onSelect={() => setRenameTarget(chat)}>
@@ -148,25 +116,14 @@ export function ChatTabsBar({
           );
         })}
         {!isReadOnly ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="New chat"
-                disabled={isCreating}
-                className="motion-press flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-[0.92] disabled:opacity-50"
-                onClick={onCreate}
-              >
-                <IconPlus className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              New chat in this session — runs alongside the others on the same
-              sandbox
-            </TooltipContent>
-          </Tooltip>
+          <ChatTabAddButton
+            label="New chat"
+            tooltip="New chat in this session — runs alongside the others on the same sandbox"
+            disabled={isCreating}
+            onClick={onCreate}
+          />
         ) : null}
-      </div>
+      </ChatTabStrip>
       <ChatRenameDialog
         target={renameTarget}
         onClose={() => setRenameTarget(null)}
@@ -196,5 +153,148 @@ export function ChatTabsBar({
         }}
       />
     </>
+  );
+}
+
+/** A row of chat tabs that scrolls sideways (sessions and projects). */
+export function ChatTabStrip({
+  label,
+  className,
+  children,
+}: {
+  /** The tab list's accessible name. */
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        // min-w-0: in a narrow chat column the row scrolls instead of
+        // spilling under the panel beside it.
+        "flex min-w-0 max-w-full shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin",
+        className,
+      )}
+      role="tablist"
+      aria-label={label}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One chat tab: tone-only selected fill, and the sidebar's Drive grid while
+ * the chat works. `onClose` adds a ✕ after the label. The rest of the props
+ * land on the tab's root, so a context menu trigger can wrap it.
+ */
+export function ChatTab({
+  selected,
+  running,
+  label,
+  hint,
+  onSelect,
+  onClose,
+  closeLabel,
+  narrow = false,
+  className,
+  ...root
+}: ComponentProps<"div"> & {
+  selected: boolean;
+  running: boolean;
+  label: ReactNode;
+  /** Native tooltip on the tab (a full title the pill truncates). */
+  hint?: string;
+  onSelect: () => void;
+  onClose?: () => void;
+  closeLabel?: string;
+  /** A tighter label cap, for tab rows in a narrow column (project task tabs). */
+  narrow?: boolean;
+}) {
+  return (
+    <div
+      {...root}
+      className={cn(
+        "flex h-8 shrink-0 items-center rounded-lg motion-base",
+        selected ? "bg-card" : "hover:bg-muted/80",
+        className,
+      )}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selected}
+        title={hint}
+        // The selected tab scrolls into view (a tab just opened at the end
+        // of a long row).
+        ref={
+          selected
+            ? (el) => {
+                // The whole pill (label and ✕), not just the label button.
+                el?.parentElement?.scrollIntoView({
+                  block: "nearest",
+                  inline: "nearest",
+                });
+              }
+            : undefined
+        }
+        className={cn(
+          "motion-press flex h-full min-w-20 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
+          narrow ? "max-w-32" : "max-w-48",
+          onClose ? "pr-1" : undefined,
+          selected
+            ? "text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={onSelect}
+      >
+        {running ? (
+          <span className="flex shrink-0 items-center" title="Working">
+            <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
+          </span>
+        ) : null}
+        <span className="truncate">{label}</span>
+      </button>
+      {onClose ? (
+        <button
+          type="button"
+          aria-label={closeLabel}
+          className="motion-press mr-1 flex size-5 shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.92]"
+          onClick={onClose}
+        >
+          <IconX className="size-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The `+` at the end of a chat tab strip. */
+export function ChatTabAddButton({
+  label,
+  tooltip,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  tooltip: ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          disabled={disabled}
+          className="motion-press flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-[0.92] disabled:opacity-50"
+          onClick={onClick}
+        >
+          <IconPlus className="size-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }

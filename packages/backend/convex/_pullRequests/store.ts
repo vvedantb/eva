@@ -1,5 +1,9 @@
 import type { Infer } from "convex/values";
-import { isLivePrState, type LivePrState } from "@eva/shared";
+import {
+  combineRepoPrStates,
+  isLivePrState,
+  type LivePrState,
+} from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type {
@@ -21,6 +25,8 @@ import {
   type PrLifecycleTransition,
 } from "../_github/prLifecycleActions";
 import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
+import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
+import type { SiblingPr } from "../prBody";
 
 /**
  * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
@@ -172,6 +178,149 @@ export function summarisePullRequests(
   return { prUrl: head.prUrl, prState, prCount: rows.length };
 }
 
+type SummaryRow = Pick<
+  Doc<"pullRequests">,
+  "prUrl" | "state" | "primary" | "createdAt" | "owner"
+>;
+
+/**
+ * A multi-repo task's summary: its own PRs (the home repo) and each linked
+ * repo's PR on its session (`linkedRows`), one state per repo combined by
+ * `combineRepoPrStates`. So the task reads open while any repo's PR is open
+ * and merged only once every repo's PR merged. With no linked rows it is
+ * exactly `summarisePullRequests`.
+ */
+export function summariseTaskPullRequests(
+  ownRows: readonly SummaryRow[],
+  linkedRows: readonly SummaryRow[],
+): PrSummary {
+  const home = summarisePullRequests(ownRows);
+  if (linkedRows.length === 0) return home;
+  const byRepo = new Map<string, SummaryRow[]>();
+  for (const row of linkedRows) {
+    const key =
+      row.owner.kind === "session" ? String(row.owner.sessionRepoId) : "";
+    byRepo.set(key, [...(byRepo.get(key) ?? []), row]);
+  }
+  const states = [home, ...[...byRepo.values()].map(summarisePullRequests)]
+    .map((summary) => summary.prState)
+    .filter((state) => state !== undefined);
+  return {
+    prUrl: home.prUrl ?? summarisePullRequests(linkedRows).prUrl,
+    prState: combineRepoPrStates(states),
+    prCount: ownRows.length + linkedRows.length,
+  };
+}
+
+/**
+ * The linked repos' PRs of a task's session (`owner.sessionRepoId`), which
+ * count toward the task. Empty for a single-repo task.
+ */
+export async function listTaskLinkedPullRequests(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"pullRequests">[]> {
+  const session = await findOwnedSession(db, { kind: "task", taskId });
+  if (!session || (session.linkedRepoCount ?? 0) === 0) return [];
+  const rows = await listOwnerPullRequests(db, {
+    kind: "session",
+    sessionId: session._id,
+  });
+  return rows.filter(
+    (row) =>
+      row.owner.kind === "session" && row.owner.sessionRepoId !== undefined,
+  );
+}
+
+/**
+ * A multi-repo task's linked repos' PRs (`listTaskLinkedPullRequests`) as the
+ * "Related pull requests" links of its own PR body. Empty for a single-repo
+ * task.
+ */
+export async function taskRelatedPrLinks(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<SiblingPr[]> {
+  const rows = await listTaskLinkedPullRequests(db, taskId);
+  return Promise.all(
+    rows.map(async (row) => {
+      const repo = await db.get(row.repoId);
+      return {
+        label: repo ? `${repo.owner}/${repo.name}` : `#${row.prNumber}`,
+        url: row.prUrl,
+      };
+    }),
+  );
+}
+
+/** A task's PR summary over every repo it changes (`summariseTaskPullRequests`). */
+export async function taskPrSummary(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<PrSummary> {
+  const [own, linked] = await Promise.all([
+    listOwnerPullRequests(db, { kind: "task", taskId }),
+    listTaskLinkedPullRequests(db, taskId),
+  ]);
+  return summariseTaskPullRequests(own, linked);
+}
+
+/** One repo's PR of a multi-repo task, as its Tasks list rows show it. */
+export type TaskRepoPullRequest = {
+  prUrl: string;
+  prState: PrState;
+  repoName: string;
+};
+
+/**
+ * A multi-repo task's PRs, one per repo: its home repo's first, then each
+ * linked repo's, each that repo's summary (`summarisePullRequests`). Repos
+ * with no PR yet are left out.
+ */
+export async function taskRepoPullRequests(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<TaskRepoPullRequest[]> {
+  const [own, linked] = await Promise.all([
+    listOwnerPullRequests(db, { kind: "task", taskId }),
+    listTaskLinkedPullRequests(db, taskId),
+  ]);
+  const byRepo = new Map<string, Doc<"pullRequests">[]>();
+  for (const row of linked) {
+    const key =
+      row.owner.kind === "session" ? String(row.owner.sessionRepoId) : "";
+    byRepo.set(key, [...(byRepo.get(key) ?? []), row]);
+  }
+  const groups = [own, ...byRepo.values()].filter((rows) => rows.length > 0);
+  const entries = await Promise.all(
+    groups.map(async (rows) => {
+      const { prUrl, prState } = summarisePullRequests(rows);
+      const head = rows.find((row) => row.prUrl === prUrl);
+      if (head === undefined || prUrl === undefined || prState === undefined) {
+        return null;
+      }
+      const repo = await db.get(head.repoId);
+      return { prUrl, prState, repoName: repo?.name ?? "" };
+    }),
+  );
+  return entries.filter((entry) => entry !== null);
+}
+
+/**
+ * The task a PR row counts toward through its linked repo: a `sessionRepos`
+ * PR on a task's session. Undefined for every other row.
+ */
+export async function linkedPullRequestTaskId(
+  db: DatabaseReader,
+  row: Pick<Doc<"pullRequests">, "owner">,
+): Promise<Id<"agentTasks"> | undefined> {
+  if (row.owner.kind !== "session" || row.owner.sessionRepoId === undefined) {
+    return undefined;
+  }
+  const session = await db.get(row.owner.sessionId);
+  return session ? sessionOwnerTaskId(session) : undefined;
+}
+
 /** True once every PR the owner holds is merged or closed (and it holds one). */
 export function allPullRequestsTerminal(
   rows: readonly Pick<Doc<"pullRequests">, "state">[],
@@ -185,7 +334,20 @@ export async function syncOwnerPrSummary(
   owner: PrOwnerRef,
 ): Promise<PrSummary> {
   const rows = await listOwnerPullRequests(ctx.db, owner);
-  const summary = summarisePullRequests(rows);
+  // A task also counts its linked repos' PRs (`summariseTaskPullRequests`).
+  const linked =
+    owner.kind === "task"
+      ? await listTaskLinkedPullRequests(ctx.db, owner.taskId)
+      : [];
+  const summary = summariseTaskPullRequests(rows, linked);
+  // A linked repo's PR on a task's session moves the task's summary too.
+  if (owner.kind === "session") {
+    const session = await ctx.db.get(owner.sessionId);
+    const taskId = session ? sessionOwnerTaskId(session) : undefined;
+    if (taskId !== undefined && (session?.linkedRepoCount ?? 0) > 0) {
+      await syncOwnerPrSummary(ctx, { kind: "task", taskId });
+    }
+  }
   const doc =
     owner.kind === "session"
       ? await ctx.db.get(owner.sessionId)
@@ -197,7 +359,7 @@ export async function syncOwnerPrSummary(
     // Never synced (`prCount` unset) and no rows yet: a pre-`pullRequests`
     // owner whose summary still holds its only PR record until
     // `backfillPullRequests` runs. Clearing it would drop that link.
-    (rows.length === 0 && doc.prCount === undefined) ||
+    (rows.length + linked.length === 0 && doc.prCount === undefined) ||
     (doc.prUrl === summary.prUrl &&
       doc.prState === summary.prState &&
       doc.prCount === summary.prCount)
@@ -407,24 +569,44 @@ export async function reopenArchivedPullRequests(
 /**
  * Pushes a task or project status change out to GitHub. Cancel closes every
  * live PR the owner holds and un-cancel reopens exactly those; draft/ready
- * follow the review phase, which belongs to the primary PR alone.
+ * follow the review phase, which belongs to the primary PR (and a
+ * multi-repo task's linked repos' PRs).
  */
 export async function applyPrLifecycleTransition(
   ctx: MutationCtx,
   owner: PrOwnerRef,
   transition: PrLifecycleTransition,
 ): Promise<void> {
-  if (transition.kind === "close") {
-    await closeLivePullRequests(ctx, owner);
-    return;
+  // A multi-repo task's linked repos' PRs (on its session) follow the task
+  // with its own: no repo's PR is held back as a draft.
+  const linkedSession =
+    owner.kind === "task"
+      ? await findOwnedSession(ctx.db, { kind: "task", taskId: owner.taskId })
+      : null;
+  const linkedOwner: PrOwnerRef | null =
+    linkedSession && (linkedSession.linkedRepoCount ?? 0) > 0
+      ? { kind: "session", sessionId: linkedSession._id }
+      : null;
+  const owners = linkedOwner ? [owner, linkedOwner] : [owner];
+  for (const each of owners) {
+    if (transition.kind === "close") {
+      await closeLivePullRequests(ctx, each);
+    } else if (transition.kind === "reopen") {
+      await reopenArchivedPullRequests(ctx, each, transition.asReady);
+    }
   }
-  if (transition.kind === "reopen") {
-    await reopenArchivedPullRequests(ctx, owner, transition.asReady);
-    return;
-  }
+  if (transition.kind === "close" || transition.kind === "reopen") return;
   const primary = await findPrimaryPullRequest(ctx.db, owner);
-  if (primary && isLivePrState(primary.state)) {
-    await schedulePullRequestAction(ctx, primary, transition);
+  const linked =
+    owner.kind === "task"
+      ? (await listTaskLinkedPullRequests(ctx.db, owner.taskId)).filter(
+          (row) => row.origin === "eva",
+        )
+      : [];
+  for (const row of [...(primary ? [primary] : []), ...linked]) {
+    if (isLivePrState(row.state)) {
+      await schedulePullRequestAction(ctx, row, transition);
+    }
   }
 }
 

@@ -1,13 +1,23 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { authQuery, hasRepoAccess } from "../functions";
 import { prStateValidator, sessionRepoFields } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { PRIMARY_REPO_DIR } from "../_sandbox_runtime/workspaceLayout";
 import {
+  linkedRepoDir,
+  PRIMARY_REPO_DIR,
+} from "../_sandbox_runtime/workspaceLayout";
+import {
+  findPrimaryPullRequest,
   listOwnerPullRequests,
   sessionRepoPullRequest,
 } from "../_pullRequests/store";
+import { sessionOwnerTaskId } from "./owner";
 import { buildSessionBranchName } from "../_git/branchNames";
 
 /**
@@ -15,6 +25,47 @@ import { buildSessionBranchName } from "../_git/branchNames";
  * always at `/tmp/repo`) plus every `sessionRepos` row cloned beside it under
  * `/tmp/workspace`.
  */
+
+/**
+ * Inserts the session's linked repos: one `sessionRepos` row each, checked
+ * out on the session's own branch name off its own default base, and sets
+ * `linkedRepoCount`. The rows are the sandbox's clone list, so they must exist
+ * before the sandbox starts. The one insert for a multi-repo session
+ * (`createSession`) and a multi-repo task's session (`insertWorkSession`).
+ */
+export async function insertSessionRepos(
+  ctx: MutationCtx,
+  session: { sessionId: Id<"sessions">; branchName: string },
+  linkedRepos: readonly Doc<"githubRepos">[],
+  installDependencies: boolean,
+): Promise<void> {
+  if (linkedRepos.length === 0) return;
+  for (const linkedRepo of linkedRepos) {
+    await ctx.db.insert("sessionRepos", {
+      sessionId: session.sessionId,
+      repoId: linkedRepo._id,
+      owner: linkedRepo.owner,
+      name: linkedRepo.name,
+      installationId: linkedRepo.installationId,
+      path: linkedRepoDir(linkedRepo.name),
+      branchName: session.branchName,
+      baseBranch: resolveSessionBaseBranch(
+        { baseBranch: undefined },
+        linkedRepo,
+      ),
+      installDependencies,
+      ...(linkedRepo.devPort !== undefined
+        ? { devPort: linkedRepo.devPort }
+        : {}),
+      ...(linkedRepo.devCommand !== undefined
+        ? { devCommand: linkedRepo.devCommand }
+        : {}),
+    });
+  }
+  await ctx.db.patch(session.sessionId, {
+    linkedRepoCount: linkedRepos.length,
+  });
+}
 
 /** Full `sessionRepos` document, for internal callers. */
 export const sessionRepoValidator = v.object({
@@ -64,7 +115,15 @@ export const listRepos = authQuery({
       kind: "session",
       sessionId: session._id,
     });
-    const primaryPr = sessionRepoPullRequest(prs, undefined);
+    // A task's session: the task owns the primary repo's PR.
+    const ownerTaskId = sessionOwnerTaskId(session);
+    const primaryPr =
+      ownerTaskId === undefined
+        ? sessionRepoPullRequest(prs, undefined)
+        : await findPrimaryPullRequest(ctx.db, {
+            kind: "task",
+            taskId: ownerTaskId,
+          });
     const primary = {
       kind: "primary" as const,
       repoId: repo._id,

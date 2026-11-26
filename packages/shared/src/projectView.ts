@@ -1,5 +1,6 @@
 import type { Doc } from "@eva/backend";
-import { prStateLabel } from "./prState";
+import { prStateLabel, type PrState } from "./prState";
+import { repoDisplayLabel } from "./repoTile";
 import { prNumberFromGithubUrl } from "./prReview";
 import { ARCHIVE_LIST_MODE_LABELS } from "./archive";
 import {
@@ -269,6 +270,12 @@ export interface SummarizableProjectTaskRow {
   mergedIntoTaskId?: string;
   /** Archived on its own: listed under Archived (`projectTaskStatusSections`). */
   archivedAt?: number;
+  /** A multi-repo task's PRs, one per repo (`listByProject`). */
+  repoPrs?: ReadonlyArray<{
+    prUrl: string;
+    prState: NonNullable<Doc<"agentTasks">["prState"]>;
+    repoName: string;
+  }>;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -341,11 +348,14 @@ export function projectTaskSummaryLine(
     otherRepoLabel: string | undefined;
     /** The task number of a task, by id: names a merged item's target. */
     numIdOf?: (taskId: string) => number | undefined;
+    /** The task is open as a chat tab beside Eva (web). */
+    open?: boolean;
   },
 ): string {
   const reports = extra.notes?.reports.length ?? 0;
   return [
     row.numId !== undefined ? `#${row.numId}` : undefined,
+    extra.open === true ? "Open" : undefined,
     projectTaskReason(row, view, {
       ask: extra.notes?.ask,
       failed: extra.failed,
@@ -363,24 +373,131 @@ export function projectTaskSummaryLine(
     .join(" · ");
 }
 
-/** The tasks that have a PR: the task list's Pull requests group, in list order. */
+/**
+ * The tasks that have a PR: the task list's Pull requests group, in list
+ * order. A multi-repo task is one entry per repo's PR, labelled with its
+ * repo (`repoName`); a single-repo task is one entry, as before.
+ */
 export function projectTaskPullRequests<
   Row extends SummarizableProjectTaskRow & { locked?: boolean },
->(rows: readonly Row[]): Array<Row & { prUrl: string }> {
-  return rows.flatMap((row) =>
-    row.locked !== true && row.prUrl !== undefined
-      ? [{ ...row, prUrl: row.prUrl }]
-      : [],
-  );
+>(rows: readonly Row[]): Array<Row & { prUrl: string; repoName?: string }> {
+  return rows.flatMap((row) => {
+    if (row.locked === true) return [];
+    if (row.repoPrs !== undefined && row.repoPrs.length > 0) {
+      return row.repoPrs.map((pr) => ({
+        ...row,
+        prUrl: pr.prUrl,
+        prState: pr.prState,
+        repoName: pr.repoName,
+      }));
+    }
+    return row.prUrl !== undefined ? [{ ...row, prUrl: row.prUrl }] : [];
+  });
 }
 
-/** A Pull requests row's second line: "#9003 · Open · via #904". */
+/**
+ * A task's own stage in words, for its Details: Triage until approved, then
+ * To do, Working, In review, Done or Cancelled. The Tasks list groups by
+ * display status instead (a task in review sits under "Blocked" there).
+ */
+export function projectTaskStageLabel(
+  stage: ProjectTaskStage,
+  row: Pick<ProjectTaskRow, "approvedAt" | "locked">,
+): string {
+  switch (stage) {
+    case "todo":
+      return row.approvedAt !== undefined || row.locked === true
+        ? "To do"
+        : "Triage";
+    case "in_progress":
+      return "Working";
+    case "in_review":
+      return "In review";
+    case "launched":
+      return "Done";
+    case "cancelled":
+      return "Cancelled";
+  }
+}
+
+/** What `projectTaskFacts` reads of a project task (its `agentTasks` row). */
+export interface FactsProjectTaskRow extends ProjectTaskRow {
+  repoId?: string;
+  linkedRepoIds?: readonly string[];
+  phaseLabel?: string;
+  archivedAt?: number;
+}
+
+/**
+ * A project task's Details facts, for web and phone: the plain text
+ * "Working · Phase 2 · docs", then its PR links. The text is the task's own
+ * stage (`projectTaskStageLabel`: "In review", not the list's "Blocked"
+ * group), the phase, and on a multi-repo task
+ * each repo without a PR. A PR link names its repo on a multi-repo task, so
+ * each repo shows once. A `listByProject` row carries the server's facts; a
+ * bare task row reads as never failed.
+ */
+export function projectTaskFacts<
+  Pr extends { prUrl: string; state: PrState; repoId: string; repoName: string },
+>(
+  row: FactsProjectTaskRow,
+  repos: ReadonlyArray<{
+    _id: string;
+    name: string;
+    label?: string;
+    rootDirectory?: string;
+  }>,
+  prs: readonly Pr[],
+): {
+  text: string;
+  /** Each PR with its link label: "#12", or "api #12" on a multi-repo task. */
+  prs: Array<Pr & { label: string }>;
+} {
+  const view = projectTaskView(row, false);
+  const status = row.archivedAt !== undefined ? "Archived" : projectTaskStageLabel(view.stage, row);
+  const linked = row.linkedRepoIds ?? [];
+  const multiRepo = linked.length > 0;
+  const repoLabel = (repoId: string) => {
+    const repo = repos.find((entry) => entry._id === repoId);
+    return repo ? repoDisplayLabel(repo) : undefined;
+  };
+  const prRepoIds = new Set(prs.map((pr) => pr.repoId));
+  const reposWithoutPr = multiRepo
+    ? [row.repoId, ...linked].flatMap((repoId) =>
+        repoId === undefined || prRepoIds.has(repoId) ? [] : [repoLabel(repoId)],
+      )
+    : [];
+  return {
+    text: [
+      status,
+      row.phaseLabel,
+      ...reposWithoutPr,
+    ]
+      .filter((part) => part !== undefined && part !== "")
+      .join(" · "),
+    prs: prs.map((pr) => ({
+      ...pr,
+      label: [
+        multiRepo ? (repoLabel(pr.repoId) ?? pr.repoName) : undefined,
+        prShortLabel(pr.prUrl),
+      ]
+        .filter((part) => part !== undefined && part !== "")
+        .join(" "),
+    })),
+  };
+}
+
+/**
+ * A Pull requests row's second line: "#9003 · Open · via #904", with the
+ * repo for a multi-repo task's PR ("#12 · Open · api · via #904").
+ */
 export function projectTaskPrLine(
-  row: SummarizableProjectTaskRow & { prUrl: string },
+  row: SummarizableProjectTaskRow & { prUrl: string; repoName?: string },
 ): string {
   return [
     prShortLabel(row.prUrl),
     prStateLabel(row.prState),
+    row.repoName || undefined,
     row.numId !== undefined ? `via #${row.numId}` : undefined,
   ]
     .filter((part) => part !== undefined)

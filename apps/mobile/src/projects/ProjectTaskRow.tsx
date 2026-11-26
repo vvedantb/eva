@@ -133,7 +133,7 @@ export function ProjectTaskRow({
 }
 
 /** A Pull requests row, as the web `ProjectTaskPrRow`: a tap opens the PR. */
-export function ProjectTaskPrRow({ task }: { task: ProjectTaskListRow & { prUrl: string } }) {
+export function ProjectTaskPrRow({ task }: { task: ProjectTaskListRow & { prUrl: string; repoName?: string } }) {
   const scheme = useScheme();
   return (
     <FlatRow

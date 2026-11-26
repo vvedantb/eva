@@ -38,10 +38,6 @@ function deriveTaskRowFields(
       task?.baseBranch?.trim() ||
       repoForTask?.defaultBaseBranch?.trim() ||
       FALLBACK_GIT_BASE_BRANCH,
-    devServerCommandLabel:
-      sandbox.devCommand?.trim() ||
-      repoForTask?.devCommand?.trim() ||
-      "Auto-detected from package.json (e.g. pnpm run dev)",
     sandboxId: sandbox.sandboxId,
   };
 }
@@ -147,7 +143,6 @@ export function useTaskDetail(
     taskSession: data.taskSession,
     hasRuns: data.hasRuns,
     routing,
-    setExecutionError: execution.setExecutionError,
   });
   const tab = useTaskDetailTab(routing);
 

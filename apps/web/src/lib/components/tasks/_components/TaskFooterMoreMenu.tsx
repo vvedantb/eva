@@ -10,59 +10,36 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   ConfirmSkipHint,
+  Spinner,
   skipConfirmTitle,
 } from "@vvedantb/ui";
 import { IconHammer, IconDots } from "@tabler/icons-react";
-import {
-  BusyMenuIcon,
-  SandboxCommandMenuItems,
-} from "@/lib/components/sandbox/SandboxCommandMenuItems";
 import type { TaskStatus } from "../TaskStatusBadge";
 
 export interface MoreMenuVisibility {
   showResolveConflicts: boolean;
-  showRunDevServer: boolean;
-  showRunBackgroundCommands: boolean;
-  hasSandboxCommandItems: boolean;
   showMoreMenu: boolean;
 }
 
-// Simple view hides the git/sandbox plumbing: conflict resolution and the
-// startup/dev/background command runners. The footer menu then has nothing
+// Simple view hides the git plumbing: conflict resolution. The footer menu then has nothing
 // left and drops out entirely; the header menu stays for Copy link.
 export function getMoreMenuVisibility({
   simpleView,
   hasActiveRun,
   status,
-  canStartSandbox,
-  isSandboxActive,
   isHeader,
   hasPrItems,
 }: {
   simpleView: boolean;
   hasActiveRun: boolean;
   status: TaskStatus | undefined;
-  canStartSandbox: boolean;
-  isSandboxActive: boolean;
   isHeader: boolean;
   hasPrItems: boolean;
 }): MoreMenuVisibility {
   const showResolveConflicts =
     !simpleView && taskCanResolveConflicts(status, hasActiveRun);
-  const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
-  const showRunBackgroundCommands =
-    !simpleView && isSandboxActive && canStartSandbox;
-  const hasSandboxCommandItems =
-    showRunDevServer || showRunBackgroundCommands;
-  const showMoreMenu =
-    isHeader || showResolveConflicts || hasSandboxCommandItems || hasPrItems;
-  return {
-    showResolveConflicts,
-    showRunDevServer,
-    showRunBackgroundCommands,
-    hasSandboxCommandItems,
-    showMoreMenu,
-  };
+  const showMoreMenu = isHeader || showResolveConflicts || hasPrItems;
+  return { showResolveConflicts, showMoreMenu };
 }
 
 export interface TaskFooterMoreMenuProps {
@@ -71,11 +48,7 @@ export interface TaskFooterMoreMenuProps {
   buttonSize: "default" | "sm";
   iconSize: number;
   isStarting: boolean;
-  isRunningDevServer: boolean;
-  isRunningBackgroundCommands: boolean;
   onResolveConfirm: () => void;
-  onRunDevServer: () => void;
-  onRunBackgroundCommands: () => void;
 }
 
 export function TaskFooterMoreMenu({
@@ -84,13 +57,9 @@ export function TaskFooterMoreMenu({
   buttonSize,
   iconSize,
   isStarting,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
   onResolveConfirm,
-  onRunDevServer,
-  onRunBackgroundCommands,
 }: TaskFooterMoreMenuProps) {
-  const { showResolveConflicts, hasSandboxCommandItems } = visibility;
+  const { showResolveConflicts } = visibility;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -106,14 +75,9 @@ export function TaskFooterMoreMenu({
         <TaskSandboxMenuItems
           visibility={visibility}
           isStarting={isStarting}
-          isRunningDevServer={isRunningDevServer}
-          isRunningBackgroundCommands={isRunningBackgroundCommands}
           onResolveConfirm={onResolveConfirm}
-          onRunDevServer={onRunDevServer}
-          onRunBackgroundCommands={onRunBackgroundCommands}
         />
-        {(showResolveConflicts || hasSandboxCommandItems) &&
-        prLinks.hasItems ? (
+        {showResolveConflicts && prLinks.hasItems ? (
           <DropdownMenuSeparator />
         ) : null}
         {prLinks.items}
@@ -124,56 +88,41 @@ export function TaskFooterMoreMenu({
 
 export type TaskSandboxMenuItemsProps = Pick<
   TaskFooterMoreMenuProps,
-  | "visibility"
-  | "isStarting"
-  | "isRunningDevServer"
-  | "isRunningBackgroundCommands"
-  | "onResolveConfirm"
-  | "onRunDevServer"
-  | "onRunBackgroundCommands"
+  "visibility" | "isStarting" | "onResolveConfirm"
 >;
 
-/** Resolve Conflicts and the sandbox command runners; the task header reuses them. */
+/** Resolve Conflicts; the task header reuses it. */
 export function TaskSandboxMenuItems({
   visibility,
   isStarting,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
   onResolveConfirm,
-  onRunDevServer,
-  onRunBackgroundCommands,
 }: TaskSandboxMenuItemsProps) {
-  const { showResolveConflicts, hasSandboxCommandItems } = visibility;
-  return (
-    <>
-      {showResolveConflicts && (
-        <DropdownMenuItem
-          onClick={onResolveConfirm}
-          disabled={isStarting}
-          title={skipConfirmTitle("Resolve Conflicts")}
-        >
-          <BusyMenuIcon busy={isStarting}>
-            <IconHammer size={14} />
-          </BusyMenuIcon>
-          Resolve Conflicts
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      )}
-      {showResolveConflicts && hasSandboxCommandItems ? (
-        <DropdownMenuSeparator />
-      ) : null}
-      <SandboxCommandMenuItems
-        devServer={{
-          show: visibility.showRunDevServer,
-          busy: isRunningDevServer,
-          onRun: onRunDevServer,
-        }}
-        backgroundCommands={{
-          show: visibility.showRunBackgroundCommands,
-          busy: isRunningBackgroundCommands,
-          onRun: onRunBackgroundCommands,
-        }}
-      />
-    </>
+  return visibility.showResolveConflicts ? (
+    <DropdownMenuItem
+      onClick={onResolveConfirm}
+      disabled={isStarting}
+      title={skipConfirmTitle("Resolve Conflicts")}
+    >
+      <BusyMenuIcon busy={isStarting}>
+        <IconHammer size={14} />
+      </BusyMenuIcon>
+      Resolve Conflicts
+      <ConfirmSkipHint />
+    </DropdownMenuItem>
+  ) : null;
+}
+
+/** Spinner while the item's action runs, else its own icon. */
+function BusyMenuIcon({
+  busy,
+  children,
+}: {
+  busy: boolean;
+  children: ReactNode;
+}) {
+  return busy ? (
+    <Spinner variant="circle" size="sm" className="size-3.5" />
+  ) : (
+    children
   );
 }

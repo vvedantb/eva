@@ -8,9 +8,8 @@
  * this action asks Jev why each person was named and records the answer, which
  * is what picks instant email / daily digest / inbox only.
  *
- * Failure is not fatal and never silent: a mention that cannot be judged falls
- * back to the pre-routing behaviour (the 15-minute debounced email) with its
- * urgency left unset, so the worst case is today's behaviour.
+ * Failure is not fatal and never silent: a mention that cannot be judged is
+ * delivered as `normal` (toast, push, daily digest).
  *
  * Its own top-level module because `"use node"` cannot be mixed into the
  * isolate bundle `_mentions/*` is part of.
@@ -76,7 +75,7 @@ export const routeMentions = internalAction({
           outcome.ok ? "" : outcome.error,
         );
         await ctx.runMutation(
-          internal.notifications.scheduleLegacyMentionEmail,
+          internal.notifications.routeMentionFallback,
           { notificationId: item.notificationId },
         );
         continue;

@@ -84,6 +84,27 @@ export async function findOpenTurn(
 }
 
 /**
+ * The open task run streaming into a chat (`_taskWorkflow/runChatTurn.ts`).
+ * A run's turn is keyed on the run, so the chat's own lookup misses it; it is
+ * filed under the chat's session with the chat as its stream.
+ */
+export async function findOpenRunTurnForChat(
+  ctx: QueryCtx,
+  chatId: Id<"sessionChats">,
+): Promise<Doc<"turns"> | null> {
+  const chat = await ctx.db.get(chatId);
+  if (!chat) return null;
+  const turns = await listOpenSessionTurns(ctx, chat.sessionId);
+  return (
+    turns.find(
+      (turn) =>
+        turn.streamingEntityId === String(chatId) &&
+        ctx.db.normalizeId("agentRuns", turn.entityId) !== null,
+    ) ?? null
+  );
+}
+
+/**
  * The entity's latest no-lane turn: the open one, else the last closed one.
  * Follow-up rows (alerts, retries, continuations) read it to find their thread.
  */
@@ -116,6 +137,8 @@ type OpenTurnFields = {
   placeholderMessageId?: Id<"messages">;
   /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
+  /** Thread turns only: who asked; Eva's answer notifies them. */
+  askedBy?: Id<"users">;
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
@@ -159,6 +182,7 @@ export async function openTurn(
     leaseGeneration: 0,
     placeholderMessageId: params.placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.replyTo === undefined ? undefined : params.askedBy,
     prompt: params.prompt,
     attachmentStorageIds: params.attachmentStorageIds,
     model: params.model,
@@ -451,19 +475,25 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
-  // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
-  // one-shot lanes (summary, interview) are not replies, and their owner rows
-  // have no such field. Lease sweeps can close a turn after its chat was
-  // hard-deleted, and `patch` throws then. A session chat's turn stamps both
-  // the chat and its session, since the sidebar reads unread per session.
+  // The unread watermark read by `chatReads.ts`: chat turns, and task runs,
+  // which reply in the chat they stream into. One-shot lanes (summary,
+  // interview) are not replies, and their owner rows have no such field.
+  // Lease sweeps can close a turn after its chat was hard-deleted, and
+  // `patch` throws then. A session chat's turn stamps both the chat and its
+  // session, since the sidebar reads unread per session.
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   const chatParentId =
-    turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
+    turn.lane === undefined
+      ? chatParentIdOf(
+          ctx.db,
+          runId ? turn.streamingEntityId : turn.entityId,
+        )
+      : null;
   if (chatParentId && (await ctx.db.get(chatParentId))) {
     await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
   }
   const session =
     turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   if (session && chatParentId) {
     await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
     // A task's or project's session reads unread on its owner's card, so the

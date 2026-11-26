@@ -39,12 +39,17 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
+/** No task open as a chat tab. */
+const NO_OPEN_TASKS: ReadonlySet<string> = new Set();
+
 /** The Pull requests group's key, beside the display statuses. */
 const PULL_REQUESTS = "pull_requests";
 
 /** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs: their rows are marked. */
+  openTaskIds: ReadonlySet<string>;
   failedTaskIds: ReadonlySet<string>;
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
@@ -74,7 +79,9 @@ function ProjectTaskRowFor({
     <ProjectTaskRow
       task={row}
       view={view}
+      open={context.openTaskIds.has(row._id)}
       line={projectTaskSummaryLine(row, view, {
+        open: context.openTaskIds.has(row._id),
         notes: context.notesByTask.get(row._id),
         failed: context.failedTaskIds.has(row._id),
         authorName:
@@ -138,6 +145,8 @@ interface ProjectTaskListPanelProps {
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs (`?tasks=`). */
+  openTaskIds?: ReadonlySet<string>;
   /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
@@ -154,6 +163,7 @@ export function ProjectTaskListPanel({
   readOnly,
   failedTaskIds,
   onSelectTask,
+  openTaskIds = NO_OPEN_TASKS,
   homeRepoId,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
@@ -234,6 +244,7 @@ export function ProjectTaskListPanel({
 
   const context: RowContext = {
     onSelectTask,
+    openTaskIds,
     failedTaskIds,
     notesByTask,
     basePath,
@@ -302,7 +313,10 @@ export function ProjectTaskListPanel({
             <GroupHeader label="Pull requests" count={pullRequests.length} />
             <AccordionContent className="pt-1 pb-0">
               {pullRequests.map((task) => (
-                <ProjectTaskPrRow key={task._id} task={task} />
+                <ProjectTaskPrRow
+                  key={`${task._id}:${task.prUrl}`}
+                  task={task}
+                />
               ))}
             </AccordionContent>
           </AccordionItem>

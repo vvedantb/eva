@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { mentionsEva } from "@eva/shared";
 import { internal } from "../_generated/api";
 import {
@@ -16,6 +16,7 @@ import {
   aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
+  previewAnnotationValidator,
   reasoningLevelValidator,
   usesChatDaemon,
 } from "../validators";
@@ -53,6 +54,7 @@ import {
   bumpThreadRoot,
   threadReplyPrompt,
 } from "../_messages/replies";
+import { joinThreadOnReply } from "../_messages/threadParticipants";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
@@ -179,6 +181,7 @@ async function stageAndStartChatTurn(
     streamingEntityId,
     placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.actingUserId,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
@@ -258,6 +261,8 @@ async function enqueueChatMessage(
     userId: Id<"users">;
     content: string;
     displayContent?: string;
+    /** Preview "Select element" sends; copied to the user row on start. */
+    annotation?: Infer<typeof previewAnnotationValidator>;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
     /** A thread reply for Eva: her answer joins this root's thread. */
@@ -281,6 +286,7 @@ async function enqueueChatMessage(
     parentId: chat._id,
     content: params.content,
     displayContent: params.displayContent,
+    annotation: params.annotation,
     createdAt: now,
     order: now,
     userId: params.userId,
@@ -707,6 +713,8 @@ export const enqueueMessage = authMutation({
     message: v.string(),
     /** Compact chat-display text when `message` is a rich agent prompt. */
     displayContent: v.optional(v.string()),
+    /** Preview "Select element" sends: where the annotation points. */
+    annotation: v.optional(previewAnnotationValidator),
     ...turnSettingsArgs,
     /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
@@ -727,6 +735,7 @@ export const enqueueMessage = authMutation({
       chatId,
       message,
       displayContent: omittedDisplay,
+      annotation,
       sentViaOrchestrator,
       ...settings
     } = args;
@@ -738,6 +747,7 @@ export const enqueueMessage = authMutation({
       userId: ctx.userId,
       content,
       displayContent: displayContent || undefined,
+      annotation,
       settings,
       sentViaOrchestrator,
     });
@@ -790,18 +800,28 @@ export const addReply = authMutation({
     });
 
     const surface = { kind: "session" as const, session, chat };
-    await notifyChatMentions(ctx, {
+    // The mentioned hear of it as a mention; the thread's followers as a
+    // reply. Posting reads this thread for the author.
+    const mentionedIds = await notifyChatMentions(ctx, {
       content,
       authorUserId: ctx.userId,
       surface,
+      threadRoot: root,
+    });
+    const reply = await ctx.db.get(replyId);
+    if (!reply) throw new Error("Reply not stored");
+    await joinThreadOnReply(ctx, {
+      root,
+      reply,
+      replierId: ctx.userId,
+      mentionedIds,
+      repoId: session.repoId,
     });
     await notifyThreadReply(ctx, {
       content,
       authorUserId: ctx.userId,
-      participantIds: [
-        ...(root.role === "user" && root.userId ? [root.userId] : []),
-        ...(root.replierIds ?? []),
-      ],
+      rootId: root._id,
+      mentionedIds,
       surface,
     });
 
@@ -838,6 +858,7 @@ export async function sendSessionChatMessage(
     userId: Id<"users">;
     content: string;
     displayContent?: string;
+    annotation?: Infer<typeof previewAnnotationValidator>;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
   },

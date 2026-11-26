@@ -1,8 +1,6 @@
 export {
   get,
   getWithDetails,
-  getActivityLog,
-  getMedia,
   listByTask,
   getTaskIdsWithLatestRunError,
   getLatestDeploymentStatuses,

@@ -220,7 +220,7 @@ describe("quick tasks on sessions", () => {
         await openTurn(ctx, {
           entityId: runId,
           sessionId,
-          streamingEntityId: `task-run-${runId}`,
+          streamingEntityId: String(chatId),
           model: DEFAULT_AI_MODEL,
           repoId: f.repoId,
         });

@@ -3,7 +3,7 @@ import { internalMutation } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { cleanUpStaleRun } from "./recovery";
-import { clearTaskRunStreaming } from "./helpers";
+import { settleRunChatTurn } from "./runChatTurn";
 import { RUN_TIMEOUT_MS } from "./staleness";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import { onProjectTasksChanged } from "../functions";
@@ -66,9 +66,7 @@ export const handleStaleRun = internalMutation({
       }
     }
 
-    await clearTaskRunStreaming(ctx, args.taskId, args.runId, {
-      snapshot: true,
-    });
+    await settleRunChatTurn(ctx, args.taskId, args.runId);
 
     return null;
   },

@@ -122,31 +122,3 @@ export function LandingSectionHeading({
     </div>
   );
 }
-
-/**
- * Capabilities as one quiet mono line rather than a row of pills. Every item
- * carries its own dot, so a wrapped line never starts with a stray separator.
- */
-export function LandingCapabilityLine({
-  items,
-  className,
-}: {
-  items: readonly string[];
-  className?: string;
-}) {
-  return (
-    <ul
-      className={cn(
-        "flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs text-muted-foreground",
-        className,
-      )}
-    >
-      {items.map((item) => (
-        <li key={item} className="flex items-center gap-2">
-          <span aria-hidden className="size-1 rounded-full bg-primary/50" />
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}

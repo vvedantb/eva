@@ -6,6 +6,7 @@ import {
   needsYouGroupForSession,
 } from "@eva/shared/needsYou";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
 import { authQuery, hasRepoAccess } from "./functions";
 import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -21,9 +22,10 @@ import { isSessionArchived } from "./_sessions/archive";
  * sessions show to the person who made them.
  *
  * - Questions: a project task's open ask the coordinator handed to a person,
- *   any blocking agent question (`pendingQuestions`) on an open turn, and a
- *   teammate's `@`-mention of the caller in a chat they have not posted in
- *   since (an unread `mention` notification; posting there reads it).
+ *   any blocking agent question (`pendingQuestions`) on an open turn, and an
+ *   unread notification that asks for the caller in a chat: a teammate's
+ *   `@`-mention, a routed question, an agent's `notify_user`
+ *   (`isNeedsYouNotification`; posting in that chat reads it).
  * - To review: an open (not draft) PR of a project task, quick task or session.
  * - Triage: a project task no one approved yet.
  * - Failed: a project task whose retries are spent, or a quick task whose
@@ -55,6 +57,8 @@ const needsYouRowValidator = v.object({
   href: v.optional(v.string()),
   /** The chat the phone opens (`chats.get` target). */
   chatTarget: v.optional(v.string()),
+  /** The reply thread in that chat the phone opens. */
+  threadRootId: v.optional(v.id("messages")),
   repoId: v.id("githubRepos"),
   /** When it started to wait, for the row's age and the order. */
   at: v.number(),
@@ -75,11 +79,15 @@ export const list = authQuery({
         : (await hasRepoAccess(ctx.db, args.repoId, ctx.userId))
           ? [await ctx.db.get(args.repoId)].filter((repo) => repo !== null)
           : [];
-    const [perRepo, mentions] = await Promise.all([
+    const [perRepo, asks] = await Promise.all([
       Promise.all(repos.map((repo) => repoRows(ctx.db, repo, ctx.userId))),
-      mentionRows(ctx.db, ctx.userId, new Set(repos.map((repo) => repo._id))),
+      notificationRows(
+        ctx.db,
+        ctx.userId,
+        new Set(repos.map((repo) => repo._id)),
+      ),
     ]);
-    return [...perRepo.flat(), ...mentions];
+    return [...perRepo.flat(), ...asks];
   },
 });
 
@@ -97,15 +105,15 @@ async function repoRows(
   return [...projects, ...quickTasks, ...sessions, ...questions];
 }
 
-/** Most unread notifications the mention rows look through. */
-const MENTION_SCAN_LIMIT = 100;
+/** Most unread notifications the notification rows look through. */
+const NOTIFICATION_SCAN_LIMIT = 100;
 
 /**
- * The caller's unread chat `@`-mentions, as Questions. A mention row leaves
- * once the caller posts in that chat (`notifyChatMentions` reads it) or reads
- * or archives it in Updates.
+ * The caller's unread notifications that ask for them in a chat, as
+ * Questions. A row leaves once the caller posts in that chat
+ * (`notifyChatMentions` reads it) or reads or archives it in Updates.
  */
-async function mentionRows(
+async function notificationRows(
   db: DatabaseReader,
   userId: Id<"users">,
   repoIds: ReadonlySet<Id<"githubRepos">>,
@@ -117,12 +125,11 @@ async function mentionRows(
         q.eq("userId", userId).eq("read", false),
       )
       .order("desc")
-      .take(MENTION_SCAN_LIMIT)
+      .take(NOTIFICATION_SCAN_LIMIT)
   ).filter(
     (row) =>
-      row.type === "mention" &&
+      isNeedsYouNotification(row) &&
       row.archivedAt === undefined &&
-      row.chatTarget !== undefined &&
       row.repoId !== undefined &&
       repoIds.has(row.repoId),
   );
@@ -130,10 +137,10 @@ async function mentionRows(
     unread.map(async (row): Promise<NeedsYouRow | null> => {
       const { chatTarget, repoId } = row;
       if (chatTarget === undefined || repoId === undefined) return null;
-      const source = await mentionSource(db, chatTarget);
+      const source = await chatSource(db, chatTarget);
       if (!source) return null;
       return {
-        key: `mention:${row._id}`,
+        key: `notification:${row._id}`,
         group: "question",
         title: row.title,
         detail: row.message,
@@ -142,6 +149,7 @@ async function mentionRows(
         projectId: source.projectId,
         href: row.href,
         chatTarget,
+        threadRootId: row.threadRootId,
         repoId,
         at: row.createdAt,
       };
@@ -150,8 +158,8 @@ async function mentionRows(
   return rows.filter((row) => row !== null);
 }
 
-/** Which kind of chat a mention's `chatTarget` names. */
-async function mentionSource(
+/** Which kind of chat a notification's `chatTarget` names. */
+async function chatSource(
   db: DatabaseReader,
   chatTarget: string,
 ): Promise<{

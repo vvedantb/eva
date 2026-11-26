@@ -9,7 +9,7 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * The idle-pause sweep must be a strict no-op while the setting is off (every
- * existing deployment), log-only in dry-run, and when on must only ever stop a
+ * existing deployment), and when on must only ever stop a
  * sandbox that is active, idle past both graces, not busy and not being looked
  * at. Each guard is pinned here with real Convex rows.
  */
@@ -66,7 +66,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 async function setMode(
   t: Fixture["t"],
-  mode: "off" | "dry-run" | "on",
+  mode: "off" | "on",
 ): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("appSettings", {
@@ -133,18 +133,6 @@ describe("idle pause sweep", () => {
       });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "dry-run decides but never stops",
-    async () => {
-      const { t, sessionId, taskSessionId } = await fixture();
-      await setMode(t, "dry-run");
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await sessionStatus(t, sessionId)).toBe("active");
-      expect(await sessionStatus(t, taskSessionId)).toBe("active");
     },
     TIMEOUT_MS,
   );

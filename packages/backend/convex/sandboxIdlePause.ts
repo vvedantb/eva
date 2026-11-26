@@ -50,7 +50,6 @@ import {
  *
  * Gated by `appSettings.sandboxIdlePauseMode`:
  *   - `off`     — this module does nothing (default; identical to pre-feature).
- *   - `dry-run` — logs `[sandboxIdlePause] would-pause …` per candidate.
  *   - `on`      — logs `[sandboxIdlePause] pause …` and requests the stop.
  *
  * The daily `sandboxAutoStop` sweep is untouched and keeps running alongside.
@@ -577,21 +576,18 @@ export const run = internalAction({
         continue;
       }
       if (paused >= MAX_PAUSES_PER_RUN) continue;
-      const verb = thresholds.mode === "on" ? "pause" : "would-pause";
       console.log(
-        `[sandboxIdlePause] ${verb} kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
+        `[sandboxIdlePause] pause kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
       );
-      if (thresholds.mode === "on") {
-        const stopped = await ctx.runMutation(
-          internal.sandboxIdlePause.pause,
-          { ...ref, idleMinutes: decision.idleMinutes },
-        );
-        if (!stopped) continue;
-      }
+      const stopped = await ctx.runMutation(internal.sandboxIdlePause.pause, {
+        ...ref,
+        idleMinutes: decision.idleMinutes,
+      });
+      if (!stopped) continue;
       paused += 1;
     }
     console.log(
-      `[sandboxIdlePause] sweep mode=${thresholds.mode} active=${refs.length} busy=${busy} present=${present} ${thresholds.mode === "on" ? "paused" : "would-pause"}=${paused}`,
+      `[sandboxIdlePause] sweep mode=${thresholds.mode} active=${refs.length} busy=${busy} present=${present} paused=${paused}`,
     );
     return null;
   },

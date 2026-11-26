@@ -122,12 +122,6 @@ describe("decideIdlePause", () => {
     ).toEqual({ action: "skip", reason: "within-grace" });
   });
 
-  test("dry-run decides exactly like on (the sweep decides whether to act)", () => {
-    expect(decideIdlePause(input({ mode: "dry-run" }))).toEqual({
-      action: "pause",
-      idleMinutes: 60,
-    });
-  });
 });
 
 describe("resolveIdleThresholds", () => {
@@ -165,12 +159,12 @@ describe("resolveIdleThresholds", () => {
   test("the new fields win over the earlier ones", () => {
     expect(
       resolveIdleThresholds({
-        sandboxIdlePauseMode: "dry-run",
+        sandboxIdlePauseMode: "on",
         sandboxIdleAfterInteractionMinutes: 20,
         sandboxIdleStopEnabled: false,
         sandboxIdleStopMinutes: 120,
       }),
-    ).toEqual({ mode: "dry-run", afterAgentMs: 5 * MIN, afterInteractionMs: 20 * MIN });
+    ).toEqual({ mode: "on", afterAgentMs: 5 * MIN, afterInteractionMs: 20 * MIN });
   });
 
   test("configured minutes are used; sub-minute and NaN values clamp to defaults or 1", () => {

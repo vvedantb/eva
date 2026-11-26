@@ -70,6 +70,37 @@ import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 import { sessionOwnerValidator } from "../_sessions/owner";
 
+/** Where the user was in Eva when they messaged Manager Ave, as the web app sends it. */
+const avePageContextArgFields = {
+  /** Path plus search, e.g. `/acme/web/sessions/12?tab=diff`. */
+  path: v.string(),
+  title: v.string(),
+  /** IANA zone, e.g. `Europe/London`. */
+  timeZone: v.string(),
+  /** Text the user last selected on that page, if any. */
+  selection: v.optional(v.string()),
+};
+export const avePageContextArgValidator = v.object(avePageContextArgFields);
+
+/** The session, quick task, project or doc the page shows (`_ave/pageEntity.ts`). */
+export const avePageEntityValidator = v.object({
+  kind: v.union(
+    v.literal("session"),
+    v.literal("quick task"),
+    v.literal("project"),
+    v.literal("doc"),
+  ),
+  title: v.string(),
+  /** Sessions and quick tasks only: projects and docs have no status. */
+  status: v.optional(v.string()),
+});
+
+/** Stored on the user's Ave row: what the client sent plus what the server found at that path. */
+export const avePageContextValidator = v.object({
+  ...avePageContextArgFields,
+  entity: v.optional(avePageEntityValidator),
+});
+
 export const userFields = {
   clerkId: v.optional(v.string()),
   email: v.optional(v.string()),
@@ -351,6 +382,8 @@ export const turnFields = {
    * Its retries, alerts and continuations join the same thread.
    */
   replyTo: v.optional(v.id("messages")),
+  /** A thread turn: the person whose @Eva reply woke her; her answer notifies them. */
+  askedBy: v.optional(v.id("users")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
@@ -626,6 +659,12 @@ export const agentTaskFields = {
   // /tmp/eva-attachment-* at launch so the agent can read them.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
+  /**
+   * Repos besides `repoId` this task changes in the same sandbox (a project
+   * coordinator's multi-repo task). Its work session gets one `sessionRepos`
+   * row per repo (`insertWorkSession`), each with its own PR.
+   */
+  linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   projectId: v.optional(v.id("projects")),
   /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
   origin: v.optional(taskOriginValidator),
@@ -743,10 +782,15 @@ export const agentRunFields = {
   // this field existed.
   model: v.optional(aiModelValidator),
   // Screenshots and recordings the agent left in the sandbox deliverable
-  // folders, uploaded as the run finishes. A run has no `messages` row to hang
-  // media on — it renders as the quick task's first chat turn or as a timeline
-  // row, both built from this doc — so the ids live here instead.
+  // folders, uploaded before the run completes. Copied onto the run's reply
+  // row (`replyMessageId`) when the run settles (`settleRunChatTurn`).
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The run's assistant row in its task's Main chat: an empty bubble the run
+   * streams into, settled with its reply on every terminal path
+   * (`_taskWorkflow/runChatTurn.ts`).
+   */
+  replyMessageId: v.optional(v.id("messages")),
   /**
    * The start attempt a quick task run's claim took on its session
    * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
@@ -1387,6 +1431,31 @@ export const logFields = {
   ...logUsageFields,
 };
 
+/**
+ * Where a preview annotation points ("Select element" in the preview). Set on
+ * the user row (and its queued row) so the preview comments drawer can list a
+ * chat's annotations without reading the chat text. `selector` is unset on
+ * rows the backfill recovered from that text.
+ */
+const previewAnnotationFields = {
+  pagePath: v.string(),
+  element: v.string(),
+  selector: v.optional(v.string()),
+};
+
+/** What a send carries (and its queued row): no resolve state yet. */
+export const previewAnnotationValidator = v.object(previewAnnotationFields);
+
+/**
+ * The user row's annotation: the send's fields plus resolve state, written
+ * only by `previewComments.setResolved`. Both unset while the comment is open.
+ */
+export const storedPreviewAnnotationValidator = v.object({
+  ...previewAnnotationFields,
+  resolvedAt: v.optional(v.number()),
+  resolvedBy: v.optional(v.id("users")),
+});
+
 export const messageFields = {
   role: roleValidator,
   content: v.string(),
@@ -1399,6 +1468,8 @@ export const messageFields = {
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
+  /** User rows sent from the preview's "Select element" tool. */
+  annotation: v.optional(storedPreviewAnnotationValidator),
   isSystemAlert: v.optional(v.boolean()),
   // System alerts that did not fail the session (it keeps running) render
   // amber. Unset alerts with `errorDetail` render as errors.
@@ -1428,6 +1499,9 @@ export const messageFields = {
   // Convex-side guard only — synthetic continuations are rendered like normal
   // turns; the UI does not read this flag.
   isSyntheticTurn: v.optional(v.boolean()),
+  // The task run that wrote this row: its prompt (user) or its reply
+  // (assistant). Chat-turn helpers that pick rows by recency skip these.
+  runId: v.optional(v.id("agentRuns")),
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
@@ -1521,6 +1595,8 @@ export const aveMessageFields = {
    * capped results), replayed as model context on later runs.
    */
   modelMessages: v.optional(v.string()),
+  /** User rows: the Eva page the user had open when they sent it. */
+  pageContext: v.optional(avePageContextValidator),
 };
 
 export const queuedMessageFields = {
@@ -1528,6 +1604,8 @@ export const queuedMessageFields = {
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
+  /** Copied to the user row when the queue starts it (see messageFields). */
+  annotation: v.optional(previewAnnotationValidator),
   createdAt: v.number(),
   // Sort key for queue run order. Enqueue sets Date.now() (appends to the end);
   // the reorder mutation rewrites this to 0-based positions. Optional so the
@@ -1611,6 +1689,18 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
+// One row per (person, reply thread): who takes part and hears about replies
+// (plan `notifications-v2-5.md`, part A). Created automatically for the
+// root's author, repliers, people mentioned in the thread and the person Eva
+// answers. `following: false` is an Unfollow and stays: joining again does
+// not undo it. `lastReadAt` drives the thread's "N new" and "New" line.
+export const threadParticipantFields = {
+  rootId: v.id("messages"),
+  userId: v.id("users"),
+  following: v.boolean(),
+  lastReadAt: v.optional(v.number()),
+};
+
 // One row per (user, chat): when the user last saw it. "Read" is per user, so
 // it cannot live on the shared chat doc. `repoId` lets a list query load one
 // user's rows for one repo in a single indexed read.
@@ -1657,12 +1747,11 @@ export const chatRecapFields = {
 // `sandboxAutoStop` cron stops every active sandbox so none are left running
 // overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
 // (the local date "YYYY-MM-DD" of the last occurrence that was swept).
-// Idle pause (`sandboxIdlePause` cron): `off` is today's behaviour, `dry-run`
-// only logs which sandboxes would pause, `on` pauses them. All three fields are
+// Idle pause (`sandboxIdlePause` cron): `off` does nothing, `on` pauses idle
+// sandboxes. All three fields are
 // optional so existing rows need no migration; readers default to off / 5 / 20.
 export const sandboxIdlePauseModeValidator = v.union(
   v.literal("off"),
-  v.literal("dry-run"),
   v.literal("on"),
 );
 
@@ -1805,6 +1894,10 @@ export const docFields = {
   // Save-as-document from a session plan). Manual New Document leaves these
   // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
   ...chatSourceFields,
+  // The chat thread and turn that made it (`create_eva_doc`), for its inline
+  // card under that reply. Docs made any other way have neither.
+  chatParentId: v.optional(chatParentIdValidator),
+  messageId: v.optional(v.id("messages")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -2334,6 +2427,9 @@ export const notificationFields = {
   // The chat this notification is about (session, quick task or project id),
   // so the mobile inbox can open it without parsing `href`.
   chatTarget: v.optional(v.string()),
+  // The reply thread it is about: the phone opens that thread, opening it
+  // reads the notification, and posting in it answers its mentions.
+  threadRootId: v.optional(v.id("messages")),
 };
 
 export const repoEnvVarFields = {

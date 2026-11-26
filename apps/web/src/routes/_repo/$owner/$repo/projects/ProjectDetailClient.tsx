@@ -24,6 +24,7 @@ import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import { useProjectTaskTabs } from "@/lib/components/projects/useProjectTaskTabs";
 import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
@@ -104,6 +105,14 @@ export function ProjectDetailClient({
       replace: true,
     });
   };
+
+  // Tasks open as chat tabs beside Eva (`?tasks=`, `?task=`).
+  const taskTabs = useProjectTaskTabs({
+    basePath,
+    projectPathSegment,
+    sandboxTab,
+    onShowPanel: () => setExpandRightSignal((n) => n + 1),
+  });
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
@@ -215,6 +224,7 @@ export function ProjectDetailClient({
             expandRightSignal={expandRightSignal}
             onThreadOpen={openThread}
             onCloseThread={closeThread}
+            taskTabs={taskTabs}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}

@@ -24,7 +24,7 @@ import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
@@ -40,8 +40,18 @@ import {
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { useProjectDocuments } from "./useProjectDocuments";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
-import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
-import { useProjectTaskStatus } from "./useProjectStatus";
+import {
+  isProjectSandboxTab,
+  isProjectTaskTab,
+  visibleProjectTaskTabs,
+  type ProjectSandboxTab,
+} from "./projectSandboxTabs";
+import {
+  useProjectTaskStatus,
+  type ProjectTaskListRow,
+} from "./useProjectStatus";
+import { ProjectTaskPane } from "./ProjectTaskPane";
+import { projectTaskRailTabs } from "./useProjectTaskTabs";
 
 /** Sandbox tabs a task's sandbox has but the coordinator's does not. */
 const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
@@ -89,6 +99,17 @@ interface ProjectSandboxPanelProps {
   title: string;
   /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
   onCloseThread: () => void;
+  /**
+   * The selected chat tab's task (`?task=`): the panel shows its tabs only.
+   * Undefined on Eva's tab.
+   */
+  selectedTask: ProjectTaskListRow | undefined;
+  /** A task tab is selected but its row is still loading. */
+  selectedTaskLoading: boolean;
+  /** The tasks open as chat tabs: the Tasks tab marks their rows. */
+  openTaskIds: ReadonlySet<string>;
+  /** Opens a task as a chat tab (a Tasks tab row). */
+  onOpenTask: (taskNumId: number) => void;
 }
 
 export function ProjectSandboxPanel({
@@ -112,6 +133,10 @@ export function ProjectSandboxPanel({
   onToggle,
   title,
   onCloseThread,
+  selectedTask,
+  selectedTaskLoading,
+  openTaskIds,
+  onOpenTask,
 }: ProjectSandboxPanelProps) {
   // An open reply thread adds the Replies tab (projects v2, PR D).
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -120,23 +145,35 @@ export function ProjectSandboxPanel({
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const chatBinding = useProjectChatBinding(projectId, projectSession);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const annotationTarget = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
+  const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { status: taskStatus } = useProjectTaskStatus(
+    projectId,
+    repoId,
+  );
+  // A selected task tab shows its own tabs only (Details first); one that
+  // lost its content (the sandbox stopped) falls back to Details.
+  const taskSelected = selectedTask !== undefined || selectedTaskLoading;
+  const taskTabs = selectedTask ? visibleProjectTaskTabs(selectedTask) : [];
   // The coordinator only reads code and delegates: no dev server, no edits,
   // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
-  // Replies without an open thread (an old link) lands on Tasks too.
-  const activeTab: ProjectSandboxTab =
-    COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
-    (sandboxTab === "replies" && !threadId)
+  // Replies without an open thread (an old link) lands on Tasks too, as
+  // does a task tab on Eva's tab.
+  const activeTab: ProjectSandboxTab = taskSelected
+    ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
+      ? sandboxTab
+      : "task-details"
+    : COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
+        isProjectTaskTab(sandboxTab) ||
+        (sandboxTab === "replies" && !threadId)
       ? "tasks"
       : sandboxTab;
-  const projectDocuments = useProjectDocuments(projectId, repoId);
-  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
   const triageCount = taskStatus?.counts.triage ?? 0;
   // Tasks leads the rail; its badge counts what waits in Triage.
   const tasksTab: SandboxTabDescriptor = {
@@ -206,7 +243,7 @@ export function ProjectSandboxPanel({
       {projectPathSegment &&
       typeof ownerParam === "string" &&
       typeof repoParam === "string" ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={activeTab}
           to="/$owner/$repo/projects/$numId/sandbox/$sandboxTab"
           params={{
@@ -225,9 +262,18 @@ export function ProjectSandboxPanel({
             collapsed={collapsed}
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
-            enabledTabs={enabledTabs}
-            leadingTabs={threadId ? [tasksTab, REPLIES_TAB] : [tasksTab]}
-            showAgentsTab={hasAgents}
+            // A task tab's rail holds its own tabs only.
+            enabledTabs={taskSelected ? [] : enabledTabs}
+            leadingTabs={
+              taskSelected
+                ? projectTaskRailTabs(taskTabs)
+                : threadId
+                  ? [tasksTab, REPLIES_TAB]
+                  : [tasksTab]
+            }
+            showArtifactsTab={!taskSelected}
+            showDocumentsTab={!taskSelected}
+            showAgentsTab={!taskSelected && hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
             documentCount={documentCount}
@@ -248,8 +294,23 @@ export function ProjectSandboxPanel({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
+              openTaskIds={openTaskIds}
+              onOpenTask={onOpenTask}
             />
           </KeepAlivePane>
+          {selectedTask && projectPathSegment && isProjectTaskTab(activeTab) ? (
+            <ProjectTaskPane
+              key={selectedTask._id}
+              taskId={selectedTask._id}
+              numId={selectedTask.numId}
+              title={selectedTask.title}
+              prUrl={selectedTask.prUrl}
+              tab={activeTab}
+              fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedTask.numId}`}
+              collapsed={collapsed}
+              onSelectTab={navigateToSandboxTab}
+            />
+          ) : null}
           <div
             className={
               activeTab === "replies"
@@ -318,7 +379,7 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
-              onAnnotationSubmit={submitAnnotation}
+              annotation={annotationTarget}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
               // A collapsed rail keeps its preview parked.

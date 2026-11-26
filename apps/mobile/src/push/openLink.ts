@@ -4,12 +4,16 @@ import { Linking } from "react-native";
 import { WEB_URL } from "@/config";
 
 /**
- * Opens what a notification points at, on the phone when it can: its chat
- * (`chatTarget`), a pull request at once, a task, project, session or doc
+ * Opens what a notification points at, on the phone when it can: its reply
+ * thread (`threadRootId` in `chatTarget`), its chat (`chatTarget`), a pull request at once, a task, project, session or doc
  * through `/open` (which looks the item up by its number), and anything else
  * (drafts, automations, settings) on the web, as before.
  */
-export function openAppLink(link: { chatTarget?: string; href?: string; repoId?: string }) {
+export function openAppLink(link: { chatTarget?: string; threadRootId?: string; href?: string; repoId?: string }) {
+  if (link.chatTarget && link.threadRootId) {
+    router.push({ pathname: "/chat/[target]/thread/[rootId]", params: { target: link.chatTarget, rootId: link.threadRootId } });
+    return;
+  }
   if (link.chatTarget) {
     router.push({ pathname: "/chat/[target]", params: { target: link.chatTarget } });
     return;

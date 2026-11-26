@@ -16,7 +16,6 @@ import {
   turnAdapterForEntity,
 } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
-import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
 import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
@@ -576,7 +575,7 @@ describe("quick-task run as a turn owner", () => {
       });
       const turnId = await openTurn(ctx, {
         entityId: runId,
-        streamingEntityId: getTaskRunStreamingEntityId(runId),
+        streamingEntityId: String(runId),
         model: "claude:sonnet",
         repoId,
       });
@@ -593,7 +592,7 @@ describe("quick-task run as a turn owner", () => {
       current: await renewTurnLease(ctx, {
         turnId,
         leaseGeneration: 1,
-        streamingEntityId: getTaskRunStreamingEntityId(runId),
+        streamingEntityId: String(runId),
       }),
       old: await renewTurnLease(ctx, { turnId, leaseGeneration: 0 }),
     }));

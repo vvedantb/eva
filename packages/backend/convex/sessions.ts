@@ -37,8 +37,6 @@ export {
   finishTaskRunSandboxMutation,
   attachTaskRunSandbox,
 
-  runDevServer,
-  runBackgroundCommands,
   patchSessionDevServer,
   sandboxReady,
   clearSandboxSetupPending,

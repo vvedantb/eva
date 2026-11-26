@@ -259,42 +259,6 @@ export const forcePushBranch = authMutation({
   },
 });
 
-/** The running sandbox of a session the caller can reach, or a thrown reason. */
-async function requireActiveSandbox(
-  ctx: MutationCtx & { userId: Id<"users"> },
-  sessionId: Id<"sessions">,
-  action: string,
-): Promise<{ session: Doc<"sessions">; sandboxId: string }> {
-  const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
-  if (session.status !== "active" || !session.sandboxId) {
-    throw new Error(`Start the sandbox before ${action}`);
-  }
-  return { session, sandboxId: session.sandboxId };
-}
-
-/**
- * Re-runs the app dev server in the session's running sandbox (repo App
- * settings, else package.json detection) and stores the resolved port and
- * command. The quick task panel's "Run dev server".
- */
-export const runDevServer = authMutation({
-  args: { sessionId: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { session, sandboxId } = await requireActiveSandbox(
-      ctx,
-      args.sessionId,
-      "running the dev server",
-    );
-    await ctx.scheduler.runAfter(0, internal.sandbox.runDevServerInSandbox, {
-      owner: { kind: "session", sessionId: session._id },
-      sandboxId,
-      repoId: session.repoId,
-    });
-    return null;
-  },
-});
-
 /** Records the dev server a manual rerun resolved (`runDevServerInSandbox`). */
 export const patchSessionDevServer = internalMutation({
   args: {
@@ -307,28 +271,6 @@ export const patchSessionDevServer = internalMutation({
     await ctx.db.patch(args.sessionId, {
       devPort: args.devPort,
       devCommand: args.devCommand,
-    });
-    return null;
-  },
-});
-
-/**
- * Re-launches the repo's background commands (long-running daemons such as
- * `npx convex dev`) in the session's running sandbox, for a daemon that died
- * while the sandbox kept running.
- */
-export const runBackgroundCommands = authMutation({
-  args: { sessionId: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { session, sandboxId } = await requireActiveSandbox(
-      ctx,
-      args.sessionId,
-      "running background commands",
-    );
-    await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
-      sandboxId,
-      repoId: session.repoId,
     });
     return null;
   },
@@ -468,7 +410,8 @@ export const requestStopSandbox = internalMutation({
  *
  * `active` at claim time (the reviewer has it open) is reused as is and stays
  * `active` after the run, as `keepTaskSandboxActiveAfterRun` did for the task
- * sandbox; idle pause then stops it through the normal stop path. A row mid
+ * sandbox; idle pause then stops it through the normal stop path. A chat with
+ * a queued follow-up also keeps it `active`, so the follow-up sends at once. A row mid
  * start or stop is not claimed: the run then works on a VM of its own, which
  * no row records and which it stops itself.
  */
@@ -572,9 +515,27 @@ export async function finishTaskRunSandbox(
     return;
   }
   if (options.keepActive || session.status !== "active") return;
+  // A follow-up queued behind the run sends on this VM when the run's turn
+  // closes (`closeTurn` drains). A stop now would park it until the stop
+  // settles and then boot the VM again. Idle pause stops it later.
+  if (await sessionHasQueuedMessage(ctx.db, sessionId)) return;
   await requestSessionSandboxStop(ctx, sessionId, {
     stopReason: { kind: "task" },
   });
+}
+
+async function sessionHasQueuedMessage(
+  db: DatabaseReader,
+  sessionId: Id<"sessions">,
+): Promise<boolean> {
+  for (const chat of await listLiveSessionChats(db, sessionId)) {
+    const queued = await db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", chat._id))
+      .first();
+    if (queued) return true;
+  }
+  return false;
 }
 
 /**

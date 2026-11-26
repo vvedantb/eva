@@ -4,23 +4,23 @@ import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useNavigate } from "@tanstack/react-router";
 import { api, type Id } from "@eva/backend";
-import { TASK_TAGS } from "@eva/shared";
 import { projectStatusCountsLine } from "@eva/shared/projectView";
 import { Button } from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { QuickTaskModal } from "../quick-tasks/QuickTaskModal";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
+import { ProjectNewTaskModal } from "./ProjectNewTaskModal";
 
 /**
  * The coordinator rail's Tasks tab: the title with "+" (a new task, to Triage
  * unless "Start now"), a thin progress bar
  * and the counts as one muted line, then the tasks grouped Triage, Working,
  * Blocked, Idle, Archived (with the tasks archived on their own), and their
- * Pull requests. A row opens the task in place of the coordinator. An
+ * Pull requests. A row opens the task as a chat tab beside Eva
+ * (`onOpenTask`), else its full page; rows open as tabs are marked. An
  * archived project's list is read-only.
  */
 export function ProjectTasksPanel({
@@ -28,11 +28,17 @@ export function ProjectTasksPanel({
   projectNumId,
   repoId,
   basePath,
+  openTaskIds,
+  onOpenTask,
 }: {
   projectId: Id<"projects">;
   projectNumId: number | undefined;
   repoId: Id<"githubRepos">;
   basePath: string;
+  /** The tasks open as chat tabs (`?tasks=`); their rows are marked. */
+  openTaskIds?: ReadonlySet<string>;
+  /** Opens a task as a chat tab; without it a row opens its page. */
+  onOpenTask?: (taskNumId: number) => void;
 }) {
   const navigate = useNavigate();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -44,8 +50,6 @@ export function ProjectTasksPanel({
     projectId,
     archived: true,
   });
-  const users = useQuery(api.users.listAll);
-  const projects = useQuery(api.projects.list, { repoId });
   // An archived project is read-only: no new tasks.
   const isArchived =
     useQuery(api.projects.get, { id: projectId })?.archivedAt !== undefined;
@@ -55,6 +59,10 @@ export function ProjectTasksPanel({
     const task = [...(tasks ?? []), ...(archivedTasks ?? [])].find(
       (row) => row._id === taskId,
     );
+    if (onOpenTask && task?.numId !== undefined) {
+      onOpenTask(task.numId);
+      return;
+    }
     const taskSegment = task ? entityPathSegment(task) : null;
     if (!projectSegment || !taskSegment) return;
     void navigate({
@@ -63,11 +71,6 @@ export function ProjectTasksPanel({
       ),
     });
   };
-
-  const tagSet = new Set<string>(TASK_TAGS);
-  for (const task of tasks ?? []) {
-    for (const tag of task.tags ?? []) tagSet.add(tag);
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -100,16 +103,15 @@ export function ProjectTasksPanel({
           readOnly={isArchived}
           failedTaskIds={failedTaskIds}
           onSelectTask={openTask}
+          openTaskIds={openTaskIds}
           homeRepoId={repoId}
         />
       </div>
-      <QuickTaskModal
+      <ProjectNewTaskModal
+        projectId={projectId}
+        repoId={repoId}
         isOpen={createTaskOpen}
         onClose={() => setCreateTaskOpen(false)}
-        projectId={projectId}
-        users={users ?? undefined}
-        projects={projects ?? undefined}
-        allTags={[...tagSet].sort()}
       />
     </div>
   );

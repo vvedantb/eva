@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -12,7 +11,7 @@ import { toast } from "@vvedantb/ui";
 
 /**
  * A project's sandbox: its session's (`useOwnedSession`), which the project
- * chat, builds and tasks share. Start and background commands act on that
+ * chat, builds and tasks share. Start acts on that
  * session, creating it on first need; Stop never creates it. A project has
  * no closed state, so its coordinator sandbox can always start.
  */
@@ -21,13 +20,8 @@ export function useProjectSandbox(projectId: Id<"projects">) {
   const { sandbox } = projectSession;
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
-  const runSessionBackgroundCommands = useMutation(
-    api.sessions.runBackgroundCommands,
-  );
 
   const lifecycle = useSandboxLifecycle(sandbox.status);
-  const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
-    useState(false);
 
   const isSandboxActive = sandbox.status === "active";
   const isSandboxStartingFromStatus = sandbox.status === "starting";
@@ -66,17 +60,6 @@ export function useProjectSandbox(projectId: Id<"projects">) {
       }
     });
 
-  const handleRunBackgroundCommands = async () => {
-    setIsRunningBackgroundCommands(true);
-    try {
-      await onSession(runSessionBackgroundCommands);
-    } catch (err) {
-      console.error("Failed to run project background commands:", err);
-      toast.error("Could not run the background commands. Try again.");
-    }
-    setIsRunningBackgroundCommands(false);
-  };
-
   return {
     /** The project's session and chat; the sandbox fields come off it. */
     projectSession,
@@ -88,7 +71,5 @@ export function useProjectSandbox(projectId: Id<"projects">) {
     sandboxId: sandbox.sandboxId,
     handleStartSandbox,
     handleStopSandbox,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
   };
 }

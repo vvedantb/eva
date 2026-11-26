@@ -1,11 +1,18 @@
-import type { ReactNode } from "react";
+import { Activity, type ReactNode } from "react";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
+import { ProjectChatTabs } from "@/lib/components/projects/ProjectChatTabs";
+import { ProjectTaskChat } from "@/lib/components/projects/ProjectTaskChat";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import {
+  useProjectTaskTabRows,
+  type ProjectTaskTabs,
+} from "@/lib/components/projects/useProjectTaskTabs";
+import { entityPathSegment } from "@/lib/numId";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
@@ -36,6 +43,8 @@ interface ProjectDetailSandboxContentProps {
   onThreadOpen: (messageId: string) => void;
   /** ✕ on the Replies tab: back to the tab before it. */
   onCloseThread: () => void;
+  /** The chat tabs: Eva, then the open tasks (`useProjectTaskTabs`). */
+  taskTabs: ProjectTaskTabs;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -54,6 +63,7 @@ export function ProjectDetailSandboxContent({
   expandRightSignal,
   onThreadOpen,
   onCloseThread,
+  taskTabs,
   openFile,
   openDiffs,
   openAgentsTab,
@@ -70,6 +80,14 @@ export function ProjectDetailSandboxContent({
   } = sandbox;
   // An archived project opens read-only: no wake, no composer.
   const isArchived = project.archivedAt !== undefined;
+  const projectPathSegment = entityPathSegment({ numId: projectNumId });
+  const { rows, selectedRow, selectedLoading } = useProjectTaskTabRows(
+    projectId,
+    repoId,
+    taskTabs,
+  );
+  // Eva's tab is selected unless a task tab is (or its row still loads).
+  const onEva = selectedRow === undefined && !selectedLoading;
 
   // Always mount the sandbox panel so tabs stay reachable while stopped —
   // same as sessions. Panes self-gate.
@@ -109,8 +127,66 @@ export function ProjectDetailSandboxContent({
       collapsed={collapsed}
       onToggle={onToggle}
       onCloseThread={onCloseThread}
+      selectedTask={selectedRow}
+      selectedTaskLoading={selectedLoading}
+      openTaskIds={new Set(rows.map(({ row }) => row._id))}
+      onOpenTask={taskTabs.open}
     />
   );
+
+  const evaChat = (
+    <ProjectSandboxChatPanel
+      projectId={projectId}
+      projectSession={sandbox.projectSession}
+      isSandboxActive={isSandboxActive}
+      isSandboxToggling={isSandboxStarting || isSandboxStopping}
+      sandboxStartupActivity={sandboxStartupActivity}
+      onOpenFile={openFile}
+      onViewDiff={openDiffs}
+      onOpenAgentsTab={openAgentsTab}
+      onThreadOpen={onThreadOpen}
+      isArchived={isArchived}
+      onSandboxToggle={(action) => {
+        if (action === "start") void handleStartSandbox();
+        else void handleStopSandbox();
+      }}
+    />
+  );
+
+  // Chat tabs need the panel (a task tab shows its tabs there): a project
+  // with no session yet has only Eva's chat.
+  const chatColumn = () =>
+    sandbox.sandbox.owner ? (
+      <div className="flex h-full min-h-0 flex-col">
+        <ProjectChatTabs
+          projectId={projectId}
+          repoId={repoId}
+          rows={rows}
+          selected={onEva ? null : taskTabs.selected}
+          evaRunning={chatTurnOpen === true}
+          isArchived={isArchived}
+          onSelect={taskTabs.select}
+          onClose={taskTabs.close}
+        />
+        {/* Eva's chat stays alive behind a task tab: back is instant. */}
+        <Activity mode={onEva ? "visible" : "hidden"}>
+          <div className="flex min-h-0 flex-1 flex-col">{evaChat}</div>
+        </Activity>
+        {selectedRow && projectPathSegment ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ProjectTaskChat
+              key={selectedRow._id}
+              taskId={selectedRow._id}
+              prUrl={selectedRow.prUrl}
+              fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedRow.numId}`}
+              onShowReview={() => taskTabs.showTab("task-review")}
+            />
+          </div>
+        ) : null}
+      </div>
+    ) : (
+      evaChat
+    );
 
   const layout = (rightPanel: (ctx: SandboxPanelContext) => ReactNode) => (
     <ResizablePanelLayout
@@ -126,24 +202,7 @@ export function ProjectDetailSandboxContent({
       defaultRightCollapsed={false}
       expandRightSignal={expandRightSignal}
       mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-      leftPanel={() => (
-        <ProjectSandboxChatPanel
-          projectId={projectId}
-          projectSession={sandbox.projectSession}
-          isSandboxActive={isSandboxActive}
-          isSandboxToggling={isSandboxStarting || isSandboxStopping}
-          sandboxStartupActivity={sandboxStartupActivity}
-          onOpenFile={openFile}
-          onViewDiff={openDiffs}
-          onOpenAgentsTab={openAgentsTab}
-          onThreadOpen={onThreadOpen}
-          isArchived={isArchived}
-          onSandboxToggle={(action) => {
-            if (action === "start") void handleStartSandbox();
-            else void handleStopSandbox();
-          }}
-        />
-      )}
+      leftPanel={chatColumn}
       rightPanel={rightPanel}
     />
   );

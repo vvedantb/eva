@@ -11,11 +11,9 @@ import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { finishTaskRun, scheduleTaskRun } from "../_agentTasks/runState";
+import { runStreamingEntityId, settleRunChatTurn } from "./runChatTurn";
 import {
-  clearTaskRunStreaming,
-  getTaskRunStreamingEntityId,
   upsertStreamingActivity,
-  upsertActivityLog,
   finalizeRunStatus,
   recordRunPullRequest,
   RUN_WAITING_FOR_ANSWER,
@@ -51,17 +49,20 @@ export const updateRunToRunning = internalMutation({
       status: "in_progress",
       updatedAt: startedAt,
     });
-    await upsertStreamingActivity(
-      ctx,
-      getTaskRunStreamingEntityId(args.runId),
-      JSON.stringify([
-        {
-          type: "thinking",
-          label: "Starting sandbox...",
-          status: "active",
-        },
-      ]),
-    );
+    const streamingEntityId = await runStreamingEntityId(ctx.db, run);
+    if (streamingEntityId) {
+      await upsertStreamingActivity(
+        ctx,
+        streamingEntityId,
+        JSON.stringify([
+          {
+            type: "thinking",
+            label: "Starting sandbox...",
+            status: "active",
+          },
+        ]),
+      );
+    }
 
     await ctx.scheduler.runAfter(
       RUN_TIMEOUT_MS,
@@ -224,9 +225,9 @@ export const completeRun = internalMutation({
       claudeResult: args.claudeResult,
     });
 
-    if (args.activityLog) {
-      await upsertActivityLog(ctx, args.runId, args.activityLog);
-    }
+    await settleRunChatTurn(ctx, args.taskId, args.runId, {
+      activityLog: args.activityLog,
+    });
 
     const task = await ctx.db.get(args.taskId);
     const staleCompletion =
@@ -260,8 +261,6 @@ export const completeRun = internalMutation({
         await onProjectTasksChanged(ctx, task.projectId);
       }
     }
-
-    await clearTaskRunStreaming(ctx, args.taskId, args.runId);
 
     // Run success/failure deliberately sends no notification: the task card and
     // chat already show the outcome, so an inbox row per run is pure noise.

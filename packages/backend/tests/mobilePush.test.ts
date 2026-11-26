@@ -159,7 +159,7 @@ describe("mobile push", () => {
 
       await t.mutation(internal.notifications.setUrgency, { notificationId: low, urgency: "low" });
       await t.mutation(internal.notifications.setUrgency, { notificationId: normal, urgency: "normal" });
-      await t.mutation(internal.notifications.scheduleLegacyMentionEmail, { notificationId: fallback });
+      await t.mutation(internal.notifications.routeMentionFallback, { notificationId: fallback });
       expect(await scheduledPushes(t)).toEqual([
         expect.objectContaining({ title: "question" }),
         expect.objectContaining({ title: "normal", data: { target: ids.sessionId } }),

@@ -44,8 +44,8 @@ interface NewProjectModalProps {
 /**
  * A new project from one prompt, as a new session starts: the prompt is the
  * project's brief, and the server titles the project from it. A project has
- * no interview or plan step: it opens on its coordinator chat. "Save" sends
- * nothing; "Save and Run" (Enter) also sends the prompt as the coordinator
+ * no interview or plan step: it opens on its coordinator chat. "Save"
+ * (Ctrl/⌘+Enter; Enter is a newline) sends nothing; "Save and Run" also sends the prompt as the coordinator
  * chat's first message (`projects.create` `run`).
  */
 export function NewProjectModal({
@@ -124,7 +124,7 @@ export function NewProjectModal({
     "submitComposerForm",
     (e) => {
       e.preventDefault();
-      void handleSubmit(true);
+      void handleSubmit(false);
     },
     { enabled: isOpen },
   );
@@ -155,7 +155,6 @@ export function NewProjectModal({
             minHeight="min-h-[160px]"
             className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
             completionContext={`the brief of a coding project for the repository ${repo.owner}/${repo.name}`}
-            onEnterSubmit={() => void handleSubmit(true)}
           />
         </div>
 
@@ -195,19 +194,19 @@ export function NewProjectModal({
               <span className="inline-flex gap-2 max-sm:w-full max-sm:flex-col-reverse">
                 <Button
                   variant="secondary"
-                  onClick={() => void handleSubmit(false)}
-                  disabled={!canSubmit}
-                  className="max-sm:w-full"
-                >
-                  Save
-                </Button>
-                <Button
                   onClick={() => void handleSubmit(true)}
                   disabled={!canSubmit}
                   className="max-sm:w-full"
                 >
-                  {isLoading && <Spinner size="sm" />}
                   Save and Run
+                </Button>
+                <Button
+                  onClick={() => void handleSubmit(false)}
+                  disabled={!canSubmit}
+                  className="max-sm:w-full"
+                >
+                  {isLoading && <Spinner size="sm" />}
+                  Save
                   <ShortcutKbd
                     id="submitComposerForm"
                     className="ml-1.5 border-0 bg-transparent p-0 text-current opacity-60"

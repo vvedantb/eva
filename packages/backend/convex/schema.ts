@@ -25,6 +25,7 @@ import {
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  threadParticipantFields,
   chatReadFields,
   standupReadFields,
   chatRecapFields,
@@ -190,6 +191,10 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
 
+  threadParticipants: defineTable(threadParticipantFields)
+    .index("by_root", ["rootId"])
+    .index("by_user_and_root", ["userId", "rootId"]),
+
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
@@ -226,6 +231,9 @@ const schema = defineSchema({
     .index("by_reply_to", ["replyTo"])
     // A chat's thread roots (only roots carry `lastReplyAt`).
     .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
+    // Preview annotations of a chat (the preview comments drawer). Rows with
+    // no annotation sort as undefined, before any path.
+    .index("by_parent_and_annotation_page", ["parentId", "annotation.pagePath"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",
@@ -385,6 +393,7 @@ const schema = defineSchema({
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
 
@@ -443,6 +452,12 @@ const schema = defineSchema({
   notifications: defineTable(notificationFields)
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
+    // A thread's unread rows for one person: opening the thread reads them.
+    .index("by_user_and_thread_root_and_read", [
+      "userId",
+      "threadRootId",
+      "read",
+    ])
     .index("by_repo", ["repoId"]),
   // Expo push tokens for the mobile app (see push.ts). One row per device.
   pushTokens: defineTable({

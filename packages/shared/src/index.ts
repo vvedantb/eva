@@ -165,10 +165,12 @@ export {
   type ChatUserAttribution,
 } from "./teammateMessages";
 export {
+  combineRepoPrStates,
   isLivePrState,
   orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestRepoLabel,
   pullRequestsMenuLabel,
   type LivePrState,
   type PrState,
@@ -451,5 +453,7 @@ export {
   collectQuestionSteps,
   getSessionReadOnlyMessage,
   isSandboxLifecycleAlert,
+  splitStepsAtQuestions,
   visibleChatMessages,
 } from "./chatRows";
+export type { QuestionSplitChunk } from "./chatRows";

@@ -6,12 +6,11 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
+import { authQuery, hasRepoAccess } from "./functions";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 import {
   AUTOMATION_RUN_STREAM_PREFIX,
   PR_RECAP_STREAM_PREFIX,
-  TASK_RUN_STREAM_PREFIX,
 } from "./_chat/agentStreamIds";
 import {
   parseSandboxStartupEntityId,
@@ -137,7 +136,6 @@ type StreamOwner =
   | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
   | { kind: "doc"; docId: Id<"docs"> }
   | { kind: "report"; reportId: Id<"evaluationReports"> }
-  | { kind: "taskRun"; runId: Id<"agentRuns"> }
   | { kind: "automationRun"; runId: Id<"automationRuns"> }
   | { kind: "project"; projectId: Id<"projects"> };
 
@@ -156,11 +154,6 @@ function parseStreamOwner(
   const after = (prefix: string) =>
     entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
 
-  const taskRun = after(TASK_RUN_STREAM_PREFIX);
-  if (taskRun !== null) {
-    const runId = db.normalizeId("agentRuns", taskRun);
-    return runId ? { kind: "taskRun", runId } : null;
-  }
   const automationRun = after(AUTOMATION_RUN_STREAM_PREFIX);
   if (automationRun !== null) {
     const runId = db.normalizeId("automationRuns", automationRun);
@@ -207,12 +200,6 @@ async function canReadStream(
       const report = await db.get(owner.reportId);
       const doc = report ? await db.get(report.docId) : null;
       return doc !== null && (await hasRepoAccess(db, doc.repoId, userId));
-    }
-    case "taskRun": {
-      // Same rule as `agentRuns.get`: the run follows its task.
-      const run = await db.get(owner.runId);
-      const task = run ? await db.get(run.taskId) : null;
-      return task !== null && (await hasTaskAccess(db, task, userId));
     }
     case "automationRun": {
       const run = await db.get(owner.runId);

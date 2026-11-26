@@ -6,8 +6,14 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docCommentFilterParser } from "@/lib/search-params";
-import { cn } from "@eva/ui";
-import { Button, tokenTransition, ListEnter } from "@vvedantb/ui";
+import {
+  Button,
+  ListEnter,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconX } from "@tabler/icons-react";
 import { DocCommentThread } from "./DocCommentThread";
@@ -69,31 +75,24 @@ export function DocCommentsPanel({
         </Button>
       </div>
 
-      <div className="flex items-center gap-1 border-b border-border px-3 max-sm:py-1.5 max-sm:gap-2.5">
-        <button
-          type="button"
-          onClick={() => setFilter("open")}
-          className={cn(
-            "max-sm:hit-target rounded-md px-2 max-sm:py-1 text-xs font-medium transition-colors",
-            filter === "open"
-              ? "bg-accent-soft text-accent-soft-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
+      <div className="px-3 pb-1.5">
+        <Tabs
+          value={filter}
+          onValueChange={(value) => {
+            if (value === "open" || value === "resolved") void setFilter(value);
+          }}
         >
-          Open ({openRoots.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilter("resolved")}
-          className={cn(
-            "max-sm:hit-target rounded-md px-2 max-sm:py-1 text-xs font-medium transition-colors",
-            filter === "resolved"
-              ? "bg-accent-soft text-accent-soft-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          Resolved ({resolvedRoots.length})
-        </button>
+          <TabsList
+            size="sm"
+            className="tabs-segmented"
+            aria-label="Open or resolved"
+          >
+            <TabsTrigger value="open">Open ({openRoots.length})</TabsTrigger>
+            <TabsTrigger value="resolved">
+              Resolved ({resolvedRoots.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto">

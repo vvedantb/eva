@@ -60,11 +60,10 @@ function turnOffLabel(
   if (mode === "off") return "Idle pause off";
   if (sandbox.busy) return "On while the agent works";
   if (sandbox.viewerName) return `On while ${sandbox.viewerName} views it`;
-  const prefix = mode === "dry-run" ? "Would pause" : "Pauses";
   // The sweep runs every 5 minutes, so a passed deadline means the next tick.
   return dayjs(sandbox.idleDeadline).isAfter(dayjs())
-    ? `${prefix} at ${formatClock(sandbox.idleDeadline)}`
-    : `${prefix} within 5 min`;
+    ? `Pauses at ${formatClock(sandbox.idleDeadline)}`
+    : "Pauses within 5 min";
 }
 
 /**

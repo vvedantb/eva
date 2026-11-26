@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   projectStatusCountsLine,
+  projectTaskFacts,
   projectTaskPrLine,
   projectTaskPullRequests,
   projectTaskSummaryLine,
@@ -127,6 +128,25 @@ describe("project task PRs and counts", () => {
     ).toBe("12 · PR");
   });
 
+  it("lists a multi-repo task's PRs one per repo, each with its repo", () => {
+    const prs = projectTaskPullRequests([
+      task({
+        numId: 4,
+        status: "code_review",
+        prUrl: "https://github.com/acme/web/pull/12",
+        prState: "open",
+        repoPrs: [
+          { prUrl: "https://github.com/acme/web/pull/12", prState: "merged", repoName: "web" },
+          { prUrl: "https://github.com/acme/api/pull/7", prState: "open", repoName: "api" },
+        ],
+      }),
+    ]);
+    expect(prs.map((row) => projectTaskPrLine(row))).toEqual([
+      "#12 · Merged · web · via #4",
+      "#7 · Open · api · via #4",
+    ]);
+  });
+
   it("counts the non-empty statuses in list order", () => {
     expect(
       projectStatusCountsLine({
@@ -137,5 +157,64 @@ describe("project task PRs and counts", () => {
         archived: 1,
       }),
     ).toBe("3 triage · 2 blocked · 1 idle · 1 archived");
+  });
+});
+
+describe("projectTaskFacts", () => {
+  const repos = [
+    { _id: "r1", name: "web" },
+    { _id: "r2", name: "api" },
+    { _id: "r3", name: "docs", label: "Docs site" },
+  ];
+  const pr = (repoId: string, repoName: string, number: number) => ({
+    prUrl: `https://github.com/acme/${repoName}/pull/${number}`,
+    state: "open" as const,
+    repoId,
+    repoName,
+  });
+
+  it("shows the status, the phase and a bare PR number on one repo", () => {
+    const facts = projectTaskFacts(
+      {
+        _id: "t1",
+        status: "in_progress",
+        approvedAt: 1,
+        repoId: "r1",
+        phaseLabel: "Phase 2",
+      },
+      repos,
+      [pr("r1", "web", 12)],
+    );
+    expect(facts.text).toBe("Working · Phase 2");
+    expect(facts.prs.map((row) => row.label)).toEqual(["#12"]);
+  });
+
+  it("names each repo once on a multi-repo task", () => {
+    const facts = projectTaskFacts(
+      {
+        _id: "t1",
+        status: "code_review",
+        approvedAt: 1,
+        repoId: "r1",
+        linkedRepoIds: ["r2", "r3"],
+      },
+      repos,
+      [pr("r1", "web", 12), pr("r2", "api", 7)],
+    );
+    expect(facts.text).toBe("In review · Docs site");
+    expect(facts.prs.map((row) => row.label)).toEqual(["web #12", "api #7"]);
+  });
+
+  it("reads Triage for an unapproved task and Archived once archived", () => {
+    expect(
+      projectTaskFacts({ _id: "t1", status: "todo" }, repos, []).text,
+    ).toBe("Triage");
+    expect(
+      projectTaskFacts(
+        { _id: "t1", status: "todo", archivedAt: 5 },
+        repos,
+        [],
+      ).text,
+    ).toBe("Archived");
   });
 });
