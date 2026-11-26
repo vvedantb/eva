@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Thread notifications, step by step</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1240px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:18px;max-width:1020px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:14px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.num{width:24px;height:24px;border-radius:12px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12.5px;margin-top:2px}
+.ui{display:flex;height:370px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#1c1d20;position:relative}
+.col{flex:1;display:flex;flex-direction:column;min-width:0;padding:12px 14px;gap:12px;font-size:12px}
+.side{width:250px;background:#242529;border-left:1px solid #2e2f34;display:flex;flex-direction:column}
+.side .hd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #2e2f34;font-weight:600;font-size:12.5px}
+.side .hd .sp{flex:1}
+.side .bd{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:9px;font-size:11.5px}
+.who{font-size:10px;color:#8b8f96;margin-bottom:-6px}
+.b{background:#2c2d32;border-radius:12px;padding:7px 10px;max-width:85%}
+.b.me{align-self:flex-end;background:#2f2a4a}
+.b.root{max-width:100%;background:#2a2b2f}
+.row{display:flex;align-items:center;gap:6px;color:#9fb8ef;font-size:11.5px;margin-top:-6px}
+.av{width:16px;height:16px;border-radius:8px;border:1.5px solid #1c1d20;margin-left:-5px;flex:none}
+.av:first-child{margin-left:0}
+.newdot{width:7px;height:7px;border-radius:4px;background:#3b82f6;display:inline-block}
+.pill{border-radius:99px;padding:2px 8px;font-size:10.5px;font-weight:600}
+.pill.new{background:#3b82f6;color:#fff}
+.btn{border:1px solid #3a3b41;border-radius:7px;padding:3px 8px;font-size:11px;color:#c9cbcf;font-weight:500}
+.btn.on{background:#2a2b30}
+.divider{display:flex;align-items:center;gap:8px;color:#3b82f6;font-size:10px;font-weight:600}
+.divider:before,.divider:after{content:"";flex:1;height:1px;background:#3b82f655}
+.mention{background:#60a5fa2e;color:#93c5fd;border-radius:99px;padding:0 5px;font-weight:500}
+.toast{position:absolute;right:12px;top:12px;width:260px;background:#2a2b30;border:1px solid #3a3b41;border-radius:12px;padding:10px 12px;font-size:11.5px;box-shadow:0 8px 24px #0008}
+.toast .t{font-weight:600;margin-bottom:2px}
+.toast .m{color:#a7aab0}
+.inbox{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:6px}
+.tab{padding:3px 10px;border-radius:7px;color:#8b8f96;font-size:11.5px}.tab.on{background:#2a2b30;color:#e6e7e9}
+.gh{color:#8b8f96;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
+.ir{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-radius:8px;background:#232428}
+.ir .ic{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:10px;flex:none;background:#2f2a4a;color:#c4b5fd}
+.ir .tx{flex:1}.ir .s{color:#8b8f96;font-size:10.5px}
+.ir.unread{box-shadow:inset 2px 0 0 #3b82f6}
+.phone{width:200px;border-left:1px solid #2e2f34;background:#141517;padding:12px;display:flex;flex-direction:column;gap:8px}
+.push{background:#2a2b30;border-radius:12px;padding:8px 10px;font-size:11px}
+.push .a{color:#8b8f96;font-size:10px}
+.hit{outline:2px solid #f0b35a;outline-offset:2px;border-radius:8px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:10px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap}
+.note{margin-top:10px;font-size:12px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+</style></head><body>
+<h1>Reply threads: who hears about a reply, and where it takes you</h1>
+<p class="lead">Thread = the replies under one message in the project chat ("3 replies"). Today replies only reach the person who wrote the first message and the last 3 repliers, open the main chat rather than the thread, and have no unread marker. Below: what changes, step by step.</p>
+<div class="grid">
+
+<!-- 1 -->
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">You replied in a thread earlier, so you follow it automatically. Krzysztof replies.</div><div class="see">You get a pop-up (and a phone push). The thread's "replies" line under the message shows a blue dot and "1 new".</div></div></div>
+  <div class="ui">
+    <div class="col">
+      <div class="who">Vedant</div>
+      <div class="b root">Business says the promo code box is hard to find on mobile.</div>
+      <div class="row"><span style="display:flex"><span class="av" style="background:#e0a800"></span><span class="av" style="background:#7c5cf0"></span><span class="av" style="background:#22c55e"></span></span>4 replies <span class="pill new">1 new</span></div>
+      <div class="who" style="margin-top:8px">Eva</div>
+      <div class="b">Added to #904.</div>
+    </div>
+    <div class="toast"><div class="t">Krzysztof replied in a thread</div><div class="m">"Same on iPad, it sits under the total." · Checkout v2</div></div>
+  </div>
+  <div class="note"><b>New:</b> everyone who wrote in the thread, was @mentioned in it, or started it gets replies (not just the last 3). Unread is per thread.</div>
+</div>
+
+<!-- 2 -->
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">Click the pop-up (or "4 replies").</div><div class="see">The thread itself opens in the Replies panel, scrolled to a "New" line above the reply you have not read.</div></div></div>
+  <div class="ui">
+    <div class="col">
+      <div class="who">Vedant</div>
+      <div class="b root">Business says the promo code box is hard to find on mobile.</div>
+      <div class="row"><span style="display:flex"><span class="av" style="background:#e0a800"></span><span class="av" style="background:#7c5cf0"></span><span class="av" style="background:#22c55e"></span></span>4 replies</div>
+    </div>
+    <div class="side" style="width:300px">
+      <div class="hd">Thread<span class="sp"></span><span class="btn on">✓ Following</span><span style="color:#8b8f96">✕</span></div>
+      <div class="bd">
+        <div class="b root" style="font-size:11px">Business says the promo code box is hard to find on mobile.</div>
+        <div class="who">You</div><div class="b me">Is this the SAVE10 box?</div>
+        <div class="who">Priya</div><div class="b">Yes, under the order summary.</div>
+        <div class="who">Eva</div><div class="b">Added to #904.</div>
+        <div class="divider">New</div>
+        <div class="who">Krzysztof</div><div class="b">Same on iPad, it sits under the total.</div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>New:</b> notifications open the exact thread (web Replies panel, phone thread screen). Opening it marks it read.</div>
+</div>
+
+<!-- 3 -->
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">Don't want more replies? Click "Following" to unfollow.</div><div class="see">It turns into "Follow". You stop getting replies from this thread, unless someone @mentions you.</div></div></div>
+  <div class="ui">
+    <div class="col">
+      <div class="who">Vedant</div>
+      <div class="b root">Business says the promo code box is hard to find on mobile.</div>
+      <div class="row">4 replies</div>
+    </div>
+    <div class="side" style="width:300px">
+      <div class="hd">Thread<span class="sp"></span><span class="btn hit" style="position:relative">Follow<span class="tag" style="top:-14px;right:0">after click</span></span><span style="color:#8b8f96">✕</span></div>
+      <div class="bd">
+        <div class="b root" style="font-size:11px">Business says the promo code box is hard to find on mobile.</div>
+        <div class="who">Krzysztof</div><div class="b">Same on iPad, it sits under the total.</div>
+        <div class="who">Priya</div><div class="b"><span class="mention">@Vedant</span> can you check the desktop one too?</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">An @mention still reaches you after you unfollow (it goes to <b>Needs you</b>, step 4).</div>
+</div>
+
+<!-- 4 -->
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">Where it shows in the Inbox, and on the phone.</div><div class="see">A reply goes in Updates; an @mention of you (and Eva's answer to your question) goes in Needs you. Each opens the thread.</div></div></div>
+  <div class="ui">
+    <div class="inbox">
+      <div class="tabs"><span class="tab on">Needs you</span><span class="tab">Updates</span></div>
+      <div class="gh">Questions</div>
+      <div class="ir unread"><span class="ic">@</span><div class="tx">Priya mentioned you in a thread<div class="s">"can you check the desktop one too?" · Checkout v2</div></div></div>
+      <div class="ir"><span class="ic">✦</span><div class="tx">Eva answered your question in a thread<div class="s">"Phase 1 has two open items…" · Checkout v2</div></div></div>
+      <div class="tabs" style="margin-top:10px"><span class="tab">Needs you</span><span class="tab on">Updates</span></div>
+      <div class="ir unread"><span class="ic" style="background:#1e3a5f;color:#93c5fd">↩</span><div class="tx">Krzysztof replied in a thread<div class="s">"Same on iPad…" · 2m</div></div></div>
+    </div>
+    <div class="phone">
+      <div style="color:#8b8f96;font-size:10px">Phone</div>
+      <div class="push"><div class="a">Eva · now</div><b>Krzysztof replied in a thread</b><br>Same on iPad, it sits under the total.</div>
+      <div class="push"><div class="a">Eva · now</div><b>Priya mentioned you in a thread</b><br>@Vedant can you check the desktop…</div>
+      <div style="color:#8b8f96;font-size:10.5px">Tap → the thread screen.</div>
+    </div>
+  </div>
+  <div class="note">Email: an @mention emails at once; plain replies go in the daily digest.</div>
+</div>
+
+</div>
+</body></html>

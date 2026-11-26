@@ -54,6 +54,7 @@ import {
   bumpThreadRoot,
   threadReplyPrompt,
 } from "../_messages/replies";
+import { joinThreadOnReply } from "../_messages/threadParticipants";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
@@ -180,6 +181,7 @@ async function stageAndStartChatTurn(
     streamingEntityId,
     placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.actingUserId,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
@@ -798,18 +800,28 @@ export const addReply = authMutation({
     });
 
     const surface = { kind: "session" as const, session, chat };
-    await notifyChatMentions(ctx, {
+    // The mentioned hear of it as a mention; the thread's followers as a
+    // reply. Posting reads this thread for the author.
+    const mentionedIds = await notifyChatMentions(ctx, {
       content,
       authorUserId: ctx.userId,
       surface,
+      threadRoot: root,
+    });
+    const reply = await ctx.db.get(replyId);
+    if (!reply) throw new Error("Reply not stored");
+    await joinThreadOnReply(ctx, {
+      root,
+      reply,
+      replierId: ctx.userId,
+      mentionedIds,
+      repoId: session.repoId,
     });
     await notifyThreadReply(ctx, {
       content,
       authorUserId: ctx.userId,
-      participantIds: [
-        ...(root.role === "user" && root.userId ? [root.userId] : []),
-        ...(root.replierIds ?? []),
-      ],
+      rootId: root._id,
+      mentionedIds,
       surface,
     });
 

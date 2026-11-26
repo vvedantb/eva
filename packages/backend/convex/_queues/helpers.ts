@@ -692,6 +692,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       replyTo: next.replyTo,
+      askedBy: next.userId,
     });
     // Normalised, not forwarded raw: the composer enqueues model defaults
     // explicitly (e.g. reasoning "high"), and the workflow feeds these

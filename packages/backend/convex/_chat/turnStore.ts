@@ -116,6 +116,8 @@ type OpenTurnFields = {
   placeholderMessageId?: Id<"messages">;
   /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
+  /** Thread turns only: who asked; Eva's answer notifies them. */
+  askedBy?: Id<"users">;
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
@@ -159,6 +161,7 @@ export async function openTurn(
     leaseGeneration: 0,
     placeholderMessageId: params.placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.replyTo === undefined ? undefined : params.askedBy,
     prompt: params.prompt,
     attachmentStorageIds: params.attachmentStorageIds,
     model: params.model,

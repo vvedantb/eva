@@ -34,6 +34,8 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
   "routed_question",
+  "thread_reply",
+  "thread_answer",
 ]);
 
 /**
@@ -87,6 +89,8 @@ export async function createNotification(
     // Known at creation (comment mentions, agent `notify_user`): the modifier
     // on top of the routing table (`@eva/shared/notificationRouting`).
     urgency?: Infer<typeof notificationUrgencyValidator>;
+    // Set by reply-thread notifications: the link opens that thread.
+    threadRootId?: Id<"messages">;
   },
 ): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
@@ -119,6 +123,10 @@ export async function createNotification(
         href = entityHref("task", repo, task.numId);
       } else if (project?.numId !== undefined) {
         href = entityHref("project", repo, project.numId);
+        // Reply threads live in the project chat: its rail's Replies tab.
+        if (params.threadRootId !== undefined) {
+          href = `${href}/sandbox/replies?thread=${params.threadRootId}`;
+        }
       } else if (session?.numId !== undefined) {
         href = entityHref("session", repo, session.numId);
       } else {
@@ -160,6 +168,7 @@ export async function createNotification(
     contextLabel,
     commentId: params.commentId,
     chatTarget,
+    threadRootId: params.threadRootId,
     urgency: params.urgency,
     read: false,
     createdAt: Date.now(),
@@ -202,10 +211,16 @@ async function pushNotification(
     userId: notification.userId,
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
-    // `target` opens a chat; otherwise the phone opens its own screen for
-    // `href` (with `repoId`), or the web. Older app builds read `target` only.
+    // `target` opens a chat (and `thread` a reply thread in it); otherwise
+    // the phone opens its own screen for `href` (with `repoId`), or the web.
+    // Older app builds read `target` only.
     data: notification.chatTarget
-      ? { target: notification.chatTarget }
+      ? {
+          target: notification.chatTarget,
+          ...(notification.threadRootId
+            ? { thread: notification.threadRootId }
+            : {}),
+        }
       : notification.href
         ? { href: notification.href, repoId: notification.repoId }
         : undefined,
@@ -256,6 +271,7 @@ const notificationValidator = v.object({
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
   chatTarget: v.optional(v.string()),
+  threadRootId: v.optional(v.id("messages")),
   // Undefined = not yet routed (a mention whose routing action has not landed)
   // or legacy; treated as normal everywhere it is read.
   urgency: v.optional(notificationUrgencyValidator),

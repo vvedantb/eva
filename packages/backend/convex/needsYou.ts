@@ -57,6 +57,8 @@ const needsYouRowValidator = v.object({
   href: v.optional(v.string()),
   /** The chat the phone opens (`chats.get` target). */
   chatTarget: v.optional(v.string()),
+  /** The reply thread in that chat the phone opens. */
+  threadRootId: v.optional(v.id("messages")),
   repoId: v.id("githubRepos"),
   /** When it started to wait, for the row's age and the order. */
   at: v.number(),
@@ -147,6 +149,7 @@ async function notificationRows(
         projectId: source.projectId,
         href: row.href,
         chatTarget,
+        threadRootId: row.threadRootId,
         repoId,
         at: row.createdAt,
       };

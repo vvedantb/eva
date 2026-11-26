@@ -139,8 +139,13 @@ export default function InboxScreen() {
     notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
-    // Its chat, else the phone screen its link names (a task, project, PR, doc), else the web.
-    openAppLink({ chatTarget: notification.chatTarget, href: notification.href, repoId: notification.repoId });
+    // Its thread or chat, else the phone screen its link names (a task, project, PR, doc), else the web.
+    openAppLink({
+      chatTarget: notification.chatTarget,
+      threadRootId: notification.threadRootId,
+      href: notification.href,
+      repoId: notification.repoId,
+    });
   };
 
   return (

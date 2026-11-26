@@ -52,7 +52,8 @@ import {
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { MutationCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
+import { notifyThreadAnswer } from "../_mentions/notifyChatMentions";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
@@ -908,6 +909,31 @@ export const clearSessionClosedStatus = internalMutation({
   },
 });
 
+/**
+ * A thread turn that answered: the person whose @Eva reply woke her hears
+ * about it (`thread_answer`), with her answer as the preview.
+ */
+async function notifyAnswerInThread(
+  ctx: MutationCtx,
+  turn: Doc<"turns">,
+  success: boolean,
+  context: { session: Doc<"sessions">; chat: Doc<"sessionChats"> },
+): Promise<void> {
+  if (!success || turn.replyTo === undefined || turn.askedBy === undefined) {
+    return;
+  }
+  const answer =
+    turn.placeholderMessageId === undefined
+      ? null
+      : await ctx.db.get(turn.placeholderMessageId);
+  await notifyThreadAnswer(ctx, {
+    askerId: turn.askedBy,
+    rootId: turn.replyTo,
+    content: answer?.content ?? "",
+    surface: { kind: "session", ...context },
+  });
+}
+
 /** Saves a chat turn's result, updating the last message and starting queued messages. */
 export const saveResult = internalMutation({
   args: {
@@ -994,6 +1020,7 @@ export const saveResult = internalMutation({
         args.success ? "done" : "error",
         args.error ? { error: args.error } : {},
       );
+      await notifyAnswerInThread(ctx, turn, args.success, { session, chat });
     }
     await drainSessionChatQueues(ctx, session._id, chat._id);
     return null;
