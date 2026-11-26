@@ -16,7 +16,6 @@ import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
 import { joinThread } from "./_messages/threadParticipants";
-import { notificationPrefsFromLegacy } from "./_users/notificationPrefs";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
 
 /**
@@ -398,15 +397,4 @@ export const backfillThreadParticipants = dataMigrations.define({
       }
     }
   },
-});
-
-/**
- * The old email opt-in becomes the email choice (notifications v2.5, part D;
- * mapping in `notificationPrefsFromLegacy`). Idempotent.
- *
- * `npx convex run --prod dataMigrations:migrateNotificationPrefs`
- */
-export const migrateNotificationPrefs = dataMigrations.define({
-  table: "users",
-  migrateOne: (_ctx, user) => notificationPrefsFromLegacy(user),
 });

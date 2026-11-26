@@ -119,8 +119,8 @@ export const userFields = {
   lastSeenPath: v.optional(v.string()),
   lastChangelogDismissedAt: v.optional(v.number()),
   onboardingCompletedAt: v.optional(v.number()),
-  /** Legacy: drop after `dataMigrations:migrateNotificationPrefs` runs (it clears it). */
-  emailNotificationsEnabled: v.optional(v.boolean()),
+  // emailNotificationsEnabled removed: `notificationPrefs` replaced it.
+  // schema-narrowing-ok: migrateNotificationPrefs
   /** Email and push choices (settings → Notifications). Sparse: missing = default. */
   notificationPrefs: v.optional(notificationPrefsValidator),
   /** Opt-in experimental features (settings → Experimental). */
