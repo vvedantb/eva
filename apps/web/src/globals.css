@@ -288,7 +288,7 @@
   }
 }
 
-/* Composer wash: Eva's chart tones (no accent glow) as soft blobs. Each
+/* Composer wash: Eva's brand purple and blue as soft blobs. Each
  * blob drifts on its own path, so they move against each other. Transform
  * only, so it stays on the compositor. "Disable page animations" stops it. */
 @utility eva-blob {
@@ -470,6 +470,9 @@
     --chart-3: rgb(129 140 248);
     --chart-4: rgb(167 139 250);
     --chart-5: rgb(6 182 212);
+    /* Eva's brand pair: the purple and blue of the logo glow. */
+    --eva-brand-purple: #8b3fb8;
+    --eva-brand-blue: #3b7dd8;
     /* Muted categorical ramp for hash-assigned identity colour (tab groups,
      * repo tiles, avatars). Not for status: status uses --status-*. */
     --cat-1: rgb(72 106 168);

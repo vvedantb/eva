@@ -157,8 +157,8 @@ export function NewSessionComposer() {
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="eva-blob -top-[25%] -right-[15%] [--eva-blob-path:eva-blob-a] [--eva-blob-tone:var(--chart-2)]" />
-        <div className="eva-blob top-[5%] -left-[20%] [--eva-blob-path:eva-blob-b] [--eva-blob-tone:var(--chart-3)]" />
+        <div className="eva-blob -top-[25%] -right-[15%] [--eva-blob-path:eva-blob-a] [--eva-blob-tone:var(--eva-brand-blue)]" />
+        <div className="eva-blob top-[5%] -left-[20%] [--eva-blob-path:eva-blob-b] [--eva-blob-tone:var(--eva-brand-purple)]" />
       </div>
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />
