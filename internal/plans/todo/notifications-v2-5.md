@@ -51,7 +51,7 @@ One rule for every event: **who** gets it (participants), **how urgent** it is, 
 2. **Unread for people's messages.** `chatReads` compares against the chat's last activity from anyone (Eva turn or person message), not only Eva turns. Per-thread read state (`threadReads`: lastReadAt per person per root). "N replies" shows a dot when a thread has unread replies.
 3. **Deep links.** Notifications carry `threadRootId`; web opens the Replies tab on that thread, phone opens `chat/[target]/thread/[rootId]`.
 4. **Clearing.** Opening a chat clears your mentions in its main transcript; opening a thread clears that thread's mentions and replies. Posting no longer clears mentions elsewhere.
-5. **Delivery fixes.** Comment mentions route like chat mentions (toast + email); failed routing falls back to `normal` (toast + push). Digest stamps `emailedAt`; digest window covers weekends (Monday includes Saturday and Sunday).
+5. **Delivery fixes.** Comment mentions route like chat mentions (toast + email); failed routing falls back to `high` (toast + push + instant email). Digest stamps `emailedAt`; digest window covers weekends (Monday includes Saturday and Sunday).
 6. **Preferences (web and phone).** Per channel: Email (instant for mentions and direct replies / daily digest / off), Push (on/off, phone), Desktop (on/off, per device, as today). Defaults per the table.
 7. **Phone badge.** App-icon badge = Needs you count, as the web tab.
 8. **Cleanups.** Remove the five dead types. Mentions added by editing a comment notify. `routed_question` and `notify_user` show in Needs you.
@@ -81,7 +81,7 @@ Each PR ships on web and phone together.
 - The table lives in `@eva/shared/notificationRouting` (`NOTIFICATION_ROUTES` plus `notificationToasts`, `notificationPushes`, `notificationEmail`, `isNeedsYouNotification`, `isAwaitingRouting`).
 - Types not in the table: `changes_requested` toasts, no push, no email (as before); `session_archived` is inbox only (it no longer toasts); `system` toasts, no push, digest. `comment_reply` is both "reply to your comment" and a thread reply today, so both are instant email with push until A splits them.
 - Urgency `normal` means the table, except on a chat mention (a `mention` without `commentId`), where it is Jev's fyi and waits for the digest. Comment mentions are created with `normal` and keep the instant email.
-- Failed routing falls back to `normal`, so it goes in the digest (no instant email). Before it had the 15-minute instant email.
+- Failed routing falls back to `high` (user, 26 November 2026): toast, push and instant email, so a mention never loses its email when the judge fails.
 - Digest window: since the previous weekday run (no per-user state). With `emailedAt` stamped, an overlap never repeats a row.
 - Needs you: an agent `notify_user` row is a `system` row with a `chatTarget`; an automation's email draft has none, so it stays out. Posting in a chat clears every Needs you row for that chat, not only mentions.
 - Doc comments have no edit mutation, so only task comment edits notify new mentions.

@@ -287,8 +287,9 @@ export const setUrgency = internalMutation({
 });
 
 /**
- * When Jev could not judge a mention, it is delivered as `normal`: it toasts,
- * pushes and waits for the digest.
+ * When Jev could not judge a mention, it is delivered as `high`: it toasts,
+ * pushes and emails at once. A mention must not lose its email because the
+ * judge failed (user, 26 November 2026).
  *
  * Internal use only (mentionRouting.routeMentions).
  */
@@ -299,7 +300,7 @@ export const routeMentionFallback = internalMutation({
     const notification = await ctx.db.get(args.notificationId);
     // Archived or deleted between creation and routing: nothing to deliver.
     if (!notification) return null;
-    await deliverRoutedMention(ctx, notification, "normal");
+    await deliverRoutedMention(ctx, notification, "high");
     return null;
   },
 });

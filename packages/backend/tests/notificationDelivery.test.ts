@@ -5,7 +5,10 @@ import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { digestWindowStart } from "../convex/_notifications/digestWindow";
-import { notificationToasts } from "@eva/shared/notificationRouting";
+import {
+  notificationEmail,
+  notificationToasts,
+} from "@eva/shared/notificationRouting";
 import { modules } from "./_helpers/convexModules";
 import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 
@@ -142,7 +145,7 @@ describe("notification delivery", () => {
   );
 
   test(
-    "a chat mention routing could not judge falls back to normal and toasts",
+    "a chat mention routing could not judge falls back to high: toasts and emails at once",
     async () => {
       const { t, ids } = await fixture();
       const notificationId = await t.run((ctx) =>
@@ -158,8 +161,9 @@ describe("notification delivery", () => {
         notificationId,
       });
       const row = await t.run((ctx) => ctx.db.get(notificationId));
-      expect(row?.urgency).toBe("normal");
+      expect(row?.urgency).toBe("high");
       expect(row !== null && notificationToasts(row)).toBe(true);
+      expect(row !== null && notificationEmail(row)).toBe("instant");
     },
     TIMEOUT_MS,
   );
