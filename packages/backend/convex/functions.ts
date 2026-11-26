@@ -7,6 +7,8 @@ import {
 import { createAuthFunctions } from "@vvedantb/server";
 import type { GenericDatabaseReader } from "convex/server";
 import { makeFunctionReference } from "convex/server";
+import { ConvexError } from "convex/values";
+import { archiveCopy } from "@eva/shared";
 import {
   query,
   mutation,
@@ -25,7 +27,7 @@ import type {
   Id,
   TableNames,
 } from "./_generated/dataModel";
-import { isEntityDeleted } from "./numId";
+import { isEntityArchived } from "./numId";
 import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { findLivePullRequestOnBranch } from "./_pullRequests/store";
@@ -175,19 +177,24 @@ export async function hasTaskAccess(
 /**
  * A project's live tasks the user may know of (no one else's drafts), each
  * with whether the user can open it (`hasTaskAccess`: a task in a repo they
- * cannot access is locked). The caller checks access to the project.
+ * cannot access is locked). With `archived`, the tasks archived on their own
+ * instead. The caller checks access to the project.
  */
 export async function listProjectTasksForUser(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
   userId: Id<"users">,
+  archived = false,
 ): Promise<Array<{ task: Doc<"agentTasks">; canAccess: boolean }>> {
   const tasks = (
     await db
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect()
-  ).filter((task) => !isEntityDeleted(task) && isTaskVisibleTo(task, userId));
+  ).filter(
+    (task) =>
+      isEntityArchived(task) === archived && isTaskVisibleTo(task, userId),
+  );
   return Promise.all(
     tasks.map(async (task) => ({
       task,
@@ -278,6 +285,31 @@ export async function onProjectTasksChanged(
   await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
     projectId,
   });
+}
+
+/**
+ * Refuses an edit to an archived project: it is read-only until unarchived.
+ * Every mutation that edits a project (or approves its tasks) calls this.
+ */
+export function assertProjectNotArchived(project: { archivedAt?: number }): void {
+  if (isEntityArchived(project)) {
+    throw new ConvexError(archiveCopy("project").unarchiveFirst);
+  }
+}
+
+/**
+ * Refuses an edit to an archived task, or to a task of an archived project
+ * (a project archives as one unit). Every mutation that edits a task calls this.
+ */
+export async function assertTaskNotArchived(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "archivedAt" | "projectId">,
+): Promise<void> {
+  if (isEntityArchived(task)) {
+    throw new ConvexError(archiveCopy("task").unarchiveFirst);
+  }
+  const project = task.projectId ? await db.get(task.projectId) : null;
+  if (project) assertProjectNotArchived(project);
 }
 
 /** Fetches a project by ID, throwing if not found or the user lacks repo access. */
@@ -377,53 +409,18 @@ export async function isFirstTaskOnBranch(
   );
 }
 
-/** Deletes a task and all its related data (runs, activity, scheduled functions). */
-export async function deleteTaskRelatedData(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-): Promise<void> {
-  // A task's sandbox is its session's: the delete path retires that session.
-  await cancelTaskRunSchedule(ctx, taskId);
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const run of runs) {
-    await ctx.db.delete(run._id);
-  }
-  const activityEvents = await ctx.db
-    .query("taskActivity")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const event of activityEvents) {
-    await ctx.db.delete(event._id);
-  }
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.delete(taskId);
-}
-
-/** Soft-deletes a task: cancels schedules, but keeps the row. */
-export async function softDeleteAgentTask(
+/**
+ * Archives a task: cancels its scheduled run and hides it from lists. The row
+ * and its runs stay; `unarchive` brings it back. The caller retires its session.
+ */
+export async function archiveAgentTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || isEntityDeleted(task)) return;
+  if (!task || isEntityArchived(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.patch(taskId, { deletedAt: Date.now() });
+  await ctx.db.patch(taskId, { archivedAt: Date.now() });
 }
 
 const getUserIdFromIdentityRef = makeFunctionReference<

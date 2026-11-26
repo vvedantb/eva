@@ -6,7 +6,7 @@ import {
 } from "@eva/shared/projectStatus";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
-import { filterActiveEntities, isEntityDeleted } from "../numId";
+import { filterUnarchived, isEntityArchived } from "../numId";
 import { isFirstTaskOnBranch } from "../functions";
 import { startTaskRun } from "../_taskWorkflow/startRun";
 import { latestTaskRun } from "./runSettings";
@@ -39,7 +39,7 @@ export async function listProjectTasks(
   db: DatabaseReader,
   projectId: Id<"projects">,
 ): Promise<Doc<"agentTasks">[]> {
-  return filterActiveEntities(
+  return filterUnarchived(
     await db
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -185,7 +185,7 @@ export async function scheduleReadyProjectTasks(
   projectId: Id<"projects">,
 ): Promise<Id<"agentTasks">[]> {
   const project = await ctx.db.get(projectId);
-  if (!project || isEntityDeleted(project)) return [];
+  if (!project || isEntityArchived(project)) return [];
   const [tasks, context] = await Promise.all([
     listProjectTasks(ctx.db, projectId),
     loadProjectFactsContext(ctx.db, project, Date.now()),
@@ -298,7 +298,7 @@ export async function approveTasks(
   const tasks = await Promise.all(taskIds.map((taskId) => ctx.db.get(taskId)));
   const handed: Doc<"agentTasks">[] = [];
   for (const task of tasks) {
-    if (!task || task.projectId !== projectId || isEntityDeleted(task)) {
+    if (!task || task.projectId !== projectId || isEntityArchived(task)) {
       throw new Error("Task not found in this project");
     }
     if (task.status === "todo" && task.approvedAt === undefined) {
@@ -335,7 +335,7 @@ async function coordinatorTodoTask(
   taskId: Id<"agentTasks">,
 ): Promise<Doc<"agentTasks">> {
   const task = await ctx.db.get(taskId);
-  if (!task || task.projectId !== projectId || isEntityDeleted(task)) {
+  if (!task || task.projectId !== projectId || isEntityArchived(task)) {
     throw new Error("That task is not part of this project.");
   }
   if (task.status !== "todo" || task.approvedAt === undefined) {
@@ -383,7 +383,7 @@ export async function mergeHandedTask(
     throw new Error("A task cannot be merged into itself.");
   }
   const into = await ctx.db.get(intoTaskId);
-  if (!into || into.projectId !== projectId || isEntityDeleted(into)) {
+  if (!into || into.projectId !== projectId || isEntityArchived(into)) {
     throw new Error("The target task is not part of this project.");
   }
   if (
@@ -418,7 +418,7 @@ export async function retryFailedTask(
   note: string,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || task.projectId === undefined || isEntityDeleted(task)) {
+  if (!task || task.projectId === undefined || isEntityArchived(task)) {
     throw new Error("Project task not found");
   }
   if ((task.coordinatorRetries ?? 0) >= MAX_COORDINATOR_RETRIES) {

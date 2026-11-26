@@ -8,6 +8,7 @@ import { findMainChat } from "../_sessionChats/helpers";
 import {
   deploymentStatusValidator,
   entityNumIdFields,
+  softDeleteFields,
   prStateValidator,
   sessionStatusValidator,
   aiModelValidator,
@@ -54,6 +55,7 @@ const sessionListItemValidator = v.object({
   _id: v.id("sessions"),
   _creationTime: v.number(),
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
   title: v.string(),

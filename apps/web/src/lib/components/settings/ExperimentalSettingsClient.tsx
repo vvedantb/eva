@@ -38,7 +38,7 @@ const FLAG_GROUPS: FlagGroup[] = [
         key: "disablePageMotion",
         title: "Disable page animations",
         description:
-          "Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer beam, and the sessions sidebar working indicator stay on.",
+          "Make every animation and transition instant. Spinners, pulses and shimmers stay on.",
       },
       {
         key: "sessionTabs",

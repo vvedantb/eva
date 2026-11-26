@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalQuery } from "./_generated/server";
 import { authQuery, hasRepoAccess } from "./functions";
-import { filterActiveEntities } from "./numId";
+import { filterUnarchived } from "./numId";
 import { loadLastSeenAt } from "./_users/lastSeen";
 import { standaloneOnly } from "./_sessions/owner";
 
@@ -39,8 +39,8 @@ export const getShipRateStats = authQuery({
         )
         .collect(),
     ]);
-    const done = filterActiveEntities(doneDocs).length;
-    const cancelled = filterActiveEntities(cancelledDocs).length;
+    const done = filterUnarchived(doneDocs).length;
+    const cancelled = filterUnarchived(cancelledDocs).length;
     const tasksRan = done + cancelled;
     return {
       tasksRan,

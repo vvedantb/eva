@@ -36,7 +36,7 @@ interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
   owner: string;
   name: string;
   basePath: string;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  onArchive: (id: Id<"projects">, title: string) => void;
 }
 
 export function ProjectsKanbanView({
@@ -46,7 +46,7 @@ export function ProjectsKanbanView({
   owner,
   name,
   basePath,
-  onDelete,
+  onArchive,
   isSelecting,
   selectedIds,
   onToggleSelect,
@@ -72,7 +72,7 @@ export function ProjectsKanbanView({
                   owner={owner}
                   name={name}
                   basePath={basePath}
-                  onDelete={onDelete}
+                  onArchive={onArchive}
                   isSelecting={isSelecting}
                   selectedIds={selectedIds}
                   onToggleSelect={onToggleSelect}
@@ -92,7 +92,7 @@ function VirtualProjectColumn({
   owner,
   name,
   basePath,
-  onDelete,
+  onArchive,
   isSelecting = false,
   selectedIds,
   onToggleSelect,
@@ -103,7 +103,7 @@ function VirtualProjectColumn({
   owner: string;
   name: string;
   basePath: string;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  onArchive: (id: Id<"projects">, title: string) => void;
 }) {
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/kanban/${phase}`,
@@ -145,12 +145,13 @@ function VirtualProjectColumn({
                   sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}
                   isAwaitingAnswer={project.isAwaitingAnswer}
+                  archived={project.archivedAt !== undefined}
                   href={
                     entityPathSegment(project)
                       ? `${basePath}/projects/${entityPathSegment(project)}`
                       : `${basePath}/projects`
                   }
-                  onDelete={() => onDelete(project._id, project.title)}
+                  onArchive={() => onArchive(project._id, project.title)}
                   isSelecting={isSelecting}
                   isSelected={selectedIds?.has(project._id)}
                   onToggleSelect={(event) =>

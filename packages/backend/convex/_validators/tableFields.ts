@@ -225,6 +225,10 @@ export const repoEntityCounterFields = {
 /** Per-repo sequential id for readable URLs. Optional until backfill completes. */
 export const entityNumIdFields = {
   numId: v.optional(v.number()),
+};
+
+/** Soft delete, for the tables that still delete (tasks and projects archive: `archivedAt`). */
+export const softDeleteFields = {
   deletedAt: v.optional(v.number()),
 };
 
@@ -612,6 +616,9 @@ export const taskRunValidator = v.union(
 
 export const agentTaskFields = {
   ...entityNumIdFields,
+  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
+  /** Archived: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
   // User-attached input files (paperclip / paste in the quick task composer),
@@ -750,6 +757,7 @@ export const agentRunFields = {
 
 export const sessionFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
   title: v.string(),
@@ -1181,6 +1189,9 @@ export const teamFields = {
 
 export const projectFields = {
   ...entityNumIdFields,
+  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
+  /** Archived with its tasks: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
   /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
@@ -1248,6 +1259,7 @@ export const automationTriggerValidator = v.union(
 
 export const automationFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   title: v.string(),
   description: v.string(),
@@ -1785,6 +1797,7 @@ export const feedbackFields = {
 
 export const docFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),

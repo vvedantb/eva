@@ -109,7 +109,7 @@ const schema = defineSchema({
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
-    .index("by_repo_and_deleted", ["repoId", "deletedAt"])
+    .index("by_repo_and_archived", ["repoId", "archivedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
   // projectDetails table removed. schema-narrowing-ok: deleteProjectDetails
@@ -117,11 +117,11 @@ const schema = defineSchema({
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_status", ["repoId", "status"])
-    .index("by_repo_status_and_deleted", ["repoId", "status", "deletedAt"])
-    .index("by_repo_status_deleted_and_creator", [
+    .index("by_repo_status_and_archived", ["repoId", "status", "archivedAt"])
+    .index("by_repo_status_archived_and_creator", [
       "repoId",
       "status",
-      "deletedAt",
+      "archivedAt",
       "createdBy",
     ])
     .index("by_repo_and_updatedAt", ["repoId", "updatedAt"])

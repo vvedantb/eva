@@ -1,6 +1,6 @@
 import {
+  IconArchive,
   IconFolders,
-  IconTrash,
   IconTags,
   IconUser,
   IconUserCheck,
@@ -17,7 +17,7 @@ import {
 export type BulkAction =
   | "actions"
   | "group"
-  | "delete"
+  | "archive"
   | "addLabels"
   | "assign"
   | "assignMe"
@@ -36,7 +36,7 @@ interface QuickTasksBulkBarProps {
   onSetBulkAction: (action: BulkAction | null) => void;
   /** Alt-click skips the confirm dialog for these actions. */
   onSkipConfirm?: Partial<
-    Pick<Record<BulkAction, () => void>, "delete" | "run">
+    Pick<Record<BulkAction, () => void>, "archive" | "run">
   >;
 }
 
@@ -75,12 +75,12 @@ const moreActions: ActionDef[] = [
   { key: "schedule", label: "Schedule Run", icon: IconCalendarClock },
 ];
 
-const deleteAction: ActionDef = {
-  key: "delete",
-  label: "Delete All",
-  shortLabel: "Delete",
-  icon: IconTrash,
-  destructive: true,
+/** Last in the bar, not destructive: the toast's Undo brings the tasks back. */
+const archiveAction: ActionDef = {
+  key: "archive",
+  label: "Archive All",
+  shortLabel: "Archive",
+  icon: IconArchive,
 };
 
 export function QuickTasksBulkBar({
@@ -98,7 +98,7 @@ export function QuickTasksBulkBar({
 
   const activate = (action: BulkAction) => {
     const skip =
-      action === "delete" || action === "run"
+      action === "archive" || action === "run"
         ? onSkipConfirm?.[action]
         : undefined;
     if (skip) {
@@ -108,10 +108,10 @@ export function QuickTasksBulkBar({
     onSetBulkAction(action);
   };
 
-  /** Only `run` and `delete` have an Alt-to-skip path to advertise. */
+  /** Only `run` and `archive` have an Alt-to-skip path to advertise. */
   const toBarAction = (action: ActionDef): BulkBarAction => ({
     ...action,
-    showSkipHint: action.key === "run" || action.key === "delete",
+    showSkipHint: action.key === "run" || action.key === "archive",
     onClick: () => activate(action.key),
   });
 
@@ -129,7 +129,7 @@ export function QuickTasksBulkBar({
         ...action,
         onClick: () => onSetBulkAction(action.key),
       }))}
-      destructiveAction={toBarAction(deleteAction)}
+      destructiveAction={toBarAction(archiveAction)}
     />
   );
 }

@@ -203,20 +203,14 @@ export function projectProgressSegments(
 }
 
 /**
- * Why "Create Project" is off, or undefined when it can run: a project needs
- * a title and a description.
+ * Why "Save" and "Save and Run" are off, or undefined when they can run: a
+ * project needs a prompt.
  */
 export function newProjectSubmitBlocker(
   isLoading: boolean,
-  title: string,
-  description: string,
+  prompt: string,
 ): string | undefined {
   if (isLoading) return "Creating project…";
-  const missingTitle = !title.trim();
-  const missingDescription = !description.trim();
-  if (missingTitle && missingDescription)
-    return "Enter a project title and description";
-  if (missingTitle) return "Enter a project title";
-  if (missingDescription) return "Enter a description";
+  if (!prompt.trim()) return "Describe the project";
   return undefined;
 }

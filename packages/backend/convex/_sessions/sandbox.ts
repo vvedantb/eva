@@ -259,42 +259,6 @@ export const forcePushBranch = authMutation({
   },
 });
 
-/** The running sandbox of a session the caller can reach, or a thrown reason. */
-async function requireActiveSandbox(
-  ctx: MutationCtx & { userId: Id<"users"> },
-  sessionId: Id<"sessions">,
-  action: string,
-): Promise<{ session: Doc<"sessions">; sandboxId: string }> {
-  const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
-  if (session.status !== "active" || !session.sandboxId) {
-    throw new Error(`Start the sandbox before ${action}`);
-  }
-  return { session, sandboxId: session.sandboxId };
-}
-
-/**
- * Re-runs the app dev server in the session's running sandbox (repo App
- * settings, else package.json detection) and stores the resolved port and
- * command. The quick task panel's "Run dev server".
- */
-export const runDevServer = authMutation({
-  args: { sessionId: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { session, sandboxId } = await requireActiveSandbox(
-      ctx,
-      args.sessionId,
-      "running the dev server",
-    );
-    await ctx.scheduler.runAfter(0, internal.sandbox.runDevServerInSandbox, {
-      owner: { kind: "session", sessionId: session._id },
-      sandboxId,
-      repoId: session.repoId,
-    });
-    return null;
-  },
-});
-
 /** Records the dev server a manual rerun resolved (`runDevServerInSandbox`). */
 export const patchSessionDevServer = internalMutation({
   args: {
@@ -307,28 +271,6 @@ export const patchSessionDevServer = internalMutation({
     await ctx.db.patch(args.sessionId, {
       devPort: args.devPort,
       devCommand: args.devCommand,
-    });
-    return null;
-  },
-});
-
-/**
- * Re-launches the repo's background commands (long-running daemons such as
- * `npx convex dev`) in the session's running sandbox, for a daemon that died
- * while the sandbox kept running.
- */
-export const runBackgroundCommands = authMutation({
-  args: { sessionId: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { session, sandboxId } = await requireActiveSandbox(
-      ctx,
-      args.sessionId,
-      "running background commands",
-    );
-    await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
-      sandboxId,
-      repoId: session.repoId,
     });
     return null;
   },

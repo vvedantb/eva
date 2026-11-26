@@ -125,6 +125,7 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export { titleFromPrompt } from "./promptTitle";
 export {
   composerTraitFields,
   hasComposerTraitUpdate,
@@ -156,6 +157,7 @@ export {
   threadTurnStatusText,
 } from "./replyThreads";
 export {
+  EVA_SENDER_NAME,
   findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
@@ -181,9 +183,19 @@ export {
 } from "./sessionMenu";
 export {
   draftCountAfterRemove,
+  draftPrompt,
   draftsAfterRemove,
-  visibleDrafts,
 } from "./draftVisibility";
+export {
+  ARCHIVE_LABEL,
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
+  UNARCHIVE_LABEL,
+  archiveCopy,
+  isArchiveListMode,
+  type ArchivableKind,
+  type ArchiveListMode,
+} from "./archive";
 export {
   chatSourceKindLabel,
   chatSourceLabel,

@@ -32,6 +32,7 @@ import {
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
+import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type RunDoc = NonNullable<
@@ -59,15 +60,11 @@ interface TaskFooterProps {
   isSandboxStopping: boolean;
   /** The task's sandbox checkout (a quick task's lives on its session). */
   sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
-  isRunningDevServer: boolean;
-  isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunDevServer: () => void;
-  onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
   onResolveConfirm: () => void;
   variant?: "footer" | "header";
@@ -116,6 +113,7 @@ function getShowRunButton({
 }): boolean {
   return (
     !task?.projectId &&
+    task?.archivedAt === undefined &&
     ((status === "todo" && !hasRuns) ||
       (status === "in_progress" && !hasActiveRun))
   );
@@ -170,15 +168,11 @@ export function TaskFooter({
   isSandboxStarting,
   isSandboxStopping,
   sandbox,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
   canCreatePr,
   isCreatingPr,
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunDevServer,
-  onRunBackgroundCommands,
   onStartExecution,
   onResolveConfirm,
   variant = "footer",
@@ -217,8 +211,6 @@ export function TaskFooter({
     simpleView,
     hasActiveRun,
     status,
-    canStartSandbox,
-    isSandboxActive,
     isHeader,
     hasPrItems: prLinks.hasItems,
   });
@@ -265,6 +257,9 @@ export function TaskFooter({
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
         <div className={layout.actions}>
+          {isHeader && task?.archivedAt !== undefined ? (
+            <ArchivedLabel />
+          ) : null}
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}
@@ -281,11 +276,7 @@ export function TaskFooter({
               }}
               visibility={moreMenu}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : moreMenu.showMoreMenu ? (
             <TaskFooterMoreMenu
@@ -294,11 +285,7 @@ export function TaskFooter({
               buttonSize={buttonSize}
               iconSize={iconSize}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : null}
           <SandboxCommitPushButton

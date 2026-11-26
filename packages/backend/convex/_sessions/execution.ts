@@ -38,7 +38,11 @@ import {
   selectUsageLimitRetryUserMessage,
 } from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
-import { reviveCoordinatorSession } from "./ownedSession";
+import {
+  ensureOwnerChat,
+  reviveCoordinatorSession,
+  type OwnerEntity,
+} from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
@@ -865,6 +869,64 @@ export async function sendSessionChatMessage(
   // slot, or for Eva to wake — a sleeping sandbox is woken here and its
   // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
+}
+
+/**
+ * A person's message in a session chat on the chat's sticky model, traits
+ * and account (the phone reply, `chats.send`, and a new project's first
+ * message). The caller checks access.
+ */
+export async function sendStickyChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    model: Doc<"turns">["model"];
+    userId: Id<"users">;
+    content: string;
+    attachmentStorageIds?: Id<"_storage">[];
+  },
+): Promise<void> {
+  const { chat } = params.context;
+  await sendSessionChatMessage(ctx, {
+    context: params.context,
+    userId: params.userId,
+    content: params.content,
+    settings: {
+      model: params.model,
+      ...launchTraitsFromStored(params.model, {
+        reasoningLevel: chat.lastReasoningLevel,
+        thinkingEnabled: chat.lastThinkingEnabled,
+        use1mContext: chat.lastUse1mContext,
+        fastMode: chat.lastFastMode,
+      }),
+      providerAccountId: chat.providerAccountId,
+      attachmentStorageIds: params.attachmentStorageIds,
+    },
+  });
+}
+
+/**
+ * A person's message to a task's or project's chat: its first send creates
+ * the owner's session chat (`ensureOwnerChat`), then it runs on that chat's
+ * sticky picks. The caller checks access.
+ */
+export async function sendOwnerChatMessage(
+  ctx: MutationCtx,
+  params: {
+    entity: OwnerEntity;
+    userId: Id<"users">;
+    content: string;
+    attachmentStorageIds?: Id<"_storage">[];
+  },
+): Promise<void> {
+  const context = await ensureOwnerChat(ctx, params.entity);
+  await sendStickyChatMessage(ctx, {
+    context,
+    model: normalizeAIModel(context.chat.lastModel),
+    userId: params.userId,
+    content: params.content,
+    attachmentStorageIds: params.attachmentStorageIds,
+  });
 }
 
 /**

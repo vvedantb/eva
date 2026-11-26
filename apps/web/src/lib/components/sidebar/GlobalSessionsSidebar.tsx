@@ -14,7 +14,7 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
-import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
+import { ListModeTabs } from "@/lib/components/ListModeTabs";
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   filterSessionsStartedBy,
@@ -145,7 +145,7 @@ export function GlobalSessionsSidebar({
     <>
       <div className="flex-1 px-0 pb-1">
         <div className="flex w-full items-center pb-2 pt-1">
-          <SessionsListModeTabs mode={listMode} onChange={setListMode} />
+          <ListModeTabs mode={listMode} onChange={setListMode} />
         </div>
         <div>
           <AnimatePresence mode="wait" initial={false}>

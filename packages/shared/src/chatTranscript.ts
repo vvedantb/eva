@@ -7,11 +7,13 @@
  */
 
 /**
- * Messages a chat opens with. 30 covers the last turn (the only one in the
- * viewport on open) and most of the first screen above it, at about a tenth
- * of a heavy chat's payload.
+ * Messages a chat opens with. 10 covers the last turn (the only one in the
+ * viewport on open) and a few turns above it. Each assistant row carries an
+ * activity log, so the tail is what makes switching chats slow: 10 rows read
+ * about a third of what 30 did (load test, 26 November 2026). Older rows load
+ * as the reader scrolls up.
  */
-export const TRANSCRIPT_TAIL_MESSAGES = 30;
+export const TRANSCRIPT_TAIL_MESSAGES = 10;
 
 /** Args of the tail subscription. */
 export function transcriptTailArgs<P>(parentId: P) {

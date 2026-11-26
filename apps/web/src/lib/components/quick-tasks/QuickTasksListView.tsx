@@ -73,6 +73,8 @@ interface QuickTasksListViewProps {
    * alone cannot express when the tapped task is the one already open.
    */
   onOpenTask?: (id: Id<"agentTasks">) => void;
+  /** The Archived list: no drafts, no Run All, Unarchive in row menus. */
+  archived?: boolean;
 }
 
 export function QuickTasksListView({
@@ -82,6 +84,7 @@ export function QuickTasksListView({
   onToggleSelect,
   selectedTaskId,
   onOpenTask,
+  archived = false,
 }: QuickTasksListViewProps) {
   const { repoId, basePath, owner, name } = useRepo();
   const firstPaint = useFirstPaintGate();
@@ -115,7 +118,8 @@ export function QuickTasksListView({
   );
 
   const [{ q, statuses }] = useQuickTaskFilters();
-  const todoDrafts = useQuickTaskTodoDrafts(repoId);
+  const liveTodoDrafts = useQuickTaskTodoDrafts(repoId);
+  const todoDrafts = archived ? [] : liveTodoDrafts;
   const searchQuery = q;
   const visibleStatuses = new Set(statuses);
 
@@ -245,7 +249,7 @@ export function QuickTasksListView({
                           </span>
                         </button>
                       </CollapsibleTrigger>
-                      {status === "todo" && todoTasks.length > 0 && (
+                      {status === "todo" && todoTasks.length > 0 && !archived && (
                         <Button
                           size="sm"
                           title={skipConfirmTitle("Run All")}
@@ -319,6 +323,7 @@ export function QuickTasksListView({
                                       isAgentActive={task.isExecuting}
                                       hasUnread={task.hasUnread}
                                       isAwaitingAnswer={task.isAwaitingAnswer}
+                                      archived={archived}
                                       priority={task.priority}
                                       numId={task.numId}
                                       hasError={errorTaskIdSet.has(task._id)}

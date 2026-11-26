@@ -101,7 +101,7 @@ function NeedsYouAction({
   onReply: () => void;
 }) {
   const approve = useMutation(api.buildWorkflow.approveProjectTasks);
-  const remove = useMutation(api.agentTasks.remove);
+  const archive = useMutation(api.agentTasks.archive);
   const retry = useMutation(api.agentTasks.startExecution);
   const buttonClass = "h-7 shrink-0 text-xs";
 
@@ -137,7 +137,7 @@ function NeedsYouAction({
           className={buttonClass}
           onClick={() =>
             void catchMutationError(
-              remove({ id: taskId }),
+              archive({ id: taskId }),
               "Couldn't reject the task",
               "needs-you-reject",
             )

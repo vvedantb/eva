@@ -213,10 +213,10 @@ async function repoFromCache(
 
 function summarise(
   kind: ChatEntityKind,
-  entity: { _id: string; title: string; numId?: number; deletedAt?: number },
+  entity: { _id: string; title: string; numId?: number },
   repo: Doc<"githubRepos"> | null,
 ): ChatSourceSummary {
-  if (isEntityDeleted(entity) || repo === null) return null;
+  if (repo === null) return null;
   return {
     kind,
     id: String(entity._id),
@@ -236,7 +236,8 @@ async function summariseSession(
   cache: RepoCache,
 ): Promise<ChatSourceSummary> {
   const session = await ctx.db.get(sessionId);
-  if (!session) return null;
+  // An archived task or project still links; only a deleted session hides.
+  if (!session || isEntityDeleted(session)) return null;
   return summarise(
     "session",
     session,

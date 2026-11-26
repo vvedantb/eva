@@ -1,5 +1,6 @@
 export {
   list,
+  listArchived,
   get,
   getByNumId,
   getTaskCount,
@@ -9,7 +10,7 @@ export {
   listStatusesForRepo,
 } from "./_projects/queries";
 
-export { create, update, remove } from "./_projects/mutations";
+export { create, update, archive, unarchive } from "./_projects/mutations";
 
 export { createFromTasks } from "./_projects/development";
 

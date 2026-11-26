@@ -1,7 +1,7 @@
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { GroupTasksModal } from "@/lib/components/quick-tasks/GroupTasksModal";
-import { DeleteTasksModal } from "@/lib/components/quick-tasks/DeleteTasksModal";
+import { ArchiveTasksModal } from "@/lib/components/quick-tasks/ArchiveTasksModal";
 import { AddLabelsModal } from "@/lib/components/quick-tasks/AddLabelsModal";
 import { AssignTasksModal } from "@/lib/components/quick-tasks/AssignTasksModal";
 import { ChangeStatusModal } from "@/lib/components/quick-tasks/ChangeStatusModal";
@@ -34,8 +34,8 @@ export function QuickTasksBulkModals({
         selectedTasks={selectedTasks}
         onSuccess={onSuccess}
       />
-      <DeleteTasksModal
-        isOpen={activeBulkAction === "delete"}
+      <ArchiveTasksModal
+        isOpen={activeBulkAction === "archive"}
         onClose={onCloseBulkAction}
         selectedTaskIds={selectedTaskIds}
         onSuccess={onSuccess}

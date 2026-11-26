@@ -15,7 +15,7 @@ import {
   taskBranchName,
 } from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived } from "../numId";
 import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
@@ -552,7 +552,7 @@ export async function resolvePrOwnerFromBranch(
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", project._id))
       .collect()
-  ).find((task) => task.branchName === args.branch && !isEntityDeleted(task));
+  ).find((task) => task.branchName === args.branch && !isEntityArchived(task));
   if (keeper?.repoId !== undefined) {
     return {
       owner: { kind: "task", taskId: keeper._id },

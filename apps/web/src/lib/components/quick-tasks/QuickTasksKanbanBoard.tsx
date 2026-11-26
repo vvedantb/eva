@@ -34,6 +34,8 @@ interface QuickTasksKanbanBoardProps {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
+  /** The Archived list: no drafts, no Run All, Unarchive in card menus. */
+  archived?: boolean;
 }
 
 export function QuickTasksKanbanBoard({
@@ -41,6 +43,7 @@ export function QuickTasksKanbanBoard({
   isSelecting,
   selectedIds,
   onToggleSelect,
+  archived = false,
 }: QuickTasksKanbanBoardProps) {
   const { repoId, basePath } = useRepo();
   const currentUserId = useQuery(api.auth.me);
@@ -60,7 +63,8 @@ export function QuickTasksKanbanBoard({
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
-  const todoDrafts = useQuickTaskTodoDrafts(repoId);
+  const liveTodoDrafts = useQuickTaskTodoDrafts(repoId);
+  const todoDrafts = archived ? [] : liveTodoDrafts;
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -108,6 +112,8 @@ export function QuickTasksKanbanBoard({
   }
 
   const handleStatusChange = async (id: string, status: TaskStatus) => {
+    // An archived task is read-only: a drag does not change it.
+    if (archived) return;
     const task = tasks.find((t) => t._id === id);
     if (task) await updateStatus({ id: task._id, status });
   };
@@ -156,7 +162,7 @@ export function QuickTasksKanbanBoard({
             : []
         }
         columnExtra={(status) =>
-          status === "todo" && todoTasks.length > 0 ? (
+          status === "todo" && todoTasks.length > 0 && !archived ? (
             <Button
               size="sm"
               title={skipConfirmTitle("Run All")}
@@ -190,6 +196,7 @@ export function QuickTasksKanbanBoard({
             isAgentActive={task.isExecuting}
             hasUnread={task.hasUnread}
             isAwaitingAnswer={task.isAwaitingAnswer}
+            archived={archived}
             priority={task.priority}
             numId={task.numId}
             hasError={errorTaskIdSet.has(task._id)}
@@ -241,6 +248,7 @@ export function QuickTasksKanbanBoard({
             isAgentActive={task.isExecuting}
             hasUnread={task.hasUnread}
             isAwaitingAnswer={task.isAwaitingAnswer}
+            archived={archived}
             priority={task.priority}
             numId={task.numId}
             hasError={errorTaskIdSet.has(task._id)}

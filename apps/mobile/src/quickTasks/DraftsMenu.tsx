@@ -22,8 +22,8 @@ export function quickTaskDraftRoute(draft: Pick<QuickTaskDraft, "_id" | "repoId"
  * The web quick-task `DraftsMenu`: "Drafts (N)", shown while the repo has
  * saved drafts, opens "Saved Drafts" as a bottom sheet, newest first. A row
  * loads its draft into the form and closes the sheet; its trash asks "Delete
- * draft?" in place of the row, as the web, then `agentTasks.remove` (a soft
- * delete). `onDeleted` lets the form forget a draft it had loaded.
+ * draft?" in place of the row, as the web, then `agentTasks.deleteDraft`.
+ * `onDeleted` lets the form forget a draft it had loaded.
  */
 export function DraftsMenu({
   drafts,
@@ -39,7 +39,7 @@ export function DraftsMenu({
   const danger = EVA_THEME[scheme].destructive;
   const [open, setOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<Id<"agentTasks"> | null>(null);
-  const removeDraft = useMutation(api.agentTasks.remove);
+  const removeDraft = useMutation(api.agentTasks.deleteDraft);
   if (!drafts || drafts.length === 0) return null;
 
   const remove = async (draftId: Id<"agentTasks">) => {

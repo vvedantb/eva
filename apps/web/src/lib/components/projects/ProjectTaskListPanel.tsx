@@ -39,12 +39,17 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
+/** No task open as a chat tab. */
+const NO_OPEN_TASKS: ReadonlySet<string> = new Set();
+
 /** The Pull requests group's key, beside the display statuses. */
 const PULL_REQUESTS = "pull_requests";
 
 /** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs: their rows are marked. */
+  openTaskIds: ReadonlySet<string>;
   failedTaskIds: ReadonlySet<string>;
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
@@ -55,6 +60,8 @@ interface RowContext {
   authorNames: ReadonlyMap<string, string>;
   /** Task numbers by task id: names where a merged Triage item went. */
   numIdOf: (taskId: string) => number | undefined;
+  /** An archived project: no triage buttons, no row menu. */
+  readOnly: boolean;
 }
 
 function ProjectTaskRowFor({
@@ -72,7 +79,9 @@ function ProjectTaskRowFor({
     <ProjectTaskRow
       task={row}
       view={view}
+      open={context.openTaskIds.has(row._id)}
       line={projectTaskSummaryLine(row, view, {
+        open: context.openTaskIds.has(row._id),
         notes: context.notesByTask.get(row._id),
         failed: context.failedTaskIds.has(row._id),
         authorName:
@@ -84,6 +93,7 @@ function ProjectTaskRowFor({
       })}
       onSelectTask={context.onSelectTask}
       basePath={context.basePath}
+      readOnly={context.readOnly}
     />
   );
 }
@@ -128,9 +138,15 @@ function GroupHeader({
 interface ProjectTaskListPanelProps {
   projectId: Id<"projects">;
   tasks: Task[];
+  /** Tasks archived on their own: listed under Archived, with Unarchive. */
+  archivedTasks: Task[];
+  /** An archived project: no Approve all, triage buttons or row menu. */
+  readOnly: boolean;
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs (`?tasks=`). */
+  openTaskIds?: ReadonlySet<string>;
   /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
@@ -143,8 +159,11 @@ interface ProjectTaskListPanelProps {
 export function ProjectTaskListPanel({
   projectId,
   tasks,
+  archivedTasks,
+  readOnly,
   failedTaskIds,
   onSelectTask,
+  openTaskIds = NO_OPEN_TASKS,
   homeRepoId,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
@@ -159,8 +178,14 @@ export function ProjectTaskListPanel({
   );
 
   const notesByTask = useProjectTaskNotes(projectId);
-  const numIdById = new Map(tasks.map((task) => [String(task._id), task.numId]));
-  const sections = projectTaskStatusSections(tasks, failedTaskIds);
+  const numIdById = new Map(
+    [...tasks, ...archivedTasks].map((task) => [String(task._id), task.numId]),
+  );
+  const sections = projectTaskStatusSections(
+    tasks,
+    failedTaskIds,
+    archivedTasks,
+  );
   const pullRequests = projectTaskPullRequests(tasks);
   const toApprove = unapprovedTodoTaskIds(tasks);
   const triageAuthorIds = [
@@ -219,6 +244,7 @@ export function ProjectTaskListPanel({
 
   const context: RowContext = {
     onSelectTask,
+    openTaskIds,
     failedTaskIds,
     notesByTask,
     basePath,
@@ -226,12 +252,13 @@ export function ProjectTaskListPanel({
     reposById,
     authorNames: firstNameByUserId(authors ?? []),
     numIdOf: (taskId) => numIdById.get(taskId),
+    readOnly,
   };
 
   // Tasks added without "Start now" wait in Triage: its header approves them
   // all.
   const triageActions =
-    toApprove.length > 0 ? (
+    !readOnly && toApprove.length > 0 ? (
       <Button
         size="xs"
         variant="ghost"

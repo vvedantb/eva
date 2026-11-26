@@ -357,6 +357,7 @@ import type * as _shared_commentAnchor from "../_shared/commentAnchor.js";
 import type * as _shared_composerTraits from "../_shared/composerTraits.js";
 import type * as _shared_hmac from "../_shared/hmac.js";
 import type * as _shared_modelHandoff from "../_shared/modelHandoff.js";
+import type * as _shared_ownerTitle from "../_shared/ownerTitle.js";
 import type * as _skillSuggestions_rank from "../_skillSuggestions/rank.js";
 import type * as _systemSkills_evaAsk from "../_systemSkills/evaAsk.js";
 import type * as _systemSkills_evaAudit from "../_systemSkills/evaAudit.js";
@@ -949,6 +950,7 @@ declare const fullApi: ApiFromModules<{
   "_shared/composerTraits": typeof _shared_composerTraits;
   "_shared/hmac": typeof _shared_hmac;
   "_shared/modelHandoff": typeof _shared_modelHandoff;
+  "_shared/ownerTitle": typeof _shared_ownerTitle;
   "_skillSuggestions/rank": typeof _skillSuggestions_rank;
   "_systemSkills/evaAsk": typeof _systemSkills_evaAsk;
   "_systemSkills/evaAudit": typeof _systemSkills_evaAudit;

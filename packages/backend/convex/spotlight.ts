@@ -5,7 +5,13 @@ import {
   repoBasePath,
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
-import { filterActiveEntities, isEntityDeleted } from "./numId";
+import {
+  archivedProjectIds,
+  filterActiveEntities,
+  filterLiveTasks,
+  filterUnarchived,
+  isEntityDeleted,
+} from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import { standaloneOnly } from "./_sessions/owner";
 import { entityHref } from "@eva/shared";
@@ -313,7 +319,7 @@ export const search = authQuery({
           const label = repoDisplayLabel(repo);
           const base = repoBasePath(repo);
 
-          const [projects, sessions, tasks, docs, automations] =
+          const [projects, sessions, tasks, docs, automations, archived] =
             await Promise.all([
               ctx.db
                 .query("projects")
@@ -337,9 +343,10 @@ export const search = authQuery({
                 .query("automations")
                 .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
                 .take(PER_REPO_TAKE),
+              archivedProjectIds(ctx.db, repo._id),
             ]);
 
-          for (const project of filterActiveEntities(projects)) {
+          for (const project of filterUnarchived(projects)) {
             if (project.numId === undefined) continue;
             if (!matchesQuery(project.title, query)) continue;
             pushHit(
@@ -373,7 +380,7 @@ export const search = authQuery({
             );
           }
 
-          for (const task of filterActiveEntities(tasks)) {
+          for (const task of filterLiveTasks(tasks, archived)) {
             // A draft has no task page of its own yet, so it opens the repo's
             // Drafts list. The card there deep-links through a search param,
             // which a plain href string cannot carry.

@@ -1,14 +1,19 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
+import { tokenizedToDisplayText } from "@eva/shared";
+import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
+import { sendOwnerChatMessage } from "../_sessions/execution";
 import {
   priorityValidator,
   aiModelValidator,
 } from "../validators";
 import {
+  assertProjectNotArchived,
   authMutation,
   hasRepoAccess,
   getProjectWithAccess,
+  onProjectTasksChanged,
   taskRunPending,
 } from "../functions";
 import { listProjectTasks, taskLabel } from "./scheduler";
@@ -26,34 +31,34 @@ import {
 } from "../_userProviderAccounts/defaults";
 
 /**
- * Creates a new project. It plans in its coordinator chat (decision 1): no
- * interview, no spec, no project branch. `rawInput` becomes the description:
- * the project context every coordinator and child task turn carries
- * (`projectBriefBlock`), so the person need not repeat it. The client opens
- * the coordinator chat;
- * nothing is sent for them. `skipPlanning` stays accepted for older clients
- * and is ignored: every project starts the same way, and nothing starts the
- * old interview for it.
+ * Creates a new project from one prompt. It plans in its coordinator chat
+ * (decision 1): no interview, no spec, no project branch. `rawInput` (the
+ * prompt, with mention tokens) becomes the description as display text: the
+ * project context every coordinator and child task turn carries
+ * (`projectBriefBlock`). The title is the prompt's first line until a
+ * generated one replaces it (`_shared/ownerTitle.ts`). With `run` ("Save and
+ * Run") the prompt is also the first message in the coordinator chat; without
+ * it nothing is sent. The client opens the project either way.
  */
 export const create = authMutation({
   args: {
     repoId: v.id("githubRepos"),
-    title: v.string(),
     rawInput: v.string(),
     baseBranch: v.optional(v.string()),
     priority: v.optional(priorityValidator),
-    /** Ignored; kept for older clients. */
-    skipPlanning: v.optional(v.boolean()),
     model: v.optional(aiModelValidator),
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
+    run: v.optional(v.boolean()),
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    const prompt = args.rawInput.trim();
+    const { title } = initialTitle(undefined, prompt);
     const numId = await allocateNumId(ctx.db, args.repoId, "projects");
     const repo = await ctx.db.get(args.repoId);
     const model = args.model ?? repo?.defaultModel;
@@ -65,13 +70,12 @@ export const create = authMutation({
             args.providerAccountId,
             ctx.userId,
           );
-    const description = args.rawInput.trim();
-    return await ctx.db.insert("projects", {
+    const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
       userId: ctx.userId,
-      title: args.title,
-      rawInput: args.rawInput,
-      ...(description ? { description } : {}),
+      title,
+      rawInput: prompt,
+      description: tokenizedToDisplayText(prompt),
       baseBranch: args.baseBranch,
       projectStartDate: Date.now(),
       priority: args.priority,
@@ -79,6 +83,17 @@ export const create = authMutation({
       model,
       providerAccountId,
     });
+    await scheduleGeneratedTitle(ctx, { kind: "project", projectId }, prompt, title);
+    if (args.run) {
+      const project = await ctx.db.get(projectId);
+      if (!project) throw new Error("Project not found");
+      await sendOwnerChatMessage(ctx, {
+        entity: { kind: "project", project },
+        userId: ctx.userId,
+        content: prompt,
+      });
+    }
+    return projectId;
   },
 });
 
@@ -108,6 +123,7 @@ export const update = authMutation({
       args.id,
       ctx.userId,
     );
+    assertProjectNotArchived(project);
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
     const {
@@ -194,38 +210,39 @@ export const update = authMutation({
 });
 
 /**
- * Soft-deletes a project (row retained; hidden from lists and direct URLs).
- * Refused while a child task runs. Its child tasks stay as quick tasks, with
- * their sessions, branches and PRs: they leave the project and lose what
- * only a project task has (number, phase label, approval, coordinator
- * retries).
+ * Archives a project as one unit: its tasks stay in it, the coordinator
+ * session retires and the scheduler skips it. Hidden from lists; its page
+ * still opens read-only. Refused while one of its tasks runs.
  */
-export const remove = authMutation({
+export const archive = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const tasks = await listProjectTasks(ctx.db, args.id);
-    for (const task of tasks) {
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    if (project.archivedAt !== undefined) return null;
+    for (const task of await listProjectTasks(ctx.db, args.id)) {
       if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
         throw new ConvexError(
-          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then delete the project.`,
+          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then archive the project.`,
         );
       }
     }
-    const now = Date.now();
-    for (const task of tasks) {
-      await ctx.db.patch(task._id, {
-        projectId: undefined,
-        taskNumber: undefined,
-        phaseLabel: undefined,
-        approvedAt: undefined,
-        coordinatorRetries: undefined,
-        updatedAt: now,
-      });
-    }
-    await ctx.db.patch(args.id, { deletedAt: now });
+    await ctx.db.patch(args.id, { archivedAt: Date.now() });
     await syncProjectSession(ctx, args.id);
+    return null;
+  },
+});
+
+/** Brings an archived project back with its tasks and coordinator session. */
+export const unarchive = authMutation({
+  args: { id: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    if (project.archivedAt === undefined) return null;
+    await ctx.db.patch(args.id, { archivedAt: undefined });
+    await syncProjectSession(ctx, args.id);
+    await onProjectTasksChanged(ctx, args.id);
     return null;
   },
 });

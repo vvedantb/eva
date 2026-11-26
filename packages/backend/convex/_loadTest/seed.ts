@@ -387,7 +387,7 @@ async function insertTaskWithChildren(
     projectId,
     taskNumber: i,
     ...(status === "draft" ? {} : { lastTurnFinishedAt: createdAt + DAY }),
-    ...(i % 10 === 7 ? { deletedAt: createdAt + 2 * DAY } : {}),
+    ...(i % 10 === 7 ? { archivedAt: createdAt + 2 * DAY } : {}),
   });
   await db.insert("agentTaskRunSummaries", {
     taskId,
@@ -598,7 +598,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       title: `Project ${i}`,
       rawInput: filler(i, 400),
       lastTurnFinishedAt: ago(now, i, total) + DAY,
-      ...(i % 10 === 9 ? { deletedAt: ago(now, i, total) } : {}),
+      ...(i % 10 === 9 ? { archivedAt: ago(now, i, total) } : {}),
     });
     for (let t = 0; t < 3; t++) {
       await insertTaskWithChildren(db, refs, i * 3 + t, total * 3, projectId);

@@ -19,6 +19,7 @@ import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
+import { ArchivedBar } from "@/ui/ArchivedBar";
 
 type Tab = "overview" | "coordinator" | "documents";
 
@@ -36,7 +37,9 @@ type Tab = "overview" | "coordinator" | "documents";
  * "+" adds a task to Triage, or starts it now. The "…" sheet is led by the
  * web's sandbox actions
  * (`useProjectGitActions`); the coordinator starts approved tasks. Not here
- * from the web: the sandbox preview, files and review panes.
+ * from the web: the sandbox preview, files and review panes. An archived
+ * project (found in `projects.listArchived`) opens read-only under its
+ * `ArchivedBar`.
  */
 export default function ProjectScreen() {
   const router = useRouter();
@@ -47,15 +50,25 @@ export default function ProjectScreen() {
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const projects = useQuery(api.projects.list, repo ? { repoId: repo._id } : "skip");
-  const listed = projects?.find((candidate) => candidate._id === params.projectId);
+  const live = projects?.find((candidate) => candidate._id === params.projectId);
+  const archivedProjects = useQuery(
+    api.projects.listArchived,
+    repo && projects !== undefined && live === undefined ? { repoId: repo._id } : "skip",
+  );
+  const listed = live ?? archivedProjects?.find((candidate) => candidate._id === params.projectId);
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
   const tab: Tab = params.tab === "overview" || params.tab === "documents" ? params.tab : "coordinator";
   // The web page's sandbox actions, leading the "…" sheet.
   const git = useProjectGitActions(project);
-  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
+  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onArchived: leave, extraRows: git.rows });
 
-  const loading = repos === undefined || (repo !== undefined && (projects === undefined || (listed !== undefined && project === undefined)));
+  const loading =
+    repos === undefined ||
+    (repo !== undefined &&
+      (projects === undefined ||
+        (live === undefined && archivedProjects === undefined) ||
+        (listed !== undefined && project === undefined)));
   if (loading || !repo || !project) {
     return (
       <Screen title="Project" onBack={leave}>
@@ -63,7 +76,7 @@ export default function ProjectScreen() {
           <CenteredSpinner label="Loading project" />
         ) : (
           // The web `EntityNotFound` for a project.
-          <EmptyState icon={IconLayoutKanban} title="Project not found" description="It was deleted, or you no longer have access." />
+          <EmptyState icon={IconLayoutKanban} title="Project not found" description="It does not exist, or you no longer have access." />
         )}
       </Screen>
     );
@@ -78,6 +91,7 @@ export default function ProjectScreen() {
         <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
       }
     >
+      {project.archivedAt !== undefined ? <ArchivedBar onUnarchive={() => actions.unarchive(project._id)} /> : null}
       <View className="px-4 pb-2">
         <SegmentedTabs
           value={tab}

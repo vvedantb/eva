@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { authQuery, hasRepoAccess } from "./functions";
-import { isEntityDeleted } from "./numId";
 import { repoEntityTypeValidator } from "./validators";
 
 /**
@@ -30,7 +29,9 @@ export const resolveNumId = authQuery({
     if (id === null) return null;
 
     const doc = await ctx.db.get(id);
-    if (!doc || doc.repoId !== args.repoId || isEntityDeleted(doc)) return null;
+    if (!doc || doc.repoId !== args.repoId) return null;
+    // Tasks and projects are archived, never deleted: an archived one opens.
+    if ("deletedAt" in doc && doc.deletedAt !== undefined) return null;
     return doc.numId ?? null;
   },
 });

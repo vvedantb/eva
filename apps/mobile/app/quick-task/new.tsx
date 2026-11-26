@@ -6,17 +6,17 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
-import { TASK_TAGS, visibleDrafts, type Priority } from "@eva/shared";
+import { draftPrompt, TASK_TAGS, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { Attachment, Attachments } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, Checkbox, EmptyState, KeyboardAvoidingView, Text } from "@vvedantb/native-ui/primitives";
+import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FunctionReturnType } from "convex/server";
@@ -34,28 +34,30 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
 /**
  * A new quick task, as the web `QuickTaskModal` on a phone: a full screen in
- * place of the dialog. The repo (the web takes it from the page), the title
- * and description fields, then the web option chips, each opening a bottom
- * sheet: priority, code reviewer, model and traits, base branch (locked to
- * the project's when a project is picked), tags and project. "Create Task"
- * sits at the bottom in thumb reach and calls the web's
- * `agentTasks.createQuickTask`, which files the task in To Do without
- * running it; the screen then goes back to the list, as the dialog closes
- * (to Quick Tasks after a deep link). Return on the title moves to the
- * description. Files attach with the chat's picker (`AttachButton`). A task
- * in a project waits in Triage unless "Start now" is checked (it is then
- * approved, so the project's scheduler runs it).
+ * place of the dialog. The repo (the web takes it from the page), one prompt
+ * ("Describe the task…"; the server titles the task from it), then the web
+ * option chips, each opening a bottom sheet: priority, code reviewer, model
+ * and traits, base branch (locked to the project's when a project is
+ * picked), tags and project. "Save" and "Save and Run" sit at the bottom in
+ * thumb reach and call the web's `agentTasks.createQuickTask`: "Save" files
+ * the task in To Do (a project task waits in Triage), "Save and Run" (`run`)
+ * starts it (a project task is approved, so the project's scheduler runs
+ * it). The screen then goes back to the list, as the dialog closes (to Quick
+ * Tasks after a deep link). Files attach with the chat's picker
+ * (`AttachButton`).
  *
- * Drafts are the web's: leaving with a title or description saves one
+ * Drafts are the web's: leaving with a prompt saves one
  * (`agentTasks.saveDraft`, as the dialog's close), and "Drafts (N)" beside
- * Create lists the repo's saved drafts, from any device, to load or delete.
- * Create on a loaded draft promotes it (`agentTasks.activateDraft`). A
- * link with `draftId` (a Drafts card) opens with that draft loaded, as the
- * web Drafts page opens the dialog with `?draft=`.
+ * the buttons lists the repo's saved drafts, from any device, to load or
+ * delete. Either button on a loaded draft promotes it
+ * (`agentTasks.activateDraft`). A link with `draftId` (a Drafts card) opens
+ * with that draft loaded, as the web Drafts page opens the dialog with
+ * `?draft=`.
  *
  * Not here from the web dialog: voice input, @ mentions and /
  * skills, the readiness check, the provider account (the server picks the
- * creator's own, as the web default) and "New project...".
+ * creator's own, as the web default), "New project..." and the keyboard
+ * shortcut (Return is a newline, as the phone's session composer).
  */
 export default function NewQuickTaskScreen() {
   const router = useRouter();
@@ -67,7 +69,7 @@ export default function NewQuickTaskScreen() {
     repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.find((candidate) => candidate._id === lastRepoId) ?? repos?.[0];
   // The linked draft, once the repo's drafts are in; a removed one opens a blank form.
   const linkedDrafts = useQuery(api.agentTasks.listDrafts, params.draftId && first ? { repoId: first._id } : "skip");
-  const initialDraft = linkedDrafts === undefined ? undefined : visibleDrafts(linkedDrafts).find((draft) => draft._id === params.draftId);
+  const initialDraft = linkedDrafts?.find((draft) => draft._id === params.draftId);
   if (repos === undefined || (params.draftId && first && linkedDrafts === undefined)) {
     return <Screen onBack={leave}><CenteredSpinner label="Loading repos" /></Screen>;
   }
@@ -103,8 +105,6 @@ function NewQuickTaskForm({
   const theme = EVA_THEME[scheme];
   const insets = useSafeAreaInsets();
   const simpleView = useSimpleView();
-  // The description field, for Return on the title: focus is imperative.
-  const descriptionRef = useRef<TextInput>(null);
   const [picked, setPicked] = useState<Id<"githubRepos">>(initialRepo._id);
   const repo = repos.find((candidate) => candidate._id === picked) ?? initialRepo;
   const repoArgs = { repoId: repo._id };
@@ -114,17 +114,14 @@ function NewQuickTaskForm({
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const draftRows = useQuery(api.agentTasks.listDrafts, repoArgs);
-  // `remove` is a soft delete: a removed draft stays on disk until the list drops it.
-  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
+  const drafts = useQuery(api.agentTasks.listDrafts, repoArgs);
   const navigation = useNavigation();
 
-  const [title, setTitle] = useState(initialDraft?.title ?? "");
-  const [description, setDescription] = useState(initialDraft?.description ?? "");
+  // The one prompt: the task's description, and its title once the server takes the first line.
+  const [prompt, setPrompt] = useState(initialDraft ? draftPrompt(initialDraft) : "");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
   const [tags, setTags] = useState<string[]>(initialDraft?.tags ?? []);
-  const [startNow, setStartNow] = useState(false);
   const attachments = useAttachments();
   // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
   const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(
@@ -139,7 +136,8 @@ function NewQuickTaskForm({
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(
     initialDraft?.baseBranch ? { repoId: initialRepo._id, branch: initialDraft.baseBranch } : null,
   );
-  const [saving, setSaving] = useState(false);
+  // Which button is saving, for its spinner; null when idle.
+  const [saving, setSaving] = useState<"save" | "run" | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(initialDraft?._id ?? null);
 
   // A task in a project takes the project's base branch (web `useEffectiveProject`).
@@ -153,12 +151,11 @@ function NewQuickTaskForm({
 
   // The fields a draft keeps (the web `handleClose`), or null when there is nothing to keep.
   const draftToSave =
-    !saving && (title.trim() || description.trim())
+    saving === null && prompt.trim()
       ? {
           id: activeDraftId ?? undefined,
           repoId: repo._id,
-          title: title.trim() || undefined,
-          description: description.trim() || undefined,
+          description: prompt.trim(),
           baseBranch: branchLocked ? undefined : baseBranch,
           projectId,
         }
@@ -177,7 +174,7 @@ function NewQuickTaskForm({
 
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...(tasks ?? []).flatMap((task) => task.tags ?? [])])].sort();
-  const canSubmit = !saving && title.trim().length > 0 && displayBranch.length > 0;
+  const canSubmit = saving === null && prompt.trim().length > 0 && displayBranch.length > 0;
 
   const changeRepo = (repoId: Id<"githubRepos">) => {
     setPicked(repoId);
@@ -189,16 +186,14 @@ function NewQuickTaskForm({
 
   // The web `loadDraft`: its fields into the form; Create then promotes it.
   const loadDraft = (draft: QuickTaskDraft) => {
-    setTitle(draft.title);
-    setDescription(draft.description ?? "");
+    setPrompt(draftPrompt(draft));
     setPickedBranch(draft.baseBranch ? { repoId: repo._id, branch: draft.baseBranch } : null);
     setActiveDraftId(draft._id);
     setProjectId(draft.projectId);
     setTags(draft.tags ?? []);
   };
   const resetForm = () => {
-    setTitle("");
-    setDescription("");
+    setPrompt("");
     setPriority(undefined);
     setAssignedTo(undefined);
     setTags([]);
@@ -207,20 +202,18 @@ function NewQuickTaskForm({
     setPickedTraits({});
     setPickedBranch(null);
     setActiveDraftId(null);
-    setStartNow(false);
     attachments.clear();
   };
 
-  const submit = async () => {
+  const submit = async (run: boolean) => {
     if (!canSubmit) return;
     if (attachments.uploading) {
       toast.error("Wait for the attachments to upload");
       return;
     }
-    setSaving(true);
+    setSaving(run ? "run" : "save");
     const fields = {
-      title: title.trim(),
-      description: description.trim() || undefined,
+      description: prompt.trim(),
       baseBranch: branchLocked ? undefined : baseBranch,
       model,
       reasoningLevel: traits.effortLevel,
@@ -230,7 +223,7 @@ function NewQuickTaskForm({
       tags: tags.length > 0 ? tags : undefined,
       assignedTo,
       attachmentStorageIds: attachments.storageIds.length > 0 ? attachments.storageIds : undefined,
-      approved: startNow,
+      run,
     };
     try {
       // As the web: a loaded draft becomes the task (the draft keeps its project; priority is not a draft field).
@@ -239,7 +232,7 @@ function NewQuickTaskForm({
       leave();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't create task");
-      setSaving(false);
+      setSaving(null);
     }
   };
 
@@ -249,27 +242,14 @@ function NewQuickTaskForm({
       <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
           <RepoPicker repos={repos} value={repo} onChange={changeRepo} />
-          {/* Web: a borderless `text-base font-medium` title over a borderless description, min 160 high. */}
+          {/* Web: one borderless prompt, min 160 high. */}
           <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Task title"
+            value={prompt}
+            onChangeText={setPrompt}
+            placeholder="Describe the task…"
             placeholderTextColor={theme.mutedForeground}
-            accessibilityLabel="Task title"
+            accessibilityLabel="Describe the task"
             autoFocus
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => descriptionRef.current?.focus()}
-            className="font-instrument-sans-medium min-h-11 text-base"
-            style={{ color: theme.foreground, fontWeight: "500" }}
-          />
-          <TextInput
-            ref={descriptionRef}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Add description..."
-            placeholderTextColor={theme.mutedForeground}
-            accessibilityLabel="Description"
             multiline
             textAlignVertical="top"
             className="font-instrument-sans min-h-40 py-2 text-base"
@@ -310,7 +290,7 @@ function NewQuickTaskForm({
             <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
           </View>
         </ScrollView>
-        {/* Web footer: the Drafts menu on the start side, Create Task on the end. */}
+        {/* Web footer: the Drafts menu on the start side, Save and Save and Run on the end. */}
         <View className="flex-row items-center gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
           <DraftsMenu
             drafts={drafts}
@@ -319,17 +299,14 @@ function NewQuickTaskForm({
               if (draftId === activeDraftId) resetForm();
             }}
           />
-          {projectId ? (
-            <View className="flex-row items-center gap-2">
-              <Checkbox checked={startNow} onCheckedChange={setStartNow} accessibilityLabel="Start now" />
-              <Text variant="muted" onPress={() => setStartNow(!startNow)}>
-                Start now
-              </Text>
-            </View>
-          ) : null}
           <View className="min-w-0 flex-1">
-            <Button onPress={() => void submit()} disabled={!canSubmit} loading={saving}>
-              Create Task
+            <Button variant="secondary" onPress={() => void submit(false)} disabled={!canSubmit} loading={saving === "save"}>
+              Save
+            </Button>
+          </View>
+          <View className="min-w-0 flex-1">
+            <Button onPress={() => void submit(true)} disabled={!canSubmit} loading={saving === "run"}>
+              Save and Run
             </Button>
           </View>
         </View>

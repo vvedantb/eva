@@ -308,18 +308,25 @@ describe("resolving the chat an MCP caller named", () => {
     ).toBeNull();
 
     await f.t.run(async (ctx) => {
-      const deletedAt = Date.now();
-      await ctx.db.patch(f.sessionId, { deletedAt });
-      await ctx.db.patch(f.taskId, { deletedAt });
-      await ctx.db.patch(f.projectId, { deletedAt });
+      const at = Date.now();
+      await ctx.db.patch(f.sessionId, { deletedAt: at });
+      await ctx.db.patch(f.taskId, { archivedAt: at });
+      await ctx.db.patch(f.projectId, { archivedAt: at });
     });
-    for (const id of [f.sessionId, f.taskId, f.projectId]) {
+    expect(
+      await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
+        userId: f.ownerUserId,
+        id: f.sessionId,
+      }),
+    ).toBeNull();
+    // An archived task or project still resolves, like an archived session.
+    for (const id of [f.taskId, f.projectId]) {
       expect(
         await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
           userId: f.ownerUserId,
           id,
         }),
-      ).toBeNull();
+      ).not.toBeNull();
     }
   });
 

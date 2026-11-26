@@ -94,6 +94,7 @@ import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
+import { ArchivedBar } from "@/ui/ArchivedBar";
 
 /** A quick-task row (`getAllTasks`) or a project task row (`listByProject`): one validator, the wider inferred type. */
 type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
@@ -112,9 +113,12 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * the unread dot) and, when the web shows it, Run Eva. The title and the
  * description edit in place while the web allows it (`canEditTaskText`).
  * Routes as `/quick-task/<taskId>?repo=<repoId>&numId=<numId>`; the task
- * resolves through the repo's quick tasks, so its id keeps its table type. A
- * project task is never a quick task: it resolves by its number
- * (`getByNumId`), then through its project's list (`listByProject`).
+ * resolves through the repo's quick tasks (live, then archived), so its id
+ * keeps its table type. An archived task opens read-only under its
+ * `ArchivedBar`. A project task is never a quick task: it resolves by its number
+ * (`getByNumId`), then through its project's list (`listByProject`, the
+ * archived one for a task archived on its own). A task of an archived project
+ * is read-only too, without the bar.
  */
 export default function QuickTaskScreen() {
   const router = useRouter();
@@ -126,17 +130,28 @@ export default function QuickTaskScreen() {
     api.agentTasks.getAllTasks,
     repo ? { repoId: repo._id } : "skip",
   );
-  const quickTask = tasks?.find((candidate) => candidate._id === params.taskId);
+  const liveTask = tasks?.find((candidate) => candidate._id === params.taskId);
+  const archivedTasks = useQuery(
+    api.agentTasks.listArchived,
+    repo && tasks !== undefined && liveTask === undefined ? { repoId: repo._id } : "skip",
+  );
+  const quickTask = liveTask ?? archivedTasks?.find((candidate) => candidate._id === params.taskId);
   const numId = Number(params.numId);
-  const byNumber = repo !== undefined && tasks !== undefined && quickTask === undefined && Number.isInteger(numId);
+  const byNumber =
+    repo !== undefined && archivedTasks !== undefined && quickTask === undefined && Number.isInteger(numId);
   const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
   const projectId = numbered?._id === params.taskId ? numbered.projectId : undefined;
-  const projectTasks = useQuery(api.agentTasks.listByProject, projectId ? { projectId } : "skip");
+  // A project task archived on its own is in its project's archived list.
+  const projectTasks = useQuery(
+    api.agentTasks.listByProject,
+    projectId ? { projectId, archived: numbered?.archivedAt !== undefined } : "skip",
+  );
   const task = quickTask ?? projectTasks?.find((candidate) => candidate._id === params.taskId);
 
   const loading =
     repos === undefined ||
     (repo !== undefined && tasks === undefined) ||
+    (liveTask === undefined && tasks !== undefined && archivedTasks === undefined) ||
     (byNumber && numbered === undefined) ||
     (projectId !== undefined && projectTasks === undefined);
   if (loading || !repo || !task || !tasks) {
@@ -150,7 +165,7 @@ export default function QuickTaskScreen() {
           <EmptyState
             icon={IconChecklist}
             title="Task not found"
-            description="It was deleted, or you no longer have access."
+            description="It does not exist, or you no longer have access."
           />
         )}
       </View>
@@ -183,12 +198,17 @@ function TaskOverview({
     false;
   // The web page's sandbox and git actions, leading the "…" sheet.
   const git = useTaskGitActions({ task, runCount: runs?.length ?? 0, hasActiveRun });
+  // A project archives with its tasks, so its task is read-only too.
+  const project = useQuery(api.projects.get, task.projectId ? { id: task.projectId } : "skip");
+  const archived = task.archivedAt !== undefined;
+  const readOnly = archived || project?.archivedAt !== undefined;
   const actions = useQuickTaskActions({
     repo,
     users,
     projects,
-    onDeleted: onLeave,
+    onArchived: onLeave,
     extraRows: git.rows,
+    readOnly,
   });
   const theme = EVA_THEME[useScheme()];
   const currentUserId = useQuery(api.auth.me, {});
@@ -198,7 +218,7 @@ function TaskOverview({
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  const editable = runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const editable = !readOnly && runs !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -230,6 +250,7 @@ function TaskOverview({
         onBack={onLeave}
         headerRight={<HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
       />
+      {archived ? <ArchivedBar onUnarchive={() => actions.unarchive(task._id)} /> : null}
       {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
       <KeyboardAwareScrollView
         ref={scroll}
@@ -255,9 +276,9 @@ function TaskOverview({
         />
         {scheduledAt ? (
           <Pressable
-            accessibilityRole={task.status === "todo" ? "button" : "text"}
-            accessibilityHint={task.status === "todo" ? "Changes or removes the schedule" : undefined}
-            disabled={task.status !== "todo"}
+            accessibilityRole={task.status === "todo" && !readOnly ? "button" : "text"}
+            accessibilityHint={task.status === "todo" && !readOnly ? "Changes or removes the schedule" : undefined}
+            disabled={task.status !== "todo" || readOnly}
             onPress={() => setScheduling(true)}
             hitSlop={{ top: 8, bottom: 8 }}
             className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 active:opacity-70"
@@ -301,8 +322,10 @@ function TaskOverview({
           task={task}
           users={users}
           projects={projects}
+          taskProject={project ?? undefined}
           allTags={allTags}
           update={update}
+          readOnly={readOnly}
         />
 
         <FieldGroup title="Activity">
@@ -316,6 +339,7 @@ function TaskOverview({
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
+              readOnly={readOnly}
               onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
@@ -331,7 +355,7 @@ function TaskOverview({
         </FieldGroup>
         <View className="mt-4">
           {/* Once the person is known: presence heartbeats need their id. */}
-          {currentUserId ? (
+          {currentUserId && !readOnly ? (
             <CommentComposer
               currentUserId={currentUserId}
               taskId={task._id}
@@ -369,30 +393,39 @@ type UpdateTask = (
   failure: string,
 ) => void;
 
-/** The web Properties pane (`StatusFieldsSection`): a row per field; a tap opens its sheet, and a pick writes at once. */
+/**
+ * The web Properties pane (`StatusFieldsSection`): a row per field; a tap
+ * opens its sheet, and a pick writes at once. Read-only (archived), the rows
+ * only show their values.
+ */
 function TaskProperties({
   task,
   users,
   projects,
   allTags,
   update,
+  readOnly,
+  taskProject,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** The task's own project (`projects.get`): it names an archived project, which the live list leaves out. */
+  taskProject: FunctionReturnType<typeof api.projects.get> | undefined;
   allTags: string[];
   update: UpdateTask;
+  readOnly: boolean;
 }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const [field, setField] = useState<Field | null>(null);
-  const openField = (next: Field) => () => setField(next);
+  const openField = (next: Field) => (readOnly ? undefined : () => setField(next));
   const reviewer = task.assignedTo
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
   const project = task.projectId
-    ? projects?.find((entry) => entry._id === task.projectId)
+    ? (taskProject ?? projects?.find((entry) => entry._id === task.projectId))
     : undefined;
   const status =
     task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
@@ -873,6 +906,7 @@ function TaskDock({
   const [busy, setBusy] = useState(false);
   const canRun =
     task.projectId === undefined &&
+    task.archivedAt === undefined &&
     runs !== undefined &&
     ((task.status === "todo" && runs.length === 0) ||
       (task.status === "in_progress" && !hasActiveRun));

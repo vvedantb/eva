@@ -9,7 +9,7 @@ import {
 } from "./functions";
 import { createNotification } from "./notifications";
 import { entityHref } from "@eva/shared";
-import { isEntityDeleted } from "./numId";
+import { isEntityArchived, isEntityDeleted } from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import {
   drainSessionChatQueues,
@@ -249,8 +249,8 @@ async function loadSource(
       title: task.title,
       ownerUserId: task.createdBy,
       lastModel: undefined,
-      deleted: isEntityDeleted(task),
-      archived: false,
+      deleted: false,
+      archived: isEntityArchived(task),
     };
   }
   const id = ctx.db.normalizeId("projects", sourceId);
@@ -266,8 +266,8 @@ async function loadSource(
     title: project.title,
     ownerUserId: project.userId,
     lastModel: undefined,
-    deleted: isEntityDeleted(project),
-    archived: false,
+    deleted: false,
+    archived: isEntityArchived(project),
   };
 }
 

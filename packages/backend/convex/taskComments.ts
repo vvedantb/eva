@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel";
 import { createNotification, truncateNotificationText } from "./notifications";
 import { ensureSubscribed, notifySubscribers } from "./taskSubscribers";
 import {
+  assertTaskNotArchived,
   authQuery,
   authMutation,
   hasTaskAccess,
@@ -72,6 +73,7 @@ export const create = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");
     }
+    await assertTaskNotArchived(ctx.db, task);
 
     const parent = args.parentId ? await ctx.db.get(args.parentId) : null;
     if (args.parentId && (!parent || parent.taskId !== args.taskId)) {
@@ -198,6 +200,7 @@ export const update = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Comment not found");
     }
+    await assertTaskNotArchived(ctx.db, task);
     await ctx.db.patch(args.id, { content: args.content });
     return null;
   },
@@ -222,6 +225,7 @@ export const remove = authMutation({
     if (comment.deletedAt !== undefined) {
       throw new Error("Comment already deleted");
     }
+    await assertTaskNotArchived(ctx.db, task);
     await ctx.db.patch(args.id, {
       deletedAt: Date.now(),
       content: DELETED_COMMENT_PLACEHOLDER,

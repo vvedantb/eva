@@ -116,7 +116,7 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
 /** The web row action, by group: Reply, Open PR, Reject + Approve, Retry. */
 function NeedsYouAction({ row, onReply }: { row: NeedsYouRow; onReply: () => void }) {
   const approve = useMutation(api.buildWorkflow.approveProjectTasks);
-  const remove = useMutation(api.agentTasks.remove);
+  const archive = useMutation(api.agentTasks.archive);
   const retry = useMutation(api.agentTasks.startExecution);
   if (row.group === "question") {
     return (
@@ -142,7 +142,7 @@ function NeedsYouAction({ row, onReply }: { row: NeedsYouRow; onReply: () => voi
           size="sm"
           variant="outline"
           fullWidth={false}
-          onPress={() => remove({ id: taskId }).catch(() => toast.error("Couldn't reject the task", { id: "needs-you-reject" }))}
+          onPress={() => archive({ id: taskId }).catch(() => toast.error("Couldn't reject the task", { id: "needs-you-reject" }))}
         >
           Reject
         </Button>

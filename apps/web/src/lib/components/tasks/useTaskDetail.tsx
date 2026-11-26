@@ -38,10 +38,6 @@ function deriveTaskRowFields(
       task?.baseBranch?.trim() ||
       repoForTask?.defaultBaseBranch?.trim() ||
       FALLBACK_GIT_BASE_BRANCH,
-    devServerCommandLabel:
-      sandbox.devCommand?.trim() ||
-      repoForTask?.devCommand?.trim() ||
-      "Auto-detected from package.json (e.g. pnpm run dev)",
     sandboxId: sandbox.sandboxId,
   };
 }
@@ -67,6 +63,13 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     api.projects.list,
     task?.repoId ? { repoId: task.repoId } : "skip",
   );
+  // A project archives with its tasks, so its task is read-only too.
+  const project = useQuery(
+    api.projects.get,
+    task?.projectId ? { id: task.projectId } : "skip",
+  );
+  const isArchived =
+    task?.archivedAt !== undefined || project?.archivedAt !== undefined;
   const allComments = useQuery(api.taskComments.listByTask, { taskId });
   const comments = allComments?.filter((c) => c.authorId);
   const taskActivity = useQuery(api.taskActivity.listByTask, { taskId });
@@ -84,6 +87,7 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     hasActiveRun,
     hasRuns,
     isProjectTask,
+    isArchived,
     users,
     projects,
     comments,
@@ -99,6 +103,7 @@ function deriveRunSummary({
   task,
   runs,
   hasActiveRun,
+  isArchived,
   comments,
   users,
   projects,
@@ -110,7 +115,7 @@ function deriveRunSummary({
     (comments !== undefined && comments.length > 0);
   return {
     status,
-    canEditTaskText: canEditTaskText(status, hasActiveRun),
+    canEditTaskText: !isArchived && canEditTaskText(status, hasActiveRun),
     latestPrUrl,
     latestPrError: runs?.find((r) => r.prError)?.prError,
     latestDeployment: runs?.find((r) => r.deploymentStatus),
@@ -138,7 +143,6 @@ export function useTaskDetail(
     taskSession: data.taskSession,
     hasRuns: data.hasRuns,
     routing,
-    setExecutionError: execution.setExecutionError,
   });
   const tab = useTaskDetailTab(routing);
 
@@ -149,6 +153,8 @@ export function useTaskDetail(
     ...tab,
     ...execution,
     ...sandbox,
+    // An archived task opens read-only: no sandbox start.
+    canStartSandbox: sandbox.canStartSandbox && !data.isArchived,
     layoutGridClass: "grid-cols-1 md:grid-cols-[1fr_1fr_200px]",
     modalWidthClass: "max-w-[calc(100vw-2rem)] md:max-w-6xl",
   };

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import {
+  assertProjectNotArchived,
   authMutation,
   getProjectWithAccess,
   normalizeIdOrThrow,
@@ -46,10 +47,8 @@ export const approveProjectTasks = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
+    assertProjectNotArchived(
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
     );
     await approveTasks(ctx, args.projectId, args.taskIds);
     return null;

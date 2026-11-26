@@ -25,7 +25,7 @@ export interface ProjectsSelection {
  *
  * `existingIds` is every project currently in the list (before filtering, so a
  * filter change never silently drops a selection); ids that vanish from it —
- * deleted elsewhere, moved out of the repo — are pruned during render.
+ * archived elsewhere, moved out of the repo — are pruned during render.
  */
 export function useProjectsSelection(
   existingIds: ReadonlyArray<Id<"projects">>,

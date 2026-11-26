@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type { FunctionArgs } from "convex/server";
 import type { Id } from "../convex/_generated/dataModel";
@@ -18,7 +18,6 @@ import {
   groupByTaskStatus,
   runAllPlan,
   startAll,
-  visibleDrafts,
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
@@ -582,8 +581,7 @@ describe("mobile api", () => {
       // What the phone form sends: the web `createQuickTask` with its picks.
       const taskId = await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,
-        title: "Fix the footer",
-        description: "It overlaps the tab bar",
+        description: "Fix the footer\nIt overlaps the tab bar",
         baseBranch: "staging",
         model: "claude:opus",
         reasoningLevel: "low",
@@ -592,6 +590,8 @@ describe("mobile api", () => {
       });
       const task = await t.run((ctx) => ctx.db.get(taskId));
       expect(task).toMatchObject({
+        // The prompt's first line, until the generated title replaces it.
+        title: "Fix the footer",
         status: "todo",
         baseBranch: "staging",
         model: "claude:opus",
@@ -603,7 +603,7 @@ describe("mobile api", () => {
       // A task in a project is not in the list the web opens with.
       await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,
-        title: "Billing step",
+        description: "Billing step",
         projectId: ids.projectId,
       });
       const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
@@ -625,7 +625,7 @@ describe("mobile api", () => {
     "Run All on the Quick Tasks list starts the user's own To Do tasks with the web startExecution and skips a teammate's",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const mine = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, title: "Fix the footer" });
+      const mine = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, description: "Fix the footer" });
       const theirs = await t.run(async (ctx) => {
         const teammate = await ctx.db.insert("users", {});
         return await ctx.db.insert("agentTasks", {
@@ -660,20 +660,19 @@ describe("mobile api", () => {
       // What the phone saves when the form is left with text in it: the web `saveDraft` fields.
       const draftId = await asUser.mutation(api.agentTasks.saveDraft, {
         repoId: ids.repoId,
-        title: "Half an idea",
-        description: "More later",
+        description: "Half an idea\nMore later",
         baseBranch: "staging",
       });
-      // Left again after an edit: the same draft, not a second one.
-      await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, title: "Half an idea, v2" });
-      const drafts = visibleDrafts(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId }));
+      // Left again after an edit: the same draft, not a second one. Its row shows the prompt's first line.
+      await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, description: "Half an idea, v2\nMore later" });
+      const drafts = await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId });
       expect(drafts.map((draft) => draft.title)).toEqual(["Half an idea, v2"]);
       // Drafts are not on the list.
       const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
       expect(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()).map((task) => task.title)).not.toContain(
         "Half an idea, v2",
       );
-      await asUser.mutation(api.agentTasks.activateDraft, { id: draftId, title: "Whole idea", tags: ["ui"] });
+      await asUser.mutation(api.agentTasks.activateDraft, { id: draftId, description: "Whole idea", tags: ["ui"] });
       expect(await t.run((ctx) => ctx.db.get(draftId))).toMatchObject({ status: "todo", title: "Whole idea" });
       expect(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId })).toEqual([]);
     },
@@ -774,42 +773,88 @@ describe("mobile api", () => {
   );
 
   test(
-    "projects.create makes one kind of project whatever skipPlanning an old phone sends: it plans in its coordinator chat, with no interview",
+    "projects.create titles the project from its prompt and plans in its coordinator chat, with no interview",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const tasksOnly = await asUser.mutation(api.projects.create, {
+      const offline = await asUser.mutation(api.projects.create, {
         repoId: ids.repoId,
-        title: "Offline drafts",
-        rawInput: "Keep a draft when the network drops.",
+        rawInput: "Offline drafts\nKeep a draft when the network drops.",
         baseBranch: "main",
         priority: "high",
-        skipPlanning: true,
       });
-      const interview = await asUser.mutation(api.projects.create, {
+      const copy = await asUser.mutation(api.projects.create, {
         repoId: ids.repoId,
-        title: "Copy pass",
         rawInput: "Shorter onboarding copy.",
         baseBranch: "main",
-        skipPlanning: false,
       });
       const listed = await asUser.query(api.projects.list, { repoId: ids.repoId });
       const byId = new Map(listed.map((project) => [project._id, project]));
-      expect(byId.get(tasksOnly)).toMatchObject({
-        description: "Keep a draft when the network drops.",
+      // The description is what the coordinator's first turn carries.
+      expect(byId.get(offline)).toMatchObject({
+        title: "Offline drafts",
+        description: "Offline drafts\nKeep a draft when the network drops.",
         priority: "high",
         baseBranch: "main",
         userId: ids.userId,
       });
-      // The description is what the coordinator's first turn carries.
-      expect(byId.get(interview)).toMatchObject({
+      expect(byId.get(copy)).toMatchObject({
+        title: "Shorter onboarding copy.",
         description: "Shorter onboarding copy.",
       });
       // No stored phase and no project branch: the status is derived.
-      expect(byId.get(tasksOnly)).not.toHaveProperty("phase");
-      expect(byId.get(tasksOnly)).not.toHaveProperty("branchName");
+      expect(byId.get(offline)).not.toHaveProperty("phase");
+      expect(byId.get(offline)).not.toHaveProperty("branchName");
       // Each takes the repo's next project number.
-      const numbers = await t.run(async (ctx) => [(await ctx.db.get(tasksOnly))?.numId, (await ctx.db.get(interview))?.numId]);
+      const numbers = await t.run(async (ctx) => [(await ctx.db.get(offline))?.numId, (await ctx.db.get(copy))?.numId]);
       expect(new Set(numbers).size).toBe(2);
+      // Save sends nothing: the project has no chat yet.
+      expect((await asUser.query(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: offline } }))?.session).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "projects.create with run sends the prompt once, as the first message in the coordinator chat",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const prompt = "Offline drafts\nKeep a draft when the network drops.";
+      const projectId = await asUser.mutation(api.projects.create, { repoId: ids.repoId, rawInput: prompt, run: true });
+      const chatId = await ownedChatId(asUser, { kind: "project", projectId });
+      expect(await sent(t, chatId)).toEqual([{ content: prompt, model: DEFAULT_AI_MODEL, userId: ids.userId }]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a generated title replaces only the first-line title: a rename made first stays",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const kept = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, description: "fix footer overlap" });
+      const renamed = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, description: "fix header overlap" });
+      await asUser.mutation(api.agentTasks.update, { id: renamed, title: "Header spacing" });
+      const project = await asUser.mutation(api.projects.create, { repoId: ids.repoId, rawInput: "offline drafts" });
+      await asUser.mutation(api.projects.update, { id: project, title: "Drafts offline" });
+      await t.mutation(internal._shared.ownerTitle.applyGeneratedTitle, {
+        owner: { kind: "task", taskId: kept },
+        fallbackTitle: "fix footer overlap",
+        title: "Fix footer overlapping tab bar",
+      });
+      await t.mutation(internal._shared.ownerTitle.applyGeneratedTitle, {
+        owner: { kind: "task", taskId: renamed },
+        fallbackTitle: "fix header overlap",
+        title: "Fix header overlap",
+      });
+      await t.mutation(internal._shared.ownerTitle.applyGeneratedTitle, {
+        owner: { kind: "project", projectId: project },
+        fallbackTitle: "offline drafts",
+        title: "Offline draft saving",
+      });
+      const titles = await t.run(async (ctx) => [
+        (await ctx.db.get(kept))?.title,
+        (await ctx.db.get(renamed))?.title,
+        (await ctx.db.get(project))?.title,
+      ]);
+      expect(titles).toEqual(["Fix footer overlapping tab bar", "Header spacing", "Drafts offline"]);
     },
     TIMEOUT_MS,
   );
@@ -827,9 +872,9 @@ describe("mobile api", () => {
         return repo._id;
       });
       await expect(
-        asUser.mutation(api.projects.create, { repoId: strangerRepoId, title: "Nope", rawInput: "Nope", skipPlanning: true }),
+        asUser.mutation(api.projects.create, { repoId: strangerRepoId, rawInput: "Nope" }),
       ).rejects.toThrow();
-      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_deleted", (q) => q.eq("repoId", strangerRepoId).eq("deletedAt", undefined)).collect())).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_archived", (q) => q.eq("repoId", strangerRepoId).eq("archivedAt", undefined)).collect())).toEqual([]);
     },
     TIMEOUT_MS,
   );

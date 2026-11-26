@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { aiModelValidator } from "../validators";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
@@ -26,11 +26,14 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary } from "./runSummary";
+import { startTaskExecution } from "./execution";
+import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
+import { titleFromPrompt } from "@eva/shared";
 
 /**
- * The user's drafts in a repo. `deletedAt` is in the range so a soft-deleted
- * draft does not linger in the quick-task modal (or the Drafts page) after
- * Remove; `createdBy` is in the range so other users' drafts are never read.
+ * The user's drafts in a repo. A draft is never archived (`deleteDraft`
+ * deletes it), so `archivedAt` is only the index prefix; `createdBy` is in the
+ * range so other users' drafts are never read.
  */
 function myLiveDrafts(
   db: QueryCtx["db"],
@@ -39,11 +42,11 @@ function myLiveDrafts(
 ) {
   return db
     .query("agentTasks")
-    .withIndex("by_repo_status_deleted_and_creator", (q) =>
+    .withIndex("by_repo_status_archived_and_creator", (q) =>
       q
         .eq("repoId", repoId)
         .eq("status", "draft")
-        .eq("deletedAt", undefined)
+        .eq("archivedAt", undefined)
         .eq("createdBy", userId),
     )
     .collect();
@@ -70,12 +73,15 @@ export const countDrafts = authQuery({
   },
 });
 
-/** Creates or updates a draft task. Returns the task ID. */
+/**
+ * Creates or updates a draft task from the form's prompt (`description`).
+ * Returns the task ID. Its title is the prompt's first line, which the
+ * Drafts lists show.
+ */
 export const saveDraft = authMutation({
   args: {
     id: v.optional(v.id("agentTasks")),
     repoId: v.id("githubRepos"),
-    title: v.optional(v.string()),
     description: v.optional(v.string()),
     baseBranch: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
@@ -103,7 +109,7 @@ export const saveDraft = authMutation({
       )
         throw new Error("Draft not found");
       await ctx.db.patch(args.id, {
-        title: args.title ?? "",
+        title: titleFromPrompt(args.description ?? ""),
         description: args.description,
         baseBranch: args.baseBranch,
         attachmentStorageIds: args.attachmentStorageIds,
@@ -113,7 +119,7 @@ export const saveDraft = authMutation({
     }
 
     const draftId = await ctx.db.insert("agentTasks", {
-      title: args.title ?? "",
+      title: titleFromPrompt(args.description ?? ""),
       description: args.description,
       attachmentStorageIds: args.attachmentStorageIds,
       repoId: args.repoId,
@@ -131,12 +137,15 @@ export const saveDraft = authMutation({
   },
 });
 
-/** Promotes a draft task to "todo" status so it can be executed. */
+/**
+ * Promotes a draft task to "todo" from the form's prompt, as
+ * `createQuickTask`: the title comes from the prompt, and `run` ("Save and
+ * Run") approves a project task or starts any other task now.
+ */
 export const activateDraft = authMutation({
   args: {
     id: v.id("agentTasks"),
-    title: v.string(),
-    description: v.optional(v.string()),
+    description: v.string(),
     baseBranch: v.optional(v.string()),
     model: v.optional(aiModelValidator),
     providerAccountId: v.optional(
@@ -146,8 +155,7 @@ export const activateDraft = authMutation({
     tags: v.optional(v.array(v.string())),
     assignedTo: v.optional(v.id("users")),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** As `createQuickTask`: a project task is approved unless this is false. */
-    approved: v.optional(v.boolean()),
+    run: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -161,7 +169,8 @@ export const activateDraft = authMutation({
       throw new Error("Draft not found");
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
-    const approved = task.projectId !== undefined && args.approved !== false;
+    const approved = task.projectId !== undefined && args.run === true;
+    const { title } = initialTitle(undefined, args.description);
 
     const providerAccountId =
       args.providerAccountId === undefined
@@ -173,7 +182,7 @@ export const activateDraft = authMutation({
           );
 
     await ctx.db.patch(args.id, {
-      title: args.title,
+      title,
       description: args.description,
       baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
       model: args.model,
@@ -189,9 +198,15 @@ export const activateDraft = authMutation({
       assignedTo: args.assignedTo,
       attachmentStorageIds: args.attachmentStorageIds,
     });
+    await scheduleGeneratedTitle(
+      ctx,
+      { kind: "task", taskId: args.id },
+      args.description,
+      title,
+    );
     await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
       taskId: args.id,
-      title: args.title,
+      title,
       description: args.description,
       existingTags: normalizeTaskTags(args.tags) ?? [],
     });
@@ -202,7 +217,7 @@ export const activateDraft = authMutation({
       await createNotification(ctx, {
         userId: args.assignedTo,
         type: "task_assigned",
-        title: `Assigned: "${args.title}"`,
+        title: `Assigned: "${title}"`,
         repoId: task.repoId,
         projectId: task.projectId,
         taskId: args.id,
@@ -222,7 +237,48 @@ export const activateDraft = authMutation({
     }
     if (task.projectId) {
       await onProjectTasksChanged(ctx, task.projectId);
+    } else if (args.run) {
+      await startTaskExecution(ctx, args.id);
     }
+    return null;
+  },
+});
+
+/**
+ * Deletes a draft row with the run summary and subscription `saveDraft` made.
+ * A draft is unsent text: it is deleted, never archived.
+ */
+async function deleteDraftRow(
+  ctx: MutationCtx,
+  draftId: Id<"agentTasks">,
+): Promise<void> {
+  const runSummaries = await ctx.db
+    .query("agentTaskRunSummaries")
+    .withIndex("by_task", (q) => q.eq("taskId", draftId))
+    .collect();
+  const subscribers = await ctx.db
+    .query("taskSubscribers")
+    .withIndex("by_task", (q) => q.eq("taskId", draftId))
+    .collect();
+  for (const row of [...runSummaries, ...subscribers]) {
+    await ctx.db.delete(row._id);
+  }
+  await ctx.db.delete(draftId);
+}
+
+/** Deletes one of the user's drafts. */
+export const deleteDraft = authMutation({
+  args: { id: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const draft = await ctx.db.get(args.id);
+    if (
+      !draft ||
+      draft.createdBy !== ctx.userId ||
+      draft.status !== "draft"
+    )
+      throw new Error("Draft not found");
+    await deleteDraftRow(ctx, args.id);
     return null;
   },
 });

@@ -74,14 +74,13 @@ export function TaskHeaderMenu({
     users: users ?? undefined,
     currentUserId: currentUserId ?? undefined,
     projects: projects ?? undefined,
-    // Deleted or moved: this page has nothing left to show.
+    archived: task.archivedAt !== undefined,
+    // Archived or moved: back to the list, as a session archive does.
     onRemoved: () => {
       void navigate({ to: toInternalRepoHref(tasksPath) });
     },
   });
-  const { showResolveConflicts, hasSandboxCommandItems } =
-    sandboxItems.visibility;
-  const hasCommands = showResolveConflicts || hasSandboxCommandItems;
+  const hasCommands = sandboxItems.visibility.showResolveConflicts;
   const recapChat = useRecapChat(chatId);
 
   return (

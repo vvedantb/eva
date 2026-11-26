@@ -74,7 +74,6 @@ export function createAnnotationTask(
     const [taskId, meUserId, creatorInitials] = await Promise.all([
       client.mutation(api.agentTasks.createQuickTask, {
         repoId,
-        title: payload.title.slice(0, 100),
         description,
       }),
       client.query(api.auth.me, {}),
@@ -115,7 +114,6 @@ export function runAllAnnotations(
       try {
         const taskId = await client.mutation(api.agentTasks.createQuickTask, {
           repoId,
-          title: pin.text.slice(0, 100) || `Annotation #${pin.number}`,
           description: buildPinDescription(pin, payload.pageUrl),
         });
         await client.mutation(api.agentTasks.startExecution, { id: taskId });
@@ -159,7 +157,6 @@ export function addToProject(
       try {
         const id = await client.mutation(api.agentTasks.createQuickTask, {
           repoId,
-          title: pin.text.slice(0, 100) || `Annotation #${pin.number}`,
           description: buildPinDescription(pin, payload.pageUrl),
         });
         taskIds.push(id);
