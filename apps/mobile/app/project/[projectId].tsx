@@ -34,9 +34,9 @@ type Tab = "overview" | "coordinator" | "documents";
  * the phone chat screen (`/chat/<projectId>`), as embedding it would fork
  * the chat screen: "Chat" in the bottom bar opens it, with the web unread
  * dot; a project has no closed state, so it always shows. The task list's
- * "+" adds a task to Triage, or starts it now. The "…" sheet is led by the
- * web's sandbox actions
- * (`useProjectGitActions`); the coordinator starts approved tasks. Not here
+ * "+" opens that chat too: work goes in through Eva. The "…" sheet is led by
+ * the web's sandbox actions
+ * (`useProjectGitActions`); the coordinator starts the tasks. Not here
  * from the web: the sandbox preview, files and review panes. An archived
  * project (found in `projects.listArchived`) opens read-only under its
  * `ArchivedBar`.

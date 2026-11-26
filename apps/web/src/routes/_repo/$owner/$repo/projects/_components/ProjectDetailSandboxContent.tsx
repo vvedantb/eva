@@ -131,6 +131,7 @@ export function ProjectDetailSandboxContent({
       selectedTaskLoading={selectedLoading}
       openTaskIds={new Set(rows.map(({ row }) => row._id))}
       onOpenTask={taskTabs.open}
+      onAskEva={taskTabs.askEva}
     />
   );
 
@@ -159,14 +160,13 @@ export function ProjectDetailSandboxContent({
     sandbox.sandbox.owner ? (
       <div className="flex h-full min-h-0 flex-col">
         <ProjectChatTabs
-          projectId={projectId}
-          repoId={repoId}
           rows={rows}
           selected={onEva ? null : taskTabs.selected}
           evaRunning={chatTurnOpen === true}
           isArchived={isArchived}
           onSelect={taskTabs.select}
           onClose={taskTabs.close}
+          onAskEva={taskTabs.askEva}
         />
         {/* Eva's chat stays alive behind a task tab: back is instant. */}
         <Activity mode={onEva ? "visible" : "hidden"}>
@@ -235,7 +235,7 @@ export function ProjectDetailSandboxContent({
         </SandboxWorkspace>
       ) : (
         // No session yet, so no sandbox tabs: the card holds only the Tasks
-        // list (feedback can wait in Triage before the coordinator ever ran).
+        // list. "+" focuses Eva's composer, the only chat there.
         layout(() => (
           <div className="flex h-full min-h-0 flex-col">
             <ProjectTasksPanel
@@ -243,6 +243,7 @@ export function ProjectDetailSandboxContent({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
+              onAskEva={taskTabs.askEva}
             />
           </div>
         ))

@@ -17,6 +17,7 @@ import type { BackgroundAgentEntry } from "./_validators/tableFields";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
 import { joinThread } from "./_messages/threadParticipants";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
+import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -396,5 +397,19 @@ export const backfillThreadParticipants = dataMigrations.define({
         await joinThread(ctx, root._id, userId, now);
       }
     }
+  },
+});
+
+/**
+ * Projects have no Triage any more: every project task still waiting there
+ * goes to the project's coordinator (Eva), which groups or starts it. One
+ * wake per project; safe to re-run. Run once after the deploy:
+ *
+ *   npx convex run dataMigrations:handTriageToEva --prod
+ */
+export const handTriageToEva = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    await handProjectTriageToEva(ctx, project);
   },
 });

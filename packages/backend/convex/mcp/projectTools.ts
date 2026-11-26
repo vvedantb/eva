@@ -74,7 +74,7 @@ export async function siblingRowRefusal(
 /**
  * Tools that exist only inside a project (`projectToolAccess` hides each
  * from every other caller): the coordinator's summary, retry, and its start
- * and merge of handed Triage items, and a child task's report up to its
+ * and merge of tasks handed to it, and a child task's report up to its
  * coordinator.
  */
 export function projectTools(
@@ -143,7 +143,7 @@ export function projectTools(
   tools.push(
     defineTool({
       name: "start_task",
-      description: `Start one Triage item a person approved and handed to you (coordinator only). It runs as its own task, with its own branch and PR. Use it for an item no open task covers; to add an item to an open task instead, use merge_task_into.`,
+      description: `Start one task that was handed to you (coordinator only). It runs as its own task, with its own branch and PR. Use it for an item no open task covers; to add an item to an open task instead, use merge_task_into.`,
       mutating: true,
       input: { ...projectTaskRefArgs },
       handler: async (ref) =>
@@ -168,7 +168,7 @@ export function projectTools(
   tools.push(
     defineTool({
       name: "merge_task_into",
-      description: `Close one Triage item a person handed to you by adding it to an open task of this project (coordinator only). First give the open task the item with send_chat_message, then call this: the item is cancelled and shows "Added to #N". The target must be open: not done, cancelled or merged.`,
+      description: `Close one task that was handed to you by adding it to an open task of this project (coordinator only). First give the open task the item with send_chat_message, then call this: the item is cancelled and shows "Added to #N". The target must be open: not done, cancelled or merged.`,
       mutating: true,
       input: {
         ...projectTaskRefArgs,

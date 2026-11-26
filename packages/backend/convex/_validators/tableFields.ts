@@ -721,21 +721,21 @@ export const agentTaskFields = {
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
   /**
-   * When this project task was approved to run: at creation for the
-   * coordinator's tasks, from Triage by a person for feedback. The project
-   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
-   * Absent on quick tasks and on project tasks waiting in Triage.
+   * When this project task was approved to run: every project task is, at
+   * creation (a person's is handed to the coordinator at the same time,
+   * `handTasksToCoordinator`). The project scheduler (`scheduleReadyTasks`)
+   * starts only approved `todo` tasks. Absent on quick tasks and drafts.
    */
   approvedAt: v.optional(v.number()),
   /**
-   * When a person's Triage approval handed this task to the coordinator
-   * (v2 PR C). While set, the scheduler never starts the task: the
+   * When this task, added by a person, an agent or feedback, was handed to
+   * the coordinator (`handTasksToCoordinator`). While set, the scheduler never starts the task: the
    * coordinator starts it (`start_task`) or adds it to an open task
    * (`merge_task_into`). Cleared when the coordinator starts it.
    */
   handedToCoordinatorAt: v.optional(v.number()),
   /**
-   * The open task the coordinator added this Triage item to
+   * The open task the coordinator added this handed task to
    * (`merge_task_into`). The item itself is cancelled ("Added to #N").
    */
   mergedIntoTaskId: v.optional(v.id("agentTasks")),

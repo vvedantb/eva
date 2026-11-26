@@ -110,7 +110,6 @@ function undefinedIfEmpty<T>(items: T[]): T[] | undefined {
 interface QuickTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectId?: Id<"projects">;
   users?: User[];
   projects?: Project[];
   allTags?: string[];
@@ -578,7 +577,6 @@ function DraftsMenu({
 export function QuickTaskModal({
   isOpen,
   onClose,
-  projectId,
   users,
   projects,
   allTags,
@@ -605,7 +603,7 @@ export function QuickTaskModal({
   const { request: requestConfirm } = useRequestConfirm();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
-  >(initialDraft?.projectId ?? projectId);
+  >(initialDraft?.projectId);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(
     undefined,
   );
@@ -661,7 +659,7 @@ export function QuickTaskModal({
   const dragEnterDepth = useRef(0);
 
   const { branchLockedToProject, displayBaseBranch } = useEffectiveProject(
-    projectId ?? selectedProjectId,
+    selectedProjectId,
     defaultBranch,
   );
 
@@ -678,7 +676,7 @@ export function QuickTaskModal({
     setProviderAccountId(defaultProviderAccountId(accounts, defaultModel));
     setAccountDefaulted(accounts.length > 0);
     setActiveDraftId(null);
-    setSelectedProjectId(projectId);
+    setSelectedProjectId(undefined);
     setAssignedTo(undefined);
     setSelectedTags([]);
     setTagSearch("");
@@ -707,8 +705,9 @@ export function QuickTaskModal({
   };
 
   /**
-   * "Save" files the task in To Do (a project's Triage); "Save and Run"
-   * (`run`) starts it, or approves a project task for its scheduler.
+   * "Save" files the task in To Do, or hands a project task to the project's
+   * coordinator; "Save and Run" (`run`) starts it, or approves a project
+   * task for its scheduler.
    */
   const handleSubmit = async (run: boolean) => {
     if (!canSubmit) return;
@@ -775,7 +774,7 @@ export function QuickTaskModal({
     setDescription(draftPrompt(draft));
     setBaseBranch(draft.baseBranch ?? defaultBranch);
     setActiveDraftId(draft._id);
-    setSelectedProjectId(draft.projectId ?? projectId);
+    setSelectedProjectId(draft.projectId);
     setSelectedTags(draft.tags ?? []);
     // The loaded text has not been judged; the previous draft's verdict must
     // not carry over onto it.

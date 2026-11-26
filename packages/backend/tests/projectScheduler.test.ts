@@ -11,11 +11,12 @@ import {
 import { sessionSandboxProfile } from "../convex/_sessions/owner";
 import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 import { modules } from "./_helpers/convexModules";
+import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
 /**
  * The project as an orchestrator, through the real Convex functions: the
  * scheduler and its cap, the coordinator's tasks (start at once) against
- * a person's unapproved task (waits in Triage), the coordinator's one retry and its wake-ups,
+ * a person's task (handed to the coordinator at once), the coordinator's one retry and its wake-ups,
  * the repos the coordinator may use, locked rows, the roll-up of docs, artifacts and
  * log, the copy of the project's model and account, the coordinator's
  * delete rule, project delete, and the coordinator's sandbox.
@@ -214,7 +215,7 @@ describe("project scheduler", () => {
 
 describe("who starts project tasks", () => {
   test(
-    "the coordinator's tasks are approved and the scheduler runs at once; a person's waits in Triage",
+    "the coordinator's tasks are approved and the scheduler runs at once; a person's goes to the coordinator",
     async () => {
       const f = await fixture(0);
       const created = await f.t.mutation(
@@ -241,31 +242,20 @@ describe("who starts project tasks", () => {
         "in_progress",
       ]);
 
-      // "+" without "Start now": not approved.
-      const triageId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
+      // A person's task without "Start now" goes to the coordinator, and
+      // only the coordinator starts it.
+      const personTaskId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: f.repoId,
         projectId: f.projectId,
         description: "The button is hard to find",
       });
       await schedule(f);
-      const triaged = await taskDoc(f, triageId);
-      expect(triaged.status).toBe("todo");
-      expect(triaged.approvedAt).toBeUndefined();
-      expect(projectTaskDisplayStatus(await factsOf(f, triageId))).toBe("triage");
-
-      // A person approves it from Triage: it goes to the coordinator, and
-      // only the coordinator starts it.
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [triageId],
-      });
-      await schedule(f);
-      expect((await taskDoc(f, triageId)).status).toBe("todo");
+      expect((await taskDoc(f, personTaskId)).status).toBe("todo");
       await f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
         projectId: f.projectId,
-        taskId: triageId,
+        taskId: personTaskId,
       });
-      expect((await taskDoc(f, triageId)).status).toBe("in_progress");
+      expect((await taskDoc(f, personTaskId)).status).toBe("in_progress");
     },
     TIMEOUT_MS,
   );
@@ -590,9 +580,9 @@ test(
   TIMEOUT_MS,
 );
 
-describe("approved Triage goes to the coordinator", () => {
-  /** A Triage item: a person's task nobody approved yet. */
-  const triageItem = (f: Fixture, title: string) =>
+describe("people's tasks go to the coordinator", () => {
+  /** A person's project task: handed to the coordinator at creation. */
+  const personTask = (f: Fixture, title: string) =>
     f.asUser.mutation(api.agentTasks.createQuickTask, {
       repoId: f.repoId,
       projectId: f.projectId,
@@ -603,36 +593,87 @@ describe("approved Triage goes to the coordinator", () => {
     f.t.run((ctx) => ctx.db.query("projectCoordinatorWakes").collect());
 
   test(
-    "approval hands the items over with one wake-up and starts nothing",
+    "a person's task is approved and handed at once, with one wake-up, and starts nothing",
     async () => {
       const f = await fixture(0);
-      const a = await triageItem(f, "Promo box is hard to find");
-      const b = await triageItem(f, "Rename Basket to Cart");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [a, b],
-      });
+      const a = await personTask(f, "Promo box is hard to find");
       await schedule(f);
-      expect(await statuses(f, [a, b])).toEqual(["todo", "todo"]);
+      expect(await statuses(f, [a])).toEqual(["todo"]);
       const handed = await taskDoc(f, a);
       expect(handed.approvedAt).toBeDefined();
       expect(handed.handedToCoordinatorAt).toBeDefined();
       const facts = await factsOf(f, a);
       expect(facts.withCoordinator).toBe(true);
       expect(projectTaskDisplayStatus(facts)).toBe("idle");
-      // It left Triage: nothing waits for a person's approval any more.
       expect(projectTaskNeedsYou(facts)).toBeUndefined();
       const rows = await wakes(f);
       expect(rows.map((row) => row.reason)).toEqual(["triage"]);
       expect(rows[0]?.text).toContain("Promo box is hard to find");
-      expect(rows[0]?.text).toContain("Rename Basket to Cart");
 
-      // Approving again changes nothing and wakes no one.
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [a, b],
-      });
-      expect(await wakes(f)).toHaveLength(1);
+      // A second ask is its own wake-up.
+      await personTask(f, "Rename Basket to Cart");
+      expect(await wakes(f)).toHaveLength(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the migration hands old Triage tasks over with one wake-up per project, once",
+    async () => {
+      const f = await fixture(0);
+      const old = (title: string, projectId: Id<"projects">) =>
+        f.t.run((ctx) =>
+          ctx.db.insert("agentTasks", {
+            repoId: f.repoId,
+            projectId,
+            title,
+            status: "todo",
+            numId: 100,
+            createdAt: 0,
+            updatedAt: 0,
+            createdBy: f.userId,
+          }),
+        );
+      const otherProject = await f.t.run((ctx) =>
+        ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Other",
+          rawInput: "Other",
+          numId: 2,
+        }),
+      );
+      const a = await old("Old ask A", f.projectId);
+      const b = await old("Old ask B", f.projectId);
+      const c = await old("Old ask C", otherProject);
+      const migrate = () =>
+        f.t.run(async (ctx) => {
+          const projects = await ctx.db.query("projects").collect();
+          for (const project of projects) {
+            await handProjectTriageToEva(ctx, project);
+          }
+        });
+      await migrate();
+      for (const id of [a, b, c]) {
+        const task = await taskDoc(f, id);
+        expect(task.approvedAt).toBeDefined();
+        expect(task.handedToCoordinatorAt).toBeDefined();
+      }
+      const rows = await wakes(f);
+      expect(rows.map((row) => String(row.projectId)).sort()).toEqual(
+        [String(f.projectId), String(otherProject)].sort(),
+      );
+      expect(rows.find((row) => row.projectId === f.projectId)?.text).toContain(
+        "Old ask B",
+      );
+
+      // A re-run, even with the stamps cleared, wakes no one again.
+      await migrate();
+      await f.t.run((ctx) =>
+        ctx.db.patch(a, { approvedAt: undefined, handedToCoordinatorAt: undefined }),
+      );
+      await migrate();
+      expect(await wakes(f)).toHaveLength(2);
     },
     TIMEOUT_MS,
   );
@@ -643,12 +684,8 @@ describe("approved Triage goes to the coordinator", () => {
       const f = await fixture(1);
       const open = f.tasks[0];
       if (open === undefined) throw new Error("fixture task missing");
-      const item = await triageItem(f, "Copy fix");
-      const other = await triageItem(f, "Another fix");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [item, other],
-      });
+      const item = await personTask(f, "Copy fix");
+      const other = await personTask(f, "Another fix");
       const merge = (taskId: Id<"agentTasks">, intoTaskId: Id<"agentTasks">) =>
         f.t.mutation(internal.buildWorkflow.mergeTaskIntoAsCoordinator, {
           projectId: f.projectId,
@@ -688,11 +725,7 @@ describe("approved Triage goes to the coordinator", () => {
           numId: 2,
         }),
       );
-      const item = await triageItem(f, "Copy fix");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [item],
-      });
+      const item = await personTask(f, "Copy fix");
       await expect(
         f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
           projectId: otherProject,
