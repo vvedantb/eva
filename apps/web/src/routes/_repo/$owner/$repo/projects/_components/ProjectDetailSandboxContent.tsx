@@ -145,6 +145,11 @@ export function ProjectDetailSandboxContent({
       onOpenFile={openFile}
       onViewDiff={openDiffs}
       onOpenAgentsTab={openAgentsTab}
+      projectTaskCards={{
+        projectId,
+        repoId,
+        onOpenTask: taskTabs.open,
+      }}
       onThreadOpen={onThreadOpen}
       isArchived={isArchived}
       onSandboxToggle={(action) => {

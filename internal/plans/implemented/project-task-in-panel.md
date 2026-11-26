@@ -1,7 +1,7 @@
 # Project task in the side panel
 
 **Date:** 26 November 2026
-**Status:** TODO, one PR (web only).
+**Status:** Built (#1513, 26 November 2026); its task Chat tab was replaced by `project-task-chat-tabs.md`.
 **Mock:** agreed with the user in chat on 26 November 2026 (rail with the task section on top, divider, coordinator tabs below; Tasks tab marks the open task).
 
 ## Decisions (user, 26 November 2026)

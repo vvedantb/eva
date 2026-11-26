@@ -1,7 +1,7 @@
 # Project tasks across several repos
 
 **Date:** 26 November 2026
-**Status:** TODO (v3, first item). Decisions settled 26 November 2026.
+**Status:** Built (#1519, 26 November 2026), with the known gap below fixed in follow-ups. The rest of multi-repo stays in v3 (`todo/projects-as-orchestrator-v2-v3.md`).
 **Example:** one change that needs `evalucom/carepulse_v2` (API) and `evalucom/carepulse-ts` (client).
 
 ## Today
@@ -45,5 +45,5 @@
 - Owned sessions no longer go through the PR auto-archive rule (`reconcileSessionArchiveState`); the task's status retires its session.
 - Phone has no session repo badges, so the phone task header gets none; the phone shows repos in the PR sheet and the Tasks list.
 - The home PR opens before the linked PRs, so its body did not list them. Now `buildTaskPullRequestBody` adds a marked "Related pull requests" block from `taskRelatedPrLinks` (the linked rows of the combined state), and `createDraftSessionRepoPr` patches that block into the task PR after each linked PR opens (best-effort). The description rewrite leaves the block alone.
-- Known gap: moving a multi-repo task to code review rewrites only the home PR's description, which may drop the merge order there.
+- Gap fixed after #1519: the code-review description rewrite replaces only its own block, so the merge order stays, and the home PR lists its sibling PRs.
 

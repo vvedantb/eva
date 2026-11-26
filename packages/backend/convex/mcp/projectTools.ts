@@ -135,6 +135,10 @@ export function projectTools(
             internal.buildWorkflow.retryFailedTaskAsCoordinator,
             { projectId: caller.projectId, taskId, note },
           );
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: taskId,
+          });
           return toolJsonResult({ taskId, status: "retry_started" });
         }),
     }),
@@ -159,6 +163,10 @@ export function projectTools(
           await ctx.runMutation(internal.buildWorkflow.startTaskAsCoordinator, {
             projectId: caller.projectId,
             taskId,
+          });
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: taskId,
           });
           return toolJsonResult({ taskId, status: "started" });
         }),
@@ -206,6 +214,10 @@ export function projectTools(
             internal.buildWorkflow.mergeTaskIntoAsCoordinator,
             { projectId: caller.projectId, taskId, intoTaskId: into },
           );
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: into,
+          });
           return toolJsonResult({
             taskId,
             intoTaskId: into,

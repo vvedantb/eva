@@ -201,7 +201,9 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // A project's coordinator chat: cards for the tasks Eva created or gave work to.
+  const chatProject = chat?.project ? { projectId: chat.project.id, repoId: chat.repoId } : undefined;
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chatProject);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.

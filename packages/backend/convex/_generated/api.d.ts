@@ -213,6 +213,7 @@ import type * as _prRecapWorkflow_start from "../_prRecapWorkflow/start.js";
 import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthrough.js";
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
 import type * as _projects_batches from "../_projects/batches.js";
+import type * as _projects_chatTaskCards from "../_projects/chatTaskCards.js";
 import type * as _projects_conflicts from "../_projects/conflicts.js";
 import type * as _projects_coordinatorWake from "../_projects/coordinatorWake.js";
 import type * as _projects_coordinatorWakeDelivery from "../_projects/coordinatorWakeDelivery.js";
@@ -814,6 +815,7 @@ declare const fullApi: ApiFromModules<{
   "_prRecapWorkflow/walkthrough": typeof _prRecapWorkflow_walkthrough;
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
   "_projects/batches": typeof _projects_batches;
+  "_projects/chatTaskCards": typeof _projects_chatTaskCards;
   "_projects/conflicts": typeof _projects_conflicts;
   "_projects/coordinatorWake": typeof _projects_coordinatorWake;
   "_projects/coordinatorWakeDelivery": typeof _projects_coordinatorWakeDelivery;

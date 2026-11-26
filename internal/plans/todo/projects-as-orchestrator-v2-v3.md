@@ -1,17 +1,17 @@
 # Projects as orchestrator — v2 and v3 (outline only)
 
 **Date:** 2026-11-19
-**Status:** TODO. Outline only, on purpose. Do new research and write a detailed plan when each stage starts.
+**Status:** v2 built (all merged by 26 November 2026). v3 TODO, outline only, on purpose. Do new research and write a detailed plan when each v3 item starts.
 **Depends on:** `projects-as-orchestrator.md` (v1) must ship first.
 
 This file is separate from the v1 plan because the v1 plan moves to `internal/plans/implemented/` when it is done. These items must stay in `todo`.
 
 ## v1 follow-ups (separate PRs, before v2)
 
-- **PR 2: Inbox (built 25 November 2026).** The Inbox has "Needs you" (default: Questions, To review, Triage, Failed, from `needsYou.list` and `@eva/shared/needsYou`) and "Updates" (the notification feed), on web and phone. Not done: a repo picker inside the global Inbox; a Needs you count on the nav badge.
+- **PR 2: Inbox (built 25 November 2026).** The Inbox has "Needs you" (default: Questions, To review, Failed; Triage was removed in #1551, from `needsYou.list` and `@eva/shared/needsYou`) and "Updates" (the notification feed), on web and phone. Not done: a repo picker inside the global Inbox; a Needs you count on the nav badge.
 - **PR 3: Legacy cleanup.** Delete the old project interview and plan tabs and their code, after `migrations:convertProjects` has run on production.
 
-## v2
+## v2 (built)
 
 Scope (decided 25 November 2026): how people and Eva talk in the coordinator chat, plus Triage routing. The larger items moved to v3.
 
@@ -19,7 +19,7 @@ Scope (decided 25 November 2026): how people and Eva talk in the coordinator cha
 - **Comments that do not wake the coordinator** (moved from v1 on 19 November 2026). Build it together with the message routing check above.
 - **Reply threads on messages** (added 25 November 2026). Any message in the coordinator chat can get replies, Slack style: "3 replies" with the repliers' avatars under the message, and a side panel ("Comments") with the message on top, its replies and a composer. Replies are between people and do not wake the coordinator unless they @mention Eva. Separate from task threads. Build with the routing check and quiet comments above.
 - **Coordinator talks like a chat bot** (added 25 November 2026). Replies are a few short lines, as the Grok bot. While it works, the chat shows a typing indicator ("Eva is typing", three dots, as iMessage and WhatsApp) instead of reasoning and tool steps; the steps stay one tap away on the finished message for debugging.
-- **Approved Triage items go to the coordinator** (added 25 November 2026). Today "Approve" starts each Triage task alone, so 100 small items mean 100 sandboxes. Instead, approval hands the items to the coordinator, which groups them by area and routes them to open tasks (the rules it already follows for pasted feedback).
+- **Triage removed** (added 25 November 2026; changed 26 November 2026, #1551). Work goes in through Eva's chat, as in Amp: she starts it or adds it to an open task. No Approve step; existing Triage items were handed to her once (`dataMigrations:handTriageToEva`). Her replies show a card for each task she created or gave work to.
 
 ## v3
 

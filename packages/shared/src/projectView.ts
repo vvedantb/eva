@@ -411,6 +411,31 @@ export function projectTaskStageLabel(stage: ProjectTaskStage): string {
   }
 }
 
+/**
+ * One task card under Eva's reply (`projects.listChatTaskCards`), for web and
+ * phone: the task's number, title, view and its own stage in words, from the
+ * project's task list (`agentTasks.listByProject`) so it stays live. Null for
+ * a task not in the list (archived), locked to the reader, or with no number
+ * to open it by.
+ */
+export function projectChatTaskCard<
+  Row extends ProjectTaskRow & { numId?: number; title: string },
+>(
+  rows: readonly Row[],
+  taskId: string,
+  failedTaskIds: ReadonlySet<string>,
+): { numId: number; title: string; view: ProjectTaskView; stageLabel: string } | null {
+  const row = rows.find((entry) => entry._id === taskId);
+  if (!row || row.locked === true || row.numId === undefined) return null;
+  const view = projectTaskView(row, failedTaskIds.has(row._id));
+  return {
+    numId: row.numId,
+    title: row.title,
+    view,
+    stageLabel: projectTaskStageLabel(view.stage),
+  };
+}
+
 /** What `projectTaskFacts` reads of a project task (its `agentTasks` row). */
 export interface FactsProjectTaskRow extends ProjectTaskRow {
   repoId?: string;
