@@ -11,3 +11,6 @@ export function requestComposerFocus(): void {
     window.dispatchEvent(new Event(COMPOSER_FOCUS_EVENT));
   });
 }
+
+/** The docked open question (`ChatQuestionDock`), which the Inbox's Q key focuses. */
+export const QUESTION_DOCK_SELECTOR = "[data-chat-question-dock]";

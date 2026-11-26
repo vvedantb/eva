@@ -1,264 +1,190 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
-import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
-import {
-  inboxFilterParser,
-  inboxGroupParser,
-  inboxSelectedParser,
-  inboxViewParser,
-} from "@/lib/search-params";
-import { type Notification } from "@/lib/components/notifications/notification-config";
-import { InboxHeader } from "@/lib/components/inbox/InboxHeader";
-import { InboxBulkBar } from "@/lib/components/inbox/InboxBulkBar";
-import { InboxListPane } from "@/lib/components/inbox/InboxListPane";
-import { NotificationDetailPane } from "@/lib/components/inbox/NotificationDetailPane";
-import { NeedsYouList } from "@/lib/components/inbox/NeedsYouList";
-import { useInboxActions } from "@/lib/components/inbox/useInboxActions";
-import { useInboxSelection } from "@/lib/components/inbox/useInboxSelection";
-import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
-import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
+import { IconInbox } from "@tabler/icons-react";
+import { inboxDoneTarget } from "@eva/shared/inbox";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
+import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
+import { inboxSelectedParser } from "@/lib/search-params";
+import { PageHeader } from "@/lib/components/PageHeader";
+import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
+import { InboxList } from "@/lib/components/inbox/InboxList";
+import { InboxActionBar } from "@/lib/components/inbox/InboxActionBar";
+import {
+  focusInboxFrame,
+  InboxPagePreview,
+} from "@/lib/components/inbox/InboxPagePreview";
+import {
+  useInboxDone,
+  type InboxRow,
+} from "@/lib/components/inbox/useInboxDone";
+import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**
- * The Inbox, in two views. Needs you (the default): what waits for a person,
- * derived from live state (`NeedsYouList`), scoped to `repoId` on a repo's
- * inbox. Updates: the notification feed, two-pane (Linear-style) — the list
- * on the left, the selected notification's full content on the right.
- * Clicking a row selects it (and marks it read) instead of navigating away;
- * the detail pane owns the jump to the linked entity. Archive is reversible —
- * archived rows move to their own filter rather than leaving.
+ * The Inbox: one list grouped by how urgent it is (`inbox.list`), one row for
+ * each chat, and the selected row's chat beside it (an embedded, chat-only
+ * page) with a bar to act on it. Keys: ↑ ↓ move, Enter opens the full page,
+ * R replies, Q answers the open question, E is Done, Escape clears the
+ * selection. A repo's inbox (`repoId`) lists that repo only.
  */
 export function InboxClient({
   repoId,
 }: {
-  /** A repo's inbox: Needs you shows that repo only. */
   repoId?: Id<"githubRepos">;
 } = {}) {
   const navigate = useNavigate();
   usePageTitleSync("Inbox");
-  const [view, setView] = useQueryState("view", inboxViewParser);
-  const needsYou = useQuery(
-    api.needsYou.list,
-    view === "needs" ? (repoId === undefined ? {} : { repoId }) : "skip",
-  );
-  const [filter, setFilter] = useQueryState("filter", inboxFilterParser);
-  const [group, setGroup] = useQueryState("group", inboxGroupParser);
-  const [selectedId, setSelectedId] = useQueryState(
-    "notification",
-    inboxSelectedParser,
-  );
-  const listArgs = { archived: filter === "archived" };
-  const notifications = useQuery(api.notifications.list, listArgs);
+  const listArgs = repoId === undefined ? {} : { repoId };
+  const rows = useQuery(api.inbox.list, listArgs);
   const repos = useQuery(api.githubRepos.list, {});
-  const unreadCount = useQuery(api.notifications.countUnread) ?? 0;
   const repoById = new Map<Id<"githubRepos">, RepoWithLogo>(
     (repos ?? []).map((repo) => [repo._id, repo]),
   );
-  const { markRead, markUnread, markAllRead, markMany, archive, unarchive } =
-    useInboxActions(listArgs);
+  const [selectedKey, setSelectedKey] = useQueryState("item", inboxSelectedParser);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const markDone = useInboxDone(listArgs);
 
-  const filtered =
-    notifications === undefined
-      ? undefined
-      : filter === "unread"
-        ? notifications.filter((n) => !n.read)
-        : notifications;
+  // The first row is selected until the user picks one (or the picked one leaves).
+  const selected =
+    rows?.find((row) => row.key === selectedKey) ?? rows?.[0];
 
-  // Selection is scoped to what is on screen: the rendered order defines both
-  // "select all" and a shift-click range, and rows that leave the list have
-  // their selection pruned inside the hook.
-  const { isSelecting, selectedIds, start, toggle, selectAll, clear, exit } =
-    useInboxSelection((filtered ?? []).map((n) => n._id));
-  const checkedIds = (filtered ?? [])
-    .filter((n) => selectedIds.has(n._id))
-    .map((n) => n._id);
+  const select = (row: InboxRow | undefined) => setSelectedKey(row?.key ?? null);
 
-  // Resolved against the full list, not `filtered`: selecting an unread row on
-  // the Unread tab marks it read (removing it from the tab), and the detail
-  // pane must keep showing it rather than blanking out.
-  const selected = notifications?.find((n) => n._id === selectedId);
-  const selectedRepo =
-    selected?.repoId !== undefined ? repoById.get(selected.repoId) : undefined;
-
-  const handleMarkRead = (n: Notification) => markRead(n._id);
-
-  const handleSelect = (n: Notification) => {
-    if (!n.read) markRead(n._id);
-    setSelectedId(n._id);
-  };
-
-  // Right-click toggle. Deliberately leaves selection alone: marking the open
-  // notification unread should not close the detail pane, and re-reading it
-  // only happens when the row is clicked again.
-  const handleToggleRead = (n: Notification) => {
-    if (n.read) markUnread(n._id);
-    else markRead(n._id);
-  };
-
-  const handleToggleArchive = (n: Notification) => {
-    if (n.archivedAt !== undefined) unarchive([n._id]);
-    else archive([n._id]);
-  };
-
-  // Every bulk action leaves selection mode: the rows it acted on have just
-  // moved or changed, so holding the selection open would leave the bar
-  // counting a list the user no longer has in front of them.
-  const runBulk = (action: (ids: Id<"notifications">[]) => void) => {
-    const ids = checkedIds;
-    exit();
-    action(ids);
-  };
-
-  const handleOpen = (n: Notification) => {
-    // Split rather than passed whole: a comment notification's href carries
-    // `?comment=<id>`, and the router resolves `to` as a pathname only.
-    if (n.href && isInternalAppHref(n.href)) {
-      navigate(hrefToNavigateOptions(n.href));
+  const open = (row: InboxRow) => {
+    if (row.href && isInternalAppHref(row.href)) {
+      navigate(hrefToNavigateOptions(row.href));
     }
   };
 
-  // Linear-style keys: arrows step the list, Enter opens the linked entity,
-  // `x` checks the focused row while selecting, and Escape backs out of
-  // selection mode first and the selected row second. Skipped while typing.
+  /** Done, then the next row (or the one before, at the end) is selected. */
+  const done = (row: InboxRow) => {
+    if (!inboxDoneTarget(row) || !rows) return;
+    const index = rows.findIndex((r) => r.key === row.key);
+    const next = rows[index + 1] ?? rows[index - 1];
+    markDone(row);
+    if (row.key === selected?.key) select(next);
+  };
+
+  const runCommand = (command: InboxKeyCommand, list: InboxRow[]) => {
+    const index = selected ? list.findIndex((r) => r.key === selected.key) : -1;
+    if (command === "next" || command === "previous") {
+      const step = command === "next" ? 1 : -1;
+      select(list[Math.min(Math.max(index + step, 0), list.length - 1)]);
+    } else if (command === "clear") {
+      setSelectedKey(null);
+    } else if (selected) {
+      if (command === "open") open(selected);
+      else if (command === "done") done(selected);
+      else if (command === "reply" && selected.kind === "chat") {
+        focusInboxFrame(frameRef.current, "composer");
+      } else if (command === "answer" && selected.action === "answer") {
+        focusInboxFrame(frameRef.current, "question");
+      }
+    }
+  };
+
+  /* eslint-disable no-effect/no-event-handler --
+     Page-wide keys: the list, the pane and the bar all answer to them, and
+     no single element holds focus while the user moves through the rows. */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (view !== "updates") return;
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      const target = e.target;
-      if (target instanceof HTMLElement) {
-        if (target.isContentEditable) return;
-        const tag = target.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        if (filtered === undefined || filtered.length === 0) return;
-        e.preventDefault();
-        const index = filtered.findIndex((n) => n._id === selectedId);
-        const next =
-          index < 0
-            ? filtered[0]
-            : e.key === "ArrowDown"
-              ? filtered[Math.min(index + 1, filtered.length - 1)]
-              : filtered[Math.max(index - 1, 0)];
-        if (next) handleSelect(next);
-      } else if (e.key === "Enter") {
-        if (selected) handleOpen(selected);
-      } else if (e.key === "x" || e.key === "X") {
-        if (!isSelecting || selectedId === null) return;
-        e.preventDefault();
-        toggle(selectedId);
-      } else if (e.key === "Escape") {
-        if (isSelecting) {
-          exit();
-          return;
-        }
-        setSelectedId(null);
-      }
+      const command = inboxKeyCommand(e);
+      if (!command || !rows || rows.length === 0) return;
+      e.preventDefault();
+      runCommand(command, rows);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    view,
-    filtered,
-    selected,
-    selectedId,
-    setSelectedId,
-    handleSelect,
-    handleOpen,
-    isSelecting,
-    toggle,
-    exit,
-  ]);
+  });
+  /* eslint-enable no-effect/no-event-handler */
 
-  const header = (
-    <InboxHeader
-      view={view}
-      onViewChange={setView}
-      filter={filter}
-      group={group}
-      unreadCount={unreadCount}
-      isSelecting={isSelecting}
-      onFilterChange={setFilter}
-      onGroupChange={setGroup}
-      onToggleSelecting={() => (isSelecting ? exit() : start())}
-      onMarkAllRead={markAllRead}
-    />
-  );
-
-  if (view === "needs") {
-    return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-300">
-        {header}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
-          <NeedsYouList rows={needsYou} />
-        </div>
-      </div>
-    );
-  }
-
-  // The header sits inside the left pane rather than above both panes, so the
-  // detail pane (and the divider between them) runs the full viewport height.
   return (
     <div className="flex-1 h-full min-h-0 overflow-hidden animate-in fade-in duration-300">
       <ResizablePanelLayout
         storageKey="inbox-split"
-        leftDefaultSize="40%"
+        leftDefaultSize="36%"
         leftMinWidthPx={300}
         rightMinWidthPx={360}
-        // The detail pane is the point of this view, so it starts open.
+        // The chat beside the list is the point of this view, so it starts open.
         defaultRightCollapsed={false}
+        mobilePaneLabels={{ left: "Inbox", right: "Chat" }}
         leftPanel={() => (
-          // `relative`: the floating bulk bar anchors to this pane, not the page.
-          <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-            {header}
-            {/* Region divider between the header and the notification list. */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
-              <InboxListPane
-                notifications={filtered}
-                filter={filter}
-                group={group}
-                repoById={repoById}
-                selectedId={selectedId}
-                onSelect={handleSelect}
-                onMarkRead={handleMarkRead}
-                onToggleRead={handleToggleRead}
-                onToggleArchive={handleToggleArchive}
-                isSelecting={isSelecting}
-                checkedIds={selectedIds}
-                onToggleCheck={(n, extend) => toggle(n._id, extend)}
-              />
-            </div>
-            <InboxBulkBar
-              isSelecting={isSelecting}
-              selectedCount={checkedIds.length}
-              totalCount={(filtered ?? []).length}
-              viewingArchived={filter === "archived"}
-              onExitSelect={exit}
-              onSelectAll={selectAll}
-              onClearSelection={clear}
-              onMarkRead={() => runBulk((ids) => markMany(ids, true))}
-              onMarkUnread={() => runBulk((ids) => markMany(ids, false))}
-              onArchive={() => runBulk(archive)}
-              onUnarchive={() => runBulk(unarchive)}
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <PageHeader title="Inbox" />
+            <InboxList
+              rows={rows}
+              repoById={repoById}
+              selectedKey={selected?.key ?? null}
+              onSelect={select}
             />
           </div>
         )}
         rightPanel={() => (
           <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-            <NotificationDetailPane
-              notification={selected}
-              repo={selectedRepo}
-              onOpen={handleOpen}
-            />
+            {selected?.href && isInternalAppHref(selected.href) ? (
+              <InboxPagePreview
+                href={selected.href}
+                chatOnly={selected.kind === "chat"}
+                frameRef={frameRef}
+              />
+            ) : (
+              // No page to show (a notification without a link): its message.
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
+                <IconInbox className="size-8 text-muted-foreground" />
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {selected?.preview ?? "Nothing new since you looked"}
+                </p>
+              </div>
+            )}
+            {selected ? (
+              <InboxActionBar
+                row={selected}
+                onAnswer={() => focusInboxFrame(frameRef.current, "question")}
+                onReply={() => focusInboxFrame(frameRef.current, "composer")}
+                onOpen={() => open(selected)}
+                onDone={inboxDoneTarget(selected) ? () => done(selected) : undefined}
+              />
+            ) : null}
           </div>
         )}
       />
     </div>
   );
+}
+
+type InboxKeyCommand =
+  | "next"
+  | "previous"
+  | "open"
+  | "reply"
+  | "answer"
+  | "done"
+  | "clear";
+
+const INBOX_KEYS: Record<string, InboxKeyCommand> = {
+  ArrowDown: "next",
+  ArrowUp: "previous",
+  Enter: "open",
+  r: "reply",
+  q: "answer",
+  e: "done",
+  Escape: "clear",
+};
+
+/** The Inbox command a key press asks for; none while typing or with a modifier. */
+function inboxKeyCommand(e: KeyboardEvent): InboxKeyCommand | undefined {
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return undefined;
+  const target = e.target;
+  if (target instanceof HTMLElement) {
+    if (target.isContentEditable) return undefined;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return undefined;
+    // A focused button (a row, a bar button) answers Enter itself.
+    if (e.key === "Enter" && target.tagName === "BUTTON") return undefined;
+  }
+  return INBOX_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
 }
