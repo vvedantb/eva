@@ -1,9 +1,8 @@
 "use client";
 
-import { Button, Spinner } from "@vvedantb/ui";
+import { Button, Spinner, EmptyState } from "@vvedantb/ui";
 import { IconBrandGithub } from "@tabler/icons-react";
 import { Container } from "@/lib/components/ui/Container";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 
 /** Where the installation's own permissions are changed. */
 const GITHUB_INSTALLATIONS_URL = "https://github.com/settings/installations";
@@ -86,22 +85,28 @@ export function RepoSetupError({
 export function RepoSetupEmpty() {
   return (
     <Container>
-      <EmptyState
-        icon={<IconBrandGithub size={24} />}
-        title="This installation has no repositories Eva can see"
-        description="Grant the Eva GitHub App access to repositories, then come back here."
-        action={
-          <Button asChild className="mt-6">
-            <a
-              href={GITHUB_INSTALLATIONS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Manage GitHub access
-            </a>
-          </Button>
-        }
-      />
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconBrandGithub} size={24} />
+        <EmptyState.Title>
+          This installation has no repositories Eva can see
+        </EmptyState.Title>
+        <EmptyState.Description>
+          Grant the Eva GitHub App access to repositories, then come back here.
+        </EmptyState.Description>
+        <EmptyState.Actions>
+          {
+            <Button asChild className="mt-6">
+              <a
+                href={GITHUB_INSTALLATIONS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Manage GitHub access
+              </a>
+            </Button>
+          }
+        </EmptyState.Actions>
+      </EmptyState.Root>
     </Container>
   );
 }

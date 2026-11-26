@@ -1,4 +1,3 @@
-import type { DatabaseReader } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
@@ -6,10 +5,6 @@ type RepoBaseBranchSource = Pick<
   Doc<"githubRepos">,
   "defaultBaseBranch"
 > | null;
-type ProjectBaseBranchSource =
-  | Pick<Doc<"projects">, "baseBranch">
-  | null
-  | undefined;
 
 // Returns the first candidate that is non-empty after trimming, else the
 // configured fallback. Callers pass candidates in priority order.
@@ -23,39 +18,30 @@ function firstBranchOrFallback(
   return FALLBACK_GIT_BASE_BRANCH;
 }
 
+/**
+ * The branch a task's run works from and opens its PR to: the task's own
+ * base, else the repo default. A project's child task follows the same rule
+ * (its PR goes straight to main), never the project's branch.
+ */
 export function resolveTaskWorkflowBaseBranch(
-  task: Pick<Doc<"agentTasks">, "baseBranch" | "projectId">,
+  task: Pick<Doc<"agentTasks">, "baseBranch">,
   repo: RepoBaseBranchSource,
-  project?: ProjectBaseBranchSource,
 ): string {
-  return firstBranchOrFallback(
-    task.projectId ? project?.baseBranch : undefined,
-    task.baseBranch,
-    repo?.defaultBaseBranch,
-  );
+  return firstBranchOrFallback(task.baseBranch, repo?.defaultBaseBranch);
 }
 
-export async function resolveTaskWorkflowBaseBranchForTask(
-  db: DatabaseReader,
-  task: Pick<Doc<"agentTasks">, "baseBranch" | "projectId">,
-  repo: RepoBaseBranchSource,
-): Promise<string> {
-  const project = task.projectId ? await db.get(task.projectId) : null;
-  return firstBranchOrFallback(
-    project?.baseBranch,
-    task.baseBranch,
-    repo?.defaultBaseBranch,
-  );
-}
-
+/** A new task's base branch: the explicit pick, else the repo default. */
 export function resolveNewTaskBaseBranch(
   explicitBaseBranch: string | undefined,
   repo: RepoBaseBranchSource,
-  project?: ProjectBaseBranchSource,
 ): string {
-  return firstBranchOrFallback(
-    explicitBaseBranch,
-    project?.baseBranch,
-    repo?.defaultBaseBranch,
-  );
+  return firstBranchOrFallback(explicitBaseBranch, repo?.defaultBaseBranch);
+}
+
+/** A project's base branch; a blank one counts as missing. */
+export function resolveProjectBaseBranch(
+  project: Pick<Doc<"projects">, "baseBranch">,
+  repo: RepoBaseBranchSource,
+): string {
+  return firstBranchOrFallback(project.baseBranch, repo?.defaultBaseBranch);
 }

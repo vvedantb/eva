@@ -14,6 +14,7 @@ import {
   type RepoEvent,
 } from "./events";
 import {
+  buildAlertTaskDescription,
   buildCiFailureMessage,
   buildCiGiveUpMessage,
   buildIssueTaskDescription,
@@ -173,13 +174,33 @@ export const flush = internalAction({
         repo: event.name,
       };
 
+      if (context.action === "create_task" && event.kind === "production_alert") {
+        const created = await ctx.runMutation(
+          internal._automationEvents.dispatch.createTaskForEvent,
+          {
+            runId,
+            title: `Axiom alert: ${event.title}`,
+            description: buildAlertTaskDescription({
+              event,
+              instructions: context.instructions,
+            }),
+          },
+        );
+        if (created === null) {
+          await settle("cancelled", "A task already exists for this alert");
+          return null;
+        }
+        await settle("success", `Created quick task #${created.numId}`);
+        return null;
+      }
+
       if (context.action === "create_task") {
         if (event.kind !== "issue_labeled") {
-          await settle("error", "Issues to tasks only handles labelled issues");
+          await settle("error", "This automation only handles labelled issues");
           return null;
         }
         const created = await ctx.runMutation(
-          internal._automationEvents.dispatch.createTaskFromIssue,
+          internal._automationEvents.dispatch.createTaskForEvent,
           {
             runId,
             title: event.title,

@@ -1,0 +1,8 @@
+/* Spinner */
+
+@layer stageshow {
+  .ss-spinner {
+    flex: none;
+    animation: ss-spin 0.8s linear infinite;
+  }
+}

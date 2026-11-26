@@ -5,6 +5,7 @@ import {
   IconLayoutDashboard,
   IconSparkles,
   IconStack2,
+  IconThumbUp,
 } from "@tabler/icons-react";
 import {
   SharedLayoutNav,
@@ -19,6 +20,7 @@ const WHATS_NEW_HREF = "/whats-new";
 const HOME_NAV = [
   { name: "Artifacts", href: "/artifacts", icon: IconLayoutDashboard },
   { name: "What's New", href: WHATS_NEW_HREF, icon: IconSparkles },
+  { name: "Feedback", href: "/feedback", icon: IconThumbUp },
 ] as const;
 
 interface HomeSidebarProps {

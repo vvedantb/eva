@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
+import { findEntitySession } from "../_sessions/owner";
 
 const entityKindValidator = v.union(
   v.literal("session"),
@@ -8,10 +9,9 @@ const entityKindValidator = v.union(
 );
 
 /**
- * Soft UX lock for agent-driven browsing, generalized across the three
- * sandbox-hosting tables. MCP browser_lock / browser_unlock call this; each
- * entity's UI reacts to `agentBrowsingAt` for auto-switch + takeover overlay
- * (see sessions.agentBrowsingAt for the original session-only version).
+ * Soft UX lock for agent-driven browsing. MCP browser_lock / browser_unlock
+ * call this; the session's UI reacts to `agentBrowsingAt` for auto-switch +
+ * takeover overlay. A task or project locks its session's browser.
  */
 export const setAgentBrowsingAt = internalMutation({
   args: {
@@ -24,21 +24,14 @@ export const setAgentBrowsingAt = internalMutation({
     const agentBrowsingAt = args.locked ? Date.now() : undefined;
     const updatedAt = Date.now();
 
-    if (args.entityKind === "session") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      if (!id) return null;
-      if (!(await ctx.db.get(id))) return null;
-      await ctx.db.patch(id, { agentBrowsingAt, updatedAt });
-    } else if (args.entityKind === "task") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      if (!id) return null;
-      if (!(await ctx.db.get(id))) return null;
-      await ctx.db.patch(id, { agentBrowsingAt, updatedAt });
-    } else {
-      const id = ctx.db.normalizeId("projects", args.entityId);
-      if (!id) return null;
-      if (!(await ctx.db.get(id))) return null;
-      await ctx.db.patch(id, { agentBrowsingAt, updatedAt });
+    // A task's or project's browser is its session's.
+    const session = await findEntitySession(
+      ctx.db,
+      args.entityKind,
+      args.entityId,
+    );
+    if (session) {
+      await ctx.db.patch(session._id, { agentBrowsingAt, updatedAt });
     }
     return null;
   },

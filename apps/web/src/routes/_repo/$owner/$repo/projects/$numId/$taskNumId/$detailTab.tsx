@@ -1,24 +1,21 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { isTaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 
+// Legacy `/projects/$numId/$taskNumId/$detailTab` (e.g. `/activity`) redirects
+// to the task's tab-less URL: a project task now opens on its chat and sandbox.
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/projects/$numId/$taskNumId/$detailTab",
 )({
   beforeLoad: ({ params }) => {
-    if (!isTaskDetailTab(params.detailTab)) {
-      throw redirect({
-        to: "/$owner/$repo/projects/$numId/$taskNumId/$detailTab",
-        params: {
-          owner: params.owner,
-          repo: params.repo,
-          numId: params.numId,
-          detailTab: "activity",
-          taskNumId: params.taskNumId,
-        },
-      });
-    }
+    throw redirect({
+      to: "/$owner/$repo/projects/$numId/$taskNumId",
+      params: {
+        owner: params.owner,
+        repo: params.repo,
+        numId: params.numId,
+        taskNumId: params.taskNumId,
+      },
+      replace: true,
+    });
   },
-  // Shell is rendered by the `$numId` layout so the task list and header stay
-  // mounted while switching between tasks.
   component: () => null,
 });

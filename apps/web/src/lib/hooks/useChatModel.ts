@@ -4,14 +4,19 @@ import {
   api,
   normalizeAIModel,
   type AIModel,
+  type Doc,
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
-import { composerTraitFields, storedComposerTraits } from "@eva/shared";
+import { patchLoadedQuery } from "@vvedantb/server";
+import { composerTraitFields, storedComposerTraits, toRunTraitArgs } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
+import {
+  withSessionChat,
+  type SessionChatSource,
+} from "@/lib/components/chat/sandboxChatTurn";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
  * Chat composer prefs backed by Convex (`sessionChats.lastModel` / trait
@@ -21,16 +26,19 @@ import { toRunTraitArgs } from "@/lib/utils/runTraits";
  * its own picks, which is what lets two chats run on different providers.
  *
  * Changes go through sticky setters with optimistic patches. While the chat
- * query is still loading the picker shows `defaultModel`, model-default
- * traits, and Team account. Cached-hidden shells pass `active: false` so this
- * does not keep a second `sessionChats.get` live after SessionDetailClient
- * skips it.
+ * query is still loading (or the chat does not exist yet: a quick task's
+ * session before its first need) the picker shows `defaultModel`,
+ * model-default traits, and Team account. Cached-hidden shells pass
+ * `active: false` so this does not keep a second `sessionChats.get` live
+ * after SessionDetailClient skips it.
  */
 export function useChatModel(
-  chatId: Id<"sessionChats">,
+  chatSource: SessionChatSource,
   defaultModel: AIModel,
   active = true,
 ): {
+  /** The live chat row; undefined while it loads or before it exists. */
+  chat: Doc<"sessionChats"> | null | undefined;
   model: AIModel;
   setModel: (model: AIModel) => void;
   /** Sticky traits from Convex; undefined fields use model defaults. */
@@ -43,76 +51,84 @@ export function useChatModel(
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<void>;
   isSwitchingAccount: boolean;
+  /** The raw account write and daemon warm-up, for a caller's own handoff. */
+  persistProviderAccountId: (
+    providerAccountId: Id<"userProviderAccounts"> | null,
+  ) => Promise<null>;
+  prewarm: () => Promise<null>;
 } {
   const chat = useHeldQuery(
     api.sessionChats.get,
-    active ? { chatId } : "skip",
+    active && typeof chatSource === "string"
+      ? { chatId: chatSource }
+      : "skip",
   );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
   const setModelMutation = useMutation(
     api.sessionChats.setModel,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      { ...current, lastModel: args.model },
+      (cur) => cur && { ...cur, lastModel: args.model },
     );
   });
   const setProviderAccountIdMutation = useMutation(
     api.sessionChats.setProviderAccountId,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      {
-        ...current,
-        providerAccountId:
-          args.providerAccountId === null ? undefined : args.providerAccountId,
-      },
+      (cur) =>
+        cur && {
+          ...cur,
+          providerAccountId:
+            args.providerAccountId === null ? undefined : args.providerAccountId,
+        },
     );
   });
+  const persistProviderAccountId = (
+    providerAccountId: Id<"userProviderAccounts"> | null,
+  ) =>
+    withSessionChat(chatSource, (chatId) =>
+      setProviderAccountIdMutation({ chatId, providerAccountId }),
+    );
+  const prewarm = () =>
+    withSessionChat(chatSource, (chatId) => prewarmDaemonNow({ chatId }));
   const { isSwitchingAccount, switchProviderAccount } =
     useProviderAccountHandoff({
-      persist: (providerAccountId) =>
-        setProviderAccountIdMutation({ chatId, providerAccountId }),
-      prewarm: () => prewarmDaemonNow({ chatId }),
+      persist: persistProviderAccountId,
+      prewarm,
     });
   const setTraitsMutation = useMutation(
     api.sessionChats.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      {
-        ...current,
-        ...composerTraitFields(args),
-      },
+      (cur) => cur && { ...cur, ...composerTraitFields(args) },
     );
   });
 
   const model = normalizeAIModel(chat?.lastModel ?? defaultModel);
 
   const setModel = (nextModel: AIModel) => {
-    void setModelMutation({ chatId, model: normalizeAIModel(nextModel) });
+    void withSessionChat(chatSource, (chatId) =>
+      setModelMutation({ chatId, model: normalizeAIModel(nextModel) }),
+    );
   };
 
   const setTraits = (partial: Partial<StoredModelTraits>) => {
-    void setTraitsMutation({ chatId, ...toRunTraitArgs(partial) });
+    void withSessionChat(chatSource, (chatId) =>
+      setTraitsMutation({ chatId, ...toRunTraitArgs(partial) }),
+    );
   };
 
   return {
+    chat,
     model,
     setModel,
     traits: storedComposerTraits(chat),
@@ -121,5 +137,7 @@ export function useChatModel(
       chat === undefined ? undefined : (chat?.providerAccountId ?? null),
     setProviderAccountId: switchProviderAccount,
     isSwitchingAccount,
+    persistProviderAccountId,
+    prewarm,
   };
 }

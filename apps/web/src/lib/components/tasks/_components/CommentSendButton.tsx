@@ -43,7 +43,7 @@ export function CommentSendButton({
       size={size}
       variant={isIdle ? "ghost" : variant}
       className={cn(
-        "rounded-full transition-colors",
+        "transition-colors",
         // Button fades disabled controls to 45%, which leaves the idle arrow
         // barely visible on the card: hold it at a readable muted tone instead.
         isIdle && "text-muted-foreground/70 disabled:opacity-100",

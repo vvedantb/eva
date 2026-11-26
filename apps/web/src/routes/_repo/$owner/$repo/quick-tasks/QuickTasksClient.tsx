@@ -1,9 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
+import {
+  CenteredSpinner,
+  TabsTransition,
+  tokenTransition,
+  EmptyState,
+  Button,
+} from "@vvedantb/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -13,7 +19,6 @@ import {
 } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import {
   QuickTaskModal,
@@ -24,8 +29,7 @@ import { QuickTasksListSplit } from "./_components/QuickTasksListSplit";
 import { QuickTaskDetailShell } from "./_components/QuickTaskDetailShell";
 import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent";
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
-import { IconChecklist } from "@tabler/icons-react";
-import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
+import { IconArchive, IconChecklist, IconPlus } from "@tabler/icons-react";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import {
@@ -33,15 +37,28 @@ import {
   type BulkAction,
 } from "./_components/QuickTasksBulkBar";
 import { QuickTasksBulkModals } from "./_components/QuickTasksBulkModals";
-import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
+import {
+  QUICK_TASK_VIEWS,
+  useFilteredQuickTasks,
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { TASK_TAGS } from "@eva/shared";
+import {
+  TASK_TAGS,
+  clearedQuickTaskFilter,
+  clearedQuickTaskFilters,
+  quickTaskFilterChips,
+  archiveCopy,
+  type ArchiveListMode,
+  type QuickTaskFilterKey,
+} from "@eva/shared";
 import {
   rangeBetween,
   type SelectionToggleOptions,
 } from "@/lib/components/quick-tasks/selectionRange";
-import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
+import { useTaskArchive } from "@/lib/components/quick-tasks/_components/ArchiveTaskDialog";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
@@ -59,7 +76,18 @@ export function QuickTasksClient() {
     taskResolve.status === "ready"
       ? (taskResolve.convexId ?? undefined)
       : undefined;
-  const tasks = useQuery(api.agentTasks.getAllTasks, { repoId: repo._id });
+  // Not persisted, as the Sessions sidebar: the page opens on Active.
+  const [listMode, setListMode] = useState<ArchiveListMode>("active");
+  const isArchivedList = listMode === "archived";
+  const liveTasks = useQuery(
+    api.agentTasks.getAllTasks,
+    isArchivedList ? "skip" : { repoId: repo._id },
+  );
+  const archivedTasks = useQuery(
+    api.agentTasks.listArchived,
+    isArchivedList ? { repoId: repo._id } : "skip",
+  );
+  const tasks = isArchivedList ? archivedTasks : liveTasks;
   const { draft: draftParam } = useSearch({
     from: "/_repo/$owner/$repo/quick-tasks",
   });
@@ -78,25 +106,13 @@ export function QuickTasksClient() {
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
-  const deleteSelected = useBulkDeleteTasks();
+  const { archive: archiveTasks } = useTaskArchive();
   const runSelected = useBulkRunTasks();
-  const [
-    { q, view, project, user, assignee, tags, timeRange, statuses },
-    setParams,
-  ] = useQuickTaskFilters();
+  const [filters, setParams] = useQuickTaskFilters();
+  const { q, view, user } = filters;
 
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const users = useQuery(api.users.listAll);
-
-  const projectNames = (() => {
-    const map = new Map<string, string>();
-    if (projects) {
-      for (const p of projects) {
-        map.set(p._id, p.title);
-      }
-    }
-    return map;
-  })();
 
   const allTags = (() => {
     const tagSet = new Set<string>(TASK_TAGS);
@@ -113,8 +129,13 @@ export function QuickTasksClient() {
   })();
 
   const quickTasks = useFilteredQuickTasks(tasks);
-  const hasAnyTasks = (tasks ?? []).length > 0;
-  const hasQuickTasks = quickTasks.length > 0;
+  // The user's drafts sit in To Do, so they alone keep the board on screen.
+  // The Archived list shows no drafts.
+  const liveTodoDrafts = useQuickTaskTodoDrafts(repo._id);
+  const todoDrafts = isArchivedList ? [] : liveTodoDrafts;
+  const hasAnyTasks =
+    (tasks ?? []).length > 0 || (!isArchivedList && (drafts ?? []).length > 0);
+  const hasQuickTasks = quickTasks.length > 0 || todoDrafts.length > 0;
 
   const taskIdSet = (() => {
     const set = new Set<string>();
@@ -178,8 +199,10 @@ export function QuickTasksClient() {
     setActiveBulkAction(null);
   };
 
-  const skipBulkDelete = () => {
-    void deleteSelected(selectedIds).then(exitSelectMode);
+  const skipBulkArchive = () => {
+    void archiveTasks([...selectedIds]).then((archived) => {
+      if (archived) exitSelectMode();
+    });
   };
 
   const skipBulkRun = () => {
@@ -203,103 +226,31 @@ export function QuickTasksClient() {
     });
   };
 
-  const activeFilterLabels = (() => {
-    const labels: Array<{ key: string; label: ReactNode }> = [];
-    if (project === "all") {
-      labels.push({ key: "project", label: "All Projects" });
-    } else if (project !== "none") {
-      const name = projects?.find((p) => p._id === project)?.title ?? "Project";
-      labels.push({ key: "project", label: `Project: ${name}` });
-    }
-    if (user !== "all") {
-      const u = users?.find((u) => u._id === user);
-      const name = u?.fullName ?? u?.firstName ?? "User";
-      labels.push({
-        key: "user",
-        label: (
-          <>
-            Created by: <span data-pii>{name}</span>
-          </>
-        ),
-      });
-    }
-    if (assignee !== "all") {
-      const name =
-        assignee === "unassigned"
-          ? "Unassigned"
-          : (users?.find((u) => u._id === assignee)?.fullName ??
-            users?.find((u) => u._id === assignee)?.firstName ??
-            "Code Reviewer");
-      labels.push({
-        key: "assignee",
-        label:
-          assignee === "unassigned" ? (
-            `Code reviewer: ${name}`
-          ) : (
-            <>
-              Code reviewer: <span data-pii>{name}</span>
-            </>
-          ),
-      });
-    }
-    if (statuses.length !== TASK_STATUSES.length) {
-      labels.push({
-        key: "statuses",
-        label: `${statuses.length} Status${statuses.length !== 1 ? "es" : ""}`,
-      });
-    }
-    if (tags.length > 0) {
-      labels.push({
-        key: "tags",
-        label: `${tags.length} Tag${tags.length !== 1 ? "s" : ""}`,
-      });
-    }
-    if (timeRange !== "all") {
-      const rangeLabels: Record<string, string> = {
-        "7d": "Last 7 days",
-        "30d": "Last 30 days",
-        "90d": "Last 90 days",
-      };
-      labels.push({
-        key: "timeRange",
-        label: rangeLabels[timeRange] ?? timeRange,
-      });
-    }
-    return labels;
-  })();
+  const userName = (id: string) => {
+    const match = users?.find((u) => u._id === id);
+    return match?.fullName ?? match?.firstName;
+  };
+  const activeFilterLabels = quickTaskFilterChips(filters, {
+    user: userName,
+  }).map((chip) => ({
+    key: chip.key,
+    label:
+      chip.person === undefined ? (
+        chip.text
+      ) : (
+        <>
+          {chip.text}
+          <span data-pii>{chip.person}</span>
+        </>
+      ),
+  }));
 
-  const clearFilter = (key: string) => {
-    switch (key) {
-      case "project":
-        setParams({ project: "none" });
-        break;
-      case "user":
-        setParams({ user: "all" });
-        break;
-      case "assignee":
-        setParams({ assignee: "all" });
-        break;
-      case "statuses":
-        setParams({ statuses: [...TASK_STATUSES] });
-        break;
-      case "tags":
-        setParams({ tags: [] });
-        break;
-      case "timeRange":
-        setParams({ timeRange: "all" });
-        break;
-    }
+  const clearFilter = (key: QuickTaskFilterKey) => {
+    setParams(clearedQuickTaskFilter(key));
   };
 
   const clearAllFilters = () => {
-    setParams({
-      project: "none",
-      user: "all",
-      assignee: "all",
-      statuses: [...TASK_STATUSES],
-      tags: [],
-      timeRange: "all",
-    });
+    setParams(clearedQuickTaskFilters());
   };
 
   const closeBulkAction = () => setActiveBulkAction(null);
@@ -325,7 +276,7 @@ export function QuickTasksClient() {
   };
 
   // If the drafts list has loaded and the param points to a non-existent draft
-  // (deleted or stale link), clean up the URL.
+  // (archived or stale link), clean up the URL.
   useEffect(() => {
     if (
       drafts !== undefined &&
@@ -408,6 +359,11 @@ export function QuickTasksClient() {
         childPadding={false}
         headerRight={
           <QuickTasksToolbar
+            listMode={listMode}
+            onListModeChange={(mode) => {
+              exitSelectMode();
+              setListMode(mode);
+            }}
             view={view}
             onViewChange={(v: "kanban" | "list") => {
               setParams({ view: v });
@@ -427,9 +383,6 @@ export function QuickTasksClient() {
             onStartSelecting={() => setIsSelecting(true)}
             onCreateTask={() => setIsCreating(true)}
             onImport={() => setIsImporting(true)}
-            projects={projects}
-            projectFilter={project}
-            onProjectFilterChange={(v) => setParams({ project: v })}
             users={users}
             userFilter={user}
             onUserFilterChange={(v) => setParams({ user: v })}
@@ -467,78 +420,89 @@ export function QuickTasksClient() {
                 exit={{ opacity: 0, y: 8 }}
                 transition={tokenTransition.base}
               >
-                <EmptyState
-                  icon={
-                    <IconChecklist
-                      size={24}
-                      className="text-muted-foreground"
-                    />
-                  }
-                  title={
-                    hasAnyTasks ? "No matching quick tasks" : "No quick tasks"
-                  }
-                  description={
-                    hasAnyTasks
-                      ? "Try clearing filters to see all tasks."
-                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."
-                  }
-                  actionLabel={
-                    hasAnyTasks ? "Clear filters" : "Create Quick Task"
-                  }
-                  onAction={
-                    hasAnyTasks ? clearAllFilters : () => setIsCreating(true)
-                  }
-                  animate={!hasAnyTasks}
-                />
-              </m.div>
-            ) : view === "kanban" ? (
-              <m.div
-                key="quick-tasks-board"
-                className="flex min-w-0 flex-1 min-h-0"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={tokenTransition.base}
-              >
-                <QuickTasksKanbanBoard
-                  tasks={quickTasks}
-                  projectNames={projectNames}
-                  isSelecting={isSelecting}
-                  selectedIds={selectedIds}
-                  onToggleSelect={toggleSelect}
-                />
+                {isArchivedList && !hasAnyTasks ? (
+                  <EmptyState.Root enter>
+                    <EmptyState.Icon icon={IconArchive} size={24} />
+                    <EmptyState.Title>
+                      {archiveCopy("task").emptyArchived}
+                    </EmptyState.Title>
+                  </EmptyState.Root>
+                ) : (
+                  <EmptyState.Root enter={!hasAnyTasks}>
+                    <EmptyState.Icon icon={IconChecklist} size={24} />
+                    <EmptyState.Title>
+                      {hasAnyTasks ? "No matching quick tasks" : "No quick tasks"}
+                    </EmptyState.Title>
+                    <EmptyState.Description>
+                      {hasAnyTasks
+                        ? "Try clearing filters to see all tasks."
+                        : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."}
+                    </EmptyState.Description>
+                    <EmptyState.Actions>
+                      <Button
+                        size="sm"
+                        onClick={
+                          hasAnyTasks
+                            ? clearAllFilters
+                            : () => setIsCreating(true)
+                        }
+                        className="mt-6"
+                      >
+                        <IconPlus size={16} />
+                        {hasAnyTasks ? "Clear filters" : "Create Quick Task"}
+                      </Button>
+                    </EmptyState.Actions>
+                  </EmptyState.Root>
+                )}
               </m.div>
             ) : (
               <m.div
-                key="quick-tasks-list"
+                key="quick-tasks-views"
                 className="flex min-w-0 flex-1 min-h-0"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={tokenTransition.base}
               >
-                <QuickTasksListSplit
-                  tasks={quickTasks}
-                  projectNames={projectNames}
-                  isSelecting={isSelecting}
-                  selectedIds={selectedIds}
-                  onToggleSelect={toggleSelect}
-                  selectedTaskId={selectedTaskId}
-                  selectedTaskStatus={
-                    numIdParam !== undefined ? taskResolve.status : undefined
-                  }
-                  detailTab={routeState?.detailTab}
-                  sandboxTab={
-                    routeState?.surface === "sandbox"
-                      ? routeState.sandboxTab
-                      : undefined
-                  }
-                  navSurface={routeState?.surface ?? "detail"}
-                />
+                <TabsTransition
+                  value={view}
+                  order={QUICK_TASK_VIEWS}
+                  className="flex min-w-0 flex-1 min-h-0"
+                  panelClassName="flex min-w-0 flex-1 min-h-0"
+                >
+                  {view === "kanban" ? (
+                    <QuickTasksKanbanBoard
+                      tasks={quickTasks}
+                      isSelecting={isSelecting}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      archived={isArchivedList}
+                    />
+                  ) : (
+                    <QuickTasksListSplit
+                      tasks={quickTasks}
+                      isSelecting={isSelecting}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      selectedTaskId={selectedTaskId}
+                      selectedTaskStatus={
+                        numIdParam !== undefined ? taskResolve.status : undefined
+                      }
+                      detailTab={routeState?.detailTab}
+                      sandboxTab={
+                        routeState?.surface === "sandbox"
+                          ? routeState.sandboxTab
+                          : undefined
+                      }
+                      navSurface={routeState?.surface ?? "detail"}
+                      archived={isArchivedList}
+                    />
+                  )}
+                </TabsTransition>
               </m.div>
             )}
           </AnimatePresence>
-          {hasQuickTasks && (
+          {hasQuickTasks && !isArchivedList && (
             <QuickTasksBulkBar
               isSelecting={isSelecting}
               selectedCount={selectedIds.size}
@@ -554,7 +518,7 @@ export function QuickTasksClient() {
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
               onSkipConfirm={{
-                delete: skipBulkDelete,
+                archive: skipBulkArchive,
                 run: skipBulkRun,
               }}
             />

@@ -1,7 +1,7 @@
 import type { api, Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { openChatTurnOptimistically } from "./useChatTurnOpen";
 
@@ -10,7 +10,7 @@ import { openChatTurnOptimistically } from "./useChatTurnOpen";
  * second send in that window queues instead of starting another turn.
  */
 
-const CHAT_ID = z.custom<Id<"agentTasks">>().parse("task_1");
+const CHAT_ID = z.custom<Id<"sessionChats">>().parse("chat_1");
 
 type ChatStatus = FunctionReturnType<typeof api.turns.getChatStatus> | undefined;
 

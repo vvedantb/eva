@@ -10,6 +10,8 @@ import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { findMainChat } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
+import { isSessionArchived } from "./archive";
+import { assertStandaloneSession } from "./owner";
 
 /** What `forkSession` needs to know about the source before touching its sandbox. */
 export const getForkSource = internalAuthQuery({
@@ -32,6 +34,7 @@ export const getForkSource = internalAuthQuery({
       args.sessionId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "be forked");
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
     return {
@@ -78,6 +81,7 @@ export const createForkedSession = internalAuthMutation({
       args.sourceSessionId,
       ctx.userId,
     );
+    assertStandaloneSession(source, "be forked");
     const linkedRepos = await ctx.db
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sourceSessionId))
@@ -152,7 +156,7 @@ export const settleForkSource = internalMutation({
       const source = await ctx.db.get(fork.forkedFromSessionId);
       // Only a source still parked by the fork: anything else means the user
       // (or a message) already woke it, or archived it since.
-      if (source && source.status === "closed" && source.sandboxId && !source.archived) {
+      if (source && source.status === "closed" && source.sandboxId && !isSessionArchived(source)) {
         await requestSessionSandboxStart(ctx, source);
       }
     }

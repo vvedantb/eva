@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Badge,
@@ -17,12 +18,13 @@ import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import {
   NotificationIcon,
   getNotificationAppearance,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 import {
   isDesktopNotificationsEnabled,
@@ -62,22 +64,12 @@ export function NotificationToastStream() {
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
-      );
-    }
-    const count = localStore.getQuery(api.notifications.countUnread, {});
-    if (count !== undefined) {
-      localStore.setQuery(
-        api.notifications.countUnread,
-        {},
-        Math.max(0, count - 1),
-      );
-    }
+    patchLoadedQuery(localStore, api.notifications.list, {}, (current) =>
+      current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
+    );
+    patchLoadedQuery(localStore, api.notifications.countUnread, {}, (count) =>
+      Math.max(0, count - 1),
+    );
   });
   const navigate = useNavigate();
   const seenNotificationIdsRef = useRef<Set<Id<"notifications">> | null>(null);
@@ -94,7 +86,7 @@ export function NotificationToastStream() {
       markAsRead({ id: notification._id }).catch(() => undefined);
     }
     dismissToast(notification._id);
-    if (notification.href) {
+    if (notification.href && isInternalAppHref(notification.href)) {
       // Same treatment as the inbox: the `repo--app` rewrite plus the search
       // split the router needs to see a comment anchor at all.
       navigate(hrefToNavigateOptions(notification.href));

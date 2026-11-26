@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1066825156825",
+    "project_id": "pv-velth",
+    "storage_bucket": "pv-velth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1066825156825:android:4a21368f0e10f003b9d6c8",
+        "android_client_info": {
+          "package_name": "com.projectvdotuk.eva"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1HoIaa_HCF1ZQey8uXft1cN1y-FTO5uI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1066825156825:android:d2abd05bc25a46dfb9d6c8",
+        "android_client_info": {
+          "package_name": "com.projectvdotuk.velth"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1HoIaa_HCF1ZQey8uXft1cN1y-FTO5uI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

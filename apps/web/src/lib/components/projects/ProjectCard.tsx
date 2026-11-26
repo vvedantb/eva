@@ -1,34 +1,21 @@
 "use client";
 
 import type { Id } from "@eva/backend";
-import { useState, type MouseEvent } from "react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import type { MouseEvent } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
+import { IconDots } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import {
   AvatarStack,
-  Badge,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
-  BorderBeam,
-  Button,
   Checkbox,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  Input,
   LIST_ROW_CONTROL_CLASS,
   ListRow,
-  Textarea,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -37,8 +24,12 @@ import {
 } from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
+import {
+  projectListNeedsYouLabel,
+  type ProjectListStatus,
+} from "@eva/shared/projectView";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
+import { useProjectMenu } from "./_components/useProjectMenu";
 import {
   SANDBOX_STATUS_STYLES,
   showsSandboxStatusDot,
@@ -46,8 +37,10 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
+import { NeedsYouMark } from "@/lib/components/ui/NeedsYouMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
+import { ProjectStageCounts } from "./ProjectStageCounts";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
 interface ProjectCardProps {
@@ -58,14 +51,12 @@ interface ProjectCardProps {
   rawInput?: string;
   branchName?: string;
   numId?: number;
-  repoFullName: string;
   createdAt: number;
   accentColor: string;
   members?: Array<Id<"users">>;
   projectLead?: Id<"users">;
-  phase: ProjectPhase;
-  planningMode: "interview" | "tasks_only";
-  isBuilding?: boolean;
+  /** Derived from the child tasks (`useProjectListStatuses`). */
+  status?: ProjectListStatus;
   sandboxStatus?: SandboxStatus;
   /** Finished project chat reply the user has not seen (`api.projects.list`). */
   hasUnread?: boolean;
@@ -83,7 +74,9 @@ interface ProjectCardProps {
    * navigation (e.g. while a dialog is open).
    */
   onClick?: (event: MouseEvent<HTMLElement>) => void;
-  onDelete: () => void;
+  /** In the Archived list: the menu offers Unarchive. */
+  archived?: boolean;
+  onArchive: () => void;
 }
 
 export function ProjectCard({
@@ -94,13 +87,10 @@ export function ProjectCard({
   rawInput,
   branchName,
   numId,
-  repoFullName,
   accentColor,
   members,
   projectLead,
-  phase,
-  planningMode,
-  isBuilding = false,
+  status,
   sandboxStatus,
   hasUnread = false,
   isAwaitingAnswer = false,
@@ -110,51 +100,21 @@ export function ProjectCard({
   onToggleSelect,
   href,
   onClick,
-  onDelete,
+  archived,
+  onArchive,
 }: ProjectCardProps) {
   const simpleView = useSimpleView();
-  const [editOpen, setEditOpen] = useState(false);
-  const [editTitle, setEditTitle] = useState(title);
-  const [editDescription, setEditDescription] = useState(description ?? "");
-  const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.projects.get, { id: projectId });
-      if (current !== undefined && current !== null) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.get,
-          { id: projectId },
-          {
-            ...current,
-            ...safeFields,
-            ...(priority !== undefined
-              ? { priority: priority ?? undefined }
-              : {}),
-            ...(projectLead !== undefined
-              ? { projectLead: projectLead ?? undefined }
-              : {}),
-            ...(codeReviewer !== undefined
-              ? { codeReviewer: codeReviewer ?? undefined }
-              : {}),
-            ...(model !== undefined ? { model: model ?? undefined } : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
-              : {}),
-          },
-        );
-      }
-    },
-  );
-  const currentUserId = useQuery(api.auth.me);
-  const users = useQuery(api.users.listAll);
+  const { menuProps, dialogs, isEditOpen } = useProjectMenu({
+    projectId,
+    title,
+    description,
+    projectLead,
+    href,
+    showOpenInNewTab: true,
+    branchName,
+    archived,
+    onArchive,
+  });
   const memberIds = [
     ...new Set(
       [projectLead, ...(members ?? [])].filter(
@@ -163,41 +123,12 @@ export function ProjectCard({
     ),
   ];
   const previewText = description ?? rawInput;
+  const needsYouLabel = status ? projectListNeedsYouLabel(status) : undefined;
 
   const MAX_AVATARS = 3;
   const allAvatarIds = memberIds.length > 0 ? memberIds : [userId];
   const shownAvatarIds = allAvatarIds.slice(0, MAX_AVATARS);
   const hiddenCount = allAvatarIds.length - MAX_AVATARS;
-
-  const menuProps = {
-    title,
-    phase,
-    projectLead,
-    currentUserId,
-    users,
-    href,
-    branchName,
-    repoFullName,
-    onPhaseChange: (nextPhase: ProjectPhase) => {
-      void updateProject({ id: projectId, phase: nextPhase });
-    },
-    onLeadChange: (value: string) => {
-      if (value === "none") {
-        void updateProject({ id: projectId, projectLead: null });
-        return;
-      }
-      const matchedUser = (users ?? []).find((u) => u._id === value);
-      const leadId = currentUserId === value ? currentUserId : matchedUser?._id;
-      if (!leadId) return;
-      void updateProject({ id: projectId, projectLead: leadId });
-    },
-    onEdit: () => {
-      setEditTitle(title);
-      setEditDescription(description ?? "");
-      setEditOpen(true);
-    },
-    onDelete,
-  };
 
   const cardContent = (
     <ListRow
@@ -210,9 +141,9 @@ export function ProjectCard({
         ) : undefined
       }
       onClick={
-        editOpen || isSelecting || onClick
+        isEditOpen || isSelecting || onClick
           ? (event) => {
-              if (editOpen) {
+              if (isEditOpen) {
                 event.preventDefault();
                 return;
               }
@@ -275,6 +206,15 @@ export function ProjectCard({
             </TooltipTrigger>
             <TooltipContent>Eva asked you a question</TooltipContent>
           </Tooltip>
+        ) : needsYouLabel !== undefined ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="relative mt-[3px] flex items-center hit-target">
+                <NeedsYouMark />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{needsYouLabel}</TooltipContent>
+          </Tooltip>
         ) : sandboxStatus &&
           showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
@@ -295,34 +235,9 @@ export function ProjectCard({
         <UnreadDot show={hasUnread} className="mt-[7px]" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
-            >
-              {planningMode === "interview" ? (
-                <IconSparkles className="size-2.5 shrink-0" />
-              ) : (
-                <IconListCheck className="size-2.5 shrink-0" />
-              )}
-              {planningMode === "interview" ? "Interview" : "Tasks only"}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            {planningMode === "interview"
-              ? "Created with AI interview and generated plan"
-              : "Created as a tasks-only container"}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
       <div className="mt-0.5 pt-0.5">
-        <ProjectProgressBar
-          projectId={projectId}
-          className="h-1 bg-secondary/80"
-        />
+        <ProjectProgressBar status={status} className="h-1 bg-secondary/80" />
+        <ProjectStageCounts status={status} className="mt-1.5" />
         <div className="mt-2 flex items-center gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <AvatarStack size={18} className="-space-x-0.5">
@@ -364,65 +279,13 @@ export function ProjectCard({
         </div>
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent onClick={(event) => event.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              await updateProject({
-                id: projectId,
-                title: editTitle,
-                description: editDescription || undefined,
-              });
-              setEditOpen(false);
-            }}
-            className="flex flex-col gap-4"
-          >
-            <Input
-              placeholder="Title"
-              value={editTitle}
-              onChange={(event) => setEditTitle(event.target.value)}
-              autoFocus
-            />
-            <Textarea
-              placeholder="Description"
-              value={editDescription}
-              onChange={(event) => setEditDescription(event.target.value)}
-              rows={6}
-              className="min-h-[160px] resize-y"
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setEditOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!editTitle.trim()}>
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {dialogs}
     </ListRow>
-  );
-
-  const wrappedCard = isBuilding ? (
-    <BorderBeam active colorVariant="progress" className="rounded-surface">
-      {cardContent}
-    </BorderBeam>
-  ) : (
-    cardContent
   );
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{wrappedCard}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
       <ContextMenuContent onClick={(e) => e.stopPropagation()}>
         <ProjectCardMenuItems variant="context" {...menuProps} />
       </ContextMenuContent>

@@ -11,6 +11,7 @@ export function ProjectDescription({
   projectId,
   className,
   clamp = true,
+  readOnly,
 }: {
   description: string | undefined;
   projectId: Id<"projects">;
@@ -18,6 +19,8 @@ export function ProjectDescription({
   className?: string;
   /** Height cap. Off on Overview, where the description owns the column. */
   clamp?: boolean;
+  /** An archived project: the context shows, with no editor. */
+  readOnly: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const updateProject = useUpdateProject(projectId);
@@ -43,20 +46,20 @@ export function ProjectDescription({
       </div>
       <div
         title={
-          isEditing
+          isEditing || readOnly
             ? undefined
             : "Acts as the project's system prompt for Eva chat and tasks"
         }
         className={cn(
           "relative min-h-6 overflow-x-hidden rounded px-2 py-1 -mx-2 -my-1",
-          !isEditing && "hover:bg-muted/50",
+          !isEditing && !readOnly && "hover:bg-muted/50",
           !isEditing && clamp && "max-h-[20dvh] overflow-y-auto scrollbar",
         )}
       >
         {/* A real button stretched over the (non-editable) preview rather than
             `onClick` on the wrapper: the div gave click-to-edit no keyboard path
             at all, and the editor below cannot itself be the button. */}
-        {!isEditing ? (
+        {!isEditing && !readOnly ? (
           <button
             type="button"
             aria-label="Edit project context"

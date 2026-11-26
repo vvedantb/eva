@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
+import { sleep } from "../_shared/async";
 
 const POLL_INTERVAL_MS = 250;
 /** Below the 10-minute action ceiling. The gate also clears when setup fails. */
@@ -25,7 +26,7 @@ export const waitForSessionSetup = internalAction({
       if (session?.sandboxSetupPending !== true) {
         return Date.now() - startedAt;
       }
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      await sleep(POLL_INTERVAL_MS);
     }
     console.warn(
       `[sessionWorkflow] waitForSessionSetup timed out after ${MAX_WAIT_MS}ms sessionId=${args.sessionId}; launching anyway`,

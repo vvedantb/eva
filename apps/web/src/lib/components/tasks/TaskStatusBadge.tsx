@@ -11,36 +11,14 @@ import {
   IconCircleX,
   IconPencil,
 } from "@tabler/icons-react";
+import { TASK_STATUS_LABELS, type TaskStatus } from "@eva/shared";
 
-export type TaskStatus =
-  | "draft"
-  | "todo"
-  | "in_progress"
-  | "code_review"
-  | "business_review"
-  | "done"
-  | "cancelled";
-
-export type DisplayTaskStatus = Exclude<TaskStatus, "draft">;
-
-export const TASK_STATUSES: DisplayTaskStatus[] = [
-  "todo",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "done",
-  "cancelled",
-];
-
-/**
- * Position of a status in the workflow, for sorting a mixed list into pipeline
- * order (todo → … → done) instead of alphabetically. Statuses outside
- * TASK_STATUSES — only "draft" today — sort after every known one.
- */
-export function statusWorkflowOrder(status: TaskStatus): number {
-  const index = TASK_STATUSES.findIndex((s) => s === status);
-  return index === -1 ? TASK_STATUSES.length : index;
-}
+export {
+  TASK_STATUSES,
+  statusWorkflowOrder,
+  type DisplayTaskStatus,
+  type TaskStatus,
+} from "@eva/shared";
 
 interface TaskStatusBadgeProps {
   status: TaskStatus;
@@ -62,7 +40,7 @@ export const statusConfig: Record<
     cardBg: "bg-secondary/40",
     bar: "bg-muted-foreground/50",
     text: "text-muted-foreground",
-    label: "Draft",
+    label: TASK_STATUS_LABELS.draft,
     icon: IconPencil,
   },
   todo: {
@@ -70,7 +48,7 @@ export const statusConfig: Record<
     cardBg: "bg-secondary/40",
     bar: "bg-foreground/50",
     text: "text-muted-foreground",
-    label: "To Do",
+    label: TASK_STATUS_LABELS.todo,
     icon: IconCircle,
   },
   in_progress: {
@@ -78,7 +56,7 @@ export const statusConfig: Record<
     cardBg: "bg-status-progress-subtle/40",
     bar: "bg-status-progress-bar",
     text: "text-status-progress",
-    label: "In Progress",
+    label: TASK_STATUS_LABELS.in_progress,
     icon: IconClock,
   },
   code_review: {
@@ -86,7 +64,7 @@ export const statusConfig: Record<
     cardBg: "bg-status-code-review-subtle/40",
     bar: "bg-status-code-review-bar",
     text: "text-status-code-review",
-    label: "Code Review",
+    label: TASK_STATUS_LABELS.code_review,
     icon: IconEye,
   },
   business_review: {
@@ -94,7 +72,7 @@ export const statusConfig: Record<
     cardBg: "bg-status-business-review-subtle/40",
     bar: "bg-status-business-review-bar",
     text: "text-status-business-review",
-    label: "Business Review",
+    label: TASK_STATUS_LABELS.business_review,
     icon: IconClipboardCheck,
   },
   done: {
@@ -102,7 +80,7 @@ export const statusConfig: Record<
     cardBg: "bg-status-done-subtle/40",
     bar: "bg-status-done-bar",
     text: "text-status-done",
-    label: "Merged",
+    label: TASK_STATUS_LABELS.done,
     icon: IconCircleCheck,
   },
   cancelled: {
@@ -110,7 +88,7 @@ export const statusConfig: Record<
     cardBg: "bg-status-cancelled-subtle/40",
     bar: "bg-status-cancelled-bar",
     text: "text-status-cancelled",
-    label: "Cancelled",
+    label: TASK_STATUS_LABELS.cancelled,
     icon: IconCircleX,
   },
 };

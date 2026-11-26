@@ -1,9 +1,17 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { createNotification } from "./notifications";
+import { createNotification, truncateNotificationText } from "./notifications";
 import { ensureSubscribed, notifySubscribers } from "./taskSubscribers";
-import { authQuery, authMutation, hasTaskAccess } from "./functions";
-import { extractMentionedUserIds } from "./_mentions/extractMentionedUserIds";
+import {
+  assertTaskNotArchived,
+  authQuery,
+  authMutation,
+  hasTaskAccess,
+} from "./functions";
+import {
+  authorDisplayName,
+  teamMentionRecipients,
+} from "./_mentions/mentionRecipients";
 import { taskCommentFields } from "./validators";
 import { deleteDraftForTarget } from "./_drafts/helpers";
 
@@ -16,39 +24,22 @@ const taskCommentValidator = v.object({
   ...taskCommentFields,
 });
 
-/** Trims and truncates comment content for a notification, or null if empty. */
-function summariseCommentContent(content: string): string | null {
-  const trimmedContent = content.trim();
-  if (!trimmedContent) {
-    return null;
-  }
-  return trimmedContent.length > 180
-    ? `${trimmedContent.slice(0, 177)}...`
-    : trimmedContent;
-}
-
-/** Builds a truncated notification message for a new task comment. */
-function buildCommentNotificationMessage(
-  content: string,
+/** Notification message for a new task comment or a "Make changes" request. */
+function commentNotificationMessage(
+  requestsChanges: boolean | undefined,
   projectId: Id<"projects"> | undefined,
+  content: string,
 ): string {
   const scopeLabel = projectId ? "project task" : "quick task";
-  const summary = summariseCommentContent(content);
+  const summary = truncateNotificationText(content);
+  if (requestsChanges) {
+    return summary
+      ? `Changes requested on this ${scopeLabel}: "${summary}"`
+      : `Changes requested on this ${scopeLabel}.`;
+  }
   return summary
     ? `New comment on this ${scopeLabel}: "${summary}"`
     : `New comment added on this ${scopeLabel}.`;
-}
-
-/** Builds the subscriber notification message for a "Make changes" request. */
-function buildChangeRequestNotificationMessage(
-  content: string,
-  projectId: Id<"projects"> | undefined,
-): string {
-  const scopeLabel = projectId ? "project task" : "quick task";
-  const summary = summariseCommentContent(content);
-  return summary
-    ? `Changes requested on this ${scopeLabel}: "${summary}"`
-    : `Changes requested on this ${scopeLabel}.`;
 }
 
 /** Lists all comments for a task, sorted oldest first. */
@@ -82,6 +73,7 @@ export const create = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");
     }
+    await assertTaskNotArchived(ctx.db, task);
 
     const parent = args.parentId ? await ctx.db.get(args.parentId) : null;
     if (args.parentId && (!parent || parent.taskId !== args.taskId)) {
@@ -97,8 +89,8 @@ export const create = authMutation({
     });
 
     // A "Make changes" submission parks itself on the task as the pending
-    // change-request comment. The next run created for this task (Build Project
-    // for project tasks, immediate startExecution for quick tasks) copies it
+    // change-request comment. The next run created for this task (the project
+    // scheduler or startExecution) copies it
     // onto the run's `triggeringCommentId`, so the timeline labels that run
     // "made changes" rather than a bare "success".
     if (args.requestsChanges) {
@@ -111,8 +103,12 @@ export const create = authMutation({
     await deleteDraftForTarget(ctx.db, ctx.userId, args.taskId, args.parentId);
 
     const notifiedUserIds = new Set<string>([ctx.userId]);
-    const author = await ctx.db.get(ctx.userId);
-    const authorName = author?.fullName?.trim() || "Someone";
+    const authorName = await authorDisplayName(ctx, ctx.userId);
+    const commentMessage = commentNotificationMessage(
+      false,
+      task.projectId,
+      args.content,
+    );
 
     // Commenting subscribes you to the task (sticky opt-out respected).
     await ensureSubscribed(ctx, args.taskId, ctx.userId);
@@ -130,45 +126,30 @@ export const create = authMutation({
         projectId: task.projectId,
         taskId: args.taskId,
         commentId,
-        message: buildCommentNotificationMessage(args.content, task.projectId),
+        message: commentMessage,
       });
       notifiedUserIds.add(parent.authorId);
       await ensureSubscribed(ctx, args.taskId, parent.authorId);
     }
 
-    const mentionedUserIds = extractMentionedUserIds(ctx, args.content);
-    if (mentionedUserIds.length > 0) {
-      const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
-      const teamId = repo?.teamId;
-      const mentionTitle = `${authorName} mentioned you in a comment`;
-      const mentionMessage = buildCommentNotificationMessage(
-        args.content,
-        task.projectId,
-      );
-      for (const mentionedUserId of mentionedUserIds) {
-        if (notifiedUserIds.has(mentionedUserId)) continue;
-        if (teamId) {
-          const membership = await ctx.db
-            .query("teamMembers")
-            .withIndex("by_team_and_user", (q) =>
-              q.eq("teamId", teamId).eq("userId", mentionedUserId),
-            )
-            .first();
-          if (!membership) continue;
-        }
-        await createNotification(ctx, {
-          userId: mentionedUserId,
-          type: "mention",
-          title: mentionTitle,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.taskId,
-          commentId,
-          message: mentionMessage,
-        });
-        notifiedUserIds.add(mentionedUserId);
-        await ensureSubscribed(ctx, args.taskId, mentionedUserId);
-      }
+    for (const mentionedUserId of await teamMentionRecipients(
+      ctx,
+      args.content,
+      task.repoId,
+      notifiedUserIds,
+    )) {
+      await createNotification(ctx, {
+        userId: mentionedUserId,
+        type: "mention",
+        title: `${authorName} mentioned you in a comment`,
+        repoId: task.repoId,
+        projectId: task.projectId,
+        taskId: args.taskId,
+        commentId,
+        message: commentMessage,
+      });
+      notifiedUserIds.add(mentionedUserId);
+      await ensureSubscribed(ctx, args.taskId, mentionedUserId);
     }
 
     // Broadcast to the rest of the subscriber set (creator, assignee, followers).
@@ -181,9 +162,11 @@ export const create = authMutation({
       title: args.requestsChanges
         ? `${authorName} requested changes on "${task.title}"`
         : `New comment on "${task.title}"`,
-      message: args.requestsChanges
-        ? buildChangeRequestNotificationMessage(args.content, task.projectId)
-        : buildCommentNotificationMessage(args.content, task.projectId),
+      message: commentNotificationMessage(
+        args.requestsChanges,
+        task.projectId,
+        args.content,
+      ),
       repoId: task.repoId,
       projectId: task.projectId,
       commentId,
@@ -217,6 +200,7 @@ export const update = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Comment not found");
     }
+    await assertTaskNotArchived(ctx.db, task);
     await ctx.db.patch(args.id, { content: args.content });
     return null;
   },
@@ -241,6 +225,7 @@ export const remove = authMutation({
     if (comment.deletedAt !== undefined) {
       throw new Error("Comment already deleted");
     }
+    await assertTaskNotArchived(ctx.db, task);
     await ctx.db.patch(args.id, {
       deletedAt: Date.now(),
       content: DELETED_COMMENT_PLACEHOLDER,

@@ -4,6 +4,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
+import { useMarkAveRead } from "@/lib/components/ave/aveUnread";
 import {
   RoutedQuestionDock,
   type RoutedQuestionDockSize,
@@ -21,9 +22,12 @@ import {
  */
 export function AveChat({
   size = "popover",
+  visible = true,
 }: {
   /** The full-screen `/ave` page has room for a taller question dock. */
   size?: RoutedQuestionDockSize;
+  /** False while the popover is minimized: it stays mounted but unseen. */
+  visible?: boolean;
 }) {
   return (
     <ErrorBoundary
@@ -37,13 +41,20 @@ export function AveChat({
         </div>
       )}
     >
-      <AveChatBody size={size} />
+      <AveChatBody size={size} visible={visible} />
     </ErrorBoundary>
   );
 }
 
-function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
+function AveChatBody({
+  size,
+  visible,
+}: {
+  size: RoutedQuestionDockSize;
+  visible: boolean;
+}) {
   const chat = useAveChat();
+  useMarkAveRead(visible);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

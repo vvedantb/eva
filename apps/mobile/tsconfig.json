@@ -1,0 +1,23 @@
+{
+  "extends": ["expo/tsconfig.base", "@vvedantb/config/tsconfig/react-native.json"],
+  "compilerOptions": {
+    // The shared @vvedantb/config preset with two backend-driven overrides:
+    // `api` types pull in packages/backend source, which uses ESNext + DOM
+    // APIs (Expo's own default lib) and is not written for unchecked indexes.
+    "lib": ["DOM", "ESNext"],
+    "noUncheckedIndexedAccess": false,
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "app.config.ts",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": ["node_modules", "android"]
+}

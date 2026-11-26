@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseWriter } from "../_generated/server";
 import { authMutation, getSessionWithAccess } from "../functions";
+import { assertStandaloneSession } from "./owner";
 
 /** The group a session belongs to; throws when it is in none. */
 function requireGroupId(session: {
@@ -20,6 +21,7 @@ export async function ensureSessionGroup(
   anchor: Doc<"sessions">,
   userId: Id<"users">,
 ): Promise<Id<"sessionGroups">> {
+  assertStandaloneSession(anchor, "join a session group");
   if (anchor.sessionGroupId) return anchor.sessionGroupId;
   const groupId = await db.insert("sessionGroups", { createdBy: userId });
   await db.patch(anchor._id, { sessionGroupId: groupId });
@@ -81,6 +83,7 @@ export const addToGroup = authMutation({
       getSessionWithAccess(ctx.db, args.sessionId, ctx.userId),
       getSessionWithAccess(ctx.db, args.groupSessionId, ctx.userId),
     ]);
+    assertStandaloneSession(session, "join a session group");
     if (
       session.sessionGroupId &&
       session.sessionGroupId === anchor.sessionGroupId

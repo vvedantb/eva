@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { PREVIEW_GRANT_PARAM } from "../convex/previewGrantConfig";
 import { normalizeStickyPreviewPath } from "../convex/_sandbox/stickyPreview";
 

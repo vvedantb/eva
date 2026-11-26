@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useThemeMode, type ThemeMode } from "@/lib/hooks/useThemeMode";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import { DEFAULT_ACCENT_COLOR, api } from "@eva/backend";
 import { writeCustomThemeHint } from "@/lib/contexts/themeHint";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import {
@@ -43,7 +43,7 @@ function clearAccentOverride() {
 }
 
 function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
-  const accentColor = customTheme.accentColor ?? "zinc";
+  const accentColor = customTheme.accentColor ?? DEFAULT_ACCENT_COLOR;
   const radius = customTheme.radius ?? "xl";
   const fontFamily = customTheme.fontFamily ?? "inter";
   const letterSpacing = customTheme.letterSpacing ?? "tight";
@@ -96,48 +96,32 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
     document.head.appendChild(styleEl);
   }
 
+  // Brand is the package `--accent` (focus, chart-1 and sidebar primary follow
+  // it). `--accent-soft` is the tinted hover fill that `bg-accent-soft` reads.
   styleEl.textContent = `
     :root {
-      --primary: ${colors.light.primary};
-      --primary-foreground: ${colors.light.foreground};
-      --ring: ${colors.light.primary};
-      --chart-1: ${colors.light.primary};
-      --accent: ${colors.light.accent};
-      --accent-foreground: ${colors.light.accentFg};
-      --sidebar-primary: ${colors.light.primary};
-      --sidebar-primary-foreground: ${colors.light.foreground};
-      --sidebar-ring: ${colors.light.primary};
-      --sidebar-accent-foreground: ${colors.light.accentFg};
+      --accent: ${colors.light.primary};
+      --accent-foreground: ${colors.light.foreground};
+      --accent-soft: ${colors.light.accent};
+      --accent-soft-foreground: ${colors.light.accentFg};
     }
-    .dark,
-    .dark.neutral {
-      --primary: ${colors.dark.primary};
-      --primary-foreground: ${colors.dark.foreground};
-      --ring: ${colors.dark.primary};
-      --chart-1: ${colors.dark.primary};
-      --accent: ${colors.dark.accent};
-      --accent-foreground: ${colors.dark.accentFg};
-      --sidebar-primary: ${colors.dark.primary};
-      --sidebar-primary-foreground: ${colors.dark.foreground};
-      --sidebar-ring: ${colors.dark.primary};
-      --sidebar-accent-foreground: ${colors.dark.accentFg};
+    .dark {
+      --accent: ${colors.dark.primary};
+      --accent-foreground: ${colors.dark.foreground};
+      --accent-soft: ${colors.dark.accent};
+      --accent-soft-foreground: ${colors.dark.accentFg};
     }
   `;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { theme, appearance, setTheme: setNextTheme } = useThemeMode();
+  // Theme mode (read, save, optimistic update) is owned by ThemeModeProvider.
+  const { theme, appearance, setTheme } = useThemeMode();
   // Client-only gate without setState-in-effect (SSR snapshot = false).
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
-  );
-  const syncedTheme = useQuery(api.auth.getTheme);
-  const setThemeMutation = useMutation(api.auth.setTheme).withOptimisticUpdate(
-    (localStore, args) => {
-      localStore.setQuery(api.auth.getTheme, {}, args.theme);
-    },
   );
   const syncedCustomTheme = useQuery(api.auth.getCustomTheme);
   const setCustomThemeMutation = useMutation(
@@ -147,29 +131,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    if (syncedTheme === undefined || syncedTheme === null) return;
-    if (syncedTheme !== theme) {
-      setNextTheme(syncedTheme);
-    }
-  }, [syncedTheme]);
-
-  useEffect(() => {
     if (syncedCustomTheme === undefined) return;
     const customTheme = syncedCustomTheme ?? {};
     // Neutral is dark-family — accent `.dark` rules apply via the `dark` class.
     applyCustomThemeVars(customTheme, appearance !== "light");
   }, [syncedCustomTheme, appearance]);
-
-  // Every mode persists, System included — it is a preference ("follow the OS"),
-  // not a resolved appearance, so it has to survive a reload like the others.
-  const setTheme = (next: ThemeMode) => {
-    setNextTheme(next);
-    void catchMutationError(
-      setThemeMutation({ theme: next }),
-      "Couldn't save theme",
-      "theme-mode",
-    );
-  };
 
   const toggleTheme = () => {
     setTheme(nextCycledTheme(theme, appearance));

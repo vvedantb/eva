@@ -8,7 +8,7 @@ import {
   hasRepoAccess,
   hasTaskAccess,
 } from "../functions";
-import { sandboxOwnerValidator } from "../_sandbox/owner";
+import { prOwnerRefValidator } from "../_validators/tableFields";
 import {
   prOriginValidator,
   prOwnerValidator,
@@ -76,7 +76,7 @@ async function canReadOwner(
  * subscription however many PRs the owner holds.
  */
 export const listForOwner = authQuery({
-  args: { owner: sandboxOwnerValidator },
+  args: { owner: prOwnerRefValidator },
   returns: v.array(pullRequestListItemValidator),
   handler: async (ctx, args) => {
     if (!(await canReadOwner(ctx.db, args.owner, ctx.userId))) return [];
@@ -128,7 +128,7 @@ export const stopWatch = authMutation({
 
 /** Every PR an owner holds, for actions (newest first). */
 export const listForOwnerInternal = internalQuery({
-  args: { owner: sandboxOwnerValidator },
+  args: { owner: prOwnerRefValidator },
   returns: v.array(pullRequestValidator),
   handler: async (ctx, args) => await listOwnerPullRequests(ctx.db, args.owner),
 });

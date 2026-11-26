@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Hosted artifacts keep persistent state through window.cowork.state. These
@@ -9,7 +10,6 @@ import schema from "../convex/schema";
  * must be one copy per team, and outsiders must see and write nothing.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const ALICE = "clerk|artifact-state-alice";
 const BOB = "clerk|artifact-state-bob";

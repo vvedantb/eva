@@ -1,7 +1,7 @@
+import type { ThemeMode } from "@/lib/hooks/useThemeMode";
+
 /** localStorage key for early-paint theme hint (read by index.html). */
 export const CUSTOM_THEME_HINT_KEY = "eva-custom-theme-hint";
-
-export type ThemeHintMode = "light" | "neutral" | "dark" | "system";
 
 type ThemeHint = {
   accentColor?: string;
@@ -15,7 +15,7 @@ type ThemeHint = {
    * light/dark appearance, so the appearance alone cannot round-trip it.
    * Absent in hints written before this field existed.
    */
-  mode?: ThemeHintMode;
+  mode?: ThemeMode;
 };
 
 function getStringProp(value: object, key: string): string | undefined {
@@ -30,7 +30,7 @@ function isAppearance(
   return value === "light" || value === "neutral" || value === "dark";
 }
 
-function isMode(value: string | undefined): value is ThemeHintMode {
+function isMode(value: string | undefined): value is ThemeMode {
   return isAppearance(value) || value === "system";
 }
 
@@ -79,7 +79,7 @@ function writeThemeHint(patch: ThemeHint) {
  */
 export function writeThemeAppearanceHint(
   appearance: "light" | "neutral" | "dark",
-  mode: ThemeHintMode,
+  mode: ThemeMode,
 ) {
   writeThemeHint({ appearance, mode });
 }
@@ -89,7 +89,7 @@ export function writeThemeAppearanceHint(
  * client render. Hints written before `mode` existed return `mode: undefined`.
  */
 export function readThemeHintSeed(): {
-  mode: ThemeHintMode | undefined;
+  mode: ThemeMode | undefined;
   appearance: "light" | "neutral" | "dark" | undefined;
 } {
   const hint = readThemeHint();

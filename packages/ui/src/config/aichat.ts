@@ -17,14 +17,13 @@ export const aichatConfig = {
     classes: {
       content: "flex flex-col gap-8 p-4",
       scroll: "scrollbar scroll-fade",
-      download:
-        "absolute top-4 right-4 rounded-full bg-background hover:bg-muted",
+      download: "absolute top-4 right-4 bg-background hover:bg-muted",
       // The pill sits in a static frame; the animated wrapper has no class.
       scrollButtonFrame:
         "pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 justify-center",
       scrollButtonMotion: "",
       scrollButton:
-        "pointer-events-auto h-7 gap-1.5 rounded-full border border-border/60 bg-card px-3 text-xs font-normal text-muted-foreground hover:border-border hover:bg-card hover:text-foreground",
+        "pointer-events-auto h-7 gap-1.5 border border-border/60 bg-card px-3 text-xs font-normal text-muted-foreground hover:border-border hover:bg-card hover:text-foreground",
     },
     scrollButton: {
       label: "Scroll to end",
@@ -53,7 +52,6 @@ export const aichatConfig = {
       ].join(" "),
       branchSelector:
         "[&>*:not(:first-child)]:rounded-l-lg [&>*:not(:last-child)]:rounded-r-lg",
-      branchIcon: "size-3.5",
     },
   },
   PromptInput: {
@@ -70,7 +68,7 @@ export const aichatConfig = {
       // than a phone-width composer: wrap instead of squashing.
       footer: "justify-between gap-1 max-sm:flex-wrap",
       submit: "rounded-full",
-      tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
+      tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent-soft",
     },
     submitIcons: {
       send: createElement(IconArrowUp, { className: "size-4" }),
@@ -85,7 +83,7 @@ export const aichatConfig = {
       createElement(ProviderIcon, { provider, size: 14 }),
     classes: {
       trigger:
-        "motion-press rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.92] disabled:opacity-50",
+        "motion-press rounded-lg p-1.5 text-muted-foreground hover:bg-accent-soft hover:text-foreground active:scale-[0.92] disabled:opacity-50",
     },
   },
   TraitsPanel: {
@@ -94,7 +92,7 @@ export const aichatConfig = {
         "w-[4.75rem] shrink-0 pt-1 text-2xs font-medium text-muted-foreground",
       empty: "flex h-6 items-center text-2xs text-muted-foreground/70",
       option:
-        "h-6 rounded-md px-2 text-2xs font-medium motion-press transition-colors active:scale-[0.96]",
+        "h-6 rounded-md px-2 text-2xs font-medium motion-press active:scale-[0.96]",
       note: "pl-[5.375rem] text-2xs leading-snug text-muted-foreground/80",
     },
   },
@@ -121,7 +119,6 @@ export const aichatConfig = {
       pre: "overflow-x-auto p-3 text-xs",
       copyButton:
         "absolute right-2 top-2 size-7 p-0 text-muted-foreground hover:text-foreground after:absolute after:inset-[-6px]",
-      copyIcon: "size-3.5",
     },
   },
   Artifact: {
@@ -141,8 +138,8 @@ export const aichatConfig = {
       item: {
         grid: "size-24 overflow-hidden rounded-surface",
         inline:
-          "flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-surface border border-border px-1.5 font-medium text-sm transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        list: "flex w-full items-center gap-3 border p-3 rounded-surface hover:bg-accent/50",
+          "flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-surface border border-border px-1.5 font-medium text-sm transition-colors hover:bg-accent-soft hover:text-accent-soft-foreground dark:hover:bg-accent-soft/50",
+        list: "flex w-full items-center gap-3 border p-3 rounded-surface hover:bg-accent-soft/50",
       },
       preview: {
         grid: "size-full bg-muted",

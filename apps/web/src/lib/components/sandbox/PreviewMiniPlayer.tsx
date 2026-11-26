@@ -3,6 +3,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import { springTransition, useMediaQuery } from "@vvedantb/ui";
@@ -17,7 +18,7 @@ import {
 import { usePreviewMiniPlayerFrame } from "./usePreviewMiniPlayerFrame";
 
 /**
- * Floating picture-in-picture window for a session's dev-server preview.
+ * Floating picture-in-picture window for a session's, quick task's or project's dev-server preview.
  *
  * Mounted once at the app root, just before {@link PreviewIframeHost} and on
  * the same z layer: the host overlays its iframe on the anchor rendered here,
@@ -47,21 +48,10 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
   const { style, moveHandlers, resizeHandlers, gesture } =
     usePreviewMiniPlayerFrame(entry.entryKey);
   const logicalSize = entry.logicalSize ?? DEFAULT_MINI_PLAYER_LOGICAL_SIZE;
-  // The session doc is the truth about whether this iframe still shows a live
-  // sandbox; the pane that would normally notice has been unmounted.
-  // Blob/data guests are local fixtures (no sandbox doc to reconcile).
-  const session = useQuery(
-    api.sessions.get,
-    entry.src.startsWith("blob:") || entry.src.startsWith("data:")
-      ? "skip"
-      : { id: entry.sessionId },
-  );
-  const stale =
-    session === null ||
-    (session !== undefined &&
-      (session.sandboxId !== entry.sandboxId || session.status !== "active"));
+  const stale = useOwnerSandboxStale(entry);
 
   const expand = () => {
+    if (!isInternalAppHref(entry.returnTo)) return;
     closePreviewMiniPlayer();
     void navigate({ to: entry.returnTo });
   };
@@ -112,6 +102,29 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
       </div>
       {stale ? <StalePreviewSweeper sandboxId={entry.sandboxId} /> : null}
     </m.div>
+  );
+}
+
+/**
+ * The owner doc is the truth about whether this iframe still shows a live
+ * sandbox; the pane that would normally notice has been unmounted.
+ * Blob/data guests are local fixtures (no sandbox doc to reconcile).
+ */
+function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
+  const { owner } = entry;
+  const fixture =
+    entry.src.startsWith("blob:") || entry.src.startsWith("data:");
+  const session = useQuery(
+    api.sessions.get,
+    !fixture ? { id: owner.sessionId } : "skip",
+  );
+  const live = session && {
+    sandboxId: session.sandboxId,
+    active: session.status === "active",
+  };
+  return (
+    live === null ||
+    (live !== undefined && (live.sandboxId !== entry.sandboxId || !live.active))
   );
 }
 

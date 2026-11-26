@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { copyFileIfPresent } from "../utils.js";
+import { copyFileIfPresent, isJsonObject } from "../utils.js";
 
 export type SessionStoreConfig = {
   runtimeHomeDir: string;
@@ -8,7 +8,6 @@ export type SessionStoreConfig = {
   persistStateFile: string;
   resumeField: "resumeThreadId" | "resumeSessionId";
   getActiveId: () => string;
-  setActiveId: (id: string) => void;
 };
 
 export type PersistedSessionState = {
@@ -28,7 +27,7 @@ export function createSessionStore(config: SessionStoreConfig) {
     }
     try {
       const parsed = JSON.parse(readFileSync(statePath, "utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (!isJsonObject(parsed)) {
         return null;
       }
       const value = parsed[config.resumeField];
@@ -79,20 +78,10 @@ export function createSessionStore(config: SessionStoreConfig) {
     );
   };
 
-  const resolveResumeId = (): string | null => {
-    const persisted = readSessionState();
-    if (!persisted) return null;
-    if (config.resumeField === "resumeThreadId") {
-      return persisted.resumeThreadId ?? null;
-    }
-    return persisted.resumeSessionId ?? null;
-  };
-
   return {
     readSessionState,
     writeSessionState,
     hydratePersistedState,
     syncStateToPersist,
-    resolveResumeId,
   };
 }

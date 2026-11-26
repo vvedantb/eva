@@ -2,9 +2,9 @@ export {
   listByProject,
   get,
   getByNumId,
-  getActiveTasks,
+  countSandboxTasks,
   getAllTasks,
-  getDependentTasks,
+  listArchived,
   getStatusesByIds,
   listAttachments,
   listOpenTaskTitles,
@@ -13,15 +13,12 @@ export {
 export {
   update,
   updateStatus,
-  remove,
-  restore,
+  archive,
+  unarchive,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,
   assignToProject,
-  reorderProjectTasks,
-  deleteCascade,
-  setTraits,
 } from "./_agentTasks/mutations";
 
 export {
@@ -36,21 +33,10 @@ export {
   countDrafts,
   saveDraft,
   activateDraft,
+  deleteDraft,
 } from "./_agentTasks/drafts";
 
 export {
-  startTaskSandbox,
-  stopTaskSandbox,
-  retryStartupCommands,
-  runDevServer,
-  runBackgroundCommands,
-  taskSandboxReady,
-  taskSandboxError,
-} from "./_agentTasks/sandbox";
-
-export {
   getInternal,
-  getInternalByStringId,
-  getBySandboxInternal,
   applyGeneratedTags,
 } from "./_agentTasks/internal";

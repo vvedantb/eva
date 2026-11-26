@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   LAST_SEEN_MIN_INTERVAL_MS,
   mergeLastSeen,

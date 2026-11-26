@@ -10,11 +10,11 @@ import {
   ContributionGraphCalendar,
   ContributionGraphFooter,
   ContributionGraphLegend,
+  useCountUpDisplay,
 } from "@vvedantb/ui";
 import type { ContributionGraphActivity } from "@vvedantb/ui";
 import { IconFlame } from "@tabler/icons-react";
 import { Widget } from "@/lib/components/Widget";
-import { useCountUpDisplay } from "./useCountUpDisplay";
 
 interface ActivityHeatmapProps {
   data: Array<{ date: string; count: number }>;

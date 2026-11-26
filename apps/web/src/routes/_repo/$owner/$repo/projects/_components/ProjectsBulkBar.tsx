@@ -1,11 +1,5 @@
-import { IconRefresh, IconTrash } from "@tabler/icons-react";
-import {
-  BulkActionBar,
-  type BulkBarAction,
-} from "@/lib/components/ui/BulkActionBar";
-
-/** Bulk actions that open their own dialog. Delete owns its confirm elsewhere. */
-export type ProjectBulkAction = "phase";
+import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
+import { IconArchive } from "@tabler/icons-react";
 
 interface ProjectsBulkBarProps {
   isSelecting: boolean;
@@ -14,14 +8,14 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  onSetBulkAction: (action: ProjectBulkAction | null) => void;
-  /** Runs the delete flow, which owns its own confirm and Alt-to-skip. */
-  onDelete: () => void;
+  /** Runs the archive flow, which owns its own confirm and Alt-to-skip. */
+  onArchive: () => void;
 }
 
 /**
- * The projects board's selection bar. Same shell as quick tasks — only the two
- * actions projects have differ: move the selection to a phase, or delete it.
+ * The projects board's selection bar. Same shell as quick tasks; the one
+ * action projects have is archive (a project's stage is derived from its
+ * tasks, so there is no phase to set). The Archived list has no select mode.
  */
 export function ProjectsBulkBar({
   isSelecting,
@@ -30,25 +24,15 @@ export function ProjectsBulkBar({
   onExitSelect,
   onSelectAll,
   onClearSelection,
-  onSetBulkAction,
-  onDelete,
+  onArchive,
 }: ProjectsBulkBarProps) {
-  const phaseAction: BulkBarAction = {
-    key: "phase",
-    label: "Change Phase",
-    shortLabel: "Phase",
-    icon: IconRefresh,
-    onClick: () => onSetBulkAction("phase"),
-  };
-
-  const deleteAction: BulkBarAction = {
-    key: "delete",
-    label: "Delete All",
-    shortLabel: "Delete",
-    icon: IconTrash,
-    destructive: true,
+  const archiveAction: BulkBarAction = {
+    key: "archive",
+    label: "Archive All",
+    shortLabel: "Archive",
+    icon: IconArchive,
     showSkipHint: true,
-    onClick: onDelete,
+    onClick: onArchive,
   };
 
   return (
@@ -60,8 +44,8 @@ export function ProjectsBulkBar({
       onExitSelect={onExitSelect}
       onSelectAll={onSelectAll}
       onClearSelection={onClearSelection}
-      primaryActions={[phaseAction]}
-      destructiveAction={deleteAction}
+      primaryActions={[]}
+      destructiveAction={archiveAction}
     />
   );
 }

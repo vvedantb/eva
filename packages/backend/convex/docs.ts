@@ -4,8 +4,11 @@ import {
   authAction,
   authQuery,
   authMutation,
+  getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
+import { findDocWithAccess, getDocWithAccess } from "./_docs/access";
+import { replaceDocBody } from "./_docs/body";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
   internalMutation,
@@ -22,7 +25,6 @@ import {
   normalizeAIModel,
   prRecapOriginValidator,
   prRecapStatusValidator,
-  roleValidator,
   docKindValidator,
   docFields,
   evaluationStatusValidator,
@@ -51,13 +53,14 @@ import {
   chatSourceArgValidator,
   chatSourceFieldsFromArg,
   chatSourceSummaryValidator,
+  listRowsForChatRollUp,
   listRowsForChatSource,
   resolveChatSource,
   type ChatSourceArg,
   type RepoCache,
 } from "./_chatSource/helpers";
 
-const docValidator = v.object({
+export const docValidator = v.object({
   _id: v.id("docs"),
   _creationTime: v.number(),
   ...docFields,
@@ -168,14 +171,19 @@ export const list = authQuery({
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     const seen = new Set<string>();
     const docs: Doc<"docs">[] = [];
+    const docsBySibling = await Promise.all(
+      siblingIds.map((siblingId) =>
+        ctx.db
+          .query("docs")
+          .withIndex("by_repo_and_deleted", (q) =>
+            q.eq("repoId", siblingId).eq("deletedAt", undefined),
+          )
+          .collect(),
+      ),
+    );
 
-    for (const siblingId of siblingIds) {
-      const siblingDocs = await ctx.db
-        .query("docs")
-        .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
-        .collect();
-
-      for (const doc of siblingDocs) {
+    for (const [i, siblingId] of siblingIds.entries()) {
+      for (const doc of docsBySibling[i]) {
         if (seen.has(doc._id)) continue;
         if (args.kind !== undefined && doc.kind !== args.kind) continue;
         const isCurrentRepo = siblingId === args.repoId;
@@ -188,7 +196,6 @@ export const list = authQuery({
         ) {
           continue;
         }
-        if (isEntityDeleted(doc)) continue;
         seen.add(doc._id);
         docs.push(doc);
       }
@@ -210,7 +217,11 @@ export const list = authQuery({
   },
 });
 
-/** Docs created from one session, quick task, or project sandbox. */
+/**
+ * Docs created from one session, quick task, or project sandbox. A project
+ * rolls up its child tasks' docs (`listRowsForChatRollUp`); each row's
+ * `source` names the task that made it.
+ */
 export const listForSource = authQuery({
   args: { source: chatSourceArgValidator },
   returns: v.array(docListItemValidator),
@@ -233,11 +244,11 @@ export const listForSource = authQuery({
  * document (`sessionId`); `getBySession` still reads only `sessionId`.
  */
 async function listDocsForSource(
-  ctx: QueryCtx,
+  ctx: QueryCtx & { userId: Id<"users"> },
   source: ChatSourceArg,
 ): Promise<Doc<"docs">[]> {
   if (source.kind !== "session") {
-    return listRowsForChatSource(ctx, "docs", source);
+    return listRowsForChatRollUp(ctx, "docs", source);
   }
   const sessionId = source.sessionId;
   const [fromSource, fromPlan] = await Promise.all([
@@ -298,18 +309,8 @@ export const get = authQuery({
   args: { id: v.id("docs") },
   returns: v.union(docValidator, v.null()),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) return null;
-
-    if (doc.kind === "pr-recap") {
-      if (!(await hasCodebaseRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-        return null;
-      }
-      return entityVisible(doc);
-    }
-
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) return null;
-    return entityVisible(doc);
+    const doc = await findDocWithAccess(ctx.db, args.id, ctx.userId);
+    return doc ? entityVisible(doc) : null;
   },
 });
 
@@ -397,10 +398,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       title?: string;
       content?: string;
@@ -437,11 +435,11 @@ export const createFromSession = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     const planContent = session.planContent?.trim();
     if (!planContent) {
       throw new Error("Session has no plan content to save");
@@ -455,25 +453,9 @@ export const createFromSession = authMutation({
 
     if (existing) {
       // "Update Document": overwrite the live synced doc with the latest plan.
-      // We reset the sync component's data and recreate it (rather than a
-      // server-side transform, which would need the full editor schema in the
-      // isolate). This is an explicit, infrequent overwrite, so clobbering any
-      // in-flight collaborative edits on this doc is acceptable.
-      const snapshot = await ctx.runQuery(
-        components.prosemirrorSync.lib.getSnapshot,
-        { id: existing._id },
-      );
-      if (snapshot.content !== null) {
-        await ctx.runMutation(components.prosemirrorSync.lib.deleteDocument, {
-          id: existing._id,
-        });
-      }
-      await prosemirrorSync.create(ctx, existing._id, planJson);
-      await ctx.db.patch(existing._id, {
-        content: session.planContent ?? "",
-        contentUpdatedAt: now,
-        updatedAt: now,
-      });
+      // An explicit, infrequent overwrite, so clobbering in-flight edits is
+      // acceptable.
+      await replaceDocBody(ctx, existing._id, session.planContent ?? "");
       return existing._id;
     }
 
@@ -500,11 +482,7 @@ export const ensureSyncDoc = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
 
     const existing = await ctx.runQuery(
       components.prosemirrorSync.lib.getSnapshot,
@@ -522,35 +500,29 @@ export const remove = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
     return null;
   },
 });
 
-/** Appends a message to the doc's interview conversation history. */
+/**
+ * Appends the caller's own answer to the doc interview. Assistant turns are
+ * written only by the interview workflow (internal mutations).
+ */
 export const addInterviewMessage = authMutation({
   args: {
     id: v.id("docs"),
-    role: roleValidator,
+    role: v.literal("user"),
     content: v.string(),
-    activityLog: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const history = doc.interviewHistory ?? [];
     history.push({
       role: args.role,
       content: args.content,
-      activityLog: args.activityLog,
       userId: ctx.userId,
     });
     await ctx.db.patch(args.id, { interviewHistory: history });
@@ -563,8 +535,7 @@ export const clearInterview = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       interviewHistory: undefined,
       sandboxId: undefined,

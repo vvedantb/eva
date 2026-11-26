@@ -21,7 +21,6 @@ type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 
 interface QuickTasksListSplitProps {
   tasks: Task[];
-  projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
   onToggleSelect: (
@@ -34,6 +33,8 @@ interface QuickTasksListSplitProps {
   detailTab?: TaskDetailTab;
   sandboxTab?: TaskRouteSandboxTab;
   navSurface: "detail" | "sandbox";
+  /** The Archived list: no drafts, no Run All, Unarchive in row menus. */
+  archived?: boolean;
 }
 
 /**
@@ -65,7 +66,6 @@ interface QuickTasksListSplitProps {
  */
 export function QuickTasksListSplit({
   tasks,
-  projectNames,
   isSelecting,
   selectedIds,
   onToggleSelect,
@@ -74,6 +74,7 @@ export function QuickTasksListSplit({
   detailTab,
   sandboxTab,
   navSurface,
+  archived = false,
 }: QuickTasksListSplitProps) {
   const { basePath } = useRepo();
   const { expandRightSignal, collapseRightSignal, nudge } =
@@ -96,12 +97,12 @@ export function QuickTasksListSplit({
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
               <QuickTasksListView
                 tasks={tasks}
-                projectNames={projectNames}
                 isSelecting={isSelecting}
                 selectedIds={selectedIds}
                 onToggleSelect={onToggleSelect}
                 selectedTaskId={selectedTaskId}
                 onOpenTask={nudge}
+                archived={archived}
               />
             </div>
           )}

@@ -3,6 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Spinner,
   Switch,
@@ -37,7 +38,7 @@ const FLAG_GROUPS: FlagGroup[] = [
         key: "disablePageMotion",
         title: "Disable page animations",
         description:
-          "Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer beam, and the sessions sidebar working indicator stay on.",
+          "Make every animation and transition instant. Spinners, pulses and shimmers stay on.",
       },
       {
         key: "sessionTabs",
@@ -85,6 +86,18 @@ const FLAG_GROUPS: FlagGroup[] = [
         title: "Composer predictions",
         description:
           "Suggest your next message when Eva finishes a turn. Press Tab to put it in the composer. It never sends on its own.",
+      },
+      {
+        key: "draftReadiness",
+        title: "Draft check",
+        description:
+          "Check a new chat's first message or a quick task's description while you type. A banner names what is missing, like where the change goes.",
+      },
+      {
+        key: "skillSuggestions",
+        title: "Skill suggestions",
+        description:
+          "Suggest a / skill that fits your message while you type. Chips appear above the composer; tap one to add it.",
       },
     ],
   },
@@ -178,13 +191,10 @@ export function ExperimentalSettingsClient() {
   const setFlag = useMutation(
     api.auth.setExperimentalFlag,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getExperimentalFlags, {});
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.auth.getExperimentalFlags,
-      {},
-      { ...current, [args.key]: args.enabled },
-    );
+    patchLoadedQuery(localStore, api.auth.getExperimentalFlags, {}, (cur) => ({
+      ...cur,
+      [args.key]: args.enabled,
+    }));
   });
 
   const toggle = (key: ExperimentalFlagKey, enabled: boolean) => {

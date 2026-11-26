@@ -1,11 +1,12 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { cancelChatExecution } from "../convex/_sessions/execution";
 import { sessionChatAdapter } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Since sessions hold several chats, the session composer reads turn status
@@ -13,7 +14,6 @@ import { loadSessionChat } from "../convex/_sessionChats/helpers";
  * turn (superseding the running one) instead of queueing behind it.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-status";
 const STRANGER_CLERK_ID = "clerk|session-chat-status-stranger";
@@ -30,6 +30,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Queue behind a turn",
@@ -125,7 +126,7 @@ describe("session chat status and queue", () => {
         });
         const context = await loadSessionChat(ctx.db, f.chatId);
         if (!context) throw new Error("fixture: chat missing");
-        await cancelChatExecution(ctx, context);
+        await cancelChatExecution(ctx, context, { holdQueue: true });
         await sessionChatAdapter.interrupt(ctx, context);
         const jobs = await ctx.db.system.query("_scheduled_functions").collect();
         return jobs.map((job) => job.name);

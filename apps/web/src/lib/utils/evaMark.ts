@@ -1,27 +1,21 @@
 import type { ThemeAppearance } from "@/lib/hooks/useThemeMode";
 
-/**
- * Eva's mark: a filled circle with a two-tone star across its middle.
- *
- * Single source of truth for the geometry. `EvaIcon` and `LogoMark` render it
- * as JSX; `evaMarkDataUri` serialises it for the favicon. The two static files
- * in public/ (`icon.svg`, `favicon.svg`) mirror these numbers by hand — edit
- * them alongside anything here.
- */
-export const EVA_MARK_TOP_POINTS = "0,256 217,237 256,64 295,237 512,256";
-export const EVA_MARK_BOTTOM_POINTS = "0,256 217,275 256,449 295,275 512,256";
-/**
- * Thicker-waisted star for the disc marks (favicon, Manager Ave). They enlarge
- * the star 1.45x into a small circle, where the logo's thin waist shrinks to a
- * hairline cross at 16 px. Same tips, wider inner points.
- */
-export const EVA_DISC_STAR_TOP_POINTS = "0,256 204,222 256,64 308,222 512,256";
-export const EVA_DISC_STAR_BOTTOM_POINTS =
-  "0,256 204,290 256,449 308,290 512,256";
-/** Star enlargement inside a disc mark; the overflow is clipped to the disc. */
-export const EVA_DISC_STAR_SCALE = 1.45;
-export const EVA_MARK_PURPLE = "#8B3FB8";
-export const EVA_MARK_BLUE = "#3B7DD8";
+export {
+  EVA_MARK_TOP_POINTS,
+  EVA_MARK_BOTTOM_POINTS,
+  EVA_DISC_STAR_TOP_POINTS,
+  EVA_DISC_STAR_BOTTOM_POINTS,
+  EVA_DISC_STAR_SCALE,
+  EVA_MARK_PURPLE,
+  EVA_MARK_BLUE,
+} from "@eva/shared/evaMark";
+import {
+  EVA_DISC_STAR_BOTTOM_POINTS,
+  EVA_DISC_STAR_SCALE,
+  EVA_DISC_STAR_TOP_POINTS,
+  EVA_MARK_BLUE,
+  EVA_MARK_PURPLE,
+} from "@eva/shared/evaMark";
 
 /**
  * Favicon disc colours. Must read against OS tab chrome, not the app shell.
@@ -36,8 +30,8 @@ const FAVICON_SURFACE: Record<ThemeAppearance, string> = {
 
 /** Browser/OS chrome colour per theme, mirroring `--app-shell` in globals.css. */
 export const SHELL_COLOR: Record<ThemeAppearance, string> = {
-  light: "#F4F5F6",
-  dark: "#020202",
+  light: "#F5F5F5",
+  dark: "#060606",
   neutral: "#222325",
 };
 
@@ -85,13 +79,13 @@ function markGroup(surface: string): string {
 /** Unread bubble drawn after the mark so it sits on top of the disc edge. */
 function badgeGroup(label: string, fill: string, fg: string): string {
   return (
-    `<circle cx="${BADGE_CENTER}" cy="${BADGE_CENTER}" r="${BADGE_CUTOUT_RADIUS}" fill="#020202"/>` +
+    `<circle cx="${BADGE_CENTER}" cy="${BADGE_CENTER}" r="${BADGE_CUTOUT_RADIUS}" fill="#060606"/>` +
     `<circle cx="${BADGE_CENTER}" cy="${BADGE_CENTER}" r="${BADGE_RADIUS}" fill="${fill}"/>` +
     `<text x="${BADGE_CENTER}" y="${BADGE_CENTER}" text-anchor="middle" dominant-baseline="central" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="${badgeFontSize(label)}" fill="${fg}">${label}</text>`
   );
 }
 
-/** `countUnread` saturates at 100, so anything above 99 is reported as "99+". */
+/** Counts above 99 show as "99+". */
 export function formatBadgeLabel(count: number): string {
   return count > 99 ? "99+" : String(count);
 }

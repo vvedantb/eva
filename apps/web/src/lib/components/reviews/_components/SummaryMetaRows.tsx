@@ -12,6 +12,7 @@ import {
 import { usePrMetaEdit } from "../usePrMetaEdit";
 import { PrMetaEditor, type PrMetaOption } from "./PrMetaEditor";
 import { PrPreviewList } from "./PrPreviewList";
+import { prReviewers } from "@eva/shared";
 import {
   reviewStateMeta,
   type PrLabel,
@@ -58,18 +59,7 @@ export function SummaryMetaRows({
       adornment: <LabelDot color={label.color} />,
     }),
   );
-  const reviewers = [
-    ...overview.reviews.map((review) => ({
-      login: review.authorLogin,
-      avatarUrl: review.authorAvatarUrl,
-      state: review.state,
-    })),
-    ...overview.requestedReviewers.map((reviewer) => ({
-      login: reviewer.login,
-      avatarUrl: reviewer.avatarUrl,
-      state: "REQUESTED",
-    })),
-  ];
+  const reviewers = prReviewers(overview);
 
   return (
     <section className="space-y-1 px-4 pt-3 pb-1">

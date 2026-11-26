@@ -14,9 +14,7 @@ import {
 } from "@vvedantb/ui";
 import {
   IconAspectRatio,
-  IconCamera,
   IconCheck,
-  IconClick,
   IconDevices,
   IconDotsVertical,
   IconListTree,
@@ -28,7 +26,6 @@ import {
   normalizePreviewPath,
   type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
-import { usePreviewScreenshot } from "./usePreviewScreenshot";
 import { usePreviewSnapshot } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { usePreviewWebMcp } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import type { PreviewViewport } from "../_utils/previewViewport";
@@ -54,9 +51,6 @@ export function PreviewPanelNavBar({
   onToggleDevice,
   contain,
   onToggleContain,
-  annotationMode,
-  onAnnotationModeChange,
-  showAnnotationToggle,
   popOut,
   externalHrefForPath,
 }: {
@@ -77,25 +71,23 @@ export function PreviewPanelNavBar({
   /** Letterbox a locked viewport instead of filling the pane (responsive). */
   contain: boolean;
   onToggleContain: () => void;
-  annotationMode: boolean;
-  onAnnotationModeChange: (active: boolean) => void;
-  showAnnotationToggle: boolean;
-  /** Sessions on desktop only: toggles the floating mini-player. */
+  /** Sessions and quick tasks on desktop only: toggles the floating mini-player. */
   popOut?: { active: boolean; onToggle: () => void };
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }) {
   const { iframeRef } = useWebPreview();
   const frame = iframeElement ?? null;
-  const screenshot = usePreviewScreenshot(frame);
   const snapshot = usePreviewSnapshot({ iframeElement: frame });
   const webMcp = usePreviewWebMcp({ iframeElement: frame });
   const deviceActive = viewport.mode !== "fill";
   const containActive = contain || deviceActive;
-  const busy = screenshot.capturing || snapshot.capturing || webMcp.discovering;
+  const busy = snapshot.capturing || webMcp.discovering;
   // The menu hides these modes, so the trigger carries their "on" state.
   const anyModeActive =
-    deviceActive || containActive || annotationMode || popOut?.active === true;
+    deviceActive ||
+    containActive ||
+    popOut?.active === true;
 
   const toolsMenu = (
     <DropdownMenu>
@@ -139,12 +131,6 @@ export function PreviewPanelNavBar({
           />
         ) : null}
         <PreviewToolItem
-          icon={<IconCamera className="size-3.5" />}
-          label="Screenshot"
-          disabled={screenshot.capturing || frame === null}
-          onSelect={screenshot.capture}
-        />
-        <PreviewToolItem
           icon={<IconListTree className="size-3.5" />}
           label="Semantic snapshot"
           disabled={snapshot.disabled}
@@ -156,14 +142,6 @@ export function PreviewPanelNavBar({
           disabled={webMcp.disabled}
           onSelect={webMcp.discover}
         />
-        {showAnnotationToggle ? (
-          <PreviewToolItem
-            icon={<IconClick className="size-3.5" />}
-            label="Select element"
-            active={annotationMode}
-            onSelect={() => onAnnotationModeChange(!annotationMode)}
-          />
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -10,11 +10,10 @@ import {
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
-import {
-  phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -24,9 +23,11 @@ import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/select
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 interface ProjectsListViewProps {
-  projectsByPhase: Record<ProjectPhase, Project[]>;
-  visiblePhases: Set<ProjectPhase>;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  projectsByPhase: Record<ProjectStage, Project[]>;
+  visiblePhases: Set<ProjectStage>;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
+  onArchive: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
   onToggleSelect?: (
@@ -38,7 +39,8 @@ interface ProjectsListViewProps {
 export function ProjectsListView({
   projectsByPhase,
   visiblePhases,
-  onDelete,
+  statuses,
+  onArchive,
   isSelecting = false,
   selectedIds,
   onToggleSelect,
@@ -48,14 +50,14 @@ export function ProjectsListView({
     `${owner}/${name}/projects/list`,
   );
   const firstPaint = useFirstPaintGate();
-  const [openSections, setOpenSections] = useState<Set<ProjectPhase>>(() => {
+  const [openSections, setOpenSections] = useState<Set<ProjectStage>>(() => {
     const nonEmpty = new Set(
-      PROJECT_PHASES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
+      PROJECT_STAGES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
     );
-    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_PHASES);
+    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_STAGES);
   });
 
-  const toggleSection = (phase: ProjectPhase) => {
+  const toggleSection = (phase: ProjectStage) => {
     setOpenSections((prev) => {
       const next = new Set(prev);
       if (next.has(phase)) {
@@ -72,9 +74,9 @@ export function ProjectsListView({
       ref={scrollRef}
       className="flex-1 w-full overflow-y-auto scrollbar space-y-1"
     >
-      {PROJECT_PHASES.flatMap((phase) => {
+      {PROJECT_STAGES.flatMap((phase) => {
         if (!visiblePhases.has(phase)) return [];
-        const cfg = phaseConfig[phase];
+        const cfg = projectStageConfig[phase];
         const items = projectsByPhase[phase] ?? [];
         // Shift-click spans this section only — the visible order of the group
         // the click landed in, not the whole flattened list.
@@ -132,26 +134,22 @@ export function ProjectsListView({
                               rawInput={project.rawInput}
                               branchName={project.branchName}
                               numId={project.numId}
-                              repoFullName={`${owner}/${name}`}
                               createdAt={project._creationTime}
-                              accentColor={phaseConfig[phase].bar}
+                              accentColor={projectStageConfig[phase].bar}
                               members={project.members}
                               projectLead={project.projectLead}
-                              phase={phase}
-                              planningMode={project.planningMode}
-                              isBuilding={
-                                project.activeBuildWorkflowId !== undefined
-                              }
-                              sandboxStatus={project.reviewProjectSandboxStatus}
+                              status={statuses.get(project._id)}
+                              sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}
+                              archived={project.archivedAt !== undefined}
                               href={
                                 entityPathSegment(project)
                                   ? `${basePath}/projects/${entityPathSegment(project)}`
                                   : `${basePath}/projects`
                               }
-                              onDelete={() =>
-                                onDelete(project._id, project.title)
+                              onArchive={() =>
+                                onArchive(project._id, project.title)
                               }
                               isSelecting={isSelecting}
                               isSelected={selectedIds?.has(project._id)}

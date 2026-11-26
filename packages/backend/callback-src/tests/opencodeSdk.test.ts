@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { opencodeParseLine } from "../providers/opencode.js";
 import {
   createPartEmitState,
@@ -13,6 +13,7 @@ import type {
   OpencodeAssistantMessage,
   OpencodeClientLike,
   OpencodeEvent,
+  OpencodeMcpLocalConfig,
   OpencodeMcpRemoteConfig,
   OpencodePart,
 } from "../providers/opencodeSdkTypes.js";
@@ -280,14 +281,26 @@ test("opencodeErrorMessage prefers the server message, then the error name", () 
 
 function mcpClientStub(known: Record<string, { status: string } | undefined>): {
   client: Pick<OpencodeClientLike, "mcp">;
-  added: Array<{ name: string; config: OpencodeMcpRemoteConfig }>;
+  added: Array<{
+    name: string;
+    config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
+  }>;
+  calls: { status: number };
 } {
-  const added: Array<{ name: string; config: OpencodeMcpRemoteConfig }> = [];
+  const added: Array<{
+    name: string;
+    config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
+  }> = [];
+  const calls = { status: 0 };
   return {
     added,
+    calls,
     client: {
       mcp: {
-        status: () => Promise.resolve({ data: known }),
+        status: () => {
+          calls.status += 1;
+          return Promise.resolve({ data: known });
+        },
         add: (options) => {
           added.push(options.body);
           return Promise.resolve({
@@ -323,6 +336,51 @@ test("ensureEvaMcpServers registers the eva server on the live opencode server",
   ]);
 });
 
+test("ensureEvaMcpServers registers a repo stdio server as a local command", async () => {
+  const { client, added } = mcpClientStub({});
+
+  await ensureEvaMcpServers(client, {
+    "figma-dev": {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "figma-developer-mcp"],
+      env: { FIGMA_API_KEY: "f-1" },
+    },
+  });
+
+  expect(added).toEqual([
+    {
+      name: "figma-dev",
+      config: {
+        type: "local",
+        command: ["npx", "-y", "figma-developer-mcp"],
+        environment: { FIGMA_API_KEY: "f-1" },
+        enabled: true,
+      },
+    },
+  ]);
+});
+
+test("ensureEvaMcpServers registers a repo SSE server as remote", async () => {
+  const { client, added } = mcpClientStub({});
+
+  await ensureEvaMcpServers(client, {
+    events: { type: "sse", url: "https://example.com/sse", headers: {} },
+  });
+
+  expect(added).toEqual([
+    {
+      name: "events",
+      config: {
+        type: "remote",
+        url: "https://example.com/sse",
+        headers: {},
+        enabled: true,
+      },
+    },
+  ]);
+});
+
 test("ensureEvaMcpServers skips servers the opencode server already knows", async () => {
   const registered = mcpClientStub({ eva: { status: "connected" } });
   await ensureEvaMcpServers(registered.client, {
@@ -337,5 +395,6 @@ test("ensureEvaMcpServers skips servers the opencode server already knows", asyn
   // No MCP token in the environment means no status probe and no registration.
   const unconfigured = mcpClientStub({});
   await ensureEvaMcpServers(unconfigured.client, {});
+  expect(unconfigured.calls.status).toBe(0);
   expect(unconfigured.added).toEqual([]);
 });

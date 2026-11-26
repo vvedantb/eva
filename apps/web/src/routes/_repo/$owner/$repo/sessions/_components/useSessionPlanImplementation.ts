@@ -10,9 +10,9 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   buildPlanImplementationPrompt,
   buildPlanImplementationThreadTitle,
-} from "./planExport";
-import type { ProposedPlanRow } from "./proposedPlanLogic";
-import type { SessionSendOptions } from "./useChatSend";
+} from "@eva/shared/proposedPlan";
+import type { ProposedPlanRow } from "@eva/shared/proposedPlan";
+import type { ChatTurnSendOptions } from "@/lib/components/chat/useChatSend";
 
 export function useSessionPlanImplementation({
   sessionId,
@@ -26,7 +26,7 @@ export function useSessionPlanImplementation({
   handleSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
-    options?: SessionSendOptions,
+    options?: ChatTurnSendOptions,
   ) => void | Promise<void>;
   isRouteActive?: boolean;
 }) {

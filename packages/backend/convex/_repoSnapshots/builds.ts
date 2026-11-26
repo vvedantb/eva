@@ -8,20 +8,19 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   snapshotBuildStatusValidator,
-  sandboxProviderKindValidator,
   seededAppStatusValidator,
   snapshotBuildFields,
 } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
+import { findSiblingsOf } from "../_githubRepos/helpers";
 
-/** Full snapshot build doc as returned to the client (provider always resolved). */
+/** Full snapshot build doc as returned to the client. */
 const snapshotBuildReturnValidator = v.object({
   _id: v.id("snapshotBuilds"),
   _creationTime: v.number(),
   ...snapshotBuildFields,
-  provider: sandboxProviderKindValidator,
 });
 
 const STALE_BUILD_MS = 30 * 60 * 1000;
@@ -56,7 +55,7 @@ async function expireStaleBuild(
   if (Date.now() - runningBuild.startedAt > STALE_BUILD_MS) {
     await ctx.db.patch(runningBuild._id, {
       status: "error",
-      error: "Build timed out (exceeded 20 minutes)",
+      error: `Build timed out (exceeded ${STALE_BUILD_MS / 60_000} minutes)`,
       completedAt: Date.now(),
     });
     return false;
@@ -70,30 +69,6 @@ function sanitizeBuildForReturn(build: Doc<"snapshotBuilds">) {
     seededApps: sanitizeSeededApps(build.seededApps),
   };
 }
-
-/**
- * Provider for display: persisted on the build when possible. Legacy rows and
- * builds still running infer from log markers (env vars are encrypted and
- * cannot be read in query handlers).
- */
-function resolveBuildProvider(_build: Doc<"snapshotBuilds">): "vercel" {
-  return "vercel";
-}
-
-/** Persists the sandbox provider at workflow start (requires action to decrypt env). */
-export const setBuildProvider = internalMutation({
-  args: {
-    buildId: v.id("snapshotBuilds"),
-    provider: sandboxProviderKindValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const build = await ctx.db.get(args.buildId);
-    if (!build) return null;
-    await ctx.db.patch(args.buildId, { provider: args.provider });
-    return null;
-  },
-});
 
 /** Lists the most recent 20 snapshot builds for a given snapshot config. */
 export const listBuilds = authQuery({
@@ -110,10 +85,7 @@ export const listBuilds = authQuery({
       )
       .order("desc")
       .take(20);
-    return builds.map((build) => ({
-      ...sanitizeBuildForReturn(build),
-      provider: resolveBuildProvider(build),
-    }));
+    return builds.map(sanitizeBuildForReturn);
   },
 });
 
@@ -129,21 +101,7 @@ export const getBuild = authQuery({
     const config = await ctx.db.get(build.repoSnapshotId);
     if (!config) return null;
     await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);
-    return {
-      ...sanitizeBuildForReturn(build),
-      provider: resolveBuildProvider(build),
-    };
-  },
-});
-
-/** Returns just the build status, used by the safety-net poller to avoid double-completing. */
-export const getBuildStatus = internalQuery({
-  args: { buildId: v.id("snapshotBuilds") },
-  returns: v.union(snapshotBuildStatusValidator, v.null()),
-  handler: async (ctx, args) => {
-    const build = await ctx.db.get(args.buildId);
-    if (!build) return null;
-    return build.status;
+    return sanitizeBuildForReturn(build);
   },
 });
 
@@ -155,7 +113,6 @@ export const triggerScheduledBuild = internalMutation({
     // the build as manual so completeBuild does not enqueue cron retries.
     disableRetries: v.optional(v.boolean()),
     forceImageRebuild: v.optional(v.boolean()),
-    forceBaseSeed: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -190,7 +147,6 @@ export const triggerScheduledBuild = internalMutation({
         buildId,
         repoSnapshotId: args.repoSnapshotId,
         forceImageRebuild: args.forceImageRebuild,
-        forceBaseSeed: args.forceBaseSeed,
       },
     );
     await ctx.db.patch(buildId, { workflowId });
@@ -213,17 +169,11 @@ export const listReferencedSandboxIds = internalQuery({
       if (sandboxId && !ids.includes(sandboxId)) ids.push(sandboxId);
     };
 
-    const tasks = await ctx.db.query("agentTasks").collect();
-    for (const task of tasks) add(task.sandboxId);
-
     const runs = await ctx.db.query("agentRuns").collect();
     for (const run of runs) add(run.sandboxId);
 
     const sessions = await ctx.db.query("sessions").collect();
     for (const session of sessions) add(session.sandboxId);
-
-    const projects = await ctx.db.query("projects").collect();
-    for (const project of projects) add(project.sandboxId);
 
     const docs = await ctx.db.query("docs").collect();
     for (const doc of docs) add(doc.sandboxId);
@@ -264,10 +214,8 @@ export const startBuild = authMutation({
         const now = Date.now();
         const id = await ctx.db.insert("repoSnapshots", {
           repoId: effectiveAppRepoId,
-          snapshotName: `snapshot-${effectiveAppRepoId}`,
           schedule: sharedConfig.schedule,
           enabled: sharedConfig.enabled ?? true,
-          workflowRef: sharedConfig.workflowRef,
           buildCommands: sharedConfig.buildCommands,
           seedCommands: sharedConfig.seedCommands,
           // Do not copy baseSnapshotId — that may be another app's Vercel snap.
@@ -339,12 +287,7 @@ export const startBuildForRepo = internalMutation({
     if (!repoSnapshotId) {
       const repo = await ctx.db.get(args.repoId);
       if (!repo) throw new Error("Repo not found");
-      const siblings = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", repo.owner).eq("name", repo.name),
-        )
-        .collect();
+      const siblings = await findSiblingsOf(ctx.db, repo);
       let shared: Doc<"repoSnapshots"> | null = null;
       for (const sibling of siblings) {
         if (sibling._id === args.repoId) continue;
@@ -361,10 +304,8 @@ export const startBuildForRepo = internalMutation({
       const now = Date.now();
       repoSnapshotId = await ctx.db.insert("repoSnapshots", {
         repoId: args.repoId,
-        snapshotName: `snapshot-${args.repoId}`,
         schedule: shared.schedule,
         enabled: shared.enabled ?? true,
-        workflowRef: shared.workflowRef,
         buildCommands: shared.buildCommands,
         seedCommands: shared.seedCommands,
         createdAt: now,
@@ -443,7 +384,6 @@ export const completeBuild = internalMutation({
         status: "running",
         triggeredBy: "cron",
         kind: build.kind,
-        provider: build.provider,
         logs: `Retry ${retryCount}/${MAX_CRON_RETRIES} after failure: ${args.error ?? "unknown error"}\n`,
         startedAt: now,
         retryCount,

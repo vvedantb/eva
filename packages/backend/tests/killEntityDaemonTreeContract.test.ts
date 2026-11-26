@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   buildKillEntityDaemonCmd,
   entityDaemonPaths,
@@ -79,6 +79,35 @@ const pidAlive = (pid: number): boolean => {
   }
 };
 
+/**
+ * Whether a process is gone for the lock's purposes: no longer listed, or a
+ * zombie. A zombie has closed its fds, so it no longer holds the flock; it
+ * only waits for its new parent (the sandbox's init) to reap it, which under
+ * CI load can lag the kill by a scheduler tick.
+ */
+const processGone = (pid: number): boolean => {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    // The state is the field after the `(comm)`, which may itself hold spaces.
+    return stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z");
+  } catch {
+    return !pidAlive(pid);
+  }
+};
+
+/**
+ * Waits up to `ms` for a signalled process to go. The relaunch runs ~1s after
+ * the kill, so a child that is gone within that window never blocks it; a
+ * child the kill missed is still there after it, and fails the test.
+ */
+const goneWithin = async (pid: number, ms: number): Promise<boolean> => {
+  for (let waited = 0; waited < ms; waited += 20) {
+    if (processGone(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return processGone(pid);
+};
+
 const readPid = async (file: string): Promise<number> => {
   for (let i = 0; i < 50; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -116,7 +145,7 @@ bashDescribe("the generated command kills a real process tree", () => {
       `echo $$ > ${parentPidFile}\nsleep 300 &\necho $! > ${childPidFile}\nwait\n`,
     );
 
-    // setsid so the tree's parent is init, not vitest: node reaps its own
+    // setsid so the tree's parent is init, not the test runner: node reaps its own
     // children asynchronously, and a zombie still answers `kill -0`, which
     // would push the wait loop to its SIGKILL fallback for the wrong reason.
     spawn("setsid", ["bash", script], {
@@ -144,10 +173,12 @@ bashDescribe("the generated command kills a real process tree", () => {
         pidAlive(parentPid),
         "the command returned before the daemon exited",
       ).toBe(false);
+      // The command waits for the daemon only; its child gets the same signal and
+      // goes a moment later, well inside the ~1s before the relaunch.
       expect(
-        pidAlive(childPid),
+        await goneWithin(childPid, 1_000),
         "the daemon's child outlived it and would keep the inherited flock fd held",
-      ).toBe(false);
+      ).toBe(true);
     } finally {
       for (const pid of [childPid, parentPid]) {
         if (pid > 0) {

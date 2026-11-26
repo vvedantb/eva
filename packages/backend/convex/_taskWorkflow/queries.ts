@@ -2,21 +2,22 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { taskBranchName } from "../_git/branchNames";
+import { findLivePullRequestOnBranch } from "../_pullRequests/store";
+import { taskStatusValidator } from "../_validators/enums";
 import {
   buildTraitsExecutionPayload,
   reasoningLevelValidator,
   runModeValidator,
 } from "../validators";
-import {
-  resolveTaskWorkflowBaseBranch,
-  resolveTaskWorkflowBaseBranchForTask,
-} from "./resolveBaseBranch";
+import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   buildImplementationPrompt,
   buildConflictResolutionPrompt,
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
+import { childTaskProjectBlock } from "../_sessions/sessionPrompt";
 
 const MONTH_NAMES = [
   "January",
@@ -69,6 +70,8 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
+    /** The task's own session: its sandbox is the one the run reuses. */
+    ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
   },
@@ -90,19 +93,29 @@ export const getTaskData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
     }),
-    projectSandboxId: v.optional(v.string()),
-    taskSandboxId: v.optional(v.string()),
-    keepTaskSandboxActiveAfterRun: v.boolean(),
     deploymentProjectName: v.optional(v.string()),
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
     devCommand: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
+    const [task, repo, comments, successfulRuns] = await Promise.all([
+      ctx.db.get(args.taskId),
+      ctx.db.get(args.repoId),
+      ctx.db
+        .query("taskComments")
+        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+      // Only surface comments the last successful run hasn't already
+      // addressed (see the cutoff below).
+      ctx.db
+        .query("agentRuns")
+        .withIndex("by_task_and_status", (q) =>
+          q.eq("taskId", args.taskId).eq("status", "success"),
+        )
+        .collect(),
+    ]);
     if (!task) throw new Error("Task not found");
-
-    const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
     const resolveDescriptionForPrompt = async (
@@ -121,49 +134,34 @@ export const getTaskData = internalQuery({
       return resolvedMessage;
     };
 
-    let projectSandboxId: string | undefined;
     let projectContext: { title: string; description?: string } | undefined;
-    let project = null;
+    // A child task's run carries the same project half its chat turns do:
+    // its place in the project and the brief.
+    let projectBlock = "";
     if (args.projectId) {
-      project = await ctx.db.get(args.projectId);
+      const project = await ctx.db.get(args.projectId);
       if (project) {
-        projectSandboxId = project.sandboxId;
-
         projectContext = {
           title: project.title,
           description: await resolveDescriptionForPrompt(
             project.description ?? undefined,
           ),
         };
+        projectBlock = await childTaskProjectBlock(ctx, project);
       }
     }
+    // The coordinator's retry note or the answer to the task's question.
+    const runNote = (await ctx.db.get(args.runId))?.note?.trim() ?? "";
 
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
     );
-
-    // Non-project (quick) tasks persist their sandbox on the task itself so
-    // change-request / resolve_conflicts runs reuse the same paused filesystem.
-    const taskSandboxId = args.projectId ? undefined : task.sandboxId;
-    const keepTaskSandboxActiveAfterRun =
-      !args.projectId && task.reviewTaskSandboxStatus === "active";
-
-    const comments = await ctx.db
-      .query("taskComments")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
     // latest successful run's startedAt (not finishedAt), so comments added
     // while that run was in-flight still carry over. Failed/errored runs are
     // NOT cutoffs — their comments stay unaddressed for the next retry.
-    const successfulRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task_and_status", (q) =>
-        q.eq("taskId", args.taskId).eq("status", "success"),
-      )
-      .collect();
     const latestSuccessfulRun = successfulRuns.reduce<Doc<"agentRuns"> | null>(
       (latest, run) => {
         if (run.startedAt === undefined) return latest;
@@ -226,7 +224,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || `eva/task-${args.taskId}`;
+    const branchName = args.branchName || taskBranchName(task);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -242,7 +240,7 @@ export const getTaskData = internalQuery({
       args.mode === "resolve_conflicts"
         ? buildConflictResolutionPrompt(
             branchName,
-            resolveTaskWorkflowBaseBranch(task, repo, project ?? undefined),
+            resolveTaskWorkflowBaseBranch(task, repo),
             rootDirectory,
             repo.owner,
             repo.name,
@@ -268,7 +266,9 @@ export const getTaskData = internalQuery({
           );
 
     return {
-      prompt,
+      prompt: [prompt, projectBlock, runNote]
+        .filter((block) => block !== "")
+        .join("\n\n"),
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
@@ -281,9 +281,6 @@ export const getTaskData = internalQuery({
         use1mContext: task.use1mContext,
         fastMode: task.fastMode,
       }),
-      projectSandboxId,
-      taskSandboxId,
-      keepTaskSandboxActiveAfterRun,
       deploymentProjectName: repo.deploymentProjectName,
       rootDirectory,
       devPort: repo.devPort,
@@ -311,49 +308,55 @@ export const getTaskPrCreationData = internalQuery({
     rootDirectory: v.string(),
     projectId: v.optional(v.id("projects")),
     isQuickTask: v.boolean(),
+    taskStatus: taskStatusValidator,
     latestRunId: v.union(v.id("agentRuns"), v.null()),
     existingPrUrl: v.union(v.string(), v.null()),
     changeRequests: v.array(v.string()),
   }),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
+    const [task, runs, changeRequests] = await Promise.all([
+      ctx.db.get(args.taskId),
+      ctx.db
+        .query("agentRuns")
+        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+      getChangeRequestContents(ctx, args.taskId),
+    ]);
     if (!task) throw new Error("Task not found");
     if (!task.repoId) throw new Error("Task has no repository");
 
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
     const sortedRuns = runs.sort(
       (a, b) =>
         (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
     );
     const latestRun = sortedRuns[0] ?? null;
-    const existingPrUrl = sortedRuns.find((r) => r.prUrl)?.prUrl ?? null;
-
-    const changeRequests = await getChangeRequestContents(ctx, args.taskId);
+    const branchName = taskBranchName(task);
+    // Only a live PR blocks a new one: after a merge or close, new commits on
+    // the branch need a fresh PR.
+    const livePr = await findLivePullRequestOnBranch(
+      ctx.db,
+      repo._id,
+      branchName,
+    );
 
     return {
       repoId: repo._id,
       installationId: repo.installationId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: `eva/task-${args.taskId}`,
-      baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-        ctx.db,
-        task,
-        repo,
-      ),
+      branchName,
+      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
       taskTitle: task.title,
       taskDescription: task.description,
       rootDirectory: repo.rootDirectory ?? "",
       projectId: task.projectId,
       isQuickTask: task.projectId === undefined,
+      taskStatus: task.status,
       latestRunId: latestRun ? latestRun._id : null,
-      existingPrUrl,
+      existingPrUrl: livePr?.prUrl ?? null,
       changeRequests,
     };
   },

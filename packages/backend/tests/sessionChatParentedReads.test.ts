@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Since sessions hold several chats, a session's messages hang off its
@@ -11,14 +12,17 @@ import { openSessionChatTurn } from "../convex/_chat/turnStore";
  * and write through the chat.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-reads";
 
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
+    // The scope check is opt-in per asker (a1f8918ed), so this user opts in.
+    const userId = await ctx.db.insert("users", {
+      clerkId: CLERK_ID,
+      experimentalFlags: { scopeCheck: true },
+    });
     const repoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",
       name: "eva",
@@ -26,6 +30,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Seed invoices",
@@ -53,6 +58,7 @@ async function fixture() {
     await ctx.db.insert("messages", {
       parentId: mainChatId,
       role: "user",
+      userId,
       content: "Seed the invoices table",
       timestamp: 1_000,
     });
@@ -139,6 +145,7 @@ describe("session reads go through its chats", () => {
       const f = await fixture();
       const otherSessionId = await f.t.run(async (ctx) =>
         ctx.db.insert("sessions", {
+          owner: { kind: "standalone" },
           repoId: f.repoId,
           userId: f.userId,
           title: "Other",

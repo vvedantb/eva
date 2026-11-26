@@ -2,11 +2,14 @@ import { cn } from "@eva/ui";
 import {
   BorderBeam,
   Button,
+  CrossfadeIconSlot,
   InputGroupAddon,
   PromptInput,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTools,
+  SendQueueIcon,
+  Spinner,
   toast,
   Tooltip,
   TooltipContent,
@@ -67,6 +70,7 @@ interface DataMenuItem {
 
 export function ComposerInputChrome({
   repo,
+  mentionEva,
   mentionRef,
   skillItems,
   plusDataItems,
@@ -84,9 +88,12 @@ export function ComposerInputChrome({
   messageHistory,
   allowEmptySubmit,
   predictionTarget,
+  warnFor,
   onDraftChange,
 }: {
   repo?: ChatRepo;
+  /** A project coordinator chat: `@Eva` is in the mention picker. */
+  mentionEva?: boolean;
   mentionRef: RefObject<MentionTextareaHandle | null>;
   skillItems: SlashItem[];
   plusDataItems: DataMenuItem[];
@@ -107,10 +114,13 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
+  /** Amber border while the draft-readiness nudge is up for this text; it beats the focus border. */
+  warnFor?: (text: string) => boolean;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
+  const warn = warnFor?.(textInput.value) ?? false;
   // A PR row dropped here becomes a context chip. Absent outside ChatBody
   // (Manager Ave), where the drop is left to the browser.
   const pullRequests = usePendingPullRequests();
@@ -125,7 +135,7 @@ export function ComposerInputChrome({
     fileCount: attachments.files.length,
   });
 
-  // Up to five session shells plus Manager Ave stay mounted, so a shortcut
+  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
   // registered here fires once per mounted composer. Only the one on screen
   // may act — see composerVisibility.ts.
   const isVisibleComposer = () =>
@@ -199,7 +209,6 @@ export function ComposerInputChrome({
                   size="icon-sm"
                   type="button"
                   variant="destructive"
-                  className="rounded-full"
                   onClick={onCancel}
                   aria-label="Stop Eva"
                 >
@@ -258,6 +267,8 @@ export function ComposerInputChrome({
               compact
                 ? "h-12 items-center rounded-full py-1"
                 : "h-auto rounded-surface",
+              // `!`: the InputGroup focus state sets its own border and ring colour.
+              warn && "border-warning! ring-warning/40!",
             )}
           >
             <ChatAttachmentPreview />
@@ -273,6 +284,7 @@ export function ComposerInputChrome({
               key="composer-editor"
               ref={mentionRef}
               repo={repo}
+              mentionEva={mentionEva}
               skillItems={skillItems}
               placeholder={placeholder}
               initialMentionMap={seedMentionMap}
@@ -334,9 +346,6 @@ function ChatBodySubmit({
         isUploading ||
         (isEmpty && !hasPendingContext && !allowEmptySubmit)
       }
-      // "submitted" is the button's own spinner state. Fetch uploads report no
-      // bytes, so a spinner is the honest signal — a percentage would be made up.
-      {...(isUploading ? { status: "submitted" as const } : {})}
       className="size-9"
       title={
         isUploading
@@ -345,6 +354,12 @@ function ChatBodySubmit({
             ? "Queue message"
             : "Send message"
       }
-    />
+    >
+      {/* Fetch uploads report no bytes, so a spinner is the honest signal — a
+          percentage would be made up. */}
+      <CrossfadeIconSlot iconKey={isUploading ? "uploading" : "send"}>
+        {isUploading ? <Spinner /> : <SendQueueIcon queued={isExecuting} />}
+      </CrossfadeIconSlot>
+    </PromptInputSubmit>
   );
 }

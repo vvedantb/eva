@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `createForkedSession` (fix #882): the fork stacks on the source — its base
@@ -14,7 +15,6 @@ import schema from "../convex/schema";
  * source Main chat's composer traits.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -33,6 +33,7 @@ async function fixture() {
       defaultBaseBranch: "main",
     });
     const id = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Seed the invoices table",
@@ -73,16 +74,28 @@ async function fixture() {
   return { t: t.withIdentity({ subject: CLERK_ID }), sourceId };
 }
 
+/**
+ * Keeps the work the fork schedules from firing after the test has ended,
+ * where its writes land outside any transaction (an unhandled rejection).
+ */
+async function withoutScheduledRuns<T>(run: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    return await run();
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 async function createFork(stackOnSource: boolean) {
   const { t, sourceId } = await fixture();
-  const { sessionId } = await t.mutation(
-    internal.sessions.createForkedSession,
-    {
+  const { sessionId } = await withoutScheduledRuns(() =>
+    t.mutation(internal.sessions.createForkedSession, {
       sourceSessionId: sourceId,
       sourceSandboxId: "sbx_source",
       restartSource: false,
       stackOnSource,
-    },
+    }),
   );
   return await t.run(async (ctx) => {
     const mainChat = await ctx.db

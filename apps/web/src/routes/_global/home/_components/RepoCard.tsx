@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { m } from "motion/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -36,24 +37,18 @@ export type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 export function RepoCard({
   repo,
   index,
-  onManageApps,
 }: {
   repo: Repo;
   index: number;
-  onManageApps: () => void;
 }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
-    const visible = localStore.getQuery(api.githubRepos.list, {});
-    if (visible !== undefined && args.hidden) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        {},
-        visible.filter((r) => r._id !== args.repoId),
-      );
-    }
+    if (!args.hidden) return;
+    patchLoadedQuery(localStore, api.githubRepos.list, {}, (repos) =>
+      repos.filter((r) => r._id !== args.repoId),
+    );
   });
   const { uploadLogo, removeLogo } = useRepoLogoUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +62,6 @@ export function RepoCard({
   const menuProps = {
     hasLogo: Boolean(repo.logoUrl),
     onRename: () => setRenameOpen(true),
-    onManageApps,
     onPickLogo: () => fileInputRef.current?.click(),
     onRemoveLogo: () => removeLogo(repo._id),
     onHide: () =>

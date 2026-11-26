@@ -4,6 +4,8 @@
  * Email clients ignore <style>/external CSS, so every style is inlined.
  */
 
+import { escapeHtml } from "@eva/shared/escapeHtml";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import {
   CHANGELOG_CATEGORIES,
   changelogSections,
@@ -54,16 +56,6 @@ const BRAND_TINT = "#eef2ff";
 const FONT_STACK =
   "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-/** Escapes the five HTML-significant characters so user content cannot break the markup. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 /** Removes trailing slashes so a base URL can have a path appended cleanly. */
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
@@ -95,11 +87,15 @@ function formatDate(timestamp: number): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-/** Joins the app base URL with a notification path, tolerating slashes on either side. */
+/**
+ * Joins the app base URL with a notification path, tolerating slashes on
+ * either side. A path that is not app-internal falls back to the app root, so
+ * a stored href can never point a mailed link at another site.
+ */
 function buildLink(appUrl: string, href: string): string {
   const base = stripTrailingSlash(appUrl);
   const path = href.startsWith("/") ? href : `/${href}`;
-  return `${base}${path}`;
+  return isInternalAppHref(path) ? `${base}${path}` : base;
 }
 
 /** A filled brand-colour call-to-action link. */

@@ -8,7 +8,6 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
   Markdown,
-  MarkdownLink,
   ScreenshotPreview,
   VideoPreview,
 } from "@vvedantb/ui";
@@ -17,15 +16,15 @@ import {
   DataMentionChip,
   SkillMentionChip,
   UserMentionChip,
-  LinkChip,
   isSkillTokenId,
   isHarnessSkillTokenId,
-  isChipLinkUrl,
   MENTION_CHIP_CLASS,
   SKILL_CHIP_CLASS,
 } from "@/lib/components/mentions";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
-import { remarkMentionChips, MENTION_HREF_REGEX } from "./remarkMentionChips";
+import { EVA_MENTION_ID, parseMentionChipHref } from "@eva/shared";
+import { remarkMentionChips } from "./remarkMentionChips";
+import { ChatMarkdownLink } from "./ChatMarkdownLink";
 
 interface MarkdownMentionTextProps {
   text: string;
@@ -106,9 +105,14 @@ export function AtMentionChip({
   repoId: Id<"githubRepos">;
   onNavigateToData: (e: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const entity = useQuery(api.mentions.getEntity, { id, repoId });
+  // `@Eva` names no row: nothing to look up, and no hover card.
+  const isEva = id === EVA_MENTION_ID;
+  const entity = useQuery(
+    api.mentions.getEntity,
+    isEva ? "skip" : { id, repoId },
+  );
 
-  if (entity === undefined) {
+  if (isEva || entity === undefined) {
     // Kind not resolved yet — render a neutral, non-interactive placeholder
     // rather than guessing (a click during this window must not misfire).
     return <span className={MENTION_CHIP_CLASS}>@{label}</span>;
@@ -180,17 +184,14 @@ export function MarkdownMentionText({
         },
         a: ({ href, children }) => {
           const match =
-            typeof href === "string" ? href.match(MENTION_HREF_REGEX) : null;
+            typeof href === "string" ? parseMentionChipHref(href) : null;
 
           if (!match) {
-            if (typeof href === "string" && isChipLinkUrl(href)) {
-              return <LinkChip url={href} />;
-            }
-            return <MarkdownLink href={href}>{children}</MarkdownLink>;
+            return <ChatMarkdownLink href={href}>{children}</ChatMarkdownLink>;
           }
 
-          const prefix = match[1];
-          const id = match[2];
+          const prefix = match.kind;
+          const id = match.id;
           const label = childrenToText(children);
 
           // `/` → skill

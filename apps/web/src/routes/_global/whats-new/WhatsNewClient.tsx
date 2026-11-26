@@ -9,12 +9,12 @@ import {
   tokenTransition,
   staggerDelay,
   Markdown,
+  EmptyState,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 
 /**
  * Every published entry of the "Eva Weekly Changelog" automation as a timeline.
@@ -28,11 +28,13 @@ export function WhatsNewClient() {
       {entries === undefined ? (
         <CenteredSpinner label="Loading updates" />
       ) : entries.length === 0 ? (
-        <EmptyState
-          icon={<IconSparkles size={24} />}
-          title="Nothing new yet"
-          description="Published weekly updates will show up here."
-        />
+        <EmptyState.Root>
+          <EmptyState.Icon icon={IconSparkles} size={24} />
+          <EmptyState.Title>Nothing new yet</EmptyState.Title>
+          <EmptyState.Description>
+            Published weekly updates will show up here.
+          </EmptyState.Description>
+        </EmptyState.Root>
       ) : (
         // The rail is drawn on the list, not per entry, so it runs unbroken
         // between cards instead of restarting at each one.

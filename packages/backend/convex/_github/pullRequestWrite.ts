@@ -3,6 +3,8 @@
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "../githubAuth";
 import { isPullRequestAlreadyExistsError } from "./prErrors";
+import { errorMessage } from "@vvedantb/server";
+import { sleep } from "../_shared/async";
 
 const PR_READY_WAIT_DELAYS_MS = [0, 1000, 2000, 4000, 8000, 12000, 16000];
 
@@ -32,12 +34,6 @@ export type OpenPullRequestRef = {
   number: number;
   body: string | null;
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 export async function findOpenPullRequestForBranch(
   params: PullRequestWriteTarget,
@@ -100,9 +96,10 @@ export async function waitForPullRequestHead(params: {
 export async function createPullRequestWithGitHub(
   args: PullRequestCreateParams,
 ): Promise<string> {
+  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
-  const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const existingPr = await findOpenPullRequestForBranch(args);
+  const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   if (existingPr) {
     await octokit.rest.pulls.update({
       owner: args.repoOwner,
@@ -163,7 +160,7 @@ export async function createPullRequestWithGitHub(
       });
     } catch (labelError) {
       console.error(
-        `Failed to add labels to PR ${prUrl}: ${labelError instanceof Error ? labelError.message : String(labelError)}`,
+        `Failed to add labels to PR ${prUrl}: ${errorMessage(labelError)}`,
       );
     }
   }
@@ -174,6 +171,7 @@ export async function createPullRequestWithGitHub(
 export async function refreshPullRequestBodyWithGitHub(
   args: PullRequestRefreshParams,
 ): Promise<string> {
+  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
   const pr = await findOpenPullRequestForBranch(args);
   if (!pr) {

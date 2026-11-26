@@ -5,6 +5,73 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
+  isThemeMode,
+  themeAppearance,
+  type ThemeAppearance,
+  type ThemeMode,
+} from "./themeMode";
+export {
+  CONVEX_ID_PATTERN,
+  MENTION_HREF_REGEX,
+  MENTION_TOKEN_REGEX,
+  SKILL_TOKEN_REGEX,
+  buildMentionPattern,
+  buildSkillPattern,
+  escapeRegExp,
+  formatMentionToken,
+  formatSkillToken,
+  harnessSkillTokenId,
+  isHarnessSkillTokenId,
+  isSystemSkillTokenId,
+  mentionChipHref,
+  mentionTokensToChipLinks,
+  mentionTokensToEditableText,
+  parseMentionChipHref,
+  systemSkillTokenId,
+  tokenizeMentionText,
+  tokenizedToDisplayText,
+  tokenizedToEditable,
+  type MentionChipKind,
+  type MentionTokenMaps,
+} from "./mentionText";
+export {
+  carriedAccountForProvider,
+  defaultAccountForProvider,
+  projectPickerAccounts,
+  toPickerAccounts,
+  type PickerAccount,
+} from "./providerAccounts";
+export {
+  CLAUDE_HARNESS_SKILLS,
+  acceptMentionTrigger,
+  dataMentionItems,
+  filterMentionItems,
+  findMentionTrigger,
+  harnessCatalogProvider,
+  harnessSlashItems,
+  isClaudeSkillSourcePath,
+  isInsertedTokenTrigger,
+  matchesMentionQuery,
+  mergeMentionItems,
+  peopleMentionItems,
+  selectRepoSkillsForProvider,
+  shouldShowMentionPicker,
+  skillSlashItems,
+  type HarnessSkill,
+  type InsertedToken,
+  type MentionItem,
+  type MentionKind,
+  type MentionTrigger,
+  type SlashItem,
+} from "./mentionComposer";
+export {
+  chatMessageRoute,
+  EVA_MENTION_ID,
+  EVA_MENTION_ITEM,
+  mentionsEva,
+  type ChatMessageRoute,
+} from "./chatMessageRoute";
+export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,
   sandboxPausedAlertText,
@@ -15,6 +82,27 @@ export {
   isSandboxUserEngaged,
   sandboxPresenceRoomId,
 } from "./sandboxPresence";
+export {
+  DEFAULT_SANDBOX_SIZE,
+  SANDBOX_SIZES,
+  SANDBOX_SIZE_OPTIONS,
+  sandboxVcpus,
+  type SandboxSize,
+} from "./sandboxSize";
+export {
+  DEFAULT_PREVIEW_PORT,
+  DESKTOP_PORT,
+  EDITOR_PORT,
+  previewProxyPort,
+} from "./sandboxPorts";
+export { MAX_PARALLEL_CHATS } from "./sessionChats";
+export { terminalHistoryTail } from "./terminalHistory";
+export { isAgentBrowsingActive } from "./agentBrowsing";
+export {
+  SANDBOX_STARTUP_PREFIX,
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+} from "./sandboxOwnerKeys";
 export {
   PREVIEW_WAKE_KINDS,
   previewWakePath,
@@ -37,6 +125,7 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export { titleFromPrompt } from "./promptTitle";
 export {
   composerTraitFields,
   hasComposerTraitUpdate,
@@ -55,3 +144,312 @@ export {
   type ForkTranscriptPrefix,
   type ForkTranscriptTurn,
 } from "./messageFork";
+export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
+export { buildPrecedingUserTurns } from "./precedingUserTurns";
+export {
+  chatStreamingEntityId,
+  findStreamingTargetMessage,
+} from "./chatStreaming";
+export {
+  threadAnswerContent,
+  threadPendingQuestion,
+  threadRootPreview,
+  threadTurnStatusText,
+} from "./replyThreads";
+export {
+  findBubbleGroups,
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+  type ChatUserAttribution,
+} from "./teammateMessages";
+export {
+  isLivePrState,
+  orderPrsLiveFirst,
+  prStateLabel,
+  prStateTone,
+  pullRequestsMenuLabel,
+  type LivePrState,
+  type PrState,
+  type PrStateTone,
+} from "./prState";
+export {
+  canSendSessionForReview,
+  sessionCountLabel,
+  sessionMenuActions,
+  type SessionMenuAction,
+} from "./sessionMenu";
+export {
+  draftCountAfterRemove,
+  draftPrompt,
+  draftsAfterRemove,
+} from "./draftVisibility";
+export {
+  ARCHIVE_LABEL,
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
+  UNARCHIVE_LABEL,
+  archiveCopy,
+  isArchiveListMode,
+  type ArchivableKind,
+  type ArchiveListMode,
+} from "./archive";
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+  type ChatSourceKind,
+  type ChatSourceLabelFields,
+} from "./chatSourceLabel";
+export { standupEntryHeading, standupEntryTime } from "./standup";
+export {
+  QUICK_TASK_FILTER_DEFAULTS,
+  QUICK_TASK_LIST_DEFAULTS,
+  QUICK_TASK_SORT_DEFAULTS,
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_SORT_FIELD_LABELS,
+  QUICK_TASK_TIME_RANGES,
+  QUICK_TASK_TIME_RANGE_LABELS,
+  activeQuickTaskFilterKeys,
+  applyQuickTaskFilters,
+  quickTaskTodoDrafts,
+  clearedQuickTaskFilter,
+  clearedQuickTaskFilters,
+  hasActiveQuickTaskFilters,
+  quickTaskFilterChips,
+  runAllPlan,
+  startAll,
+  toggleQuickTaskStatus,
+  type FilterableQuickTask,
+  type QuickTaskFilterChip,
+  type QuickTaskFilterKey,
+  type QuickTaskListFilters,
+  type QuickTaskSortDir,
+  type QuickTaskSortField,
+  type QuickTaskTimeRange,
+} from "./quickTaskFilters";
+export {
+  ENTITY_SECTION,
+  entityHref,
+  parseEvaEntityLink,
+  repoBasePath,
+  type EvaEntityLink,
+  type EvaLinkSection,
+} from "./repoPath";
+export {
+  PRIORITY_LABELS,
+  PRIORITY_ORDER,
+  TASK_STATUSES,
+  TASK_STATUS_LABELS,
+  formatEntityNumLabel,
+  groupByTaskStatus,
+  priorityCompare,
+  statusWorkflowOrder,
+  type DisplayTaskStatus,
+  type Priority,
+  type TaskStatus,
+} from "./taskMeta";
+export {
+  getNotificationAppearance,
+  type NotificationAppearance,
+  type NotificationIconName,
+  type NotificationTone,
+} from "./notificationAppearance";
+export {
+  toRepoRelativePath,
+  toSandboxFilePath,
+  workspaceRepoName,
+  workspaceRootPath,
+} from "./sandboxFilePath";
+export {
+  DIFF_FILE_KINDS,
+  applyIgnoreWhitespace,
+  buildDiffFileEntries,
+  diffFileKind,
+  ignoreWhitespaceInPatch,
+  lineCommentTarget,
+  lineRangeCommentTarget,
+  summarizeDiffSize,
+  reviewCommentExcerpt,
+  unifiedDiffLines,
+  type DiffFileEntry,
+  type DiffFileKind,
+  type DiffFileStatus,
+  type DiffSize,
+  type UnifiedDiffLine,
+} from "./diffFiles";
+export {
+  MERGE_METHODS,
+  PR_LIST_STATES,
+  REVIEW_EVENT_OPTIONS,
+  buildSummaryComments,
+  canMergePr,
+  canSubmitReview,
+  checkTone,
+  checksHeadline,
+  checksOverallTone,
+  countChecks,
+  githubPrUrl,
+  headerBlocker,
+  mergeBlocker,
+  mergeButtonLabel,
+  parseGithubPrLink,
+  prNumberFromGithubUrl,
+  prReviewers,
+  revertSessionRequest,
+  reviewStateMeta,
+  splitSummaryComments,
+  stackBlockingReason,
+  stackMergeTargets,
+  stackVerdict,
+  verdictSuccessTitle,
+  type CheckCounts,
+  type GithubPrLink,
+  type MergeMethod,
+  type PrBlocker,
+  type PrCheck,
+  type PrOverview,
+  type PrRemedy,
+  type PrStack,
+  type PrStackEntry,
+  type PullRequestListState,
+  type ReviewEvent,
+  type StackVerdict,
+  type StatusTone,
+  type SummaryComment,
+} from "./prReview";
+export {
+  appLeafName,
+  repoDisplayLabel,
+  repoTileSlot,
+  type RepoTileSlot,
+} from "./repoTile";
+
+export { storedRunTraits, toRunTraitArgs } from "./runTraits";
+export {
+  buildPrTimeline,
+  groupTimelineRows,
+  type ConversationEvent,
+  type TimelineEvent,
+  type TimelineRow,
+} from "./prTimeline";
+export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  QUEUE_PANEL_LABEL,
+  moveQueuedId,
+  orderQueuedRows,
+  queuePanelLabel,
+  queuedMessagePreview,
+} from "./queuedMessages";
+export {
+  appendReviewCommentsToPrompt,
+  parseReviewCommentSegments,
+  stripReviewCommentBlocks,
+  type ReviewComment,
+  type ReviewCommentAnchor,
+  type ReviewCommentMessageSegment,
+  type ReviewCommentSide,
+} from "./reviewCommentBlocks";
+export {
+  PROJECT_LIST_DEFAULTS,
+  PROJECT_SORT_FIELDS,
+  PROJECT_SORT_FIELD_LABELS,
+  clearedProjectFilter,
+  clearedProjectFilters,
+  searchAndSortProjects,
+  newProjectSubmitBlocker,
+  projectFilterChips,
+  projectProgressSegments,
+  projectTaskSections,
+  toggleHiddenProjectPhase,
+  type ProjectFilterKey,
+  type ProjectListFilters,
+  type ProjectSortDir,
+  type ProjectSortField,
+  type ProjectTaskProgress,
+  type SearchableProject,
+  type SectionableProjectTask,
+} from "./projectMeta";
+export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
+export { readableErrorMessage, readableServerError } from "./serverError";
+export {
+  APP_SORT_LABELS,
+  APP_SORT_ORDERS,
+  clampSessionPreviewCount,
+  DEFAULT_SESSION_PREVIEW_COUNT,
+  filterSessionsStartedBy,
+  MAX_SESSION_PREVIEW_COUNT,
+  MIN_SESSION_PREVIEW_COUNT,
+  SESSION_SORT_LABELS,
+  SESSION_SORT_ORDERS,
+  linkedSessionGroups,
+  perRepoQueryCache,
+  sessionActivityAt,
+  sessionListEntries,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+  type AppSortOrder,
+  type LinkedSessionGroup,
+  type SessionListEntry,
+  type SessionSortOrder,
+} from "./sessionList";
+export {
+  OLDER_TRANSCRIPT_FIRST_PAGE,
+  OLDER_TRANSCRIPT_PAGED_STEPS,
+  TRANSCRIPT_TAIL_MESSAGES,
+  olderTranscriptArgs,
+  transcriptLiveArgs,
+  transcriptTailArgs,
+} from "./chatTranscript";
+export {
+  placeChatUiPanels,
+  type PanelPlacement,
+  type PlaceablePanel,
+  type PlacementMessage,
+} from "./chatUiPanelPlacement";
+export {
+  attachmentFileKind,
+  chatAttachmentErrorMessage,
+  contentTypeForUpload,
+  isAllowedAttachmentFile,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  type AttachmentFileMeta,
+  filenameExtension,
+  isImageContentType,
+  labelForAttachment,
+  messageAttachments,
+  normalizeContentType,
+  splitAgentMedia,
+  type AttachmentFileKind,
+  type ResolvedMediaEntry,
+} from "./attachmentLabels";
+export {
+  ECHO_HISTORY_LIMIT,
+  decideDraftPull,
+  rememberOwnSave,
+  type DraftPullDecision,
+} from "./chatDraftPull";
+export {
+  MID_TURN_SLEEP_HINT,
+  sandboxDisplayStatus,
+  SLEEP_EVA_LABEL,
+  WAKE_EVA_LABEL,
+  WAKE_EVA_RETRY_LABEL,
+  type SandboxDisplayStatus,
+  type SandboxStatus,
+} from "./sandboxStatus";
+export { stripErrorPrefix, turnErrorTitle } from "./turnError";
+export {
+  PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  taskCanCreatePr,
+  taskCanResolveConflicts,
+  taskCanStartSandbox,
+} from "./ownedSandboxRules";
+export {
+  collectQuestionSteps,
+  getSessionReadOnlyMessage,
+  isSandboxLifecycleAlert,
+  visibleChatMessages,
+} from "./chatRows";

@@ -1,5 +1,6 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Id } from "./_generated/dataModel";
+import { findRepoEnvVarDoc } from "./_envVars/documentStore";
 
 type Ctx = { db: GenericDatabaseReader<DataModel> };
 
@@ -25,10 +26,7 @@ export async function hasRepoReferences(
       .query("evaluationReports")
       .withIndex("by_repo", (q) => q.eq("repoId", repoId))
       .first(),
-    ctx.db
-      .query("repoEnvVars")
-      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-      .first(),
+    findRepoEnvVarDoc(ctx.db, repoId),
     ctx.db
       .query("repoSnapshots")
       .withIndex("by_repo", (q) => q.eq("repoId", repoId))

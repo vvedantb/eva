@@ -3,7 +3,8 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { AIModel, ModelTraitsExecutionArgs } from "../validators";
 import { sessionChatPersistenceId } from "../_sessionChats/helpers";
-import { SESSION_TOOLS } from "./workflow";
+import { SESSION_TOOLS } from "./sessionPrompt";
+import { sessionAccountHolder } from "../_projects/runSettings";
 
 /** The `pendingTurn` a chat's warm daemon claims through claimPendingTurn. */
 export function buildDaemonPendingTurn(turn: {
@@ -51,7 +52,11 @@ export async function scheduleChatDaemonPrewarm(
     ...params.launchTraits,
     allowedTools: SESSION_TOOLS,
     providerAccountId: params.providerAccountId,
-    credentialOwnerUserId: session.createdBy ?? session.userId,
+    credentialOwnerUserId: await sessionAccountHolder(
+      ctx.db,
+      session,
+      params.providerAccountId,
+    ),
     sessionPersistenceId: sessionChatPersistenceId(chat),
   });
 }

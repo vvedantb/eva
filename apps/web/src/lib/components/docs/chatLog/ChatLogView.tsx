@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryState } from "nuqs";
 import { cn } from "@eva/ui";
 import { IconDownload, IconPlus } from "@tabler/icons-react";
@@ -17,7 +17,8 @@ import {
   sessionSourceViewAllClass,
 } from "@/lib/components/sandbox/SessionSourcePane";
 import type { ChatSourceArg } from "@/lib/components/sandbox/chatSource";
-import { chatLogKindParser, chatLogKinds } from "@/lib/search-params";
+import { CHAT_LOG_ENTRY_KINDS } from "@eva/backend";
+import { chatLogKindParser } from "@/lib/search-params";
 import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { AddLogEntryDialog } from "./AddLogEntryDialog";
 import { ChatLogEntryCard } from "./ChatLogEntryCard";
@@ -71,10 +72,13 @@ export function ChatLogView({
   source,
   entries,
   onBack,
+  entrySource,
 }: {
   source: ChatSourceArg;
   entries: ChatLogEntry[];
   onBack: () => void;
+  /** A project's Log: names the child task that wrote an entry. */
+  entrySource?: (entry: ChatLogEntry) => ReactNode;
 }) {
   const [kindFilter, setKindFilter] = useQueryState(
     "logKind",
@@ -148,7 +152,7 @@ export function ChatLogView({
               role="radiogroup"
               aria-label="Filter by kind"
             >
-              {[null, ...chatLogKinds].map((kind) => (
+              {[null, ...CHAT_LOG_ENTRY_KINDS].map((kind) => (
                 <button
                   key={kind ?? "all"}
                   type="button"
@@ -176,6 +180,7 @@ export function ChatLogView({
                     key={entry._id}
                     entry={entry}
                     history={history}
+                    source={entrySource?.(entry)}
                   />
                 ))}
               </section>

@@ -14,11 +14,32 @@ export {
 } from "./labels";
 
 /**
- * GitHub webhooks normalised into the few repo events automations react to.
- * Pure: `http.ts` verifies the signature, then hands the raw body here.
+ * GitHub webhooks, plus monitoring alerts, normalised into the few repo events
+ * automations react to. Pure: `http.ts` verifies the caller, then hands the
+ * raw body here (alerts go through `axiomAlert.ts`).
  */
 
 const repoRef = { owner: v.string(), name: v.string() };
+
+/** A monitoring alert, before the webhook route adds the automation's repo. */
+const alertFields = {
+  kind: v.literal("production_alert"),
+  source: v.literal("axiom"),
+  monitorId: v.string(),
+  title: v.string(),
+  description: v.string(),
+  /** Axiom's own summary: the matched event, or the threshold crossed. */
+  body: v.string(),
+  value: v.optional(v.number()),
+  /** Match monitors: the matching event, as JSON text. */
+  matchedEvent: v.optional(v.string()),
+  /** Grouped monitors: the group that fired, as "key=value" pairs. */
+  group: v.optional(v.string()),
+  queryStartTime: v.optional(v.string()),
+  queryEndTime: v.optional(v.string()),
+};
+
+export const alertValidator = v.object(alertFields);
 
 export const repoEventValidator = v.union(
   v.object({
@@ -50,9 +71,11 @@ export const repoEventValidator = v.union(
     prNumber: v.number(),
     title: v.string(),
   }),
+  v.object({ ...alertFields, ...repoRef }),
 );
 
 export type RepoEvent = Infer<typeof repoEventValidator>;
+export type AlertEvent = Infer<typeof alertValidator>;
 
 /**
  * A check suite passed on a PR. Not an automation trigger: it only resets the
@@ -76,7 +99,15 @@ export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
   issue_labeled: 0,
   pr_opened: 0,
   pr_merged: 0,
+  // A match monitor sends one alert per matching event; gather the burst.
+  production_alert: 30_000,
 };
+
+/**
+ * Repeat alerts from one monitor inside this window fold into the task the
+ * first one made, so a noisy error opens one task, not fifty.
+ */
+export const ALERT_DEDUPE_WINDOW_MS = 60 * 60_000;
 
 /** A preset run that has not finished by now is marked timed out. */
 export const STALE_EVENT_RUN_MS = 15 * 60_000;
@@ -101,11 +132,21 @@ export function repoEventKey(event: RepoEvent): string {
     case "pr_opened":
     case "pr_merged":
       return event.prUrl;
+    case "production_alert":
+      return `${event.source}:${event.monitorId}`;
   }
 }
 
-export function repoEventTargetUrl(event: RepoEvent): string {
-  return event.kind === "issue_labeled" ? event.issueUrl : event.prUrl;
+/** The PR or issue an event is about; alerts have none. */
+export function repoEventTargetUrl(event: RepoEvent): string | undefined {
+  switch (event.kind) {
+    case "issue_labeled":
+      return event.issueUrl;
+    case "production_alert":
+      return undefined;
+    default:
+      return event.prUrl;
+  }
 }
 
 export function triggerMatchesEvent(
@@ -133,7 +174,38 @@ export function describeRepoEvent(event: RepoEvent): string {
       return `PR opened: ${event.prUrl} — ${event.title}`;
     case "pr_merged":
       return `PR merged: ${event.prUrl} — ${event.title}`;
+    case "production_alert":
+      return describeAlert(event);
   }
+}
+
+/**
+ * The alert as the agent reads it. Every field comes from outside Eva, so it
+ * sits in a fenced block the prompt tells the agent to treat as data. Fences
+ * inside the payload are broken up so it cannot close the block early.
+ */
+export function describeAlert(
+  event: Extract<RepoEvent, { kind: "production_alert" }>,
+): string {
+  const lines = [
+    `Monitor: ${event.title} (${event.monitorId})`,
+    event.description.trim() === "" ? null : `Description: ${event.description}`,
+    `Alert: ${event.body}`,
+    event.value === undefined ? null : `Value: ${event.value}`,
+    event.group === undefined ? null : `Group: ${event.group}`,
+    event.queryStartTime === undefined || event.queryEndTime === undefined
+      ? null
+      : `Window: ${event.queryStartTime} to ${event.queryEndTime}`,
+    event.matchedEvent === undefined
+      ? null
+      : `Matched event:\n${event.matchedEvent}`,
+  ].filter((line) => line !== null);
+  return [
+    `An Axiom monitor alerted for ${event.owner}/${event.name}.`,
+    "```text",
+    lines.join("\n").replaceAll("```", "` ` `"),
+    "```",
+  ].join("\n");
 }
 
 // ── Webhook boundary ────────────────────────────────────────────────────────

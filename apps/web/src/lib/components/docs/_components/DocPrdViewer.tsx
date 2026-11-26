@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { isDocViewerTab, type DocViewerTab } from "@/lib/search-params";
@@ -61,18 +62,12 @@ function applyDocUpdateOptimistically(
   localStore: OptimisticLocalStore,
   args: FunctionArgs<typeof api.docs.update>,
 ) {
-  const current = localStore.getQuery(api.docs.get, { id: args.id });
-  if (current) {
-    localStore.setQuery(
-      api.docs.get,
-      { id: args.id },
-      {
-        ...current,
-        ...args,
-        updatedAt: Date.now(),
-      },
-    );
-  }
+  patchLoadedQuery(
+    localStore,
+    api.docs.get,
+    { id: args.id },
+    (current) => current && { ...current, ...args, updatedAt: Date.now() },
+  );
 }
 
 export function DocPrdViewer({
@@ -361,12 +356,13 @@ export function DocPrdViewer({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <TabsBar
-          className="sm:px-4"
+          className="border-b-0 sm:px-4"
           actions={
             <div className="flex items-center gap-1">
               {activeTab === "content" && (
                 <>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={suggestionsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -381,6 +377,7 @@ export function DocPrdViewer({
                     )}
                   </Button>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={commentsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"

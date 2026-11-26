@@ -1,4 +1,4 @@
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 
 /**
  * Every branch Eva creates and publishes is namespaced under this prefix, and
@@ -30,6 +30,41 @@ export function buildProjectBranchName(
     return `${EVA_BRANCH_PREFIX}project-${projectId}`;
   }
   return `${EVA_BRANCH_PREFIX}project-${projectId}-v${version}`;
+}
+
+/** A project's stored branch, else the builder name for its branch version. */
+export function resolveProjectBranchName(
+  projectId: Id<"projects">,
+  project:
+    | Pick<Doc<"projects">, "branchName" | "branchVersion">
+    | null
+    | undefined,
+): string {
+  return (
+    project?.branchName ??
+    buildProjectBranchName(projectId, project?.branchVersion)
+  );
+}
+
+/** Session branch; also the default when a session has no stored branch. */
+export function buildSessionBranchName(sessionId: Id<"sessions">): string {
+  return `${EVA_BRANCH_PREFIX}session-${String(sessionId)}`;
+}
+
+/** Standalone (quick) task branch. */
+export function buildTaskBranchName(taskId: Id<"agentTasks">): string {
+  return `${EVA_BRANCH_PREFIX}task-${String(taskId)}`;
+}
+
+/**
+ * The branch a task works and opens its PR on: its kept branch (a project
+ * task converted from the old project branch, `agentTasks.branchName`), else
+ * `eva/task-<id>`. Every reader of a task's branch asks here.
+ */
+export function taskBranchName(
+  task: Pick<Doc<"agentTasks">, "_id" | "branchName">,
+): string {
+  return task.branchName ?? buildTaskBranchName(task._id);
 }
 
 /** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */

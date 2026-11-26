@@ -3,13 +3,14 @@
 /**
  * Vercel Sandbox implementation of the provider-neutral contract (./provider.ts),
  * targeting `@vercel/sandbox` v2 (persistent sandboxes, sub-second snapshot
- * restore — see the Phase 0 spike results).
+ * restore).
  *
- * Design notes / provider deltas vs Daytona (the original, now-removed provider):
+ * Design notes:
  * - Identity: Vercel addresses sandboxes by `name`, not a separate id. We expose
  *   `handle.id === sandbox.name` and resolve `get(sandboxId)` via `Sandbox.get({ name })`.
- * - Resources: the neutral create params carry no vCPU count, so we default it
- *   (Vercel gives 2 GB RAM per vCPU). Override via SANDBOX_VERCEL_VCPUS if needed.
+ * - Resources: the client is built with the app's vCPU count (its sandbox
+ *   size setting); `SandboxCreateParams.vcpus` overrides it for one sandbox
+ *   (the project coordinator). Vercel gives 2 GB RAM per vCPU.
  * - Lifecycle: Vercel is persistent-by-default and the SDK auto-resumes on
  *   `get` and on any exec. Eva turns both off (`resume: false`,
  *   `withoutLazyResume`), so only `start()` wakes a stopped sandbox.
@@ -29,6 +30,7 @@
 import { Drive, Sandbox } from "@vercel/sandbox";
 import type { SandboxMounts, SandboxRegion } from "@vercel/sandbox";
 import { z } from "zod";
+import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import { SandboxProviderError } from "./provider";
 import type {
   CreateSnapshotParams,
@@ -52,13 +54,15 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
-import { EVA_ENV_FILE } from "./vercelEnvFile";
+import { foreignSandboxDeployment } from "./tags";
+import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
+import { errorMessage } from "@vvedantb/server";
 
 export {
   EVA_ENV_FILE,
@@ -74,7 +78,6 @@ interface VercelCredentials {
   projectId: string;
 }
 
-const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 // Vercel caps the create-time `env` payload at 4 KB, but eva injects the full
 // repo/team env (~6 KB+). Instead of passing env at create, we write it to this
 // file in the sandbox and source it on every exec — no size cap, and it persists
@@ -93,7 +96,7 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
-const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
+const SOURCE_ENV = `${EVA_ENV_SOURCE_CMD};`;
 /** Vercel exposes at most 4 ports; default assumes Next on 3000 + Supabase API. */
 const MAX_PORTS = 4;
 const STOP_CONFIRMATION_TIMEOUT_MS = 180_000;
@@ -105,7 +108,10 @@ const STOP_CONFIRMATION_POLL_MS = 1_000;
  */
 const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
-  3000, 8080, 6080, 54321,
+  DEFAULT_PREVIEW_PORT,
+  EDITOR_PORT,
+  DESKTOP_PORT,
+  54321,
 ];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
@@ -165,7 +171,7 @@ function extractApiErrorDetail(e: unknown): string {
   try {
     return JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0, 1000);
   } catch {
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 }
 
@@ -206,14 +212,23 @@ function providerError(message: string, e: unknown): SandboxProviderError {
   });
 }
 
-/** True when the Vercel command NDJSON stream died while the VM is still up. */
-function isVercelCommandStreamClosed(detail: string): boolean {
+/**
+ * True when an exec failed in transit, not in the sandbox: the command NDJSON
+ * stream died while the VM is still up, or undici dropped the HTTP connection
+ * to the Vercel API ("fetch failed", socket reset). A retry can run the
+ * command twice; that is the same trade-off the stream-closed retry accepts.
+ */
+function isRetryableExecFailure(detail: string): boolean {
   const lower = detail.toLowerCase();
   return (
     lower.includes("stream was closed") ||
     lower.includes("not accepting commands") ||
     lower.includes("stream_ended_early") ||
-    lower.includes("stream ended before")
+    lower.includes("stream ended before") ||
+    lower.includes("fetch failed") ||
+    lower.includes("und_err_socket") ||
+    lower.includes("econnreset") ||
+    lower.includes("socket hang up")
   );
 }
 
@@ -222,7 +237,7 @@ class VercelGit implements SandboxGit {
   constructor(private readonly handle: VercelSandboxHandle) {}
 
   private async sh(cmd: string): Promise<string> {
-    // Goes through handle.exec so stream-closed refresh+retry applies.
+    // Goes through handle.exec so its transit-failure refresh+retry applies.
     const result = await this.handle.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(
@@ -633,7 +648,7 @@ class VercelSandboxHandle implements SandboxHandle {
       };
     } catch (e) {
       console.log(
-        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${e instanceof Error ? e.message : String(e)}`,
+        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${errorMessage(e)}`,
       );
       return { kind: "error" };
     }
@@ -773,8 +788,8 @@ class VercelSandboxHandle implements SandboxHandle {
     cmd: string,
     opts?: SandboxExecOptions,
   ): Promise<SandboxExecResult> {
-    // One refresh+retry on "stream was closed" — common after resume when the
-    // SDK's command stream dies while the VM is still running.
+    // One refresh+retry on a transit failure (`isRetryableExecFailure`): the
+    // command stream dying after resume, or a dropped API connection.
     const maxAttempts = 2;
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -800,11 +815,12 @@ class VercelSandboxHandle implements SandboxHandle {
           `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
           e,
         );
-        if (attempt < maxAttempts && isVercelCommandStreamClosed(detail)) {
+        if (attempt < maxAttempts && isRetryableExecFailure(detail)) {
           console.log(
-            `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
+            `[vercel] exec transit failure on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts}): ${detail.slice(0, 200)}`,
           );
-          await this.refresh();
+          // A failed refresh must not hide the exec error; the retry reports it.
+          await this.refresh().catch(() => undefined);
           continue;
         }
         throw lastError;
@@ -815,8 +831,7 @@ class VercelSandboxHandle implements SandboxHandle {
 
   async execDetached(cmd: string, opts?: SandboxExecOptions): Promise<void> {
     // Native detached exec: returns a Command handle immediately without holding
-    // the stream. This is the analogue of eva's `setsid nohup … &` on Daytona —
-    // a shell `&` inside a synchronous runCommand would keep the stream open
+    // the stream. A shell `&` inside a synchronous runCommand would keep the stream open
     // until it times out (StreamError). The command itself still backgrounds its
     // long-runner with setsid so it survives this launcher process exiting.
     await this.sandbox.runCommand({
@@ -917,7 +932,7 @@ class VercelSandboxHandle implements SandboxHandle {
         observed = this.state;
         if (observed === "running") return;
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
+        lastError = errorMessage(e);
         lastErrorStatus = vercelHttpStatus(e);
         lastErrorDetail = extractApiErrorDetail(e);
         // SDK may reject resume while stop finishes even if listSessions lagged.
@@ -1085,7 +1100,7 @@ class VercelSandboxHandle implements SandboxHandle {
       } catch (error) {
         console.warn(
           `[vercel] snapshot.delete failed sandbox=${sandboxName} snapshotId=${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }`,
         );
       }
@@ -1104,7 +1119,7 @@ class VercelSandboxHandle implements SandboxHandle {
     } catch (error) {
       console.warn(
         `[vercel] sandbox.delete failed name=${sandboxName}: ${
-          error instanceof Error ? error.message : String(error)
+          errorMessage(error)
         }`,
       );
     }
@@ -1132,11 +1147,12 @@ class VercelSandboxHandle implements SandboxHandle {
     );
   }
 
+  /**
+   * Reads the route from the handle we already hold. Only a sandbox that lacks
+   * the route (an old one created with fewer ports) pays for the port update
+   * and refetch: two Vercel API calls that sat on every preview open before.
+   */
   async previewUrl(port: number): Promise<PreviewUrl> {
-    if (VERCEL_DEFAULT_EXPOSED_PORTS.includes(port)) {
-      await this.sandbox.update({ ports: [...VERCEL_DEFAULT_EXPOSED_PORTS] });
-      await this.refresh();
-    }
     try {
       return { url: this.sandbox.domain(port), port };
     } catch (error) {
@@ -1160,7 +1176,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(driveCacheTeardownScript(), { timeoutSeconds: 30 });
     } catch (error) {
       console.warn(
-        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 
@@ -1171,7 +1187,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(snapshotPruneScript(), { timeoutSeconds: 120 });
     } catch (error) {
       console.warn(
-        `[vercel] snapshot prune failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] snapshot prune failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 
@@ -1225,7 +1241,11 @@ class VercelSandboxHandle implements SandboxHandle {
 class VercelSandboxClient implements SandboxClient {
   readonly kind: SandboxProviderKind = "vercel";
 
-  constructor(private readonly creds: VercelCredentials) {}
+  constructor(
+    private readonly creds: VercelCredentials,
+    /** vCPUs for a sandbox whose create params set none (the app's size setting). */
+    private readonly vcpus: number,
+  ) {}
 
   /**
    * Turns neutral {@link SandboxMount}s into the SDK's `mounts` map, resolving
@@ -1241,29 +1261,32 @@ class VercelSandboxClient implements SandboxClient {
     mounts: ReadonlyArray<SandboxMount>,
   ): Promise<SandboxMounts | undefined> {
     const resolved: SandboxMounts = {};
-    for (const mount of mounts) {
-      try {
-        const drive = await Drive.getOrCreate({
-          ...this.creds,
-          name: mount.volumeName,
-          region: SANDBOX_REGION,
-          maxSize: DRIVE_MAX_SIZE_BYTES,
-        });
-        resolved[mount.path] =
-          mount.mode === "read-write" ? drive : drive.snapshot();
-      } catch (e) {
-        console.warn(
-          `[vercel] drive mount skipped name=${mount.volumeName} path=${mount.path} mode=${mount.mode}: ${extractApiErrorDetail(e)}`,
-        );
-      }
-    }
+    // Each Drive lookup is an independent API call on the create path.
+    await Promise.all(
+      mounts.map(async (mount) => {
+        try {
+          const drive = await Drive.getOrCreate({
+            ...this.creds,
+            name: mount.volumeName,
+            region: SANDBOX_REGION,
+            maxSize: DRIVE_MAX_SIZE_BYTES,
+          });
+          resolved[mount.path] =
+            mount.mode === "read-write" ? drive : drive.snapshot();
+        } catch (e) {
+          console.warn(
+            `[vercel] drive mount skipped name=${mount.volumeName} path=${mount.path} mode=${mount.mode}: ${extractApiErrorDetail(e)}`,
+          );
+        }
+      }),
+    );
     return Object.keys(resolved).length > 0 ? resolved : undefined;
   }
 
   /**
    * Regions the create's snapshot lives in, for {@link sandboxPlacement}.
    * A fork restores from the source sandbox's current snapshot, so it follows
-   * that one — a source made before the move to cdg1 only forks in iad1.
+   * that one — a source made while sandboxes ran in cdg1 only forks in cdg1.
    * `undefined` when there is no snapshot to follow or the lookup failed.
    */
   private async snapshotRegions(
@@ -1274,6 +1297,7 @@ class VercelSandboxClient implements SandboxClient {
         ? (
             await Sandbox.get({
               ...this.creds,
+              onResume: rewireDriveCacheOnResume,
               name: params.forkFrom,
               resume: false,
             })
@@ -1300,12 +1324,14 @@ class VercelSandboxClient implements SandboxClient {
       params.mounts?.length && mountDrives
         ? await this.resolveMounts(params.mounts)
         : undefined;
+    // A per-sandbox size (the project coordinator) beats the app's setting.
+    const vcpus = params.vcpus ?? this.vcpus;
     const base = {
       ...this.creds,
       onResume: rewireDriveCacheOnResume,
       region,
       failoverRegions,
-      // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
+      // Vercel `timeout` is a HARD session cap, not an idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro
       // plan max (24h) so Start/Stop own the lifecycle; this cap is only a leak
@@ -1313,7 +1339,7 @@ class VercelSandboxClient implements SandboxClient {
       timeout: Math.max(params.lifecycle.autoStopMinutes, 24 * 60) * 60 * 1000,
       persistent,
       ...vercelSnapshotCreateOptions(persistent),
-      resources: { vcpus: DEFAULT_VCPUS },
+      resources: { vcpus },
       ports: (params.ports ?? VERCEL_DEFAULT_EXPOSED_PORTS).slice(0, MAX_PORTS),
       ...(params.lifecycle.labels ? { tags: params.lifecycle.labels } : {}),
     };
@@ -1356,7 +1382,7 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} vcpus=${vcpus} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1379,7 +1405,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${vcpus}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }
@@ -1395,6 +1421,14 @@ class VercelSandboxClient implements SandboxClient {
       name: sandboxId,
       resume: false,
     });
+    // Every stop / exec / delete starts from this lookup, so one check here
+    // keeps a deployment off another deployment's VMs. 404 classifies as
+    // sandbox-gone: the caller drops its mirrored row instead of retrying.
+    const owner = foreignSandboxDeployment(sandbox.tags);
+    if (owner !== null) {
+      const detail = `sandbox ${sandboxId} belongs to Convex deployment ${owner}`;
+      throw new SandboxProviderError(detail, { httpStatus: 404, detail });
+    }
     return new VercelSandboxHandle(sandbox, this.creds);
   }
 
@@ -1434,6 +1468,9 @@ export function unwrapVercelSandbox(handle: SandboxHandle): Sandbox {
 }
 
 /** Constructs a Vercel-backed {@link SandboxClient} from access-token credentials. */
-export function createVercelClient(creds: VercelCredentials): SandboxClient {
-  return new VercelSandboxClient(creds);
+export function createVercelClient(
+  creds: VercelCredentials,
+  vcpus: number,
+): SandboxClient {
+  return new VercelSandboxClient(creds, vcpus);
 }

@@ -4,14 +4,20 @@ export type {
   BackgroundAgentEntry,
 } from "./convex/_validators/tableFields";
 export type { SandboxOwner } from "./convex/_sandbox/owner";
+export type { PrOwnerRef } from "./convex/_pullRequests/store";
+export type { ChatEntityKind } from "./convex/_validators/enums";
 export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
 export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPublish";
 export {
+  isTaskRunning,
+  taskScheduledAt,
+  type TaskRunSource,
+} from "./convex/_agentTasks/runState";
+export {
   findUsageLimitHold,
   isHeldByUsageLimit,
   parseUsageLimitResetTime,
-  type UsageLimitHold,
 } from "./convex/_taskWorkflow/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
@@ -19,7 +25,6 @@ export {
   REPO_EVENT_LABELS,
   USER_REPO_EVENTS,
   type AutomationTrigger,
-  type RepoEventKind,
 } from "./convex/_automationEvents/labels";
 export {
   INCOMPLETE_PR_RECAP_MESSAGE,
@@ -27,24 +32,26 @@ export {
   isIncompleteReadyRecap,
   isViewableRecap,
 } from "./convex/_prRecapWorkflow/recapState";
+export { type RecapWalkthroughStep } from "./convex/_prRecapWorkflow/walkthrough";
+export { CONNECTOR_ENV_KEYS } from "./convex/_connectors/providers";
 export {
-  OTHER_CHANGES_STEP_TITLE,
-  type RecapWalkthroughStep,
-} from "./convex/_prRecapWorkflow/walkthrough";
-export {
-  CONNECTOR_ENV_KEYS,
-  CONNECTOR_PROVIDERS,
-  CONNECTOR_LABEL,
-} from "./convex/_connectors/providers";
-export { pickConnectorToken } from "./convex/_connectors/pick";
-export {
+  CHAT_LOG_ENTRY_KINDS,
+  DEFAULT_ACCENT_COLOR,
+  FEEDBACK_AUTHORS,
+  FEEDBACK_SENTIMENTS,
+  PROJECT_PHASES,
   COMMENT_ANCHOR_PARAM,
   withCommentAnchor,
   AI_MODEL_OPTIONS,
   DEFAULT_AI_MODEL,
+  ARTIFACT_STATE_SCOPES,
+  CLAUDE_AUTH_ENV_KEYS,
   CODEX_AUTH_ENV_KEYS,
   OPENCODE_AUTH_ENV_KEYS,
   CURSOR_AUTH_ENV_KEYS,
+  PROVIDER_CONFIG_KEY,
+  PROVIDER_LABELS,
+  PROVIDER_PRIMARY_AUTH_KEY,
   findAIModelOption,
   contextWindowForRawModel,
   getAIModelProvider,
@@ -56,11 +63,11 @@ export {
   resolveTraitsForDisplay,
   buildTraitsExecutionPayload,
   getReasoningLevelLabel,
+  modelTraitSummary,
   normalizeAIModel,
   storedTraitsFromRepoDefaults,
   type AIModel,
   type AIProvider,
-  type InteractionMode,
   type ReasoningLevel,
   type StoredModelTraits,
   type ModelTraitsExecutionArgs,

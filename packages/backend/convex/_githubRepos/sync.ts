@@ -1,80 +1,53 @@
-import { v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
-import { internalMutation } from "../_generated/server";
+import { type ObjectType, v } from "convex/values";
+import type { Doc } from "../_generated/dataModel";
+import { type MutationCtx, internalMutation } from "../_generated/server";
 import { hasRepoReferences, normalizePath } from "../repoUtils";
+import { findReposByOwnerAndName } from "./helpers";
+
+const upsertArgs = {
+  owner: v.string(),
+  name: v.string(),
+  installationId: v.number(),
+  githubId: v.optional(v.number()),
+  teamId: v.optional(v.id("teams")),
+  rootDirectory: v.optional(v.string()),
+  parentRepoId: v.optional(v.id("githubRepos")),
+};
+type UpsertArgs = ObjectType<typeof upsertArgs>;
+
+/** The row for this repo (or monorepo app), matched by GitHub id, then owner/name. */
+async function findExistingRow(
+  ctx: MutationCtx,
+  args: UpsertArgs,
+): Promise<Doc<"githubRepos"> | undefined> {
+  const normalizedRoot = args.rootDirectory
+    ? normalizePath(args.rootDirectory)
+    : undefined;
+  const matchesRoot = (r: Doc<"githubRepos">) =>
+    r.rootDirectory === normalizedRoot;
+
+  if (args.githubId !== undefined) {
+    const byGithubId = await ctx.db
+      .query("githubRepos")
+      .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
+      .collect();
+    const match = byGithubId.find(matchesRoot);
+    if (match) return match;
+  }
+  const byOwnerName = await findReposByOwnerAndName(ctx.db, args);
+  return byOwnerName.find(matchesRoot);
+}
 
 /** Inserts or updates a GitHub repo entry, matching by GitHub ID or owner/name. */
 export const upsert = internalMutation({
-  args: {
-    owner: v.string(),
-    name: v.string(),
-    installationId: v.number(),
-    githubId: v.optional(v.number()),
-    teamId: v.optional(v.id("teams")),
-    rootDirectory: v.optional(v.string()),
-    parentRepoId: v.optional(v.id("githubRepos")),
-  },
+  args: upsertArgs,
   returns: v.id("githubRepos"),
   handler: async (ctx, args) => {
-    const normalizedRoot = args.rootDirectory
-      ? normalizePath(args.rootDirectory)
-      : undefined;
-
-    const matchesRoot = (r: Doc<"githubRepos">) =>
-      r.rootDirectory === normalizedRoot;
-
-    let existing: Doc<"githubRepos"> | undefined;
-
-    if (args.githubId !== undefined) {
-      const byGithubId = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
-        .collect();
-      existing = byGithubId.find(matchesRoot);
-    }
-
-    if (!existing) {
-      const byOwnerName = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", args.owner).eq("name", args.name),
-        )
-        .collect();
-      existing = byOwnerName.find(matchesRoot);
-    }
-
+    const existing = await findExistingRow(ctx, args);
     if (existing) {
-      const updates: Record<
-        string,
-        string | number | boolean | Id<"teams"> | Id<"githubRepos">
-      > = {
-        connected: true,
-      };
-      if (args.teamId && !existing.teamId) {
-        updates.teamId = args.teamId;
-      }
-      if (existing.installationId !== args.installationId) {
-        updates.installationId = args.installationId;
-      }
-      if (existing.owner !== args.owner) {
-        updates.owner = args.owner;
-      }
-      if (existing.name !== args.name) {
-        updates.name = args.name;
-      }
-      if (args.githubId !== undefined && existing.githubId === undefined) {
-        updates.githubId = args.githubId;
-      }
-      if (
-        args.parentRepoId !== undefined &&
-        existing.parentRepoId === undefined
-      ) {
-        updates.parentRepoId = args.parentRepoId;
-      }
-      await ctx.db.patch(existing._id, updates);
+      await refreshRow(ctx, existing, args);
       return existing._id;
     }
-
     return await ctx.db.insert("githubRepos", {
       owner: args.owner,
       name: args.name,
@@ -82,12 +55,52 @@ export const upsert = internalMutation({
       githubId: args.githubId,
       connected: true,
       teamId: args.teamId,
-      rootDirectory: normalizedRoot,
+      rootDirectory: args.rootDirectory
+        ? normalizePath(args.rootDirectory)
+        : undefined,
       parentRepoId: args.parentRepoId,
       defaultBaseBranch: "staging",
     });
   },
 });
+
+/**
+ * Sync step for one detected monorepo app. Refreshes a row that exists (a
+ * hidden app stays hidden). An app with no row is not inserted: sync returns
+ * it as new, and the user picks whether to show it.
+ */
+export const syncDetectedApp = internalMutation({
+  args: upsertArgs,
+  returns: v.union(v.literal("kept"), v.literal("new")),
+  handler: async (ctx, args) => {
+    const existing = await findExistingRow(ctx, args);
+    if (!existing) return "new";
+    await refreshRow(ctx, existing, args);
+    return "kept";
+  },
+});
+
+/** Marks a synced row connected and fills in identity GitHub now reports. */
+async function refreshRow(
+  ctx: MutationCtx,
+  existing: Doc<"githubRepos">,
+  args: UpsertArgs,
+): Promise<void> {
+  const updates: Partial<Doc<"githubRepos">> = { connected: true };
+  if (args.teamId && !existing.teamId) updates.teamId = args.teamId;
+  if (existing.installationId !== args.installationId) {
+    updates.installationId = args.installationId;
+  }
+  if (existing.owner !== args.owner) updates.owner = args.owner;
+  if (existing.name !== args.name) updates.name = args.name;
+  if (args.githubId !== undefined && existing.githubId === undefined) {
+    updates.githubId = args.githubId;
+  }
+  if (args.parentRepoId !== undefined && existing.parentRepoId === undefined) {
+    updates.parentRepoId = args.parentRepoId;
+  }
+  await ctx.db.patch(existing._id, updates);
+}
 
 /** Updates the connected flag on all repos, marking only the provided IDs as connected. */
 export const syncConnectedStatus = internalMutation({
@@ -129,12 +142,7 @@ export const cleanupStaleSubApps = internalMutation({
           .filter((p): p is string => p !== undefined),
       );
 
-      const rows = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", entry.owner).eq("name", entry.name),
-        )
-        .collect();
+      const rows = await findReposByOwnerAndName(ctx.db, entry);
 
       const subAppRows = rows.filter((r) => r.rootDirectory !== undefined);
 
@@ -170,12 +178,7 @@ export const cleanupMonorepoRoots = internalMutation({
     let deletedCount = 0;
 
     for (const entry of args.monorepos) {
-      const rows = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", entry.owner).eq("name", entry.name),
-        )
-        .collect();
+      const rows = await findReposByOwnerAndName(ctx.db, entry);
 
       const rootRow = rows.find((r) => r.rootDirectory === undefined);
       if (!rootRow) continue;

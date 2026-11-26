@@ -4,8 +4,11 @@ import {
   customQuery,
   customAction,
 } from "convex-helpers/server/customFunctions";
+import { createAuthFunctions } from "@vvedantb/server";
 import type { GenericDatabaseReader } from "convex/server";
 import { makeFunctionReference } from "convex/server";
+import { ConvexError } from "convex/values";
+import { archiveCopy } from "@eva/shared";
 import {
   query,
   mutation,
@@ -16,11 +19,17 @@ import {
 } from "./_generated/server";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { getCurrentUserId } from "./_auth/currentUser";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { scheduleProjectPrSync } from "./_projects/prSync";
-import { isEntityDeleted } from "./numId";
-import { buildProjectBranchName } from "./_git/branchNames";
+import { requireCurrentUserId } from "./_auth/currentUser";
+import { assertNotInMaintenance } from "./maintenance";
+import type {
+  DataModel,
+  Doc,
+  Id,
+  TableNames,
+} from "./_generated/dataModel";
+import { isEntityArchived } from "./numId";
+import { taskBranchName } from "./_git/branchNames";
+import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { findLivePullRequestOnBranch } from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
@@ -30,15 +39,7 @@ export async function userCanAccessRepo(
   userId: Id<"users">,
 ): Promise<boolean> {
   if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
+  return repo.teamId !== undefined && hasTeamAccess(db, repo.teamId, userId);
 }
 
 /** Checks if a user has access to a repo — either as the connector or via team membership. */
@@ -100,33 +101,106 @@ export async function assertActionTeamAccess(
   if (!team) throw new Error("Not authorized to access this team");
 }
 
+/** Fetches a user's membership row for a team, or null if they aren't a member. */
+export function getTeamMembership(
+  db: GenericDatabaseReader<DataModel>,
+  teamId: Id<"teams">,
+  userId: Id<"users">,
+): Promise<Doc<"teamMembers"> | null> {
+  return db
+    .query("teamMembers")
+    .withIndex("by_team_and_user", (q) =>
+      q.eq("teamId", teamId).eq("userId", userId),
+    )
+    .first();
+}
+
+/** Throws unless the user is an Eva app admin (`users.isAdmin`). Gates app-wide settings. */
+export async function requireAppAdmin(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+): Promise<void> {
+  const user = await db.get(userId);
+  if (user?.isAdmin !== true) {
+    throw new Error("Only app admins can change app-wide settings");
+  }
+}
+
 /** Checks if a user has access to a team — i.e. is a member of it. */
 export async function hasTeamAccess(
   db: GenericDatabaseReader<DataModel>,
   teamId: Id<"teams">,
   userId: Id<"users">,
 ): Promise<boolean> {
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
+  return (await getTeamMembership(db, teamId, userId)) !== null;
 }
 
-/** Checks if a user can access a task by verifying access to its parent repo or project. */
+/** Throws with the given message unless the user is an owner of the team. */
+export async function requireTeamOwner(
+  db: GenericDatabaseReader<DataModel>,
+  teamId: Id<"teams">,
+  userId: Id<"users">,
+  errorMessage: string,
+): Promise<void> {
+  const membership = await getTeamMembership(db, teamId, userId);
+  if (!membership || membership.role !== "owner") {
+    throw new Error(errorMessage);
+  }
+}
+
+/** A `draft` task is private to its creator; every other status is shared. */
+export function isTaskVisibleTo(
+  task: Pick<Doc<"agentTasks">, "status" | "createdBy">,
+  userId: Id<"users">,
+): boolean {
+  return task.status !== "draft" || task.createdBy === userId;
+}
+
+/** Checks if a user can access a task: draft privacy, then its parent repo or project. */
 export async function hasTaskAccess(
   db: GenericDatabaseReader<DataModel>,
-  task: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> },
+  task: Pick<
+    Doc<"agentTasks">,
+    "repoId" | "projectId" | "status" | "createdBy"
+  >,
   userId: Id<"users">,
 ): Promise<boolean> {
+  if (!isTaskVisibleTo(task, userId)) return false;
   if (task.repoId) return hasRepoAccess(db, task.repoId, userId);
   if (task.projectId) {
     const project = await db.get(task.projectId);
     return project ? hasRepoAccess(db, project.repoId, userId) : false;
   }
   return false;
+}
+
+/**
+ * A project's live tasks the user may know of (no one else's drafts), each
+ * with whether the user can open it (`hasTaskAccess`: a task in a repo they
+ * cannot access is locked). With `archived`, the tasks archived on their own
+ * instead. The caller checks access to the project.
+ */
+export async function listProjectTasksForUser(
+  db: GenericDatabaseReader<DataModel>,
+  projectId: Id<"projects">,
+  userId: Id<"users">,
+  archived = false,
+): Promise<Array<{ task: Doc<"agentTasks">; canAccess: boolean }>> {
+  const tasks = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect()
+  ).filter(
+    (task) =>
+      isEntityArchived(task) === archived && isTaskVisibleTo(task, userId),
+  );
+  return Promise.all(
+    tasks.map(async (task) => ({
+      task,
+      canAccess: await hasTaskAccess(db, task, userId),
+    })),
+  );
 }
 
 /** Loads a task and verifies access through its repository or project. */
@@ -197,107 +271,48 @@ export async function assertMessageParentAccess(
   throw new Error("Not authorized");
 }
 
-/** Patches a project's phase and fires PR sync for the transition. */
-async function applyPhaseTransition(
-  ctx: MutationCtx,
-  project: Doc<"projects">,
-  newPhase: Doc<"projects">["phase"],
-): Promise<void> {
-  const previousPhase = project.phase;
-  await ctx.db.patch(project._id, { phase: newPhase });
-  const updated = await ctx.db.get(project._id);
-  if (updated) {
-    await scheduleProjectPrSync(ctx, updated, previousPhase, newPhase);
-  }
-}
-
-/** Recalculates a project's delivery phase from child task statuses. */
-export async function recomputeProjectPhase(
+/**
+ * The hook every child task status change, run end and child PR merge calls:
+ * it schedules the project's next ready tasks (`scheduleReadyTasks`).
+ * Scheduled, as this module stays a leaf; idempotent, so a call with nothing
+ * new starts nothing. A project's status is derived from its tasks
+ * (`projectStatus`), never stored.
+ */
+export async function onProjectTasksChanged(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<void> {
-  const db = ctx.db;
-  const project = await db.get(projectId);
-  if (!project) return;
-  if (
-    project.phase !== "in_progress" &&
-    project.phase !== "business_review" &&
-    project.phase !== "code_review" &&
-    project.phase !== "completed" &&
-    project.phase !== "finalized" &&
-    project.phase !== "cancelled"
-  ) {
-    return;
-  }
+  await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
+    projectId,
+  });
+}
 
-  if (project.activeBuildWorkflowId) {
-    if (project.phase !== "in_progress") {
-      await applyPhaseTransition(ctx, project, "in_progress");
-    }
-    return;
-  }
-
-  const businessReviewTask = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "business_review"),
-    )
-    .first();
-  if (businessReviewTask) {
-    if (project.phase !== "business_review") {
-      await applyPhaseTransition(ctx, project, "business_review");
-    }
-    return;
-  }
-
-  const codeReviewTask = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "code_review"),
-    )
-    .first();
-  if (codeReviewTask) {
-    if (project.phase !== "code_review") {
-      await applyPhaseTransition(ctx, project, "code_review");
-    }
-    return;
-  }
-
-  const nonDoneStatuses = ["draft", "cancelled"] as const;
-  const nonDoneChecks = await Promise.all(
-    nonDoneStatuses.map((status) =>
-      db
-        .query("agentTasks")
-        .withIndex("by_project_and_status", (q) =>
-          q.eq("projectId", projectId).eq("status", status),
-        )
-        .first(),
-    ),
-  );
-  const hasNonDone = nonDoneChecks.some((t) => t !== null);
-
-  const hasDone = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "done"),
-    )
-    .first();
-
-  if (!hasDone && !hasNonDone) {
-    // Build-only phase: demote stale in_progress when no active build remains.
-    if (project.phase === "in_progress") {
-      await applyPhaseTransition(ctx, project, "business_review");
-    }
-    return;
-  }
-
-  const allDone = hasDone !== null && !hasNonDone;
-  if (allDone && project.phase !== "completed") {
-    await applyPhaseTransition(ctx, project, "completed");
+/**
+ * Refuses an edit to an archived project: it is read-only until unarchived.
+ * Every mutation that edits a project (or approves its tasks) calls this.
+ */
+export function assertProjectNotArchived(project: { archivedAt?: number }): void {
+  if (isEntityArchived(project)) {
+    throw new ConvexError(archiveCopy("project").unarchiveFirst);
   }
 }
 
-/** Fetches a project by ID, throwing if not found or the user lacks access. */
+/**
+ * Refuses an edit to an archived task, or to a task of an archived project
+ * (a project archives as one unit). Every mutation that edits a task calls this.
+ */
+export async function assertTaskNotArchived(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "archivedAt" | "projectId">,
+): Promise<void> {
+  if (isEntityArchived(task)) {
+    throw new ConvexError(archiveCopy("task").unarchiveFirst);
+  }
+  const project = task.projectId ? await db.get(task.projectId) : null;
+  if (project) assertProjectNotArchived(project);
+}
+
+/** Fetches a project by ID, throwing if not found or the user lacks repo access. */
 export async function getProjectWithAccess(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
@@ -311,25 +326,47 @@ export async function getProjectWithAccess(
   return project;
 }
 
-/** Returns true if the given task has any queued or running agent runs. */
-export async function hasActiveRun(
+/**
+ * The task's queued or running agent run, or null. Prefers a queued run over a
+ * running one; every agentRuns insert is guarded by an active-run check, so a
+ * task has at most one active run and the order does not matter.
+ */
+export async function getActiveTaskRun(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-): Promise<boolean> {
+): Promise<Doc<"agentRuns"> | null> {
   const queued = await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "queued"),
     )
     .first();
-  if (queued) return true;
-  const running = await db
+  if (queued) return queued;
+  return await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "running"),
     )
     .first();
-  return running !== null;
+}
+
+/** Returns true if the given task has any queued or running agent runs. */
+export async function hasActiveRun(
+  db: GenericDatabaseReader<DataModel>,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  return (await getActiveTaskRun(db, taskId)) !== null;
+}
+
+/**
+ * A run of the task is queued, running, scheduled or waiting to retry: its
+ * run lifecycle is set (`agentTasks.run`) or an agent run is active.
+ */
+export async function taskRunPending(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "_id" | "run">,
+): Promise<boolean> {
+  return task.run !== undefined || (await hasActiveRun(db, task._id));
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */
@@ -360,143 +397,31 @@ export async function isSupersededTaskRun(
 export async function isFirstTaskOnBranch(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-  projectId?: Id<"projects">,
 ): Promise<boolean> {
-  if (projectId) {
-    const project = await db.get(projectId);
-    if (!project) return true;
-    const branch =
-      project.branchName ??
-      buildProjectBranchName(project._id, project.branchVersion);
-    return (
-      (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
-    );
-  }
   const task = await db.get(taskId);
   if (!task?.repoId) return true;
   return (
     (await findLivePullRequestOnBranch(
       db,
       task.repoId,
-      `eva/task-${taskId}`,
+      taskBranchName(task),
     )) === null
   );
 }
 
-/** Deletes a task and all its related data (runs, dependencies, scheduled functions, sandbox). */
-export async function deleteTaskRelatedData(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-): Promise<void> {
-  const task = await ctx.db.get(taskId);
-  if (task?.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
-  // Quick tasks persist a sandbox; clean it up so we don't leak compute.
-  // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
-  if (task && !task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const run of runs) {
-    await ctx.db.delete(run._id);
-  }
-  const dependencies = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const dep of dependencies) {
-    await ctx.db.delete(dep._id);
-  }
-  const dependents = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_dependency", (q) => q.eq("dependsOnId", taskId))
-    .collect();
-  for (const dep of dependents) {
-    await ctx.db.delete(dep._id);
-  }
-  const activityEvents = await ctx.db
-    .query("taskActivity")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const event of activityEvents) {
-    await ctx.db.delete(event._id);
-  }
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.delete(taskId);
-}
-
 /**
- * Soft-deletes a task: cancels schedules and sandbox cleanup, but keeps the row.
+ * Archives a task: cancels its scheduled run and hides it from lists. The row
+ * and its runs stay; `unarchive` brings it back. The caller retires its session.
  */
-export async function softDeleteAgentTask(
+export async function archiveAgentTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || isEntityDeleted(task)) return;
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
-  if (!task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.patch(taskId, { deletedAt: Date.now() });
+  if (!task || isEntityArchived(task)) return;
+  await cancelTaskRunSchedule(ctx, taskId);
+  await ctx.db.patch(taskId, { archivedAt: Date.now() });
 }
-
-/** Authenticated query wrapper — injects userId into context, throws if not authenticated. */
-export const authQuery = customQuery(
-  query,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
-);
-
-/** Authenticated mutation wrapper — injects userId into context, throws if not authenticated. */
-export const authMutation = customMutation(
-  mutation,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
-);
 
 const getUserIdFromIdentityRef = makeFunctionReference<
   "query",
@@ -513,44 +438,50 @@ async function resolveActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
   return userId;
 }
 
-/** Authenticated action wrapper — injects userId into context via a query roundtrip. */
-export const authAction = customAction(
+/**
+ * Authenticated function wrappers — inject `userId` into the handler context,
+ * throw if not authenticated, and throw while maintenance mode is on (see
+ * `maintenance.ts`). Actions resolve the userId through a query roundtrip.
+ */
+export const { authQuery, authMutation, authAction } = createAuthFunctions({
+  customFunctions: { customQuery, customMutation, customAction, customCtx },
+  query,
+  mutation,
   action,
-  customCtx(async (ctx: ActionCtx) => {
-    const userId = await resolveActionUserId(ctx);
-    return { userId };
-  }),
-);
+  resolveUserId: (ctx) => requireCurrentUserId(ctx),
+  resolveActionUserId: (ctx) => resolveActionUserId(ctx),
+  beforeEach: () => assertNotInMaintenance(),
+});
 
-/** Internal authenticated query — same as authQuery but for internal-only queries. */
-export const internalAuthQuery = customQuery(
-  internalQuery,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
-);
+/**
+ * Internal authenticated wrappers — same as the public ones but on the
+ * internal builders and with no maintenance gate, so they run during
+ * maintenance.
+ */
+export const {
+  authQuery: internalAuthQuery,
+  authMutation: internalAuthMutation,
+  authAction: internalAuthAction,
+} = createAuthFunctions({
+  customFunctions: { customQuery, customMutation, customAction, customCtx },
+  query: internalQuery,
+  mutation: internalMutation,
+  action: internalAction,
+  resolveUserId: (ctx) => requireCurrentUserId(ctx),
+  resolveActionUserId: (ctx) => resolveActionUserId(ctx),
+});
 
-/** Internal authenticated mutation — same as authMutation but for internal-only mutations. */
-export const internalAuthMutation = customMutation(
-  internalMutation,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
-);
-
-/** Internal authenticated action — same as authAction but for internal-only actions. */
-export const internalAuthAction = customAction(
-  internalAction,
-  customCtx(async (ctx: ActionCtx) => {
-    const userId = await resolveActionUserId(ctx);
-    return { userId };
-  }),
-);
+/**
+ * A string id from outside Convex's validators (an MCP tool's argument),
+ * checked against its table. Throws `${what} not found` when it is not one.
+ */
+export function normalizeIdOrThrow<Table extends TableNames>(
+  db: GenericDatabaseReader<DataModel>,
+  table: Table,
+  id: string,
+  what: string,
+): Id<Table> {
+  const normalized = db.normalizeId(table, id);
+  if (normalized === null) throw new Error(`${what} not found`);
+  return normalized;
+}

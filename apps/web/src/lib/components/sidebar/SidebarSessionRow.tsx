@@ -1,12 +1,13 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import { m } from "motion/react";
-import type { Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  tokenTransition,
   toast,
   useRequestConfirm,
 } from "@vvedantb/ui";
@@ -28,9 +29,11 @@ import {
   useSendSessionForReview,
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
+import { sidebarRowPresence } from "@/lib/components/sidebar/_utils/sidebarRowPresence";
 
 interface SessionItem {
   _id: Id<"sessions">;
+  repoId: Id<"githubRepos">;
   numId?: number;
   _creationTime: number;
   userId: Id<"users">;
@@ -49,7 +52,7 @@ interface SessionItem {
   branchName?: string;
   baseBranch?: string;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /**
    * Set only on rows this app sees through a linked checkout: the session's
    * primary repo, which owns its URL (see `sessionHrefForRow`).
@@ -109,21 +112,21 @@ export function SidebarSessionRow<T extends SessionItem>({
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(session._id);
+  // One cached subscription per repo, shared by every row of that repo.
+  const draftMarks = useQuery(api.drafts.listMarks, { repoId: session.repoId });
+  const hasDraft = draftMarks?.sessionIds.includes(session._id) ?? false;
 
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={tokenTransition.fast}
+            {...sidebarRowPresence}
           >
             <SharedLayoutNavSurface
               itemId={session._id}
               isActive={isSelected}
-              className="group mx-1 rounded-menu-item"
+              className="group rounded-menu-item"
             >
               <SidebarSessionItem
                 href={href}
@@ -138,6 +141,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 isExecuting={session.isExecuting === true}
                 isAwaitingAnswer={session.isAwaitingAnswer === true}
                 hasUnread={session.hasUnread === true}
+                hasDraft={hasDraft}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}
@@ -153,6 +157,8 @@ export function SidebarSessionRow<T extends SessionItem>({
         </ContextMenuTrigger>
         <ContextMenuContent onClick={(e) => e.stopPropagation()}>
           <SessionMenuItems
+            variant="context"
+            showOpenInNewTab
             session={session}
             href={href}
             isRegeneratingTitle={isRegeneratingTitle}

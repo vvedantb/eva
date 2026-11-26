@@ -8,8 +8,10 @@ import {
   SettingsIcon,
 } from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
-import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { EASE_OUT } from "../../_components/DeckPrimitives";
+
+/** The rail's active tile, as the app drew it before the November rail redesign. */
+const railTileActiveClass = "bg-sidebar-accent text-sidebar-primary";
 
 /** Copied from `RepoRail`, which cannot be reused here: it is router-driven. */
 const RAIL_TILE_CLASS =

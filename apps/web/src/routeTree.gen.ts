@@ -13,10 +13,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
-import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
+import { Route as GlobalFeedbackRouteImport } from './routes/_global/feedback'
 import { Route as GlobalHomeRouteImport } from './routes/_global/home'
 import { Route as GlobalInboxRouteImport } from './routes/_global/inbox'
 import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
@@ -24,6 +24,7 @@ import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settin
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
+import { Route as DevLandingDemosRouteImport } from './routes/dev/landing-demos'
 import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
 import { Route as SlidesIndexRouteImport } from './routes/slides/index'
 import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
@@ -42,7 +43,6 @@ import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_glo
 import { Route as GlobalSettingsSandboxStatusRouteImport } from './routes/_global/settings/sandbox-status'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
 import { Route as GlobalSettingsShortcutsRouteImport } from './routes/_global/settings/shortcuts'
-import { Route as GlobalSettingsSyncRouteImport } from './routes/_global/settings/sync'
 import { Route as GlobalSettingsThemeRouteImport } from './routes/_global/settings/theme'
 import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
@@ -64,7 +64,6 @@ import { Route as RepoOwnerRepoAutomationsIndexRouteImport } from './routes/_rep
 import { Route as RepoOwnerRepoAutomationsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/automations/$numId/route'
 import { Route as RepoOwnerRepoDocsIndexRouteImport } from './routes/_repo/$owner/$repo/docs/index'
 import { Route as RepoOwnerRepoDocsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/docs/$numId/route'
-import { Route as RepoOwnerRepoDraftsIndexRouteImport } from './routes/_repo/$owner/$repo/drafts/index'
 import { Route as RepoOwnerRepoProjectsIndexRouteImport } from './routes/_repo/$owner/$repo/projects/index'
 import { Route as RepoOwnerRepoProjectsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/projects/$numId/route'
 import { Route as RepoOwnerRepoQuickTasksIndexRouteImport } from './routes/_repo/$owner/$repo/quick-tasks/index'
@@ -78,7 +77,6 @@ import { Route as RepoOwnerRepoSettingsAppRouteImport } from './routes/_repo/$ow
 import { Route as RepoOwnerRepoSettingsConfigRouteImport } from './routes/_repo/$owner/$repo/settings/config'
 import { Route as RepoOwnerRepoSettingsLogsRouteImport } from './routes/_repo/$owner/$repo/settings/logs'
 import { Route as RepoOwnerRepoSettingsMcpConfigRouteImport } from './routes/_repo/$owner/$repo/settings/mcp-config'
-import { Route as RepoOwnerRepoSettingsMonorepoRouteImport } from './routes/_repo/$owner/$repo/settings/monorepo'
 import { Route as RepoOwnerRepoSettingsPersonalisationRouteImport } from './routes/_repo/$owner/$repo/settings/personalisation'
 import { Route as RepoOwnerRepoSettingsSkillsRouteImport } from './routes/_repo/$owner/$repo/settings/skills'
 import { Route as RepoOwnerRepoSettingsSnapshotsRouteRouteImport } from './routes/_repo/$owner/$repo/settings/snapshots/route'
@@ -171,11 +169,6 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
   path: '/agent-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PreviewAuthRoute = PreviewAuthRouteImport.update({
-  id: '/preview-auth',
-  path: '/preview-auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
   id: '/automations',
   path: '/automations',
@@ -189,6 +182,11 @@ const GlobalAveRoute = GlobalAveRouteImport.update({
 const GlobalChangelogRoute = GlobalChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
+  getParentRoute: () => GlobalRoute,
+} as any)
+const GlobalFeedbackRoute = GlobalFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
   getParentRoute: () => GlobalRoute,
 } as any)
 const GlobalHomeRoute = GlobalHomeRouteImport.update({
@@ -224,6 +222,11 @@ const GlobalWhatsNewRoute = GlobalWhatsNewRouteImport.update({
 const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
   id: '/dev/feature-previews',
   path: '/dev/feature-previews',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevLandingDemosRoute = DevLandingDemosRouteImport.update({
+  id: '/dev/landing-demos',
+  path: '/dev/landing-demos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
@@ -320,11 +323,6 @@ const GlobalSettingsSandboxesRoute = GlobalSettingsSandboxesRouteImport.update({
 const GlobalSettingsShortcutsRoute = GlobalSettingsShortcutsRouteImport.update({
   id: '/shortcuts',
   path: '/shortcuts',
-  getParentRoute: () => GlobalSettingsRouteRoute,
-} as any)
-const GlobalSettingsSyncRoute = GlobalSettingsSyncRouteImport.update({
-  id: '/sync',
-  path: '/sync',
   getParentRoute: () => GlobalSettingsRouteRoute,
 } as any)
 const GlobalSettingsThemeRoute = GlobalSettingsThemeRouteImport.update({
@@ -441,12 +439,6 @@ const RepoOwnerRepoDocsNumIdRouteRoute =
     path: '/docs/$numId',
     getParentRoute: () => RepoOwnerRepoRoute,
   } as any)
-const RepoOwnerRepoDraftsIndexRoute =
-  RepoOwnerRepoDraftsIndexRouteImport.update({
-    id: '/drafts/',
-    path: '/drafts/',
-    getParentRoute: () => RepoOwnerRepoRoute,
-  } as any)
 const RepoOwnerRepoProjectsIndexRoute =
   RepoOwnerRepoProjectsIndexRouteImport.update({
     id: '/projects/',
@@ -523,12 +515,6 @@ const RepoOwnerRepoSettingsMcpConfigRoute =
   RepoOwnerRepoSettingsMcpConfigRouteImport.update({
     id: '/mcp-config',
     path: '/mcp-config',
-    getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
-  } as any)
-const RepoOwnerRepoSettingsMonorepoRoute =
-  RepoOwnerRepoSettingsMonorepoRouteImport.update({
-    id: '/monorepo',
-    path: '/monorepo',
     getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
   } as any)
 const RepoOwnerRepoSettingsPersonalisationRoute =
@@ -977,17 +963,18 @@ const RepoOwnerRepoQuickTasksNumIdSandboxReviewDiffsDiffViewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1005,7 +992,6 @@ export interface FileRoutesByFullPath {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1036,14 +1022,12 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
   '/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/$owner/$repo/automations/': typeof RepoOwnerRepoAutomationsIndexRoute
   '/$owner/$repo/docs/': typeof RepoOwnerRepoDocsIndexRoute
-  '/$owner/$repo/drafts/': typeof RepoOwnerRepoDraftsIndexRoute
   '/$owner/$repo/projects/': typeof RepoOwnerRepoProjectsIndexRoute
   '/$owner/$repo/quick-tasks/': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/$owner/$repo/reviews/': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1120,16 +1104,17 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1146,7 +1131,6 @@ export interface FileRoutesByTo {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/p/$kind/$id': typeof PKindIdRoute
@@ -1163,14 +1147,12 @@ export interface FileRoutesByTo {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
   '/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsIndexRoute
   '/$owner/$repo/docs': typeof RepoOwnerRepoDocsIndexRoute
-  '/$owner/$repo/drafts': typeof RepoOwnerRepoDraftsIndexRoute
   '/$owner/$repo/projects': typeof RepoOwnerRepoProjectsIndexRoute
   '/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/$owner/$repo/reviews': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1241,17 +1223,18 @@ export interface FileRoutesById {
   '/_global': typeof GlobalRouteWithChildren
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
   '/_global/changelog': typeof GlobalChangelogRoute
+  '/_global/feedback': typeof GlobalFeedbackRoute
   '/_global/home': typeof GlobalHomeRoute
   '/_global/inbox': typeof GlobalInboxRoute
   '/_global/sessions': typeof GlobalSessionsRoute
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1269,7 +1252,6 @@ export interface FileRoutesById {
   '/_global/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/_global/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/_global/settings/sync': typeof GlobalSettingsSyncRoute
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1300,14 +1282,12 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/_repo/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/_repo/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/_repo/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/_repo/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/_repo/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/_repo/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
   '/_repo/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/_repo/$owner/$repo/automations/': typeof RepoOwnerRepoAutomationsIndexRoute
   '/_repo/$owner/$repo/docs/': typeof RepoOwnerRepoDocsIndexRoute
-  '/_repo/$owner/$repo/drafts/': typeof RepoOwnerRepoDraftsIndexRoute
   '/_repo/$owner/$repo/projects/': typeof RepoOwnerRepoProjectsIndexRoute
   '/_repo/$owner/$repo/quick-tasks/': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/_repo/$owner/$repo/reviews/': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1386,17 +1366,18 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-callback'
-    | '/preview-auth'
     | '/settings'
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1414,7 +1395,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
@@ -1445,14 +1425,12 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
     | '/$owner/$repo/settings/theme'
     | '/$owner/$repo/automations/'
     | '/$owner/$repo/docs/'
-    | '/$owner/$repo/drafts/'
     | '/$owner/$repo/projects/'
     | '/$owner/$repo/quick-tasks/'
     | '/$owner/$repo/reviews/'
@@ -1529,16 +1507,17 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent-callback'
-    | '/preview-auth'
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1555,7 +1534,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/p/$kind/$id'
@@ -1572,14 +1550,12 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
     | '/$owner/$repo/settings/theme'
     | '/$owner/$repo/automations'
     | '/$owner/$repo/docs'
-    | '/$owner/$repo/drafts'
     | '/$owner/$repo/projects'
     | '/$owner/$repo/quick-tasks'
     | '/$owner/$repo/reviews'
@@ -1649,17 +1625,18 @@ export interface FileRouteTypes {
     | '/_global'
     | '/_repo'
     | '/agent-callback'
-    | '/preview-auth'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
     | '/_global/changelog'
+    | '/_global/feedback'
     | '/_global/home'
     | '/_global/inbox'
     | '/_global/sessions'
     | '/_global/testing'
     | '/_global/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1677,7 +1654,6 @@ export interface FileRouteTypes {
     | '/_global/settings/sandbox-status'
     | '/_global/settings/sandboxes'
     | '/_global/settings/shortcuts'
-    | '/_global/settings/sync'
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
@@ -1708,14 +1684,12 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo/settings/config'
     | '/_repo/$owner/$repo/settings/logs'
     | '/_repo/$owner/$repo/settings/mcp-config'
-    | '/_repo/$owner/$repo/settings/monorepo'
     | '/_repo/$owner/$repo/settings/personalisation'
     | '/_repo/$owner/$repo/settings/skills'
     | '/_repo/$owner/$repo/settings/tabs'
     | '/_repo/$owner/$repo/settings/theme'
     | '/_repo/$owner/$repo/automations/'
     | '/_repo/$owner/$repo/docs/'
-    | '/_repo/$owner/$repo/drafts/'
     | '/_repo/$owner/$repo/projects/'
     | '/_repo/$owner/$repo/quick-tasks/'
     | '/_repo/$owner/$repo/reviews/'
@@ -1795,8 +1769,8 @@ export interface RootRouteChildren {
   GlobalRoute: typeof GlobalRouteWithChildren
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
-  PreviewAuthRoute: typeof PreviewAuthRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
+  DevLandingDemosRoute: typeof DevLandingDemosRoute
   DevUiGalleryRoute: typeof DevUiGalleryRoute
   SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
   SlidesBeeRoute: typeof SlidesBeeRoute
@@ -1836,13 +1810,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/preview-auth': {
-      id: '/preview-auth'
-      path: '/preview-auth'
-      fullPath: '/preview-auth'
-      preLoaderRoute: typeof PreviewAuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_global/automations': {
       id: '/_global/automations'
       path: '/automations'
@@ -1862,6 +1829,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/changelog'
       preLoaderRoute: typeof GlobalChangelogRouteImport
+      parentRoute: typeof GlobalRoute
+    }
+    '/_global/feedback': {
+      id: '/_global/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof GlobalFeedbackRouteImport
       parentRoute: typeof GlobalRoute
     }
     '/_global/home': {
@@ -1911,6 +1885,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/feature-previews'
       fullPath: '/dev/feature-previews'
       preLoaderRoute: typeof DevFeaturePreviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/landing-demos': {
+      id: '/dev/landing-demos'
+      path: '/dev/landing-demos'
+      fullPath: '/dev/landing-demos'
+      preLoaderRoute: typeof DevLandingDemosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/ui-gallery': {
@@ -2037,13 +2018,6 @@ declare module '@tanstack/react-router' {
       path: '/shortcuts'
       fullPath: '/settings/shortcuts'
       preLoaderRoute: typeof GlobalSettingsShortcutsRouteImport
-      parentRoute: typeof GlobalSettingsRouteRoute
-    }
-    '/_global/settings/sync': {
-      id: '/_global/settings/sync'
-      path: '/sync'
-      fullPath: '/settings/sync'
-      preLoaderRoute: typeof GlobalSettingsSyncRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/theme': {
@@ -2193,13 +2167,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RepoOwnerRepoDocsNumIdRouteRouteImport
       parentRoute: typeof RepoOwnerRepoRoute
     }
-    '/_repo/$owner/$repo/drafts/': {
-      id: '/_repo/$owner/$repo/drafts/'
-      path: '/drafts'
-      fullPath: '/$owner/$repo/drafts/'
-      preLoaderRoute: typeof RepoOwnerRepoDraftsIndexRouteImport
-      parentRoute: typeof RepoOwnerRepoRoute
-    }
     '/_repo/$owner/$repo/projects/': {
       id: '/_repo/$owner/$repo/projects/'
       path: '/projects'
@@ -2289,13 +2256,6 @@ declare module '@tanstack/react-router' {
       path: '/mcp-config'
       fullPath: '/$owner/$repo/settings/mcp-config'
       preLoaderRoute: typeof RepoOwnerRepoSettingsMcpConfigRouteImport
-      parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
-    }
-    '/_repo/$owner/$repo/settings/monorepo': {
-      id: '/_repo/$owner/$repo/settings/monorepo'
-      path: '/monorepo'
-      fullPath: '/$owner/$repo/settings/monorepo'
-      preLoaderRoute: typeof RepoOwnerRepoSettingsMonorepoRouteImport
       parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
     }
     '/_repo/$owner/$repo/settings/personalisation': {
@@ -2822,7 +2782,6 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsSandboxStatusRoute: typeof GlobalSettingsSandboxStatusRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
-  GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
   GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
@@ -2837,7 +2796,6 @@ const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsSandboxStatusRoute: GlobalSettingsSandboxStatusRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
-  GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
   GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
@@ -2866,6 +2824,7 @@ interface GlobalRouteChildren {
   GlobalAutomationsRoute: typeof GlobalAutomationsRoute
   GlobalAveRoute: typeof GlobalAveRoute
   GlobalChangelogRoute: typeof GlobalChangelogRoute
+  GlobalFeedbackRoute: typeof GlobalFeedbackRoute
   GlobalHomeRoute: typeof GlobalHomeRoute
   GlobalInboxRoute: typeof GlobalInboxRoute
   GlobalSessionsRoute: typeof GlobalSessionsRoute
@@ -2883,6 +2842,7 @@ const GlobalRouteChildren: GlobalRouteChildren = {
   GlobalAutomationsRoute: GlobalAutomationsRoute,
   GlobalAveRoute: GlobalAveRoute,
   GlobalChangelogRoute: GlobalChangelogRoute,
+  GlobalFeedbackRoute: GlobalFeedbackRoute,
   GlobalHomeRoute: GlobalHomeRoute,
   GlobalInboxRoute: GlobalInboxRoute,
   GlobalSessionsRoute: GlobalSessionsRoute,
@@ -3226,7 +3186,6 @@ interface RepoOwnerRepoSettingsRouteRouteChildren {
   RepoOwnerRepoSettingsConfigRoute: typeof RepoOwnerRepoSettingsConfigRoute
   RepoOwnerRepoSettingsLogsRoute: typeof RepoOwnerRepoSettingsLogsRoute
   RepoOwnerRepoSettingsMcpConfigRoute: typeof RepoOwnerRepoSettingsMcpConfigRoute
-  RepoOwnerRepoSettingsMonorepoRoute: typeof RepoOwnerRepoSettingsMonorepoRoute
   RepoOwnerRepoSettingsPersonalisationRoute: typeof RepoOwnerRepoSettingsPersonalisationRoute
   RepoOwnerRepoSettingsSkillsRoute: typeof RepoOwnerRepoSettingsSkillsRoute
   RepoOwnerRepoSettingsTabsRoute: typeof RepoOwnerRepoSettingsTabsRoute
@@ -3244,7 +3203,6 @@ const RepoOwnerRepoSettingsRouteRouteChildren: RepoOwnerRepoSettingsRouteRouteCh
     RepoOwnerRepoSettingsConfigRoute: RepoOwnerRepoSettingsConfigRoute,
     RepoOwnerRepoSettingsLogsRoute: RepoOwnerRepoSettingsLogsRoute,
     RepoOwnerRepoSettingsMcpConfigRoute: RepoOwnerRepoSettingsMcpConfigRoute,
-    RepoOwnerRepoSettingsMonorepoRoute: RepoOwnerRepoSettingsMonorepoRoute,
     RepoOwnerRepoSettingsPersonalisationRoute:
       RepoOwnerRepoSettingsPersonalisationRoute,
     RepoOwnerRepoSettingsSkillsRoute: RepoOwnerRepoSettingsSkillsRoute,
@@ -3426,7 +3384,6 @@ interface RepoOwnerRepoRouteChildren {
   RepoOwnerRepoProjectsNumIdRouteRoute: typeof RepoOwnerRepoProjectsNumIdRouteRouteWithChildren
   RepoOwnerRepoTestingArenaNumIdRouteRoute: typeof RepoOwnerRepoTestingArenaNumIdRouteRouteWithChildren
   RepoOwnerRepoDocsIndexRoute: typeof RepoOwnerRepoDocsIndexRoute
-  RepoOwnerRepoDraftsIndexRoute: typeof RepoOwnerRepoDraftsIndexRoute
   RepoOwnerRepoProjectsIndexRoute: typeof RepoOwnerRepoProjectsIndexRoute
   RepoOwnerRepoTestingArenaIndexRoute: typeof RepoOwnerRepoTestingArenaIndexRoute
 }
@@ -3450,7 +3407,6 @@ const RepoOwnerRepoRouteChildren: RepoOwnerRepoRouteChildren = {
   RepoOwnerRepoTestingArenaNumIdRouteRoute:
     RepoOwnerRepoTestingArenaNumIdRouteRouteWithChildren,
   RepoOwnerRepoDocsIndexRoute: RepoOwnerRepoDocsIndexRoute,
-  RepoOwnerRepoDraftsIndexRoute: RepoOwnerRepoDraftsIndexRoute,
   RepoOwnerRepoProjectsIndexRoute: RepoOwnerRepoProjectsIndexRoute,
   RepoOwnerRepoTestingArenaIndexRoute: RepoOwnerRepoTestingArenaIndexRoute,
 }
@@ -3474,8 +3430,8 @@ const rootRouteChildren: RootRouteChildren = {
   GlobalRoute: GlobalRouteWithChildren,
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
-  PreviewAuthRoute: PreviewAuthRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
+  DevLandingDemosRoute: DevLandingDemosRoute,
   DevUiGalleryRoute: DevUiGalleryRoute,
   SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
   SlidesBeeRoute: SlidesBeeRoute,

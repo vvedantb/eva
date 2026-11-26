@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { BG_HEAL_MIN_INTERVAL_MS } from "../convex/sandboxHeal";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Prod (2026-09-01): the preview heal launched a session's background daemons
@@ -15,7 +16,6 @@ import { BG_HEAL_MIN_INTERVAL_MS } from "../convex/sandboxHeal";
  * behavioural: the gate blocks, and it does NOT consume the interval slot.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -35,6 +35,7 @@ async function seedSession(
       installationId: 1,
     });
     return ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Preview heal gate",

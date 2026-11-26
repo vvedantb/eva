@@ -23,6 +23,7 @@ import {
   Tabs,
   TabsBar,
   TabsList,
+  TabsTransition,
   TabsTrigger,
   Markdown,
 } from "@vvedantb/ui";
@@ -39,7 +40,7 @@ import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBod
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
+import { storedRunTraits, toRunTraitArgs } from "@eva/shared";
 
 type RecapDoc = FunctionReturnType<typeof api.docs.getRecapByPrUrl>;
 
@@ -53,12 +54,16 @@ interface PrRecapPanelProps {
  * Recap sub-tab for the sandbox PR panel — generate/stream/ready states for
  * Eva-origin (and any) PR recaps keyed by prUrl.
  */
+/** The recap's views in their on-screen order (the content slides by it). */
+const PR_RECAP_VIEWS = ["recap", "summary"] as const;
+type PrRecapView = (typeof PR_RECAP_VIEWS)[number];
+
 export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
   const { basePath, repo } = useRepo();
   const generatePrRecap = useAction(api.docs.generatePrRecap);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [view, setView] = useState<"recap" | "summary">("recap");
+  const [view, setView] = useState<PrRecapView>("recap");
   // Only the pending override lives in state; the last run's setup is read off
   // the recap doc, so a reload shows what actually produced the recap.
   const [pendingModel, setPendingModel] = useState<AIModel>();
@@ -177,6 +182,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       className="flex h-full min-h-0 flex-col"
     >
       <TabsBar
+        className="border-b-0"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {shortSha ? <span className="font-mono">{shortSha}</span> : null}
@@ -295,13 +301,15 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-        {view === "recap" ? (
-          <RecapTourBody doc={recapDoc} repoId={repoId} />
-        ) : (
-          <Surface>
-            <Markdown className="text-sm">{recapDoc.content}</Markdown>
-          </Surface>
-        )}
+        <TabsTransition value={view} order={PR_RECAP_VIEWS}>
+          {view === "recap" ? (
+            <RecapTourBody doc={recapDoc} repoId={repoId} />
+          ) : (
+            <Surface>
+              <Markdown className="text-sm">{recapDoc.content}</Markdown>
+            </Surface>
+          )}
+        </TabsTransition>
       </div>
     </Tabs>
   );

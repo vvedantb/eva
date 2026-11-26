@@ -18,6 +18,7 @@ import { ChangelogDialogGate } from "@/lib/components/ChangelogDialogGate";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
 import { EmbedNavigationBridge } from "@/lib/embed/EmbedNavigationBridge";
 import { useDocumentTitle } from "@/lib/hooks/useDocumentTitle";
+import { PrCloseDialogHost } from "@/lib/components/pr-menu/PrCloseDialogHost";
 
 export interface RouterContext {
   isSignedIn: boolean;
@@ -53,9 +54,7 @@ function RootComponent() {
   // The anonymous landing is the one route that needs no Convex. Skipping the
   // provider there keeps marketing visitors from opening a WebSocket to the
   // production deployment (ClientProvider's presence/user bootstrapping and
-  // ChangelogDialogGate each subscribe immediately on mount). Every other
-  // public route (preview-auth) calls Convex hooks
-  // unconditionally, so they keep the provider even when signed out.
+  // ChangelogDialogGate each subscribe immediately on mount).
   const anonymousLanding = pathname === "/" && isSignedIn !== true;
 
   const app = (
@@ -92,7 +91,7 @@ function RootComponent() {
 
   // One provider above everything, including the layers outside the app shell:
   // the preview mini player, the What's New dialog and the routes without
-  // chrome (preview-auth) all render tooltips, and Radix throws
+  // chrome all render tooltips, and Radix throws
   // outright when a Tooltip has no Provider above it. Context only — no DOM,
   // so the anonymous landing pays nothing for it.
   return (
@@ -104,6 +103,8 @@ function RootComponent() {
           {app}
           {/* The What's New dialog belongs to the top-level window, not previews. */}
           {IS_EMBEDDED ? null : <ChangelogDialogGate />}
+          {/* "Close without merging" from any PR menu confirms here. */}
+          <PrCloseDialogHost />
         </ClientProvider>
       )}
     </TooltipProvider>

@@ -1,6 +1,6 @@
 import { TURN_ID, TURN_LEASE_GENERATION } from "../config.js";
 import type { JsonObject, JsonValue } from "../types.js";
-import { log } from "../utils.js";
+import { isJsonObject, log } from "../utils.js";
 
 export type TurnLeaseIdentity = {
   turnId: string;
@@ -100,12 +100,12 @@ export function getLeaseTerminalReason(): LeaseTerminalReason | null {
   return terminalReason;
 }
 
-/** Two legacy (lease-less) owners compare equal; otherwise id and generation must match. */
-export function isSameTurnLease(
-  a: TurnLeaseIdentity | null,
+/** A released lease never matches; otherwise id and generation must match. */
+function isSameTurnLease(
+  a: TurnLeaseIdentity,
   b: TurnLeaseIdentity | null,
 ): boolean {
-  if (a === null || b === null) return a === b;
+  if (b === null) return false;
   return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
 }
 
@@ -154,7 +154,7 @@ function parseTerminalReason(value: JsonValue): LeaseTerminalReason | null {
  */
 export function noteHeartbeatResponse(
   response: string | JsonValue,
-  sentUnder: TurnLeaseIdentity | null,
+  sentUnder: TurnLeaseIdentity,
 ): boolean {
   if (terminalReason !== null) return true;
   let parsed: JsonValue;
@@ -167,7 +167,7 @@ export function noteHeartbeatResponse(
   } else {
     parsed = response;
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isJsonObject(parsed)) {
     return false;
   }
   const responseValue = parsed.value;
@@ -178,7 +178,7 @@ export function noteHeartbeatResponse(
       ? responseValue
       : parsed;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
+  if (!isJsonObject(lease)) {
     return false;
   }
   if (lease.status !== "terminal") return false;
@@ -189,7 +189,7 @@ export function noteHeartbeatResponse(
       "stale turn lease verdict ignored (" +
         reason +
         ") sentUnder=" +
-        String(sentUnder?.turnId) +
+        sentUnder.turnId +
         " current=" +
         String(current?.turnId),
     );

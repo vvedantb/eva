@@ -1,18 +1,18 @@
 import { useLocalStorage } from "usehooks-ts";
 import { useQueryStates } from "nuqs";
-import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectSortDir, ProjectSortField } from "@eva/shared";
+import type { ProjectStage } from "@eva/shared/projectStatus";
 import {
   searchParser,
   sortDirParser,
-  hiddenProjectPhasesParser,
+  hiddenProjectStagesParser,
   projectSortFieldParser,
 } from "@/lib/search-params";
 
 type ProjectView = "kanban" | "timeline" | "list";
 const PROJECT_VIEWS: readonly ProjectView[] = ["kanban", "timeline", "list"];
-export const SORT_FIELDS = ["created", "title", "priority"] as const;
-type SortField = (typeof SORT_FIELDS)[number];
-type SortDir = "asc" | "desc";
+type SortField = ProjectSortField;
+type SortDir = ProjectSortDir;
 // Timeline axis granularity. Maps 1:1 to the Gantt engine's `Range`
 // ("daily" renders day columns, surfaced to users as the "Week" zoom).
 type TimelineRange = "quarterly" | "monthly" | "daily";
@@ -20,10 +20,10 @@ type TimelineRange = "quarterly" | "monthly" | "daily";
 interface ProjectFilters {
   q: string;
   view: ProjectView;
-  // Phases the user has hidden (blocklist). Empty = all phases visible.
+  // Stages the user has hidden (blocklist). Empty = all stages visible.
   // Storing exclusions (not the visible allowlist) keeps "no filter" stable
-  // and makes any newly-added phase visible by default.
-  hiddenPhases: ProjectPhase[];
+  // and makes any newly-added stage visible by default.
+  hiddenPhases: ProjectStage[];
   sortField: SortField;
   sortDir: SortDir;
   // Timeline view only: axis granularity + zoom (percent). Other views ignore.
@@ -64,7 +64,7 @@ export function useProjectFilters(): [
 
   const [urlFilters, setUrlFilters] = useQueryStates({
     q: searchParser,
-    hiddenPhases: hiddenProjectPhasesParser,
+    hiddenPhases: hiddenProjectStagesParser,
     sortField: projectSortFieldParser,
     sortDir: sortDirParser,
   });

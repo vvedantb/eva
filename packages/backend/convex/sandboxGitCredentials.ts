@@ -10,6 +10,7 @@ import {
   isInstallationAllowed,
   parseRepoPath,
 } from "./_sandbox_runtime/gitCredentialsPath";
+import { isReadOnlySandboxOwner } from "./_sessions/owner";
 
 /** Upserts the credential row for a sandbox, replacing any prior secret. */
 export const upsertForSandbox = internalMutation({
@@ -87,6 +88,11 @@ async function lookupSandboxOwner(
   repoId: Id<"githubRepos">;
   /** Only sessions can carry linked repos (multi-repo sessions). */
   sessionId?: Id<"sessions">;
+  /**
+   * A project coordinator's sandbox (a project-owned session): it reads code
+   * and never pushes (plan decision 6), so it gets read-only tokens only.
+   */
+  readOnly: boolean;
 } | null> {
   const session = await db
     .query("sessions")
@@ -97,28 +103,52 @@ async function lookupSandboxOwner(
       userId: session.userId,
       repoId: session.repoId,
       sessionId: session._id,
+      readOnly: isReadOnlySandboxOwner(session.owner),
     };
   }
 
-  const project = await db
-    .query("projects")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (project) return { userId: project.userId, repoId: project.repoId };
-
-  const task = await db
-    .query("agentTasks")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (!task) return null;
-  if (task.repoId) return { userId: task.createdBy, repoId: task.repoId };
-  if (task.projectId) {
-    const taskProject = await db.get(task.projectId);
-    if (taskProject) {
-      return { userId: task.createdBy, repoId: taskProject.repoId };
-    }
-  }
   return null;
+}
+
+/**
+ * The read-only answer for a coordinator sandbox: its home repo, or a
+ * sibling its owner can read. GitHub refuses a push with such a token, so the
+ * coordinator cannot change code even when it tries.
+ */
+async function readOnlyCredential(
+  db: GenericDatabaseReader<DataModel>,
+  entity: { userId: Id<"users">; repoId: Id<"githubRepos"> },
+  sandboxId: string,
+  requested: { owner: string; name: string } | null,
+) {
+  const homeRepo = await db.get(entity.repoId);
+  if (!homeRepo) {
+    return { kind: "denied" as const, reason: "home repository missing" };
+  }
+  const target =
+    requested === null || isSameGitHubRepo(homeRepo, requested)
+      ? homeRepo
+      : await resolveSiblingReadAccess(
+          db,
+          entity.userId,
+          entity.repoId,
+          requested.owner,
+          requested.name,
+        );
+  if (!target) {
+    return {
+      kind: "denied" as const,
+      reason: `no access to ${requested?.owner}/${requested?.name}`,
+    };
+  }
+  return {
+    kind: "read_only" as const,
+    installationId: target.installationId,
+    owner: target.owner,
+    name: target.name,
+    githubId: target.githubId,
+    sandboxId,
+  };
 }
 
 /**
@@ -139,6 +169,9 @@ async function linkedSessionRepo(
 
 /**
  * Decides what token a sandbox credential request may have.
+ *
+ * A project coordinator's sandbox (a project-owned session) gets a read-only
+ * token for whatever it may read, never a push token (`readOnlyCredential`).
  *
  * `path` is the repository git asked about (`owner/repo.git`, sent because the
  * helper sets `credential.useHttpPath`). No path, or the sandbox's own home
@@ -176,6 +209,14 @@ export const resolveCredentialRequest = internalQuery({
       sandboxId: v.string(),
       userId: v.id("users"),
     }),
+    v.object({
+      kind: v.literal("read_only"),
+      installationId: v.number(),
+      owner: v.string(),
+      name: v.string(),
+      githubId: v.optional(v.number()),
+      sandboxId: v.string(),
+    }),
     v.object({ kind: v.literal("denied"), reason: v.string() }),
   ),
   handler: async (ctx, args) => {
@@ -189,6 +230,13 @@ export const resolveCredentialRequest = internalQuery({
     // `useHttpPath` rolled out. Mint for the sandbox's primary installation.
     const requested =
       args.path === undefined ? null : parseRepoPath(args.path);
+
+    // A project coordinator's sandbox only ever reads.
+    const owner = await lookupSandboxOwner(ctx.db, row.sandboxId);
+    if (owner?.readOnly) {
+      return await readOnlyCredential(ctx.db, owner, row.sandboxId, requested);
+    }
+
     if (!requested) {
       return { kind: "home" as const, installationId: row.installationId };
     }
@@ -199,7 +247,7 @@ export const resolveCredentialRequest = internalQuery({
       return { kind: "home" as const, installationId: row.installationId };
     }
 
-    const entity = await lookupSandboxOwner(ctx.db, row.sandboxId);
+    const entity = owner;
     if (!entity) {
       return {
         kind: "denied" as const,

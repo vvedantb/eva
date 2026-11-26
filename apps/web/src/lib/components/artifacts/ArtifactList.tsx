@@ -3,10 +3,9 @@
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { SessionSourceEmpty } from "@/lib/components/sandbox/SessionSourcePane";
 import { ArtifactCard } from "./ArtifactCard";
-import { ListEnter } from "@vvedantb/ui";
+import { ListEnter, EmptyState } from "@vvedantb/ui";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 
@@ -20,7 +19,8 @@ export function ArtifactList({
 }: {
   artifacts: ArtifactRow[];
   emptyDescription: string;
-  showSource?: boolean;
+  /** `"task"`: only rows a child task made (a project's own tab). */
+  showSource?: boolean | "task";
   /** Single column — the sandbox Artifacts pane is too narrow for the grid. */
   compact?: boolean;
   /** Open a row in place instead of navigating to the viewer. */
@@ -38,13 +38,11 @@ export function ArtifactList({
     }
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center py-16">
-        <EmptyState
-          icon={
-            <IconLayoutDashboard size={24} className="text-muted-foreground" />
-          }
-          title="No artifacts yet"
-          description={emptyDescription}
-        />
+        <EmptyState.Root>
+          <EmptyState.Icon icon={IconLayoutDashboard} size={24} />
+          <EmptyState.Title>No artifacts yet</EmptyState.Title>
+          <EmptyState.Description>{emptyDescription}</EmptyState.Description>
+        </EmptyState.Root>
       </div>
     );
   }

@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Doc, Id } from "../_generated/dataModel";
 import { defineTool, type EvaTool } from "../mcp/registry";
+import { sleep } from "../_shared/async";
 
 type CallRow = Doc<"previewToolCalls">;
 
@@ -73,10 +74,6 @@ function resultOf(row: CallRow): CallToolResult {
   }
   // Raw page output: re-encoding it through toolJsonResult would double-escape JSON.
   return toolTextResult(row.resultJson ?? "null");
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

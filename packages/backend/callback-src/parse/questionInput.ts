@@ -4,6 +4,7 @@ import type {
   StepQuestion,
   StepQuestionOption,
 } from "../types.js";
+import { isJsonObject } from "../utils.js";
 
 function parseQuestionOptions(
   value: JsonValue | undefined,
@@ -11,7 +12,7 @@ function parseQuestionOptions(
   if (!Array.isArray(value)) return [];
   const options: StepQuestionOption[] = [];
   for (const raw of value) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.label !== "string" || !raw.label) continue;
     options.push({
       label: raw.label,
@@ -35,7 +36,7 @@ export function parseQuestionInput(
   if (!Array.isArray(input.questions)) return undefined;
   const questions: StepQuestion[] = [];
   for (const raw of input.questions) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.question !== "string" || !raw.question) continue;
     questions.push({
       question: raw.question,

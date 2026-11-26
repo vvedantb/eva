@@ -1,5 +1,6 @@
 "use client";
 
+import { SPOTLIGHT_PLACEHOLDER } from "@eva/shared/spotlight";
 import { useDeferredValue, useState } from "react";
 import {
   Command,
@@ -30,6 +31,7 @@ import {
   iconForRecent,
 } from "@/lib/components/_components/spotlightGroups";
 import { SpotlightItem } from "@/lib/components/_components/SpotlightItem";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 
 /** What a selected row records in Recents — the shape both hits and recents share. */
 interface SelectableHit {
@@ -61,6 +63,7 @@ export function SpotlightSearch() {
   };
 
   const handleSelect = (hit: SelectableHit) => {
+    if (!isInternalAppHref(hit.href)) return;
     record({
       type: hit.type,
       title: hit.title,
@@ -107,7 +110,7 @@ export function SpotlightSearch() {
         >
           <CommandInput
             autoFocus
-            placeholder="Search across your teams and repos…"
+            placeholder={SPOTLIGHT_PLACEHOLDER}
             value={search}
             onValueChange={setSearch}
           />

@@ -14,7 +14,8 @@ import {
 import { IconMessage, IconTrash, IconX } from "@tabler/icons-react";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PrCommentForm } from "./PrCommentForm";
-import { PrReviewForm, type ReviewEvent } from "./PrReviewForm";
+import type { ReviewEvent } from "@eva/shared";
+import { PrReviewForm } from "./PrReviewForm";
 
 type ComposerMode = "comment" | "review";
 
@@ -62,7 +63,7 @@ export function PrComposer({
         <Button
           size="icon"
           variant="secondary"
-          className="relative rounded-full bg-popover/95 backdrop-blur-md smooth-shadow-ring-md"
+          className="relative bg-popover/95 backdrop-blur-md smooth-shadow-ring-md"
           aria-label={
             pending > 0
               ? `Review pull request, ${pending} ${pending === 1 ? "comment" : "comments"} pending`

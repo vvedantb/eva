@@ -1,10 +1,10 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   CONTEXT_OVERLOAD_RATIO,
   aggregateUsage,
   contextCompactsAutomatically,
   contextUsedRatio,
-} from "./EntityContextUsage";
+} from "@eva/shared/contextUsage";
 
 test("aggregateUsage uses latest occupancy, not summed cache reads", () => {
   const logs = [

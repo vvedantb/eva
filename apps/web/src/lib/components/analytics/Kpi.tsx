@@ -3,14 +3,19 @@
 import { Children, type ReactNode } from "react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
-import { Card, CardContent, tokenTransition, staggerDelay } from "@vvedantb/ui";
+import {
+  Card,
+  CardContent,
+  tokenTransition,
+  staggerDelay,
+  useCountUpDisplay,
+} from "@vvedantb/ui";
 import {
   type Icon as TablerIcon,
   IconTrendingUp,
   IconTrendingDown,
   IconMinus,
 } from "@tabler/icons-react";
-import { useCountUpDisplay } from "./useCountUpDisplay";
 
 interface KpiProps {
   /** Optional leading icon shown in a rounded pill next to the label. */

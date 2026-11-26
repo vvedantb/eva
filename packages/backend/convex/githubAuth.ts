@@ -3,7 +3,9 @@
 import { Octokit } from "octokit";
 import { createAppAuth } from "@octokit/auth-app";
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   ensurePkcs8PrivateKey,
   normalizePemKey,
@@ -44,13 +46,23 @@ export function getGitHubCredentials() {
   };
 }
 
-/** Generates a short-lived access token for a GitHub App installation. */
+let sharedAppAuth: ReturnType<typeof createAppAuth> | null = null;
+
+/**
+ * One `createAppAuth` per process. It caches installation tokens (keyed by
+ * installation, permissions and repositories) until shortly before expiry,
+ * so repeated calls in a warm action reuse the token instead of minting one.
+ */
+function appAuth(): ReturnType<typeof createAppAuth> {
+  sharedAppAuth ??= createAppAuth(getGitHubCredentials());
+  return sharedAppAuth;
+}
+
+/** Short-lived access token for a GitHub App installation (cached per process). */
 export async function getInstallationToken(
   installationId: number,
 ): Promise<string> {
-  const creds = getGitHubCredentials();
-  const auth = createAppAuth(creds);
-  const installationAuth = await auth({
+  const installationAuth = await appAuth()({
     type: "installation",
     installationId,
   });
@@ -65,13 +77,11 @@ export async function getInstallationToken(
  * repository id when known; GitHub also accepts the repository name for
  * installations whose id we never recorded.
  */
-export async function getSiblingRepoInstallationToken(
+function siblingRepoInstallationAuth(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
-): Promise<string> {
-  const creds = getGitHubCredentials();
-  const auth = createAppAuth(creds);
-  const installationAuth = await auth({
+) {
+  return appAuth()({
     type: "installation",
     installationId,
     permissions: { contents: "write", metadata: "read" },
@@ -79,7 +89,6 @@ export async function getSiblingRepoInstallationToken(
       ? { repositoryIds: [repo.githubId] }
       : { repositoryNames: [repo.name] }),
   });
-  return installationAuth.token;
 }
 
 /** Creates an Octokit client authenticated as a specific GitHub App installation. */
@@ -88,6 +97,22 @@ export async function getInstallationOctokit(
 ): Promise<Octokit> {
   const token = await getInstallationToken(installationId);
   return new Octokit({ auth: token });
+}
+
+/**
+ * Loads a repo without an access check and builds an installation Octokit for
+ * it. Internal fetchers only; public actions check access first.
+ */
+export async function getRepoOctokit(
+  ctx: Pick<ActionCtx, "runQuery">,
+  repoId: Id<"githubRepos">,
+): Promise<{ repo: Doc<"githubRepos">; octokit: Octokit }> {
+  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+    id: repoId,
+  });
+  if (!repo) throw new Error("Repo not found");
+  const octokit = await getInstallationOctokit(repo.installationId);
+  return { repo, octokit };
 }
 
 /** Creates an Octokit client authenticated as the GitHub App itself (not an installation). */
@@ -99,12 +124,89 @@ export function getAppOctokit(): Octokit {
   });
 }
 
+/**
+ * A token plus its real GitHub expiry (unix seconds). The process cache above
+ * can hand out a token up to 59 minutes old, so callers that cache it again
+ * (the sandbox credential helper) must key off `expiresAt`, not fetch time.
+ */
+const sandboxGitCredentialValidator = v.object({
+  token: v.string(),
+  expiresAt: v.number(),
+});
+
+export function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
+  return {
+    token: auth.token,
+    expiresAt: Math.floor(Date.parse(auth.expiresAt) / 1000),
+  };
+}
+
 /** Internal action wrapper so HTTP actions can mint an installation token via ctx.runAction. */
 export const mintInstallationToken = internalAction({
   args: { installationId: v.number() },
-  returns: v.string(),
+  returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return await getInstallationToken(args.installationId);
+    return await mintSandboxGitToken(args.installationId, SANDBOX_GIT_WRITE);
+  },
+});
+
+/**
+ * What a sandbox may do with GitHub. Every sandbox pushes its own work
+ * (`write`: a full installation token), except a project coordinator's
+ * (plan decision 6): it only reads one repository (`read`: contents and
+ * metadata read, scoped to that repository), and GitHub refuses its push.
+ * Who gets `read` is decided by `isReadOnlySandboxOwner` (`_sessions/owner.ts`).
+ */
+export type SandboxGitAccess =
+  | { kind: "write" }
+  | { kind: "read"; repo: { githubId?: number; name: string } };
+
+export const SANDBOX_GIT_WRITE: SandboxGitAccess = { kind: "write" };
+
+/**
+ * The one minting rule for a GitHub token a sandbox holds: the env token
+ * written at create (`createSandbox`), the clone token, the runner's refresh
+ * (`github:getInstallationTokenAction`) and the credential helper's answer
+ * for a coordinator (`/api/git-credentials`).
+ */
+export async function mintSandboxGitToken(
+  installationId: number,
+  access: SandboxGitAccess,
+): Promise<{ token: string; expiresAt: number }> {
+  if (access.kind === "write") {
+    return toSandboxGitCredential(
+      await appAuth()({ type: "installation", installationId }),
+    );
+  }
+  const { repo } = access;
+  return toSandboxGitCredential(
+    await appAuth()({
+      type: "installation",
+      installationId,
+      permissions: { contents: "read", metadata: "read" },
+      ...(repo.githubId !== undefined
+        ? { repositoryIds: [repo.githubId] }
+        : { repositoryNames: [repo.name] }),
+    }),
+  );
+}
+
+/**
+ * A read-only token for one repository: what a project coordinator's
+ * credential helper gets (`mintSandboxGitToken` with `read`).
+ */
+export const mintReadOnlyRepoToken = internalAction({
+  args: {
+    installationId: v.number(),
+    githubId: v.optional(v.number()),
+    name: v.string(),
+  },
+  returns: sandboxGitCredentialValidator,
+  handler: async (_ctx, args) => {
+    return await mintSandboxGitToken(args.installationId, {
+      kind: "read",
+      repo: { githubId: args.githubId, name: args.name },
+    });
   },
 });
 
@@ -115,11 +217,13 @@ export const mintSiblingRepoToken = internalAction({
     githubId: v.optional(v.number()),
     name: v.string(),
   },
-  returns: v.string(),
+  returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return await getSiblingRepoInstallationToken(args.installationId, {
-      githubId: args.githubId,
-      name: args.name,
-    });
+    return toSandboxGitCredential(
+      await siblingRepoInstallationAuth(args.installationId, {
+        githubId: args.githubId,
+        name: args.name,
+      }),
+    );
   },
 });

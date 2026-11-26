@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { isFirstTaskOnBranch } from "../convex/functions";
+import { isSessionArchived } from "../convex/_sessions/archive";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Reported bug: closing a project's pull request wiped the project (fix
@@ -11,15 +12,14 @@ import { isFirstTaskOnBranch } from "../convex/functions";
  * to walk `by_project` and force each task to done/cancelled — a single
  * "Close pull request" click on GitHub cancelled work that was still in
  * progress, and fanned a notification out per task. A close can be undone on
- * GitHub; the task statuses it overwrote cannot, so the blast radius is now
- * the project phase alone.
+ * GitHub; the task statuses it overwrote cannot, so a project's own PR now
+ * moves nothing: the project's status is derived from its tasks.
  *
  * Behavioural rather than source-level: the property that broke is what the
  * webhook leaves behind in the database, and the source-level rules that used
  * to guard this path silently went stale when the handler was restructured.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -49,7 +49,6 @@ async function fixture() {
       userId: ada,
       title: "Billing rewrite",
       rawInput: "rewrite billing",
-      phase: "code_review",
       numId: 7,
       branchVersion: 2,
       branchName: "eva/project-billing-v2",
@@ -169,104 +168,27 @@ function notificationsFor(
   );
 }
 
-describe("a project pull request closing without merge", () => {
-  test(
-    "moves the project to cancelled and leaves every task alone",
-    async () => {
-      const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
-        prUrl: PROJECT_PR,
-        action: "closed",
-        merged: false,
-      });
+describe("a project's own (legacy) pull request ending", () => {
+  for (const merged of [false, true]) {
+    test(
+      `${merged ? "merging" : "closing"} leaves the project, its tasks and their subscribers alone`,
+      async () => {
+        const { t, ids } = await fixture();
+        await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+          prUrl: PROJECT_PR,
+          action: "closed",
+          merged,
+        });
 
-      expect(
-        await statuses(t, [ids.shipped, ids.building, ids.queued]),
-        "a project PR is not a verdict on what each task did",
-      ).toEqual(["done", "in_progress", "todo"]);
-      const project = await t.run((ctx) => ctx.db.get(ids.projectId));
-      expect(project?.phase).toBe("cancelled");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "notifies each subscriber once about the project, not once per task",
-    async () => {
-      const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
-        prUrl: PROJECT_PR,
-        action: "closed",
-        merged: false,
-      });
-
-      // Ada subscribes to two of the three tasks; the old per-task loop sent
-      // her one notification for each.
-      const ada = await notificationsFor(t, ids.ada);
-      expect(ada).toHaveLength(1);
-      expect(ada[0].title).toContain('project "Billing rewrite"');
-      // No taskId is set, so the click-through lands on the project rather
-      // than whichever task happened to open the PR.
-      expect(ada[0].href).toBe("/vvedantb/eva/projects/7");
-
-      expect(await notificationsFor(t, ids.bo)).toHaveLength(1);
-      expect(
-        await notificationsFor(t, ids.cy),
-        "an unsubscribed member stays unsubscribed",
-      ).toHaveLength(0);
-    },
-    TIMEOUT_MS,
-  );
-});
-
-describe("a project pull request merging", () => {
-  test(
-    "completes the project and still leaves task statuses untouched",
-    async () => {
-      const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
-        prUrl: PROJECT_PR,
-        action: "closed",
-        merged: true,
-      });
-
-      expect(
-        await statuses(t, [ids.shipped, ids.building, ids.queued]),
-      ).toEqual(["done", "in_progress", "todo"]);
-      const project = await t.run((ctx) => ctx.db.get(ids.projectId));
-      expect(project?.phase).toBe("completed");
-      // The merged branch is spent: the next build needs a fresh one. The old
-      // PR stays linked as history, but no longer sits on the live branch, so
-      // the next run opens a new PR instead of refreshing it.
-      expect(project?.branchVersion).toBe(3);
-      expect(project?.branchName).not.toBe("eva/project-billing-v2");
-      expect(project?.prState).toBe("merged");
-      const firstOnBranch = await t.run((ctx) =>
-        isFirstTaskOnBranch(ctx.db, ids.building, ids.projectId),
-      );
-      expect(firstOnBranch).toBe(true);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "records the merge on the timeline of the task that opened the PR",
-    async () => {
-      const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
-        prUrl: PROJECT_PR,
-        action: "closed",
-        merged: true,
-      });
-
-      const activity = await t.run((ctx) =>
-        ctx.db.query("taskActivity").collect(),
-      );
-      expect(activity.map((entry) => entry.taskId)).toEqual([ids.shipped]);
-      expect(activity[0].newValue).toBe("merged");
-    },
-    TIMEOUT_MS,
-  );
+        expect(
+          await statuses(t, [ids.shipped, ids.building, ids.queued]),
+          "a project PR is not a verdict on what each task did",
+        ).toEqual(["done", "in_progress", "todo"]);
+        expect(await notificationsFor(t, ids.ada)).toHaveLength(0);
+      },
+      TIMEOUT_MS,
+    );
+  }
 });
 
 /**
@@ -311,11 +233,17 @@ describe("a quick task's pull request", () => {
   );
 
   test(
-    "closes a preview sandbox the task never started",
+    "retires the task's session, so its preview stops being startable",
     async () => {
       const { t, ids } = await fixture();
-      await t.run((ctx) =>
-        ctx.db.patch(ids.quick, { reviewTaskSandboxStatus: "active" }),
+      const sessionId = await t.run((ctx) =>
+        ctx.db.insert("sessions", {
+          owner: { kind: "task", taskId: ids.quick },
+          repoId: ids.repoId,
+          userId: ids.ada,
+          title: "Quick task",
+          status: "closed",
+        }),
       );
 
       await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
@@ -324,11 +252,10 @@ describe("a quick task's pull request", () => {
         merged: true,
       });
 
-      // A merged PR makes the task read-only, so its preview must not stay
-      // startable. (The stop of a *live* VM schedules provider teardown, so
-      // that half is asserted at source level in taskPrLifecycleContract.)
-      const task = await t.run((ctx) => ctx.db.get(ids.quick));
-      expect(task?.reviewTaskSandboxStatus).toBe("closed");
+      // A merged PR makes the task read-only: its session (and so its
+      // sandbox) is archived and starts the grace delete.
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session && isSessionArchived(session)).toBe(true);
     },
     TIMEOUT_MS,
   );

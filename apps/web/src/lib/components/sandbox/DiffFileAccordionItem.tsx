@@ -26,12 +26,11 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { DiffView } from "@/lib/search-params";
-import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
+import { toSandboxFilePath, type DiffFileEntry } from "@eva/shared";
 import { useOpenSandboxFile } from "@/lib/contexts/OpenSandboxFileContext";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
 import { DiffFileLazyBody } from "./DiffFileLazyBody";
-import type { DiffFileEntry } from "./diffFiles";
 import {
   ReviewableFileDiff,
   type FullFileContents,

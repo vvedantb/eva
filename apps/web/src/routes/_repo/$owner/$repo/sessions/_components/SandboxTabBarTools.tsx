@@ -1,6 +1,11 @@
 import { IconLetterCase, IconPlus, IconTerminal2 } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
+import {
+  ButtonTrack,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
 
 const SANDBOX_RAIL_ICON_BUTTON_CLASS =
@@ -13,7 +18,8 @@ export function SandboxTabBarTools({
   showLabels,
   onToggleLabels,
 }: {
-  onNewPreview: () => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
+  onNewPreview?: () => void;
   newPreviewDisabled: boolean;
   terminalPanel: TerminalPanelApi;
   /** Desktop rail: tab labels under the icons. */
@@ -21,25 +27,27 @@ export function SandboxTabBarTools({
   onToggleLabels: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 md:mt-auto md:flex-col">
+    <ButtonTrack direction="column" className="md:mt-auto">
       {/* Editor and Computer are first-class tabs on the rail, so `+` is now a
           direct New Preview action rather than a one-item menu. */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="New preview"
-            className={SANDBOX_RAIL_ICON_BUTTON_CLASS}
-            onClick={onNewPreview}
-            disabled={newPreviewDisabled}
-          >
-            <IconPlus className="size-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="text-xs">
-          New preview
-        </TooltipContent>
-      </Tooltip>
+      {onNewPreview ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="New preview"
+              className={SANDBOX_RAIL_ICON_BUTTON_CLASS}
+              onClick={onNewPreview}
+              disabled={newPreviewDisabled}
+            >
+              <IconPlus className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            New preview
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -73,6 +81,6 @@ export function SandboxTabBarTools({
           {showLabels ? "Hide labels" : "Show labels"}
         </TooltipContent>
       </Tooltip>
-    </div>
+    </ButtonTrack>
   );
 }

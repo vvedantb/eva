@@ -1,10 +1,34 @@
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import { listAutomationsForRepo } from "../_automations/helpers";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
-import { entityVisible, filterActiveEntities } from "../numId";
-import { prOriginValidator, prStateValidator } from "../validators";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { derivedProjectStage } from "../_projects/taskTable";
+import {
+  archivedProjectIds,
+  filterActiveEntities,
+  filterLiveTasks,
+  isEntityDeleted,
+} from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
+import {
+  findOwnedSession,
+  findWorkSession,
+  standaloneOnly,
+} from "../_sessions/owner";
+import {
+  liveTaskSandboxStatuses,
+  projectSandboxStatus,
+} from "../_sessions/ownedSession";
+import { listSelectableAccountsFor } from "../_userProviderAccounts/listing";
+import {
+  ALL_TASK_STATUSES,
+  SANDBOX_STATUSES,
+  getAIModelProvider,
+  prOriginValidator,
+  prStateValidator,
+} from "../validators";
 import {
   findPullRequestByUrl,
   listOwnerPullRequests,
@@ -28,19 +52,7 @@ export const checkRepoAccessForUser = internalQuery({
   handler: async (ctx, args): Promise<boolean> => {
     const repoId = ctx.db.normalizeId("githubRepos", args.repoId);
     const userId = ctx.db.normalizeId("users", args.userId);
-    if (!repoId || !userId) return false;
-    const repo = await ctx.db.get(repoId);
-    if (!repo) return false;
-    if (repo.connectedBy === args.userId) return true;
-    const teamId = repo.teamId;
-    if (!teamId) return false;
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", teamId).eq("userId", userId),
-      )
-      .first();
-    return membership !== null;
+    return repoId && userId ? hasRepoAccess(ctx.db, repoId, userId) : false;
   },
 });
 
@@ -55,40 +67,49 @@ export const getUserByClerkId = internalQuery({
   },
 });
 
-/** List repos accessible to a user. */
+/** Repos a user can reach (hidden included), in the shape MCP tools report. */
 export const listUserRepos = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    // Get repos connected by this user
-    const connectedRepos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-      .collect();
+  args: { userId: v.string() },
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      owner: v.string(),
+      name: v.string(),
+      rootDirectory: v.union(v.string(), v.null()),
+      mcpRootPrompt: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!userId) return [];
+    const repos = await gatherAccessibleRepos(ctx.db, userId, true);
+    return repos.map((repo) => ({
+      id: repo._id,
+      owner: repo.owner,
+      name: repo.name,
+      rootDirectory: repo.rootDirectory ?? null,
+      mcpRootPrompt: repo.mcpRootPrompt ?? null,
+    }));
+  },
+});
 
-    // Get repos via team membership
+/** Teams a user belongs to. */
+export const listUserTeams = internalQuery({
+  args: { userId: v.string() },
+  returns: v.array(v.object({ id: v.string(), name: v.string() })),
+  handler: async (ctx, args) => {
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!userId) return [];
     const memberships = await ctx.db
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-
-    const teamRepoResults = await Promise.all(
-      memberships.map((m) =>
-        ctx.db
-          .query("githubRepos")
-          .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-          .collect(),
-      ),
+    const teams = await Promise.all(
+      memberships.map((m) => ctx.db.get(m.teamId)),
     );
-
-    // Dedupe repos
-    const seen = new Set<string>();
-    const result: typeof connectedRepos = [];
-    for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-      if (seen.has(repo._id)) continue;
-      seen.add(repo._id);
-      result.push(repo);
-    }
-    return result;
+    return teams.flatMap((team) =>
+      team ? [{ id: team._id, name: team.name }] : [],
+    );
   },
 });
 
@@ -294,6 +315,10 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: v.optional(v.string()),
       /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
+      /** A task or project on its session: the session that holds its sandbox. */
+      sandboxSessionId: v.optional(v.id("sessions")),
+      /** A project's own id, or a project task's project. */
+      projectId: v.optional(v.id("projects")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -301,7 +326,10 @@ export const resolveChatTargetForUser = internalQuery({
     if (!userId) return null;
 
     const hit = await findChatTargetByRef(ctx, args);
-    if (!hit || !entityVisible(hit.doc)) return null;
+    // An archived task or project resolves, like an archived session.
+    if (!hit || (hit.kind === "session" && isEntityDeleted(hit.doc))) {
+      return null;
+    }
 
     const repoId = await targetRepoId(ctx, hit);
     if (!repoId) return null;
@@ -311,30 +339,46 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
+    // A task's or project's sandbox lives on its own session; none before
+    // that session exists.
+    const ownerSession =
+      hit.kind === "task"
+        ? await findWorkSession(ctx.db, hit.doc)
+        : hit.kind === "project"
+          ? await findOwnedSession(ctx.db, {
+              kind: "project",
+              projectId: hit.doc._id,
+            })
+          : null;
+    const sandboxRow = hit.kind === "session" ? hit.doc : ownerSession;
     return {
       kind: hit.kind,
       targetId: doc._id,
       numId: doc.numId,
       title: doc.title,
-      // A project tracks a phase where the other two track a status; both
-      // answer the same "where is this up to" question for the caller.
-      status: hit.kind === "project" ? hit.doc.phase : hit.doc.status,
+      // A project's status is derived from its tasks (`projectStatus`).
+      status:
+        hit.kind === "project"
+          ? await derivedProjectStage(ctx.db, hit.doc)
+          : hit.doc.status,
       prUrl: hit.doc.prUrl,
       branchName: hit.kind === "task" ? undefined : hit.doc.branchName,
       repoId,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
-      // A session's own status IS its sandbox's; the other two park the
-      // reviewer-facing VM state in their own field (see list_entities).
-      sandboxStatus:
-        hit.kind === "session"
-          ? hit.doc.status
+      // A session's own status IS its sandbox's; a task's or project's is its
+      // session's, the same rule lists use (`taskSandboxStatus`).
+      sandboxStatus: sandboxRow?.status ?? "closed",
+      sandboxId: sandboxRow?.sandboxId,
+      devPort: sandboxRow?.devPort ?? repo.devPort,
+      sandboxSessionId: ownerSession?._id,
+      projectId:
+        hit.kind === "project"
+          ? hit.doc._id
           : hit.kind === "task"
-            ? (hit.doc.reviewTaskSandboxStatus ?? "closed")
-            : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
-      sandboxId: doc.sandboxId,
-      devPort: doc.devPort ?? repo.devPort,
+            ? hit.doc.projectId
+            : undefined,
     };
   },
 });
@@ -364,7 +408,7 @@ const listedEntityValidator = v.object({
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
-  /** Lifecycle: a session's sandbox status, a task's status, a project's phase. */
+  /** Lifecycle: a session's sandbox status, a task's status, a project's derived stage. */
   status: v.string(),
   /** Preview VM state, `"closed"` when the entity has never started one. */
   sandboxStatus: v.string(),
@@ -386,28 +430,6 @@ const listedEntityValidator = v.object({
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-const SESSION_STATUSES = ["active", "starting", "stopping", "closed"] as const;
-
-const TASK_STATUSES = [
-  "draft",
-  "todo",
-  "in_progress",
-  "code_review",
-  "business_review",
-  "done",
-  "cancelled",
-] as const;
-
-const PROJECT_PHASES = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-] as const;
-
 /**
  * Narrows the caller's free-text status onto one kind's own vocabulary, so the
  * per-status index can be used without an assertion. A status that belongs to
@@ -415,20 +437,20 @@ const PROJECT_PHASES = [
  */
 function asSessionStatus(
   status: string,
-): (typeof SESSION_STATUSES)[number] | undefined {
-  return SESSION_STATUSES.find((candidate) => candidate === status);
+): (typeof SANDBOX_STATUSES)[number] | undefined {
+  return SANDBOX_STATUSES.find((candidate) => candidate === status);
 }
 
 function asTaskStatus(
   status: string,
-): (typeof TASK_STATUSES)[number] | undefined {
-  return TASK_STATUSES.find((candidate) => candidate === status);
+): (typeof ALL_TASK_STATUSES)[number] | undefined {
+  return ALL_TASK_STATUSES.find((candidate) => candidate === status);
 }
 
-function asProjectPhase(
-  status: string,
-): (typeof PROJECT_PHASES)[number] | undefined {
-  return PROJECT_PHASES.find((candidate) => candidate === status);
+const PROJECT_STAGES: readonly ProjectStage[] = ["todo", "in_progress", "done"];
+
+function asProjectStage(status: string): ProjectStage | undefined {
+  return PROJECT_STAGES.find((candidate) => candidate === status);
 }
 
 /**
@@ -461,15 +483,18 @@ async function scanSessions(
         q.eq("repoId", repoId).eq("status", narrowed),
       )
       .order("desc")
+      .filter(standaloneOnly)
       .take(take);
     return filterActiveEntities(rows);
   }
+  // A task's session lists as its task, never as a session of its own.
   return ctx.db
     .query("sessions")
     .withIndex("by_repo_and_deleted", (q) =>
       q.eq("repoId", repoId).eq("deletedAt", undefined),
     )
     .order("desc")
+    .filter(standaloneOnly)
     .take(take);
 }
 
@@ -479,19 +504,22 @@ async function scanTasks(
   status: string | undefined,
   take: number,
 ): Promise<Doc<"agentTasks">[]> {
+  // A task of an archived project is archived with it.
+  const archivedProjects = await archivedProjectIds(ctx.db, repoId);
   if (status !== undefined) {
     const narrowed = asTaskStatus(status);
     if (narrowed === undefined) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("agentTasks")
-      .withIndex("by_repo_status_and_deleted", (q) =>
+      .withIndex("by_repo_status_and_archived", (q) =>
         q
           .eq("repoId", repoId)
           .eq("status", narrowed)
-          .eq("deletedAt", undefined),
+          .eq("archivedAt", undefined),
       )
       .order("desc")
       .take(take);
+    return filterLiveTasks(rows, archivedProjects);
   }
   // Tasks are the one surface with an updatedAt index, which is also the order
   // the merged page is sorted by.
@@ -500,7 +528,7 @@ async function scanTasks(
     .withIndex("by_repo_and_updatedAt", (q) => q.eq("repoId", repoId))
     .order("desc")
     .take(take);
-  return filterActiveEntities(rows);
+  return filterLiveTasks(rows, archivedProjects);
 }
 
 async function scanProjects(
@@ -510,21 +538,25 @@ async function scanProjects(
   take: number,
 ): Promise<Doc<"projects">[]> {
   if (status !== undefined) {
-    const narrowed = asProjectPhase(status);
+    // The stage is derived, so it filters a repo's live projects (few).
+    const narrowed = asProjectStage(status);
     if (narrowed === undefined) return [];
     const rows = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_phase", (q) =>
-        q.eq("repoId", repoId).eq("phase", narrowed),
+      .withIndex("by_repo_and_archived", (q) =>
+        q.eq("repoId", repoId).eq("archivedAt", undefined),
       )
       .order("desc")
-      .take(take);
-    return filterActiveEntities(rows);
+      .collect();
+    const stages = await Promise.all(
+      rows.map((row) => derivedProjectStage(ctx.db, row)),
+    );
+    return rows.filter((_, index) => stages[index] === narrowed).slice(0, take);
   }
   return ctx.db
     .query("projects")
-    .withIndex("by_repo_and_deleted", (q) =>
-      q.eq("repoId", repoId).eq("deletedAt", undefined),
+    .withIndex("by_repo_and_archived", (q) =>
+      q.eq("repoId", repoId).eq("archivedAt", undefined),
     )
     .order("desc")
     .take(take);
@@ -589,74 +621,91 @@ export const listEntitiesForUser = internalQuery({
     const take = rowsPerScan(limit, repoIds.length, kinds.length);
     const rows: ListedEntity[] = [];
 
-    for (const repoId of repoIds) {
-      if (!(await hasRepoAccess(ctx.db, repoId, userId))) continue;
-      const repo = await ctx.db.get(repoId);
-      if (!repo) continue;
-      const columns = repoColumns(repo);
-      const openChatEntityIds = await openChatEntityIdsForRepo(ctx.db, repoId);
+    // Repos and kinds scan side by side; `rows` is sorted below, so the push
+    // order does not matter.
+    await Promise.all(
+      repoIds.map(async (repoId) => {
+        // Access first: a denied repo reads nothing else.
+        if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
+        const [repo, openChatEntityIds, taskSandboxStatus] = await Promise.all([
+          ctx.db.get(repoId),
+          openChatEntityIdsForRepo(ctx.db, repoId),
+          liveTaskSandboxStatuses(ctx.db, [repoId]),
+        ]);
+        if (!repo) return;
+        const columns = repoColumns(repo);
 
-      for (const kind of kinds) {
-        if (kind === "session") {
-          const docs = await scanSessions(ctx, repoId, args.status, take);
-          for (const doc of docs) {
-            rows.push({
-              kind,
-              id: doc._id,
-              numId: doc.numId,
-              title: doc.title,
-              // A session has one status and it is its sandbox's, so both
-              // columns read the same field rather than inventing a second.
-              status: doc.status,
-              sandboxStatus: doc.status,
-              isExecuting: sessionIsExecuting(doc, openChatEntityIds),
-              archived: doc.archived,
-              prUrl: doc.prUrl,
-              branchName: doc.branchName,
-              updatedAt: doc.updatedAt ?? doc._creationTime,
-              linkedRepoCount: doc.linkedRepoCount,
-              ...columns,
-            });
-          }
-          continue;
-        }
+        await Promise.all(
+          kinds.map(async (kind) => {
+            if (kind === "session") {
+              const docs = await scanSessions(ctx, repoId, args.status, take);
+              for (const doc of docs) {
+                rows.push({
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  // A session has one status and it is its sandbox's, so both
+                  // columns read the same field rather than inventing a second.
+                  status: doc.status,
+                  sandboxStatus: doc.status,
+                  isExecuting: sessionIsExecuting(doc, openChatEntityIds),
+                  archived: isSessionArchived(doc),
+                  prUrl: doc.prUrl,
+                  branchName: doc.branchName,
+                  updatedAt: doc.updatedAt ?? doc._creationTime,
+                  linkedRepoCount: doc.linkedRepoCount,
+                  ...columns,
+                });
+              }
+              return;
+            }
 
-        if (kind === "task") {
-          const docs = await scanTasks(ctx, repoId, args.status, take);
-          for (const doc of docs) {
-            rows.push({
-              kind,
-              id: doc._id,
-              numId: doc.numId,
-              title: doc.title,
-              status: doc.status,
-              sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
-              isExecuting: taskIsExecuting(doc, openChatEntityIds),
-              updatedAt: doc.updatedAt,
-              ...columns,
-            });
-          }
-          continue;
-        }
+            if (kind === "task") {
+              const docs = await scanTasks(ctx, repoId, args.status, take);
+              for (const doc of docs) {
+                rows.push({
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  status: doc.status,
+                  sandboxStatus: (await taskSandboxStatus(doc)) ?? "closed",
+                  isExecuting: taskIsExecuting(doc, openChatEntityIds),
+                  updatedAt: doc.updatedAt,
+                  ...columns,
+                });
+              }
+              return;
+            }
 
-        const docs = await scanProjects(ctx, repoId, args.status, take);
-        for (const doc of docs) {
-          rows.push({
-            kind,
-            id: doc._id,
-            numId: doc.numId,
-            title: doc.title,
-            status: doc.phase,
-            sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
-            isExecuting: projectIsExecuting(doc, openChatEntityIds),
-            prUrl: doc.prUrl,
-            branchName: doc.branchName,
-            updatedAt: doc.updatedAt ?? doc._creationTime,
-            ...columns,
-          });
-        }
-      }
-    }
+            const docs = await scanProjects(ctx, repoId, args.status, take);
+            const projectRows = await Promise.all(
+              docs.map(async (doc) => {
+                const [stage, sandboxStatus] = await Promise.all([
+                  derivedProjectStage(ctx.db, doc),
+                  projectSandboxStatus(ctx.db, doc),
+                ]);
+                return {
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  status: stage,
+                  sandboxStatus: sandboxStatus ?? "closed",
+                  isExecuting: projectIsExecuting(doc, openChatEntityIds),
+                  prUrl: doc.prUrl,
+                  branchName: doc.branchName,
+                  updatedAt: doc.updatedAt ?? doc._creationTime,
+                  ...columns,
+                };
+              }),
+            );
+            rows.push(...projectRows);
+          }),
+        );
+      }),
+    );
 
     rows.sort((a, b) => b.updatedAt - a.updatedAt);
     const page = rows.slice(0, limit);
@@ -666,11 +715,12 @@ export const listEntitiesForUser = internalQuery({
       page.map(async (row) => {
         const owner = chatTargetOwner(ctx, row.kind, row.id);
         if (owner === null) return row;
-        const prs = await listOwnerPullRequests(ctx.db, owner);
-        const withTaskPr =
+        const [prs, withTaskPr] = await Promise.all([
+          listOwnerPullRequests(ctx.db, owner),
           owner.kind === "task" && row.prUrl === undefined
-            ? await taskPrUrlById(ctx, owner.taskId)
-            : row.prUrl;
+            ? taskPrUrlById(ctx, owner.taskId)
+            : row.prUrl,
+        ]);
         return {
           ...row,
           prUrl: withTaskPr,
@@ -687,10 +737,28 @@ export const listEntitiesForUser = internalQuery({
 });
 
 /**
+ * A project's derived stage (`projectStatus`), for `get_agent_state`. The
+ * caller has already proven access by reading the project as the user.
+ */
+export const projectStage = internalQuery({
+  args: { projectId: v.string() },
+  returns: v.union(
+    v.literal("todo"),
+    v.literal("in_progress"),
+    v.literal("done"),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const projectId = ctx.db.normalizeId("projects", args.projectId);
+    const project = projectId ? await ctx.db.get(projectId) : null;
+    return project ? await derivedProjectStage(ctx.db, project) : null;
+  },
+});
+
+/**
  * Whether one entity has a turn in flight, by the same rule the app's own list
- * uses. `stop_sandbox` reads this before tearing a VM down: a session running a
- * daemon-minted continuation (`/loop`) never gets an `activeWorkflowId`, so
- * keying the refusal off that field alone would stop the VM under a live turn.
+ * uses. `stop_sandbox` reads this before tearing a VM down. For a session the
+ * open turn is the only signal, daemon-minted continuations (`/loop`) included.
  *
  * The caller has already proven access to `id` by reading the entity as the
  * user; this only adds the turn lookup that read cannot do.
@@ -708,19 +776,27 @@ export const entityIsExecuting = internalQuery({
       if (!sessionId) return false;
       const session = await ctx.db.get(sessionId);
       if (!session) return false;
-      return sessionIsExecuting(session, await openChatEntityIdsFor(ctx.db, sessionId));
+      return sessionIsExecuting(
+        session,
+        await openChatEntityIdsFor(ctx.db, sessionId),
+      );
     }
     if (kind === "task") {
       const taskId = ctx.db.normalizeId("agentTasks", id);
       if (!taskId) return false;
       const task = await ctx.db.get(taskId);
-      return task ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) : false;
+      return task
+        ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId))
+        : false;
     }
     const projectId = ctx.db.normalizeId("projects", id);
     if (!projectId) return false;
     const project = await ctx.db.get(projectId);
     return project
-      ? projectIsExecuting(project, await openChatEntityIdsFor(ctx.db, projectId))
+      ? projectIsExecuting(
+          project,
+          await openChatEntityIdsFor(ctx.db, projectId),
+        )
       : false;
   },
 });
@@ -740,183 +816,46 @@ export const reposWithPostgresReplica = internalQuery({
   args: { repoIds: v.array(v.string()) },
   returns: v.array(v.string()),
   handler: async (ctx, { repoIds }): Promise<string[]> => {
-    const teamHasKey = new Map<string, boolean>();
-    const matches: string[] = [];
+    // One promise per team, so a shared team is still read once while repos
+    // are checked side by side.
+    const teamHasKey = new Map<string, Promise<boolean>>();
+    const teamHasReplica = (teamId: Id<"teams">): Promise<boolean> => {
+      const cached = teamHasKey.get(teamId);
+      if (cached) return cached;
+      const pending = ctx.db
+        .query("teamEnvVars")
+        .withIndex("by_team", (q) => q.eq("teamId", teamId))
+        .first()
+        .then(
+          (teamVars) =>
+            teamVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY) ??
+            false,
+        );
+      teamHasKey.set(teamId, pending);
+      return pending;
+    };
 
-    for (const rawId of repoIds) {
-      // normalizeId turns the caller's string back into a typed Id (or null
-      // for anything malformed) without an `as` cast.
-      const repoId = ctx.db.normalizeId("githubRepos", rawId);
-      if (!repoId) continue;
-
-      const repoVars = await ctx.db
-        .query("repoEnvVars")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .first();
-      if (repoVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY)) {
-        matches.push(rawId);
-        continue;
-      }
-
-      const repo = await ctx.db.get(repoId);
-      const teamId = repo?.teamId;
-      if (!teamId) continue;
-
-      let teamHas = teamHasKey.get(teamId);
-      if (teamHas === undefined) {
-        const teamVars = await ctx.db
-          .query("teamEnvVars")
-          .withIndex("by_team", (q) => q.eq("teamId", teamId))
-          .first();
-        teamHas =
-          teamVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY) ??
-          false;
-        teamHasKey.set(teamId, teamHas);
-      }
-      if (teamHas) matches.push(rawId);
-    }
-
-    return matches;
-  },
-});
-
-/** Query a table with access control. */
-export const queryTable = internalQuery({
-  args: {
-    table: v.string(),
-    repoId: v.optional(v.id("githubRepos")),
-    userId: v.id("users"),
-    limit: v.number(),
-  },
-  handler: async (ctx, { table, repoId, userId, limit }) => {
-    // Type-safe table queries for known tables
-    if (table === "agentTasks" && repoId) {
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .order("desc")
-        .take(limit);
-      return tasks;
-    }
-
-    if (table === "sessions" && repoId) {
-      const sessions = await ctx.db
-        .query("sessions")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .order("desc")
-        .take(limit);
-      return sessions;
-    }
-
-    if (table === "projects" && repoId) {
-      // Projects don't have direct repoId, they have tasks with repoId
-      // Return projects that have tasks in this repo
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      const projectIds = new Set(
-        tasks
-          .map((t) => t.projectId)
-          .filter((id): id is Id<"projects"> => id !== undefined),
-      );
-      const projects = await Promise.all(
-        Array.from(projectIds)
-          .slice(0, limit)
-          .map((id) => ctx.db.get(id)),
-      );
-      return projects.filter(Boolean);
-    }
-
-    if (table === "automations" && repoId) {
-      const automations = await listAutomationsForRepo(ctx.db, repoId);
-      return automations.slice(0, limit);
-    }
-
-    if (table === "messages") {
-      // Messages require a parentId, return empty for general query
-      return [];
-    }
-
-    if (table === "notifications") {
-      const notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .take(limit);
-      return notifications;
-    }
-
-    if (table === "teams") {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-      const teams = await Promise.all(
-        memberships.map((m) => ctx.db.get(m.teamId)),
-      );
-      return teams.filter(Boolean).slice(0, limit);
-    }
-
-    if (table === "githubRepos") {
-      // Return user's accessible repos
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-        .take(limit);
-      return connectedRepos;
-    }
-
-    // For other tables, return empty (access control)
-    return [];
-  },
-});
-
-/** Get a document by ID with access control. */
-export const getDocument = internalQuery({
-  args: {
-    id: v.string(),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, { id, userId }) => {
-    // Convex IDs are opaque strings; normalizeId turns the caller's string back
-    // into a typed Id (or null) for each candidate table without an `as` cast.
-    const taskId = ctx.db.normalizeId("agentTasks", id);
-    if (taskId) {
-      const task = await ctx.db.get(taskId);
-      if (task && task.repoId) {
-        // Verify access via repo
-        const hasAccess = await ctx.db
-          .query("teamMembers")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .first();
-        const repo = await ctx.db.get(task.repoId);
-        if (repo && (repo.connectedBy === userId || hasAccess)) {
-          return task;
+    const hits = await Promise.all(
+      repoIds.map(async (rawId) => {
+        // normalizeId turns the caller's string back into a typed Id (or null
+        // for anything malformed) without an `as` cast.
+        const repoId = ctx.db.normalizeId("githubRepos", rawId);
+        if (!repoId) return false;
+        const [repoVars, repo] = await Promise.all([
+          ctx.db
+            .query("repoEnvVars")
+            .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+            .first(),
+          ctx.db.get(repoId),
+        ]);
+        if (repoVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY)) {
+          return true;
         }
-      }
-    }
-
-    const sessionId = ctx.db.normalizeId("sessions", id);
-    if (sessionId) {
-      const session = await ctx.db.get(sessionId);
-      if (session) {
-        const repo = await ctx.db.get(session.repoId);
-        if (repo && repo.connectedBy === userId) {
-          return session;
-        }
-      }
-    }
-
-    const repoId = ctx.db.normalizeId("githubRepos", id);
-    if (repoId) {
-      const repo = await ctx.db.get(repoId);
-      if (repo && repo.connectedBy === userId) {
-        return repo;
-      }
-    }
-
-    return null;
+        const teamId = repo?.teamId;
+        return teamId ? teamHasReplica(teamId) : false;
+      }),
+    );
+    return repoIds.filter((_, index) => hits[index]);
   },
 });
 
@@ -938,13 +877,13 @@ function chatTargetOwner(
   return projectId ? { kind, projectId } : null;
 }
 
-/** A task's PR: its own summary, or its project's for a project task. */
+/** A task's own PR summary (every task owns its PR). */
 async function taskPrUrlById(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
 ): Promise<string | undefined> {
   const task = await ctx.db.get(taskId);
-  return task ? await taskPrUrl(ctx.db, task) : undefined;
+  return task ? taskPrUrl(task) : undefined;
 }
 
 /** One pull request linked to a chat, as reported over MCP. */
@@ -1012,14 +951,13 @@ export const sessionLinkedRepos = internalQuery({
   handler: async (ctx, { sessionId }): Promise<McpLinkedRepo[]> => {
     const id = ctx.db.normalizeId("sessions", sessionId);
     if (!id) return [];
-    const links = await ctx.db
-      .query("sessionRepos")
-      .withIndex("by_session", (q) => q.eq("sessionId", id))
-      .collect();
-    const prs = await listOwnerPullRequests(ctx.db, {
-      kind: "session",
-      sessionId: id,
-    });
+    const [links, prs] = await Promise.all([
+      ctx.db
+        .query("sessionRepos")
+        .withIndex("by_session", (q) => q.eq("sessionId", id))
+        .collect(),
+      listOwnerPullRequests(ctx.db, { kind: "session", sessionId: id }),
+    ]);
     return links.map((link) => {
       const pr = sessionRepoPullRequest(prs, link._id);
       return {
@@ -1033,38 +971,98 @@ export const sessionLinkedRepos = internalQuery({
   },
 });
 
-/** Count documents in a table. */
-export const countTable = internalQuery({
+/**
+ * Which provider account an MCP send or create runs on, from the caller's
+ * `account` pick: an account id, its owner's first name, or "team". The pool
+ * is the one the web picker shows — the owner's own accounts plus teammates'
+ * shared ones — so MCP can use a shared account just as the composer can.
+ *
+ * - `chat` scope: an existing chat's turn, billed to the session owner. An
+ *   omitted pick keeps the chat's current account, as the composer does.
+ * - `creator` scope: a new session, billed to the caller; the model is the
+ *   repo default the create mutation will use.
+ *
+ * `providerAccountId: null` is Team. The send mutations still re-check usability.
+ */
+export const resolveMcpProviderAccount = internalQuery({
   args: {
-    table: v.string(),
-    repoId: v.optional(v.id("githubRepos")),
-    userId: v.id("users"),
+    account: v.optional(v.string()),
+    scope: v.union(
+      v.object({
+        kind: v.literal("chat"),
+        chatId: v.string(),
+        model: v.string(),
+      }),
+      v.object({
+        kind: v.literal("creator"),
+        userId: v.string(),
+        repoId: v.string(),
+      }),
+    ),
   },
-  handler: async (ctx, { table, repoId, userId }) => {
-    if (table === "agentTasks" && repoId) {
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return tasks.length;
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+    }),
+    v.object({ ok: v.literal(false), error: v.string() }),
+  ),
+  handler: async (
+    ctx,
+    { account, scope },
+  ): Promise<
+    | { ok: true; providerAccountId: Id<"userProviderAccounts"> | null }
+    | { ok: false; error: string }
+  > => {
+    let ownerUserId: Id<"users">;
+    let model: string | undefined;
+    if (scope.kind === "chat") {
+      const chatId = ctx.db.normalizeId("sessionChats", scope.chatId);
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      const session = chat ? await ctx.db.get(chat.sessionId) : null;
+      if (!chat || !session) return { ok: false, error: "Chat not found." };
+      if (account === undefined) {
+        return { ok: true, providerAccountId: chat.providerAccountId ?? null };
+      }
+      ownerUserId = session.createdBy ?? session.userId;
+      model = scope.model;
+    } else {
+      const repoId = ctx.db.normalizeId("githubRepos", scope.repoId);
+      const userId = ctx.db.normalizeId("users", scope.userId);
+      const repo = repoId ? await ctx.db.get(repoId) : null;
+      if (!repo || !userId) return { ok: false, error: "Repo not found." };
+      if (account === undefined) return { ok: true, providerAccountId: null };
+      ownerUserId = userId;
+      model = repo.defaultModel;
     }
 
-    if (table === "sessions" && repoId) {
-      const sessions = await ctx.db
-        .query("sessions")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return sessions.length;
+    const wanted = account.trim().toLowerCase();
+    if (wanted === "team") return { ok: true, providerAccountId: null };
+    const provider = getAIModelProvider(model);
+    const pool = await listSelectableAccountsFor(ctx, ownerUserId);
+    const byId = pool.find((row) => String(row._id) === account.trim());
+    if (byId) return { ok: true, providerAccountId: byId._id };
+    const byName = pool.filter(
+      (row) =>
+        row.provider === provider && row.label.trim().toLowerCase() === wanted,
+    );
+    const [only] = byName;
+    if (byName.length === 1 && only) {
+      return { ok: true, providerAccountId: only._id };
     }
-
-    if (table === "notifications") {
-      const notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-      return notifications.length;
-    }
-
-    return 0;
+    const options = pool
+      .filter((row) => row.provider === provider)
+      .map(
+        (row) =>
+          `"${row.label}" (id ${row._id}${row.isOwn ? ", own" : ", shared"})`,
+      );
+    const choices = [...options, '"team"'].join(", ");
+    return {
+      ok: false,
+      error:
+        byName.length > 1
+          ? `Several ${provider} accounts belong to "${account}". Pass one by id: ${choices}.`
+          : `No ${provider} account "${account}" you can use. Choose one of: ${choices}.`,
+    };
   },
 });

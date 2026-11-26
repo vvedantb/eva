@@ -1,3 +1,4 @@
+
 /**
  * Shared visual styles for the sandbox status dot — used by the session sidebar
  * item, list/kanban cards, and the Task/Project surface tabs. Each state maps
@@ -9,10 +10,14 @@
  * {@link sandboxDisplayStatus} — the backend has no such status.
  */
 
-export type SandboxStatus = "active" | "starting" | "stopping" | "closed";
+import type { SandboxDisplayStatus } from "@eva/shared";
 
-/** Backend statuses plus the client-derived "a wake attempt failed" state. */
-export type SandboxDisplayStatus = SandboxStatus | "error";
+// Moved to `@eva/shared` so the phone's wake control reads the same states.
+export {
+  sandboxDisplayStatus,
+  type SandboxDisplayStatus,
+  type SandboxStatus,
+} from "@eva/shared";
 
 export const SANDBOX_STATUS_STYLES: Record<
   SandboxDisplayStatus,
@@ -51,17 +56,3 @@ export function showsSandboxStatusDot(
   return !simpleView || status === "error";
 }
 
-/**
- * A sandbox whose start failed is left `closed` with the reason on the row, so
- * on status alone it is indistinguishable from one the user put to sleep. Pair
- * the two fields to tell them apart.
- */
-export function sandboxDisplayStatus(session: {
-  status: SandboxStatus;
-  sandboxError?: string;
-}): SandboxDisplayStatus {
-  if (session.status === "closed" && (session.sandboxError ?? "") !== "") {
-    return "error";
-  }
-  return session.status;
-}

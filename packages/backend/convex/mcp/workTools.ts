@@ -11,19 +11,15 @@ import {
   type EntityTarget,
 } from "./entityRef";
 import {
-  confirmedDeleteArg,
+  guarded,
   mcpCallAsUser,
   mcpGetContext,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
-
-const projectIdArg = z
-  .string()
-  .optional()
-  .describe(
-    'The project\'s Convex id. Alternatively name it with "id", "prUrl", or "numId" plus repoName.',
-  );
+import { projectCallerOf } from "./projectScope";
+import { projectTaskRefArgs, resolveProjectTaskRef } from "./projectTools";
+import { internal } from "../_generated/api";
 
 const taskIdArg = z
   .string()
@@ -48,8 +44,7 @@ const nullReply = z.null();
  * the Eva UI button calls, run as the user, so its access checks and gates
  * apply unchanged.
  *
- * Deliberately absent: task status and review state (a person's call) and
- * `deleteCascade` (irreversible, removes the task's history too).
+ * Deliberately absent: task status and review state (a person's call).
  */
 export function workTools(
   credentials: McpCredentials,
@@ -106,125 +101,27 @@ export function workTools(
     return at;
   }
 
-  const projectInput = { projectId: projectIdArg, ...entityRefArgs };
   const taskInput = { taskId: taskIdArg, ...entityRefArgs };
+  // update_task and archive_task also take a task's number in the caller's
+  // project (`projectTaskRefArgs`), so a coordinator names "#3" directly.
+  const projectTaskInput = {
+    ...entityRefArgs,
+    ...projectTaskRefArgs,
+  };
+  const caller = projectCallerOf(credentials.owner);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Project builds
-  // ───────────────────────────────────────────────────────────────────────────
-
-  tools.push(
-    defineTool({
-      name: "start_project_build",
-      description: `Start a project's build now — the "Start cooking" button. The build runs the project's tasks in dependency order, each as its own quick task.
-
-Rejected when a build is already running. The reply only means the build workflow started; follow progress with get_agent_state (kind "project", "buildRunning") or list_entities. A pending scheduled build is left in place.`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:startBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({ ...entitySummary(target), build: "started" });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "schedule_project_build",
-      description: `Schedule a project's build to start at a future time. Use update_scheduled_project_build to move an existing schedule.
-
-Rejected when a build is already running, when one is already scheduled, or when the time is not in the future. At the scheduled time the build is skipped if one is already running.`,
-      mutating: true,
-      input: { ...projectInput, scheduledAt: scheduledAtArg },
-      handler: async ({ projectId, scheduledAt, ...ref }) => {
-        const at = futureTime(scheduledAt);
-        if (typeof at !== "number") return at;
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:scheduleBuild", {
-          projectId: target.targetId,
-          scheduledAt: at,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "scheduled",
-          scheduledAt: new Date(at).toISOString(),
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "update_scheduled_project_build",
-      description: `Move a project's scheduled build to a new future time. Any existing schedule is replaced; with none, this creates one. Rejected when the time is not in the future.`,
-      mutating: true,
-      input: { ...projectInput, scheduledAt: scheduledAtArg },
-      handler: async ({ projectId, scheduledAt, ...ref }) => {
-        const at = futureTime(scheduledAt);
-        if (typeof at !== "number") return at;
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:updateScheduledBuild", {
-          projectId: target.targetId,
-          scheduledAt: at,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "rescheduled",
-          scheduledAt: new Date(at).toISOString(),
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "cancel_scheduled_project_build",
-      description: `Cancel a project's scheduled build before it starts. Does not touch a build that is already running (use cancel_project_build). Rejected when the project has no scheduled build.`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:cancelScheduledBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "schedule_cancelled",
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "cancel_project_build",
-      description: `Stop a project's running build. Every in-progress task in the project is cancelled, its run marked as errored, and the task moved back to todo; finished tasks are left alone. Ask the user before calling — the in-flight work is lost.
-
-Rejected when no build is running. This does not stop the project's sandbox chat (use stop_agent with kind "project").`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:cancelBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({ ...entitySummary(target), build: "cancelled" });
-      },
-    }),
-  );
+  /** A task named by id, by its number in the caller's project, or by ref. */
+  async function resolveTask(
+    ref: EntityRef & { taskId?: string; taskNumber?: number },
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
+    const { taskId, taskNumber, ...rest } = ref;
+    const directId = await resolveProjectTaskRef(ctx, caller, {
+      taskId,
+      taskNumber,
+    });
+    if (typeof directId === "object") return directId;
+    return resolveKind("task", directId, rest);
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Quick task lifecycle
@@ -233,12 +130,18 @@ Rejected when no build is running. This does not stop the project's sandbox chat
   tools.push(
     defineTool({
       name: "update_task",
-      description: `Edit a quick task's title, description, tags, priority or base branch. Only the fields you pass change.
+      description: `Edit a task's title, description, tags, priority or base branch (and a project task's phaseLabel). Only the fields you pass change.
 
-Status and review state cannot be changed here; those stay a person's call. "tags" replaces the whole tag list. "priority": null clears it.`,
+Status and review state cannot be changed here; those stay a person's call. "tags" replaces the whole tag list. "priority": null clears it.
+
+In a project coordinator chat, name the task by taskNumber; you can change only tasks of this project that have not started.`,
       mutating: true,
       input: {
-        ...taskInput,
+        ...projectTaskInput,
+        phaseLabel: z
+          .string()
+          .optional()
+          .describe("Project coordinator only: the task's phase label. Empty clears it."),
         title: z.string().min(1).optional().describe("New title."),
         description: z
           .string()
@@ -256,12 +159,12 @@ Status and review state cannot be changed here; those stay a person's call. "tag
           .describe("Branch the task's work is based on."),
       },
       handler: async ({
-        taskId,
         title,
         description,
         tags,
         priority,
         baseBranch,
+        phaseLabel,
         ...ref
       }) => {
         const updates: Record<string, JsonValue> = {};
@@ -270,21 +173,46 @@ Status and review state cannot be changed here; those stay a person's call. "tag
         if (tags !== undefined) updates.tags = tags;
         if (priority !== undefined) updates.priority = priority;
         if (baseBranch !== undefined) updates.baseBranch = baseBranch;
-        if (Object.keys(updates).length === 0) {
+        if (Object.keys(updates).length === 0 && phaseLabel === undefined) {
           return toolErrorResult(
-            'Nothing to change: pass at least one of "title", "description", "tags", "priority" or "baseBranch".',
+            'Nothing to change: pass at least one of "title", "description", "tags", "priority", "baseBranch" or "phaseLabel".',
           );
         }
-        const resolved = await resolveKind("task", taskId, ref);
+        if (phaseLabel !== undefined && caller?.role !== "coordinator") {
+          return toolErrorResult(
+            "Only a project coordinator sets a task's phaseLabel.",
+          );
+        }
+        const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
-        await runMutation("agentTasks:update", {
-          id: target.targetId,
-          ...updates,
-        });
+        if (caller?.role === "coordinator") {
+          // Only a task not started yet.
+          const refused = await guarded(async () => {
+            await ctx.runMutation(
+              internal.mcp.projectQueries.editTaskAsCoordinator,
+              {
+                projectId: caller.projectId,
+                taskId: target.targetId,
+                ...(phaseLabel !== undefined ? { phaseLabel } : {}),
+              },
+            );
+            return null;
+          });
+          if (refused !== null) return refused;
+        }
+        if (Object.keys(updates).length > 0) {
+          await runMutation("agentTasks:update", {
+            id: target.targetId,
+            ...updates,
+          });
+        }
         return toolJsonResult({
           ...entitySummary(target),
-          updated: Object.keys(updates),
+          updated: [
+            ...Object.keys(updates),
+            ...(phaseLabel !== undefined ? ["phaseLabel"] : []),
+          ],
         });
       },
     }),
@@ -365,41 +293,42 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
 
   tools.push(
     defineTool({
-      name: "delete_task",
-      description: `Delete a quick task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first.
-
-Deleting also cancels its scheduled run, drops its run summary and queues its sandbox for deletion. restore_task brings the task row back, but none of those.`,
+      name: "archive_task",
+      description: `Archive a task: it leaves the lists, its sandbox stops and its scheduled run is cancelled. Its page still opens, and unarchive_task brings it back. In a project coordinator chat, name the task by taskNumber; only this project's tasks that have not started.`,
       mutating: true,
-      input: { ...taskInput, confirmed: confirmedDeleteArg },
-      // `confirmed` rides along in `ref`; the schema already required it.
-      handler: async ({ taskId, ...ref }) => {
-        const resolved = await resolveKind("task", taskId, ref);
+      input: projectTaskInput,
+      handler: async (ref) => {
+        const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
-        await runMutation("agentTasks:remove", { id: target.targetId });
-        return toolJsonResult({
-          ...entitySummary(target),
-          deleted: true,
-          note: `Restore with restore_task and taskId "${target.targetId}".`,
-        });
+        if (caller?.role === "coordinator") {
+          const refused = await guarded(async () => {
+            await ctx.runQuery(
+              internal.mcp.projectQueries.assertCoordinatorMayArchiveTask,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
+            return null;
+          });
+          if (refused !== null) return refused;
+        }
+        await runMutation("agentTasks:archive", { id: target.targetId });
+        return toolJsonResult({ ...entitySummary(target), archived: true });
       },
     }),
   );
 
   tools.push(
     defineTool({
-      name: "restore_task",
-      description: `Undo delete_task: put a soft-deleted quick task back in its lists. Its scheduled run, run summary and sandbox do not come back. Needs the task's Convex id, since a deleted task no longer resolves by number or PR link. A task that is not deleted is left as it is.`,
+      name: "unarchive_task",
+      description: `Undo archive_task: put an archived task back in its lists. Its cancelled scheduled run does not come back. A task that is not archived is left as it is.`,
       mutating: true,
-      input: {
-        taskId: z
-          .string()
-          .describe("The deleted task's Convex id, as delete_task returned."),
-      },
-      handler: async ({ taskId }) => {
-        await mcpGetContext(ctx, clerkUserId);
-        await runMutation("agentTasks:restore", { id: taskId });
-        return toolJsonResult({ kind: "task", id: taskId, restored: true });
+      input: taskInput,
+      handler: async ({ taskId, ...ref }) => {
+        const resolved = await resolveKind("task", taskId, ref);
+        if ("content" in resolved) return resolved;
+        const { target } = resolved;
+        await runMutation("agentTasks:unarchive", { id: target.targetId });
+        return toolJsonResult({ ...entitySummary(target), archived: false });
       },
     }),
   );

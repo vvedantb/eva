@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
+import { describe, expect, test } from "bun:test";
+import { isVisibleBackgroundAgent } from "@eva/shared/backgroundAgents";
 
 describe("isVisibleBackgroundAgent", () => {
   test("hides a running foreground subagent", () => {

@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { isHttpUrl } from "./safeUrl";
 
 /** Convex documents cap at 1 MiB, so the page is capped in UTF-8 bytes. */
 export const HTML_RENDER_MAX_BYTES = 900_000;
@@ -87,9 +88,9 @@ export function htmlRenderFrameHeight(
 }
 
 /**
- * A theme token as a complete CSS value. Eva stores colours as bare RGB
- * channels (`244 245 246`) for Tailwind's alpha syntax; a page should be able
- * to write `var(--primary)`, so those are wrapped in `rgb()`.
+ * A theme token as a complete CSS value. A page writes `var(--primary)`, so a
+ * host that stores colours as bare RGB channels (`244 245 246`, as the phone
+ * theme does) has them wrapped in `rgb()`.
  */
 export function htmlRenderThemeValue(raw: string): string {
   const value = raw.trim();
@@ -128,7 +129,7 @@ export const htmlRenderFrameMessage = z.discriminatedUnion("method", [
       url: z
         .string()
         .url()
-        .refine((url) => /^https?:/i.test(url), "Only http(s) links open."),
+        .refine(isHttpUrl, "Only http(s) links open."),
     }),
   }),
 ]);

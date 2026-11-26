@@ -5,7 +5,8 @@ import {
   connectorProviderValidator,
 } from "../validators";
 
-const STATE_TTL_MS = 10 * 60 * 1000;
+/** How long an OAuth authorize-hop nonce stays redeemable (connectors and GitHub). */
+export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 const storedTokenValidator = v.object({
   _id: v.id("connectedAccounts"),
@@ -116,7 +117,7 @@ export const insertOauthState = internalMutation({
       actor: args.actor,
       returnPath: args.returnPath,
       codeVerifier: args.codeVerifier,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
     });
     return nonce;
   },

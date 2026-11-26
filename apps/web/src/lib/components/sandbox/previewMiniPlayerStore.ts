@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react";
-import type { Id } from "@eva/backend";
+import type { SandboxOwner } from "@eva/backend";
 
 /**
  * Preview mini-player (picture-in-picture) state.
  *
- * A session's Preview pane can keep running in a floating window after the
+ * A session's, quick task's or project's Preview pane can keep running in a floating window after the
  * user leaves the sessions area. The window shows the SAME hosted iframe as
  * the pane did (see previewIframeHost), so the app under development is not
  * reloaded — this store only decides WHICH entry floats and WHY:
@@ -23,9 +23,10 @@ type PreviewMiniPlayerMode = "auto" | "manual";
 
 /** What the pane knows and the host does not: where the preview belongs. */
 export interface PreviewMiniPlayerSource {
-  sessionId: Id<"sessions">;
+  /** Session, quick task or project whose doc says if the sandbox is live. */
+  owner: SandboxOwner;
   sandboxId: string;
-  /** Route of the session's Preview tab — Expand navigates here. */
+  /** Route of the owner's Preview tab — Expand navigates here. */
   returnTo: string;
   title: string;
 }

@@ -3,9 +3,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { createNotification } from "../notifications";
 import { formatMessagePreview } from "../_messages/preview";
-import { extractMentionedUserIds } from "./extractMentionedUserIds";
+import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
+import { sessionOwner } from "../_sessions/owner";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -13,7 +14,12 @@ import { stripSkillTokens } from "./skillToken";
  * the notification (repo, entity id) comes off it.
  */
 export type ChatMentionSurface =
-  | { kind: "session"; session: Doc<"sessions"> }
+  | {
+      kind: "session";
+      session: Doc<"sessions">;
+      /** The chat posted in; a project task's own chat speaks for the task. */
+      chat?: Doc<"sessionChats">;
+    }
   | { kind: "project"; project: Doc<"projects"> }
   | { kind: "task"; task: Doc<"agentTasks"> };
 
@@ -60,6 +66,63 @@ function surfaceTitle(surface: ChatMentionSurface): string {
   }
 }
 
+/**
+ * A task's or project's session notifies as its owner: the link opens the
+ * task or project page.
+ */
+async function ownerSurface(
+  ctx: MutationCtx,
+  surface: ChatMentionSurface,
+): Promise<ChatMentionSurface> {
+  if (surface.kind !== "session") return surface;
+  const owner = surface.chat
+    ? sessionOwner(surface.session)
+    : sessionOwner(surface.session);
+  if (owner.kind === "task") {
+    const task = await ctx.db.get(owner.taskId);
+    return task ? { kind: "task", task } : surface;
+  }
+  if (owner.kind === "project") {
+    const project = await ctx.db.get(owner.projectId);
+    return project ? { kind: "project", project } : surface;
+  }
+  return surface;
+}
+
+/** Most unread notifications one send looks through for this chat's mentions. */
+const OWN_MENTIONS_SCAN = 100;
+
+/**
+ * Posting in a chat answers the mentions you had there: your unread
+ * `mention` notifications for this chat are marked read, so they leave
+ * Inbox → Needs you (plan `projects-v2-chat.md`, decision 3). The chat id is
+ * the one `createNotification` stores (`chatTarget`: task, else session,
+ * else project).
+ */
+async function answerOwnChatMentions(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  surface: ChatMentionSurface,
+): Promise<void> {
+  const unread = (
+    await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", userId).eq("read", false),
+      )
+      .order("desc")
+      .take(OWN_MENTIONS_SCAN)
+  ).filter((row) => row.type === "mention" && row.chatTarget !== undefined);
+  if (unread.length === 0) return;
+  const target = notificationTarget(await ownerSurface(ctx, surface));
+  const chatTarget = target.taskId ?? target.sessionId ?? target.projectId;
+  for (const row of unread) {
+    if (row.chatTarget === chatTarget) {
+      await ctx.db.patch(row._id, { read: true });
+    }
+  }
+}
+
 /** How much of the message routing is shown. Long enough for the ask, short
  * enough that a pasted log does not dominate the judgement. */
 const ROUTING_MESSAGE_LIMIT = 4000;
@@ -85,15 +148,23 @@ export async function notifyChatMentions(
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
-  const mentionedUserIds = extractMentionedUserIds(ctx, args.content);
-  if (mentionedUserIds.length === 0) return;
+  await answerOwnChatMentions(ctx, args.authorUserId, args.surface);
+  // A task and its session share the repo, so the recipients need no owner
+  // read; it only runs once someone is mentioned.
+  const recipients = await teamMentionRecipients(
+    ctx,
+    args.content,
+    notificationTarget(args.surface).repoId,
+    new Set([args.authorUserId]),
+  );
+  if (recipients.length === 0) return;
 
-  const target = notificationTarget(args.surface);
-  const repo = target.repoId ? await ctx.db.get(target.repoId) : null;
-  const teamId = repo?.teamId;
-  const author = await ctx.db.get(args.authorUserId);
-  const authorName = author?.fullName?.trim() || "Someone";
-  const title = `${authorName} mentioned you in a ${SURFACE_NAME[args.surface.kind]} chat`;
+  const [surface, authorName] = await Promise.all([
+    ownerSurface(ctx, args.surface),
+    authorDisplayName(ctx, args.authorUserId),
+  ]);
+  const target = notificationTarget(surface);
+  const title = `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
   // Routing runs after every notification exists, in one action: the judgement
@@ -104,23 +175,14 @@ export async function notifyChatMentions(
     mentionedName: string;
   }[] = [];
 
-  for (const userId of mentionedUserIds) {
-    if (userId === args.authorUserId) continue;
-    if (teamId) {
-      const membership = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_team_and_user", (q) =>
-          q.eq("teamId", teamId).eq("userId", userId),
-        )
-        .first();
-      if (!membership) continue;
-    }
+  for (const userId of recipients) {
     const notificationId = await createNotification(ctx, {
       userId,
       type: "mention",
       title,
       message,
       ...target,
+      routesUrgency: true,
     });
     const mentioned = await ctx.db.get(userId);
     routed.push({
@@ -142,7 +204,46 @@ export async function notifyChatMentions(
       ROUTING_MESSAGE_LIMIT,
     ),
     authorName,
-    surface: args.surface.kind,
-    entityTitle: surfaceTitle(args.surface),
+    surface: surface.kind,
+    entityTitle: surfaceTitle(surface),
   });
+}
+
+/**
+ * Tells the people already in a reply thread (the root's author and earlier
+ * repliers) that someone replied. Those @-mentioned in the reply are skipped:
+ * `notifyChatMentions` already told them.
+ */
+export async function notifyThreadReply(
+  ctx: MutationCtx,
+  args: {
+    content: string;
+    authorUserId: Id<"users">;
+    participantIds: readonly Id<"users">[];
+    surface: ChatMentionSurface;
+  },
+): Promise<void> {
+  const target = notificationTarget(args.surface);
+  const mentioned = new Set(
+    await teamMentionRecipients(ctx, args.content, target.repoId, new Set()),
+  );
+  const recipients = [...new Set(args.participantIds)].filter(
+    (userId) => userId !== args.authorUserId && !mentioned.has(userId),
+  );
+  if (recipients.length === 0) return;
+  const [surface, authorName] = await Promise.all([
+    ownerSurface(ctx, args.surface),
+    authorDisplayName(ctx, args.authorUserId),
+  ]);
+  const title = `${authorName} replied in a thread`;
+  const message = formatMessagePreview(args.content);
+  for (const userId of recipients) {
+    await createNotification(ctx, {
+      userId,
+      type: "comment_reply",
+      title,
+      message,
+      ...notificationTarget(surface),
+    });
+  }
 }

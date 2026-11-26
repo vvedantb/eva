@@ -85,7 +85,6 @@ export function WorkProfileSection() {
   return (
     <SettingsSection
       title="Work profile"
-      description="Eva uses this to route design and product questions to you."
       footer={
         <>
           {isDirty ? (

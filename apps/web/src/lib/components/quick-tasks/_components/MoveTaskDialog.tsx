@@ -2,11 +2,11 @@
 
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast } from "@vvedantb/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 
 /** Moves a quick task to another app. Shared by the confirm dialog and Alt-click bypass. */
 export function useMoveAgentTask() {
@@ -15,16 +15,12 @@ export function useMoveAgentTask() {
     (localStore, args) => {
       // Moving to a different repo — remove from the current repo's list
       if (args.repoId) {
-        const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-          repoId,
-        });
-        if (current !== undefined) {
-          localStore.setQuery(
-            api.agentTasks.getAllTasks,
-            { repoId },
-            current.filter((task) => task._id !== args.id),
-          );
-        }
+        patchLoadedQuery(
+          localStore,
+          api.agentTasks.getAllTasks,
+          { repoId },
+          (cur) => cur.filter((task) => task._id !== args.id),
+        );
       }
     },
   );
@@ -34,6 +30,8 @@ interface MoveTaskDialogProps {
   targetId: Id<"githubRepos"> | null;
   targetAppName: string;
   onClose: () => void;
+  /** After a successful move, once the dialog has closed. */
+  onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;
 }
@@ -42,6 +40,7 @@ export function MoveTaskDialog({
   targetId,
   targetAppName,
   onClose,
+  onDone,
   taskId,
   taskTitle,
 }: MoveTaskDialogProps) {
@@ -54,6 +53,7 @@ export function MoveTaskDialog({
     try {
       await updateTask({ id: taskId, repoId: targetId });
       onClose();
+      if (onDone) onDone();
     } catch (err) {
       console.error("Failed to move task:", err);
       toast.error("Could not move the task. Try again.");
@@ -63,6 +63,7 @@ export function MoveTaskDialog({
 
   return (
     <ConfirmDialog
+      size="md"
       open={targetId !== null}
       onOpenChange={(v) => {
         if (!v) onClose();
@@ -73,10 +74,14 @@ export function MoveTaskDialog({
           Move <strong>{taskTitle}</strong> to <strong>{targetAppName}</strong>?
         </>
       }
-      detail="The task will appear in the other app's quick tasks."
+      body={
+        <p className="text-sm text-muted-foreground">
+          The task will appear in the other app's quick tasks.
+        </p>
+      }
       confirmLabel="Move"
       onConfirm={handleMove}
-      isLoading={isMoving}
+      pending={isMoving}
     />
   );
 }

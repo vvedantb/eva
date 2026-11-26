@@ -1,3 +1,5 @@
+import { errorMessage } from "@vvedantb/server";
+
 /**
  * Git exit 128 "couldn't find remote ref" is expected when the requested
  * branch was deleted (e.g. a finished `eva/automation-*` run) or never pushed.
@@ -13,6 +15,6 @@ export function isMissingRemoteRefError(message: string): boolean {
 
 /** True when a sandbox git fetch failed because that ref is gone on the remote. */
 export function isMissingRemoteRefFetchFailure(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   return isMissingRemoteRefError(message);
 }

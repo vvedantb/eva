@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { settleAgentTurnCompletion } from "../_chat/turnStore";
+import {
+  closeTurn,
+  findOpenTurn,
+  settleAgentTurnCompletion,
+} from "../_chat/turnStore";
 import type { GenericDatabaseReader } from "convex/server";
 import {
   internalMutation,
@@ -12,40 +16,26 @@ import {
   automationFindingValidator,
   findingTriageValidator,
   runStatusValidator,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { cancelTrackedWorkflow } from "../workflowManager";
+import { isTerminalRunStatus } from "./runStatus";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   gatherAccessibleRepos,
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
-
-/** Loads a run and its automation, throwing unless the user can access the repo. */
-async function loadRunWithAccess(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  runId: Id<"automationRuns">,
-): Promise<{ run: Doc<"automationRuns">; automation: Doc<"automations"> }> {
-  const run = await db.get(runId);
-  if (!run) throw new Error("Run not found");
-  const automation = await db.get(run.automationId);
-  if (!automation) throw new Error("Automation not found");
-  if (!(await hasRepoAccess(db, automation.repoId, userId))) {
-    throw new Error("Not authorized");
-  }
-  return { run, automation };
-}
+import { queueRunEmail } from "./email";
 import { taskCompleteEvent } from "../_taskWorkflow/events";
 import {
   clearStreamingActivity,
   recordCompletionLog,
   sendCompletionEvent,
 } from "../_taskWorkflow/helpers";
-import { listAutomationsForRepo } from "./helpers";
+import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
 import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
@@ -119,8 +109,35 @@ export const countUnreadAll = authQuery({
   returns: v.number(),
   handler: async (ctx) => {
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
+    // Reuse the repo rows already loaded: resolve each canonical id from them
+    // (reading a parent only when it is not in the list), and read each repo's
+    // automations once even when several child apps share one root.
+    const loadedRepoIds = new Set(repos.map((repo) => repo._id));
+    const rowsByRepo = new Map<
+      Id<"githubRepos">,
+      Promise<Array<Doc<"automations">>>
+    >();
+    const loadRepoRows = (repoId: Id<"githubRepos">) => {
+      const cached = rowsByRepo.get(repoId);
+      if (cached) return cached;
+      const rows = ctx.db
+        .query("automations")
+        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+        .collect();
+      rowsByRepo.set(repoId, rows);
+      return rows;
+    };
     const perRepo = await Promise.all(
-      repos.map((repo) => listAutomationsForRepo(ctx.db, repo._id)),
+      repos.map(async (repo) => {
+        const parentId = repo.parentRepoId;
+        const canonicalId =
+          parentId === undefined
+            ? repo._id
+            : loadedRepoIds.has(parentId) || (await ctx.db.get(parentId))
+              ? parentId
+              : repo._id;
+        return automationsVisibleInRepo(repo._id, canonicalId, loadRepoRows);
+      }),
     );
     // Shared monorepo automations surface into every child app, so dedupe
     // before counting or one unread run is counted once per app.
@@ -159,44 +176,6 @@ export const getAutomationData = internalQuery({
   },
 });
 
-/**
- * Returns a successful run's summary for emailing: its markdown content, finish
- * time, edition number (this automation's count of successful runs, this one
- * included), and the automation title used for the subject and heading. Returns
- * null if the run is not a completed success. Internal use only.
- */
-export const getRunForEmail = internalQuery({
-  args: { runId: v.id("automationRuns") },
-  returns: v.union(
-    v.object({
-      content: v.string(),
-      publishedAt: v.number(),
-      runNumber: v.number(),
-      automationTitle: v.string(),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.status !== "success") return null;
-    if (!run.resultSummary || !run.finishedAt) return null;
-    const automation = await ctx.db.get(run.automationId);
-    if (!automation) return null;
-    const successfulRuns = await ctx.db
-      .query("automationRuns")
-      .withIndex("by_automation_and_status", (q) =>
-        q.eq("automationId", automation._id).eq("status", "success"),
-      )
-      .collect();
-    return {
-      content: run.resultSummary,
-      publishedAt: run.finishedAt,
-      runNumber: successfulRuns.length,
-      automationTitle: resolveAutomationDoc(automation).title,
-    };
-  },
-});
-
 /** Updates an automation run's status and optional metadata fields (sandbox, error, PR URL, etc). */
 export const updateRunStatus = internalMutation({
   args: {
@@ -211,6 +190,16 @@ export const updateRunStatus = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const current = await ctx.db.get(args.runId);
+    if (!current) return null;
+    // Terminal is final. A workflow finishing after the user cancelled must
+    // not flip the run to success (and send its email) or error.
+    if (isTerminalRunStatus(current.status)) {
+      console.log(
+        `[automations] updateRunStatus ignored runId=${args.runId} ${current.status} -> ${args.status}`,
+      );
+      return null;
+    }
     const patch: Partial<Doc<"automationRuns">> = { status: args.status };
     if (args.sandboxId !== undefined) patch.sandboxId = args.sandboxId;
     if (args.error !== undefined) patch.error = args.error;
@@ -219,11 +208,7 @@ export const updateRunStatus = internalMutation({
     if (args.prUrl !== undefined) patch.prUrl = args.prUrl;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     if (args.findings !== undefined) patch.findings = args.findings;
-    if (
-      args.status === "success" ||
-      args.status === "error" ||
-      args.status === "cancelled"
-    ) {
+    if (isTerminalRunStatus(args.status)) {
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);
@@ -238,22 +223,19 @@ export const updateRunStatus = internalMutation({
       );
     }
 
-    // When a run succeeds and the automation opts into email, broadcast its
-    // result summary to all users with email notifications enabled.
+    // When a run succeeds and the automation opts into email, draft (or, with
+    // auto-send, send) its result summary for every email recipient.
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
       // Event presets settle through `settleEventRun` and never email; this
       // guards a preset row reaching here by any other path.
       if (
+        run &&
         automation?.sendEmail === true &&
         automationAction(automation) === "run"
       ) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.automationEmail.sendAutomationEmail,
-          { runId: args.runId },
-        );
+        await queueRunEmail(ctx, run, automation);
       }
     }
     return null;
@@ -323,6 +305,7 @@ export const cancelRun = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { run } = await loadRunWithAccess(ctx.db, ctx.userId, args.runId);
+    if (isTerminalRunStatus(run.status)) return null;
 
     await cancelTrackedWorkflow(ctx, run.activeWorkflowId);
 
@@ -331,6 +314,18 @@ export const cancelRun = authMutation({
       finishedAt: Date.now(),
       activeWorkflowId: undefined,
     });
+
+    // Cancelling skips the workflow's `finally`, which is what deletes the
+    // ephemeral sandbox, so delete it and close the agent turn here instead.
+    const turn = await findOpenTurn(ctx, args.runId);
+    if (turn) await closeTurn(ctx, turn, "cancelled");
+    const sandboxId = turn?.sandboxId ?? run.sandboxId;
+    if (sandboxId !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+        sandboxId,
+        repoId: turn?.repoId ?? (await resolveSandboxRepoId(ctx.db, run.repoId)),
+      });
+    }
 
     const streamingEntityId = automationRunStreamingEntityId(args.runId);
     const streaming = await ctx.db
@@ -348,12 +343,7 @@ export const handleCompletion = authMutation({
   args: {
     automationRunId: v.id("automationRuns"),
     runId: v.optional(v.string()),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

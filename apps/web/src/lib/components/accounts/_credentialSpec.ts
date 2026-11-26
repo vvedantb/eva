@@ -1,4 +1,8 @@
-import type { AIProvider } from "@eva/backend";
+import {
+  PROVIDER_CONFIG_KEY,
+  PROVIDER_PRIMARY_AUTH_KEY,
+  type AIProvider,
+} from "@eva/backend";
 
 /** A single credential field a provider account collects. */
 export interface CredentialFieldSpec {
@@ -9,14 +13,6 @@ export interface CredentialFieldSpec {
   multiline?: boolean;
   placeholder?: string;
 }
-
-/** Human label for each provider. */
-export const PROVIDER_LABELS: Record<AIProvider, string> = {
-  claude: "Claude Code",
-  codex: "Codex",
-  opencode: "opencode",
-  cursor: "Cursor",
-};
 
 /**
  * The credential fields collected per provider account. The primary field is
@@ -29,7 +25,7 @@ export const PROVIDER_CREDENTIAL_FIELDS: Record<
 > = {
   claude: [
     {
-      key: "CLAUDE_CODE_OAUTH_TOKEN",
+      key: PROVIDER_PRIMARY_AUTH_KEY.claude,
       label: "OAuth token",
       required: true,
       placeholder: "sk-ant-oat...",
@@ -37,7 +33,7 @@ export const PROVIDER_CREDENTIAL_FIELDS: Record<
   ],
   cursor: [
     {
-      key: "CURSOR_API_KEY",
+      key: PROVIDER_PRIMARY_AUTH_KEY.cursor,
       label: "API key",
       required: true,
       placeholder: "key_...",
@@ -45,14 +41,14 @@ export const PROVIDER_CREDENTIAL_FIELDS: Record<
   ],
   codex: [
     {
-      key: "CODEX_AUTH_JSON",
+      key: PROVIDER_PRIMARY_AUTH_KEY.codex,
       label: "auth.json",
       required: true,
       multiline: true,
       placeholder: '{"OPENAI_API_KEY":"sk-..."}',
     },
     {
-      key: "CODEX_CONFIG_TOML",
+      key: PROVIDER_CONFIG_KEY.codex,
       label: "config.toml (optional)",
       required: false,
       multiline: true,
@@ -60,13 +56,13 @@ export const PROVIDER_CREDENTIAL_FIELDS: Record<
   ],
   opencode: [
     {
-      key: "OPENCODE_AUTH_JSON",
+      key: PROVIDER_PRIMARY_AUTH_KEY.opencode,
       label: "auth.json",
       required: true,
       multiline: true,
     },
     {
-      key: "OPENCODE_CONFIG_JSON",
+      key: PROVIDER_CONFIG_KEY.opencode,
       label: "config.json (optional)",
       required: false,
       multiline: true,

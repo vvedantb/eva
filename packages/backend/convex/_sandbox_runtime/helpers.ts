@@ -1,9 +1,17 @@
 "use node";
 import { randomToken, sha256Hex } from "@vvedantb/server";
 import { createHash } from "crypto";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import {
+  EVA_CONFIG_PATH,
+  evaAppFingerprints,
+  findEvaApp,
+  parseEvaConfig,
+} from "../_evaConfig/config";
+import { readEvaFileAtRef } from "../_evaConfig/sync";
 import {
   resolveProviderAccountCredentials,
   resolveSandboxCredentials,
@@ -28,8 +36,10 @@ import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
+import { sleep } from "../_shared/async";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
+import { isReadOnlySandboxOwner } from "../_sessions/owner";
 
 export const WORKSPACE_DIR = "/tmp/repo";
 export const LEGACY_WORKSPACE_DIR = "/workspace/repo";
@@ -50,72 +60,6 @@ export const KILL_PRIOR_AGENT_PROCESSES_CMD =
   "pkill -f '[o]pencode run' 2>/dev/null || true; " +
   "pkill -x cursor-agent 2>/dev/null || true; " +
   "true";
-
-/** Config file shape returned by getConfigFilesForSnapshot. */
-export type SandboxConfigFile = {
-  fileName: string;
-  chunkUrls: Array<string | null>;
-};
-
-/**
- * Filters config files to those with all chunk URLs available.
- * Skips any file with a missing chunk URL — concatenating partial chunks would corrupt the file.
- */
-export function filterDownloadableConfigFiles(
-  files: SandboxConfigFile[],
-): Array<{ fileName: string; chunkUrls: string[] }> {
-  const result: Array<{ fileName: string; chunkUrls: string[] }> = [];
-  for (const f of files) {
-    if (f.chunkUrls.length === 0) continue;
-    if (f.chunkUrls.some((u) => u === null)) continue;
-    const validUrls = f.chunkUrls.filter((u): u is string => u !== null);
-    result.push({ fileName: f.fileName, chunkUrls: validUrls });
-  }
-  return result;
-}
-
-/**
- * `--http1.1` is deliberate: multi-hundred-megabyte chunks over HTTP/2 die
- * partway through with `curl: (92) stream not closed cleanly: INTERNAL_ERROR`,
- * which `--retry` does not cover because it is a protocol error rather than a
- * transient HTTP status. HTTP/1.1 has no stream layer to fail.
- */
-const CONFIG_FILE_CURL_OPTS = "-fSL --http1.1 --retry 5 --retry-delay 5";
-
-/**
- * Builds shell commands to download a config file. Single-chunk files use a
- * straight `curl -o`. Multi-chunk files download each chunk to /tmp, concatenate
- * with `cat` into the destination, then remove the chunk temp files.
- * `destDir` is optional; when omitted, files land in the caller's cwd.
- */
-export function buildConfigFileDownloadCommands(
-  file: {
-    fileName: string;
-    chunkUrls: string[];
-  },
-  destDir?: string,
-): string[] {
-  const destPath = destDir
-    ? `${destDir.replace(/\/$/, "")}/${file.fileName}`
-    : file.fileName;
-  if (file.chunkUrls.length === 1) {
-    return [
-      `curl ${CONFIG_FILE_CURL_OPTS} -o '${destPath}' '${file.chunkUrls[0]}'`,
-    ];
-  }
-  const downloadCmds = file.chunkUrls.map(
-    (url, i) =>
-      `curl ${CONFIG_FILE_CURL_OPTS} -o '/tmp/${file.fileName}.chunk-${i}' '${url}'`,
-  );
-  const chunkPaths = file.chunkUrls
-    .map((_, i) => `'/tmp/${file.fileName}.chunk-${i}'`)
-    .join(" ");
-  return [
-    ...downloadCmds,
-    `cat ${chunkPaths} > '${destPath}'`,
-    `rm ${chunkPaths}`,
-  ];
-}
 
 /** Returns a shell expression that resolves to the active workspace directory. */
 export function workspaceDirShell(): string {
@@ -154,11 +98,13 @@ export async function execHandle(
     (message) => new SandboxExecTimeoutError(message),
   );
   if (resp.exitCode !== 0) {
-    const output = resp.output?.trim() ?? "";
+    // Redacted: this error text reaches Convex logs and chat warnings, and a
+    // failing clone/push echoes its token-bearing URL.
+    const output = redactSecrets(resp.output?.trim() ?? "");
     // The command prefix is the only clue when the provider discards output on
     // a kill (e.g. exit 143 = SIGTERM at timeout) — without it the failing exec
     // is unidentifiable in logs.
-    const cmdHint = `cmd=${JSON.stringify(cmd.slice(0, 80))}`;
+    const cmdHint = `cmd=${JSON.stringify(redactSecrets(cmd.slice(0, 80)))}`;
     // Typed, not a bare Error: the sandbox answered, so it is alive. The type
     // is what stops its output (`relation "X" does not exist`) from ever being
     // read as "the sandbox is gone". See sandboxErrors.ts.
@@ -196,8 +142,8 @@ export async function ensureDockerDaemon(
     // Not running (or docker not installed) — try to start it below.
   }
 
-  // Prefer the shared bootstrap first. On Vercel resume the older Daytona-style
-  // restart below often fails (wasting ~1s) before this same bootstrap succeeds.
+  // Prefer the shared bootstrap first. On Vercel resume the plain restart
+  // below often fails (wasting ~1s) before this same bootstrap succeeds.
   if (await bootstrapVercelDocker(sandbox)) {
     return true;
   }
@@ -458,14 +404,6 @@ export async function restartUnresponsiveSandbox(
   });
 }
 
-/** Returns the value of a required environment variable, throwing if missing. */
-/** Returns a promise that resolves after the specified milliseconds. */
-export async function sleep(ms: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 export const WARMING_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 
 /** Races a promise against a timeout, throwing if the timeout expires first. */
@@ -532,6 +470,38 @@ export async function resolveSandboxClientOnly(
   return client;
 }
 
+/**
+ * Seed fingerprint of `branch`'s own `.eva/config.json` entry for this app, or
+ * null when it cannot differ from the cache (default branch, repo without
+ * `.eva/`, branch not pushed yet, no or invalid file) or GitHub is unreachable — a null keeps the seeded
+ * snapshot, the fast and usually correct choice.
+ */
+async function branchSeedFingerprint(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  branch: string,
+): Promise<string | null> {
+  try {
+    const target = await ctx.runQuery(internal._evaConfig.cache.getSyncTarget, {
+      repoId,
+    });
+    // Default branch = the cache itself. A repo that never adopted `.eva/`
+    // skips the GitHub read on this hot path.
+    if (!target || !target.hasEvaConfig || target.ref === branch) return null;
+    const text = await readEvaFileAtRef(target, EVA_CONFIG_PATH, branch);
+    if (text === null) return null;
+    const parsed = parseEvaConfig(text);
+    if (!parsed.ok) return null;
+    const app = findEvaApp(parsed.value, target.rootDirectory);
+    return app ? evaAppFingerprints(parsed.value, app).seed : null;
+  } catch (error) {
+    console.warn(
+      `[sandbox] branchSeedFingerprint repoId=${repoId} branch=${branch}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
+
 /** Resolves the provider client, sandbox env vars, and snapshot name for a repo. */
 export async function resolveSandboxContext(
   ctx: GenericActionCtx<DataModel>,
@@ -544,6 +514,12 @@ export async function resolveSandboxContext(
      * `getGroupSnapshotForBoot`.
      */
     repoGroupId?: Id<"repoGroups">;
+    /**
+     * Branch the sandbox will check out. When its `.eva/config.json` changes
+     * the seed inputs, the seeded snapshot's data is stale for it, so the
+     * sandbox boots the base Image instead.
+     */
+    branch?: string;
   },
 ): Promise<{
   client: SandboxClient;
@@ -551,22 +527,45 @@ export async function resolveSandboxContext(
   snapshotName: string | undefined;
 }> {
   const startedAt = Date.now();
-  const { credentials, sandboxEnvVars } = await resolveSandboxCredentials(
-    ctx,
-    repoId,
-  );
+  const repoGroupId = opts?.repoGroupId;
+  // Independent reads: run them together to save round trips on every boot.
+  const [{ credentials, sandboxEnvVars }, repoSnapshot, groupSnapshotName] =
+    await Promise.all([
+      resolveSandboxCredentials(ctx, repoId),
+      ctx.runQuery(internal.repoSnapshots.getRepoSnapshotName, { repoId }),
+      repoGroupId
+        ? ctx.runQuery(internal.repoGroups.getGroupSnapshotForBoot, {
+            groupId: repoGroupId,
+          })
+        : null,
+    ]);
   const client = getSandboxClient(credentials);
-  const repoSnapshot = await ctx.runQuery(
-    internal.repoSnapshots.getRepoSnapshotName,
-    { repoId },
-  );
-  let snapshotName = repoSnapshot?.snapshotName;
-  if (opts?.repoGroupId) {
-    const groupSnapshotName = await ctx.runQuery(
-      internal.repoGroups.getGroupSnapshotForBoot,
-      { groupId: opts.repoGroupId },
+  let snapshotName = groupSnapshotName || repoSnapshot?.snapshotName;
+  // A branch whose `.eva/config.json` changes the seed inputs cannot use the
+  // seeded snapshot's data. Only checked when the seeded snapshot would boot.
+  if (
+    !groupSnapshotName &&
+    opts?.branch &&
+    repoSnapshot?.seededFingerprint
+  ) {
+    const branchFingerprint = await branchSeedFingerprint(
+      ctx,
+      repoId,
+      opts.branch,
     );
-    if (groupSnapshotName) snapshotName = groupSnapshotName;
+    if (
+      branchFingerprint !== null &&
+      branchFingerprint !== repoSnapshot.seededFingerprint
+    ) {
+      console.log(
+        `[sandbox] resolveSandboxContext repoId=${repoId} branch=${opts.branch}: .eva/config.json changes the seed inputs — skipping the seeded snapshot`,
+      );
+      const base = await ctx.runQuery(
+        internal.repoSnapshots.getRepoSnapshotName,
+        { repoId, skipSeeded: true },
+      );
+      snapshotName = base?.snapshotName;
+    }
   }
   console.log(
     `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
@@ -601,6 +600,60 @@ export async function getRunningSandboxHandle(
 ): Promise<SandboxHandle | null> {
   const sandbox = await getSandboxHandle(ctx, repoId, sandboxId);
   return sandbox.state === "running" ? sandbox : null;
+}
+
+// Covers a slow launch (cold CLI install + uploads + ready poll); a launcher
+// that died holding the lock blocks the next one for at most this long.
+const SANDBOX_LAUNCH_LOCK_TTL_MS = 120_000;
+const SANDBOX_LAUNCH_LOCK_WAIT_MS = 120_000;
+const SANDBOX_LAUNCH_LOCK_POLL_MS = 500;
+
+/**
+ * Serialises `launchScript` per sandbox. Every launch writes the same fixed
+ * files (/tmp/design-prompt.txt, /tmp/eva-launch-runner.sh, the pid/ready
+ * markers), so two overlapping launches on one sandbox clobber each other.
+ * Observed on quick task 284: a session prewarm and the task launch overlapped
+ * by 2s, only the session daemon started, the task accepted its ready marker,
+ * and the task prompt never ran until the watchdog killed it 15 minutes later.
+ * Fails open after the wait so a stuck lock can never block launches outright.
+ */
+async function withSandboxLaunchLock<T>(
+  ctx: GenericActionCtx<DataModel>,
+  sandboxId: string,
+  entityId: string,
+  launch: () => Promise<T>,
+): Promise<T> {
+  const key = `sandbox:${sandboxId}`;
+  const claim = () =>
+    ctx.runMutation(internal.sandboxDaemon.claimDaemonLaunchLease, {
+      entityId: key,
+      ttlMs: SANDBOX_LAUNCH_LOCK_TTL_MS,
+    });
+  const waitStartedAt = Date.now();
+  let held = await claim();
+  while (!held && Date.now() - waitStartedAt < SANDBOX_LAUNCH_LOCK_WAIT_MS) {
+    await sleep(SANDBOX_LAUNCH_LOCK_POLL_MS);
+    held = await claim();
+  }
+  const waitedMs = Date.now() - waitStartedAt;
+  if (!held) {
+    console.warn(
+      `[sandbox][launch] launch lock still held after ${waitedMs}ms — launching anyway entityId=${entityId} sandboxId=${sandboxId}`,
+    );
+  } else if (waitedMs > 0) {
+    console.log(
+      `[sandbox][launch] waited ${waitedMs}ms for launch lock entityId=${entityId} sandboxId=${sandboxId}`,
+    );
+  }
+  try {
+    return await launch();
+  } finally {
+    if (held) {
+      await ctx.runMutation(internal.sandboxDaemon.releaseDaemonLaunchLease, {
+        entityId: key,
+      });
+    }
+  }
 }
 
 /** Signs sandbox and MCP tokens, then launches the AI agent script on the sandbox. */
@@ -710,6 +763,10 @@ export async function signAndLaunchScript(
       // tool keeps resolving; the chat rides along as its own claim.
       entityId: launchSession ? String(launchSession._id) : entityId,
       ...(launchChat ? { chatId: entityId } : {}),
+      // A project launch (the old interview) runs on the coordinator's VM too.
+      readOnlyGit:
+        entityIdField === "projectId" ||
+        (launchSession !== null && isReadOnlySandboxOwner(launchSession.owner)),
       ...(launchSession
         ? { entityKind: "session" as const }
         : entityIdField === "taskId"
@@ -757,22 +814,24 @@ export async function signAndLaunchScript(
       })
     : [];
 
-  await launchScript(
-    sandbox,
-    prompt,
-    completionMutation,
-    entityIdField,
-    sandboxToken,
-    entityId,
-    {
-      ...opts,
-      extraEnvVars,
-      mcpToken: mcpToken?.token,
-      mcpBaseUrl,
-      systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
-      harnessCatalogToken,
-      ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
-    },
+  await withSandboxLaunchLock(ctx, sandbox.id, entityId, () =>
+    launchScript(
+      sandbox,
+      prompt,
+      completionMutation,
+      entityIdField,
+      sandboxToken,
+      entityId,
+      {
+        ...opts,
+        extraEnvVars,
+        mcpToken: mcpToken?.token,
+        mcpBaseUrl,
+        systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
+        harnessCatalogToken,
+        ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
+      },
+    ),
   );
   console.log(
     `[sandbox][launch] launchScript completed in ${Date.now() - launchStartedAt}ms entityId=${entityId} sandboxId=${sandbox.id}`,

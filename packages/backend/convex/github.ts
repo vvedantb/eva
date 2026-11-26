@@ -7,12 +7,14 @@ export {
   detectMonorepoApps,
   listAllAvailableRepos,
   connectRepo,
+  importDetectedApps,
 } from "./_github/api";
 
 export {
   createSessionPr,
   createDraftSessionPr,
   createDraftSessionRepoPr,
+  linkSessionPrToStack,
 } from "./_github/prFlow";
 
 export { generatePrDescription } from "./_github/prDescription";
@@ -24,7 +26,11 @@ export {
   getCompareDiff,
 } from "./_github/prDiff";
 
-export { listPullRequests, getPullRequestHeader } from "./_github/pullRequests";
+export {
+  listPullRequests,
+  getPullRequestHeader,
+  getPullRequestCard,
+} from "./_github/pullRequests";
 
 export { getEvaMergeShare } from "./_github/mergeShare";
 

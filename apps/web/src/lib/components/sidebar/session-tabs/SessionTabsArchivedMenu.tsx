@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { prStateLabel, type PrState } from "@eva/shared";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -29,7 +30,7 @@ interface ArchivedMenuSession {
   numId?: number;
   title: string;
   archived?: boolean;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   updatedAt?: number;
   _creationTime: number;
   /** Linked-in row: the session's primary repo owns its URL. */
@@ -109,11 +110,10 @@ export function SessionTabsArchivedMenu({
                     );
                     const canUnarchive = session.archived === true;
                     const subtitle =
-                      session.prState === "merged"
-                        ? "Merged"
-                        : session.prState === "closed"
-                          ? "Closed"
-                          : "Archived";
+                      session.prState === "merged" ||
+                      session.prState === "closed"
+                        ? prStateLabel(session.prState)
+                        : "Archived";
                     return (
                       <div
                         key={session._id}
@@ -124,7 +124,7 @@ export function SessionTabsArchivedMenu({
                             to={href}
                             className={cn(
                               "cursor-pointer",
-                              isSelected && "bg-accent",
+                              isSelected && "bg-accent-soft",
                             )}
                           >
                             <span className="min-w-0 flex-1 truncate">

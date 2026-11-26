@@ -1,4 +1,4 @@
-import type { Doc, Id } from "@eva/backend";
+import { isTaskRunning, type Id, type TaskRunSource } from "@eva/backend";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 
 /**
@@ -10,9 +10,10 @@ import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
  * persisted `status`, so this never moves a card between columns.
  */
 export function useTaskAgentActive(
-  taskId: Id<"agentTasks">,
-  task: Pick<Doc<"agentTasks">, "activeWorkflowId"> | null | undefined,
+  /** The task's session chat; undefined before it exists. */
+  chatParentId: Id<"sessionChats"> | undefined,
+  task: TaskRunSource | null | undefined,
 ): boolean {
-  const chatTurnOpen = useChatTurnOpen(taskId);
-  return task?.activeWorkflowId !== undefined || chatTurnOpen === true;
+  const chatTurnOpen = useChatTurnOpen(chatParentId);
+  return (task ? isTaskRunning(task) : false) || chatTurnOpen === true;
 }

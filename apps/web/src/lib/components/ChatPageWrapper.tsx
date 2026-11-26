@@ -1,7 +1,8 @@
 "use client";
 
 import { IconArchive } from "@tabler/icons-react";
-import { tokenTransition } from "@vvedantb/ui";
+import { cn } from "@eva/ui";
+import { buttonTrackClass, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ChatPageWrapperProps {
@@ -21,6 +22,15 @@ interface ChatPageWrapperProps {
 }
 
 const ARCHIVED_MESSAGE = "This session is archived and read-only";
+
+/**
+ * Chat header actions on one shared trough: the package `buttonTrackClass`.
+ * Session, task and project chats all use it.
+ */
+export const CHAT_HEADER_ACTIONS_CLASS = cn(
+  buttonTrackClass,
+  "flex-wrap justify-end",
+);
 
 export function ChatPageWrapper({
   title: _title,
@@ -68,9 +78,7 @@ export function ChatPageWrapper({
               <div />
             )}
             {headerRight && (
-              <div className="flex shrink-0 items-center gap-1 sm:gap-2 flex-wrap justify-end">
-                {headerRight}
-              </div>
+              <div className={CHAT_HEADER_ACTIONS_CLASS}>{headerRight}</div>
             )}
           </m.div>
         )}

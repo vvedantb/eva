@@ -337,12 +337,13 @@ export function DocRecapViewer({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <TabsBar
-          className="sm:px-4"
+          className="border-b-0 sm:px-4"
           actions={
             <div className="flex items-center gap-1">
               {viewTab === "summary" && (
                 <>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={suggestionsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -357,6 +358,7 @@ export function DocRecapViewer({
                     )}
                   </Button>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={commentsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"

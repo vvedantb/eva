@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import {
@@ -8,6 +8,7 @@ import {
   isHeldByUsageLimit,
   USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
 } from "../convex/_taskWorkflow/usageLimitReset";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A chat's queue now waits for two things besides a running turn: a sleeping
@@ -16,7 +17,6 @@ import {
  * after the reset).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -176,19 +176,25 @@ async function fixture(options: {
           updatedAt: now,
         })
       : undefined;
-    const taskId = await ctx.db.insert("agentTasks", {
-      title: "Ran once",
-      status: "code_review" as const,
+    const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: userId,
-      sandboxId: "sbx-task",
-      reviewTaskSandboxStatus: options.sandboxStatus,
+      userId,
+      title: "Ran once",
+      status: options.sandboxStatus,
+      sandboxId: "sbx-session",
+    });
+    const chatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
     });
     if (options.hitLimit) {
       await ctx.db.insert("messages", {
-        parentId: taskId,
+        parentId: chatId,
         role: "user",
         content: "fix the header",
         timestamp: now - 2,
@@ -197,7 +203,7 @@ async function fixture(options: {
         credentialAccountId: accountId,
       });
       await ctx.db.insert("messages", {
-        parentId: taskId,
+        parentId: chatId,
         role: "assistant",
         content: "Error: You've hit your session limit · resets 4pm (UTC)",
         timestamp: now - 1,
@@ -207,23 +213,26 @@ async function fixture(options: {
       });
     }
     await ctx.db.insert("queuedMessages", {
-      parentId: taskId,
+      parentId: chatId,
       content: "and also rename the button",
       createdAt: now,
       order: now,
       userId,
       model: options.queuedModel,
     });
-    return { taskId };
+    return { sessionId, chatId };
   });
   return { t, ...ids };
 }
 
-function queueLength(t: ReturnType<typeof convexTest>, taskId: Id<"agentTasks">) {
+function queueLength(
+  t: ReturnType<typeof convexTest>,
+  chatId: Id<"sessionChats">,
+) {
   return t.run(async (ctx) => {
     const rows = await ctx.db
       .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", taskId))
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
       .collect();
     return rows.length;
   });
@@ -248,19 +257,19 @@ describe("a quiet drain", () => {
   test(
     "wakes a sleeping sandbox instead of starting the turn",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, sessionId, chatId } = await fixture({
         sandboxStatus: "closed",
         queuedModel: "claude:sonnet",
         hitLimit: false,
       });
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
-      expect(await queueLength(t, taskId)).toBe(1);
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("starting");
+      expect(await queueLength(t, chatId)).toBe(1);
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
     },
     TIMEOUT_MS,
   );
@@ -268,20 +277,20 @@ describe("a quiet drain", () => {
   test(
     "holds a same-provider message after a usage limit and books the resume",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, sessionId, chatId } = await fixture({
         sandboxStatus: "closed",
         queuedModel: "claude:sonnet",
         hitLimit: true,
       });
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
-      expect(await queueLength(t, taskId)).toBe(1);
+      expect(await queueLength(t, chatId)).toBe(1);
       // Held, so the sandbox is not woken just to sit idle until the reset.
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("closed");
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("closed");
       const resumes = await scheduledResumes(t);
       expect(resumes).toHaveLength(1);
       expect(resumes[0]?.scheduledTime).toBeGreaterThan(
@@ -294,19 +303,19 @@ describe("a quiet drain", () => {
   test(
     "does not hold a message moved to another provider",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, sessionId, chatId } = await fixture({
         sandboxStatus: "closed",
         queuedModel: "codex:gpt-5.6",
         hitLimit: true,
       });
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
       // Not held: it goes on to wake the sandbox so the message can send.
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("starting");
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
       expect(await scheduledResumes(t)).toHaveLength(0);
     },
     TIMEOUT_MS,
@@ -315,7 +324,7 @@ describe("a quiet drain", () => {
   test(
     "does not hold a message on another account of the same provider",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, sessionId, chatId } = await fixture({
         sandboxStatus: "closed",
         queuedModel: "claude:sonnet",
         hitLimit: true,
@@ -323,12 +332,63 @@ describe("a quiet drain", () => {
       });
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("starting");
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
       expect(await scheduledResumes(t)).toHaveLength(0);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("a Stop", () => {
+  // Keeps the scheduled sandbox start from firing after the test finishes.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test(
+    "holds what was queued before it until the user presses Steer",
+    async () => {
+      const { t, sessionId, chatId } = await fixture({
+        sandboxStatus: "closed",
+        queuedModel: "claude:sonnet",
+        hitLimit: false,
+      });
+      const stoppedAt = Date.now() + 1;
+      await t.run((ctx) => ctx.db.patch(chatId, { queueHeldAt: stoppedAt }));
+
+      await t.mutation(internal._queues.helpers.drainQueueQuietly, {
+        parentId: chatId,
+      });
+
+      // Held: the sandbox is not even woken for it.
+      expect(await queueLength(t, chatId)).toBe(1);
+      let session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("closed");
+
+      const queuedId = await t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
+          .first();
+        return row?._id;
+      });
+      if (queuedId === undefined) throw new Error("queued message missing");
+      await t
+        .withIdentity({ subject: "clerk|runner" })
+        .mutation(api.queuedMessages.steer, { id: queuedId });
+
+      // Released: the drain goes on to wake the sandbox so it can send.
+      const chat = await t.run((ctx) => ctx.db.get(chatId));
+      expect(chat?.queueHeldAt).toBeUndefined();
+      session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
     },
     TIMEOUT_MS,
   );

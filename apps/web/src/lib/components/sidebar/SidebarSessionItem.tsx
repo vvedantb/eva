@@ -12,7 +12,13 @@ import {
   MarqueeOnHover,
   UnreadDot,
 } from "@vvedantb/ui";
-import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
+import {
+  IconGitFork,
+  IconGitPullRequest,
+  IconPencil,
+} from "@tabler/icons-react";
+import { prStateLabel, type PrState } from "@eva/shared";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
@@ -29,42 +35,15 @@ import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionP
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SESSIONS_LEADING_SLOT,
+  SESSIONS_ROW_X,
+  SESSIONS_TEXT_INDENT,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
-export type SessionLinkedFrom = RepoPathParts;
+type SessionLinkedFrom = RepoPathParts;
 
-function prStateLabel(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "Open";
-    case "merged":
-      return "Merged";
-    case "closed":
-      return "Closed";
-    case "draft":
-      return "Draft";
-    default:
-      return "PR";
-  }
-}
-
-function prStateIconColor(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
-}
 
 interface SidebarSessionItemProps {
   href: string;
@@ -84,10 +63,12 @@ interface SidebarSessionItemProps {
   isAwaitingAnswer?: boolean;
   /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
+  /** The user has an unsent message in this session; a pencil in the unread slot. */
+  hasDraft?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /** Branch chosen at session creation, shown in the hover card. */
   baseBranch?: string;
   /** Multi-repo session: how many repos are cloned alongside the primary. */
@@ -147,14 +128,14 @@ function SessionPrIcon({
   prState,
 }: {
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
 }) {
   const simpleView = useSimpleView();
   if (simpleView || !prUrl) return null;
   return (
     <IconGitPullRequest
       size={12}
-      className={cn("shrink-0", prStateIconColor(prState))}
+      className={cn("shrink-0", prStateIconClass(prState))}
       title={`PR: ${prStateLabel(prState)}`}
     />
   );
@@ -166,7 +147,7 @@ function SessionPrIcon({
  * already implies an active sandbox). Otherwise the sandbox status color dot
  * (simple view: error only).
  */
-export function SessionStatusLeading({
+function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
@@ -179,23 +160,20 @@ export function SessionStatusLeading({
 }) {
   if (isAwaitingAnswer) {
     return (
-      <span
-        className="flex shrink-0 items-center"
-        title="Waiting for your answer"
-      >
+      <span className={SESSIONS_LEADING_SLOT} title="Waiting for your answer">
         <AwaitingAnswerMark />
       </span>
     );
   }
   if (isExecuting) {
     return (
-      <span className="flex shrink-0 items-center" title="Working">
+      <span className={SESSIONS_LEADING_SLOT} title="Working">
         <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
       </span>
     );
   }
   return (
-    <span className="flex shrink-0 items-center" title={label}>
+    <span className={SESSIONS_LEADING_SLOT} title={label}>
       <span className={cn("size-2 shrink-0 rounded-full", dotClassName)} />
     </span>
   );
@@ -230,6 +208,7 @@ export function SidebarSessionItem({
   isExecuting = false,
   isAwaitingAnswer = false,
   hasUnread = false,
+  hasDraft = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -265,7 +244,19 @@ export function SidebarSessionItem({
     isExecuting ||
     showsSandboxStatusDot(displayStatus, simpleView);
   // Executing wins: the leading "Working" grid says more than the dot would.
-  const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
+  // One trailing mark: unread wins over the unsent-message pencil.
+  const showUnread = hasUnread && !isExecuting;
+  const trailingMark =
+    hasDraft && !showUnread ? (
+      <IconPencil
+        size={12}
+        className="shrink-0 text-muted-foreground"
+        title="Unsent message"
+        aria-label="Unsent message"
+      />
+    ) : (
+      <UnreadDot show={showUnread} />
+    );
   const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
@@ -285,10 +276,13 @@ export function SidebarSessionItem({
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className={cn(
+        "block rounded-menu-item py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+        SESSIONS_ROW_X,
+      )}
     >
       {isFolder ? (
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
             {appMark}
@@ -296,12 +290,12 @@ export function SidebarSessionItem({
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
-            {unreadDot}
+            {trailingMark}
           </div>
           <div
             className={cn(
               "flex min-w-0 items-center gap-2 opacity-60",
-              showLeading && "pl-4",
+              showLeading && SESSIONS_TEXT_INDENT,
             )}
           >
             <div className="min-w-0 flex-1">
@@ -334,7 +328,7 @@ export function SidebarSessionItem({
             at={activityAt}
             className="shrink-0 text-2xs text-muted-foreground"
           />
-          {unreadDot}
+          {trailingMark}
         </div>
       )}
     </DynamicLink>

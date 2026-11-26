@@ -32,7 +32,12 @@ export function PreviewPathInput({
   );
   const [focused, setFocused] = useState(false);
   const [listDismissed, setListDismissed] = useState(false);
-  const matches = filterPreviewPathHistory(history, value);
+  // Like a browser address bar: focus lists the full history; typing filters it.
+  const [typedSinceFocus, setTypedSinceFocus] = useState(false);
+  const matches = filterPreviewPathHistory(
+    history,
+    typedSinceFocus ? value : "",
+  );
   const matchesKey = matches.join("\0");
   const [prevMatchesKey, setPrevMatchesKey] = useState(matchesKey);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -115,12 +120,15 @@ export function PreviewPathInput({
           value={value}
           onChange={(event) => {
             onValueChange(event.target.value);
+            setTypedSinceFocus(true);
             setListDismissed(false);
           }}
           onFocus={() => {
             setFocused(true);
+            setTypedSinceFocus(false);
             setListDismissed(false);
           }}
+          onClick={() => setListDismissed(false)}
           onBlur={(event) => {
             const next = event.relatedTarget;
             if (

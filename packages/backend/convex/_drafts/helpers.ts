@@ -2,7 +2,7 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from "convex/server";
-import { hasRepoAccess } from "../functions";
+import { getSessionWithAccess, hasRepoAccess } from "../functions";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer } from "convex/values";
 import { type draftTarget } from "../validators";
@@ -33,36 +33,6 @@ async function findTaskCommentDraft(
       (d) => d.kind === "taskComment" && d.parentCommentId === parentCommentId,
     ) ?? null
   );
-}
-
-/** Finds a user's draft row for task sandbox chat, matched by taskId. */
-async function findTaskChatDraft(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"drafts"> | null> {
-  const rows = await db
-    .query("drafts")
-    .withIndex("by_user_and_task", (q) =>
-      q.eq("userId", userId).eq("taskId", taskId),
-    )
-    .collect();
-  return rows.find((d) => d.kind === "taskChat") ?? null;
-}
-
-/** Finds a user's draft row for project sandbox chat, matched by projectId. */
-async function findProjectChatDraft(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  projectId: Id<"projects">,
-): Promise<Doc<"drafts"> | null> {
-  const rows = await db
-    .query("drafts")
-    .withIndex("by_user_and_project", (q) =>
-      q.eq("userId", userId).eq("projectId", projectId),
-    )
-    .collect();
-  return rows.find((d) => d.kind === "projectChat") ?? null;
 }
 
 /**
@@ -106,52 +76,8 @@ export async function resolveTarget(
     };
   }
 
-  if (target.kind === "taskChat") {
-    const task = await db.get(target.taskId);
-    if (!task) throw new Error("Task not found");
-
-    let repoId: Id<"githubRepos">;
-    if (task.repoId) {
-      repoId = task.repoId;
-    } else if (task.projectId) {
-      const project = await db.get(task.projectId);
-      if (!project) throw new Error("Project not found");
-      repoId = project.repoId;
-    } else {
-      throw new Error("Task has no repo or project");
-    }
-
-    if (!(await hasRepoAccess(db, repoId, userId))) {
-      throw new Error("Not authorized");
-    }
-
-    const taskId = target.taskId;
-    return {
-      repoId,
-      findExisting: () => findTaskChatDraft(db, userId, taskId),
-    };
-  }
-
-  if (target.kind === "projectChat") {
-    const project = await db.get(target.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(db, project.repoId, userId))) {
-      throw new Error("Not authorized");
-    }
-    const { repoId } = project;
-    const projectId = target.projectId;
-    return {
-      repoId,
-      findExisting: () => findProjectChatDraft(db, userId, projectId),
-    };
-  }
-
   if (target.kind === "sessionChat") {
-    const session = await db.get(target.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(db, session.repoId, userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(db, target.sessionId, userId);
     const { repoId } = session;
     const chatId = target.chatId;
     return {

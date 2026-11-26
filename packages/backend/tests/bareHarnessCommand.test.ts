@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { bareHarnessCommandPrompt } from "../convex/_mentions/bareHarnessCommand";
 import { agentGoalPatch } from "../convex/_chat/agentGoal";
 

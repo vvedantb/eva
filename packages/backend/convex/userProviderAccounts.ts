@@ -10,8 +10,11 @@ import { aiProviderValidator } from "./validators";
 import {
   listAccountsFor,
   listSelectableAccountsFor,
+  withProjectAccountFirst,
 } from "./_userProviderAccounts/listing";
+import { sessionProject } from "./_projects/runSettings";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 const credentialValidator = v.object({ key: v.string(), value: v.string() });
 
@@ -56,8 +59,9 @@ export const listSelectable = authQuery({
 
 /**
  * Lists the accounts the task owner can run on (masked) for the model picker.
- * Teammates with task access can see which accounts power the sticky
- * credential; only the owner can change the selection.
+ * The task chat runs on the owner's credentials whoever sends the turn, so
+ * collaborators pick from the owner's accounts. A project's child task lists
+ * its project's account first (`withProjectAccountFirst`).
  */
 export const listForTaskOwner = authQuery({
   args: { taskId: v.id("agentTasks") },
@@ -67,7 +71,38 @@ export const listForTaskOwner = authQuery({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       return [];
     }
-    return await listSelectableAccountsFor(ctx, task.createdBy);
+    const project =
+      task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
+    return await withProjectAccountFirst(
+      ctx,
+      await listSelectableAccountsFor(ctx, task.createdBy),
+      project,
+    );
+  },
+});
+
+/**
+ * Lists the accounts the project owner can run on (masked) for the project
+ * chat's model picker. The chat runs on the owner's credentials whoever sends
+ * the turn, so collaborators pick from the owner's accounts; the project's
+ * own account comes first.
+ */
+export const listForProjectOwner = authQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.array(accountListItemValidator),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (
+      !project ||
+      !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))
+    ) {
+      return [];
+    }
+    return await withProjectAccountFirst(
+      ctx,
+      await listSelectableAccountsFor(ctx, project.userId),
+      project,
+    );
   },
 });
 
@@ -75,6 +110,8 @@ export const listForTaskOwner = authQuery({
  * Lists the accounts the session owner can run on (masked) for the model
  * picker. A session runs on its owner's credentials whoever sends the turn, so
  * collaborators see — and pick from — the owner's accounts, never their own.
+ * A project's coordinator or child task session lists the project's account
+ * first (`withProjectAccountFirst`).
  */
 export const listForSessionOwner = authQuery({
   args: { sessionId: v.id("sessions") },
@@ -87,9 +124,10 @@ export const listForSessionOwner = authQuery({
     ) {
       return [];
     }
-    return await listSelectableAccountsFor(
+    return await withProjectAccountFirst(
       ctx,
-      session.createdBy ?? session.userId,
+      await listSelectableAccountsFor(ctx, session.createdBy ?? session.userId),
+      await sessionProject(ctx.db, session),
     );
   },
 });
@@ -249,6 +287,7 @@ export const remove = authMutation({
   args: { accountId: v.id("userProviderAccounts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.accountId);
     if (!doc || doc.userId !== ctx.userId) {
       throw new Error("Account not found");

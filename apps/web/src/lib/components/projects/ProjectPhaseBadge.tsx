@@ -1,140 +1,135 @@
 "use client";
 
-import { AnimatePresence, m } from "motion/react";
-import { Badge, tokenTransition } from "@vvedantb/ui";
-import type { Doc } from "@eva/backend";
+import { Badge } from "@vvedantb/ui";
+import type {
+  ProjectStage,
+  ProjectTaskDisplayStatus,
+} from "@eva/shared/projectStatus";
 import {
-  IconNotes,
-  IconCheck,
+  PROJECT_STAGE_LABELS,
+  PROJECT_TASK_DISPLAY_STATUS_LABELS,
+} from "@eva/shared/projectView";
+import {
+  IconAlertTriangle,
+  IconCircle,
   IconClock,
-  IconClipboardCheck,
-  IconEye,
   IconCircleCheck,
   IconCircleX,
+  IconInbox,
 } from "@tabler/icons-react";
 
-/** Single source of truth: matches Convex `projects.phase`. */
-export type ProjectPhase = Doc<"projects">["phase"];
-
-export const PROJECT_PHASES: ProjectPhase[] = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
-
-/** Phases a user can manually switch to via the status dropdown.
- *  Excludes draft/finalized — those are driven by the planning/interview flow. */
-export const ACTIVE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
-
-/** Phases where the autonomous "Build Project" workflow can be started. */
-export const BUILDABLE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-];
-
-export const phaseConfig: Record<
-  ProjectPhase,
-  {
-    bg: string;
-    cardBg: string;
-    bar: string;
-    text: string;
-    label: string;
-    icon: typeof IconNotes;
-  }
-> = {
-  draft: {
-    bg: "bg-secondary",
-    cardBg: "bg-secondary/40",
-    bar: "bg-muted-foreground/50",
-    text: "text-muted-foreground",
-    label: "Draft",
-    icon: IconNotes,
-  },
-  finalized: {
-    bg: "bg-blue-500/10",
-    cardBg: "bg-blue-500/5",
-    bar: "bg-blue-500",
-    text: "text-blue-600 dark:text-blue-400",
-    label: "Finalized",
-    icon: IconCheck,
-  },
-  in_progress: {
-    bg: "bg-status-progress-bg",
-    cardBg: "bg-status-progress-subtle/40",
-    bar: "bg-status-progress-bar",
-    text: "text-status-progress",
-    label: "In Progress",
-    icon: IconClock,
-  },
-  business_review: {
-    bg: "bg-status-business-review-bg",
-    cardBg: "bg-status-business-review-subtle/40",
-    bar: "bg-status-business-review-bar",
-    text: "text-status-business-review",
-    label: "Business Review",
-    icon: IconClipboardCheck,
-  },
-  code_review: {
-    bg: "bg-status-code-review-bg",
-    cardBg: "bg-status-code-review-subtle/40",
-    bar: "bg-status-code-review-bar",
-    text: "text-status-code-review",
-    label: "Code Review",
-    icon: IconEye,
-  },
-  completed: {
-    bg: "bg-status-done-bg",
-    cardBg: "bg-status-done-subtle/40",
-    bar: "bg-status-done-bar",
-    text: "text-status-done",
-    label: "Merged",
-    icon: IconCircleCheck,
-  },
-  cancelled: {
-    bg: "bg-status-cancelled-bg",
-    cardBg: "bg-status-cancelled-subtle/40",
-    bar: "bg-status-cancelled-bar",
-    text: "text-status-cancelled",
-    label: "Cancelled",
-    icon: IconCircleX,
-  },
-};
-
-interface ProjectPhaseBadgeProps {
-  phase: ProjectPhase;
+export interface PhaseStyle {
+  bg: string;
+  cardBg: string;
+  bar: string;
+  /** CSS colour of `bar`, for the timeline's Gantt status. */
+  barColor: string;
+  text: string;
+  label: string;
+  icon: typeof IconCircle;
 }
 
-export function ProjectPhaseBadge({ phase }: ProjectPhaseBadgeProps) {
-  const config = phaseConfig[phase];
-  const Icon = config.icon;
+/** To Do: matches the quick-task To Do column. */
+const todoStyle: PhaseStyle = {
+  bg: "bg-secondary",
+  cardBg: "bg-secondary/40",
+  bar: "bg-foreground/50",
+  barColor: "color-mix(in oklab, var(--foreground) 50%, transparent)",
+  text: "text-muted-foreground",
+  label: PROJECT_STAGE_LABELS.todo,
+  icon: IconCircle,
+};
 
+const inProgressStyle: PhaseStyle = {
+  bg: "bg-status-progress-bg",
+  cardBg: "bg-status-progress-subtle/40",
+  bar: "bg-status-progress-bar",
+  barColor: "var(--status-progress-bar)",
+  text: "text-status-progress",
+  label: PROJECT_STAGE_LABELS.in_progress,
+  icon: IconClock,
+};
+
+/** The code-review purple, for Triage. */
+const triageStyle: PhaseStyle = {
+  bg: "bg-status-code-review-bg",
+  cardBg: "bg-status-code-review-subtle/40",
+  bar: "bg-status-code-review-bar",
+  barColor: "var(--status-code-review-bar)",
+  text: "text-status-code-review",
+  label: PROJECT_TASK_DISPLAY_STATUS_LABELS.triage,
+  icon: IconInbox,
+};
+
+const doneStyle: PhaseStyle = {
+  bg: "bg-status-done-bg",
+  cardBg: "bg-status-done-subtle/40",
+  bar: "bg-status-done-bar",
+  barColor: "var(--status-done-bar)",
+  text: "text-status-done",
+  label: PROJECT_STAGE_LABELS.done,
+  icon: IconCircleCheck,
+};
+
+const cancelledStyle: PhaseStyle = {
+  bg: "bg-status-cancelled-bg",
+  cardBg: "bg-status-cancelled-subtle/40",
+  bar: "bg-status-cancelled-bar",
+  barColor: "var(--status-cancelled-bar)",
+  text: "text-status-cancelled",
+  label: PROJECT_TASK_DISPLAY_STATUS_LABELS.archived,
+  icon: IconCircleX,
+};
+
+/**
+ * A child task's display status (`projectTaskDisplayStatus`): the task list
+ * groups and rows, and a project's task counts and progress bar. Triage
+ * takes the code-review purple, Working looks as In Progress, Blocked as the
+ * needs-you warning, Idle as To Do, Archived as cancelled.
+ */
+export const projectTaskDisplayStatusConfig: Record<
+  ProjectTaskDisplayStatus,
+  PhaseStyle
+> = {
+  triage: triageStyle,
+  working: {
+    ...inProgressStyle,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,
+  },
+  blocked: {
+    bg: "bg-warning-bg",
+    cardBg: "bg-warning/5",
+    bar: "bg-warning",
+    barColor: "var(--warning)",
+    text: "text-warning",
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.blocked,
+    icon: IconAlertTriangle,
+  },
+  idle: {
+    ...todoStyle,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.idle,
+  },
+  archived: cancelledStyle,
+};
+
+/**
+ * A project's derived stage (`projectStatus`): kanban columns, list
+ * sections, badges. Done looks as Completed.
+ */
+export const projectStageConfig: Record<ProjectStage, PhaseStyle> = {
+  todo: todoStyle,
+  in_progress: inProgressStyle,
+  done: doneStyle,
+};
+
+/** The project's derived stage, in the phase badge's look. */
+export function ProjectStageBadge({ stage }: { stage: ProjectStage }) {
+  const config = projectStageConfig[stage];
+  const Icon = config.icon;
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <m.span
-        key={phase}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={tokenTransition.fast}
-        className="inline-flex"
-      >
-        <Badge className={`${config.text} ${config.bg} border-transparent`}>
-          <Icon size={14} className={`mr-1 ${config.text}`} />
-          {config.label}
-        </Badge>
-      </m.span>
-    </AnimatePresence>
+    <Badge className={`${config.text} ${config.bg} border-transparent`}>
+      <Icon size={14} className={`mr-1 ${config.text}`} />
+      {config.label}
+    </Badge>
   );
 }

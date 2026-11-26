@@ -11,10 +11,8 @@ import {
   authQuery,
 } from "../functions";
 import { previewToolCallFields } from "../validators";
-import {
-  chatEntityKindValidator,
-  resolveChatParent,
-} from "../_chat/chatParent";
+import { resolveChatParent } from "../_chat/chatParent";
+import { chatEntityKindValidator } from "../_validators/enums";
 import { listSessionChats } from "../_sessionChats/helpers";
 
 /**

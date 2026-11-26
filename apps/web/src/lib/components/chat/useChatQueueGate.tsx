@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { queuePanelLabel } from "@eva/shared";
 import { useMutation } from "convex/react";
 import {
   api,
@@ -13,12 +14,15 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import { formatModelDisplayLabel, getProviderLabel } from "@vvedantb/ui";
+import {
+  formatModelDisplayLabel,
+  getProviderLabel,
+  ConfirmDialog,
+} from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
-import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
+import { formatResetDistanceMs } from "@eva/shared/usageLimits";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
-import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
+import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { ChatBodyMessage, ChatBodyQueuedMessage } from "./chatBodyUtils";
 
@@ -59,7 +63,8 @@ export function useChatQueueGate({
   setModel,
   setAccount,
 }: {
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+  /** Undefined for a chat not created yet: nothing is queued on it. */
+  parentId: Id<"sessionChats"> | undefined;
   messages: ReadonlyArray<ChatBodyMessage>;
   queuedMessages: ReadonlyArray<ChatBodyQueuedMessage>;
   model: AIModel;
@@ -94,14 +99,16 @@ export function useChatQueueGate({
     heldCount > 0 && !isHeldByUsageLimit(hold, nextModel, nextAccountId);
 
   /** The queue panel's heading: why the queued messages have not sent. */
-  const queueLabel = (isExecuting: boolean): string | undefined => {
-    if (isExecuting || queuedMessages.length === 0) return undefined;
-    if (hold !== null && heldCount > 0) {
-      return `Queued · sends in ${formatResetDistanceMs(hold.resumeAt - now)}`;
-    }
-    if (!isSandboxActive) return "Queued · sends when Eva wakes up";
-    return undefined;
-  };
+  const queueLabel = (isExecuting: boolean): string | undefined =>
+    queuePanelLabel({
+      isExecuting,
+      queuedCount: queuedMessages.length,
+      isSandboxActive,
+      heldResetIn:
+        hold !== null && heldCount > 0
+          ? formatResetDistanceMs(hold.resumeAt - now)
+          : undefined,
+    });
 
   const guardedSetModel = (next: AIModel) => {
     if (releasesQueue(next, accountId)) {
@@ -127,15 +134,18 @@ export function useChatQueueGate({
     // cannot send on the exhausted credential's warm daemon.
     const ready =
       next.kind === "account" ? setAccount(next.accountId) : Promise.resolve();
+    const queueParentId = parentId;
     // Cleanup is duplicated across `then`/`catch` rather than written once in a
     // `finally`: React Compiler cannot compile a `finally`.
     void catchMutationError(
       ready.then(() =>
-        switchQueuedCredential({
-          parentId,
-          model: nextModel,
-          providerAccountId: resolveAccountId(nextAccountId),
-        }),
+        queueParentId === undefined
+          ? null
+          : switchQueuedCredential({
+              parentId: queueParentId,
+              model: nextModel,
+              providerAccountId: resolveAccountId(nextAccountId),
+            }),
       ),
       "Couldn't send the queued messages",
       "chat-queue-switch-credential",
@@ -165,6 +175,7 @@ export function useChatQueueGate({
           );
   const switchDialog = (
     <ConfirmDialog
+      size="md"
       open={pending !== null}
       onOpenChange={(open) => {
         if (!open) setPending(null);
@@ -175,7 +186,7 @@ export function useChatQueueGate({
       onConfirm={() => {
         if (pending !== null) confirmSwitch(pending);
       }}
-      isLoading={isSwitching}
+      pending={isSwitching}
     />
   );
 

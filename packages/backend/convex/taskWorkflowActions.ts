@@ -1,7 +1,7 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import type { GenericActionCtx } from "convex/server";
+import type { FunctionReturnType, GenericActionCtx } from "convex/server";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
@@ -14,6 +14,7 @@ import {
   syncPullRequestDraftState,
 } from "./_github/pullRequestDraftState";
 import { taskPullRequestLabels } from "./_github/prLabels";
+import { isBranchNotAheadError } from "./_github/prErrors";
 import {
   createPullRequestWithGitHub,
   getPullRequest,
@@ -35,6 +36,7 @@ import {
   type DeploymentStatus,
 } from "./_taskWorkflow/deploymentHelpers";
 import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
+import { errorMessage } from "@vvedantb/server";
 
 // Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
@@ -78,7 +80,7 @@ async function withVisiblePrFailure<T>(
   try {
     return await attempt();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.error(`[pr] ${label} failed: ${message}`);
     throw new ConvexError(message);
   }
@@ -102,50 +104,89 @@ export const createTaskPr = action({
         { taskId: args.taskId },
       );
       await getActionRepoWithAccess(ctx, data.repoId);
-
-      if (data.existingPrUrl) {
-        return { url: data.existingPrUrl };
-      }
-
-      const body = buildTaskPullRequestBody({
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        taskId: args.taskId,
-        projectId: data.projectId,
-        taskDescription: data.taskDescription,
-        rootDirectory: data.rootDirectory,
-        changeRequests: data.changeRequests,
-      });
-
-      const labels = taskPullRequestLabels({
-        rootDirectory: data.rootDirectory,
-        isQuickTask: data.isQuickTask,
-      });
-
-      const prUrl: string = await ctx.runAction(
-        internal.taskWorkflowActions.createPullRequest,
-        {
-          installationId: data.installationId,
-          repoOwner: data.repoOwner,
-          repoName: data.repoName,
-          branchName: data.branchName,
-          baseBranch: data.baseBranch,
-          title: data.taskTitle,
-          body,
-          labels,
-          draft: data.isQuickTask,
-        },
-      );
-
-      await ctx.runMutation(internal.taskWorkflow.recordManualTaskPr, {
-        taskId: args.taskId,
-        runId: data.latestRunId ?? undefined,
-        prUrl,
-        draft: data.isQuickTask,
-      });
-
-      return { url: prUrl };
+      return {
+        url: await openTaskPr(ctx, args.taskId, data, data.isQuickTask),
+      };
     }),
+});
+
+type TaskPrCreationData = FunctionReturnType<
+  typeof internal.taskWorkflow.getTaskPrCreationData
+>;
+
+/**
+ * Opens and records the task's PR, or returns the live one already on the
+ * task branch. The one path for the "Create PR" button and the task chat.
+ */
+async function openTaskPr(
+  ctx: GenericActionCtx<DataModel>,
+  taskId: Id<"agentTasks">,
+  data: TaskPrCreationData,
+  draft: boolean,
+): Promise<string> {
+  if (data.existingPrUrl) return data.existingPrUrl;
+
+  const prUrl = await createPullRequestWithGitHub({
+    installationId: data.installationId,
+    repoOwner: data.repoOwner,
+    repoName: data.repoName,
+    branchName: data.branchName,
+    baseBranch: data.baseBranch,
+    title: data.taskTitle,
+    body: buildTaskPullRequestBody({
+      repoOwner: data.repoOwner,
+      repoName: data.repoName,
+      taskId,
+      projectId: data.projectId,
+      taskDescription: data.taskDescription,
+      rootDirectory: data.rootDirectory,
+      changeRequests: data.changeRequests,
+    }),
+    labels: taskPullRequestLabels({
+      rootDirectory: data.rootDirectory,
+      isQuickTask: data.isQuickTask,
+    }),
+    draft,
+  });
+
+  await ctx.runMutation(internal.taskWorkflow.recordManualTaskPr, {
+    taskId,
+    runId: data.latestRunId ?? undefined,
+    prUrl,
+    draft,
+  });
+  return prUrl;
+}
+
+/**
+ * Opens a task's PR (a quick task's or a project child task's) after its
+ * sandbox chat pushed commits to the task branch. Without it, a task worked on only through chat never got a PR: only
+ * a task run opened one. Skips a cancelled task (its PRs stay closed) and a
+ * branch that already has a live PR. The PR is ready in code_review and draft
+ * otherwise, the same mapping the status-change sync applies.
+ */
+export const ensureTaskChatPr = internalAction({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const data = await ctx.runQuery(
+      internal.taskWorkflow.getTaskPrCreationData,
+      { taskId: args.taskId },
+    );
+    if (data.taskStatus === "cancelled") return null;
+    try {
+      await openTaskPr(
+        ctx,
+        args.taskId,
+        data,
+        data.taskStatus !== "code_review",
+      );
+    } catch (error) {
+      // A turn that left the branch level with base (a revert) has no diff.
+      if (!isBranchNotAheadError(error)) throw error;
+    }
+    return null;
+  },
 });
 
 /** Manually creates the PR for a project branch — used when the workflow's
@@ -348,7 +389,7 @@ export const updatePrTitle = internalAction({
       await patchPullRequest(octokit, target, { title: `Eva: ${args.title}` });
     } catch (error) {
       console.error(
-        `[github] Failed to update PR title for ${args.prUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to update PR title for ${args.prUrl}: ${errorMessage(error)}`,
       );
     }
     return null;
@@ -381,7 +422,7 @@ export const convertPrToDraft = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to convert PR to draft: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to convert PR to draft: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -428,7 +469,7 @@ export const reopenPullRequest = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to reopen PR: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to reopen PR: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -462,7 +503,7 @@ export const closePullRequest = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to close PR: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to close PR: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -498,7 +539,7 @@ export const markPrReadyForReview = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to mark PR ready: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to mark PR ready: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -607,7 +648,7 @@ async function runDeploymentPollAttempt(
     if (shouldReschedule) await maybeReschedule();
   } catch (error) {
     console.error(
-      `${opts.logPrefix} Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${error instanceof Error ? error.message : String(error)}`,
+      `${opts.logPrefix} Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${errorMessage(error)}`,
     );
     await maybeReschedule();
   }

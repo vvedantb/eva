@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Button,
   Spinner,
@@ -55,15 +56,15 @@ export function ShortcutsSettingsClient() {
   const setOverride = useMutation(
     api.auth.setShortcutOverride,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getShortcutOverrides, {});
-    if (current === undefined) return;
-    const next = { ...current };
-    if (args.hotkey === null) {
-      delete next[args.id];
-    } else {
-      next[args.id] = args.hotkey;
-    }
-    localStore.setQuery(api.auth.getShortcutOverrides, {}, next);
+    patchLoadedQuery(localStore, api.auth.getShortcutOverrides, {}, (cur) => {
+      const next = { ...cur };
+      if (args.hotkey === null) {
+        delete next[args.id];
+      } else {
+        next[args.id] = args.hotkey;
+      }
+      return next;
+    });
   });
 
   const resetAll = useMutation(
@@ -99,11 +100,6 @@ export function ShortcutsSettingsClient() {
         <SettingsSection
           key={section.group}
           title={section.group}
-          description={
-            index === 0
-              ? "Click a combo, then press the keys you want."
-              : undefined
-          }
           bodyVariant="list"
           action={
             index === 0 ? (
@@ -143,7 +139,6 @@ export function ShortcutsSettingsClient() {
 
       <SettingsSection
         title="Editing keys"
-        description="Handled by whatever is focused, so they cannot be rebound."
         bodyVariant="list"
       >
         {EDITING_KEYS.map((entry) => (

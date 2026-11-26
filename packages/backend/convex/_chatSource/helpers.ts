@@ -2,8 +2,22 @@ import { v, type Infer } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { hasRepoAccess, hasTaskAccess } from "../functions";
+import {
+  hasRepoAccess,
+  hasTaskAccess,
+  listProjectTasksForUser,
+} from "../functions";
 import { isEntityDeleted } from "../numId";
+import {
+  sessionOwnerEntityId,
+  sessionOwner,
+} from "../_sessions/owner";
+import {
+  chatEntityKindValidator,
+  chatRefValidator,
+  type ChatEntityKind,
+  type ChatRef,
+} from "../validators";
 
 /**
  * The chat (session / quick task / project) a doc or artifact was created
@@ -11,21 +25,13 @@ import { isEntityDeleted } from "../numId";
  * caller can see it, and resolve it to a display summary for lists.
  */
 
-export const chatSourceArgValidator = v.union(
-  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
-  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
-  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
-);
-export type ChatSourceArg = Infer<typeof chatSourceArgValidator>;
+export const chatSourceArgValidator = chatRefValidator;
+export type ChatSourceArg = ChatRef;
 
 export const chatSourceSummaryValidator = v.union(
   v.null(),
   v.object({
-    kind: v.union(
-      v.literal("session"),
-      v.literal("task"),
-      v.literal("project"),
-    ),
+    kind: chatEntityKindValidator,
     id: v.string(),
     title: v.string(),
     numId: v.optional(v.number()),
@@ -37,7 +43,7 @@ export const chatSourceSummaryValidator = v.union(
 type ChatSourceSummary = Infer<typeof chatSourceSummaryValidator>;
 
 export type ChatSourceStoredFields = {
-  sourceKind?: "session" | "task" | "project";
+  sourceKind?: ChatEntityKind;
   sourceSessionId?: Id<"sessions">;
   sourceTaskId?: Id<"agentTasks">;
   sourceProjectId?: Id<"projects">;
@@ -56,15 +62,24 @@ export async function chatSourceFieldsForEntityId(
   const sessionChatId = db.normalizeId("sessionChats", entityId);
   if (sessionChatId) {
     const chat = await db.get(sessionChatId);
-    return chat
-      ? chatSourceFieldsForEntityId(db, String(chat.sessionId))
-      : null;
+    const session = chat ? await db.get(chat.sessionId) : null;
+    if (!chat || !session) return null;
+    // An owned session's chat files under its owner (`sessionOwner`; a project
+    // task's own chat under that task).
+    return chatSourceFieldsForEntityId(
+      db,
+      String(sessionOwnerEntityId(session) ?? session._id),
+    );
   }
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) {
-    return (await db.get(sessionId))
-      ? { sourceKind: "session", sourceSessionId: sessionId }
-      : null;
+    const session = await db.get(sessionId);
+    if (!session) return null;
+    // A task's or project's session files its docs, artifacts and Log under
+    // its owner.
+    const ownerId = sessionOwnerEntityId(session);
+    if (ownerId) return chatSourceFieldsForEntityId(db, ownerId);
+    return { sourceKind: "session", sourceSessionId: sessionId };
   }
   const taskId = db.normalizeId("agentTasks", entityId);
   if (taskId) {
@@ -79,6 +94,24 @@ export async function chatSourceFieldsForEntityId(
       : null;
   }
   return null;
+}
+
+/** The chat's repo; a quick task without one falls back to its project's. */
+export async function repoIdForSource(
+  db: GenericDatabaseReader<DataModel>,
+  source: ChatSourceStoredFields,
+): Promise<Id<"githubRepos"> | undefined> {
+  if (source.sourceSessionId) {
+    return (await db.get(source.sourceSessionId))?.repoId;
+  }
+  if (source.sourceProjectId) {
+    return (await db.get(source.sourceProjectId))?.repoId;
+  }
+  if (!source.sourceTaskId) return undefined;
+  const task = await db.get(source.sourceTaskId);
+  if (!task) return undefined;
+  if (task.repoId) return task.repoId;
+  return task.projectId ? (await db.get(task.projectId))?.repoId : undefined;
 }
 
 /** Inverse of the stored fields: the chat arg a row belongs to. */
@@ -119,6 +152,10 @@ export async function chatSourceFieldsFromArg(
     if (!session) return {};
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw denied();
+    }
+    const owner = sessionOwner(session);
+    if (owner.kind !== "standalone") {
+      return chatSourceFieldsFromArg(ctx, owner, noun);
     }
     return { sourceKind: "session", sourceSessionId: sessionId };
   }
@@ -175,11 +212,11 @@ async function repoFromCache(
 }
 
 function summarise(
-  kind: "session" | "task" | "project",
-  entity: { _id: string; title: string; numId?: number; deletedAt?: number },
+  kind: ChatEntityKind,
+  entity: { _id: string; title: string; numId?: number },
   repo: Doc<"githubRepos"> | null,
 ): ChatSourceSummary {
-  if (isEntityDeleted(entity) || repo === null) return null;
+  if (repo === null) return null;
   return {
     kind,
     id: String(entity._id),
@@ -199,7 +236,8 @@ async function summariseSession(
   cache: RepoCache,
 ): Promise<ChatSourceSummary> {
   const session = await ctx.db.get(sessionId);
-  if (!session) return null;
+  // An archived task or project still links; only a deleted session hides.
+  if (!session || isEntityDeleted(session)) return null;
   return summarise(
     "session",
     session,
@@ -246,6 +284,8 @@ export async function resolveChatSource(
   return null;
 }
 
+type ChatSourceTable = "docs" | "artifacts" | "chatLogEntries";
+
 /** Rows of `table` created from one chat, via its `by_source_*` index. */
 export function listRowsForChatSource(
   ctx: QueryCtx,
@@ -264,9 +304,18 @@ export function listRowsForChatSource(
 ): Promise<Doc<"chatLogEntries">[]>;
 export async function listRowsForChatSource(
   ctx: QueryCtx,
-  table: "docs" | "artifacts" | "chatLogEntries",
+  table: ChatSourceTable,
   source: ChatSourceArg,
-): Promise<Doc<"docs" | "artifacts" | "chatLogEntries">[]> {
+): Promise<Doc<ChatSourceTable>[]> {
+  return sourceRows(ctx, table, source);
+}
+
+/** `listRowsForChatSource` without the overloads, for callers holding any table. */
+async function sourceRows(
+  ctx: QueryCtx,
+  table: ChatSourceTable,
+  source: ChatSourceArg,
+): Promise<Doc<ChatSourceTable>[]> {
   const query = ctx.db.query(table);
   if (source.kind === "session") {
     return query
@@ -288,4 +337,49 @@ export async function listRowsForChatSource(
     )
     .order("desc")
     .collect();
+}
+
+/**
+ * Rows for a chat's Documents, Artifacts and Log panels. A session or task
+ * reads its own rows (`listRowsForChatSource`). A project rolls up: its own
+ * rows plus the rows of every child task the user can open
+ * (`listProjectTasksForUser`), newest first. Rows are read in place, never
+ * copied; a child task's row names it in `sourceTaskId`. The caller checks
+ * the user can see `source`.
+ */
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "docs",
+  source: ChatSourceArg,
+): Promise<Doc<"docs">[]>;
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "artifacts",
+  source: ChatSourceArg,
+): Promise<Doc<"artifacts">[]>;
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "chatLogEntries",
+  source: ChatSourceArg,
+): Promise<Doc<"chatLogEntries">[]>;
+export async function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: ChatSourceTable,
+  source: ChatSourceArg,
+): Promise<Doc<ChatSourceTable>[]> {
+  if (source.kind !== "project") return sourceRows(ctx, table, source);
+  const tasks = await listProjectTasksForUser(
+    ctx.db,
+    source.projectId,
+    ctx.userId,
+  );
+  const groups = await Promise.all([
+    sourceRows(ctx, table, source),
+    ...tasks
+      .filter((row) => row.canAccess)
+      .map(({ task }) =>
+        sourceRows(ctx, table, { kind: "task", taskId: task._id }),
+      ),
+  ]);
+  return groups.flat().sort((a, b) => b._creationTime - a._creationTime);
 }

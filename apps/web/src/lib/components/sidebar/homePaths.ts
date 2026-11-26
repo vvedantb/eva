@@ -1,16 +1,17 @@
 /**
  * Global routes that render the home sidebar (Codebases / Teams / Artifacts /
- * What's New). `/changelog` is the old What's New path, kept so its redirect
+ * What's New / Feedback). `/changelog` is the old What's New path, kept so its redirect
  * keeps the same chrome instead of flashing the bare layout.
  *
- * Shared by `Sidebar` (which renders the panel) and the `/_global` layout
- * (which reserves the matching left padding), so the two cannot drift.
+ * Read through `routeHasSidePanel`, which both `Sidebar` (the panel) and
+ * the package `AppShell` (the matching content offset) use.
  */
 const HOME_ROOTS = [
   "/home",
   "/teams",
   "/artifacts",
   "/whats-new",
+  "/feedback",
   "/changelog",
 ] as const;
 

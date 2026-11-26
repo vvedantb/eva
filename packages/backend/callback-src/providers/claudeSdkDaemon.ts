@@ -1,17 +1,15 @@
+import { TURN_MAX_RUNTIME_ERROR } from "@eva/shared/agentTurnLimits";
 import { readdirSync } from "fs";
 import { homedir } from "os";
 import {
   CLAIM_MUTATION,
   COMPLETE_SYNTHETIC_TURN_MUTATION,
   COMPLETION_MUTATION,
-  CALLBACK_SCRIPT_FP,
-  DAEMON_OPTS_SIG,
   ENTITY_ID,
-  ENTITY_ID_FIELD,
   HARNESS_CATALOG_TOKEN,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  NO_OUTPUT_TIMEOUT_MS,
+  NO_MESSAGE_TIMEOUT_MS,
   OPEN_SYNTHETIC_TURN_MUTATION,
   UPDATE_BACKGROUND_AGENTS_MUTATION,
   WORK_DIR,
@@ -30,10 +28,10 @@ import {
   extractResultEvent,
   postClaimedTurnFailureCompletion,
   reconcileStreamingAndPersist,
+  sendTurnCompletion,
   uploadAndAttachSandboxMedia,
 } from "../runtime/completion.js";
 import {
-  runPreflightHeartbeat,
   startStreamingLoops,
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
@@ -68,30 +66,23 @@ import {
   steerClaimArgs,
 } from "../runtime/steering.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
+import { beginTurnCheckpoint } from "../runtime/turnCheckpoint.js";
 import {
-  appendTurnCheckpoint,
-  beginTurnCheckpoint,
-} from "../runtime/turnCheckpoint.js";
-import {
+  appendCurrentTurnLease,
   beginTurnOwnership,
   endTurnOwnership,
-  getCurrentTurnLease,
-  releaseTurnLeaseForCompletion,
 } from "../runtime/turnLease.js";
-import { log } from "../utils.js";
+import { isJsonObject, log, trimmedString } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
-  buildEntityMutationArgs,
-  callbackBundleWentStale,
-  claimDaemonPidfileBoot,
-  cleanOwnedDaemonMarkers,
-  readPidFromFile,
+  bootWarmDaemon,
+  callbackScriptWentStale,
+  cleanOwnedMarkers,
+  entityMutationArgs,
   sleep,
   selectClaimPollIntervalMs,
-  startDaemonDepositionFence,
 } from "../runtime/daemonProcess.js";
-import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
-import type { JsonObject, JsonValue } from "../types.js";
+import type { JsonValue } from "../types.js";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 import {
   readCancelRequested,
@@ -103,33 +94,22 @@ import {
   appendClaimedTurnCompletion,
   finishClaimedTurn,
   readClaimedTurn,
-  shouldParkClaimedTurn,
+  routeClaimedTurn,
   startClaimedTurn,
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 import { trackClaudeGoalFrame } from "./claudeGoalSync.js";
 
-/** Reads the entity daemon pidfile; NaN when missing or unreadable. */
-function readDaemonPidFile(): number {
-  return readPidFromFile(DAEMON_PID_FILE);
-}
-
 // Entity-scoped daemon marker paths (see daemonPaths.ts). Legacy session paths
 // are cleaned up on exit when this daemon is session-scoped.
 const daemonPaths = resolveDaemonPaths();
-const DAEMON_PID_FILE = daemonPaths.pid;
 
 // Exit if no new turn arrives for this long, so the sandbox can be reclaimed.
 // Kept generous so a normal work session never pays a mid-session respawn (the
 // respawn — re-upload + boot — is the ~20s "slow hi" users feel). Matches the
 // keep-warm window of comparable agents (t3code reaps at 30min).
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-// How often a daemon re-checks that it still owns the entity pidfile. Concurrent
-// launches race the multi-second gap between the launcher's alive-check and the
-// pidfile write below, so several daemons can boot for one entity (observed in
-// prod: 5 daemons flip-flopping one streaming row). Deposed daemons exit here.
-const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 // Poll interval for the claim mutation. Low enough to keep handoff→turn-start
 // latency to ~one poll; the turn itself dominates so this only trims the tail.
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
@@ -144,14 +124,14 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
 // emitting a result would never send a completion event, so the workflow's
-// awaitEvent hangs until the 2h stale-session timeout (empty "Working…" bubble).
+// awaitEvent hangs until the `RUN_TIMEOUT_MS` stale-session timeout (empty "Working…" bubble).
 // Mirrors the one-shot path (claudeSdk.ts): fail the turn if it produces no SDK
 // message for a while, or exceeds the hard runtime cap. Silence while a tool is
 // in flight (S.inFlightToolUses > 0) is exempt — the SDK emits nothing during a
 // tool run, so a long bash call would otherwise be killed as a hang (seen in
 // prod). On a fire we send a failure completion (resolving awaitEvent) and exit
 // so the next turn respawns a clean daemon rather than reusing a wedged query.
-const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
+// Silence limit: NO_MESSAGE_TIMEOUT_MS (config.ts).
 const WATCHDOG_TICK_MS = 5000;
 
 // Safety net for a cancel whose interrupted `result` never arrives (SDK
@@ -223,20 +203,6 @@ let usageRefreshInFlight = false;
 /** Resolves the message pump's idle wait; set only while it sleeps. */
 let wakeIdlePump: (() => void) | null = null;
 
-function entityMutationArgs(
-  fields: Record<string, JsonValue>,
-): Record<string, JsonValue> {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-
-/** Removes marker files only while this process still owns the pidfile. */
-function cleanOwnedMarkers(): void {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
-  });
-}
-
 function beginWatchedTurn(): void {
   turnActive = true;
   turnStartedAtMs = Date.now();
@@ -287,7 +253,7 @@ async function failTurnAndExit(error: string): Promise<never> {
   // Only unlink markers this daemon still owns — a deposed daemon that
   // deferred its fence exit through this failing turn would otherwise delete
   // the rival's pidfile and take the healthy daemon down with it.
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
 }
@@ -308,7 +274,7 @@ async function exitWithoutCompletion(reason: string): Promise<void> {
   // safe on a turn the server has already finalized.
   persistTurnWork();
   // Same ownership gate as failTurnAndExit: never delete a rival's pidfile.
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
 }
 
@@ -350,11 +316,11 @@ function startTurnWatchdog(): void {
       turnActive = false;
       if (supervisor.currentTurn?.kind === "synthetic") {
         void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       } else {
         void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
@@ -416,11 +382,6 @@ function createPromptStream(): {
     },
   };
   return { push, iterable };
-}
-
-/** Sessions may push git commits; refresh the installation token like the one-shot path. */
-async function refreshGithubToken(): Promise<void> {
-  await refreshDaemonGithubTokenFromEnv();
 }
 
 /** Clears the per-turn accumulators so the next turn starts clean on the same query. */
@@ -507,28 +468,12 @@ function readSyntheticTurnMessageId(result: JsonValue): string | null {
   return typeof messageId === "string" ? messageId : null;
 }
 
-function readParentToolUseId(message: DaemonMessage): string | null {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-
-function readStringField(
-  message: DaemonMessage,
-  field: string,
-): string | undefined {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function recogniseSubagentToolUses(message: DaemonMessage): void {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -536,7 +481,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -554,7 +499,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
 }
 
 function shouldDropSubagentMessage(message: DaemonMessage): boolean {
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -572,7 +517,7 @@ function shouldMintSyntheticTurn(message: DaemonMessage): boolean {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -768,7 +713,7 @@ function noteHarnessInitMessage(
 ): void {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField(message, "claude_code_version");
+  const cliVersion = trimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -836,7 +781,7 @@ function handleBackgroundTasksChanged(message: DaemonMessage): void {
   }
   const taskIds: string[] = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
     const taskIdField = task.task_id;
@@ -864,19 +809,19 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField(message, "tool_use_id");
+  const toolUseId = trimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
     // Shell commands also arrive as tasks. They are not subagents: background
     // shells have their own registry (`backgroundShells`), and a dev server
     // run in the background never ends, so as an entry it held the chat queue
     // for the full 2-hour cap.
-    if (readStringField(message, "task_type") === "local_bash") {
+    if (trimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry: BackgroundAgentEntry = {
       toolUseId,
-      taskId: readStringField(message, "task_id"),
-      description: readStringField(message, "description"),
+      taskId: trimmedString(message.task_id),
+      description: trimmedString(message.description),
       status: "running",
       startedAt: Date.now(),
     };
@@ -891,7 +836,7 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
     (subtype === "task_updated" || subtype === "task_notification") &&
     toolUseId
   ) {
-    const status = readStringField(message, "status");
+    const status = trimmedString(message.status);
     const terminal =
       status === "completed" ||
       status === "failed" ||
@@ -917,19 +862,15 @@ async function failSyntheticTurn(error: string): Promise<void> {
   persistTurnWork();
   try {
     await drainStreamingAndCompleteSteps();
-    const turnLease = getCurrentTurnLease();
     const completionArgs = entityMutationArgs({
       messageId,
       success: false,
       result: null,
       error,
       activityLog: serializeSteps(S.accumulatedSteps),
-      ...turnLease,
     });
-    appendTurnCheckpoint(completionArgs);
-    releaseTurnLeaseForCompletion();
-    await callConvexWithRetry(
-      "mutation",
+    appendCurrentTurnLease(completionArgs);
+    await sendTurnCompletion(
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
       completionArgs,
     );
@@ -1004,11 +945,7 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   if (S.pendingQuestionData) {
     completionArgs.pendingQuestion = S.pendingQuestionData;
   }
-  const turnLease = getCurrentTurnLease();
-  if (turnLease) {
-    completionArgs.turnId = turnLease.turnId;
-    completionArgs.leaseGeneration = turnLease.leaseGeneration;
-  }
+  appendCurrentTurnLease(completionArgs);
   // Durability BEFORE completion, exactly as finalizeTurn does it: a synthetic
   // turn has no workflow, so the server-side pushSandboxBranch step never runs
   // for it and this is the ONLY push. Work committed here sat local for hours
@@ -1016,15 +953,10 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   // completion may immediately dequeue the next message, and a VM death after
   // that point erases anything not on origin (see turnPersist.ts).
   persistTurnWork();
-  appendTurnCheckpoint(completionArgs);
-  // completeSyntheticTurn closes this turn server-side. Any heartbeat still
-  // emitted under its lease after this point is answered `closed`; the daemon
-  // used to read that as a takeover and exit 400ms after minting the next
-  // synthetic turn, which then stalled with nobody heartbeating it (session
-  // 225, 21 Sep 2026). Release first so the reply is judged stale instead.
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
+  // completeSyntheticTurn closes this turn server-side. sendTurnCompletion
+  // releases the lease first, so a later heartbeat answered `closed` is judged
+  // stale, not a takeover (session 225, 21 Sep 2026).
+  await sendTurnCompletion(
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
     completionArgs,
   );
@@ -1088,17 +1020,23 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   });
 }
 
-/** A real turn is live, so a pushed message joins it instead of starting one. */
+/**
+ * A real turn is live, so a pushed message joins it instead of starting one.
+ * Not while it waits on a blocking question: only the card's answer may
+ * resume it, so the steer waits and runs after the answer.
+ */
 function canTakeSteer(): boolean {
   return (
-    supervisor.phase === "running" && supervisor.currentTurn?.kind === "real"
+    supervisor.phase === "running" &&
+    supervisor.currentTurn?.kind === "real" &&
+    !S.awaitingQuestionAnswer
   );
 }
 
 function startClaimWatcher(agentRunner: WarmRunner): void {
   void (async () => {
     while (!supervisor.isStopping) {
-      if (callbackScriptWentStaleOnDisk()) {
+      if (callbackScriptWentStale()) {
         supervisor.noticeRefresh();
       }
       const refreshDecision = supervisor.decideRefresh({
@@ -1163,31 +1101,14 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-          // claimPendingTurn already cleared session.pendingTurn atomically, so
-          // any branch that does not park/start the claim loses that prompt.
-          // Same-turn restages (workflow re-staging the prompt already running)
-          // must still be discarded — parking those replays the prompt twice.
-          const currentTurn = supervisor.currentTurn;
-          const currentLease = getCurrentTurnLease();
-          if (
-            shouldParkClaimedTurn({
-              hasActiveRealTurn: currentTurn?.kind === "real",
-              isCancellationInFlight: supervisor.isCancellationInFlight,
-              isFinalizing: false,
-              currentLeaseTurnId: currentLease?.turnId ?? null,
-              claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
-            })
-          ) {
-            if (supervisor.parkClaim(turn)) {
-              wakeIdlePump?.();
-            } else {
-              log("daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-            );
-          }
+          const routed = routeClaimedTurn({
+            turn,
+            hasActiveRealTurn: supervisor.currentTurn?.kind === "real",
+            isCancellationInFlight: supervisor.isCancellationInFlight,
+            park: () => supervisor.parkClaim(turn),
+            logPrefix: "daemon",
+          });
+          if (routed === "parked") wakeIdlePump?.();
         }
       } catch {
         /* retry on next poll */
@@ -1510,20 +1431,6 @@ function createWarmAgentRunner(
 }
 
 /**
- * Returns true when a newer callback bundle was uploaded while this daemon is
- * running — exit cleanly so the next prewarm can spawn with fresh code.
- */
-function callbackScriptWentStaleOnDisk(): boolean {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
-
-/**
- * Polls the claimPendingTurn mutation until a turn is staged for this session
- * (daemon-pull), then returns it. Returns null on idle timeout so the
- * daemon can exit and free the sandbox. The claim is atomic server-side, so a
- * prompt is handed to exactly one poll and never re-executed.
- */
-/**
  * Persistent warm-session daemon. Creates one `query()` and feeds it prompts
  * across turns so only the first turn pays the CLI/MCP/API boot; later turns
  * cost model time only. Session-only (entity/streaming/completion are stable
@@ -1542,58 +1449,22 @@ export async function runSdkDaemon(): Promise<void> {
     process.exit(1);
   }
 
-  // Single-daemon fence, part 1 (boot claim): if a live rival already owns the
-  // pidfile, exit without touching its marker files. First writer wins. A dead
-  // pid in the file (e.g. after KILL_PRIOR_AGENT_PROCESSES_CMD) is overwritten.
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths: daemonPaths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG,
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      `daemon: rival daemon pid=${bootClaim.rivalPid} already owns ${DAEMON_PID_FILE} — exiting`,
-    );
-    process.exit(0);
-  }
-
-  // Single-daemon fence, part 2: a launch racing past the boot claim (or an
-  // optsmismatch respawn) overwrites the pidfile; the deposed daemon must exit
-  // or it lives forever, double-claiming turns and flip-flopping the shared
-  // streaming row. Deferred while a real turn is active so work is never
-  // killed mid-flight — the rival idles on claim polling meanwhile. A missing
-  // pidfile also means deposed (a kill+respawn removed it; the successor will
-  // claim it).
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile,
-    hasActiveWork: () => supervisor.hasWork,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
-    log,
     logPrefix: "daemon",
+    hasActiveWork: () => supervisor.hasWork,
     onDeposedIdle: () => {
       process.exit(0);
     },
   });
-
-  const preflightOk = await runPreflightHeartbeat();
-  if (!preflightOk) {
-    log("daemon: preflight failed");
-    process.exit(1);
-  }
   startStreamingLoops();
 
-  // The GitHub token round trip (~0.3–0.45s) and the SDK import (~0.2s, CPU)
-  // are independent, so overlap them. The fetch must reach the wire first:
-  // the import blocks the event loop and, started in the same tick, held the
-  // request back until it finished (measured: no overlap at all). One
-  // setImmediate lets fetch send; then the overlap saved ~0.16s. The token
-  // still lands before buildSdkOptions copies process.env, since the CLI's
-  // tool shells inherit `GH_TOKEN` from it. refreshGithubToken never rejects.
-  const tokenRefreshed = refreshGithubToken();
-  await new Promise<void>((resolve) => setImmediate(resolve));
+  // bootWarmDaemon refreshed the GitHub token alongside the preflight, so it
+  // lands before buildSdkOptions copies process.env (the CLI's tool shells
+  // inherit `GH_TOKEN` from it).
   // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
-  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
+  const sdk = await loadSdk();
   const options = buildSdkOptions(sessionMode);
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
@@ -1623,21 +1494,16 @@ export async function runSdkDaemon(): Promise<void> {
     // shutting down through the finally block below.
     persistTurnWork();
     try {
-      const completionArgs: JsonObject = {
-        [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+      // Not postClaimedTurnFailureCompletion: the stream can die on a
+      // synthetic turn or while idle, where no claim owns the turn.
+      const completionArgs = entityMutationArgs({
         success: false,
         result: null,
         error: "Agent SDK daemon failed: " + messageText,
         activityLog: serializeSteps(S.accumulatedSteps),
-        ...getCurrentTurnLease(),
-      };
-      appendTurnCheckpoint(completionArgs);
-      releaseTurnLeaseForCompletion();
-      await callConvexWithRetry(
-        "mutation",
-        COMPLETION_MUTATION ?? "",
-        completionArgs,
-      );
+      });
+      appendCurrentTurnLease(completionArgs);
+      await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
     } catch {
       /* ignore */
     }
@@ -1645,7 +1511,7 @@ export async function runSdkDaemon(): Promise<void> {
     // Only tear down markers this daemon still owns — after a fence
     // deposition a rival owns them (fence exits bypass this via
     // process.exit, but an SDK failure can reach here deposed).
-    cleanOwnedMarkers();
+    cleanOwnedMarkers(daemonPaths);
     await stopStreamingLoops();
   }
   process.exit(0);

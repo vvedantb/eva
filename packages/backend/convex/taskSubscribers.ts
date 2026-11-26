@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { createNotification } from "./notifications";
+import { notifyUsers } from "./notifications";
 import { authQuery, authMutation, hasTaskAccess } from "./functions";
 import {
   taskSubscriberFields,
@@ -64,17 +64,14 @@ export async function notifySubscribers(
     alreadyNotified?: Set<string>;
   },
 ): Promise<Set<string>> {
-  const notified = params.alreadyNotified ?? new Set<string>();
   const subscribers = await ctx.db
     .query("taskSubscribers")
     .withIndex("by_task", (q) => q.eq("taskId", params.taskId))
     .collect();
-  for (const sub of subscribers) {
-    if (!sub.subscribed) continue;
-    if (params.actorId && sub.userId === params.actorId) continue;
-    if (notified.has(sub.userId)) continue;
-    await createNotification(ctx, {
-      userId: sub.userId,
+  return notifyUsers(
+    ctx,
+    subscribers.filter((sub) => sub.subscribed).map((sub) => sub.userId),
+    {
       type: params.type,
       title: params.title,
       message: params.message,
@@ -82,54 +79,9 @@ export async function notifySubscribers(
       projectId: params.projectId,
       taskId: params.taskId,
       commentId: params.commentId,
-    });
-    notified.add(sub.userId);
-  }
-  return notified;
-}
-
-/**
- * Fans a single project-level notification out to everyone subscribed to any of
- * the project's tasks. Used for events that belong to the project as a whole (a
- * project PR merging or closing) so subscribers get one notification about the
- * project instead of one per task. No `taskId` is set, so the click-through
- * lands on the project rather than an arbitrary task inside it.
- */
-export async function notifyProjectSubscribers(
-  ctx: MutationCtx,
-  params: {
-    projectId: Id<"projects">;
-    type: Infer<typeof notificationTypeValidator>;
-    title: string;
-    message?: string;
-    repoId?: Id<"githubRepos">;
-  },
-): Promise<void> {
-  const tasks = await ctx.db
-    .query("agentTasks")
-    .withIndex("by_project", (q) => q.eq("projectId", params.projectId))
-    .collect();
-
-  const notified = new Set<string>();
-  for (const task of tasks) {
-    const subscribers = await ctx.db
-      .query("taskSubscribers")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .collect();
-    for (const sub of subscribers) {
-      if (!sub.subscribed) continue;
-      if (notified.has(sub.userId)) continue;
-      await createNotification(ctx, {
-        userId: sub.userId,
-        type: params.type,
-        title: params.title,
-        message: params.message,
-        repoId: params.repoId,
-        projectId: params.projectId,
-      });
-      notified.add(sub.userId);
-    }
-  }
+    },
+    { actorId: params.actorId, alreadyNotified: params.alreadyNotified },
+  );
 }
 
 /** Lists the active subscribers (subscribed = true) of a task for the UI. */
@@ -164,6 +116,14 @@ export const setSubscription = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     const targetUserId = args.userId ?? ctx.userId;
+    // A teammate can be added only if they can see the task; otherwise its
+    // notifications would leak the task to them. Removal is always allowed.
+    if (
+      args.subscribed &&
+      targetUserId !== ctx.userId &&
+      !(await hasTaskAccess(ctx.db, task, targetUserId))
+    )
+      throw new Error("That user cannot access this task");
     const existing = await ctx.db
       .query("taskSubscribers")
       .withIndex("by_task_and_user", (q) =>

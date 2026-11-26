@@ -5,11 +5,11 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner } from "@vvedantb/ui";
+import { Spinner, ViewTransitionSuspense } from "@vvedantb/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
+import { loadArtifactHtml } from "@eva/shared/artifactBridge";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import {
   chatSourceLabel,
   chatSourceRoute,
@@ -17,32 +17,6 @@ import {
 } from "@/lib/components/sandbox/chatSource";
 import { openArtifactInNewTab } from "./_open";
 
-type ArtifactHtmlResult =
-  | { ok: true; html: string }
-  | { ok: false; error: string };
-
-const artifactHtmlCache = new Map<string, Promise<ArtifactHtmlResult>>();
-
-function loadArtifactHtml(url: string): Promise<ArtifactHtmlResult> {
-  const cached = artifactHtmlCache.get(url);
-  if (cached) return cached;
-  const promise = fetch(url)
-    .then(async (response) => {
-      if (!response.ok) {
-        return {
-          ok: false as const,
-          error: `Failed to load artifact (status ${response.status})`,
-        };
-      }
-      return { ok: true as const, html: await response.text() };
-    })
-    .catch((error: Error) => ({
-      ok: false as const,
-      error: error.message || String(error),
-    }));
-  artifactHtmlCache.set(url, promise);
-  return promise;
-}
 
 function ArtifactHtmlBody({
   artifactId,

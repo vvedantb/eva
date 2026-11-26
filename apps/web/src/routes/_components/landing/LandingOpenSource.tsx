@@ -32,18 +32,13 @@ export function LandingOpenSource() {
               />
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="rounded-full px-6">
+                <Button asChild size="lg" className="px-6">
                   <a href={EVA_GITHUB_URL} target="_blank" rel="noreferrer">
                     <IconBrandGithub size={16} aria-hidden />
                     View on GitHub
                   </a>
                 </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="ghost"
-                  className="rounded-full px-5"
-                >
+                <Button asChild size="lg" variant="ghost" className="px-5">
                   <a href={EVA_SETUP_URL} target="_blank" rel="noreferrer">
                     Read the setup guide
                     <IconArrowRight size={16} aria-hidden />

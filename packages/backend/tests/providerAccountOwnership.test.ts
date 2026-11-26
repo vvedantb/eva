@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { describe, expect, test } from "bun:test";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The picker lists the viewer's own accounts alongside every teammate's shared
@@ -11,7 +12,6 @@ import schema from "../convex/schema";
  * every new session and quick task (fix 4b948b101).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -117,6 +117,45 @@ describe("provider account ownership", () => {
         [f.ownPrivate, f.ownShared].sort(),
       );
       expect(accounts.every((row) => row.isOwn)).toBe(true);
+    },
+    TIMEOUT_MS,
+  );
+
+  // MCP sends used to run on the owner's own account (or Team) only; a
+  // teammate's shared account was unreachable from send_chat_message.
+  test(
+    "MCP picks a teammate's shared account by first name",
+    async () => {
+      const f = await fixture();
+      const repoId = await f.t.run(
+        async (ctx) =>
+          await ctx.db.insert("githubRepos", {
+            owner: "vvedantb",
+            name: "eva",
+            installationId: 1,
+            connectedBy: f.ownerUserId,
+          }),
+      );
+      const resolve = (account: string) =>
+        f.t.query(internal.mcp.queries.resolveMcpProviderAccount, {
+          account,
+          scope: { kind: "creator", userId: f.ownerUserId, repoId },
+        });
+
+      expect(await resolve("sam")).toEqual({
+        ok: true,
+        providerAccountId: f.mateShared,
+      });
+      expect(await resolve("Vedant")).toEqual({
+        ok: true,
+        providerAccountId: f.ownPrivate,
+      });
+      expect(await resolve("team")).toEqual({
+        ok: true,
+        providerAccountId: null,
+      });
+      // A teammate's account they did not share stays out of reach.
+      expect((await resolve(String(f.matePrivate))).ok).toBe(false);
     },
     TIMEOUT_MS,
   );

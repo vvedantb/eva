@@ -2,12 +2,11 @@
  * Pill styling for @ doc/PRD mentions and / skill chips.
  * Uses theme accent tokens so chips follow the user's accent color (Settings → Theme).
  *
- * `max-w-full` is for `LinkChip`: an unrecognised provider falls back to the
- * whole URL as the label, and an unconstrained inline-flex pill would push the
- * message bubble (and the page) wider than a phone viewport.
+ * `max-w-full` keeps a long label from pushing the message bubble (and the
+ * page) wider than a phone viewport.
  */
 export const MENTION_CHIP_CLASS =
-  "inline-flex max-sm:max-w-full items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground";
+  "inline-flex max-sm:max-w-full items-center rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-soft-foreground";
 
 export const SKILL_CHIP_CLASS = MENTION_CHIP_CLASS;
 

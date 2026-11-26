@@ -32,13 +32,14 @@ export async function resolveConnectorToken(
   provider: ConnectorProvider,
   repoId: Id<"githubRepos"> | null,
 ): Promise<PickedConnectorToken | null> {
-  let oauthToken: string | null = null;
-  try {
-    oauthToken = await resolveUserAccessToken(ctx, userId, provider);
-  } catch {
-    // Table not deployed yet, or refresh failed — still use the env key.
-  }
-  return pickConnectorToken(oauthToken, await envTokenForRepo(ctx, provider, repoId));
+  const [oauthToken, envToken] = await Promise.all([
+    resolveUserAccessToken(ctx, userId, provider).catch(
+      // Table not deployed yet, or refresh failed — still use the env key.
+      (): string | null => null,
+    ),
+    envTokenForRepo(ctx, provider, repoId),
+  ]);
+  return pickConnectorToken(oauthToken, envToken);
 }
 
 export const resolveAccessToken = internalAction({
@@ -68,8 +69,13 @@ export async function resolveConnectorLaunchEnv(
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
   const env: Record<string, string> = {};
-  for (const provider of CONNECTOR_PROVIDERS) {
-    const picked = await resolveConnectorToken(ctx, userId, provider, repoId);
+  const pickedByProvider = await Promise.all(
+    CONNECTOR_PROVIDERS.map(async (provider) => ({
+      provider,
+      picked: await resolveConnectorToken(ctx, userId, provider, repoId),
+    })),
+  );
+  for (const { provider, picked } of pickedByProvider) {
     if (!picked) continue;
     if (picked.source === "oauth") {
       const apiKey =

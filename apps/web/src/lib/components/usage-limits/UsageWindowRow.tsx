@@ -1,14 +1,14 @@
 "use client";
 
 import { formatExactDateTime } from "@eva/shared/dates";
-import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
+import { useCountUpDisplay } from "@vvedantb/ui";
 import {
   formatUtilization,
   resetsInLabel,
   toneForUtilization,
-  USAGE_TONE_TEXT_CLASS,
   type UsageWindow,
-} from "./_utils";
+} from "@eva/shared/usageLimits";
+import { USAGE_TONE_TEXT_CLASS } from "./toneClasses";
 import { UsageBar } from "./UsageBar";
 
 interface UsageWindowRowProps {

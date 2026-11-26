@@ -1,38 +1,29 @@
 "use client";
 
-import type { FunctionReturnType } from "convex/server";
-import { type api } from "@eva/backend";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
-import {
-  statusConfig,
-  TASK_STATUSES,
-} from "@/lib/components/tasks/TaskStatusBadge";
-
-type ProjectProgress = FunctionReturnType<
-  typeof api.projects.listTaskProgress
->[number];
+import type { ProjectStage, ProjectStatus } from "@eva/shared/projectStatus";
+import { projectArchivedShare } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import { ProjectStageCounts } from "@/lib/components/projects/ProjectStageCounts";
 
 interface TimelineBarProps {
   name: string;
-  phase: ProjectPhase;
-  progress?: ProjectProgress;
+  stage: ProjectStage;
+  /** Task counts by display status (`listStatusesForRepo`). */
+  counts?: ProjectStatus["counts"];
 }
 
 /**
- * The inner content of a timeline bar: a phase-tinted track, a saturated fill
- * sized to the share of completed tasks (Linear-style), the project name and a
- * percentage. Wrapped in a tooltip with the full per-status breakdown. Purely
- * presentational — progress is fed in so the row issues no query of its own.
+ * The inner content of a timeline bar: a stage-tinted track, a saturated fill
+ * sized to the share of archived tasks (Linear-style), the project name and a
+ * percentage. Wrapped in a tooltip with the counts by display status. Purely
+ * presentational — counts are fed in so the row issues no query of its own.
  */
-export function TimelineBar({ name, phase, progress }: TimelineBarProps) {
-  const config = phaseConfig[phase];
-  const total = progress?.total ?? 0;
-  const done = progress?.done ?? 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+export function TimelineBar({ name, stage, counts }: TimelineBarProps) {
+  const config = projectStageConfig[stage];
+  const { archived, total, percent: pct } = counts
+    ? projectArchivedShare(counts)
+    : { archived: 0, total: 0, percent: 0 };
 
   return (
     <Tooltip>
@@ -61,23 +52,12 @@ export function TimelineBar({ name, phase, progress }: TimelineBarProps) {
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        {total > 0 ? (
+        {counts && total > 0 ? (
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium">
-              {done}/{total} tasks done · {pct}%
+              {archived}/{total} tasks archived · {pct}%
             </span>
-            {TASK_STATUSES.flatMap((s) => {
-              if ((progress?.[s] ?? 0) <= 0) return [];
-              const Icon = statusConfig[s].icon;
-              return [
-                <span
-                  key={s}
-                  className={`flex items-center gap-1.5 text-xs ${statusConfig[s].text}`}
-                >
-                  <Icon size={12} /> {progress?.[s]} {statusConfig[s].label}
-                </span>,
-              ];
-            })}
+            <ProjectStageCounts status={{ counts }} className="text-xs" />
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">No tasks yet</span>

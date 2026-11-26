@@ -3,14 +3,6 @@ export function isAppRepo(repo: { rootDirectory?: string }): boolean {
   return repo.rootDirectory !== undefined;
 }
 
-/** True when the GitHub codebase has multiple apps or this row is part of one. */
-export function isMonorepoCodebase(
-  repo: { parentRepoId?: string | undefined },
-  siblingAppCount: number,
-): boolean {
-  return repo.parentRepoId !== undefined || siblingAppCount > 0;
-}
-
 /** Normalizes a domain or URL input to a hostname for repo domain matching. */
 export function extractHostname(raw: string): string {
   try {
@@ -19,25 +11,4 @@ export function extractHostname(raw: string): string {
   } catch {
     return raw;
   }
-}
-
-/**
- * Parses newline-delimited commands from a textarea value into a clean array.
- * Trims each line and drops empty lines so the resulting array is ready to
- * persist or hand to a Dockerfile/shell runner.
- */
-export function parseCommandLines(text: string): string[] {
-  return text
-    .split("\n")
-    .map((cmd) => cmd.trim())
-    .filter((cmd) => cmd.length > 0);
-}
-
-/** Formats bytes into human-readable size. */
-export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }

@@ -23,6 +23,31 @@ export const getBackgroundCommands = internalQuery({
   },
 });
 
+/**
+ * Cached run commands plus the app folder, so a sandbox can prefer the
+ * checked-out branch's own `.eva/config.json` entry and fall back to these.
+ */
+export const getAppRunCommands = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.union(
+    v.object({
+      rootDirectory: v.optional(v.string()),
+      startupCommands: v.array(v.string()),
+      backgroundCommands: v.array(v.string()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) return null;
+    return {
+      rootDirectory: repo.rootDirectory,
+      startupCommands: repo.startupCommands ?? [],
+      backgroundCommands: repo.backgroundCommands ?? [],
+    };
+  },
+});
+
 /** Returns the clean-stop commands for a repo/app, if any. */
 export const getStopCommands = internalQuery({
   args: { repoId: v.id("githubRepos") },

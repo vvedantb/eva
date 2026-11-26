@@ -1,7 +1,10 @@
 import {
+  CLAUDE_AUTH_ENV_KEYS,
   CODEX_AUTH_ENV_KEYS,
   OPENCODE_AUTH_ENV_KEYS,
   CURSOR_AUTH_ENV_KEYS,
+  PROVIDER_LABELS,
+  PROVIDER_PRIMARY_AUTH_KEY,
 } from "@eva/backend";
 import {
   ClaudeLogo,
@@ -29,9 +32,9 @@ export { CONNECTOR_ENV_VARS } from "./connectorEnvVars";
 export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   {
     id: "claude",
-    label: "Claude Code",
-    primaryKey: "CLAUDE_CODE_OAUTH_TOKEN",
-    matchKeys: ["CLAUDE_CODE_OAUTH_TOKEN"],
+    label: PROVIDER_LABELS.claude,
+    primaryKey: PROVIDER_PRIMARY_AUTH_KEY.claude,
+    matchKeys: CLAUDE_AUTH_ENV_KEYS,
     Logo: ClaudeLogo,
     hint: "OAuth token from `claude setup-token` to enable Claude agents.",
     placeholder: "sk-ant-oat...",
@@ -39,8 +42,8 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   },
   {
     id: "codex",
-    label: "Codex",
-    primaryKey: "CODEX_AUTH_JSON",
+    label: PROVIDER_LABELS.codex,
+    primaryKey: PROVIDER_PRIMARY_AUTH_KEY.codex,
     matchKeys: CODEX_AUTH_ENV_KEYS,
     Logo: OpenAILogo,
     hint: "Contents of ~/.codex/auth.json to enable Codex.",
@@ -49,8 +52,10 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   },
   {
     id: "opencode",
+    // Not PROVIDER_LABELS.opencode ("opencode"): this slot has always said
+    // "OpenCode". Which casing is right is an open product question.
     label: "OpenCode",
-    primaryKey: "OPENCODE_AUTH_JSON",
+    primaryKey: PROVIDER_PRIMARY_AUTH_KEY.opencode,
     matchKeys: OPENCODE_AUTH_ENV_KEYS,
     Logo: OpenCodeLogo,
     hint: "Contents of ~/.local/share/opencode/auth.json to enable OpenCode.",
@@ -59,8 +64,8 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   },
   {
     id: "cursor",
-    label: "Cursor",
-    primaryKey: "CURSOR_API_KEY",
+    label: PROVIDER_LABELS.cursor,
+    primaryKey: PROVIDER_PRIMARY_AUTH_KEY.cursor,
     matchKeys: CURSOR_AUTH_ENV_KEYS,
     Logo: CursorLogo,
     hint: "Cursor API key to enable Cursor models.",

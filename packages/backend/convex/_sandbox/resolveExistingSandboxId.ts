@@ -4,10 +4,3 @@ export function preferPersistedSandboxId(args: {
 }): string | undefined {
   return args.sandboxId;
 }
-
-/** Resolves the reusable sandbox id from a persisted entity for start/resume. */
-export function resolveReusableVercelSandboxId(args: {
-  sandboxId?: string;
-}): string | undefined {
-  return args.sandboxId;
-}

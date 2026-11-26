@@ -118,27 +118,32 @@ export const getByProjectId = authQuery({
       return [];
     }
 
-    const tagged = await ctx.db
-      .query("logs")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .order("desc")
-      .collect();
-
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
+    const [tagged, tasks] = await Promise.all([
+      ctx.db
+        .query("logs")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+        .order("desc")
+        .collect(),
+      ctx.db
+        .query("agentTasks")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+        .collect(),
+    ]);
 
     const seenIds = new Set(tagged.map((entry) => String(entry._id)));
     const untagged: Doc<"logs">[] = [];
+    const logsByTask = await Promise.all(
+      tasks.map((task) =>
+        ctx.db
+          .query("logs")
+          .withIndex("by_repo_and_entity", (q) =>
+            q.eq("repoId", args.repoId).eq("entityId", String(task._id)),
+          )
+          .collect(),
+      ),
+    );
 
-    for (const task of tasks) {
-      const taskLogs = await ctx.db
-        .query("logs")
-        .withIndex("by_repo_and_entity", (q) =>
-          q.eq("repoId", args.repoId).eq("entityId", String(task._id)),
-        )
-        .collect();
+    for (const taskLogs of logsByTask) {
       for (const entry of taskLogs) {
         if (entry.projectId !== undefined) continue;
         const id = String(entry._id);

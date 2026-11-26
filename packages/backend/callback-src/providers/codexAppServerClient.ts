@@ -3,7 +3,7 @@ import { createInterface } from "readline";
 import { CODEX_RUNTIME_HOME_DIR, WORK_DIR } from "../config.js";
 import { codexExecutablePath } from "./codexSdk.js";
 import type { JsonObject, JsonValue } from "../types.js";
-import { asJsonObject, log, tryParseJson } from "../utils.js";
+import { asJsonObject, log, tryParseJsonObject } from "../utils.js";
 
 export type AppServerNotification = {
   method: string;
@@ -107,9 +107,8 @@ export class CodexAppServerClient {
   }
 
   private handleLine(line: string): void {
-    const parsed = tryParseJson(line);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const message: JsonObject = parsed;
+    const message = tryParseJsonObject(line);
+    if (!message) return;
     if (typeof message.id === "number" && typeof message.method !== "string") {
       const pending = this.pending.get(message.id);
       if (!pending) return;

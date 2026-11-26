@@ -7,21 +7,18 @@ export type {
 export { MentionText } from "./MentionText";
 export { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
 export { UserMentionChip } from "./UserMentionChip";
-export { LinkChip } from "./LinkChip";
-export { isChipLinkUrl } from "./linkChipUtils";
 export { isEditorValueEmpty } from "./mentionEditorUtils";
 export { DataMentionChip } from "./DataMentionChip";
 export { SkillMentionChip } from "./SkillMentionChip";
 export { DataMentionHoverCardBody } from "./DataMentionHoverCardBody";
 export { SkillMentionHoverCardBody } from "./SkillMentionHoverCardBody";
-export { tokenizedToEditable, tokenizedToDisplayText } from "./mentionToken";
 export {
-  isSkillTokenId,
+  tokenizedToEditable,
+  tokenizedToDisplayText,
   systemSkillTokenId,
-  harnessSkillTokenId,
   isHarnessSkillTokenId,
-} from "./skillToken";
-export { harnessSkillsForProvider } from "./harnessSkills";
-export { mergeMentionItems } from "./mergeMentionItems";
+  mergeMentionItems,
+} from "@eva/shared";
+export { isSkillTokenId } from "./skillToken";
 export { MentionRow } from "./MentionRow";
 export type { MentionKind } from "./MentionRow";

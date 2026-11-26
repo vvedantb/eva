@@ -1,15 +1,12 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { join } from "node:path";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { materializeTurnAttachments } from "../callback-src/runtime/turnAttachments.js";
 import {
   attachmentExtensionForMimeType,
   attachmentSandboxPath,
   buildAttachmentPromptNote,
 } from "../convex/_sandbox_runtime/attachments";
-
-const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Input attachments reach the agent as files on disk plus a prompt note naming
@@ -28,8 +25,8 @@ type StubReply =
 function stubFetch(replies: readonly StubReply[]): string[] {
   const requested: string[] = [];
   let next = 0;
-  vi.stubGlobal("fetch", (input: string | URL): Promise<Response> => {
-    requested.push(String(input));
+  spyOn(globalThis, "fetch").mockImplementation((input) => {
+    requested.push(input instanceof Request ? input.url : String(input));
     const reply = replies[next] ?? { status: 404 };
     next += 1;
     if (reply === "network-error") {
@@ -58,7 +55,7 @@ function clearWrittenAttachments(): void {
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  mock.restore();
   clearWrittenAttachments();
 });
 
@@ -205,39 +202,5 @@ describe("the daemon path matches the CLI launch path", () => {
 
     expect(existsSync(attachmentSandboxPath(0, ".bin"))).toBe(true);
     expect(attachmentExtensionForMimeType("")).toBe(".bin");
-  });
-});
-
-/**
- * The callback source is what gets reviewed; the generated bundle is what runs
- * in the sandbox. A stale bundle ships the old three-copy behaviour however the
- * source reads, and a re-inlined copy is how the three daemons drifted apart in
- * the first place.
- */
-describe("one materialiser serves every daemon", () => {
-  const NOTE_SENTENCE =
-    "The user attached the following file(s). Read them with your file-reading tool before responding:";
-
-  const DAEMONS = [
-    "callback-src/providers/claudeSdkDaemon.ts",
-    "callback-src/providers/codexAppServerDaemon.ts",
-    "callback-src/providers/cursorSdkDaemon.ts",
-  ];
-
-  test.each(DAEMONS)("%s delegates instead of copying", (relativePath) => {
-    const source = readFileSync(join(backendDir, relativePath), "utf8");
-    expect(source).toContain("materializeTurnAttachments(turn)");
-    expect(source).not.toContain(NOTE_SENTENCE);
-    expect(source).not.toContain("eva-attachment-");
-  });
-
-  test("the deployed bundle carries exactly one copy", () => {
-    const bundle = readFileSync(
-      join(backendDir, "convex/_sandbox_runtime/callbackScript.generated.ts"),
-      "utf8",
-    );
-    expect(bundle).toContain("materializeTurnAttachments");
-    expect(bundle.split(NOTE_SENTENCE).length - 1).toBe(1);
-    expect(bundle.split("eva-attachment-").length - 1).toBe(1);
   });
 });

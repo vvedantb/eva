@@ -5,18 +5,11 @@ import type { AgentGoal } from "@eva/backend";
 import { IconTargetArrow, IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
-
-/** Claude's own command; the daemon clears the banner when Claude confirms. */
-const CLEAR_GOAL_COMMAND = "/goal clear";
-
-function goalDetail(goal: AgentGoal): string {
-  if (goal.status === "complete") return "Claude judged this goal met.";
-  if (goal.checks === 0) return "Claude keeps working until this is met.";
-  const times = goal.checks === 1 ? "1 time" : `${goal.checks} times`;
-  return goal.lastCheck
-    ? `Not met after ${times}: ${goal.lastCheck}`
-    : `Not met after ${times}.`;
-}
+import {
+  CLEAR_GOAL_COMMAND,
+  goalDetail,
+  goalStatusLabel,
+} from "@eva/shared/agentGoal";
 
 /**
  * Claude's native `/goal` for this chat, above the composer: the objective,
@@ -62,9 +55,9 @@ export function GoalBanner({
               </span>
               <Badge
                 variant={goal.status === "complete" ? "success" : "secondary"}
-                className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
+                className="h-5 shrink-0 px-1.5 text-3xs font-medium"
               >
-                {goal.status === "complete" ? "Met" : "Active"}
+                {goalStatusLabel(goal)}
               </Badge>
             </div>
             <p

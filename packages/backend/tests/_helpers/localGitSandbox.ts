@@ -7,7 +7,7 @@ import type {
 import { workspaceDirShell } from "../../convex/_sandbox_runtime/helpers";
 
 /** Hermetic git: no user config, no prompts, a fixed author. */
-export const gitEnv = {
+const gitEnv = {
   ...process.env,
   HOME: undefined,
   GIT_CONFIG_NOSYSTEM: "1",

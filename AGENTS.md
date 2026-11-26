@@ -8,6 +8,7 @@ Same rules as `CLAUDE.md`. Domain details live in the two docs below — read th
 - If already on main and the user asks to ship: commit and push directly to main.
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
 - Plans: final step is `/ship` unless the user says not to.
+- The `/commit`, `/push` and `/ship` skills are vendored files in `.agents/skills/{commit,push,ship}`, maintained in this repo.
 
 ## Always
 
@@ -22,7 +23,7 @@ Same rules as `CLAUDE.md`. Domain details live in the two docs below — read th
 - Do not default to `useState`/`useRef` — pick the right state ownership first.
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - Do not run dev / lint / build unless the user asks.
-- After medium+ changes: no banned types; `tsc` where relevant; update `internal/changelog.md` (create `internal/` if missing). Changelog entry: Title, Date (YYYY-MM-DD), WHY summary, architectural reason if any.
+- After medium+ changes: no banned types; `tsc` where relevant; add `internal/changelog/<YYYY-MM-DD>/<slug>.md`. Changelog entry: Title, WHY summary, architectural reason if any.
 
 ## Domain docs (read when relevant)
 

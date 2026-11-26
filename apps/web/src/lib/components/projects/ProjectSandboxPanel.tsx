@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import type { BackgroundAgentEntry, Id, SandboxOwner } from "@eva/backend";
-import {
-  isSessionSandboxTab,
-  type SandboxTab,
-  type TaskRouteSandboxTab,
-} from "@/lib/search-params";
+import type { Id, SandboxOwner } from "@eva/backend";
+import { IconChecklist, IconMessages } from "@tabler/icons-react";
+import { useQueryState } from "nuqs";
+import { ReplyThreadView } from "@/lib/components/chat/replies/ReplyThreadView";
+import { replyThreadParser } from "@/lib/search-params";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -21,11 +22,14 @@ import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList"
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
-import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
+import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
+import { useProjectChatBinding } from "./ProjectSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -34,9 +38,32 @@ import {
   SessionDocumentsPanel,
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
+import { useProjectDocuments } from "./useProjectDocuments";
+import { ProjectTasksPanel } from "./ProjectTasksPanel";
+import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
+import { useProjectTaskStatus } from "./useProjectStatus";
+
+/** Sandbox tabs a task's sandbox has but the coordinator's does not. */
+const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
+  "preview",
+  "browser",
+  "review",
+  "computer",
+  "editor",
+  "files",
+]);
+
+/** The rail tab of an open reply thread; same descriptor shape as Tasks. */
+const REPLIES_TAB: SandboxTabDescriptor = {
+  value: "replies",
+  label: "Replies",
+  icon: { kind: "component", Icon: IconMessages },
+};
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
+  /** The project's session: its chat feeds the Agents tab and annotations. */
+  projectSession: OwnedSession;
   projectNumId?: number;
   sandboxId: string | undefined;
   isActive: boolean;
@@ -47,9 +74,7 @@ interface ProjectSandboxPanelProps {
   owner: SandboxOwner;
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
-  /** Sub-agent lifecycle entries from the project doc (Agents tab). */
-  backgroundAgents?: BackgroundAgentEntry[];
-  sandboxTab: TaskRouteSandboxTab;
+  sandboxTab: ProjectSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
@@ -60,10 +85,15 @@ interface ProjectSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Mini-player title; Expand returns to this project's Preview tab. */
+  title: string;
+  /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
+  onCloseThread: () => void;
 }
 
 export function ProjectSandboxPanel({
   projectId,
+  projectSession,
   projectNumId,
   sandboxId,
   isActive,
@@ -74,44 +104,65 @@ export function ProjectSandboxPanel({
   owner,
   panes,
   terminalPanel,
-  backgroundAgents,
   sandboxTab,
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  title,
+  onCloseThread,
 }: ProjectSandboxPanelProps) {
+  // An open reply thread adds the Replies tab (projects v2, PR D).
+  const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
   const simpleView = useSimpleView();
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
-  const projectIdStr = String(projectId);
+  const chatBinding = useProjectChatBinding(projectId, projectSession);
+  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
-  const activeTab: SandboxTab = sandboxTab;
+  // The coordinator only reads code and delegates: no dev server, no edits,
+  // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
+  // those lands on Tasks; a task's own sandbox keeps them all.
+  // Replies without an open thread (an old link) lands on Tasks too.
+  const activeTab: ProjectSandboxTab =
+    COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
+    (sandboxTab === "replies" && !threadId)
+      ? "tasks"
+      : sandboxTab;
+  const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
+  const triageCount = taskStatus?.counts.triage ?? 0;
+  // Tasks leads the rail; its badge counts what waits in Triage.
+  const tasksTab: SandboxTabDescriptor = {
+    value: "tasks",
+    label: "Tasks",
+    icon: { kind: "component", Icon: IconChecklist },
+    count: triageCount > 0 ? triageCount : undefined,
+    indicatorLabel:
+      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+  };
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
-  // chat panel already subscribes to (same entity ids).
+  // chat panel already subscribes to (same entity ids). Artifacts stay on the
+  // project: the backend files its session's artifacts under it.
   const artifactSource = { kind: "project" as const, projectId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
-    parentId: projectId,
-    streamingEntityId: `project-chat-${projectIdStr}`,
-    backgroundAgents,
+    parentId: chatKeys.parentId,
+    streamingEntityId: chatKeys.streamingEntityId,
+    backgroundAgents: chatBinding.doc?.backgroundAgents,
     sandboxRunning: isActive,
   });
 
-  const navigateToSandboxTab = (tab: SandboxTab) => {
-    if (tab === "prd" || !projectPathSegment) return;
+  const navigateToSandboxTab = (tab: ProjectSandboxTab) => {
+    if (!projectPathSegment) return;
     if (tab === "review") {
       void navigate({
         to: toInternalRepoHref(
@@ -131,24 +182,23 @@ export function ProjectSandboxPanel({
   };
 
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
   // This surface has no custom tabs, so the tab bar only emits builtin ids.
   const handleTabChange = (tab: string) => {
-    if (!isSessionSandboxTab(tab) || tab === "prd") return;
-    navigateToSandboxTab(tab);
+    if (isProjectSandboxTab(tab)) navigateToSandboxTab(tab);
   };
 
-  const enabledTabs = withBrowserTab(panes.enabledTabs);
+  const enabledTabs = withBrowserTab(panes.enabledTabs).filter(
+    (tab) => !COORDINATOR_HIDDEN_TABS.has(tab),
+  );
   const { owner: ownerParam, repo: repoParam } = useParams({ strict: false });
 
   return (
@@ -174,13 +224,9 @@ export function ProjectSandboxPanel({
             onTabChange={handleTabChange}
             collapsed={collapsed}
             onToggle={onToggle}
-            onNewPreview={() => {
-              panes.handleNewPreview();
-              navigateToSandboxTab("preview");
-            }}
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
-            showFilesTab
+            leadingTabs={threadId ? [tasksTab, REPLIES_TAB] : [tasksTab]}
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
@@ -193,6 +239,36 @@ export function ProjectSandboxPanel({
         }
       >
         <div className="h-full overflow-hidden">
+          <KeepAlivePane
+            active={activeTab === "tasks"}
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+          >
+            <ProjectTasksPanel
+              projectId={projectId}
+              projectNumId={projectNumId}
+              repoId={repoId}
+              basePath={basePath}
+            />
+          </KeepAlivePane>
+          <div
+            className={
+              activeTab === "replies"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            {threadId && chatKeys.parentId ? (
+              <ReplyThreadView
+                rootId={threadId}
+                chatParentId={chatKeys.parentId}
+                repo={{ id: repoId, basePath }}
+                model={chatBinding.model}
+                isOpen={activeTab === "replies"}
+                onOpen={(rootId) => void setThreadId(rootId)}
+                onClose={onCloseThread}
+              />
+            ) : null}
+          </div>
           <div
             className={
               activeTab === "artifacts"
@@ -209,19 +285,9 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SessionDocumentsPanel source={artifactSource} />
-          </div>
-          <div
-            className={
-              !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
-            }
-          >
-            <FilesPanel
-              sandboxId={sandboxId}
-              repoId={repoId}
-              isActive={isActive}
-              fileList={fileList}
-              wake={{ onStartSandbox, isSandboxStarting }}
+            <SessionDocumentsPanel
+              source={artifactSource}
+              project={projectDocuments}
             />
           </div>
           <div
@@ -231,12 +297,9 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SandboxAgentsPanel
-              entity={{ kind: "project", projectId }}
-              agents={agents}
-            />
+            <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
           </div>
-          <ReviewChatTargetProvider value={{ kind: "projectChat", projectId }}>
+          <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
             <SandboxPaneSlots
               activeTab={activeTab}
               panes={panes}
@@ -245,7 +308,7 @@ export function ProjectSandboxPanel({
               sandboxId={sandboxId}
               isActive={isActive}
               repoId={repoId}
-              cacheKey={projectIdStr}
+              cacheKey={String(projectId)}
               devCommand={devCommand}
               prUrl={prUrl}
               agentBrowsingAt={viewState?.agentBrowsingAt}
@@ -255,20 +318,20 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
+              onAnnotationSubmit={submitAnnotation}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
-              stickyPreviewPath={viewState?.previewPath}
-              onStickyPreviewPathChange={(path) => {
-                void setPreviewPath({ owner, path });
-              }}
-              stickyTerminalHistoryTail={
-                viewState === undefined
-                  ? undefined
-                  : (viewState?.terminalHistoryTail ?? "")
+              // A collapsed rail keeps its preview parked.
+              miniPlayer={
+                projectPathSegment && !collapsed
+                  ? {
+                      owner,
+                      returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
+                      title,
+                    }
+                  : undefined
               }
-              onStickyTerminalHistoryTailChange={(tail) => {
-                void setTerminalHistoryTail({ owner, tail });
-              }}
+              viewState={viewState}
             />
           </ReviewChatTargetProvider>
         </div>

@@ -2,7 +2,6 @@
 
 import { Link } from "@tanstack/react-router";
 import type { ComponentType } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
   BarChartIcon,
@@ -18,10 +17,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@vvedantb/ui";
-import { type api } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
-import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -33,8 +30,7 @@ import {
   type ContextSidebarMode,
 } from "@/lib/components/sidebar/contextSidebarModes";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
+import type { RepoDoc } from "@/lib/components/sidebar/sidebarPanelState";
 
 type RepoMainNavIcon = ComponentType<{
   size?: number;
@@ -71,8 +67,8 @@ interface RepoNavSectionsProps {
 /**
  * Per-repo build-pipeline navigation (Build/Ship/Test/More groups) for the
  * active repo. The far-left `RepoRail` handles switching between repos;
- * Inbox/Drafts: Inbox is on the left icon rail (global); Drafts stay above
- * these groups in `RepoTopNav` because they are per-repo.
+ * Inbox is on the left icon rail (global); Today stays above these groups
+ * in `RepoTopNav` because it is per-repo.
  */
 export function RepoNavSections({
   repoBasePath,
@@ -192,6 +188,7 @@ export function RepoNavSections({
             <span className="truncate">{item.name}</span>
           </button>
           <Button
+            shape="rounded"
             size="icon-sm"
             variant="ghost"
             // `reveal-on-hover` rather than a hand-rolled
@@ -244,9 +241,6 @@ export function RepoNavSections({
           {/* Awake-sandbox count; simple view wakes from Preview, so no count. */}
           {item.name === "Quick Tasks" && !collapsed && !simpleView && repo && (
             <ActiveTasksBadge repoId={repo._id} />
-          )}
-          {item.name === "Projects" && !collapsed && repo && (
-            <BuildingProjectsBadge repoId={repo._id} basePath={repoBasePath} />
           )}
         </Link>
       </SharedLayoutNavSurface>

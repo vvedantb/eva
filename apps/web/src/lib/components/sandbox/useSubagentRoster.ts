@@ -1,8 +1,10 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import { useChatTurnStatus } from "@/lib/components/chat/useChatTurnOpen";
 import {
   deriveSubagents,
   subagentTone,
@@ -20,7 +22,7 @@ interface SubagentRoster {
  * Agents-tab roster for the task and project sandbox panels. Sessions fold
  * theirs inside `SandboxPanel` from props the session shell already holds;
  * these two shells never query the chat transcript, so the panel subscribes
- * itself. Both queries are the ones the matching chat panel already runs with
+ * itself. Its queries are the ones the matching chat panel already runs with
  * the same arguments, so the cached client shares one subscription each.
  */
 export function useSubagentRoster({
@@ -29,25 +31,27 @@ export function useSubagentRoster({
   backgroundAgents,
   sandboxRunning,
 }: {
-  /** Chat transcript owner — the task or project the sandbox belongs to. */
-  parentId: Id<"agentTasks"> | Id<"projects">;
-  /** `api.streaming.get` entity id for that surface's chat turn. */
-  streamingEntityId: string;
+  /** The chat; undefined for a task's or project's chat not created yet. */
+  parentId: Id<"sessionChats"> | undefined;
+  /** `api.streaming.get` entity id for that chat's turn. */
+  streamingEntityId: string | undefined;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   sandboxRunning: boolean;
 }): SubagentRoster {
-  const messages = useQuery(api.messages.listByParent, { parentId });
-  const streaming = useQuery(api.streaming.get, {
-    entityId: streamingEntityId,
-  });
+  const messages = useChatTranscript(parentId ?? "skip");
+  const streaming = useQuery(
+    api.streaming.get,
+    streamingEntityId ? { entityId: streamingEntityId } : "skip",
+  );
+  const status = useChatTurnStatus(parentId);
 
-  const turns = messages ?? [];
+  // Streaming payloads can outlive their turn; only fold them while one runs.
+  // No first-run input: this stream is the chat's, not a quick task's first
+  // run, so a running first run must not fold it.
+  const isExecuting = isChatTurnExecuting({ status, messages });
   const agents = deriveSubagents({
-    activityLogs: turns.map((message) => message.activityLog),
-    // Streaming payloads can outlive their turn; only fold them while one runs.
-    streamingActivity: isAssistantTurnInProgress(turns)
-      ? streaming?.currentActivity
-      : undefined,
+    activityLogs: (messages ?? []).map((message) => message.activityLog),
+    streamingActivity: isExecuting ? streaming?.currentActivity : undefined,
     backgroundAgents,
     sandboxRunning,
   });

@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { IconArrowNarrowRight, IconArrowUpRight } from "@tabler/icons-react";
-import { headerBlocker } from "./prMergeState";
+import { headerBlocker } from "@eva/shared";
 import { PrHeaderActions } from "./PrHeaderActions";
 import { PrRemedyButton } from "./PrRemedyButton";
+import { PrStackPopover } from "./PrStackPopover";
 import {
   ToneIcon,
   statusMeta,
@@ -48,7 +49,7 @@ export function ReviewHeader({
   const blocker = headerBlocker(overview);
 
   return (
-    <div className="shrink-0 border-b border-border">
+    <div className="shrink-0">
       <div className="space-y-2 px-4 pt-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -71,6 +72,9 @@ export function ReviewHeader({
             />
             <span className="shrink-0">{overview.baseRef}</span>
           </span>
+          {overview.stack === null ? null : (
+            <PrStackPopover stack={overview.stack} />
+          )}
           <PrHeaderActions
             repoId={repoId}
             overview={overview}

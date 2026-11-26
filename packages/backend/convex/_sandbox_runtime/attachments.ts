@@ -68,18 +68,19 @@ export async function materializeAttachmentsToSandbox(
   sandbox: SandboxHandle,
   storageIds: readonly Id<"_storage">[],
 ): Promise<string[]> {
-  const paths: string[] = [];
-  for (let index = 0; index < storageIds.length; index++) {
-    const storageId = storageIds[index];
-    const blob = await ctx.storage.get(storageId);
-    if (!blob) continue;
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    const path = attachmentSandboxPath(
-      index,
-      attachmentExtensionForMimeType(blob.type),
-    );
-    await writeSandboxFile(sandbox, path, bytes);
-    paths.push(path);
-  }
-  return paths;
+  // A message carries a handful of files: download and write them together.
+  const paths = await Promise.all(
+    storageIds.map(async (storageId, index) => {
+      const blob = await ctx.storage.get(storageId);
+      if (!blob) return null;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const path = attachmentSandboxPath(
+        index,
+        attachmentExtensionForMimeType(blob.type),
+      );
+      await writeSandboxFile(sandbox, path, bytes);
+      return path;
+    }),
+  );
+  return paths.filter((path) => path !== null);
 }

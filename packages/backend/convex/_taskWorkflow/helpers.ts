@@ -1,54 +1,20 @@
 import type { MutationCtx } from "../_generated/server";
-import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
-import { buildProjectBranchName } from "../_projects/helpers";
+import { taskBranchName } from "../_git/branchNames";
 import {
   findPullRequestByUrl,
   recordPullRequest,
   type PrState,
 } from "../_pullRequests/store";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
-import { touchAgentFinished } from "../_sandbox/activity";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
-
-export async function resolveTaskBranchName(
-  db: GenericDatabaseReader<DataModel>,
-  task: Doc<"agentTasks">,
-): Promise<string> {
-  if (task.projectId) {
-    const project = await db.get(task.projectId);
-    return (
-      project?.branchName ??
-      buildProjectBranchName(task.projectId, project?.branchVersion)
-    );
-  }
-  return `eva/task-${String(task._id)}`;
-}
-
-/** Resolves the sandbox id to use for a task run (push). */
-export async function resolveTaskSandboxIdForRun(
-  db: GenericDatabaseReader<DataModel>,
-  task: Doc<"agentTasks">,
-  run: Doc<"agentRuns">,
-): Promise<string | undefined> {
-  if (task.projectId) {
-    const project = await db.get(task.projectId);
-    return preferPersistedSandboxId({
-      sandboxId: project?.sandboxId ?? run.sandboxId,
-    });
-  }
-  return preferPersistedSandboxId({
-    sandboxId: run.sandboxId ?? task.sandboxId,
-  });
-}
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
 export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
@@ -129,27 +95,48 @@ export async function snapshotStreamingActivityToLog(
   }
 }
 
+/**
+ * Clears a task run's streaming rows (run stream and task stream), optionally
+ * snapshotting the run stream into its activity log first.
+ */
+export async function clearTaskRunStreaming(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  runId: Id<"agentRuns">,
+  opts?: { snapshot?: boolean },
+): Promise<void> {
+  const entityId = getTaskRunStreamingEntityId(runId);
+  if (opts?.snapshot) {
+    await snapshotStreamingActivityToLog(ctx, entityId, runId);
+  }
+  await clearStreamingActivity(ctx, entityId);
+  await clearStreamingActivity(ctx, String(taskId));
+}
+
 /** Builds a human-readable summary string for a completed run result. */
 export function buildRunResultSummary(
   success: boolean,
   prUrl: string | null,
-  projectId: Id<"projects"> | undefined,
   claudeResult?: string,
 ): string | undefined {
   if (!success) return undefined;
   if (claudeResult) return claudeResult;
-  if (prUrl) return projectId ? "Created project PR" : "Created task PR";
-  return projectId
-    ? "Pushed commit to project branch"
-    : "Pushed commit to task branch";
+  return prUrl ? "Created task PR" : "Pushed commit to task branch";
 }
+
+/**
+ * `exitReason` of a project task's run that ended on its own open ask
+ * (`report_to_coordinator` with `kind: "ask"`, `runEndedOnAsk`): a normal
+ * outcome, not an error. The task stays `in_progress` and waits for the
+ * answer, which starts its next run.
+ */
+export const RUN_WAITING_FOR_ANSWER = "waiting_for_answer";
 
 /** Patches the run document with final status, error, PR URL, and result summary. */
 export async function finalizeRunStatus(
   ctx: MutationCtx,
   params: {
     runId: Id<"agentRuns">;
-    projectId: Id<"projects"> | undefined;
     success: boolean;
     error: string | null;
     prError: string | null;
@@ -177,7 +164,6 @@ export async function finalizeRunStatus(
     resultSummary: buildRunResultSummary(
       params.success,
       params.prUrl,
-      params.projectId,
       params.claudeResult,
     ),
     error: errorMessage,
@@ -193,27 +179,26 @@ export async function finalizeRunStatus(
       prUrl: params.prUrl,
     });
   }
-  await touchAgentFinished(ctx, {
-    kind: "task",
-    entityId: String(run.taskId),
-  });
 
-  // Single terminal-status choke point for a run, and it is guarded above
-  // against re-finalizing — so a watched task's master is woken exactly once
-  // whether the run ended via finalizeRunStreamingPhase or completeRun.
+  // Single terminal-status choke point for a run, guarded above against
+  // re-finalizing, so a watched task's master is woken exactly once.
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,
-    params.success ? "success" : "error",
+    params.exitReason === RUN_WAITING_FOR_ANSWER
+      ? "waiting"
+      : params.success
+        ? "success"
+        : "error",
   );
 }
 
 /**
- * Links the PR a task run opened or refreshed. A quick task owns its PR; a
- * project task's PR is the project's, tagged with the task and run that opened
- * it. Either way it becomes the owner's primary: it is the PR of the branch Eva
- * is working on now. Task-workflow PRs open as drafts; when the PR is already
- * tracked its state is kept, and the webhook corrects it within seconds.
+ * Links the PR a task run opened or refreshed. Every task (a quick task or a
+ * project's child task) owns its PR, and it becomes the task's primary: it is
+ * the PR of the branch Eva is working on now. Task-workflow PRs open as
+ * drafts; when the PR is already tracked its state is kept, and the webhook
+ * corrects it within seconds.
  */
 export async function recordRunPullRequest(
   ctx: MutationCtx,
@@ -228,29 +213,6 @@ export async function recordRunPullRequest(
   const task = await ctx.db.get(args.taskId);
   if (!task) return;
   const existing = await findPullRequestByUrl(ctx.db, args.prUrl);
-  if (task.projectId !== undefined) {
-    const project = await ctx.db.get(task.projectId);
-    if (!project) return;
-    await recordPullRequest(ctx, {
-      owner: {
-        kind: "project",
-        projectId: project._id,
-        taskId: task._id,
-        ...(args.runId !== undefined ? { runId: args.runId } : {}),
-      },
-      repoId: project.repoId,
-      prUrl: args.prUrl,
-      state: existing?.state ?? args.state ?? "draft",
-      primary: true,
-      origin: "eva",
-      headBranch:
-        project.branchName ??
-        buildProjectBranchName(project._id, project.branchVersion),
-      baseBranch: project.baseBranch,
-      title: project.title,
-    });
-    return;
-  }
   if (task.repoId === undefined) return;
   await recordPullRequest(ctx, {
     owner: {
@@ -263,7 +225,7 @@ export async function recordRunPullRequest(
     state: existing?.state ?? args.state ?? "draft",
     primary: true,
     origin: "eva",
-    headBranch: `eva/task-${task._id}`,
+    headBranch: taskBranchName(task),
     baseBranch: task.baseBranch,
     title: task.title,
   });

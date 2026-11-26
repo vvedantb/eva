@@ -8,9 +8,6 @@ import { tokenTransition } from "@vvedantb/ui";
 import type { LandingFeature } from "./landingContent";
 import { LANDING_PREVIEWS } from "./previews";
 
-/** How long each tab holds before the showcase moves to the next one. */
-const AUTO_ADVANCE_SECONDS = 4;
-
 interface ShowcaseState {
   index: number;
   /** Cleared for good once the visitor picks a tab themselves. */
@@ -20,13 +17,12 @@ interface ShowcaseState {
 }
 
 /**
- * A pillar's features as a tab strip over a live mock panel.
+ * A pillar's features as a tab strip over an animated Stageshow demo.
  *
- * The countdown is the progress bar itself: it animates across the active tab
- * over `AUTO_ADVANCE_SECONDS` and advances the index when it lands, so there is
- * no interval to keep in sync with what is drawn. Auto-advance stops when the
- * strip scrolls out of view, and permanently once they choose a tab — nothing should slide out from under
- * someone who is reading it.
+ * The demo drives the pace: it calls `onEnd` once its payoff has held, and the
+ * showcase moves to the next tab. The underline only shows progress, over the
+ * demo's declared `seconds`. Auto-advance stops when the strip scrolls out of
+ * view, and permanently once the visitor picks a tab (that demo then loops).
  *
  * Each tab carries `group` so the animated sidebar icons play the same hover
  * animation here as they do in the app: the keyframes in
@@ -49,13 +45,16 @@ export function LandingShowcase({
   if (!active) return null;
 
   const autoRunning = tab.auto && tab.visible;
-  const Preview = LANDING_PREVIEWS[active.preview];
+  const { Demo, seconds } = LANDING_PREVIEWS[active.preview];
 
+  // Stable for the stage's sake (a new callback restarts its script), so the
+  // auto/visible check reads current state instead of closing over it.
   const advance = () => {
-    setTab((current) => ({
-      ...current,
-      index: (current.index + 1) % features.length,
-    }));
+    setTab((current) =>
+      current.auto && current.visible
+        ? { ...current, index: (current.index + 1) % features.length }
+        : current,
+    );
   };
 
   return (
@@ -112,7 +111,7 @@ export function LandingShowcase({
                 <TabUnderline
                   countdownKey={tab.index}
                   running={autoRunning}
-                  onComplete={advance}
+                  seconds={seconds}
                 />
               ) : null}
             </button>
@@ -151,7 +150,7 @@ export function LandingShowcase({
         </SwapIn>
 
         <SwapIn swapKey={`preview-${active.preview}`}>
-          <Preview />
+          <Demo onEnd={advance} />
         </SwapIn>
       </div>
     </m.div>
@@ -159,18 +158,18 @@ export function LandingShowcase({
 }
 
 /**
- * The active tab's underline. While the showcase is cycling this is a countdown
- * that reports back when it finishes; otherwise it is a plain marker. They are
- * separate branches because remounting is what restarts the countdown.
+ * The active tab's underline. While the showcase is cycling it fills over the
+ * demo's length; otherwise it is a plain marker. They are separate branches
+ * because remounting is what restarts the fill.
  */
 function TabUnderline({
   countdownKey,
   running,
-  onComplete,
+  seconds,
 }: {
   countdownKey: number;
   running: boolean;
-  onComplete: () => void;
+  seconds: number;
 }) {
   if (!running) {
     return (
@@ -188,8 +187,7 @@ function TabUnderline({
       className="absolute inset-x-3 bottom-0 h-0.5 origin-left rounded-full bg-primary"
       initial={{ scaleX: 0 }}
       animate={{ scaleX: 1 }}
-      transition={{ duration: AUTO_ADVANCE_SECONDS, ease: "linear" }}
-      onAnimationComplete={onComplete}
+      transition={{ duration: seconds, ease: "linear" }}
     />
   );
 }

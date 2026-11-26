@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { internalQuery } from "./_generated/server";
+import { internalQuery, type DatabaseReader } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
-import { collectDirectoryUserIds } from "./_users/directory";
+import { collectDirectoryUserIds, isDirectoryPeer } from "./_users/directory";
 
 /** Returns the Clerk ID for a user (internal use only). */
 export const getInternal = internalQuery({
@@ -33,7 +34,10 @@ export const getDisplayNameInternal = internalQuery({
   },
 });
 
-/** Fetches a user's public profile (name, last seen) by their ID. */
+/**
+ * Fetches a user's profile (name, last seen) by their ID. Email and the page
+ * they are on go only to the user themself and their teammates.
+ */
 export const get = authQuery({
   args: { id: v.id("users") },
   returns: v.union(
@@ -49,52 +53,58 @@ export const get = authQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.id);
+    const [user, presence, peer] = await Promise.all([
+      ctx.db.get(args.id),
+      getUserPresenceRow(ctx.db, args.id),
+      isDirectoryPeer(ctx.db, ctx.userId, args.id),
+    ]);
     if (!user) return null;
-    const seen = mergeLastSeen(
-      await getUserPresenceRow(ctx.db, args.id),
-      user,
-    );
+    const seen = mergeLastSeen(presence, user);
     return {
       firstName: user.firstName,
       lastName: user.lastName,
       fullName: user.fullName,
-      email: user.email,
+      email: peer ? user.email : undefined,
       role: user.role,
       lastSeenAt: seen.lastSeenAt,
-      lastSeenPath: seen.lastSeenPath,
+      lastSeenPath: peer ? seen.lastSeenPath : undefined,
     };
   },
 });
 
+type EmailRecipient = { userId: Id<"users">; email: string; name?: string };
+
+/** The user as a broadcast recipient, or null without an email or opt-in. */
+function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
+  if (!user?.email || user.emailNotificationsEnabled !== true) return null;
+  return {
+    userId: user._id,
+    email: user.email,
+    name: user.firstName ?? user.fullName,
+  };
+}
+
 /**
- * Lists every user with an email address, for sending broadcast emails such as
- * the weekly changelog. Internal use only.
+ * Every user with an email address and email notifications enabled, across
+ * all teams. Only the weekly changelog broadcast may use this.
  */
-export const listEmailRecipients = internalQuery({
-  args: {},
-  returns: v.array(
-    v.object({
-      userId: v.id("users"),
-      email: v.string(),
-      name: v.optional(v.string()),
-    }),
-  ),
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
-    const recipients = [];
-    for (const user of users) {
-      if (!user.email) continue;
-      if (user.emailNotificationsEnabled !== true) continue;
-      recipients.push({
-        userId: user._id,
-        email: user.email,
-        name: user.firstName ?? user.fullName,
-      });
-    }
-    return recipients;
-  },
-});
+export async function collectEmailRecipients(
+  db: DatabaseReader,
+): Promise<EmailRecipient[]> {
+  const users = await db.query("users").collect();
+  return users.flatMap((user) => toEmailRecipient(user) ?? []);
+}
+
+/** The given users that have an email address and email notifications enabled. */
+export async function collectEmailRecipientsAmong(
+  db: DatabaseReader,
+  userIds: ReadonlyArray<Id<"users">>,
+): Promise<EmailRecipient[]> {
+  const users = await Promise.all(
+    [...new Set(userIds)].map((id) => db.get(id)),
+  );
+  return users.flatMap((user) => toEmailRecipient(user) ?? []);
+}
 
 /**
  * Email and display name for one user, the recipient lookup for the MCP
@@ -153,7 +163,13 @@ export const listTeamWithMembers = authQuery({
     if (memberships.length === 0) return null;
 
     const teamMembership = memberships[0];
-    const team = await ctx.db.get(teamMembership.teamId);
+    const [team, teamMembers] = await Promise.all([
+      ctx.db.get(teamMembership.teamId),
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", teamMembership.teamId))
+        .collect(),
+    ]);
     if (!team) return null;
 
     let displayName = team.name;
@@ -167,30 +183,30 @@ export const listTeamWithMembers = authQuery({
       }
     }
 
-    const teamMembers = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", teamMembership.teamId))
-      .collect();
-
-    const members = [];
-    for (const tm of teamMembers) {
-      if (tm.userId === ctx.userId) continue;
-      const user = await ctx.db.get(tm.userId);
-      if (user) {
-        const seen = mergeLastSeen(
-          await getUserPresenceRow(ctx.db, tm.userId),
-          user,
-        );
-        members.push({
-          _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          fullName: user.fullName,
-          lastSeenAt: seen.lastSeenAt,
-          lastSeenPath: seen.lastSeenPath,
-        });
-      }
-    }
+    const members = (
+      await Promise.all(
+        teamMembers
+          .filter((tm) => tm.userId !== ctx.userId)
+          .map(async (tm) => {
+            const [user, presence] = await Promise.all([
+              ctx.db.get(tm.userId),
+              getUserPresenceRow(ctx.db, tm.userId),
+            ]);
+            if (!user) return [];
+            const seen = mergeLastSeen(presence, user);
+            return [
+              {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: user.fullName,
+                lastSeenAt: seen.lastSeenAt,
+                lastSeenPath: seen.lastSeenPath,
+              },
+            ];
+          }),
+      )
+    ).flat();
 
     // By name: the previous online-first order changed with the clock, which is
     // what made this query non-cacheable, and it reshuffled avatars under the
@@ -226,30 +242,38 @@ export const listAll = authQuery({
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
-    const memberRows = [];
-    for (const membership of memberships) {
-      const rows = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-        .collect();
-      memberRows.push(...rows);
-    }
+    const memberRows = (
+      await Promise.all(
+        memberships.map((membership) =>
+          ctx.db
+            .query("teamMembers")
+            .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
+            .collect(),
+        ),
+      )
+    ).flat();
     const ids = collectDirectoryUserIds(ctx.userId, memberRows);
-    const profiles = [];
-    for (const id of ids) {
-      const user = await ctx.db.get(id);
-      if (!user) continue;
-      profiles.push({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.fullName,
-        role: user.role,
-      });
-    }
-    return profiles;
+    const users = await Promise.all([...ids].map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });
+
+/** Public profiles for fetched users, in order, skipping deleted ones. */
+function toPublicProfiles(users: Array<Doc<"users"> | null>) {
+  return users.flatMap((user) =>
+    user
+      ? [
+          {
+            _id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            role: user.role,
+          },
+        ]
+      : [],
+  );
+}
 
 /**
  * Public profiles for specific users. Chat uses this instead of `listAll` so a
@@ -260,19 +284,8 @@ export const getMany = authQuery({
   args: { ids: v.array(v.id("users")) },
   returns: v.array(publicProfileValidator),
   handler: async (ctx, args) => {
-    const uniqueIds = [...new Set(args.ids)];
-    const profiles = [];
-    for (const id of uniqueIds) {
-      const user = await ctx.db.get(id);
-      if (!user) continue;
-      profiles.push({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.fullName,
-        role: user.role,
-      });
-    }
-    return profiles;
+    const ids = [...new Set(args.ids)];
+    const users = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });

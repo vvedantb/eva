@@ -5,13 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
 import { Button, Spinner } from "@vvedantb/ui";
 import {
+  DEFAULT_PREVIEW_PORT,
   PREVIEW_WAKE_KINDS,
   previewWakeSearchSchema,
   type PreviewWakeKind,
 } from "@eva/shared";
 import { buildUrlWithPath } from "@/lib/components/PreviewNavBar";
 
-const DEFAULT_PREVIEW_PORT = 3000;
 /** Same cadence as the Preview pane's readiness poll (useSandboxPreview). */
 const READY_POLL_MS = 3_000;
 /** Mirrors TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS on the backend. */
@@ -24,7 +24,8 @@ function isWakeKind(value: string): value is PreviewWakeKind {
 /**
  * Stable preview link: `/p/session/<id>?port=3000&path=/foo`. Unlike the raw
  * sandbox domain this survives the sandbox being paused (idle pause) or even
- * recreated, because it is keyed by the chat entity. The route brings the
+ * recreated, because it is keyed by the chat entity. An active sandbox goes
+ * straight to its domain with a fresh grant. Otherwise the route brings the
  * sandbox up through the same Start mutation the UI button uses, waits for the
  * dev server to answer, then hands off to the sandbox's own domain with a fresh
  * preview grant — the handshake `/preview-auth` does for cold links.
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/p/$kind/$id")({
 });
 
 type Phase =
+  | { kind: "opening" }
   | { kind: "waking" }
   | { kind: "serving" }
   | { kind: "error"; message: string };
@@ -56,7 +58,7 @@ function PreviewWake() {
   const ensureActive = useAction(api.sandboxWake.ensureEntitySandboxActive);
   const getPreviewUrl = useAction(api.sandbox.getPreviewUrl);
   const convex = useConvex();
-  const [phase, setPhase] = useState<Phase>({ kind: "waking" });
+  const [phase, setPhase] = useState<Phase>({ kind: "opening" });
   const [attempt, setAttempt] = useState(0);
   const ran = useRef<number>(-1);
 
@@ -70,9 +72,10 @@ function PreviewWake() {
   const targetMissing = target === null;
   const sandboxStatus = target?.status;
 
-  /* eslint-disable no-effect/no-event-handler --
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-external-store-subscription --
      Page-level handshake like /preview-auth: the trigger is landing on the
-     route (plus sign-in settling), not a click. One run per attempt. */
+     route (plus sign-in settling), not a click. One run per attempt;
+     `attempt` is the local retry counter, not an external store. */
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !targetLoaded) return;
     if (targetMissing) {
@@ -137,11 +140,39 @@ function PreviewWake() {
       }
     };
 
-    ensureActive({ kind: wakeKind, id })
-      .then(async () => {
-        if (cancelled) return;
-        await waitForDevServer();
-      })
+    // Fast path: a sandbox that is already up needs no wake and no readiness
+    // probe. `getPreviewUrl` without `checkReady` still starts the auth proxy
+    // when it is not running (nothing else does after a resume), then returns
+    // the URL with a fresh grant. If the dev server is down the preview page
+    // says so itself. Retries skip this and run the full wake.
+    const openActive = async (): Promise<boolean> => {
+      if (attempt > 0) return false;
+      const fresh = await readTarget();
+      if (cancelled || fresh?.status !== "active" || !fresh.sandboxId) {
+        return false;
+      }
+      const preview = await getPreviewUrl({
+        sandboxId: fresh.sandboxId,
+        repoId: fresh.repoId,
+        port: search.port ?? fresh.devPort ?? DEFAULT_PREVIEW_PORT,
+      });
+      if (cancelled) return true;
+      if (preview.url.length === 0) return false;
+      setPhase({ kind: "serving" });
+      window.location.replace(buildUrlWithPath(preview.url, search.path ?? "/"));
+      return true;
+    };
+
+    const wake = async () => {
+      setPhase({ kind: "waking" });
+      await ensureActive({ kind: wakeKind, id });
+      if (cancelled) return;
+      await waitForDevServer();
+    };
+
+    openActive()
+      .catch(() => false)
+      .then((opened) => (opened || cancelled ? undefined : wake()))
       .catch((err: Error) => {
         if (cancelled) return;
         setPhase({
@@ -166,7 +197,7 @@ function PreviewWake() {
     getPreviewUrl,
     convex,
   ]);
-  /* eslint-enable no-effect/no-event-handler */
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-external-store-subscription */
 
   if (isLoaded && !isSignedIn) {
     return (
@@ -178,14 +209,16 @@ function PreviewWake() {
     );
   }
 
+  // Opening an active sandbox is a quick handoff: keep the page blank. Only a
+  // real wake (seconds to minutes) or an error shows anything.
+  if (phase.kind === "opening" || phase.kind === "serving") return null;
+
   const statusText =
     phase.kind === "error"
       ? phase.message
-      : phase.kind === "serving"
-        ? "Opening the preview…"
-        : sandboxStatus === "active"
-          ? "Starting the dev server…"
-          : "Waking Eva up…";
+      : sandboxStatus === "active"
+        ? "Starting the dev server…"
+        : "Waking Eva up…";
 
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">

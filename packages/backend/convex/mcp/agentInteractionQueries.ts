@@ -9,7 +9,10 @@ import { hasRepoAccess } from "../functions";
 import { listSessionChats } from "../_sessionChats/helpers";
 import { entityVisible } from "../numId";
 import { createNotification } from "../notifications";
-import { notificationUrgencyValidator } from "../validators";
+import {
+  chatEntityKindValidator,
+  notificationUrgencyValidator,
+} from "../validators";
 
 // Backing functions for mcp/agentInteractionTools.ts. Internal only: the tools
 // resolve the caller's Eva user id first and pass it in, and every function
@@ -21,12 +24,6 @@ import { notificationUrgencyValidator } from "../validators";
  * stops), so the whole table is small; the cap just keeps the read bounded.
  */
 const PENDING_SCAN_LIMIT = 500;
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 type ChatHit =
   | { kind: "session"; doc: Doc<"sessions"> }
@@ -52,12 +49,12 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
   if (chatId) return null;
   const taskId = ctx.db.normalizeId("agentTasks", id);
   if (taskId) {
-    const doc = entityVisible(await ctx.db.get(taskId));
+    const doc = await ctx.db.get(taskId);
     return doc ? { kind: "task", doc } : null;
   }
   const projectId = ctx.db.normalizeId("projects", id);
   if (projectId) {
-    const doc = entityVisible(await ctx.db.get(projectId));
+    const doc = await ctx.db.get(projectId);
     return doc ? { kind: "project", doc } : null;
   }
   return null;
@@ -107,7 +104,7 @@ export const listPendingQuestionsForUser = internalQuery({
       payload: v.string(),
       createdAt: v.number(),
       entityId: v.string(),
-      kind: chatKindValidator,
+      kind: chatEntityKindValidator,
       numId: v.optional(v.number()),
       title: v.string(),
       repoOwner: v.string(),
@@ -125,28 +122,39 @@ export const listPendingQuestionsForUser = internalQuery({
       const row = questionId ? await ctx.db.get(questionId) : null;
       rows = row ? [row] : [];
     } else if (args.entityId !== undefined) {
-      rows = [];
-      for (const entityId of await questionEntityIds(ctx, args.entityId)) {
-        rows.push(
-          ...(await ctx.db
+      const entityIds = await questionEntityIds(ctx, args.entityId);
+      const perEntity = await Promise.all(
+        entityIds.map((entityId) =>
+          ctx.db
             .query("pendingQuestions")
             .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-            .take(PENDING_SCAN_LIMIT)),
-        );
-      }
+            .take(PENDING_SCAN_LIMIT),
+        ),
+      );
+      rows = perEntity.flat();
     } else {
       rows = await ctx.db.query("pendingQuestions").take(PENDING_SCAN_LIMIT);
     }
 
+    // Each row resolves its chat and repo on its own; the sort below fixes order.
     const result = [];
-    for (const row of rows) {
-      if (row.answer !== undefined) continue;
-      const hit = await findChat(ctx, row.entityId);
-      if (!hit) continue;
-      const repoId = await chatRepoId(ctx, hit);
-      if (!repoId || !(await hasRepoAccess(ctx.db, repoId, userId))) continue;
-      const repo = await ctx.db.get(repoId);
-      if (!repo) continue;
+    const resolved = await Promise.all(
+      rows.map(async (row) => {
+        if (row.answer !== undefined) return null;
+        const hit = await findChat(ctx, row.entityId);
+        if (!hit) return null;
+        const repoId = await chatRepoId(ctx, hit);
+        if (!repoId) return null;
+        const [hasAccess, repo] = await Promise.all([
+          hasRepoAccess(ctx.db, repoId, userId),
+          ctx.db.get(repoId),
+        ]);
+        return hasAccess && repo ? { row, hit, repo } : null;
+      }),
+    );
+    for (const entry of resolved) {
+      if (entry === null) continue;
+      const { row, hit, repo } = entry;
       result.push({
         questionId: row._id,
         toolUseId: row.toolUseId,
@@ -180,7 +188,9 @@ export const notifyUserFromAgent = internalMutation({
     title: v.string(),
     message: v.optional(v.string()),
     urgency: notificationUrgencyValidator,
-    chat: v.optional(v.object({ kind: chatKindValidator, id: v.string() })),
+    chat: v.optional(
+      v.object({ kind: chatEntityKindValidator, id: v.string() }),
+    ),
   },
   returns: v.id("notifications"),
   handler: async (ctx, args) => {

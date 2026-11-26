@@ -1,9 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 describe("message media targeting", () => {
   test("an exact target cannot attach synthetic media to a newer message", async () => {
@@ -16,6 +16,7 @@ describe("message media targeting", () => {
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Media target test",
@@ -68,12 +69,14 @@ describe("message media targeting", () => {
         installationId: 1,
       });
       const firstSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "First parent",
         status: "active",
       });
       const secondSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Second parent",

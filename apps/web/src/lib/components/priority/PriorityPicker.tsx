@@ -21,6 +21,8 @@ interface PriorityPickerProps {
   onChange: (priority: Priority | undefined) => void;
   compact?: boolean;
   className?: string;
+  /** Read-only: the value shows, the picker does not open. */
+  disabled?: boolean;
 }
 
 const NO_PRIORITY_VALUE = "__no_priority__";
@@ -30,6 +32,7 @@ export function PriorityPicker({
   onChange,
   compact = false,
   className,
+  disabled = false,
 }: PriorityPickerProps) {
   const [open, setOpen] = useState(false);
 
@@ -38,6 +41,7 @@ export function PriorityPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           className={cn(
             // `min-h-10` rather than a height: the trigger is ~26px
             // tall, and callers that pass their own `h-*` (the quick-task

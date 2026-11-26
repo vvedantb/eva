@@ -1,28 +1,30 @@
 "use client";
 
 import {
-  Badge,
   Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
   tokenTransition,
-  Spinner,
   OpenSubagentContext,
   CountPop,
   ListEnter,
 } from "@vvedantb/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
-import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
+import { IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { use, useState } from "react";
-import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
+import {
+  backgroundAgentStatusLine,
+  backgroundAgentTitle,
+  backgroundAgentsLabel,
+  isVisibleBackgroundAgent,
+} from "@eva/shared/backgroundAgents";
+import { COMPOSER_CHIP_CLASS } from "./composerChip";
+import type { RequestAgentStop } from "./useStopBackgroundAgent";
+import { AgentStopButton } from "@/lib/components/sandbox/AgentsPanel";
 
 type BackgroundAgent = BackgroundAgentEntry;
-
-function formatStatus(status: string): string {
-  return status.replaceAll("_", " ");
-}
 
 export function BackgroundAgentsChip({
   backgroundAgents,
@@ -31,11 +33,8 @@ export function BackgroundAgentsChip({
 }: {
   backgroundAgents: BackgroundAgent[] | undefined;
   isReadOnly?: boolean;
-  onRequestStop: (toolUseId: string) => Promise<void>;
+  onRequestStop: RequestAgentStop;
 }) {
-  const [stoppingIds, setStoppingIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const [popoverOpen, setPopoverOpen] = useState(false);
   // Set by `SubagentThreadLayer` on the sandbox chats that can show the thread.
   const openSubagent = use(OpenSubagentContext);
@@ -44,29 +43,12 @@ export function BackgroundAgentsChip({
     isVisibleBackgroundAgent,
   );
 
-  const handleStop = async (toolUseId: string) => {
-    setStoppingIds((prev) => new Set(prev).add(toolUseId));
-    // Cleanup is duplicated into the catch instead of using `finally`: React
-    // Compiler bails on the whole file when it meets a `finally` clause.
-    const clearStopping = () =>
-      setStoppingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(toolUseId);
-        return next;
-      });
-    try {
-      await onRequestStop(toolUseId);
-    } catch (error) {
-      clearStopping();
-      throw error;
-    }
-    clearStopping();
+  // The confirm dialog is modal and would close the popover anyway; closing
+  // it first keeps focus return predictable.
+  const requestStop: RequestAgentStop = (toolUseId, title) => {
+    setPopoverOpen(false);
+    onRequestStop(toolUseId, title);
   };
-
-  const label =
-    runningAgents.length === 1
-      ? "1 background agent"
-      : `${runningAgents.length} background agents`;
 
   return (
     <AnimatePresence initial={false}>
@@ -81,22 +63,20 @@ export function BackgroundAgentsChip({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                aria-label={`Background: ${backgroundAgentsLabel(runningAgents.length)}`}
+                className={COMPOSER_CHIP_CLASS}
               >
                 <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
-                <span>{label}</span>
-                <Badge variant="secondary" className="h-4 px-1.5 text-3xs">
-                  <CountPop
-                    label={String(runningAgents.length)}
-                    className="tabular-nums"
-                  />
-                </Badge>
+                <CountPop
+                  label={String(runningAgents.length)}
+                  className="tabular-nums"
+                />
+                <span>{runningAgents.length === 1 ? "agent" : "agents"}</span>
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-0" align="start">
               <ul className="divide-y divide-border">
                 {runningAgents.map((agent, index) => {
-                  const isStopping = stoppingIds.has(agent.toolUseId);
                   return (
                     <ListEnter
                       key={agent.toolUseId}
@@ -108,11 +88,10 @@ export function BackgroundAgentsChip({
                       <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 grow">
                         <p className="truncate text-sm font-medium text-foreground">
-                          {agent.description?.trim() || "Background agent"}
+                          {backgroundAgentTitle(agent)}
                         </p>
                         <p className="text-xs capitalize text-muted-foreground">
-                          {formatStatus(agent.status)}
-                          {agent.backgrounded ? " · backgrounded" : ""}
+                          {backgroundAgentStatusLine(agent)}
                         </p>
                       </div>
                       {openSubagent ? (
@@ -130,27 +109,11 @@ export function BackgroundAgentsChip({
                         </Button>
                       ) : null}
                       {!isReadOnly ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0"
-                          disabled={isStopping}
-                          onClick={() => {
-                            void handleStop(agent.toolUseId);
-                          }}
-                        >
-                          {isStopping ? (
-                            <Spinner
-                              variant="circle"
-                              size="sm"
-                              className="size-3.5"
-                            />
-                          ) : (
-                            <IconPlayerStop className="size-3.5" />
-                          )}
-                          Stop
-                        </Button>
+                        <AgentStopButton
+                          toolUseId={agent.toolUseId}
+                          title={agent.description?.trim() || undefined}
+                          onRequestStop={requestStop}
+                        />
                       ) : null}
                     </ListEnter>
                   );

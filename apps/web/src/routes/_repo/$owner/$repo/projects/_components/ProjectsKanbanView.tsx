@@ -7,15 +7,15 @@ import {
   KanbanColumn,
   KANBAN_COLUMN_WIDTH_CLASS,
 } from "@/lib/components/kanban/KanbanColumn";
-import {
-  phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import { tokenTransition } from "@vvedantb/ui";
+import { kanbanCardGlide } from "@/lib/components/kanban/kanbanCardGlide";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
@@ -29,28 +29,31 @@ interface ProjectsSelectionProps {
 }
 
 interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
-  projectsByPhase: Record<ProjectPhase, Project[]>;
-  visiblePhases: Set<ProjectPhase>;
+  projectsByPhase: Record<ProjectStage, Project[]>;
+  visiblePhases: Set<ProjectStage>;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   owner: string;
   name: string;
   basePath: string;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  onArchive: (id: Id<"projects">, title: string) => void;
 }
 
 export function ProjectsKanbanView({
   projectsByPhase,
   visiblePhases,
+  statuses,
   owner,
   name,
   basePath,
-  onDelete,
+  onArchive,
   isSelecting,
   selectedIds,
   onToggleSelect,
 }: ProjectsKanbanViewProps) {
   return (
     <AnimatePresence initial={false}>
-      {PROJECT_PHASES.flatMap((phase) =>
+      {PROJECT_STAGES.flatMap((phase) =>
         visiblePhases.has(phase)
           ? [
               <m.div
@@ -65,10 +68,11 @@ export function ProjectsKanbanView({
                 <VirtualProjectColumn
                   phase={phase}
                   projects={projectsByPhase[phase]}
+                  statuses={statuses}
                   owner={owner}
                   name={name}
                   basePath={basePath}
-                  onDelete={onDelete}
+                  onArchive={onArchive}
                   isSelecting={isSelecting}
                   selectedIds={selectedIds}
                   onToggleSelect={onToggleSelect}
@@ -84,20 +88,22 @@ export function ProjectsKanbanView({
 function VirtualProjectColumn({
   phase,
   projects,
+  statuses,
   owner,
   name,
   basePath,
-  onDelete,
+  onArchive,
   isSelecting = false,
   selectedIds,
   onToggleSelect,
 }: ProjectsSelectionProps & {
-  phase: ProjectPhase;
+  phase: ProjectStage;
   projects: Project[];
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   owner: string;
   name: string;
   basePath: string;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  onArchive: (id: Id<"projects">, title: string) => void;
 }) {
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/kanban/${phase}`,
@@ -108,7 +114,7 @@ function VirtualProjectColumn({
   return (
     <KanbanColumn
       id={phase}
-      config={phaseConfig[phase]}
+      config={projectStageConfig[phase]}
       count={projects.length}
       droppable={false}
       emptyLabel="No projects"
@@ -122,7 +128,7 @@ function VirtualProjectColumn({
           itemContent={(index) => {
             const project = projects[index];
             return (
-              <div className="pb-1.5">
+              <m.div className="pb-1.5" {...kanbanCardGlide(project._id)}>
                 <ProjectCard
                   projectId={project._id}
                   userId={project.userId}
@@ -131,23 +137,21 @@ function VirtualProjectColumn({
                   rawInput={project.rawInput}
                   branchName={project.branchName}
                   numId={project.numId}
-                  repoFullName={`${owner}/${name}`}
                   createdAt={project._creationTime}
-                  accentColor={phaseConfig[phase].bar}
+                  accentColor={projectStageConfig[phase].bar}
                   members={project.members}
                   projectLead={project.projectLead}
-                  phase={phase}
-                  planningMode={project.planningMode}
-                  isBuilding={project.activeBuildWorkflowId !== undefined}
-                  sandboxStatus={project.reviewProjectSandboxStatus}
+                  status={statuses.get(project._id)}
+                  sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}
                   isAwaitingAnswer={project.isAwaitingAnswer}
+                  archived={project.archivedAt !== undefined}
                   href={
                     entityPathSegment(project)
                       ? `${basePath}/projects/${entityPathSegment(project)}`
                       : `${basePath}/projects`
                   }
-                  onDelete={() => onDelete(project._id, project.title)}
+                  onArchive={() => onArchive(project._id, project.title)}
                   isSelecting={isSelecting}
                   isSelected={selectedIds?.has(project._id)}
                   onToggleSelect={(event) =>
@@ -157,7 +161,7 @@ function VirtualProjectColumn({
                     })
                   }
                 />
-              </div>
+              </m.div>
             );
           }}
         />

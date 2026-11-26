@@ -1,64 +1,64 @@
-import { internal } from "../_generated/api";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { v } from "convex/values";
+import { internal } from "../_generated/api";
+import { ConvexError, v } from "convex/values";
+import { tokenizedToDisplayText } from "@eva/shared";
+import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
+import { sendOwnerChatMessage } from "../_sessions/execution";
 import {
-  roleValidator,
-  phaseValidator,
   priorityValidator,
   aiModelValidator,
-  reasoningLevelValidator,
 } from "../validators";
 import {
+  assertProjectNotArchived,
   authMutation,
   hasRepoAccess,
   getProjectWithAccess,
-  softDeleteAgentTask,
+  onProjectTasksChanged,
+  taskRunPending,
 } from "../functions";
+import { listProjectTasks, taskLabel } from "./scheduler";
 import { allocateNumId } from "../numId";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import {
-  getProjectConversation,
-  setProjectConversation,
-  setProjectGeneratedSpec,
-  buildProjectBranchName,
-} from "./helpers";
-import { scheduleProjectPrSync } from "./prSync";
+  mirrorOwnerIntoSession,
+  syncProjectSession,
+  syncProjectSessionBranch,
+} from "../_sessions/ownedSession";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
-import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-} from "../_shared/composerTraits";
 
 /**
- * Creates a new project. Defaults to `draft` phase with an initial conversation
- * message for the AI interview/plan flow. When `skipPlanning` is true, the
- * project goes straight to `business_review` as a plain tasks-only container —
- * no AI conversation, no generated spec, branch name set immediately.
+ * Creates a new project from one prompt. It plans in its coordinator chat
+ * (decision 1): no interview, no spec, no project branch. `rawInput` (the
+ * prompt, with mention tokens) becomes the description as display text: the
+ * project context every coordinator and child task turn carries
+ * (`projectBriefBlock`). The title is the prompt's first line until a
+ * generated one replaces it (`_shared/ownerTitle.ts`). With `run` ("Save and
+ * Run") the prompt is also the first message in the coordinator chat; without
+ * it nothing is sent. The client opens the project either way.
  */
 export const create = authMutation({
   args: {
     repoId: v.id("githubRepos"),
-    title: v.string(),
     rawInput: v.string(),
     baseBranch: v.optional(v.string()),
     priority: v.optional(priorityValidator),
-    skipPlanning: v.optional(v.boolean()),
     model: v.optional(aiModelValidator),
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
+    run: v.optional(v.boolean()),
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    const skipPlanning = args.skipPlanning ?? false;
+    const prompt = args.rawInput.trim();
+    const { title } = initialTitle(undefined, prompt);
     const numId = await allocateNumId(ctx.db, args.repoId, "projects");
     const repo = await ctx.db.get(args.repoId);
     const model = args.model ?? repo?.defaultModel;
@@ -73,51 +73,42 @@ export const create = authMutation({
     const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
       userId: ctx.userId,
-      title: args.title,
-      rawInput: args.rawInput,
-      description: skipPlanning ? args.rawInput : undefined,
+      title,
+      rawInput: prompt,
+      description: tokenizedToDisplayText(prompt),
       baseBranch: args.baseBranch,
-      phase: skipPlanning ? "business_review" : "draft",
-      planningMode: skipPlanning ? "tasks_only" : "interview",
       projectStartDate: Date.now(),
       priority: args.priority,
       numId,
       model,
       providerAccountId,
     });
-    if (skipPlanning) {
-      await ctx.db.patch(projectId, {
-        branchName: buildProjectBranchName(projectId),
+    await scheduleGeneratedTitle(ctx, { kind: "project", projectId }, prompt, title);
+    if (args.run) {
+      const project = await ctx.db.get(projectId);
+      if (!project) throw new Error("Project not found");
+      await sendOwnerChatMessage(ctx, {
+        entity: { kind: "project", project },
+        userId: ctx.userId,
+        content: prompt,
       });
-      await setProjectConversation(ctx.db, projectId, []);
-    } else {
-      await setProjectConversation(ctx.db, projectId, [
-        {
-          role: "user",
-          content: args.rawInput,
-          userId: ctx.userId,
-        },
-      ]);
     }
     return projectId;
   },
 });
 
-/** Updates editable fields on a project, including its generated spec. */
+/** Updates editable fields on a project. */
 export const update = authMutation({
   args: {
     id: v.id("projects"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     branchName: v.optional(v.string()),
-    generatedSpec: v.optional(v.string()),
-    phase: v.optional(phaseValidator),
     priority: v.optional(v.union(priorityValidator, v.null())),
     projectLead: v.optional(v.union(v.id("users"), v.null())),
     members: v.optional(v.array(v.id("users"))),
     projectStartDate: v.optional(v.number()),
     projectEndDate: v.optional(v.number()),
-    codeReviewer: v.optional(v.union(v.id("users"), v.null())),
     tags: v.optional(v.array(v.string())),
     model: v.optional(v.union(aiModelValidator, v.null())),
     // null = clear to team credentials. undefined = no change.
@@ -127,18 +118,20 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.id,
+      ctx.userId,
+    );
+    assertProjectNotArchived(project);
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
     const {
       id: _projectId,
-      generatedSpec,
       projectLead,
       priority,
-      codeReviewer,
       model,
       providerAccountId,
-      phase,
       ...fields
     } = args;
     void _projectId;
@@ -152,8 +145,6 @@ export const update = authMutation({
     if (projectLead !== undefined)
       updates.projectLead = projectLead ?? undefined;
     if (priority !== undefined) updates.priority = priority ?? undefined;
-    if (codeReviewer !== undefined)
-      updates.codeReviewer = codeReviewer ?? undefined;
     if (model !== undefined) updates.model = model ?? undefined;
     let nextProviderAccountId = project.providerAccountId;
     if (providerAccountId !== undefined) {
@@ -183,9 +174,23 @@ export const update = authMutation({
       );
       updates.providerAccountId = nextProviderAccountId;
     }
-    if (phase !== undefined) updates.phase = phase;
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
+    }
+    // A new account lifts a usage-limit hold: the scheduler goes on.
+    if (nextProviderAccountId !== project.providerAccountId) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.id },
+      );
+    }
+    // The session mirrors the title and base branch, and moves to an edited
+    // branch (the one branch writer).
+    const edited = await ctx.db.get(args.id);
+    if (edited) {
+      await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });
+      await syncProjectSessionBranch(ctx, args.id);
     }
     if (args.title !== undefined && args.title !== project.title) {
       const primaryPr = await findPrimaryPullRequest(ctx.db, {
@@ -200,204 +205,44 @@ export const update = authMutation({
         });
       }
     }
-    if (phase !== undefined && phase !== project.phase) {
-      const updated = await ctx.db.get(args.id);
-      if (updated) {
-        await scheduleProjectPrSync(ctx, updated, project.phase, phase);
+    return null;
+  },
+});
+
+/**
+ * Archives a project as one unit: its tasks stay in it, the coordinator
+ * session retires and the scheduler skips it. Hidden from lists; its page
+ * still opens read-only. Refused while one of its tasks runs.
+ */
+export const archive = authMutation({
+  args: { id: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    if (project.archivedAt !== undefined) return null;
+    for (const task of await listProjectTasks(ctx.db, args.id)) {
+      if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
+        throw new ConvexError(
+          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then archive the project.`,
+        );
       }
     }
-    if (generatedSpec !== undefined) {
-      await setProjectGeneratedSpec(ctx.db, args.id, generatedSpec);
-    }
+    await ctx.db.patch(args.id, { archivedAt: Date.now() });
+    await syncProjectSession(ctx, args.id);
     return null;
   },
 });
 
-/** Appends a message to the project conversation history. */
-export const addMessage = authMutation({
-  args: {
-    id: v.id("projects"),
-    role: roleValidator,
-    content: v.string(),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const conversation = await getProjectConversation(ctx.db, args.id);
-    await setProjectConversation(ctx.db, args.id, [
-      ...conversation,
-      {
-        role: args.role,
-        content: args.content,
-        activityLog: args.activityLog,
-        userId: ctx.userId,
-        startedAt: Date.now(),
-      },
-    ]);
-    return null;
-  },
-});
-
-/** Soft-deletes a project (row retained; hidden from lists and direct URLs). */
-export const remove = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
-    return null;
-  },
-});
-
-/** Soft-deletes a project and all its tasks. */
-export const deleteCascade = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
-    for (const task of tasks) {
-      await softDeleteAgentTask(ctx, task._id);
-    }
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
-    return null;
-  },
-});
-
-/** Clears all conversation messages from a project. */
-export const clearMessages = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await setProjectConversation(ctx.db, args.id, []);
-    return null;
-  },
-});
-
-/** Associates a sandbox ID with a project and records the activity timestamp. */
-export const updateProjectSandbox = authMutation({
-  args: {
-    id: v.id("projects"),
-    sandboxId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, {
-      sandboxId: args.sandboxId,
-      lastSandboxActivity: Date.now(),
-    });
-    return null;
-  },
-});
-
-/** Removes the sandbox association from a project and triggers sandbox deletion. */
-export const clearProjectSandbox = authMutation({
+/** Brings an archived project back with its tasks and coordinator session. */
+export const unarchive = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const deleteId = preferPersistedSandboxId({
-      sandboxId: project.sandboxId,
-    });
-    if (deleteId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId: deleteId,
-        repoId: project.repoId,
-      });
-    }
-    await ctx.db.patch(args.id, {
-      sandboxId: undefined,
-
-      lastSandboxActivity: undefined,
-    });
-    return null;
-  },
-});
-
-/** Updates the last sandbox activity timestamp on a project. */
-export const updateLastSandboxActivity = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { lastSandboxActivity: Date.now() });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the last conversation message in a project. */
-export const updateLastConversationMessage = authMutation({
-  args: {
-    id: v.id("projects"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const messages = [...(await getProjectConversation(ctx.db, args.id))];
-    const last = messages[messages.length - 1];
-    if (!last) return null;
-    if (args.content !== undefined) last.content = args.content;
-    if (args.activityLog !== undefined) last.activityLog = args.activityLog;
-    await setProjectConversation(ctx.db, args.id, messages);
-    return null;
-  },
-});
-
-/**
- * Sticky sandbox-chat model (`lastChatModel`). No `updatedAt` bump — picker
- * changes are not conversation activity. Distinct from `projects.model`
- * (metadata / build prefs). A cross-provider pick also reconciles the owner's
- * sticky account to the new model's provider.
- */
-export const setChatModel = authMutation({
-  args: {
-    id: v.id("projects"),
-    model: aiModelValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      project.userId,
-      args.model,
-      project.providerAccountId,
-    );
-    await ctx.db.patch(args.id, {
-      lastChatModel: args.model,
-      providerAccountId,
-    });
-    return null;
-  },
-});
-
-/**
- * Sticky sandbox-chat traits (effort / thinking / 1M). No `updatedAt` bump.
- * Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("projects"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    if (!hasComposerTraitUpdate(args)) {
-      return null;
-    }
-    await ctx.db.patch(args.id, composerTraitFields(args));
+    if (project.archivedAt === undefined) return null;
+    await ctx.db.patch(args.id, { archivedAt: undefined });
+    await syncProjectSession(ctx, args.id);
+    await onProjectTasksChanged(ctx, args.id);
     return null;
   },
 });

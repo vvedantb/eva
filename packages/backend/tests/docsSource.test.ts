@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Docs created from a sandbox token are stored against that session / task /
@@ -10,7 +11,6 @@ import schema from "../convex/schema";
  * create_eva_doc uses source* fields so it cannot steal the Plan save target.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|doc-source";
 const STRANGER_CLERK_ID = "clerk|doc-source-stranger";
@@ -30,6 +30,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Build the documents tab",
@@ -49,7 +50,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Docs project",
-      phase: "in_progress",
       rawInput: "docs",
       numId: 3,
       updatedAt: now,

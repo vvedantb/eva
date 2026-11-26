@@ -27,7 +27,6 @@ import {
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
   AGENT_CWD,
-  SYSTEM_PROMPT,
   cursorFastMode,
   cursorReasoningLevel,
   cursorUse1mContext,
@@ -42,7 +41,7 @@ import {
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   syncCursorStateToPersist,
   writeCursorSessionState,
@@ -52,8 +51,13 @@ import type {
   ProviderAttemptResult,
   SessionMode,
 } from "../types.js";
-import { log } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import {
+  isJsonObject,
+  log,
+  readTurnPrompt,
+  withSystemPrompt,
+} from "../utils.js";
+import { beginSdkAttempt, finishSdkAttempt } from "./attemptResult.js";
 import { resolvePinnedSdkEntry, type JsonLike } from "./claudeSdk.js";
 
 const SDK_PACKAGE = "@cursor/sdk";
@@ -374,10 +378,6 @@ export function preloadCursorSdk(): void {
   }
 }
 
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
-}
-
 /**
  * Serializes a fetched model list into the catalog JSON the SDK accepts, or
  * `null` when the list cannot stand in for the SDK's own fetch. The SDK rejects
@@ -441,7 +441,7 @@ function readCachedCursorModelResolution(): CursorModelResolution | null {
     const cached: JsonLike = JSON.parse(
       readFileSync(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8"),
     );
-    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+    if (!isJsonObject(cached)) {
       return null;
     }
     const selection = cached.selection;
@@ -459,7 +459,7 @@ function readCachedCursorModelResolution(): CursorModelResolution | null {
     for (const param of Array.isArray(selection.params)
       ? selection.params
       : []) {
-      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (!isJsonObject(param)) continue;
       if (typeof param.id !== "string" || typeof param.value !== "string") {
         continue;
       }
@@ -798,10 +798,8 @@ export async function resolveCursorTurnCostUsd(deps: {
   before: CursorCostSnapshot | null;
   fetchAfter: () => Promise<CursorCostSnapshot | null>;
   sleep: (delayMs: number) => Promise<void>;
-  retryDelaysMs?: readonly number[];
 }): Promise<number | undefined> {
   if (!deps.before) return undefined;
-  const delays = deps.retryDelaysMs ?? COST_LOOKUP_RETRY_DELAYS_MS;
   for (let attempt = 0; ; attempt++) {
     const after = await deps.fetchAfter();
     const rawCents = after
@@ -811,7 +809,7 @@ export async function resolveCursorTurnCostUsd(deps: {
       // Float cents to dollars, at a precision cents can actually carry.
       return Math.round((rawCents / 100) * 1e6) / 1e6;
     }
-    const delayMs = delays[attempt];
+    const delayMs = COST_LOOKUP_RETRY_DELAYS_MS[attempt];
     if (delayMs === undefined) return undefined;
     await deps.sleep(delayMs);
   }
@@ -896,12 +894,6 @@ export type CursorAttemptOverrides = {
    * empty prompt) and passes the prompt it claimed instead.
    */
   promptText?: string;
-  /**
-   * Receives a handle that aborts this attempt's run. The daemon calls it when
-   * a claim response drains a user cancel, so the attempt returns instead of
-   * running to completion.
-   */
-  onAbortHandle?: (abort: () => void) => void;
 };
 
 /**
@@ -920,16 +912,8 @@ export async function runCursorSdkAttempt(
   sessionMode: SessionMode,
   overrides: CursorAttemptOverrides = {},
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
+  beginSdkAttempt("runCursorSdkAttempt", sessionMode, () =>
+    cursorAgentStartupActivity(sessionMode),
   );
 
   let attemptOutput = "";
@@ -942,7 +926,6 @@ export async function runCursorSdkAttempt(
   let attemptErrorMessage = "";
   let lastStreamUsage: UsageTokens | null = null;
   let activeRun: SdkRun | null = null;
-  let abortedByCaller = false;
 
   const cancelRun = (): void => {
     if (!activeRun) return;
@@ -950,12 +933,6 @@ export async function runCursorSdkAttempt(
       /* already finished */
     });
   };
-  // Registered before the first await so a cancel racing agent setup is not
-  // dropped: `runTurn` re-applies the abort once the run exists.
-  overrides.onAbortHandle?.(() => {
-    abortedByCaller = true;
-    cancelRun();
-  });
 
   const sdk = await loadCursorSdk();
   const sqlite = await loadCursorSdkSqlite();
@@ -1103,10 +1080,9 @@ export async function runCursorSdkAttempt(
     agent = await createFreshAgent();
   }
 
-  const promptText = overrides.promptText ?? readPromptText();
-  const combinedPrompt = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + promptText
-    : promptText;
+  const combinedPrompt = withSystemPrompt(
+    overrides.promptText ?? readTurnPrompt(),
+  );
 
   const healthTimer = setInterval(() => {
     const now = Date.now();
@@ -1186,7 +1162,6 @@ export async function runCursorSdkAttempt(
       onTimeout: () => activeAgent.close(),
     });
     activeRun = run;
-    if (abortedByCaller) cancelRun();
     updateThinkingStep("Waiting for Grok...", "The model is thinking...");
     const messages = run.stream()[Symbol.asyncIterator]();
     let sawVisibleActivity = false;
@@ -1228,8 +1203,7 @@ export async function runCursorSdkAttempt(
       if (message.type === "usage") {
         lastStreamUsage = readUsageTokens(message.usage) ?? lastStreamUsage;
       }
-      if (timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller)
-        break;
+      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
     const result = await waitForCursorPhase({
       task: run.wait(),
@@ -1286,8 +1260,7 @@ export async function runCursorSdkAttempt(
     emitTurnResult(
       await runTurnWithResourceExhaustedRetries({
         runTurn: () => runTurn(activeAgent, agentIsFresh),
-        aborted: () =>
-          timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller,
+        aborted: () => timedOutForMaxRuntime || timedOutForNoOutput,
         onRetry: (retryDelayMs, attempt) => {
           log(
             "runCursorSdkAttempt: resource_exhausted — retrying in " +
@@ -1419,36 +1392,15 @@ export async function runCursorSdkAttempt(
     }
   }
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runCursorSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") +
-      ")",
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runCursorSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "runError",
+    errorMessage: attemptErrorMessage,
   });
 }
 

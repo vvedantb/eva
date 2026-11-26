@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { computeRepoGroupFingerprint } from "../convex/_repoGroups/snapshot";
 
 const base = {

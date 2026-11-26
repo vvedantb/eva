@@ -16,6 +16,7 @@ import {
   Spinner,
   formatActivityElapsed,
   useActivityElapsedSeconds,
+  RollingNumber,
 } from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
@@ -51,7 +52,7 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
         <Shimmer as="span" duration={2.5} spread={1.5}>
           Working for
         </Shimmer>{" "}
-        <span className="tabular-nums">{formatActivityElapsed(elapsed)}</span>
+        <RollingNumber value={formatActivityElapsed(elapsed)} />
       </span>
     </div>
   );

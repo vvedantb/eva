@@ -2,19 +2,25 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@vvedantb/ui";
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  useCountUpDisplay,
+} from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   chipSummaryForActive,
   claudeUsageAccountScope,
   snapshotsOf,
   usageRowsForAccount,
-  USAGE_TONE_TEXT_CLASS,
-} from "./_utils";
-import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
+} from "@eva/shared/usageLimits";
+import { USAGE_TONE_TEXT_CLASS } from "./toneClasses";
 import { UsageBar } from "./UsageBar";
 import { UsageLimitsDetails } from "./UsageLimitsDetails";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
+import { useRefreshUsage } from "./useRefreshUsage";
 
 interface UsageLimitsIndicatorProps {
   repoId: Id<"githubRepos">;
@@ -35,6 +41,7 @@ interface UsageLimitsIndicatorProps {
  *   weekly window when Anthropic reports one.
  * - Popover: every Claude credential the viewer can run on — same query
  *   everywhere, so switching sessions cannot show a different card of numbers.
+ *   Opening it refreshes every reading; there is no manual refresh button.
  *
  * Simple view hides it with the context gauge.
  */
@@ -66,12 +73,17 @@ export function UsageLimitsIndicator({
       ? undefined
       : chipSummaryForActive(chipRows, now, model);
   const chipLabel = useCountUpDisplay(summary?.label ?? "—");
+  const { refresh, pending } = useRefreshUsage(repoId);
 
   if (simpleView) return null;
   if (entries === undefined) return null;
 
   return (
-    <Popover>
+    <Popover
+      onOpenChange={(open) => {
+        if (open) void refresh();
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -94,7 +106,7 @@ export function UsageLimitsIndicator({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 overflow-hidden p-0">
-        <UsageLimitsDetails repoId={repoId} entries={entries} now={now} />
+        <UsageLimitsDetails entries={entries} now={now} refreshing={pending} />
       </PopoverContent>
     </Popover>
   );

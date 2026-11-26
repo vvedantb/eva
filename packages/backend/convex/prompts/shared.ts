@@ -1,10 +1,10 @@
 import { CHAT_LOG_AGENT_TITLE_MAX } from "@eva/shared/chatLog";
-import { PERSONALISATION_PRESETS } from "../validators";
+import { PERSONALISATION_PRESETS, type RoleUser } from "../validators";
 import { primaryLinkPath } from "../_sandbox_runtime/workspaceLayout";
 
 /** Builds the custom instructions block from a user's role preset and custom instructions. */
 export function buildCustomInstructionsBlock(
-  role: "business" | "dev" | "designer" | undefined,
+  role: RoleUser | undefined,
   customInstructions: string | undefined,
 ): string {
   const parts: string[] = [];
@@ -100,6 +100,10 @@ export const COMMUNICATION_STYLE_INSTRUCTION =
  * SDK provider, while `render_ui` is on every sandbox token — the trophy came
  * from a quick task on a Cursor model, where the first tool does not block.
  *
+ * The ambiguous-target line came from a quick task where the agent guessed
+ * twice: "the preview" (moved the step title, not the card) and "the gap
+ * already includes the error" (added 24px instead of using the empty space).
+ *
  * The report half explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
  * concise-reply rule cannot swallow those lines.
  */
@@ -110,6 +114,7 @@ When the work needs a visible choice the user did not make — which icon, which
 1. **Reuse first.** If the codebase already solves the same thing, copy that pattern and say you did. This settles most cases without a question.
 2. **Otherwise ask, before you build it.** \`AskUserQuestion\` when you have it (it blocks and waits for a real answer); otherwise the eva MCP tool \`render_ui\` with two or three \`reply\` buttons naming the concrete options. Ask once, with options, not an open-ended "what would you like?".
 3. **Never stall.** If nobody can answer (an autonomous run), pick the closest existing pattern, build it, and report it as a choice. A blocked turn helps nobody.
+If a request can point at two different elements or results (the "Preview" title or the preview card; add new space or use the empty space), ask which one before you build. Do not guess.
 This is for visible choices only. Implementation details — naming, file layout, how you structure the code — are yours to make; asking about those wastes the user's attention and trains them to wave questions through.
 
 ## Visual changes (always report)
@@ -118,7 +123,7 @@ Name every visible change you made, however small, and separately flag the ones 
 - This overrides the reply-length limit: these lines are always in scope.`;
 
 /**
- * Nudge towards `render_ui` and `render_html`. Appended to the shared
+ * Nudge towards `render_ui`, `render_html` and `submit_feedback`. Appended to the shared
  * chat-turn prompt, so sessions, quick tasks and project chat all get it — both
  * tools are on every sandbox token, and without a prompt line agents never
  * reach for them.
@@ -127,7 +132,9 @@ export const CHAT_UI_INSTRUCTION = `
 
 Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.
 
-Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
+Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.
+
+Feedback: when the user clearly shows frustration with Eva or clearly says something went well, or asks you to send feedback, call the eva MCP tool \`submit_feedback\` once for that issue. Then tell the user in one short line that you sent it.`;
 
 /**
  * Keeps the chat's Log (Documents tab) current, so someone returning weeks

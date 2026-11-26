@@ -5,12 +5,12 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import {
   CenteredSpinner,
-  tokenTransition,
   SettingsSection,
   SettingsEmptyState,
   ListEnter,
+  TabsTransition,
+  ToggleSearch,
 } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   timeRangeParser,
@@ -27,10 +27,9 @@ import { TimeRangeFilter } from "@/lib/components/analytics/TimeRangeFilter";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { IconFileOff } from "@tabler/icons-react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
 import { groupLogsByType, logTotals, parseResultEvent } from "./logs/_utils";
 import { LogsPeriodSummary } from "./logs/_components/LogsPeriodSummary";
-import { LogsViewTabs } from "./logs/_components/LogsViewTabs";
+import { LOG_VIEW_ORDER, LogsViewTabs } from "./logs/_components/LogsViewTabs";
 import { LogEntryGroup } from "./logs/_components/LogEntryGroup";
 import { ProjectSpendingGroup } from "./logs/_components/ProjectSpendingGroup";
 import { UsageOverviewView } from "./logs/_components/UsageOverviewView";
@@ -138,77 +137,59 @@ export function UsageClient() {
         </div>
       }
     >
-      <AnimatePresence mode="wait" initial={false}>
+      <TabsTransition value={logView} order={LOG_VIEW_ORDER}>
         {isOverview ? (
-          <m.div
-            key="overview"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <UsageOverviewView
-              repoId={repo._id}
-              range={timeRange}
-              now={now}
-              title={periodTitle}
+          <UsageOverviewView
+            repoId={repo._id}
+            range={timeRange}
+            now={now}
+            title={periodTitle}
+          />
+        ) : isLoading ? (
+          <CenteredSpinner label="Loading logs" />
+        ) : isEmpty ? (
+          <SettingsSection title={periodTitle} bodyVariant="list">
+            <SettingsEmptyState
+              icon={IconFileOff}
+              title={
+                isProjectView
+                  ? "No project spending"
+                  : "No completions logged"
+              }
+              description={
+                isProjectView
+                  ? "Nothing was billed to a project in this range."
+                  : "Nothing ran in this range. Widen it or clear search."
+              }
             />
-          </m.div>
+          </SettingsSection>
         ) : (
-          <m.div
-            key="ledger"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            {isLoading ? (
-              <CenteredSpinner label="Loading logs" />
-            ) : isEmpty ? (
-              <SettingsSection title={periodTitle} bodyVariant="list">
-                <SettingsEmptyState
-                  icon={IconFileOff}
-                  title={
-                    isProjectView
-                      ? "No project spending"
-                      : "No completions logged"
-                  }
-                  description={
-                    isProjectView
-                      ? "Nothing was billed to a project in this range."
-                      : "Nothing ran in this range. Widen it or clear search."
-                  }
-                />
-              </SettingsSection>
-            ) : (
-              <>
-                {totals ? (
-                  <LogsPeriodSummary title={periodTitle} totals={totals} />
-                ) : null}
-                {isProjectView
-                  ? projectGroups?.map((group, index) => (
-                      <ListEnter key={group.projectId} index={index}>
-                        <ProjectSpendingGroup
-                          projectTitle={group.projectTitle}
-                          logs={group.logs}
-                          totalCost={group.totalCost}
-                        />
-                      </ListEnter>
-                    ))
-                  : grouped.map((group, index) => (
-                      <ListEnter key={group.type} index={index}>
-                        <LogEntryGroup
-                          type={group.type}
-                          logs={group.logs}
-                          total={group.total}
-                        />
-                      </ListEnter>
-                    ))}
-              </>
-            )}
-          </m.div>
+          <>
+            {totals ? (
+              <LogsPeriodSummary title={periodTitle} totals={totals} />
+            ) : null}
+            {isProjectView
+              ? projectGroups?.map((group, index) => (
+                  <ListEnter key={group.projectId} index={index}>
+                    <ProjectSpendingGroup
+                      projectTitle={group.projectTitle}
+                      logs={group.logs}
+                      totalCost={group.totalCost}
+                    />
+                  </ListEnter>
+                ))
+              : grouped.map((group, index) => (
+                  <ListEnter key={group.type} index={index}>
+                    <LogEntryGroup
+                      type={group.type}
+                      logs={group.logs}
+                      total={group.total}
+                    />
+                  </ListEnter>
+                ))}
+          </>
         )}
-      </AnimatePresence>
+      </TabsTransition>
     </SettingsPage>
   );
 }

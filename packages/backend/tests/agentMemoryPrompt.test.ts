@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildAgentMemoryBlock } from "../convex/prompts";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
@@ -20,20 +20,15 @@ test("buildAgentMemoryBlock points at MEMORY.md and forbids sensitive data", () 
 });
 
 function sessionPrompt(agentMemoryEnabled: boolean): string {
-  return buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    undefined,
-    5173,
-    [],
-    [],
-    [],
-    { ownerKey: "session-1", agentMemoryEnabled },
-  );
+  return buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    devPort: 5173,
+    runtime: { ownerKey: "session-1", agentMemoryEnabled },
+  });
 }
 
 test("session prompt carries memory only when enabled", () => {

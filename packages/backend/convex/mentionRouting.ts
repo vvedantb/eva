@@ -77,7 +77,7 @@ export const routeMentions = internalAction({
         );
         await ctx.runMutation(
           internal.notifications.scheduleLegacyMentionEmail,
-          { userId: item.userId },
+          { notificationId: item.notificationId },
         );
         continue;
       }

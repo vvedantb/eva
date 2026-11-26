@@ -50,7 +50,8 @@ export function ArtifactCard({
   onOpen,
 }: {
   artifact: ArtifactRow;
-  showSource?: boolean;
+  /** `"task"`: only rows a child task made (a project's own tab). */
+  showSource?: boolean | "task";
   /** Sandbox pane: a list row. The global Artifacts page keeps the tile. */
   compact?: boolean;
   onOpen?: (artifactId: string) => void;
@@ -59,7 +60,11 @@ export function ArtifactCard({
   const remove = useMutation(api.artifacts.remove);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
-  const source = showSource ? artifact.source : null;
+  const source =
+    showSource === true ||
+    (showSource === "task" && artifact.source?.kind === "task")
+      ? artifact.source
+      : null;
   const sourceRoute = source ? chatSourceRoute(source, "artifacts") : null;
 
   const openInNewTab = () => openArtifactInNewTab(artifact._id);

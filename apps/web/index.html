@@ -2,13 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- `interactive-widget=resizes-content`: the Android keyboard shrinks the
+         layout viewport (as iOS does), so the `h-dvh` shell and its bottom
+         composer move above the keyboard instead of under it. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <!-- Light-theme --app-shell; the script below and FaviconController
          retarget this to the active theme. -->
-    <meta name="theme-color" content="#F4F5F6" />
+    <meta name="theme-color" content="#F5F5F5" />
     <meta
       name="description"
       content="Meet Eva, your new AI coworker. Manage tasks, ship code, and track progress in real-time."
@@ -97,7 +100,7 @@
         }
         // Match browser chrome to --app-shell before paint (see SHELL_COLOR
         // in src/lib/utils/evaMark.ts), so mobile does not flash light.
-        var shell = { light: "#F4F5F6", dark: "#020202", neutral: "#222325" };
+        var shell = { light: "#F5F5F5", dark: "#060606", neutral: "#222325" };
         if (shell[appearance]) {
           var themeMeta = document.querySelector('meta[name="theme-color"]');
           if (themeMeta) themeMeta.content = shell[appearance];
@@ -193,7 +196,8 @@
       (function () {
         // Stale HTML after a deploy requests hashed /assets/* that 404.
         // The entry module never runs, so this listener (not main.tsx) reloads.
-        // Key/param must match staleDeployReload.ts.
+        // Key/param must match the @vvedantb/ui stale-deploy helpers and
+        // STALE_DEPLOY_RELOAD_PARAM in src/lib/utils/staleDeployReloadParam.ts.
         var KEY = "deployment-reload-ts";
         var PARAM = "_eva_reload";
         var COOLDOWN_MS = 10000;

@@ -2,6 +2,7 @@
 
 import type { getInstallationOctokit } from "../githubAuth";
 import { hasLegacyDraftLabel, LEGACY_DRAFT_LABEL } from "./prLabels";
+import { errorMessage } from "@vvedantb/server";
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
 
@@ -58,7 +59,7 @@ export async function removeLegacyDraftLabel(
     });
   } catch (error) {
     console.error(
-      `[github] Failed to remove legacy draft label from PR #${target.pull_number} (${target.owner}/${target.repo}): ${error instanceof Error ? error.message : String(error)}`,
+      `[github] Failed to remove legacy draft label from PR #${target.pull_number} (${target.owner}/${target.repo}): ${errorMessage(error)}`,
     );
   }
 }

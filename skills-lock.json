@@ -115,12 +115,6 @@
       "skillPath": "code-structure/SKILL.md",
       "computedHash": "181ee2eab452ed87903b62709ea96ac65a674b5466823c1a107e9a19ebb0d0fa"
     },
-    "commit": {
-      "source": "vvedantb/skills",
-      "sourceType": "github",
-      "skillPath": "skills/commit/SKILL.md",
-      "computedHash": "8bac504619afe36ee5afcf4c3d91b9c087e94b90d494728fcf80be2c37ed0a7e"
-    },
     "convex-create-component": {
       "source": "get-convex/agent-skills",
       "sourceType": "github",
@@ -271,12 +265,6 @@
       "skillPath": "skills/prototype/SKILL.md",
       "computedHash": "b1216a31a08fb02871f5b4ace7f31d0a1e2d9c86ddca74a37ed97d975f7bcaa2"
     },
-    "push": {
-      "source": "vvedantb/skills",
-      "sourceType": "github",
-      "skillPath": "skills/push/SKILL.md",
-      "computedHash": "fbda4f0dc5db6cd5bea9dad4c80c95e00da303b5c096dc6a59a8b23711814c3a"
-    },
     "quality-code": {
       "source": "RhysSullivan/skills",
       "sourceType": "github",
@@ -301,17 +289,17 @@
       "skillPath": "skills/security-audit/SKILL.md",
       "computedHash": "98b97aad2873b3b9a8e064007c25e7827b493ba27fda8bfbdb41dab586767973"
     },
-    "ship": {
-      "source": "vvedantb/skills",
-      "sourceType": "github",
-      "skillPath": "skills/ship/SKILL.md",
-      "computedHash": "e7b0999638b292f287b1316eb90c9458f012d8594e7c04e802bdb54eee385e94"
-    },
     "show-me": {
       "source": "humanlayer/skills",
       "sourceType": "github",
       "skillPath": "plugins/show-me/skills/show-me/SKILL.md",
       "computedHash": "de32a72f802801f08a84641b467f2c6306d35a58ce5e59ea607ac3a993a18c91"
+    },
+    "stageshow": {
+      "source": "benjitaylor/skills",
+      "sourceType": "github",
+      "skillPath": "stageshow/SKILL.md",
+      "computedHash": "bf9f07985a62882deae7935b5b1162fb5bf66b248930bb14a75dcaf9d67291b7"
     },
     "stitch-design-taste": {
       "source": "Leonxlnx/taste-skill",

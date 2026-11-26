@@ -1,6 +1,7 @@
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { asRecord } from "@/lib/utils/looseRecord";
 
-export interface PreviewSnapshotElement {
+interface PreviewSnapshotElement {
   readonly role: string;
   readonly name: string;
   readonly selector: string;
@@ -12,19 +13,19 @@ export interface PreviewSnapshotElement {
   };
 }
 
-export interface PreviewSnapshotConsoleEntry {
+interface PreviewSnapshotConsoleEntry {
   readonly level: string;
   readonly text: string;
   readonly at: number;
 }
 
-export interface PreviewSnapshotNetworkEntry {
+interface PreviewSnapshotNetworkEntry {
   readonly url: string;
   readonly status: number;
   readonly at: number;
 }
 
-export interface PreviewSnapshotA11yNode {
+interface PreviewSnapshotA11yNode {
   readonly role: string;
   readonly name: string;
 }
@@ -204,13 +205,13 @@ export function parseSnapshotInbound(
   if (!("requestId" in data) || typeof data.requestId !== "string") {
     return null;
   }
-  if (data.type === "eva-preview-snapshot") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.snapshot) {
     if (!("snapshot" in data)) return null;
     const snapshot = parseSnapshot(data.snapshot);
     if (!snapshot) return null;
     return { type: "snapshot", requestId: data.requestId, snapshot };
   }
-  if (data.type === "eva-preview-snapshot-error") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.snapshotError) {
     if (!("message" in data) || typeof data.message !== "string") return null;
     return { type: "error", requestId: data.requestId, message: data.message };
   }

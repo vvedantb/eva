@@ -10,7 +10,6 @@ import {
   entityAccess,
   entityRefArgs,
   entitySummary,
-  withSelfDefault,
   type EntityTarget,
 } from "./entityRef";
 import {
@@ -20,6 +19,8 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { projectCallerOf } from "./projectScope";
+import { siblingRowRefusal } from "./projectTools";
 
 /** The chat arg `chatLog:*` takes, from a resolved target. */
 function chatSourceArg(target: EntityTarget): { [key: string]: JsonValue } {
@@ -69,7 +70,8 @@ export function chatContentTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const { resolveEntityTarget } = entityAccess(ctx, credentials);
+  const { resolveChat } = entityAccess(ctx, credentials);
+  const caller = projectCallerOf(credentials.owner);
 
   // ───────────────────────────────────────────────────────────────────────────
   // delete_artifact / delete_eva_doc
@@ -90,6 +92,13 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
       },
       handler: async ({ artifactId }) => {
         await mcpGetContext(ctx, clerkUserId);
+        const refusal = await siblingRowRefusal(
+          ctx,
+          caller,
+          "artifacts",
+          artifactId,
+        );
+        if (refusal) return refusal;
         await mcpCallAsUser(
           ctx,
           clerkUserId,
@@ -119,6 +128,8 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
         confirmed: confirmedDeleteArg,
       },
       handler: async ({ docId }) => {
+        const refusal = await siblingRowRefusal(ctx, caller, "docs", docId);
+        if (refusal) return refusal;
         await mcpGetContext(ctx, clerkUserId);
         await mcpCallAsUser(
           ctx,
@@ -167,11 +178,7 @@ The reply is the chat's identity with the title it now has.`,
           );
         }
 
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 
@@ -235,11 +242,7 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           .describe("The full plan as markdown. Replaces what is there."),
       },
       handler: async ({ planContent, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
@@ -290,11 +293,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           ),
       },
       handler: async ({ planId, implementationSessionId, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
@@ -369,11 +368,7 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           ),
       },
       handler: async ({ content, parentId, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
@@ -413,11 +408,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
@@ -493,11 +484,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
           ),
       },
       handler: async ({ entryKind, title, body, supersedes, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const entryId = await mcpCallAsUser(
@@ -533,11 +520,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const source = chatSourceArg(target);

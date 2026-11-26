@@ -169,6 +169,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}
@@ -185,6 +186,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}
@@ -210,6 +212,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={cn(TOOLBAR_BUTTON_CLASS, "hidden md:inline-flex")}
@@ -228,6 +231,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}

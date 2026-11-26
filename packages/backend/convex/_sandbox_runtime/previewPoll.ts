@@ -12,6 +12,8 @@
  * running them (see tests/previewPoll.test.ts) instead of by reading source.
  */
 
+import { DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
+
 /** Readiness outcome of one poll. */
 export type PreviewPollResult =
   | { kind: "sandbox-not-running" }
@@ -66,7 +68,12 @@ export async function pollPreviewReadiness(
   // resumed VM leaves the app port dead while the sandbox runs, and only this
   // poll notices. Reusing the heal claim rate-limits recovery to one attempt
   // per interval. Desktop and editor have their own lifecycles.
-  if (!ready && healClaimed && args.port !== 6080 && args.port !== 8080) {
+  if (
+    !ready &&
+    healClaimed &&
+    args.port !== DESKTOP_PORT &&
+    args.port !== EDITOR_PORT
+  ) {
     await io.scheduleRecovery();
   }
 

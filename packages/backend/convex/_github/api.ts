@@ -2,11 +2,16 @@
 
 import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
-import { action } from "../_generated/server";
+import { type ActionCtx, action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
-import { detectAppsForRepo } from "./helpers";
+import {
+  getInstallationOctokit,
+  mintSandboxGitToken,
+  SANDBOX_GIT_WRITE,
+} from "../githubAuth";
+import { isReadOnlyGitIdentity } from "../_auth/sandboxIdentity";
+import { detectAppsForRepo, resolveInstallationRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
 import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
 
@@ -24,17 +29,22 @@ const installationAccessStateRef = makeFunctionReference<
   InstallationAccessState
 >("githubRepos:getInstallationAccessState");
 
-/** Returns a short-lived installation token for a given GitHub repo's app installation. */
+/**
+ * Returns a short-lived installation token for a given GitHub repo's app
+ * installation. The in-sandbox runner refreshes `GITHUB_TOKEN` / `GH_TOKEN`
+ * here; a read-only sandbox's VM token (`isReadOnlyGitIdentity`) gets a
+ * read-only token for that repo only.
+ */
 export const getInstallationTokenAction = action({
   args: { repoId: v.id("githubRepos") },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
-    const token = await getInstallationToken(repo.installationId);
+    const readOnly = isReadOnlyGitIdentity(await ctx.auth.getUserIdentity());
+    const { token } = await mintSandboxGitToken(
+      repo.installationId,
+      readOnly ? { kind: "read", repo } : SANDBOX_GIT_WRITE,
+    );
     return { token };
   },
 });
@@ -44,10 +54,6 @@ export const listBranches = action({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(v.object({ name: v.string(), protected: v.boolean() })),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const octokit = await getInstallationOctokit(repo.installationId);
     const allBranches = await octokit.paginate(
@@ -140,29 +146,69 @@ export const detectMonorepoApps = authAction({
         args.name,
       );
     }
+    const repo = await resolveInstallationRepo(
+      args.installationId,
+      args.owner,
+      args.name,
+    );
     const octokit = await getInstallationOctokit(args.installationId);
-    return detectAppsForRepo(octokit, args.owner, args.name);
+    return detectAppsForRepo(octokit, repo.owner, repo.name);
   },
 });
 
 /**
- * Adds a repo to Eva, verifying against GitHub when the installation is new.
+ * Adds a repo (or one monorepo app of it) to Eva.
  *
- * The GitHub-side check happens here rather than in the mutation because it
- * needs a network call: `assertUserCanUseRepo` asks GitHub whether *this user's*
- * token can see `owner/name` inside the installation. Without that, any signed-in
- * user could bind a row to an arbitrary installation id and then mint
- * installation tokens for it through `getInstallationTokenAction`.
- *
- * Installations Eva already knows the caller can use skip the round trip, so
- * adding a second repo from an installation never re-prompts for authorization.
+ * The GitHub-side checks happen here rather than in the mutation because they
+ * need network calls:
+ * - New installation: `assertUserCanUseRepo` asks GitHub whether *this user's*
+ *   token can see `owner/name` inside it. Without that, any signed-in user could
+ *   bind a row to an arbitrary installation id and then mint installation
+ *   tokens for it through `getInstallationTokenAction`. Installations Eva
+ *   already knows the caller can use skip this, so adding a second repo never
+ *   re-prompts for authorization.
+ * - Always: `resolveInstallationRepo` proves the repo is in the installation
+ *   and supplies the stored id, owner and name. Client values are never stored,
+ *   so a row cannot impersonate another tenant's repository.
  */
+/**
+ * Authorizes the caller on an installation repo and returns GitHub's own
+ * identity for it. Shared by every action that adds repo rows.
+ */
+async function authorizeInstallationRepo(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  args: { installationId: number; owner: string; name: string },
+) {
+  const accessState = await ctx.runQuery(installationAccessStateRef, {
+    installationId: args.installationId,
+  });
+  if (accessState === "denied") {
+    throw new Error(
+      "Not authorized to add repositories from this installation",
+    );
+  }
+  if (accessState === "unclaimed") {
+    await assertUserCanUseRepo(
+      ctx,
+      userId,
+      args.installationId,
+      args.owner,
+      args.name,
+    );
+  }
+  return await resolveInstallationRepo(
+    args.installationId,
+    args.owner,
+    args.name,
+  );
+}
+
 export const connectRepo = authAction({
   args: {
     owner: v.string(),
     name: v.string(),
     installationId: v.number(),
-    githubId: v.optional(v.number()),
     rootDirectory: v.optional(v.string()),
     teamId: v.optional(v.id("teams")),
   },
@@ -170,27 +216,56 @@ export const connectRepo = authAction({
   // Explicit annotation: the handler reaches back into `internal`, so inference
   // would have to resolve this action's own type to type itself.
   handler: async (ctx, args): Promise<Id<"githubRepos">> => {
-    const accessState = await ctx.runQuery(installationAccessStateRef, {
-      installationId: args.installationId,
-    });
-    if (accessState === "denied") {
-      throw new Error(
-        "Not authorized to add repositories from this installation",
-      );
-    }
-    if (accessState === "unclaimed") {
-      await assertUserCanUseRepo(
-        ctx,
-        ctx.userId,
-        args.installationId,
-        args.owner,
-        args.name,
-      );
-    }
+    const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
     return await ctx.runMutation(
       internal._githubRepos.mutations.createForInstallation,
-      { ...args, userId: ctx.userId },
+      {
+        owner: repo.owner,
+        name: repo.name,
+        githubId: repo.githubId,
+        installationId: args.installationId,
+        rootDirectory: args.rootDirectory,
+        teamId: args.teamId,
+        userId: ctx.userId,
+      },
     );
+  },
+});
+
+/**
+ * Saves the user's picks from the "New apps found" sync popup for one
+ * codebase: ticked apps are added, unticked ones are added hidden, so sync
+ * does not offer them again. Hidden Codebases can show them later.
+ */
+export const importDetectedApps = authAction({
+  args: {
+    owner: v.string(),
+    name: v.string(),
+    installationId: v.number(),
+    teamId: v.optional(v.id("teams")),
+    apps: v.array(v.object({ path: v.string(), add: v.boolean() })),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
+    // Sequential: every insert reads the same `by_github_id` range.
+    for (const app of args.apps) {
+      await ctx.runMutation(
+        internal._githubRepos.mutations.createForInstallation,
+        {
+          owner: repo.owner,
+          name: repo.name,
+          githubId: repo.githubId,
+          installationId: args.installationId,
+          rootDirectory: app.path,
+          teamId: args.teamId,
+          userId: ctx.userId,
+          hidden: !app.add,
+          ifMissing: true,
+        },
+      );
+    }
+    return null;
   },
 });
 

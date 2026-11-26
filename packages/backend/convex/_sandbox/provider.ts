@@ -2,18 +2,13 @@
  * Provider-neutral sandbox contract.
  *
  * WHY: eva runs managed codebases in remote sandboxes. The only backend today
- * is Vercel Sandbox (sub-second snapshot restores — Phase 0 spike proved
- * ~0.3s regardless of size). Daytona was the original provider and has been
- * fully removed; this contract stays provider-neutral in shape so a future
- * provider swap does not require touching every `_sandbox_runtime/` consumer again.
+ * is Vercel Sandbox (sub-second snapshot restores). This contract stays
+ * provider-neutral in shape so a future provider swap does not require
+ * touching every `_sandbox_runtime/` consumer.
  *
  * These types are a hand-written contract, NOT Convex documents — they describe
  * an external SDK surface, so they are defined here rather than imported from
  * generated Convex types.
- *
- * Note: `_sandbox_runtime/` and the `internal.sandbox.*` action namespace keep their
- * names even though Daytona itself is gone — renaming them is tracked as a
- * separate follow-up, not part of the provider removal.
  */
 
 /** Which backend fulfils sandbox operations. Vercel is the only implementation. */
@@ -81,6 +76,13 @@ export interface SandboxMount {
   mode: "read-write" | "snapshot";
 }
 
+/**
+ * A project coordinator's sandbox size (plan decision 22): 2 vCPU, 4 GB on
+ * Vercel. It only reads code and plans, so it runs no dev server. Raise it if
+ * a large repo runs out of memory; the app's size setting does not apply.
+ */
+export const COORDINATOR_VCPUS = 2;
+
 /** Parameters to create a sandbox, optionally seeded from a snapshot. */
 export interface SandboxCreateParams {
   /** Vercel snapshotId. Omit for a bare sandbox. */
@@ -110,6 +112,12 @@ export interface SandboxCreateParams {
    * because the caller's fallback is a cold cache, not an error.
    */
   mounts?: SandboxMount[];
+  /**
+   * vCPUs for the sandbox (Vercel gives 2 GB of memory for each). Omit for
+   * the app's size setting (`SandboxCredentials.vcpus`). A project
+   * coordinator passes `COORDINATOR_VCPUS`.
+   */
+  vcpus?: number;
 }
 
 /** Narrowed view of a snapshot record. */
@@ -298,6 +306,12 @@ export type SandboxCredentials = {
   token: string;
   teamId: string;
   projectId: string;
+  /**
+   * vCPUs for sandboxes created with these credentials: the size of the app
+   * they were resolved for (`githubRepos.sandboxSize`). It rides here because
+   * credentials are the one thing every create path resolves per app.
+   */
+  vcpus: number;
 };
 
 /**

@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { detectPackageManager } from "./devServer";
 import { execHandle, workspaceDirShell } from "./helpers";
@@ -25,7 +26,7 @@ const packageJsonDepsSchema = z
   .catch({ dependencies: {}, devDependencies: {} });
 
 /** Public auth-proxy port for all Vercel app/dev Previews. */
-export const VERCEL_PREVIEW_PROXY_PORT = 3000;
+export const VERCEL_PREVIEW_PROXY_PORT = DEFAULT_PREVIEW_PORT;
 
 /** Listen port when the logical/UI port is 3000 (proxy owns that slot). */
 export const VERCEL_APP_INTERNAL_PORT = 13000;
@@ -52,7 +53,11 @@ export function vercelAppListenPort(logicalPort: number): number {
     return VERCEL_APP_INTERNAL_PORT;
   }
   // Desktop/editor/supabase public slots are never app listen ports.
-  if (logical === 6080 || logical === 8080 || logical === 54321) {
+  if (
+    logical === DESKTOP_PORT ||
+    logical === EDITOR_PORT ||
+    logical === 54321
+  ) {
     return VERCEL_APP_INTERNAL_PORT;
   }
   return logical;

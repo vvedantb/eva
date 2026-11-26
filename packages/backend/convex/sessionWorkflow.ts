@@ -30,6 +30,6 @@ export {
   prewarmDaemonNow,
   getDaemonPrewarmData,
   enqueueMessage,
-  cancelExecution,
+  addReply,
   cancelSessionExecution,
 } from "./_sessions/execution";

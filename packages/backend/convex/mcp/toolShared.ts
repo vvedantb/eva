@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
+import type { McpCallerOwner } from "./projectScope";
 
 // Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
 // tools.ts so the orchestrator registration does not close an import cycle
@@ -12,11 +13,24 @@ import type { JsonValue } from "../_jev/jsonValue";
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
- * (`claude:claude-fable-5-1`); opus/sonnet/haiku keep their existing aliases.
+ * (`claude:claude-fable-5-2`); opus/sonnet/haiku keep their existing aliases.
  * Kept as a tuple so every tool schema stays in lockstep.
  */
 export const MCP_CLAUDE_MODELS = ["opus", "sonnet", "haiku", "fable"] as const;
 export type McpClaudeModel = (typeof MCP_CLAUDE_MODELS)[number];
+
+/**
+ * Which AI account runs a turn: the caller's own, a teammate's shared one, or
+ * Team. One definition so every tool that starts a turn names it the same way.
+ */
+export function mcpAccountArg(whenOmitted: string) {
+  return z
+    .string()
+    .optional()
+    .describe(
+      `Which AI account runs the turn: the account owner's first name (e.g. "Sam" for a teammate's shared account), an account id, or "team". ${whenOmitted} An unknown name fails with the list of accounts you can use.`,
+    );
+}
 
 export interface McpCredentials {
   clerkUserId: string;
@@ -34,6 +48,14 @@ export interface McpCredentials {
    * start or message agents register a watch on this thread.
    */
   aveThreadId?: string;
+  /**
+   * The task or project the sandbox chat speaks for (`chatOwner`), resolved
+   * once for each request (`mcp.projectQueries.resolveCallerOwner`). "This
+   * chat" means this owner (`withSelfDefault`), and the project tool rules
+   * read it (`mcp/projectScope.ts`). Absent for a standalone session and for
+   * callers with no sandbox chat.
+   */
+  owner?: McpCallerOwner;
 }
 
 /**
@@ -68,11 +90,13 @@ function cleanErrorMessage(error: Error): string {
 /**
  * Turns a backend error thrown inside a tool (typically from mcpCallAsUser)
  * into a tool error the agent can read, optionally with a recovery hint.
+ * `run` may return something other than a tool result (a check that passed);
+ * only a thrown error becomes the tool error.
  */
-export async function guarded(
-  run: () => Promise<CallToolResult>,
+export async function guarded<T = CallToolResult>(
+  run: () => Promise<T>,
   hint?: string,
-): Promise<CallToolResult> {
+): Promise<T | CallToolResult> {
   try {
     return await run();
   } catch (error) {
@@ -107,6 +131,19 @@ export async function mcpCallAsUser<T>(
 }
 
 /**
+ * The `source` arg Eva's docs and artifacts mutations take to link a record to
+ * the chat (session, quick task or project) it came from.
+ */
+export function chatSourceArg(
+  kind: "session" | "task" | "project",
+  id: string,
+): Record<string, string> {
+  if (kind === "session") return { kind, sessionId: id };
+  if (kind === "task") return { kind, taskId: id };
+  return { kind, projectId: id };
+}
+
+/**
  * Required on every tool that deletes or irreversibly removes something. The
  * agent must ask the user in chat first; the literal makes skipping that a
  * visible choice rather than a default.
@@ -121,7 +158,7 @@ export const confirmedDeleteArg = z
 export async function mcpGetContext(
   ctx: ActionCtx,
   clerkUserId: string,
-): Promise<{ deployKey: string; userId: string }> {
+): Promise<{ userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
 }
 
@@ -149,7 +186,7 @@ export async function mcpListUserRepos(
   ctx: ActionCtx,
   userId: string,
 ): Promise<RepoInfo[]> {
-  return ctx.runAction(internal.mcp.nodeActions.listUserRepos, { userId });
+  return ctx.runQuery(internal.mcp.queries.listUserRepos, { userId });
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */

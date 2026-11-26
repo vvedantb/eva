@@ -1,4 +1,5 @@
 import type { JsonObject, JsonValue } from "../types.js";
+import { isJsonObject } from "../utils.js";
 
 /**
  * Claude's native `/goal`, read back out of the Agent SDK stream.
@@ -77,7 +78,7 @@ function isRootFrame(message: JsonObject): boolean {
 
 function assistantModel(message: JsonObject): string | undefined {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return undefined;
   }
   return typeof inner.model === "string" ? inner.model : undefined;
@@ -85,7 +86,7 @@ function assistantModel(message: JsonObject): string | undefined {
 
 function messageContent(message: JsonObject): JsonValue | undefined {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return undefined;
   }
   return inner.content;

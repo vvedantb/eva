@@ -57,12 +57,10 @@ export function NotificationsSettingsClient() {
     <SettingsPage title="Notifications">
       <SettingsSection
         title="Email notifications"
-        description="How Eva reaches you outside the app."
         bodyVariant="list"
       >
         <SettingsToggleRow
           title="Send summary and changelog"
-          description="Receive a daily summary of unread notifications and the weekly changelog by email."
           action={
             <Switch
               checked={enabled}
@@ -80,14 +78,13 @@ export function NotificationsSettingsClient() {
       </SettingsSection>
       <SettingsSection
         title="Desktop notifications"
-        description="System pop-ups while Eva is open in the background."
         bodyVariant="list"
       >
         <SettingsToggleRow
           title="Show pop-ups"
           description={
             desktop.supported
-              ? "Show a system pop-up for new notifications when Eva is open but you are in another app. Only on this device."
+              ? undefined
               : "This browser does not support desktop notifications."
           }
           action={

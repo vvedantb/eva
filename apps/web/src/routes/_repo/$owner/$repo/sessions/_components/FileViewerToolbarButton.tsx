@@ -31,6 +31,7 @@ export function FileViewerToolbarButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          shape="rounded"
           size="sm"
           variant="ghost"
           // Radix wires TooltipContent as `aria-describedby` — a description,

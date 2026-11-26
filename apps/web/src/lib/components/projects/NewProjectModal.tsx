@@ -1,81 +1,57 @@
 "use client";
 
-import { useState, useRef, lazy, Suspense } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   Button,
-  Input,
   Spinner,
   Popover,
   PopoverTrigger,
   PopoverContent,
-  Command,
-  CommandList,
-  CommandGroup,
-  CommandItem,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { newProjectSubmitBlocker } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useBaseBranchState } from "@/lib/hooks/useBaseBranchState";
 import { useNavigate } from "@tanstack/react-router";
 import { BranchSelect } from "@/lib/components/BranchSelect";
-import {
-  IconGitBranch,
-  IconListCheck,
-  IconSparkles,
-  IconCheck,
-} from "@tabler/icons-react";
+import { IconGitBranch } from "@tabler/icons-react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import type { MarkdownEditorHandle } from "@/lib/components/tasks/_components/MarkdownEditor";
+import {
+  DescriptionMentionEditor,
+  type DescriptionMentionEditorHandle,
+} from "@/lib/components/tasks/_components/DescriptionMentionEditor";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import type { Priority } from "@/lib/components/priority/priorityMeta";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-
-const MarkdownEditor = lazy(() =>
-  import("@/lib/components/tasks/_components/MarkdownEditor").then((m) => ({
-    default: m.MarkdownEditor,
-  })),
-);
-
-function getSubmitDisabledReason(
-  isLoading: boolean,
-  title: string,
-  description: string,
-): string | undefined {
-  if (isLoading) return "Creating project…";
-  const missingTitle = !title.trim();
-  const missingDescription = !description.trim();
-  if (missingTitle && missingDescription) {
-    return "Enter a project title and description";
-  }
-  if (missingTitle) return "Enter a project title";
-  if (missingDescription) return "Enter a description";
-  return undefined;
-}
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** When provided, called with the new project id and auto-navigation is skipped. */
   onCreated?: (projectId: Id<"projects">) => void;
-  /** Default value of the planning-mode picker. Defaults to false (interview/plan flow). */
-  defaultSkipPlanning?: boolean;
 }
 
+/**
+ * A new project from one prompt, as a new session starts: the prompt is the
+ * project's brief, and the server titles the project from it. A project has
+ * no interview or plan step: it opens on its coordinator chat. "Save" sends
+ * nothing; "Save and Run" (Enter) also sends the prompt as the coordinator
+ * chat's first message (`projects.create` `run`).
+ */
 export function NewProjectModal({
   isOpen,
   onClose,
   onCreated,
-  defaultSkipPlanning = false,
 }: NewProjectModalProps) {
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
@@ -84,25 +60,18 @@ export function NewProjectModal({
     setBaseBranch,
     repoDefaultBranch: defaultBranch,
   } = useBaseBranchState();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
-  const [skipPlanning, setSkipPlanning] = useState(defaultSkipPlanning);
-  const [planningPickerOpen, setPlanningPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const editorRef = useRef<MarkdownEditorHandle>(null);
+  const editorRef = useRef<DescriptionMentionEditorHandle>(null);
 
   const createProject = useMutation(api.projects.create);
 
-  const getDescription = () => editorRef.current?.getMarkdown() ?? description;
-
   const resetForm = () => {
-    setTitle("");
-    setDescription("");
+    setPrompt("");
     setBaseBranch(defaultBranch);
     setPriority(undefined);
-    setSkipPlanning(defaultSkipPlanning);
   };
 
   const handleClose = () => {
@@ -110,27 +79,22 @@ export function NewProjectModal({
     onClose();
   };
 
-  const canSubmit = !isLoading && !!title.trim() && !!description.trim();
-  const submitDisabledReason = getSubmitDisabledReason(
-    isLoading,
-    title,
-    description,
-  );
+  const submitDisabledReason = newProjectSubmitBlocker(isLoading, prompt);
+  const canSubmit = submitDisabledReason === undefined;
 
-  const handleSubmit = async () => {
-    const desc = getDescription().trim();
-    if (!title.trim() || !desc || !repo) return;
+  const handleSubmit = async (run: boolean) => {
+    if (!canSubmit) return;
+    const rawInput = (editorRef.current?.tokenize(prompt) ?? prompt).trim();
 
     setIsLoading(true);
     try {
       const projectId = await withMutationToast(
         createProject({
           repoId: repo._id,
-          title: title.trim(),
-          rawInput: desc,
+          rawInput,
           baseBranch,
           priority,
-          skipPlanning,
+          run,
         }),
         "Project created",
         "Couldn't create project",
@@ -142,8 +106,11 @@ export function NewProjectModal({
       if (onCreated) {
         onCreated(projectId);
       } else {
+        // The coordinator chat is on the project's sandbox surface.
         navigate({
-          to: toInternalRepoHref(basePath + "/projects/" + projectId),
+          to: toInternalRepoHref(
+            `${basePath}/projects/${projectId}/sandbox/documents`,
+          ),
         });
       }
     } catch {
@@ -157,9 +124,7 @@ export function NewProjectModal({
     "submitComposerForm",
     (e) => {
       e.preventDefault();
-      if (canSubmit) {
-        handleSubmit();
-      }
+      void handleSubmit(true);
     },
     { enabled: isOpen },
   );
@@ -171,35 +136,27 @@ export function NewProjectModal({
         if (!v) handleClose();
       }}
     >
-      <DialogContent className="max-w-2xl gap-0 p-0">
-        <div className="px-5 pt-5 pb-1">
-          <Input
-            placeholder="Project title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-            className="border-0 shadow-none bg-transparent px-0 text-base font-medium focus-visible:ring-0 placeholder:text-muted-foreground/60"
+      <DialogContent
+        className="max-w-2xl gap-0 p-0"
+        // Radix focuses the first focusable element (a header button); the
+        // prompt is what the person types into, so it takes focus instead.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          editorRef.current?.focus();
+        }}
+      >
+        <div className="scrollbar px-5 pt-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
+          <DescriptionMentionEditor
+            ref={editorRef}
+            value={prompt}
+            onValueChange={setPrompt}
+            placeholder="Describe the project… @ for data, / for skills."
+            ariaLabel="Describe the project"
+            minHeight="min-h-[160px]"
+            className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
+            completionContext={`the brief of a coding project for the repository ${repo.owner}/${repo.name}`}
+            onEnterSubmit={() => void handleSubmit(true)}
           />
-        </div>
-
-        <div className="px-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
-          <Suspense
-            fallback={
-              <div className="p-3">
-                <Spinner size="sm" />
-              </div>
-            }
-          >
-            <MarkdownEditor
-              ref={editorRef}
-              content={description}
-              onChange={setDescription}
-              editable
-              placeholder="Describe the feature…"
-              minHeight="min-h-[160px]"
-              className="text-sm [&_.tiptap]:px-0 [&_.tiptap]:py-2"
-            />
-          </Suspense>
         </div>
 
         {/* Wider gaps below `sm` so the `hit-target` bleed on each trigger does
@@ -227,79 +184,30 @@ export function NewProjectModal({
 
           <PriorityPicker value={priority} onChange={setPriority} />
 
-          <Popover
-            open={planningPickerOpen}
-            onOpenChange={setPlanningPickerOpen}
-          >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="max-sm:hit-target inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
-              >
-                {skipPlanning ? (
-                  <IconListCheck size={14} />
-                ) : (
-                  <IconSparkles size={14} />
-                )}
-                <span className="text-foreground">
-                  {skipPlanning ? "Tasks only" : "With interview/plan"}
-                </span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-64 p-0">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    <CommandItem
-                      onSelect={() => {
-                        setSkipPlanning(false);
-                        setPlanningPickerOpen(false);
-                      }}
-                    >
-                      <IconSparkles size={14} className="mr-2" />
-                      <div className="flex-1">
-                        <div className="text-sm">With interview/plan</div>
-                      </div>
-                      {!skipPlanning && (
-                        <IconCheck size={14} className="ml-2" />
-                      )}
-                    </CommandItem>
-                    <CommandItem
-                      onSelect={() => {
-                        setSkipPlanning(true);
-                        setPlanningPickerOpen(false);
-                      }}
-                    >
-                      <IconListCheck size={14} className="mr-2" />
-                      <div className="flex-1">
-                        <div className="text-sm">Tasks only</div>
-                      </div>
-                      {skipPlanning && <IconCheck size={14} className="ml-2" />}
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
         </div>
 
         <DialogFooter className="flex-col-reverse gap-2 border-t border-border px-5 py-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={handleClose}>
-            Cancel
-          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               {/* The tooltip's span is a flex item in the phone's stacked
-                  footer, so it — and the button inside — have to stretch or the
-                  primary action sits narrow above a full-width Cancel. */}
-              <span className="inline-flex max-sm:w-full">
+                  footer, so it — and the buttons inside — have to stretch or
+                  the actions sit narrow. */}
+              <span className="inline-flex gap-2 max-sm:w-full max-sm:flex-col-reverse">
                 <Button
-                  onClick={handleSubmit}
+                  variant="secondary"
+                  onClick={() => void handleSubmit(false)}
+                  disabled={!canSubmit}
+                  className="max-sm:w-full"
+                >
+                  Save
+                </Button>
+                <Button
+                  onClick={() => void handleSubmit(true)}
                   disabled={!canSubmit}
                   className="max-sm:w-full"
                 >
                   {isLoading && <Spinner size="sm" />}
-                  Create Project
+                  Save and Run
                   <ShortcutKbd
                     id="submitComposerForm"
                     className="ml-1.5 border-0 bg-transparent p-0 text-current opacity-60"

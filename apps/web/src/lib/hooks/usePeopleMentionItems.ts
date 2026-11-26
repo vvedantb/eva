@@ -3,6 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { peopleMentionItems } from "@eva/shared";
 import type { MentionItem } from "@/lib/components/mentions";
 
 /**
@@ -17,18 +18,5 @@ export function usePeopleMentionItems(
     api.teamMembers.listForRepo,
     repoId ? { repoId } : "skip",
   );
-  if (!members) return [];
-  return members.flatMap((member) => {
-    // Nameless, email-less accounts have nothing to show in the picker.
-    const label = member.fullName?.trim() || member.email?.trim();
-    if (!label) return [];
-    return [
-      {
-        id: member._id,
-        label,
-        badge: "Person",
-        personUserId: member._id,
-      },
-    ];
-  });
+  return members ? peopleMentionItems(members) : [];
 }

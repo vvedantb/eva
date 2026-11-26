@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   ContextMenuItem,
   ContextMenuRadioGroup,
@@ -17,23 +18,24 @@ import {
   DropdownMenuSubTrigger,
   ContextMenuLabel,
   DropdownMenuLabel,
-  ModelPickerContent,
-  modelPickerSurfaceClass,
   ConfirmSkipHint,
   skipConfirmTitle,
+  toast,
 } from "@vvedantb/ui";
-import { normalizeAIModel, type Id, api } from "@eva/backend";
+import { type Id, api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
+  IconArchive,
+  IconArchiveOff,
   IconArrowMoveRight,
-  IconBrain,
   IconClipboard,
+  IconCopy,
   IconExternalLink,
-  IconFolder,
+  IconGitBranch,
   IconGitPullRequest,
   IconLink,
   IconPlayerPlay,
-  IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
@@ -43,14 +45,11 @@ import {
   TASK_STATUSES,
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
-import { canEditTaskModel } from "@/lib/components/tasks/_components/task-detail-constants";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import {
-  useAvailableAiModels,
-  useTaskOwnerProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
-type GroupedCodebase = FunctionReturnType<
+export type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
 >[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -61,106 +60,93 @@ export interface TaskCardMenuItemsProps {
   id: Id<"agentTasks">;
   title: string;
   status: TaskStatus;
+  /** The task page; Copy link copies it. */
   href?: string;
+  /** Cards link elsewhere; the task header already is the task. */
+  showOpenInNewTab?: boolean;
+  /** Task header only: its sandbox and PR commands, above the shared items. */
+  leading?: ReactNode;
+  /** Off in the task header, which has its own Run Eva button. */
+  showRunEva?: boolean;
   assignedTo?: Id<"users">;
-  model?: string;
-  providerAccountId?: Id<"userProviderAccounts">;
-  createdBy?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   groupedCodebases?: GroupedCodebase[];
   users?: User[];
   currentUserId?: Id<"users">;
   projects?: Project[];
-  onDelete: () => void;
+  /** An archived task: read-only, so the menu offers Unarchive and no edits. */
+  archived?: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
   onMove: (targetId: Id<"githubRepos">) => void;
 }
 
+/**
+ * Quick task menu body shared by the card's right-click menu, the card's kebab
+ * and the task header "…" menu. Groups: Run Eva, triage (Status, Code
+ * Reviewer), open and copy, PRs, then Move and Archive. Model and project are
+ * set on the task page, not here. An archived task keeps only open, copy, PRs
+ * and Unarchive.
+ */
 export function TaskCardMenuItems({
   variant,
   id,
   title,
   status,
   href,
+  showOpenInNewTab = false,
+  leading,
+  showRunEva = true,
   assignedTo,
-  model,
-  providerAccountId,
-  createdBy,
   projectId,
   repoId,
   groupedCodebases,
   users,
   currentUserId,
   projects,
-  onDelete,
+  archived = false,
+  onArchive,
+  onUnarchive,
   onMove,
 }: TaskCardMenuItemsProps) {
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
     if (!repoId) return;
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id ? { ...task, status: args.status } : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id ? { ...task, status: args.status } : task,
+      ),
+    );
   });
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!repoId) return;
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.map((task) => {
-            if (task._id !== args.id) return task;
-            const updated = { ...task };
-            if (args.tags !== undefined) updated.tags = args.tags;
-            if (args.assignedTo !== undefined)
-              updated.assignedTo = args.assignedTo ?? undefined;
-            if (args.model !== undefined) updated.model = args.model;
-            if (args.providerAccountId !== undefined)
-              updated.providerAccountId = args.providerAccountId ?? undefined;
-            if (args.projectId !== undefined)
-              updated.projectId = args.projectId ?? undefined;
-            return updated;
-          }),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+        cur.map((task) =>
+          task._id === args.id && args.assignedTo !== undefined
+            ? { ...task, assignedTo: args.assignedTo ?? undefined }
+            : task,
+        ),
+      );
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const normalizedModel = normalizeAIModel(model);
-  const { options: modelOptions } = useAvailableAiModels(
-    repoId,
-    normalizedModel,
-  );
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(id);
 
   // A card only needs runs and PRs once the menu is open — Radix mounts menu
   // content on demand, so these stay per opened menu rather than per card on
   // the board. PRs come primary first; a project task links its project's.
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const taskPrs = useQuery(api.pullRequests.listForOwner, {
-    owner: { kind: "task", taskId: id },
-  });
-  const latestPrUrl =
-    taskPrs?.[0]?.prUrl ??
-    projects?.find((project) => project._id === projectId)?.prUrl;
-
-  const isOwner =
-    currentUserId !== undefined &&
-    createdBy !== undefined &&
-    currentUserId === createdBy;
+  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
+  // A project task without PRs of its own links its project's, which is a bare
+  // URL here: the project's rows are not loaded on a task card.
+  const projectPrUrl =
+    taskPrs.length === 0
+      ? projects?.find((project) => project._id === projectId)?.prUrl
+      : undefined;
+  // Tasks store no branch; the primary PR's head is the one Eva works on.
+  const branchName = taskPrs[0]?.headBranch;
 
   // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
   const canRun =
@@ -182,16 +168,25 @@ export function TaskCardMenuItems({
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   const MenuLabel =
     variant === "context" ? ContextMenuLabel : DropdownMenuLabel;
+  const iconSize = variant === "context" ? 16 : 14;
 
   // Filter out the current repo from move targets
   const moveTargets = groupedCodebases?.filter((codebase) =>
     codebase.apps.some((app) => app._id !== repoId),
   );
-  const hasMoveTargets = moveTargets && moveTargets.length > 0;
+  const hasMoveTargets = !archived && moveTargets && moveTargets.length > 0;
+  const hasPrGroup = taskPrs.length > 0 || projectPrUrl !== undefined;
 
   return (
     <>
-      {!projectId && (
+      {leading ? (
+        <>
+          {leading}
+          <MenuSeparator />
+        </>
+      ) : null}
+
+      {showRunEva && !projectId && !archived && (
         <>
           <Item
             disabled={!canRun}
@@ -203,265 +198,237 @@ export function TaskCardMenuItems({
               );
             }}
           >
-            <IconPlayerPlay size={16} />
+            <IconPlayerPlay size={iconSize} />
             Run Eva
           </Item>
           <MenuSeparator />
         </>
       )}
 
-      {href || latestPrUrl ? (
-        <>
-          {href ? (
-            <Item
-              onSelect={() => {
-                window.open(href, "_blank");
-              }}
-            >
-              <IconExternalLink size={16} />
-              Open in new tab
-            </Item>
-          ) : null}
-          {latestPrUrl ? (
-            <Item
-              onSelect={() => {
-                window.open(latestPrUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconGitPullRequest size={16} />
-              View PR
-            </Item>
-          ) : null}
-          <MenuSeparator />
-        </>
-      ) : null}
-
-      <Sub>
-        <SubTrigger>
-          <StatusIcon size={16} />
-          Status
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={status}
-            onValueChange={(value) => {
-              const matched = TASK_STATUSES.find((s) => s === value);
-              if (!matched) return;
-              updateStatus({ id, status: matched });
-            }}
-          >
-            {TASK_STATUSES.map((s) => {
-              const cfg = statusConfig[s];
-              const Icon = cfg.icon;
-              return (
-                <RadioItem key={s} value={s}>
-                  <Icon size={16} className={cfg.text} />
-                  {cfg.label}
-                </RadioItem>
-              );
-            })}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-
-      <Sub>
-        <SubTrigger>
-          <IconUserPlus size={16} />
-          Code Reviewer
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={assignedTo ?? "unassigned"}
-            onValueChange={(value) => {
-              if (value === "unassigned") {
-                updateTask({ id, assignedTo: null });
-              } else {
-                const matchedUser = (users ?? []).find((u) => u._id === value);
-                const userId =
-                  currentUserId === value ? currentUserId : matchedUser?._id;
-                if (!userId) return;
-                updateTask({ id, assignedTo: userId });
-              }
-            }}
-          >
-            {currentUserId && (
-              <RadioItem value={currentUserId}>Assign to me</RadioItem>
-            )}
-            <MenuSeparator />
-            <RadioItem value="unassigned">Unassigned</RadioItem>
-            {(users ?? []).flatMap((user) =>
-              user.role === "dev"
-                ? [
-                    <RadioItem key={user._id} value={user._id}>
-                      <span data-pii>
-                        {user.fullName ?? user.firstName ?? "Unknown"}
-                      </span>
-                    </RadioItem>,
-                  ]
-                : [],
-            )}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-
-      <Sub>
-        <SubTrigger disabled={!canEditTaskModel(status)}>
-          <IconBrain size={16} />
-          Model
-        </SubTrigger>
-        <SubContent className={modelPickerSurfaceClass}>
-          {/* Same body as QuickTaskModal / ModelSelect — do not hand-roll radios. */}
-          <ModelPickerContent
-            value={normalizedModel}
-            accountId={providerAccountId ?? null}
-            options={modelOptions}
-            accounts={accounts}
-            canSelectTeamWhilePersonal={isOwner}
-            onSelect={(nextModel, nextAccountId) => {
-              if (!isOwner) {
-                updateTask({ id, model: nextModel });
-                return;
-              }
-              updateTask({
-                id,
-                model: nextModel,
-                providerAccountId: resolveAccountId(nextAccountId) ?? null,
-              });
-            }}
-          />
-        </SubContent>
-      </Sub>
-
-      <Sub>
-        <SubTrigger>
-          <IconFolder size={16} />
-          Project
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={projectId ?? "none"}
-            onValueChange={(value) => {
-              if (value === "none") {
-                updateTask({ id, projectId: null });
-              } else {
-                const matched = (projects ?? []).find((p) => p._id === value);
-                if (!matched) return;
-                updateTask({ id, projectId: matched._id });
-              }
-            }}
-          >
-            <RadioItem value="none">No project</RadioItem>
-            {projects?.map((project) => (
-              <RadioItem key={project._id} value={project._id}>
-                {project.title}
-              </RadioItem>
-            ))}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-
-      <MenuSeparator />
-
-      {hasMoveTargets && (
+      {archived ? null : (
         <>
           <Sub>
             <SubTrigger>
-              <IconArrowMoveRight size={16} />
-              Move to codebase
+              <StatusIcon size={iconSize} />
+              Status
             </SubTrigger>
-            <SubContent className="max-h-80 overflow-y-auto">
-              {moveTargets.map((codebase) => {
-                // Filter out current repo from apps
-                const availableApps = codebase.apps.filter(
-                  (app) => app._id !== repoId,
-                );
-                if (availableApps.length === 0) return null;
-
-                // Single app codebase: show directly
-                if (!codebase.isMonorepo || availableApps.length === 1) {
-                  const app = availableApps[0];
+            <SubContent>
+              <RadioGroup
+                value={status}
+                onValueChange={(value) => {
+                  const matched = TASK_STATUSES.find((s) => s === value);
+                  if (!matched) return;
+                  updateStatus({ id, status: matched });
+                }}
+              >
+                {TASK_STATUSES.map((s) => {
+                  const cfg = statusConfig[s];
+                  const Icon = cfg.icon;
                   return (
-                    <Item
-                      key={app._id}
-                      title={skipConfirmTitle("Move")}
-                      onSelect={() => {
-                        onMove(app._id);
-                      }}
-                    >
-                      {codebase.displayName}
-                      <ConfirmSkipHint />
-                    </Item>
+                    <RadioItem key={s} value={s}>
+                      <Icon size={iconSize} className={cfg.text} />
+                      {cfg.label}
+                    </RadioItem>
                   );
-                }
-
-                // Monorepo: show as submenu with apps grouped
-                return (
-                  <Sub key={codebase.codebase}>
-                    <SubTrigger>{codebase.displayName}</SubTrigger>
-                    <SubContent>
-                      <MenuLabel className="text-xs text-muted-foreground">
-                        Apps
-                      </MenuLabel>
-                      {availableApps.map((app) => (
-                        <Item
-                          key={app._id}
-                          title={skipConfirmTitle("Move")}
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            onMove(app._id);
-                          }}
-                        >
-                          {app.appName}
-                          <ConfirmSkipHint />
-                        </Item>
-                      ))}
-                    </SubContent>
-                  </Sub>
-                );
-              })}
+                })}
+              </RadioGroup>
             </SubContent>
           </Sub>
+
+          <Sub>
+            <SubTrigger>
+              <IconUserPlus size={iconSize} />
+              Code Reviewer
+            </SubTrigger>
+            <SubContent>
+              <RadioGroup
+                value={assignedTo ?? "unassigned"}
+                onValueChange={(value) => {
+                  if (value === "unassigned") {
+                    updateTask({ id, assignedTo: null });
+                  } else {
+                    const matchedUser = (users ?? []).find((u) => u._id === value);
+                    const userId =
+                      currentUserId === value ? currentUserId : matchedUser?._id;
+                    if (!userId) return;
+                    updateTask({ id, assignedTo: userId });
+                  }
+                }}
+              >
+                {currentUserId && (
+                  <RadioItem value={currentUserId}>Assign to me</RadioItem>
+                )}
+                <MenuSeparator />
+                <RadioItem value="unassigned">Unassigned</RadioItem>
+                {(users ?? []).flatMap((user) =>
+                  user.role === "dev"
+                    ? [
+                        <RadioItem key={user._id} value={user._id}>
+                          <span data-pii>
+                            {user.fullName ?? user.firstName ?? "Unknown"}
+                          </span>
+                        </RadioItem>,
+                      ]
+                    : [],
+                )}
+              </RadioGroup>
+            </SubContent>
+          </Sub>
+
           <MenuSeparator />
         </>
       )}
 
-      <Item
-        onSelect={() => {
-          navigator.clipboard.writeText(title);
-        }}
-      >
-        <IconClipboard size={16} />
-        Copy title
-      </Item>
-      {href ? (
-        /*
-         * The card hosting this menu sits in a list or on the board, so the
-         * current pathname is that list — not the task. Copy the card's own
-         * href (already the public display-form path) instead.
-         */
+      {showOpenInNewTab && href ? (
         <Item
           onSelect={() => {
-            void navigator.clipboard.writeText(window.location.origin + href);
+            window.open(href, "_blank", "noopener,noreferrer");
           }}
         >
-          <IconLink size={16} />
-          Copy task link
+          <IconExternalLink size={iconSize} />
+          Open in new tab
         </Item>
+      ) : null}
+      <Sub>
+        <SubTrigger>
+          <IconCopy size={iconSize} />
+          Copy
+        </SubTrigger>
+        <SubContent>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(title);
+            }}
+          >
+            <IconClipboard size={iconSize} />
+            Title
+          </Item>
+          {href ? (
+            /*
+             * A card sits in a list or on the board, so the current pathname
+             * is that list — not the task. Copy the task's own href instead.
+             */
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(
+                  window.location.origin + href,
+                );
+              }}
+            >
+              <IconLink size={iconSize} />
+              Link
+            </Item>
+          ) : null}
+          {branchName ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(branchName).then(() => {
+                  toast.success("Branch name copied");
+                });
+              }}
+            >
+              <IconGitBranch size={iconSize} />
+              Branch name
+            </Item>
+          ) : null}
+        </SubContent>
+      </Sub>
+
+      {hasPrGroup ? (
+        <>
+          <MenuSeparator />
+          <PrActionsSubmenus variant={variant} prs={taskPrs} />
+          {projectPrUrl ? (
+            <Item
+              onSelect={() => {
+                window.open(projectPrUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <IconGitPullRequest size={iconSize} />
+              View PR
+            </Item>
+          ) : null}
+        </>
       ) : null}
 
       <MenuSeparator />
 
-      <Item
-        className="text-destructive focus:text-destructive"
-        title={skipConfirmTitle("Delete")}
-        onSelect={() => {
-          onDelete();
-        }}
-      >
-        <IconTrash size={16} />
-        Delete
-        <ConfirmSkipHint />
-      </Item>
+      {hasMoveTargets && (
+        <Sub>
+          <SubTrigger>
+            <IconArrowMoveRight size={iconSize} />
+            Move to codebase
+          </SubTrigger>
+          <SubContent className="max-h-80 overflow-y-auto">
+            {moveTargets.map((codebase) => {
+              // Filter out current repo from apps
+              const availableApps = codebase.apps.filter(
+                (app) => app._id !== repoId,
+              );
+              if (availableApps.length === 0) return null;
+
+              // Single app codebase: show directly
+              if (!codebase.isMonorepo || availableApps.length === 1) {
+                const app = availableApps[0];
+                return (
+                  <Item
+                    key={app._id}
+                    title={skipConfirmTitle("Move")}
+                    onSelect={() => {
+                      onMove(app._id);
+                    }}
+                  >
+                    {codebase.displayName}
+                    <ConfirmSkipHint />
+                  </Item>
+                );
+              }
+
+              // Monorepo: show as submenu with apps grouped
+              return (
+                <Sub key={codebase.codebase}>
+                  <SubTrigger>{codebase.displayName}</SubTrigger>
+                  <SubContent>
+                    <MenuLabel className="text-xs text-muted-foreground">
+                      Apps
+                    </MenuLabel>
+                    {availableApps.map((app) => (
+                      <Item
+                        key={app._id}
+                        title={skipConfirmTitle("Move")}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          onMove(app._id);
+                        }}
+                      >
+                        {app.appName}
+                        <ConfirmSkipHint />
+                      </Item>
+                    ))}
+                  </SubContent>
+                </Sub>
+              );
+            })}
+          </SubContent>
+        </Sub>
+      )}
+      {archived ? (
+        <Item onSelect={onUnarchive}>
+          <IconArchiveOff size={iconSize} />
+          Unarchive
+        </Item>
+      ) : (
+        <Item
+          title={skipConfirmTitle("Archive")}
+          onSelect={() => {
+            onArchive();
+          }}
+        >
+          <IconArchive size={iconSize} />
+          Archive
+          <ConfirmSkipHint />
+        </Item>
+      )}
     </>
   );
 }

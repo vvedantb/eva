@@ -1,21 +1,15 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 
 function editPrompt(askTeammatesEnabled: boolean | undefined): string {
-  return buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/some-branch",
-    "",
-    "pick the empty-state copy",
-    "",
-    "",
-    undefined,
-    undefined,
-    [],
-    [],
-    [],
-    { ownerKey: "session-abc", askTeammatesEnabled },
-  );
+  return buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/some-branch",
+    message: "pick the empty-state copy",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    runtime: { ownerKey: "session-abc", askTeammatesEnabled },
+  });
 }
 
 test("ask_teammate instruction is off unless the owner opts in", () => {

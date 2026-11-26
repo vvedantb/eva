@@ -1,18 +1,26 @@
 import type { Infer } from "convex/values";
+import { isLivePrState, type LivePrState } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
-import {
+import type {
   prOriginValidator,
   prOwnerValidator,
   prStateValidator,
 } from "../validators";
-import type { SandboxOwner } from "../_sandbox/owner";
-import { buildProjectBranchName } from "../_git/branchNames";
+import type { prOwnerRefValidator } from "../_validators/tableFields";
+import {
+  buildProjectBranchName,
+  buildSessionBranchName,
+  EVA_BRANCH_PREFIX,
+  taskBranchName,
+} from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
+import { isEntityArchived } from "../numId";
 import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
 } from "../_github/prLifecycleActions";
+import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
 
 /**
  * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
@@ -25,17 +33,9 @@ import {
 export type PrOwner = Infer<typeof prOwnerValidator>;
 export type PrState = Infer<typeof prStateValidator>;
 export type PrOrigin = Infer<typeof prOriginValidator>;
-export type LivePrState = "draft" | "open";
 
-/**
- * The owner's identity alone, without the run / linked-repo detail. Same shape
- * as a sandbox owner: whatever owns a sandbox can own pull requests.
- */
-export type PrOwnerRef = SandboxOwner;
-
-export function isLivePrState(state: PrState): state is LivePrState {
-  return state === "draft" || state === "open";
-}
+/** The owner's identity alone, without the run / linked-repo detail. */
+export type PrOwnerRef = Infer<typeof prOwnerRefValidator>;
 
 /** Maps a GitHub pull_request webhook action onto a tracked state, or null. */
 export function derivePrStateFromEvent(
@@ -447,15 +447,17 @@ export async function clearArchivedPrStates(
  * Convex ids never contain a hyphen, so the first hyphen ends the id; the
  * caller still validates it with `normalizeId`.
  */
-const EVA_OWNER_BRANCH = /^eva\/(session|task|project)-([^-/]+)(-.+)?$/;
+const EVA_OWNER_BRANCH = new RegExp(
+  `^${EVA_BRANCH_PREFIX}(session|task|project)-([^-/]+)(-.+)?$`,
+);
 
 export function parseEvaOwnerBranch(
   branch: string,
-): { kind: "session" | "task" | "project"; id: string } | null {
+): { kind: ChatEntityKind; id: string } | null {
   const match = EVA_OWNER_BRANCH.exec(branch);
   if (!match) return null;
-  const kind = match[1];
-  if (kind !== "session" && kind !== "task" && kind !== "project") return null;
+  const kind = CHAT_ENTITY_KINDS.find((entry) => entry === match[1]);
+  if (!kind) return null;
   return { kind, id: match[2] };
 }
 
@@ -496,7 +498,7 @@ export async function resolvePrOwnerFromBranch(
     const sessionId = db.normalizeId("sessions", parsed.id);
     const session = sessionId ? await db.get(sessionId) : null;
     if (!session) return null;
-    const mainBranch = session.branchName ?? `eva/session-${session._id}`;
+    const mainBranch = session.branchName ?? buildSessionBranchName(session._id);
     const isMainBranch = args.branch === mainBranch;
     if (await repoMatches(db, session.repoId, repo)) {
       return {
@@ -531,13 +533,11 @@ export async function resolvePrOwnerFromBranch(
     const task = taskId ? await db.get(taskId) : null;
     if (!task || task.repoId === undefined) return null;
     if (!(await repoMatches(db, task.repoId, repo))) return null;
-    // A project task works on the project branch; its own branch name is
-    // never pushed, so a task id always means a quick task here.
-    if (task.projectId !== undefined) return null;
+    // Every task (a quick task or a project's child task) owns its branch.
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
-      isMainBranch: args.branch === `eva/task-${task._id}`,
+      isMainBranch: args.branch === taskBranchName(task),
     };
   }
 
@@ -545,6 +545,21 @@ export async function resolvePrOwnerFromBranch(
   const project = projectId ? await db.get(projectId) : null;
   if (!project) return null;
   if (!(await repoMatches(db, project.repoId, repo))) return null;
+  // A project task converted from the old project branch kept that branch
+  // (`agentTasks.branchName`): a new PR there is the task's own.
+  const keeper = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect()
+  ).find((task) => task.branchName === args.branch && !isEntityArchived(task));
+  if (keeper?.repoId !== undefined) {
+    return {
+      owner: { kind: "task", taskId: keeper._id },
+      repoId: keeper.repoId,
+      isMainBranch: true,
+    };
+  }
   return {
     owner: { kind: "project", projectId: project._id },
     repoId: project.repoId,
@@ -574,11 +589,12 @@ export function sessionRepoPullRequest(
     : (forRepo.find((row) => row.origin === "eva") ?? forRepo[0]);
 }
 
-/** The owning project's or quick task's PR summary for a task. */
-export async function taskPrUrl(
-  db: DatabaseReader,
-  task: Doc<"agentTasks">,
-): Promise<string | undefined> {
-  if (task.projectId === undefined) return task.prUrl;
-  return (await db.get(task.projectId))?.prUrl;
+/**
+ * A task's own PR summary. Every task owns its PR; an old project task's PR
+ * on the project branch stays with the project (`projects.prUrl`).
+ */
+export function taskPrUrl(
+  task: Pick<Doc<"agentTasks">, "prUrl">,
+): string | undefined {
+  return task.prUrl;
 }

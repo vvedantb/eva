@@ -8,7 +8,7 @@ import {
   type RecapWalkthroughStep,
 } from "@eva/backend";
 import { HtmlPreviewFrame } from "@/lib/components/docs/_components/HtmlPreviewFrame";
-import { prNumberFromGithubUrl } from "@/lib/githubPr";
+import { prNumberFromGithubUrl } from "@eva/shared";
 import { RecapWalkthrough } from "./RecapWalkthrough";
 
 interface RecapTourBodyProps {

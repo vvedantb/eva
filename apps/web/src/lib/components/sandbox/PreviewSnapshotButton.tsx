@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { Spinner, toast, WebPreviewNavigationButton } from "@vvedantb/ui";
 import { IconListTree } from "@tabler/icons-react";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { parseSnapshotInbound } from "@/lib/components/sandbox/previewSnapshot";
 import { PreviewSnapshotDialog } from "@/lib/components/sandbox/PreviewSnapshotDialog";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import type { PreviewSnapshot } from "@/lib/components/sandbox/previewSnapshot";
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 
 const CAPTURE_TIMEOUT_MS = 20_000;
 
@@ -38,8 +40,7 @@ export function usePreviewSnapshot({
       return;
     }
     const frame = iframeElement;
-    const target = frame?.contentWindow;
-    if (!frame || !target) {
+    if (!frame?.contentWindow) {
       toast.error("Preview isn't ready to snapshot");
       return;
     }
@@ -58,7 +59,7 @@ export function usePreviewSnapshot({
     }
 
     function onMessage(event: MessageEvent) {
-      if (event.source !== target) return;
+      if (!isFromFrame(event, frame)) return;
       if (typeof event.data !== "object" || event.data === null) return;
       const inbound = parseSnapshotInbound(event.data);
       if (!inbound || inbound.requestId !== requestId) return;
@@ -72,10 +73,10 @@ export function usePreviewSnapshot({
     }
 
     window.addEventListener("message", onMessage);
-    target.postMessage(
-      { type: "eva-preview-snapshot-capture", requestId },
-      "*",
-    );
+    postToFrame(frame, {
+      type: PREVIEW_FRAME_MESSAGE.snapshotCapture,
+      requestId,
+    });
   }
 
   const dialog = (

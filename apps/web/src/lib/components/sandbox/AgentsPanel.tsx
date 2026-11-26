@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   IconChevronDown,
   IconPlayerStop,
@@ -13,16 +12,17 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  Spinner,
   formatActivityElapsed,
   useActivityElapsedSeconds,
   ListEnter,
+  RollingNumber,
 } from "@vvedantb/ui";
 import {
   subagentTone,
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
+import type { RequestAgentStop } from "@/lib/components/chat/useStopBackgroundAgent";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",
@@ -40,46 +40,34 @@ function AgentDuration({ agent }: { agent: SubagentView }) {
       ? liveElapsed
       : Math.max(0, Math.floor((agent.settledAt - agent.startedAt) / 1000));
   if (!running && agent.settledAt === undefined) return null;
-  return <span className="tabular-nums">{formatActivityElapsed(seconds)}</span>;
+  return <RollingNumber value={formatActivityElapsed(seconds)} />;
 }
 
+/**
+ * Stop for one background agent. It only asks: the confirm dialog from
+ * `useStopBackgroundAgent` runs the stop and shows its progress.
+ */
 export function AgentStopButton({
   toolUseId,
+  title,
   onRequestStop,
 }: {
   toolUseId: string;
-  onRequestStop: (toolUseId: string) => Promise<void>;
+  title?: string;
+  onRequestStop: RequestAgentStop;
 }) {
-  const [isStopping, setIsStopping] = useState(false);
-  const handleStop = async () => {
-    setIsStopping(true);
-    // Cleanup duplicated into the catch instead of `finally`: React Compiler
-    // bails on the whole file when it meets a `finally` clause.
-    try {
-      await onRequestStop(toolUseId);
-    } catch (error) {
-      setIsStopping(false);
-      throw error;
-    }
-    setIsStopping(false);
-  };
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
       className="shrink-0"
-      disabled={isStopping}
       onClick={(event) => {
         event.stopPropagation();
-        void handleStop();
+        onRequestStop(toolUseId, title);
       }}
     >
-      {isStopping ? (
-        <Spinner variant="circle" size="sm" className="size-3.5" />
-      ) : (
-        <IconPlayerStop className="size-3.5" />
-      )}
+      <IconPlayerStop className="size-3.5" />
       Stop
     </Button>
   );
@@ -92,7 +80,7 @@ function AgentRow({
 }: {
   agent: SubagentView;
   isReadOnly: boolean;
-  onRequestStop?: (toolUseId: string) => Promise<void>;
+  onRequestStop?: RequestAgentStop;
 }) {
   const tone = subagentTone(agent.status);
   const running = tone === "active";
@@ -133,6 +121,7 @@ function AgentRow({
         {canStop ? (
           <AgentStopButton
             toolUseId={agent.toolUseId}
+            title={agent.title}
             onRequestStop={onRequestStop}
           />
         ) : null}
@@ -172,7 +161,7 @@ export function AgentsPanel({
 }: {
   agents: SubagentView[];
   isReadOnly?: boolean;
-  onRequestStop?: (toolUseId: string) => Promise<void>;
+  onRequestStop?: RequestAgentStop;
 }) {
   if (agents.length === 0) {
     return (

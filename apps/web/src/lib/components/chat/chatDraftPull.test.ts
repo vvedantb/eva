@@ -1,9 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   ECHO_HISTORY_LIMIT,
   decideDraftPull,
   rememberOwnSave,
-} from "./chatDraftPull";
+} from "@eva/shared";
 
 /** A mention token as it is stored on the `drafts` row. */
 const mention = (label: string, id: string) => `@[${label}](${id})`;

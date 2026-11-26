@@ -27,7 +27,7 @@ import {
   type PrReviewEvent,
 } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
-import type { ConversationEvent } from "./prTimelineItems";
+import type { ConversationEvent } from "@eva/shared";
 
 /**
  * The rows on Timeline's rail. Each owns a 3rem gutter whose marker sits on the

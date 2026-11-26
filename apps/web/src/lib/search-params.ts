@@ -1,4 +1,19 @@
 import {
+  CHAT_LOG_ENTRY_KINDS,
+  FEEDBACK_AUTHORS,
+  FEEDBACK_SENTIMENTS,
+} from "@eva/backend";
+import {
+  PROJECT_SORT_FIELDS,
+  PR_LIST_STATES,
+  QUICK_TASK_FILTER_DEFAULTS,
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_TIME_RANGES,
+  TASK_STATUSES,
+} from "@eva/shared";
+import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
+import {
   parseAsString,
   parseAsStringLiteral,
   parseAsArrayOf,
@@ -12,27 +27,12 @@ export const searchParser = parseAsString
   .withDefault("")
   .withOptions(searchOptions);
 
-const taskStatuses = [
-  "todo",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "done",
-  "cancelled",
-] as const;
-export const statusesParser = parseAsArrayOf(parseAsStringLiteral(taskStatuses))
-  .withDefault([...taskStatuses])
+export const statusesParser = parseAsArrayOf(
+  parseAsStringLiteral(TASK_STATUSES),
+)
+  .withDefault([...TASK_STATUSES])
   .withOptions(searchOptions);
 
-const projectPhases = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-] as const;
 const sortDirections = ["asc", "desc"] as const;
 export const sortDirParser = parseAsStringLiteral(sortDirections)
   .withDefault("desc")
@@ -46,18 +46,11 @@ export const timeRangeParser = parseAsStringLiteral(timeRanges)
 // Quick Tasks list filters (shareable "what you're looking at" state). View
 // mode is a per-user presentation preference and stays in localStorage —
 // see quick-tasks/_utils.ts.
-const quickTaskSortFields = [
-  "status",
-  "lastRun",
-  "updated",
-  "created",
-  "title",
-  "priority",
-] as const;
 // No default here (unlike most parsers): the fallback depends on the active
 // view, so quick-tasks/_utils.ts resolves null against a per-view default.
-export const quickTaskSortFieldParser =
-  parseAsStringLiteral(quickTaskSortFields).withOptions(searchOptions);
+export const quickTaskSortFieldParser = parseAsStringLiteral(
+  QUICK_TASK_SORT_FIELDS,
+).withOptions(searchOptions);
 
 // Same reason as quickTaskSortFieldParser — the default direction pairs with
 // the per-view default field, so it cannot be baked in here.
@@ -67,76 +60,43 @@ export const quickTaskSortDirParser =
 // Quick Tasks default to "all time" (unlike the generic timeRangeParser's
 // "30d" default used elsewhere) and have no hourly view, so they keep their
 // own vocabulary and default.
-const quickTaskTimeRanges = ["7d", "30d", "90d", "all"] as const;
 export const quickTaskTimeRangeParser = parseAsStringLiteral(
-  quickTaskTimeRanges,
+  QUICK_TASK_TIME_RANGES,
 )
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.timeRange)
   .withOptions(searchOptions);
 
-export const quickTaskProjectParser = parseAsString
-  .withDefault("none")
-  .withOptions(searchOptions);
-
+// The defaults are the shared ones, so "cleared" (`clearedQuickTaskFilters`)
+// and "not filtered" cannot disagree.
 export const quickTaskUserParser = parseAsString
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.user)
   .withOptions(searchOptions);
 
 export const quickTaskAssigneeParser = parseAsString
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.assignee)
   .withOptions(searchOptions);
 
 export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
   .withDefault([])
   .withOptions(searchOptions);
 
-/**
- * The state "no filters applied" means, read off the parsers themselves.
- *
- * Both "is anything filtered?" and "clear all filters" have to agree with the
- * parser defaults, and spelling those out a second time is how `project` ended
- * up cleared to "all" while the parser defaulted to "none" — leaving ?project=all
- * in the URL and treating the default as an active filter.
- */
-export const QUICK_TASK_FILTER_DEFAULTS = {
-  project: quickTaskProjectParser.defaultValue,
-  user: quickTaskUserParser.defaultValue,
-  assignee: quickTaskAssigneeParser.defaultValue,
-  tags: quickTaskTagsParser.defaultValue,
-  statuses: statusesParser.defaultValue,
-  timeRange: quickTaskTimeRangeParser.defaultValue,
-};
-
 // Projects list filters (shareable "what you're looking at" state). View,
 // timelineRange, and timelineZoom are per-user presentation preferences and
 // stay in localStorage — see projects/_utils.ts.
-// hiddenPhases stores exclusions (blocklist), so the default is empty —
-// reuses the same phase set as `projectPhases` above.
-export const hiddenProjectPhasesParser = parseAsArrayOf(
-  parseAsStringLiteral(projectPhases),
+// hiddenPhases stores exclusions (blocklist) of the derived project stages
+// (`PROJECT_STAGES`), so the default is empty. Old links naming a stored
+// phase ("code_review", "completed") drop those values.
+export const hiddenProjectStagesParser = parseAsArrayOf(
+  parseAsStringLiteral(PROJECT_STAGES),
 )
   .withDefault([])
   .withOptions(searchOptions);
 
-const projectSortFields = ["created", "title", "priority"] as const;
-export const projectSortFieldParser = parseAsStringLiteral(projectSortFields)
+export const projectSortFieldParser = parseAsStringLiteral(PROJECT_SORT_FIELDS)
   .withDefault("created")
   .withOptions(searchOptions);
 
-const sandboxTabs = [
-  "preview",
-  "browser",
-  "editor",
-  "computer",
-  "review",
-  "files",
-  "agents",
-  "prd",
-  "designs",
-  "artifacts",
-  "documents",
-] as const;
-export type SandboxTab = (typeof sandboxTabs)[number];
+export type { SandboxTab };
 
 // Full sandbox path of the file open in the session File Viewer tab, persisted
 // in the URL so a viewed file survives reload and is shareable.
@@ -152,11 +112,15 @@ export const markdownViewParser = parseAsStringLiteral(markdownViews)
   .withOptions(searchOptions);
 
 export function isSessionSandboxTab(s: string): s is SandboxTab {
-  return sandboxTabs.some((tab) => tab === s);
+  return SANDBOX_TABS.some((tab) => tab === s);
 }
 
-/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+/**
+ * Tabs that do not talk to the VM: Review, Agents, PRD, … and a project
+ * coordinator's Tasks.
+ */
 const NON_VM_SANDBOX_TABS = new Set([
+  "tasks",
   "review",
   "agents",
   "prd",
@@ -237,12 +201,7 @@ export function isReviewTab(s: string): s is ReviewTab {
 /** Slugs a tab used to answer to, or is labelled as, mapped to canonical. */
 export function canonicalReviewTab(s: string): ReviewTab | undefined {
   if (s === "diff" || s === "changes" || s === "code") return "diffs";
-  if (
-    s === "overview" ||
-    s === "activity" ||
-    s === "checks" ||
-    s === "recap"
-  ) {
+  if (s === "overview" || s === "activity" || s === "checks" || s === "recap") {
     return "summary";
   }
   if (s === "commits") return "timeline";
@@ -372,12 +331,8 @@ export const viewModeParser = parseAsStringLiteral(viewModes)
   .withDefault("desktop")
   .withOptions(tabOptions);
 
-const snapshotSettingsTabs = [
-  "configuration",
-  "status",
-  "builds",
-  "config-files",
-] as const;
+/** Snapshot settings tabs in their on-screen order (the content slides by it). */
+export const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
 export type SnapshotSettingsTab = (typeof snapshotSettingsTabs)[number];
 
 export function isSnapshotSettingsTab(s: string): s is SnapshotSettingsTab {
@@ -416,15 +371,16 @@ export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 export const CHAT_LOG_PANEL_ITEM = "log";
 
 // Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
-export const chatLogKinds = [
-  "decision",
-  "change",
-  "research",
-  "question",
-  "note",
-] as const;
 export const chatLogKindParser =
-  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+  parseAsStringLiteral(CHAT_LOG_ENTRY_KINDS).withOptions(searchOptions);
+
+// Feedback page filters (`/feedback?sentiment=negative&from=agent&repo=o/r`).
+// Absent = all.
+export const feedbackSentimentParser =
+  parseAsStringLiteral(FEEDBACK_SENTIMENTS).withOptions(searchOptions);
+export const feedbackAuthorParser =
+  parseAsStringLiteral(FEEDBACK_AUTHORS).withOptions(searchOptions);
+export const feedbackRepoParser = parseAsString.withOptions(searchOptions);
 
 // Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
 // Absent means the chat's primary PR.
@@ -443,6 +399,18 @@ export function isAutomationTab(s: string): s is AutomationTab {
 }
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
+
+// The Inbox's two views: what waits for you (derived, no read state) and the
+// notification feed. Needs you is the default.
+export const inboxViews = ["needs", "updates"] as const;
+export type InboxView = (typeof inboxViews)[number];
+export const inboxViewParser = parseAsStringLiteral(inboxViews)
+  .withDefault("needs")
+  .withOptions(searchOptions);
+
+export function isInboxView(s: string): s is InboxView {
+  return inboxViews.some((view) => view === s);
+}
 
 // "archived" is a separate list rather than a third state of the same one: the
 // backend splits the 100-row window on `archivedAt`, so Unread only ever means
@@ -482,11 +450,8 @@ export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 // into copied links, so it replaces rather than pushes, like `?comment`.
 export const messageLinkParser = parseAsString.withOptions(searchOptions);
 
-const pullRequestListStates = ["open", "closed", "all"] as const;
-export type PullRequestListState = (typeof pullRequestListStates)[number];
-export const pullRequestListStateParser = parseAsStringLiteral(
-  pullRequestListStates,
-)
+export type { PullRequestListState } from "@eva/shared";
+export const pullRequestListStateParser = parseAsStringLiteral(PR_LIST_STATES)
   .withDefault("open")
   .withOptions(searchOptions);
 
@@ -508,18 +473,23 @@ export const chatParser = parseAsInteger.withOptions(tabOptions);
  */
 export const subagentParser = parseAsString.withOptions(tabOptions);
 
+/** The open reply thread in a coordinator chat: its root message id. */
+export const replyThreadParser = parseAsString.withOptions(tabOptions);
+
 export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);
 
-const envVarScopes = ["repo", "team"] as const;
+/** Env variable scope tabs in their on-screen order (the content slides by it). */
+export const envVarScopes = ["repo", "team"] as const;
 export type EnvVarScope = (typeof envVarScopes)[number];
 
 export function isEnvVarScope(s: string): s is EnvVarScope {
   return envVarScopes.some((scope) => scope === s);
 }
 
-const teamDetailTabs = [
+/** Team page tabs in their on-screen order (the tab content slides by it). */
+export const teamDetailTabs = [
   "activity",
   "members",
   "codebases",
@@ -556,6 +526,12 @@ export const installDependenciesParser = parseAsStringLiteral(
 )
   .withDefault("1")
   .withOptions(searchOptions);
+
+// "Stack a new session on this PR" (review header). The PR number and its head
+// branch, which becomes the new session's base; the session's own PR then joins
+// that PR's GitHub stack. Cleared by the navigation that follows a send.
+export const stackOnPrParser = parseAsInteger.withOptions(searchOptions);
+export const stackBaseParser = parseAsString.withOptions(searchOptions);
 
 // Session Files tab root selector (multi-repo sessions): "" is the primary
 // repo (/tmp/repo), otherwise a linked repo's sandbox path.

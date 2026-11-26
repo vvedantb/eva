@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { cn } from "@eva/ui";
-import { useWebPreview } from "@vvedantb/ui";
+import { DOCK_MOTION_EVENT, useWebPreview } from "@vvedantb/ui";
 import {
   armPreviewMiniPlayer,
   disarmPreviewMiniPlayer,
@@ -141,6 +141,47 @@ export function endPreviewGesture(): void {
 
 function getPreviewGesture(): PreviewGesture | null {
   return gesture;
+}
+
+/**
+ * Panels mid dock motion (`DOCK_MOTION_EVENT`), to their settle timer. An
+ * iframe over one steps aside: it cannot follow the panel's transform, so it
+ * floated at full size over a scaling card and lagged the width slide. When
+ * the motion ends it is re-measured and fades back in place.
+ */
+const movingPanels = new Map<Element, number>();
+
+function onDockMotion(event: Event): void {
+  // Duck-typed, not `instanceof`: a hot-reloaded dock motion module is a
+  // second class, and the event must still land.
+  if (!("ms" in event) || typeof event.ms !== "number") return;
+  const panel = event.target;
+  if (!(panel instanceof Element)) return;
+  window.clearTimeout(movingPanels.get(panel));
+  movingPanels.set(
+    panel,
+    window.setTimeout(() => {
+      movingPanels.delete(panel);
+      for (const [key, entry] of entries) {
+        if (entry.anchor === null) continue;
+        entries.set(key, { ...entry, rect: measure(entry.anchor) });
+      }
+      notify();
+    }, event.ms),
+  );
+  notify();
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener(DOCK_MOTION_EVENT, onDockMotion);
+}
+
+function isSteppedAside(anchor: HTMLElement | null): boolean {
+  if (anchor === null) return false;
+  for (const panel of movingPanels.keys()) {
+    if (panel.contains(anchor)) return true;
+  }
+  return false;
 }
 
 /** The rect to paint at: the measured anchor, plus any live gesture offsets. */
@@ -477,6 +518,7 @@ export function PreviewIframeHost() {
       {hosted.map((entry) => {
         const rect = overlayRect(entry, live);
         const visible = rect !== null && rect.width > 0 && rect.height > 0;
+        const steppedAside = isSteppedAside(entry.anchor);
         const logical = entry.logical;
         const contained =
           logical && rect ? previewContainedLayout(rect, logical) : null;
@@ -490,7 +532,11 @@ export function PreviewIframeHost() {
               logical ? "bg-black" : "bg-background",
               // Iframes swallow pointer events, so every overlay goes inert
               // for the duration of a gesture, not just the dragged one.
-              live !== null ? "pointer-events-none" : "pointer-events-auto",
+              live !== null || steppedAside
+                ? "pointer-events-none"
+                : "pointer-events-auto",
+              // Out at once as a dock motion starts, back with a short fade.
+              steppedAside ? "opacity-0" : "transition-opacity duration-150",
               entry.bordered && "border border-border",
               !visible && "hidden",
             )}
@@ -581,7 +627,7 @@ export function PreviewAnchor({
   const armKey =
     miniPlayer === undefined
       ? "idle"
-      : `${miniPlayer.sessionId}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
+      : `${miniPlayer.owner.kind}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
 
   return (
     <div

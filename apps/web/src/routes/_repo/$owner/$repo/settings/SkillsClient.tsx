@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { OptimisticLocalStore } from "convex/browser";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -28,16 +29,14 @@ export function SkillsClient() {
   const systemSkills = useQuery(api.repoSystemSkills.listForRepo, { repoId });
   const setInstalled = (name: string, installed: boolean) => {
     return (localStore: OptimisticLocalStore) => {
-      const current = localStore.getQuery(api.repoSystemSkills.listForRepo, {
-        repoId,
-      });
-      if (current === undefined) return;
-      localStore.setQuery(
+      patchLoadedQuery(
+        localStore,
         api.repoSystemSkills.listForRepo,
         { repoId },
-        current.map((skill) =>
-          skill.name === name ? { ...skill, installed } : skill,
-        ),
+        (skills) =>
+          skills.map((skill) =>
+            skill.name === name ? { ...skill, installed } : skill,
+          ),
       );
     };
   };
@@ -144,7 +143,6 @@ export function SkillsClient() {
 
       <SettingsSection
         title="Eva skills"
-        description="Built-in skills Eva maintains. Installing one makes it available to this repo's agents without committing anything to your codebase — the agent fetches the instructions from Eva when it runs the skill."
         bodyVariant="list"
       >
         <div className="divide-y divide-border/50">
@@ -185,13 +183,6 @@ export function SkillsClient() {
 
       <SettingsSection
         title="Repo skills"
-        description={
-          <>
-            Synced from <code>.agents/skills</code> and{" "}
-            <code>.claude/skills</code> on the base branch. Claude-only skills
-            are labelled in the <code>/</code> picker.
-          </>
-        }
         bodyVariant="list"
       >
         {skills.length > 0 ? (

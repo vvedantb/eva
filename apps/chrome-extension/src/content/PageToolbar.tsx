@@ -178,12 +178,11 @@ export function PageToolbar() {
         variant="ghost"
         size="icon"
         className={modeButtonClass(toolbar.mode === "annotate")}
-        style={{
-          borderRadius: 9999,
-          ...(toolbar.mode === "annotate"
+        style={
+          toolbar.mode === "annotate"
             ? { background: "rgba(16,145,130,0.12)" }
-            : {}),
-        }}
+            : undefined
+        }
         title={toolbar.mode === "annotate" ? "Stop annotating" : "Annotate"}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setMode(toolbar.mode === "annotate" ? null : "annotate")}
@@ -194,12 +193,11 @@ export function PageToolbar() {
         variant="ghost"
         size="icon"
         className={modeButtonClass(toolbar.mode === "inspect")}
-        style={{
-          borderRadius: 9999,
-          ...(toolbar.mode === "inspect"
+        style={
+          toolbar.mode === "inspect"
             ? { background: "rgba(16,145,130,0.12)" }
-            : {}),
-        }}
+            : undefined
+        }
         title={
           toolbar.mode === "inspect"
             ? "Stop inspecting"
@@ -219,7 +217,6 @@ export function PageToolbar() {
         variant="ghost"
         size="icon"
         className={`w-8 h-8 ${ext.pinsHidden ? "text-neutral-400" : "text-[#109182]"}`}
-        style={{ borderRadius: 9999 }}
         title={ext.pinsHidden ? "Show annotations" : "Hide annotations"}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => togglePinsHidden()}
@@ -267,7 +264,6 @@ export function PageToolbar() {
           <Button
             size="sm"
             className="bg-[#109182] hover:bg-[#2db8a4] text-white text-sm"
-            style={{ borderRadius: 9999 }}
             disabled={actionsDisabled}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => void handleRunAll()}
@@ -278,7 +274,6 @@ export function PageToolbar() {
             variant="outline"
             size="sm"
             className="text-sm"
-            style={{ borderRadius: 9999 }}
             disabled={actionsDisabled}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => openProjectModal()}

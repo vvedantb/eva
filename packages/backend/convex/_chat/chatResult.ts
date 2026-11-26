@@ -26,12 +26,9 @@ import {
 import { normalizeAIModel } from "../_validators/aiModels";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { recordTurnChange } from "../chatLog";
+import { insertTurnFollowUp } from "../_messages/replies";
 
-export type ChatResultParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"projects">
-  | Id<"agentTasks">;
+export type ChatResultParentId = Id<"sessionChats"> | Id<"sessions">;
 
 export type ChatTurnResultOutcome = "publish-failure" | "written" | "no-target";
 
@@ -51,7 +48,7 @@ export async function recordDelayedPublishFailure(
 ): Promise<boolean> {
   const publishError = delayedPublishFailureError(args.result, args.error);
   if (publishError === undefined) return false;
-  await ctx.db.insert("messages", {
+  await insertTurnFollowUp(ctx, {
     parentId: args.parentId,
     role: "assistant",
     content: args.alertTitle,
@@ -93,12 +90,63 @@ export type AssistantTurnResultPatch = {
   limitResetAt?: number;
   beforeSha?: string;
   afterSha?: string;
+  beforeShas?: Doc<"messages">["beforeShas"];
+  afterShas?: Doc<"messages">["afterShas"];
   variations?: Array<{
     label: string;
     route?: string;
     filePath?: string;
   }>;
 };
+
+type TurnCheckpointFields = Pick<
+  AssistantTurnResultPatch,
+  "beforeSha" | "afterSha" | "beforeShas" | "afterShas"
+>;
+
+/**
+ * Turn checkpoint fields, keeping only complete before/after pairs. A lone
+ * `afterSha` would make the turn look like it changed code from nothing.
+ */
+export function turnCheckpointPatch(
+  args: TurnCheckpointFields,
+): TurnCheckpointFields {
+  return {
+    ...(args.beforeSha !== undefined && args.afterSha !== undefined
+      ? { beforeSha: args.beforeSha, afterSha: args.afterSha }
+      : {}),
+    ...(args.beforeShas !== undefined && args.afterShas !== undefined
+      ? { beforeShas: args.beforeShas, afterShas: args.afterShas }
+      : {}),
+  };
+}
+
+/**
+ * Completion patch for a daemon-driven synthetic (`/loop`) turn. A failed
+ * turn drops the open-time model stamp so it never becomes a checkpoint.
+ */
+export function syntheticTurnCompletionPatch(
+  args: {
+    success: boolean;
+    result: string | null;
+    error: string | null;
+    activityLog: string | null;
+    pendingQuestion?: string;
+  } & TurnCheckpointFields,
+): AssistantTurnResultPatch & { finishedAt: number } {
+  return {
+    content: assistantReplyContent({
+      success: args.success,
+      result: args.result,
+      error: args.error,
+    }),
+    finishedAt: Date.now(),
+    ...(args.activityLog ? { activityLog: args.activityLog } : {}),
+    ...(args.pendingQuestion ? { pendingQuestion: args.pendingQuestion } : {}),
+    ...turnCheckpointPatch(args),
+    ...(args.success ? {} : { model: undefined }),
+  };
+}
 
 /**
  * Writes the turn result onto the targeted assistant bubble and deletes
@@ -230,9 +278,14 @@ export async function insertAssistantPlaceholderIfNeeded(
     .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
     .order("desc")
     .take(args.recentLimit);
+  // People's thread replies can land while a thread turn runs; they are
+  // never the turn's own bubble.
+  const turnRows = recent.filter(
+    (message) => !(message.role === "user" && message.replyTo !== undefined),
+  );
   const lastTurnMessage = args.skipSystemAlerts
-    ? recent.find((message) => message.isSystemAlert !== true)
-    : recent[0];
+    ? turnRows.find((message) => message.isSystemAlert !== true)
+    : turnRows[0];
   if (
     lastTurnMessage &&
     lastTurnMessage.role === "assistant" &&
@@ -242,7 +295,7 @@ export async function insertAssistantPlaceholderIfNeeded(
   ) {
     return "existing";
   }
-  await ctx.db.insert("messages", {
+  await insertTurnFollowUp(ctx, {
     parentId: args.parentId,
     role: "assistant",
     content: "",

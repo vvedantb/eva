@@ -42,7 +42,7 @@ sequenceDiagram
   participant WH as Eva_http_webhook
   participant WF as prRecapWorkflow
   participant GHAPI as GitHub_API
-  participant SB as Daytona_sandbox
+  participant SB as Vercel_sandbox
   participant CC as Claude_Code_CLI
   participant DB as Convex_docs
 
@@ -230,7 +230,6 @@ In `C:/Vedant/Evalucom/Github/carepulse-ts` (when shipping):
 | `CLAUDE_CODE_OAUTH_TOKEN` | Team env var — Claude Code subscription auth (already used platform-wide) |
 | `GITHUB_WEBHOOK_SECRET`   | Already exists                                                            |
 | GitHub App credentials    | Already exists — diff fetch + PR comments                                 |
-| `DAYTONA_API_KEY`         | Already in team/repo env — sandbox for agent run                          |
 
 **Not used:** `ANTHROPIC_API_KEY`, `PLAN_RECAP_TOKEN`.
 

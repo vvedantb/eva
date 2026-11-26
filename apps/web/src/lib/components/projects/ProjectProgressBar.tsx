@@ -1,33 +1,37 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
+import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { projectStatusSegments } from "@eva/shared/projectView";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import {
-  statusConfig,
-  TASK_STATUSES,
-} from "@/lib/components/tasks/TaskStatusBadge";
+import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
+import { ProjectStageCounts } from "./ProjectStageCounts";
 
 interface ProjectProgressBarProps {
-  projectId: Id<"projects">;
+  /** The project's derived status (`useProjectTaskStatus` / `useProjectListStatuses`). */
+  status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }
 
 export function ProjectProgressBar({
-  projectId,
+  status,
   className,
 }: ProjectProgressBarProps) {
-  const progress = useQuery(api.projects.getTaskProgress, { projectId });
+  if (!status) return null;
 
-  if (!progress) return null;
+  // Fills stay at full track width and scale from the left — same compositor
+  // rule as UsageBar. The global `html[data-page-motion=off]` rule snaps it.
+  const segments = projectStatusSegments(status);
 
-  if (progress.total === 0) {
+  if (segments.length === 0) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`h-1.5 overflow-hidden rounded-full bg-secondary/85 ${className ?? ""}`}
+            className={cn(
+              "h-1.5 overflow-hidden rounded-full bg-secondary/85",
+              className,
+            )}
           />
         </TooltipTrigger>
         <TooltipContent>
@@ -37,33 +41,19 @@ export function ProjectProgressBar({
     );
   }
 
-  // Fills stay at full track width and scale from the left — same compositor
-  // rule as UsageBar. `.project-progress-fill` is the hook for
-  // `html[data-page-motion=off]` (do not add that rule here).
-  const segments: {
-    status: (typeof TASK_STATUSES)[number];
-    ratio: number;
-    offset: number;
-  }[] = [];
-  let offset = 0;
-  for (const status of TASK_STATUSES) {
-    const count = progress[status];
-    if (count === 0) continue;
-    const ratio = count / progress.total;
-    segments.push({ status, ratio, offset });
-    offset += ratio;
-  }
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`relative h-1.5 overflow-hidden rounded-full bg-secondary ${className ?? ""}`}
+          className={cn(
+            "relative h-1.5 overflow-hidden rounded-full bg-secondary",
+            className,
+          )}
         >
           {segments.map((segment) => (
             <div
               key={segment.status}
-              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${statusConfig[segment.status].bar}`}
+              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${projectTaskDisplayStatusConfig[segment.status].bar}`}
               style={{
                 left: `${segment.offset * 100}%`,
                 transform: `scaleX(${segment.ratio})`,
@@ -73,20 +63,10 @@ export function ProjectProgressBar({
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        <div className="flex flex-col gap-1">
-          {TASK_STATUSES.flatMap((s) => {
-            if (progress[s] <= 0) return [];
-            const Icon = statusConfig[s].icon;
-            return [
-              <span
-                key={s}
-                className={`flex items-center gap-1.5 ${statusConfig[s].text}`}
-              >
-                <Icon size={12} /> {progress[s]} {statusConfig[s].label}
-              </span>,
-            ];
-          })}
-        </div>
+        <ProjectStageCounts
+          status={status}
+          className="flex-col items-start gap-1 text-xs"
+        />
       </TooltipContent>
     </Tooltip>
   );

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ContextMenuItem,
   ContextMenuRadioGroup,
@@ -15,64 +16,73 @@ import {
   DropdownMenuSubTrigger,
   ConfirmSkipHint,
   skipConfirmTitle,
+  toast,
 } from "@vvedantb/ui";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
+  IconArchive,
+  IconArchiveOff,
   IconClipboard,
   IconCopy,
   IconExternalLink,
   IconGitBranch,
+  IconLink,
   IconPencil,
-  IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
-import {
-  phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
- * The project card's actions, hosted in either menu surface. Right-click covers
- * pointer devices; below `sm` a kebab re-hosts the same items, since touch has
- * nothing to right-click and the card carried no visible affordance at all.
- * Both surfaces render this one component so the two can never drift apart —
- * see `TaskCardMenuItems` for the original of this pattern.
+ * The project menu body, shared by the card's right-click menu, the card's
+ * kebab (touch has nothing to right-click) and the project header "…" menu.
+ * Groups: project properties, open and copy, PRs and plan, then Archive. An
+ * archived project is read-only: no properties, and Unarchive for Archive.
+ * See `TaskCardMenuItems` for the original of this pattern.
  */
 export interface ProjectCardMenuItemsProps {
   variant: "context" | "dropdown";
+  projectId: Id<"projects">;
   title: string;
-  phase: ProjectPhase;
   projectLead?: Id<"users">;
   currentUserId?: Id<"users">;
   users?: User[];
+  /** The project page; Copy link copies it. */
   href?: string;
+  /** Cards link elsewhere; the project header already is the project. */
+  showOpenInNewTab?: boolean;
   branchName?: string;
-  repoFullName: string;
-  onPhaseChange: (phase: ProjectPhase) => void;
+  /** Project header only: its sandbox and PR commands, above the shared items. */
+  leading?: ReactNode;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  /** An archived project: read-only, so the menu offers Unarchive and no edits. */
+  archived?: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
 }
 
 export function ProjectCardMenuItems({
   variant,
+  projectId,
   title,
-  phase,
   projectLead,
   currentUserId,
   users,
   href,
+  showOpenInNewTab = false,
   branchName,
-  repoFullName,
-  onPhaseChange,
+  leading,
   onLeadChange,
   onEdit,
-  onDelete,
+  archived = false,
+  onArchive,
+  onUnarchive,
 }: ProjectCardMenuItemsProps) {
+  const prs = useOwnerPullRequests({ kind: "project", projectId });
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Sub = variant === "context" ? ContextMenuSub : DropdownMenuSub;
   const SubTrigger =
@@ -85,119 +95,121 @@ export function ProjectCardMenuItems({
     variant === "context" ? ContextMenuRadioItem : DropdownMenuRadioItem;
   const MenuSeparator =
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
+  const iconSize = variant === "context" ? 16 : 14;
 
-  const PhaseIcon = phaseConfig[phase].icon;
+  const hasPrGroup = prs.length > 0;
 
   return (
     <>
-      <Sub>
-        <SubTrigger>
-          <PhaseIcon size={16} className={phaseConfig[phase].text} />
-          Phase
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={phase}
-            onValueChange={(value) => {
-              const matched = PROJECT_PHASES.find((p) => p === value);
-              if (!matched) return;
-              onPhaseChange(matched);
-            }}
-          >
-            {PROJECT_PHASES.map((p) => {
-              const cfg = phaseConfig[p];
-              const Icon = cfg.icon;
-              return (
-                <RadioItem key={p} value={p}>
-                  <Icon size={16} className={cfg.text} />
-                  {cfg.label}
-                </RadioItem>
-              );
-            })}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-      <Sub>
-        <SubTrigger>
-          <IconUserPlus className="size-4" />
-          Project Lead
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={projectLead ?? "none"}
-            onValueChange={onLeadChange}
-          >
-            {currentUserId ? (
-              <>
-                <RadioItem value={currentUserId}>Set myself as lead</RadioItem>
-                <MenuSeparator />
-              </>
-            ) : null}
-            <RadioItem value="none">No lead</RadioItem>
-            {(users ?? []).map((user) => (
-              <RadioItem data-pii key={user._id} value={user._id}>
-                {user.fullName ?? user.firstName ?? "Unknown"}
-              </RadioItem>
-            ))}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-      <MenuSeparator />
-      {href ? (
+      {leading ? (
+        <>
+          {leading}
+          <MenuSeparator />
+        </>
+      ) : null}
+      {archived ? null : (
+        <>
+          <Sub>
+            <SubTrigger>
+              <IconUserPlus size={iconSize} />
+              Project Lead
+            </SubTrigger>
+            <SubContent>
+              <RadioGroup
+                value={projectLead ?? "none"}
+                onValueChange={onLeadChange}
+              >
+                {currentUserId ? (
+                  <>
+                    <RadioItem value={currentUserId}>Set myself as lead</RadioItem>
+                    <MenuSeparator />
+                  </>
+                ) : null}
+                <RadioItem value="none">No lead</RadioItem>
+                {(users ?? []).map((user) => (
+                  <RadioItem data-pii key={user._id} value={user._id}>
+                    {user.fullName ?? user.firstName ?? "Unknown"}
+                  </RadioItem>
+                ))}
+              </RadioGroup>
+            </SubContent>
+          </Sub>
+          <Item onSelect={onEdit}>
+            <IconPencil size={iconSize} />
+            Edit details
+          </Item>
+          <MenuSeparator />
+        </>
+      )}
+      {showOpenInNewTab && href ? (
         <Item
-          onClick={() => {
-            window.open(href, "_blank");
+          onSelect={() => {
+            window.open(href, "_blank", "noopener,noreferrer");
           }}
         >
-          <IconExternalLink className="size-4" />
+          <IconExternalLink size={iconSize} />
           Open in new tab
         </Item>
       ) : null}
-      {branchName ? (
-        <Item asChild>
-          <a
-            href={`https://github.com/${repoFullName}/tree/${branchName}`}
-            target="_blank"
-            rel="noopener noreferrer"
+      <Sub>
+        <SubTrigger>
+          <IconCopy size={iconSize} />
+          Copy
+        </SubTrigger>
+        <SubContent>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(title);
+            }}
           >
-            <IconGitBranch className="size-4" />
-            View Branch
-          </a>
-        </Item>
+            <IconClipboard size={iconSize} />
+            Title
+          </Item>
+          {href ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(
+                  window.location.origin + href,
+                );
+              }}
+            >
+              <IconLink size={iconSize} />
+              Link
+            </Item>
+          ) : null}
+          {branchName ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(branchName).then(() => {
+                  toast.success("Branch name copied");
+                });
+              }}
+            >
+              <IconGitBranch size={iconSize} />
+              Branch name
+            </Item>
+          ) : null}
+        </SubContent>
+      </Sub>
+      {hasPrGroup ? (
+        <>
+          <MenuSeparator />
+          <PrActionsSubmenus variant={variant} prs={prs} />
+        </>
       ) : null}
-      <Item onClick={onEdit}>
-        <IconPencil className="size-4" />
-        Edit Details
-      </Item>
       <MenuSeparator />
-      <Item
-        onClick={() => {
-          void navigator.clipboard.writeText(title);
-        }}
-      >
-        <IconClipboard className="size-4" />
-        Copy title
-      </Item>
-      {branchName ? (
-        <Item
-          onClick={() => {
-            void navigator.clipboard.writeText(branchName);
-          }}
-        >
-          <IconCopy className="size-4" />
-          Copy branch name
+      {archived ? (
+        <Item onSelect={onUnarchive}>
+          <IconArchiveOff size={iconSize} />
+          Unarchive
         </Item>
-      ) : null}
-      <MenuSeparator />
-      <Item
-        className="text-destructive"
-        onClick={onDelete}
-        title={skipConfirmTitle("Delete")}
-      >
-        <IconTrash className="size-4" />
-        Delete
-        <ConfirmSkipHint />
-      </Item>
+      ) : (
+        <Item onSelect={onArchive} title={skipConfirmTitle("Archive")}>
+          <IconArchive size={iconSize} />
+          Archive
+          <ConfirmSkipHint />
+        </Item>
+      )}
     </>
   );
 }

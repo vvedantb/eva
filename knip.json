@@ -6,7 +6,40 @@
       "project": ["scripts/*.{ts,mjs}"]
     },
     "apps/web": {
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/lib/stageshow/**"]
+    },
+    "apps/mobile": {
+      "entry": ["app/**/*.tsx!", "app.config.ts!"],
+      "project": ["app/**/*.tsx", "src/**/*.{ts,tsx}", "app.config.ts"],
+      "ignoreDependencies": [
+        "@babel/core",
+        "@expo/metro-runtime",
+        "@expo/vector-icons",
+        "@rn-primitives/select",
+        "@rn-primitives/slot",
+        "@rn-primitives/switch",
+        "class-variance-authority",
+        "clsx",
+        "expo-auth-session",
+        "expo-blur",
+        "expo-crypto",
+        "expo-font",
+        "expo-haptics",
+        "expo-linking",
+        "expo-secure-store",
+        "expo-system-ui",
+        "expo-web-browser",
+        "lucide-react-native",
+        "react-dom",
+        "react-native-reanimated",
+        "react-native-safe-area-context",
+        "react-native-screens",
+        "react-native-svg",
+        "react-native-worklets",
+        "tailwind-merge",
+        "tailwindcss"
+      ]
     },
     "apps/chrome-extension": {
       "entry": ["src/background/index.ts", "src/content/index.ts"],

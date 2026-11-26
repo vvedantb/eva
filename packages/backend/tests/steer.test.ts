@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { decideSteerDelivery } from "../convex/_chat/steer";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Steer sends a queued message into the running turn. Claude and Codex take
@@ -11,7 +12,6 @@ import { decideSteerDelivery } from "../convex/_chat/steer";
  * queue so it runs as the next turn.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|steer-test";
 const MODEL = "claude:sonnet";
@@ -74,6 +74,7 @@ async function createRunningChatFixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Steer test",
@@ -86,8 +87,21 @@ async function createRunningChatFixture() {
       title: "Main",
       number: 1,
       isMain: true,
-      activeWorkflowId: "wf-running",
       lastModel: MODEL,
+    });
+    // The running turn: an open turn bound to its workflow.
+    await ctx.db.insert("turns", {
+      entityId: chatId,
+      sessionId,
+      streamingEntityId: String(chatId),
+      state: "running",
+      open: true,
+      turnStartedAt: Date.now(),
+      leaseExpiresAt: Date.now() + 120_000,
+      leaseGeneration: 1,
+      model: MODEL,
+      repoId,
+      workflowId: "wf-running",
     });
     const earlierId = await ctx.db.insert("queuedMessages", {
       parentId: chatId,

@@ -36,6 +36,7 @@ import {
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
 import { type ProgressStep, startupProgress } from "./startupProgress";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
@@ -50,7 +51,7 @@ async function setLinkedRepoProgress(
   steps: ProgressStep[],
 ): Promise<void> {
   await ctx.runMutation(internal.streaming.internalSet, {
-    entityId: `session-startup-${sessionId}`,
+    entityId: sandboxStartupEntityId({ kind: "session", sessionId }),
     currentActivity: JSON.stringify(steps),
   });
 }
@@ -74,19 +75,20 @@ export const prepareLinkedRepo = internalAction({
   handler: async (ctx, args) => {
     const details = `sessionId=${args.sessionId}, sessionRepoId=${args.sessionRepoId}`;
     await runLoggedGitStep("prepareLinkedRepo", details, async () => {
-      const row = await ctx.runQuery(
-        internal.sessions.getSessionRepoInternal,
-        { id: args.sessionRepoId },
-      );
+      // Independent reads: fetch together, then check in the original order.
+      const [row, primaryRepo, stillWanted] = await Promise.all([
+        ctx.runQuery(internal.sessions.getSessionRepoInternal, {
+          id: args.sessionRepoId,
+        }),
+        ctx.runQuery(internal.githubRepos.getInternal, { id: args.repoId }),
+        sandboxStillWanted(ctx, args.sandboxId, args.sessionId),
+      ]);
       if (!row) {
         logLinkedRepo(
           `prepareLinkedRepo: sessionRepos row gone, skipping (${details})`,
         );
         return;
       }
-      const primaryRepo = await ctx.runQuery(internal.githubRepos.getInternal, {
-        id: args.repoId,
-      });
       if (!primaryRepo) {
         throw new Error(
           `prepareLinkedRepo: primary repo ${args.repoId} not found`,
@@ -94,7 +96,7 @@ export const prepareLinkedRepo = internalAction({
       }
       // Workflow retries can land after the user stopped the session; the
       // first exec would resume the stopped VM and leave it billing.
-      if (!(await sandboxStillWanted(ctx, args.sandboxId, args.sessionId))) {
+      if (!stillWanted) {
         logLinkedRepo(
           `prepareLinkedRepo: sandbox stopped, skipping (${details})`,
         );
@@ -264,7 +266,7 @@ export const prepareLinkedRepo = internalAction({
       if (freshlyCloned && row.devCommand && row.devPort !== undefined) {
         await launchLinkedRepoDevServerInVercelConsole(
           sandbox,
-          `session-${args.sessionId}-${row.name}`,
+          `${sandboxOwnerKey({ kind: "session", sessionId: args.sessionId })}-${row.name}`,
           row.path,
           row.devCommand,
           row.devPort,

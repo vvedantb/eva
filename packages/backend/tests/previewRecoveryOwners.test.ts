@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Nothing watches the dev server or the navigation proxy after launch. An OOM
@@ -21,7 +22,6 @@ import schema from "../convex/schema";
  * `null` means the guards bailed before it.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the sandbox module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -31,7 +31,7 @@ const EXPECTED_PORT = 13000;
 const DEV_COMMAND = "pnpm dev";
 
 type Harness = ReturnType<typeof convexTest>;
-/** Same four literals on sessions, quick tasks and project chats. */
+/** A session's sandbox lifecycle. */
 type SandboxLifecycle = "active" | "starting" | "stopping" | "closed";
 type OwnerState = {
   status: SandboxLifecycle;
@@ -70,6 +70,7 @@ async function seedSession(
 ): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Preview recovery",
@@ -80,58 +81,6 @@ async function seedSession(
     });
   });
 }
-
-async function seedTask(
-  t: Harness,
-  repoId: Id<"githubRepos">,
-  userId: Id<"users">,
-  owner: OwnerState,
-): Promise<void> {
-  await t.run(async (ctx) => {
-    const now = Date.now();
-    await ctx.db.insert("agentTasks", {
-      repoId,
-      title: "Preview recovery",
-      status: "business_review",
-      createdAt: now,
-      updatedAt: now,
-      createdBy: userId,
-      sandboxId: SANDBOX_ID,
-      reviewTaskSandboxStatus: owner.status,
-      devPort: owner.devPort,
-      devCommand: owner.devCommand,
-    });
-  });
-}
-
-async function seedProject(
-  t: Harness,
-  repoId: Id<"githubRepos">,
-  userId: Id<"users">,
-  owner: OwnerState,
-): Promise<void> {
-  await t.run(async (ctx) => {
-    await ctx.db.insert("projects", {
-      repoId,
-      userId,
-      title: "Preview recovery",
-      phase: "in_progress",
-      rawInput: "recover the preview",
-      sandboxId: SANDBOX_ID,
-      reviewProjectSandboxStatus: owner.status,
-      devPort: owner.devPort,
-      devCommand: owner.devCommand,
-    });
-  });
-}
-
-const SEED_BY_OWNER = {
-  session: seedSession,
-  task: seedTask,
-  project: seedProject,
-} as const;
-
-type OwnerKind = keyof typeof SEED_BY_OWNER;
 
 async function runRecovery(
   t: Harness,
@@ -178,10 +127,10 @@ describe("preview recovery only acts on an owner that is safe to relaunch", () =
     TIMEOUT_MS,
   );
 
-  describe.each<OwnerKind>(["session", "task", "project"])(
-    "%s owner",
-    (kind) => {
-      const seed = SEED_BY_OWNER[kind];
+  describe(
+    "session owner (a task's or project's sandbox is its session's)",
+    () => {
+      const seed = seedSession;
 
       test(
         "a running preview on the probed port is recovered",
@@ -232,38 +181,5 @@ describe("preview recovery only acts on an owner that is safe to relaunch", () =
         await expectStoodDown(t, repoId);
       });
     },
-  );
-
-  test(
-    "the session owning a sandbox wins over a task or project row",
-    async () => {
-      const t = convexTest(schema, modules);
-      const { repoId, userId } = await seedRepo(t);
-      // Only the session is unsafe to relaunch. Standing down proves the
-      // session was the owner consulted, not the recoverable task/project.
-      await seedSession(t, repoId, userId, {
-        ...RECOVERABLE,
-        status: "starting",
-      });
-      await seedTask(t, repoId, userId, RECOVERABLE);
-      await seedProject(t, repoId, userId, RECOVERABLE);
-      await expectStoodDown(t, repoId);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a task owner wins over a project row when no session owns the sandbox",
-    async () => {
-      const t = convexTest(schema, modules);
-      const { repoId, userId } = await seedRepo(t);
-      await seedTask(t, repoId, userId, {
-        ...RECOVERABLE,
-        status: "starting",
-      });
-      await seedProject(t, repoId, userId, RECOVERABLE);
-      await expectStoodDown(t, repoId);
-    },
-    TIMEOUT_MS,
   );
 });

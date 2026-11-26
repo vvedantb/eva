@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import { decryptCredentialMap } from "./_envVars/encryptedEntries";
 import { getAIModelProvider } from "./validators";
 import type { SandboxCredentials } from "./_sandbox/provider";
+import { sandboxVcpus } from "@eva/shared";
 import {
   presentEnv,
   selectVercelCredentials,
@@ -21,24 +22,19 @@ export async function resolveAllEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
-  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
-    repoId,
-  });
-
-  const teamEnvVars: Record<string, string> = {};
-  if (teamId) {
-    const vars = await ctx.runQuery(internal.teamEnvVars.getAllInternal, {
-      teamId,
-    });
-    Object.assign(teamEnvVars, decryptCredentialMap(vars));
-  }
-
-  const repoVars = await ctx.runQuery(internal.repoEnvVars.getAllInternal, {
-    repoId,
-  });
-  const repoEnvVars = decryptCredentialMap(repoVars);
-
-  return { ...teamEnvVars, ...repoEnvVars };
+  // Repo vars do not depend on the team lookup: fetch both chains together.
+  const [teamVars, repoVars] = await Promise.all([
+    ctx
+      .runQuery(internal.githubRepos.getTeamIdForRepo, { repoId })
+      .then((teamId) =>
+        teamId ? ctx.runQuery(internal.teamEnvVars.getAllInternal, { teamId }) : [],
+      ),
+    ctx.runQuery(internal.repoEnvVars.getAllInternal, { repoId }),
+  ]);
+  return {
+    ...decryptCredentialMap(teamVars),
+    ...decryptCredentialMap(repoVars),
+  };
 }
 
 /** Resolves and decrypts sandbox-eligible env vars (team + repo). Repo vars override team vars. */
@@ -46,38 +42,51 @@ export async function resolveEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
+  // Repo vars do not depend on the team lookup: fetch both chains together.
+  const [teamVars, repoVars] = await Promise.all([
+    ctx
+      .runQuery(internal.githubRepos.getTeamIdForRepo, { repoId })
+      .then((teamId) =>
+        teamId ? ctx.runQuery(internal.teamEnvVars.getForSandbox, { teamId }) : [],
+      ),
+    ctx.runQuery(internal.repoEnvVars.getForSandbox, { repoId }),
+  ]);
+  return {
+    ...decryptCredentialMap(teamVars),
+    ...decryptCredentialMap(repoVars),
+  };
+}
+
+/**
+ * Decrypted seed-only env vars (team + repo, repo wins). Only the snapshot
+ * seed run receives these; session sandboxes never do.
+ */
+export async function resolveSeedOnlyEnvVars(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Record<string, string>> {
   const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
     repoId,
   });
-
-  const teamEnvVars: Record<string, string> = {};
-  if (teamId) {
-    const vars = await ctx.runQuery(internal.teamEnvVars.getForSandbox, {
-      teamId,
-    });
-    Object.assign(teamEnvVars, decryptCredentialMap(vars));
-  }
-
-  const repoVars = await ctx.runQuery(internal.repoEnvVars.getForSandbox, {
-    repoId,
-  });
-  const repoEnvVars = decryptCredentialMap(repoVars);
-
-  return { ...teamEnvVars, ...repoEnvVars };
+  const teamVars = teamId
+    ? decryptCredentialMap(
+        await ctx.runQuery(internal.teamEnvVars.getForSeed, { teamId }),
+      )
+    : {};
+  const repoVars = decryptCredentialMap(
+    await ctx.runQuery(internal.repoEnvVars.getForSeed, { repoId }),
+  );
+  return { ...teamVars, ...repoVars };
 }
 
-/** All repos in the same codebase (owner/name), requested repo first. */
+/** Sibling repos of the codebase (same owner/name and team), requested repo first. */
 async function listMonorepoRepoIds(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Array<Id<"githubRepos">>> {
-  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-    id: repoId,
-  });
-  if (!repo) return [repoId];
   const siblingIds = await ctx.runQuery(
-    internal.githubRepos.listRepoIdsByOwnerAndName,
-    { owner: repo.owner, name: repo.name },
+    internal.githubRepos.listSiblingRepoIds,
+    { repoId },
   );
   if (siblingIds.length === 0) return [repoId];
   return [repoId, ...siblingIds.filter((id) => id !== repoId)];
@@ -88,12 +97,10 @@ async function loadSiblingRepoFields(
   repoId: Id<"githubRepos">,
 ): Promise<Array<AppRepoPickFields & { _id: Id<"githubRepos"> }>> {
   const repoIds = await listMonorepoRepoIds(ctx, repoId);
-  const docs: Array<AppRepoPickFields & { _id: Id<"githubRepos"> }> = [];
-  for (const id of repoIds) {
-    const doc = await ctx.runQuery(internal.githubRepos.getInternal, { id });
-    if (doc) docs.push(doc);
-  }
-  return docs;
+  const docs = await Promise.all(
+    repoIds.map((id) => ctx.runQuery(internal.githubRepos.getInternal, { id })),
+  );
+  return docs.filter((doc) => doc !== null);
 }
 
 /**
@@ -135,10 +142,13 @@ async function selectVercelCredentialsForRepo(
     !presentEnv(targetVars.VERCEL_TEAM_ID)
   ) {
     const repoIds = await listMonorepoRepoIds(ctx, credentialRepoId);
-    for (const siblingId of repoIds) {
-      if (siblingId === credentialRepoId) continue;
-      siblingVarsList.push(await resolveAllEnvVars(ctx, siblingId));
-    }
+    siblingVarsList.push(
+      ...(await Promise.all(
+        repoIds
+          .filter((siblingId) => siblingId !== credentialRepoId)
+          .map((siblingId) => resolveAllEnvVars(ctx, siblingId)),
+      )),
+    );
   }
 
   return {
@@ -147,11 +157,28 @@ async function selectVercelCredentialsForRepo(
   };
 }
 
+/**
+ * vCPUs for the target app's sandboxes. Always the target's own size, never
+ * the sibling whose Vercel project the credentials came from.
+ */
+async function resolveSandboxVcpus(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<number> {
+  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+    id: repoId,
+  });
+  return sandboxVcpus(repo?.sandboxSize);
+}
+
 async function resolveVercelCredentialsForRepo(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Extract<SandboxCredentials, { kind: "vercel" }>> {
-  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
+  const [{ selected }, vcpus] = await Promise.all([
+    selectVercelCredentialsForRepo(ctx, repoId),
+    resolveSandboxVcpus(ctx, repoId),
+  ]);
   if (!selected.ok) {
     throw new Error(selected.message);
   }
@@ -160,6 +187,7 @@ async function resolveVercelCredentialsForRepo(
     token: selected.token,
     teamId: selected.teamId,
     projectId: selected.projectId,
+    vcpus,
   };
 }
 
@@ -178,10 +206,10 @@ export async function tryResolveSandboxCredentials(
     }
   | { ok: false; error: string }
 > {
-  const { credentialRepoId, selected } = await selectVercelCredentialsForRepo(
-    ctx,
-    repoId,
-  );
+  const [{ credentialRepoId, selected }, vcpus] = await Promise.all([
+    selectVercelCredentialsForRepo(ctx, repoId),
+    resolveSandboxVcpus(ctx, repoId),
+  ]);
   if (!selected.ok) {
     return { ok: false, error: selected.message };
   }
@@ -193,6 +221,7 @@ export async function tryResolveSandboxCredentials(
       token: selected.token,
       teamId: selected.teamId,
       projectId: selected.projectId,
+      vcpus,
     },
     sandboxEnvVars,
   };

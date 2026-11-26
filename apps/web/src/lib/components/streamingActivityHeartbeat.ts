@@ -5,7 +5,7 @@ import {
 import type { ActivityStep } from "@vvedantb/ui";
 
 /** How often the simple-view thinking heartbeat reprints. */
-export const THINKING_HEARTBEAT_INTERVAL_SECONDS = 30;
+const THINKING_HEARTBEAT_INTERVAL_SECONDS = 30;
 
 /**
  * Steps that simple view never surfaces. Updating only these is still

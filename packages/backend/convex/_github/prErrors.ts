@@ -6,9 +6,7 @@
  * GitHub's prose — so there is no status code that identifies them all.
  */
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * True when a PR cannot be opened because the branch has no commits ahead of
@@ -25,7 +23,7 @@ function messageOf(error: unknown): string {
  * the branch at all, which is a real publish failure and has to reach the user.
  */
 export function isBranchNotAheadError(error: unknown): boolean {
-  const message = messageOf(error);
+  const message = errorMessage(error);
   return (
     message.includes("is not ahead of") ||
     message.includes("No commits between")
@@ -40,5 +38,5 @@ export function isBranchNotAheadError(error: unknown): boolean {
  * rather than reporting a failure.
  */
 export function isPullRequestAlreadyExistsError(error: unknown): boolean {
-  return /pull request already exists/i.test(messageOf(error));
+  return /pull request already exists/i.test(errorMessage(error));
 }

@@ -1,5 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import type { FunctionReturnType } from "convex/server";
+import { isJsonObject, type JsonObject, type JsonValue } from "@vvedantb/server";
 import type { api, Id } from "@eva/backend";
 import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -7,21 +8,6 @@ import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 const MAX_TERMINAL_HISTORY_CHARS = 500_000;
 const FLUSH_DELAY_MS = 250;
 const IMMEDIATE_FLUSH_CHARS = 4096;
-/** Lines kept when syncing session console history to Convex. */
-const TERMINAL_HISTORY_TAIL_LINES = 500;
-const TERMINAL_HISTORY_TAIL_MAX_CHARS = 100_000;
-
-type JsonValue =
-  | null
-  | string
-  | number
-  | boolean
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-interface JsonObject {
-  [key: string]: JsonValue;
-}
 
 type TerminalHistoryOwner =
   | { kind: "session"; sessionId: string }
@@ -43,10 +29,6 @@ export interface TerminalHistoryWriter {
 type TerminalHistorySetter = (
   value: string | ((current: string) => string),
 ) => void;
-
-function isJsonObject(value: JsonValue): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function parseJsonObject(raw: string): JsonObject | null {
   try {
@@ -200,29 +182,6 @@ function boundedTerminalHistory(value: string): string {
   return value.length > MAX_TERMINAL_HISTORY_CHARS
     ? value.slice(-MAX_TERMINAL_HISTORY_CHARS)
     : value;
-}
-
-/** Last `maxLines` newline-delimited lines; also caps char length. */
-export function terminalHistoryTail(
-  text: string,
-  maxLines: number = TERMINAL_HISTORY_TAIL_LINES,
-): string {
-  if (maxLines <= 0 || text.length === 0) return "";
-  let linesFound = 0;
-  let sliceFrom = 0;
-  for (let i = text.length - 1; i >= 0; i--) {
-    if (text[i] === "\n") {
-      linesFound += 1;
-      if (linesFound === maxLines) {
-        sliceFrom = i + 1;
-        break;
-      }
-    }
-  }
-  const byLines = text.slice(sliceFrom);
-  return byLines.length > TERMINAL_HISTORY_TAIL_MAX_CHARS
-    ? byLines.slice(-TERMINAL_HISTORY_TAIL_MAX_CHARS)
-    : byLines;
 }
 
 export function buildTerminalHistoryKey(

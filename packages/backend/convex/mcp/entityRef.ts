@@ -3,28 +3,24 @@ import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { repoBasePath } from "../_githubRepos/helpers";
+import { entityHref } from "@eva/shared";
 import { canonicalPrUrl } from "./sessionRef";
 import {
   matchRepoByName,
+  mcpGetContext,
   mcpListUserRepos,
   type McpCredentials,
 } from "./toolShared";
+import { CHAT_ENTITY_KINDS } from "../_validators/enums";
+import { projectCallerOf, projectTargetRefusal } from "./projectScope";
 
 // Leaf module shared by tools.ts and entityTools.ts. Holds the one definition
 // of "which session, quick task or project did the caller mean", so every tool
 // that acts on an existing chat resolves it — and checks access — identically.
 
 /** The three chat surfaces an MCP caller can name. */
-export const ENTITY_KINDS = ["session", "task", "project"] as const;
+export const ENTITY_KINDS = CHAT_ENTITY_KINDS;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
-
-/** Eva url segment for each surface, for the path echoed back to the caller. */
-export const ENTITY_PATH_SEGMENT: Record<EntityKind, string> = {
-  session: "sessions",
-  task: "quick-tasks",
-  project: "projects",
-};
 
 /**
  * Repo selector shared by the repo-scoped tools. `repoId` is the normal path;
@@ -111,6 +107,10 @@ export interface EntityTarget {
   sandboxStatus: string;
   sandboxId?: string;
   devPort?: number;
+  /** A task or project on its session: the session that holds its sandbox. */
+  sandboxSessionId?: string;
+  /** The project a project or project task belongs to (its own id for a project). */
+  projectId?: string;
 }
 
 /** Everything needed to name one entity's place in Eva's url structure. */
@@ -125,12 +125,15 @@ export interface EntityLocation {
 /** The `owner/name/sessions/42` path a caller can open in Eva, when numbered. */
 export function entityPath(location: EntityLocation): string | undefined {
   if (location.numId === undefined) return undefined;
-  const basePath = repoBasePath({
-    owner: location.repoOwner,
-    name: location.repoName,
-    rootDirectory: location.repoRootDirectory,
-  });
-  return `${basePath}/${ENTITY_PATH_SEGMENT[location.kind]}/${location.numId}`;
+  return entityHref(
+    location.kind,
+    {
+      owner: location.repoOwner,
+      name: location.repoName,
+      rootDirectory: location.repoRootDirectory,
+    },
+    location.numId,
+  );
 }
 
 /**
@@ -177,6 +180,11 @@ export function entitySummary(target: EntityTarget): EntitySummary {
  * answer that no link existed. Naming no chat therefore means "the one I am
  * running in", which the sandbox token already states. Shared by every tool
  * whose natural target is the caller's own chat.
+ *
+ * A task's or project's chat runs in that owner's hidden session, so its token
+ * names the session; "the one I am running in" is then the owner
+ * (`credentials.owner`): a coordinator means its project, a child task its
+ * task.
  */
 export function withSelfDefault<Ref extends EntityRef>(
   ref: Ref,
@@ -184,8 +192,15 @@ export function withSelfDefault<Ref extends EntityRef>(
 ): Ref {
   const named =
     ref.id !== undefined || ref.prUrl !== undefined || ref.numId !== undefined;
+  if (named) return ref;
+  const { owner } = credentials;
+  if (owner !== undefined) {
+    return owner.kind === "project"
+      ? { ...ref, id: owner.projectId, kind: "project" }
+      : { ...ref, id: owner.taskId, kind: "task" };
+  }
   const { entityId, entityKind } = credentials;
-  if (named || entityId === undefined || entityKind === undefined) return ref;
+  if (entityId === undefined || entityKind === undefined) return ref;
   return { ...ref, id: entityId, kind: entityKind };
 }
 
@@ -254,11 +269,15 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   /**
    * Turns whichever reference the caller gave into one chat they may act on.
    * "No such chat" and "exists but you cannot reach it" come back as the same
-   * sentence, so a stranger's id confirms nothing.
+   * sentence, so a stranger's id confirms nothing. Inside a project the hub
+   * rules apply (`projectTargetRefusal`): a `write` from a child task may not
+   * touch a sibling or its project, and a coordinator writes only to its own
+   * project. Read tools pass `read`.
    */
   async function resolveEntityTarget(
     ref: EntityRef,
     userId: string,
+    intent: "read" | "write" = "write",
   ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
     const { id, prUrl, numId, kind } = ref;
     if (id === undefined && prUrl === undefined && numId === undefined) {
@@ -308,7 +327,27 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     // belt for the braces). Deliberately not the token pin — see entityAccess.
     await assertUserRepoAccess(target.repoId, userId);
 
+    const refusal = projectTargetRefusal(
+      projectCallerOf(credentials.owner),
+      target,
+      intent,
+    );
+    if (refusal !== null) return toolErrorResult(refusal);
+
     return { target };
+  }
+
+  /** The caller's own chat when the ref names none, else the one it names. */
+  async function resolveChat(
+    ref: EntityRef,
+    intent: "read" | "write" = "write",
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
+    const { userId } = await mcpGetContext(ctx, credentials.clerkUserId);
+    return resolveEntityTarget(
+      withSelfDefault(ref, credentials),
+      userId,
+      intent,
+    );
   }
 
   return {
@@ -316,5 +355,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     assertUserRepoAccess,
     resolveRepoRef,
     resolveEntityTarget,
+    resolveChat,
   };
 }

@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildLinkedReposSection } from "../convex/prompts/shared";
 
 test("buildLinkedReposSection returns nothing for a single-repo session", () => {

@@ -2,11 +2,13 @@
 
 import { ActionCache } from "@convex-dev/action-cache";
 import { generateText } from "ai";
+import { FLEX_GATEWAY_PROVIDER_OPTIONS } from "@vvedantb/server/ai";
 import {
   isTitleRegenerating,
   selectTagsByProbability,
   TASK_TAGS,
   TASK_TAG_DESCRIPTIONS,
+  tokenizedToDisplayText,
   type TaskTag,
 } from "@eva/shared";
 import { v } from "convex/values";
@@ -16,10 +18,14 @@ import { getActionRepoWithAccess } from "./functions";
 import { readBoolean } from "./_jev/answers";
 import { evaluateDecision } from "./_jev/client";
 import { buildTitleDigest } from "./_sessions/prompts";
+import { ownedSessionOwnerValidator } from "./_sessions/owner";
 import { chatTurnEntityIdValidator } from "./validators";
 
-/** Cheap gateway model for session titles — one-line change later. */
-const TEXT_GEN_MODEL = "openai/gpt-5-nano";
+/** Cheap gateway model for titles, tags, completions and polish. Same as Ave. */
+const TEXT_GEN_MODEL = "openai/gpt-6-luna";
+
+/** Luna's lowest effort; it rejects gpt-5's "minimal". */
+const NO_REASONING = { reasoningEffort: "none", textVerbosity: "low" };
 
 /** Trims, then strips one pair of wrapping quotes the model sometimes adds. */
 function stripWrappingQuotes(raw: string): string {
@@ -38,10 +44,26 @@ function cleanGeneratedTitle(raw: string): string {
 }
 
 /**
+ * A short title for a request (a session's first message, a task's or a
+ * project's prompt), or "" when the model returns none. Uses the flex
+ * service tier (~0.5x cost, higher latency OK — titles are background). If
+ * flex can't be applied, Gateway falls back to the default tier (best-effort).
+ */
+async function generateRequestTitle(
+  noun: "task" | "project",
+  request: string,
+): Promise<string> {
+  const { text } = await generateText({
+    model: TEXT_GEN_MODEL,
+    prompt: `Generate a concise 3-8 word title for this coding ${noun}. Summarize the request, don't restate it. Reply with the title only — no quotes, no trailing punctuation.\n\n${noun === "task" ? "Task" : "Project"}: ${request.slice(0, 2000)}`,
+    providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+  });
+  return cleanGeneratedTitle(text);
+}
+
+/**
  * Generates a short session title from the first user message via AI Gateway.
- * Uses flex service tier (~0.5x cost, higher latency OK — titles are background).
  * Non-fatal: missing key / model errors leave the placeholder title in place.
- * If flex can't be applied, Gateway falls back to default tier/rate (best-effort).
  */
 export const generateSessionTitle = internalAction({
   args: {
@@ -51,16 +73,7 @@ export const generateSessionTitle = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const { text } = await generateText({
-        model: TEXT_GEN_MODEL,
-        prompt: `Generate a concise 3-8 word title for this coding task. Summarize the request, don't restate it. Reply with the title only — no quotes, no trailing punctuation.\n\nTask: ${args.message.slice(0, 2000)}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
-          },
-        },
-      });
-      const title = cleanGeneratedTitle(text);
+      const title = await generateRequestTitle("task", args.message);
       if (!title) {
         return null;
       }
@@ -70,6 +83,39 @@ export const generateSessionTitle = internalAction({
       });
     } catch (error) {
       console.error("[textGen.generateSessionTitle]", error);
+    }
+    return null;
+  },
+});
+
+/**
+ * Generates a task's or project's title from its prompt, as a session's from
+ * its first message (`_shared/ownerTitle.ts`). Non-fatal: a failure leaves
+ * the first-line title in place.
+ */
+export const generateOwnerTitle = internalAction({
+  args: {
+    owner: ownedSessionOwnerValidator,
+    prompt: v.string(),
+    fallbackTitle: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const title = await generateRequestTitle(
+        args.owner.kind,
+        tokenizedToDisplayText(args.prompt),
+      );
+      if (!title) {
+        return null;
+      }
+      await ctx.runMutation(internal._shared.ownerTitle.applyGeneratedTitle, {
+        owner: args.owner,
+        fallbackTitle: args.fallbackTitle,
+        title,
+      });
+    } catch (error) {
+      console.error("[textGen.generateOwnerTitle]", error);
     }
     return null;
   },
@@ -113,11 +159,7 @@ Previous title: ${context.title}
 
 Conversation:
 ${digest}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
-          },
-        },
+        providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
       });
       title = cleanGeneratedTitle(text);
     } catch (error) {
@@ -262,14 +304,9 @@ Continue the partial text below from exactly where it stops. Reply with the cont
 
 Partial text:
 ${args.text.slice(-MAX_COMPLETION_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, so a tight cap
+        // Reasoning tokens count against maxOutputTokens, so a tight cap
         // returns an empty string. Keep reasoning off and clip in cleanCompletion.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
         stopSequences: ["\n"],
       });
@@ -359,12 +396,7 @@ Conversation:
 ${digest}`,
         // Same trade-off as completeTextInternal: the user is looking at an
         // empty composer, so latency beats depth.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
       });
       return cleanPrediction(text);
@@ -445,14 +477,9 @@ Rewrite the transcript so it reads as if it were typed, following every rule:
 
 Transcript:
 ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, and the output
+        // Reasoning tokens count against maxOutputTokens, and the output
         // roughly mirrors the input length, so keep reasoning off and the cap high.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 2048,
       });
       return stripWrappingQuotes(text);
@@ -460,5 +487,104 @@ ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
       console.error("[textGen.polishTranscript]", error);
       return "";
     }
+  },
+});
+
+/**
+ * Recaps are read word by word, so they get a stronger model than titles:
+ * nano echoed prompt labels. Haiku 5.5 beat GPT-6 Luna on one mock project
+ * (19 November 2026): 4-6 s against 8-12 s, and it named task chats as chips
+ * every run, where Luna never did.
+ */
+const RECAP_MODEL = "anthropic/claude-haiku-5.5";
+
+/** "17 hours", "2 days", "45 minutes": how long the user was away, for the opening line. */
+function formatAway(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 90) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hours`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+/** Keeps `@[Title](id)` chips the context offered; any other id becomes plain text. */
+function keepKnownMentions(text: string, allowedIds: ReadonlyArray<string>): string {
+  return text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (token, label: string, id: string) =>
+    allowedIds.includes(id) ? token : label,
+  );
+}
+
+/** What `writeRecap` reads: `chatRecaps.recapContext`'s result. */
+interface RecapContext {
+  kind: "away" | "full";
+  awayMs: number;
+  transcript: string;
+  log: string;
+  allowedIds: ReadonlyArray<string>;
+}
+
+/** One recap from `model`. Exported for model comparisons; throws on a gateway error. */
+export async function writeRecap(model: string, context: RecapContext): Promise<string> {
+  const away = formatAway(context.awayMs);
+  const chips =
+    context.allowedIds.length > 0
+      ? "\n- When you name a task chat, copy its @[Title](id) token exactly as written in the transcript. Use each token at most once."
+      : "";
+  const opening =
+    context.kind === "away"
+      ? `The user was away from this coding chat for ${away}. Write a short recap of what happened while they were away, so they can pick up in seconds.
+
+Rules:
+- Start with "In the last ${away}," and say the main outcome in one sentence.`
+      : `Write a short recap of this whole coding chat, so the user can pick it up in seconds.
+
+Rules:
+- Start with what the chat set out to do and where it stands now, in one sentence.`;
+  const result = await generateText({
+    model,
+    prompt: `${opening}
+- Then at most two short paragraphs, separated by a blank line: first what was built or decided, then what is waiting on the user (approvals, questions, unpushed work, failures).
+- Write them as normal sentences. Never start a paragraph with a label such as "Built:" or "Waiting on the user:".
+- If nothing is waiting on the user, leave that out; do not say so.
+- Hard limit: 80 words in total. Cut detail before you go over. Plain prose, no headings, no bullet lists, no code or backticks.
+- Write in the third person about the agent ("the agent", or no subject); never copy its "I" sentences.
+- State only facts from the transcript. Do not invent names, numbers or results.${chips}
+
+Log entries:
+${context.log || "(none)"}
+
+Transcript, oldest first (the newest part when it is long):
+${context.transcript || "(no messages)"}`,
+    providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+  });
+  return keepKnownMentions(stripWrappingQuotes(result.text), context.allowedIds);
+}
+
+/**
+ * Writes the "Since you've been gone" recap a `chatRecaps` row asks for
+ * (started by `chatReads.markRead`). Background work on the flex tier; a
+ * failure drops the row, so the card simply does not show.
+ */
+export const generateChatRecap = internalAction({
+  args: { recapId: v.id("chatRecaps") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const context = await ctx.runQuery(internal.chatRecaps.recapContext, {
+      recapId: args.recapId,
+    });
+    if (!context) return null;
+    let text = "";
+    try {
+      if (context.transcript || context.log) {
+        text = await writeRecap(RECAP_MODEL, context);
+      }
+    } catch (error) {
+      console.error("[textGen.generateChatRecap]", error);
+    }
+    await ctx.runMutation(internal.chatRecaps.applyRecap, {
+      recapId: args.recapId,
+      text,
+    });
+    return null;
   },
 });

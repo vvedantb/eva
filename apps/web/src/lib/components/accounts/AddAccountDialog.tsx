@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
-import { api, type AIProvider, type Id } from "@eva/backend";
+import { api, PROVIDER_LABELS, type AIProvider, type Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   Button,
@@ -16,7 +16,7 @@ import {
   Spinner,
   ProviderIcon,
 } from "@vvedantb/ui";
-import { PROVIDER_CREDENTIAL_FIELDS, PROVIDER_LABELS } from "./_credentialSpec";
+import { PROVIDER_CREDENTIAL_FIELDS } from "./_credentialSpec";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 const PROVIDERS: ReadonlyArray<AIProvider> = [

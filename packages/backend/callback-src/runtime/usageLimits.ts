@@ -7,7 +7,7 @@ import type {
   UsageLimitStatus,
   UsageLimitWindow,
 } from "../types.js";
-import { log } from "../utils.js";
+import { isJsonObject, log, trimmedString } from "../utils.js";
 import { callbackState as S } from "./state.js";
 
 /** Convex mutation that upserts the (repo, provider, account) usage-limit row. */
@@ -111,10 +111,6 @@ function readFiniteNumber(value: JsonValue | undefined): number | undefined {
     : undefined;
 }
 
-function readNonEmptyString(value: JsonValue | undefined): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function readStatus(
   value: JsonValue | undefined,
 ): UsageLimitStatus | undefined {
@@ -127,7 +123,7 @@ function readStatus(
 
 /** ISO 8601 timestamp to epoch ms, or undefined when unparseable. */
 export function readIsoMs(value: JsonValue | undefined): number | undefined {
-  const text = readNonEmptyString(value);
+  const text = trimmedString(value);
   if (!text) return undefined;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : undefined;
@@ -195,9 +191,9 @@ function labelForWindowKey(key: string): string {
  */
 export function mergeClaudeRateLimitEvent(event: JsonObject): void {
   const info = event.rate_limit_info;
-  if (typeof info !== "object" || info === null || Array.isArray(info)) return;
+  if (!isJsonObject(info)) return;
   const status = readStatus(info.status);
-  const rawKey = readNonEmptyString(info.rateLimitType);
+  const rawKey = trimmedString(info.rateLimitType);
   if (!status && !rawKey) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
@@ -259,7 +255,7 @@ export function readClaudeUsageWindows(
     limits.seven_day_overage_included,
   );
   for (const entry of limits.model_scoped ?? []) {
-    const name = readNonEmptyString(entry.display_name);
+    const name = trimmedString(entry.display_name);
     if (!name) continue;
     // Model-scoped entries are weekly windows too, so they are labelled like
     // the fixed ones ("Weekly (Fable)") rather than by bare model name.
@@ -372,7 +368,7 @@ export async function captureClaudeUsage(
       return false;
     }
     const snapshot: UsageLimitSnapshot = { completeness: "complete" };
-    const subscriptionType = readNonEmptyString(payload.subscription_type);
+    const subscriptionType = trimmedString(payload.subscription_type);
     if (subscriptionType) snapshot.subscriptionType = subscriptionType;
     snapshot.windows = readClaudeUsageWindows(payload);
     // A successful `/usage` read is authoritative. Replacing here drops windows

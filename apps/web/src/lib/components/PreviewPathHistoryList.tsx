@@ -34,7 +34,7 @@ export function PreviewPathHistoryList({
               onSelect(path);
             }}
             className={cn(
-              "motion-press mx-1 flex w-[calc(100%-0.5rem)] min-w-0 items-center rounded-lg px-2 py-1.5 text-left text-xs max-sm:py-2.5 transition-[background-color] active:scale-[0.98]",
+              "motion-press mx-1 flex w-[calc(100%-0.5rem)] min-w-0 items-center rounded-lg px-2 py-1.5 text-left text-xs max-sm:py-2.5 active:scale-[0.98]",
               isSelected
                 ? "bg-primary/15 font-medium text-foreground dark:bg-primary/25"
                 : "text-foreground/90 hover:bg-muted",

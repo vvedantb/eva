@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   isComposerVisible,
   type ComposerElement,
@@ -19,7 +19,7 @@ function editor(overrides: Partial<ComposerElement> = {}): ComposerElement {
 }
 
 /**
- * Up to five session shells and Manager Ave's panel stay mounted at once, so
+ * Up to three session shells and Manager Ave's panel stay mounted at once, so
  * anything that listens on `document` reaches every one of them. Each rule here
  * is one of the ways a mounted composer can be invisible; missing any of them
  * put a stray keystroke into every hidden draft.

@@ -1,14 +1,16 @@
 "use client";
 
 import { api, normalizeAIModel, type Id } from "@eva/backend";
-import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import { sandboxAnnotationSender } from "@/lib/components/chat/sandboxChatTurn";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import { useSessionTurnPorts } from "./useSessionTurnPorts";
 
 /**
  * Sends an annotation as chat display text + rich agent prompt into the
@@ -19,7 +21,7 @@ export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
   chatId: Id<"sessionChats">,
   isRouteActive = true,
-): (display: string, full: string) => Promise<void> {
+): AnnotationSubmit {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // Model + traits + account are owned by Convex.
@@ -37,70 +39,28 @@ export function useSessionAnnotationSend(
     });
   // Owner-scoped, matching the composer picker — resolving against the
   // viewer's own accounts would drop the sticky account to Team.
-  const { resolveId: resolveAccountId } =
+  const { options: accounts, resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId, isRouteActive);
 
-  const messages = useHeldQuery(
-    api.messages.listByParent,
-    isRouteActive ? { parentId: chatId } : "skip",
-  );
+  const messages = useChatTranscript(isRouteActive ? chatId : "skip");
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
     isRouteActive ? { entityId: chatId } : "skip",
   );
-  const addMessage = useMutation(api.sessions.addMessage);
-  const startExecution = useMutation(
-    api.sessionWorkflow.startExecute,
-  ).withOptimisticUpdate((localStore, args) =>
-    openChatTurnOptimistically(localStore, args.chatId),
+  const ports = useSessionTurnPorts(chatId, accounts);
+
+  const isExecuting = isChatTurnExecuting({
+    status: turnStatus,
+    messages,
+  });
+  return sandboxAnnotationSender(
+    ports,
+    {
+      model,
+      effortLevel: displayTraits.effortLevel,
+      executionTraits,
+      providerAccountId: resolveAccountId(providerAccountId),
+    },
+    isExecuting,
   );
-  const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
-
-  const isExecuting =
-    turnStatus === undefined
-      ? isAssistantTurnInProgress(messages ?? [])
-      : turnStatus !== null;
-
-  return async (display: string, full: string) => {
-    const accountId = resolveAccountId(providerAccountId);
-    const reasoningLevel = displayTraits.effortLevel;
-    if (isExecuting) {
-      await enqueueMessage({
-        chatId,
-        message: full,
-        displayContent: display,
-        model,
-        ...executionTraits,
-        reasoningLevel,
-        providerAccountId: accountId,
-      });
-      return;
-    }
-    await Promise.all([
-      addMessage({
-        chatId,
-        role: "user",
-        content: display,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel,
-      }),
-      startExecution({
-        chatId,
-        message: full,
-        model,
-        ...executionTraits,
-        reasoningLevel,
-        providerAccountId: accountId,
-      }),
-    ]).catch(async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send annotation";
-      await addMessage({
-        chatId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
-    });
-  };
 }

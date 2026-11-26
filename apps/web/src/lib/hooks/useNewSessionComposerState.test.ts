@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { beforeAll, expect, test, vi } from "vitest";
+import { beforeAll, expect, test } from "bun:test";
 import { z } from "zod";
 import type { Id } from "@eva/backend";
 import type { useNewSessionComposerState as UseComposerState } from "./useNewSessionComposerState";
@@ -20,11 +20,14 @@ let useComposerState: typeof UseComposerState;
 beforeAll(async () => {
   // usehooks-ts decides "server" once at import time, so the fake window must
   // exist before the hook module loads.
-  vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-      removeItem: (key: string) => storage.delete(key),
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      },
     },
   });
   ({ useNewSessionComposerState: useComposerState } = await import(
@@ -35,11 +38,21 @@ beforeAll(async () => {
 function renderComposerState(stored: string) {
   storage.set(`eva:new-session-composer:${repoId}`, stored);
   let result: ReturnType<typeof UseComposerState> | undefined;
-  function Probe() {
-    result = useComposerState(repoId, "claude:opus", { fastMode: false });
+  function Probe({
+    onResult,
+  }: {
+    onResult: (value: ReturnType<typeof UseComposerState>) => void;
+  }) {
+    onResult(useComposerState(repoId, "claude:opus", { fastMode: false }));
     return null;
   }
-  renderToString(createElement(Probe));
+  renderToString(
+    createElement(Probe, {
+      onResult: (value) => {
+        result = value;
+      },
+    }),
+  );
   if (!result) throw new Error("hook did not render");
   return result;
 }

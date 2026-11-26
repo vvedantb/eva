@@ -4,30 +4,18 @@ import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import { tokenTransition, ListEnter } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import type { TypingUser } from "@/lib/hooks/useTypingPresence";
+import { typingLabelParts, type TypingUser } from "@eva/shared/typingPresence";
 
 function typingLabel(users: TypingUser[]): ReactNode {
-  const names = users.map((user) => user.firstName);
-  // Defaults guard against an empty array for the type checker; in practice the
-  // indicator is only rendered with at least one user.
-  const [first = "Someone", second = "Someone"] = names;
-  if (names.length === 1)
-    return (
-      <>
-        <span data-pii>{first}</span> is typing
-      </>
-    );
-  if (names.length === 2)
-    return (
-      <>
-        <span data-pii>{first}</span> and <span data-pii>{second}</span> are
-        typing
-      </>
-    );
-  return (
-    <>
-      <span data-pii>{first}</span> and {names.length - 1} others are typing
-    </>
+  // Parts never repeat in one label ("Ada and Bo are typing"), so each keys by its content.
+  return typingLabelParts(users).map((part) =>
+    "name" in part ? (
+      <span key={`name:${part.name}`} data-pii>
+        {part.name}
+      </span>
+    ) : (
+      <span key={`text:${part.text}`}>{part.text}</span>
+    ),
   );
 }
 
@@ -39,7 +27,8 @@ function TypingAvatar({ firstName }: { firstName: string }) {
   );
 }
 
-function TypingDots() {
+/** Three bouncing dots: someone (a teammate, or Eva in a thread) is writing. */
+export function TypingDots() {
   return (
     <span className="inline-flex items-center gap-0.5" aria-hidden>
       {[0, 1, 2].map((i) => (
@@ -49,6 +38,19 @@ function TypingDots() {
           style={{ animationDelay: `${i * 150}ms` }}
         />
       ))}
+    </span>
+  );
+}
+
+/** The coordinator's live turn in its bubble: "Eva is typing" and the dots. */
+export function EvaTypingLine() {
+  return (
+    <span
+      aria-live="polite"
+      className="flex items-center gap-2 text-xs text-muted-foreground"
+    >
+      Eva is typing
+      <TypingDots />
     </span>
   );
 }

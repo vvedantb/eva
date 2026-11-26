@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   CHAT_LOG_AGENT_BODY_MAX,
   CHAT_LOG_AGENT_TITLE_MAX,
@@ -9,6 +9,7 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordTurnChange } from "../convex/chatLog";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The chat Log: append-only entries per session / quick task / project,
@@ -16,7 +17,6 @@ import { buildEditPrompt } from "../convex/_sessions/prompts";
  * (answered questions, turn commits).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|chat-log";
 const STRANGER_CLERK_ID = "clerk|chat-log-stranger";
@@ -34,6 +34,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Build the log",
@@ -53,7 +54,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Log project",
-      phase: "in_progress",
       rawInput: "log",
       numId: 3,
       updatedAt: now,
@@ -216,19 +216,19 @@ describe("chat log", () => {
       const f = await fixture();
       await f.t.run(async (ctx) => {
         const messageId = await ctx.db.insert("messages", {
-          parentId: f.taskId,
+          parentId: f.sessionId,
           role: "assistant",
           content: "- **Added** the Log to the Documents tab. It is pinned.\nMore detail.",
           timestamp: Date.now(),
         });
         const message = await ctx.db.get(messageId);
         if (!message) throw new Error("message missing");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "aaa");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "bbb");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "bbb");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "aaa");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "bbb");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "bbb");
       });
       const rows = await f.asUser.query(api.chatLog.listForSource, {
-        source: { kind: "task", taskId: f.taskId },
+        source: { kind: "session", sessionId: f.sessionId },
       });
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
@@ -247,7 +247,7 @@ describe("chat log", () => {
     "a turn's commits go onto the agent's change entry from that turn",
     async () => {
       const f = await fixture();
-      const source = { kind: "task" as const, taskId: f.taskId };
+      const source = { kind: "session" as const, sessionId: f.sessionId };
       await f.asUser.mutation(api.chatLog.append, {
         source,
         kind: "change",
@@ -256,7 +256,7 @@ describe("chat log", () => {
       });
       const message = await f.t.run(async (ctx) => {
         const messageId = await ctx.db.insert("messages", {
-          parentId: f.taskId,
+          parentId: f.sessionId,
           role: "assistant",
           content: "",
           timestamp: Date.now(),
@@ -273,7 +273,7 @@ describe("chat log", () => {
       await f.t.run(async (ctx) => {
         await recordTurnChange(
           ctx,
-          String(f.taskId),
+          String(f.sessionId),
           { ...message, content: "Done. Long reply." },
           "aaa",
           "bbb",
@@ -300,18 +300,18 @@ describe("chat log", () => {
           ["ccc", "bbb"],
         ].entries()) {
           const messageId = await ctx.db.insert("messages", {
-            parentId: f.taskId,
+            parentId: f.sessionId,
             role: "assistant",
             content: `Turn ${index}.`,
             timestamp: Date.now(),
           });
           const message = await ctx.db.get(messageId);
           if (!message) throw new Error("message missing");
-          await recordTurnChange(ctx, String(f.taskId), message, range[0], range[1]);
+          await recordTurnChange(ctx, String(f.sessionId), message, range[0], range[1]);
         }
       });
       const rows = await f.asUser.query(api.chatLog.listForSource, {
-        source: { kind: "task", taskId: f.taskId },
+        source: { kind: "session", sessionId: f.sessionId },
       });
       expect(rows.map((row) => row.title)).toEqual(["Turn 0."]);
     },
@@ -472,16 +472,14 @@ describe("chat log markdown", () => {
 });
 
 test("the turn prompt tells the agent to keep the Log", () => {
-  const prompt = buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    undefined,
-    5173,
-  );
+  const prompt = buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    devPort: 5173,
+  });
   expect(prompt).toContain("## Chat log (Documents tab):");
   expect(prompt).toContain("log_entry");
   expect(prompt).toContain("read_chat_log");

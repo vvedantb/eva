@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Dialog,
   DialogContent,
@@ -35,17 +36,12 @@ export function ChangelogDialog() {
   const dismiss = useMutation(
     api.changelog.dismissChangelog,
   ).withOptimisticUpdate((localStore) => {
-    const current = localStore.getQuery(api.changelog.getLatestChangelog, {});
-    if (current) {
-      localStore.setQuery(
-        api.changelog.getLatestChangelog,
-        {},
-        {
-          ...current,
-          show: false,
-        },
-      );
-    }
+    patchLoadedQuery(
+      localStore,
+      api.changelog.getLatestChangelog,
+      {},
+      (current) => current && { ...current, show: false },
+    );
   });
 
   if (!changelog) return null;

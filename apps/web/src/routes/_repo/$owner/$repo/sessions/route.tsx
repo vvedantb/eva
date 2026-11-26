@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { Activity, useState } from "react";
 import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { CachedSessionShell } from "./_components/CachedSessionShell";
 
-/** Cap mounted session shells so Preview iframes / PTYs stay bounded. */
-const MAX_CACHED_SESSIONS = 5;
+/**
+ * Cap mounted session shells. Each hidden shell keeps its whole React tree,
+ * DOM and held query results in the tab's memory; 3 covers back-and-forth
+ * between recent sessions without paying for 5.
+ */
+const MAX_CACHED_SESSIONS = 3;
 
 /**
  * One cached shell's identity. Repo is captured at cache time because bare
@@ -35,9 +39,9 @@ function entryFromParams(params: {
 }
 
 /**
- * Sessions section layout. Keeps the last few opened session shells mounted
- * (hidden) so switching sessions — including across apps — does not remount
- * Preview iframes. `/sessions` (no `$numId`) still renders the new-session
+ * Sessions section layout. Keeps the last few opened session shells in a
+ * hidden `<Activity>` so switching sessions — including across apps — does not
+ * remount Preview iframes. `/sessions` (no `$numId`) still renders the new-session
  * composer via Outlet.
  */
 export const Route = createFileRoute("/_repo/$owner/$repo/sessions")({
@@ -71,25 +75,23 @@ function SessionsLayout() {
       </div>
       {cached.map((entry) => {
         const isActive = entry.key === activeEntry?.key;
+        // Activity keeps a hidden shell's DOM and state (Preview iframes stay
+        // loaded) but tears down its effects, so background sessions hold no
+        // terminal sockets and stop redrawing while off screen.
         return (
-          <div
-            key={entry.key}
-            // Flex column: the shell's per-entry RepoGate sizes itself with
-            // `flex-1`, which is inert in a block parent (height collapses and
-            // the composer falls below the fold).
-            className={
-              isActive ? "flex h-full min-h-0 flex-col" : "hidden"
-            }
-            // Keep inactive shells out of the a11y tree while mounted.
-            aria-hidden={!isActive}
-          >
-            <CachedSessionShell
-              numId={entry.numId}
-              owner={entry.owner}
-              repoParam={entry.repoParam}
-              isActiveRoute={isActive}
-            />
-          </div>
+          <Activity key={entry.key} mode={isActive ? "visible" : "hidden"}>
+            {/* Flex column: the shell's per-entry RepoGate sizes itself with
+                `flex-1`, which is inert in a block parent (height collapses
+                and the composer falls below the fold). */}
+            <div className="flex h-full min-h-0 flex-col">
+              <CachedSessionShell
+                numId={entry.numId}
+                owner={entry.owner}
+                repoParam={entry.repoParam}
+                isActiveRoute={isActive}
+              />
+            </div>
+          </Activity>
         );
       })}
     </div>

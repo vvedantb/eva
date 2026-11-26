@@ -159,7 +159,6 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 - **Composer:** `CodebasesPicker` — primary chip from the URL repo (non-removable) plus removable linked chips, an "Add codebase" popover deduped by `owner/name`, and a saved-groups section with save/rename/delete. Selection lives in the URL via nuqs (`linked`, `group`, `deps`), so it survives reloads and is shareable.
 - **Session header:** `SessionRepoBadges`, from `sessions.listRepos` — one row per repo (`kind: "primary" | "linked"`, path, branch, PR URL and state), primary first.
 - **Files panel:** root selector once a session has linked repos; the primary's root is stored as `""` in the URL.
-- **Changed files:** paths under `/tmp/workspace/<name>/` are attributed to that repo and grouped under a heading (`changedFilesPresentation.ts`).
 - **Sidebar:** a `+N` badge from `linkedRepoCount` on the primary's row, and the session also appears under each linked repo with a "via `<primary>`" hint linking back to the primary's URL (`linkedFrom`).
 - **Terminal / PTY:** cwd stays `/tmp/repo`.
 
@@ -193,4 +192,4 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 | Composer / header / files UI | `apps/web/src/routes/_repo/$owner/$repo/sessions/_components/CodebasesPicker.tsx`, `SessionRepoBadges.tsx`, `../FilesPanel.tsx` |
 | Manual harness test | `callback-src/tests/linkedReposHarness.manual.md` |
 
-Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`, `turnCheckpointCompletionContract`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`; `apps/web` — `changedFilesPresentation`.
+Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`.

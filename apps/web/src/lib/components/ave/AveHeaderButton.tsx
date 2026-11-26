@@ -2,7 +2,7 @@
 
 import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
-import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
+import { AveBadge } from "@/lib/components/ave/AveBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
 
@@ -10,7 +10,7 @@ import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
  * The mobile summon button for Manager Ave, in the fixed header next to the
  * theme toggle.
  *
- * Below `lg` the floating launcher is not merely inconvenient — a 48px FAB
+ * Below `md` the floating launcher is not merely inconvenient — a 48px FAB
  * parked at the bottom-right sits on top of the chat composer's send button,
  * the plan-question action row and the last inbox row's controls, all of which
  * are then untappable. The header is the one strip of chrome that is always
@@ -22,6 +22,7 @@ export function AveHeaderButton() {
 
   return (
     <Button
+      shape="rounded"
       size="icon"
       variant="ghost"
       onClick={toggle}
@@ -36,7 +37,7 @@ export function AveHeaderButton() {
       <AveMark size={20} />
       <ErrorBoundary>
         <AveActiveDot />
-        <AveQuestionsBadge />
+        <AveBadge />
       </ErrorBoundary>
     </Button>
   );

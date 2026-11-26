@@ -1,25 +1,15 @@
 import { CONVEX_TOKEN, CONVEX_URL, REPO_ID } from "../config.js";
 import { fetchWithTimeout } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
-import { readResponseJson } from "../utils.js";
-
-export type GithubTokenFetch = (
-  url: string,
-  options: RequestInit,
-) => Promise<Response>;
-
-export type GithubTokenEnv = {
-  GITHUB_TOKEN?: string;
-  GH_TOKEN?: string;
-};
+import { isJsonObject, readResponseJson } from "../utils.js";
 
 /** Pulls `data.value.token` out of a Convex action JSON envelope. */
-export function tokenFromActionResponse(data: JsonValue | null): string | null {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+function tokenFromActionResponse(data: JsonValue | null): string | null {
+  if (!isJsonObject(data)) {
     return null;
   }
   const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   return typeof value.token === "string" ? value.token : null;
@@ -30,15 +20,13 @@ export function tokenFromActionResponse(data: JsonValue | null): string | null {
  * or parse failures return `{ token: null }` so git can keep using whatever
  * is already in the environment.
  */
-export async function fetchInstallationToken(params: {
+async function fetchInstallationToken(params: {
   convexUrl: string;
   convexToken: string;
   repoId: string;
-  fetchFn?: GithubTokenFetch;
 }): Promise<{ token: string } | { token: null }> {
   try {
-    const fetchFn = params.fetchFn ?? fetchWithTimeout;
-    const response = await fetchFn(params.convexUrl + "/api/action", {
+    const response = await fetchWithTimeout(params.convexUrl + "/api/action", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -59,12 +47,9 @@ export async function fetchInstallationToken(params: {
 }
 
 /** Writes the token into the env object the credential helper / `gh` read. */
-export function applyGithubTokenToEnv(
-  env: GithubTokenEnv,
-  token: string,
-): void {
-  env.GITHUB_TOKEN = token;
-  env.GH_TOKEN = token;
+function applyGithubTokenToEnv(token: string): void {
+  process.env.GITHUB_TOKEN = token;
+  process.env.GH_TOKEN = token;
 }
 
 /**
@@ -75,8 +60,6 @@ export async function ensureGithubToken(params: {
   convexUrl: string | undefined;
   convexToken: string | undefined;
   repoId: string | undefined;
-  env?: GithubTokenEnv;
-  fetchFn?: GithubTokenFetch;
 }): Promise<{ refreshed: boolean }> {
   const convexUrl = params.convexUrl;
   const convexToken = params.convexToken;
@@ -88,10 +71,9 @@ export async function ensureGithubToken(params: {
     convexUrl,
     convexToken,
     repoId,
-    fetchFn: params.fetchFn,
   });
   if (result.token === null) return { refreshed: false };
-  applyGithubTokenToEnv(params.env ?? process.env, result.token);
+  applyGithubTokenToEnv(result.token);
   return { refreshed: true };
 }
 

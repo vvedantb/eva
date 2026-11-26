@@ -1,6 +1,6 @@
 export type ConnectorProviderId = "linear" | "figma";
 
-export type ConnectorSource = "oauth" | "env" | "none";
+type ConnectorSource = "oauth" | "env" | "none";
 
 export interface ConnectorStatus {
   provider: ConnectorProviderId;

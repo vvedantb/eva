@@ -7,6 +7,10 @@
   "installCommand": "cd ../.. && HUSKY=0 pnpm install --frozen-lockfile --filter @eva/web...",
   "rewrites": [
     {
+      "source": "/preview-auth",
+      "destination": "/preview-auth.html"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }

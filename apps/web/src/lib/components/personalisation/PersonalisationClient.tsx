@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api, PERSONALISATION_PRESETS } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
   Textarea,
@@ -28,31 +29,17 @@ export function PersonalisationClient() {
   const setCustomInstructions = useMutation(
     api.auth.setCustomInstructions,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getPersonalisation, {});
-    if (current) {
-      localStore.setQuery(
-        api.auth.getPersonalisation,
-        {},
-        {
-          ...current,
-          customInstructions: args.customInstructions,
-        },
-      );
-    }
+    patchLoadedQuery(localStore, api.auth.getPersonalisation, {}, (current) => ({
+      ...current,
+      customInstructions: args.customInstructions,
+    }));
   });
   const setRole = useMutation(api.auth.setRole).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.auth.getPersonalisation, {});
-      if (current) {
-        localStore.setQuery(
-          api.auth.getPersonalisation,
-          {},
-          {
-            ...current,
-            role: args.role,
-          },
-        );
-      }
+      patchLoadedQuery(localStore, api.auth.getPersonalisation, {}, (current) => ({
+        ...current,
+        role: args.role,
+      }));
     },
   );
 
@@ -106,7 +93,6 @@ export function PersonalisationClient() {
     <SettingsPage title="Personalisation">
       <SettingsSection
         title="Role preset"
-        description="How Eva talks to you. Does not change what code it edits."
       >
         <div className="space-y-3">
           <RolePresetPicker
@@ -142,7 +128,6 @@ export function PersonalisationClient() {
 
       <SettingsSection
         title="Custom instructions"
-        description="Extra guidance included in every session."
         footer={
           <>
             {isDirty ? (

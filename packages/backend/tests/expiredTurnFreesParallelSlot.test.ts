@@ -1,13 +1,13 @@
 import workflow from "@convex-dev/workflow/test";
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
-import { MAX_PARALLEL_CHATS } from "../convex/_sessionChats/helpers";
+import { MAX_PARALLEL_CHATS } from "@eva/shared";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
@@ -38,6 +38,7 @@ test(
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Parallel chats",
@@ -103,6 +104,9 @@ test(
       turnId: expiredTurnId,
       cause: "process_dead",
     });
+    // The drain runs in its own scheduled mutation, after the close commits.
+    vi.runOnlyPendingTimers();
+    await t.finishInProgressScheduledFunctions();
 
     const after = await t.run(async (ctx) => ({
       expired: await ctx.db.get(expiredTurnId),

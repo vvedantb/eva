@@ -1,75 +1,211 @@
 # PR gate. This exists because #755 and #758 shipped a React hook-order crash
-# to production with no automated check standing in the way. Tests are
-# deliberately excluded — they were flaky and kept breaking the gate. Make this
-# a required status check in branch protection so the automerge bot cannot
-# bypass it.
+# to production with no automated check standing in the way. Tests run here
+# since the source-text tests (regex over source files) were deleted: those
+# broke on every refactor and were the reason tests were once excluded.
+#
+# The job now runs through the shared reusable workflow (vvedantb/packages). Its
+# status check is named "CI / check / Check" (it was "CI / typecheck / lint /
+# compiler / design / schema"). Make that the required status check in branch
+# protection so the automerge bot cannot bypass it.
 
 name: CI
 
 on:
   pull_request:
+    # The three default types plus ready_for_review, so CI also runs when a
+    # draft is marked ready. That run replaces the Grok wake-up run that used
+    # to fire on the same event, so the grok-wake job below lives here now.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
+# Pull requests cancel their own in-progress run. Main runs must not: a push now
+# carries the Android release, so a newer push must not cancel a release mid-build,
+# and a shared group would also let a newer pending run replace an older pending one.
+# So pull requests share a per-branch group and cancel; pushes use github.run_id,
+# which is unique per run, so no main run ever cancels or queues behind another.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   check:
-    name: typecheck / lint / compiler / design / schema
+    uses: vvedantb/workflows/.github/workflows/ci-app.yml@main
+    with:
+      runs_on: ubuntu-latest
+      node_version: "24"
+      # The schema gate and the test scope both diff against the merge base, so
+      # the checkout needs full history (affected_tests requires fetch_depth: 0).
+      fetch_depth: 0
+      # Run the command lines together in the one Check job. max_parallel caps
+      # how many run at once. This runner has 4 vCPUs and 16 GB. On the old
+      # 8-core runner 2 and 4 both ran the Checks step in 25 s while all-at-once
+      # took 30 s: the heavy commands (tsrs, oxlint, bun test) are each
+      # multi-threaded, so too many at once contend for cores. 2 is the lowest
+      # peak load, so it fits 4 vCPUs best. Run ids: PR body. Under Bun the tests
+      # take seconds, so typecheck and build are now the long lines.
+      parallel: true
+      max_parallel: 2
+      # Pull requests run only the tests the diff can reach; pushes to main run
+      # everything. The workflow exports VV_TEST_SCOPE and VV_TEST_CHANGED to
+      # every command; scripts/test-affected.sh reads VV_TEST_CHANGED. Bun's
+      # --changed follows relative imports only, not workspace packages, so the
+      # script still runs a package's full suite when an upstream package changed.
+      affected_tests: true
+      bun_version: "1.4.4"
+      env: |
+        BASE_REF=origin/${{ github.base_ref || 'main' }}
+        SCHEMA_NARROWING_BASE=${{ github.event_name == 'push' && github.event.before || '' }}
+      commands: |
+        # tsrs only. `convex codegen` must never run in automation because
+        # it uploads to the linked deployment. convex/_generated is checked in,
+        # so the convex project resolves without it.
+        pnpm typecheck
+        pnpm lint
+        pnpm build
+        # Each package's arguments are the paths its tests reach but Bun's
+        # --changed cannot see: workspace packages, and for the backend the
+        # convex/ functions that convex-test loads through a runtime file scan.
+        scripts/test-affected.sh apps/web packages/shared packages/backend packages/ui
+        scripts/test-affected.sh packages/backend packages/shared packages/backend/convex packages/backend/tests/_helpers
+        # sourceEncoding scans every git-tracked text file for control bytes. It
+        # imports nothing from the repo, so --changed never selects it, and
+        # narrowing would hide a bad byte added to any file. It runs on every PR.
+        cd packages/backend && bun test tests/sourceEncoding.test.ts
+        # The schema-gate node test is not bun test and reads the schema from
+        # disk, so --changed cannot select it; it always runs (fast, one file).
+        pnpm test:schema-narrowing
+        # One backend for both apps: fails when the phone calls a Convex
+        # function the web never calls, unless it is allowed with a reason.
+        node scripts/check-shared-backend.mjs
+        # Installed APKs keep their code: warns (never fails) when this backend
+        # change would break the newest published APK, so the merge can say
+        # what old phones lose. Skips when the backend did not change.
+        ./scripts/check-apk-compat.sh
+        # Fails on a new React Compiler bailout that is not in the baseline.
+        node scripts/compiler-check.mjs
+        # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
+        node scripts/design-check.mjs
+        # Blocks a Convex schema field/table/union member being removed while
+        # live rows may still hold it. See docs/eva-convex.md > Migrations.
+        node scripts/check-schema-narrowing.mjs
+
+  # Push releases. The release build starts at once, in parallel with check, so the APK
+  # is ready when check ends. It does not need check: the shared workflow waits for the
+  # check job before publish (wait_for_check_job), so a failed check publishes nothing.
+  # Its pathspecs input is the path gate: a push that changes none of them skips the
+  # release cleanly. A pull request never runs this job.
+  release:
+    if: github.event_name == 'push'
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: release-android
+      cancel-in-progress: false
+    uses: vvedantb/workflows/.github/workflows/release-android-apk.yml@main
+    with:
+      app_name: eva
+      release_title: Eva
+      apk_basename: eva
+      package_id: com.projectvdotuk.eva
+      # Not V Store: its catalog sync reads mobile-apk-* tags.
+      tag_prefix: eva-apk-
+      mark_as_latest: false
+      release_on: always
+      # The nested check job is named "check / Check". The shared wait matches a
+      # job name equal to this value or ending in " / Check", so "Check" finds it.
+      wait_for_check_job: Check
+      # Files that reach the APK. Metro bundles @eva/shared and the runtime exports
+      # of @eva/backend (packages/backend/index.ts re-exports from convex/), so both
+      # stay in the filter. Keep it equal to that closure. Docs, the mobile
+      # .env.example, shared tests, convex tests, web and .github/** do not release.
+      # The root package.json and pnpm-lock.yaml are left out on purpose: they have
+      # no per-app part, so any dependency bump in the repo would ship an APK. A real
+      # mobile dependency change edits apps/mobile/package.json.
+      pathspecs: |
+        :(glob)apps/mobile/**
+        :(exclude,glob)apps/mobile/**/*.md
+        :(exclude,glob)apps/mobile/.env.example
+        :(glob)packages/shared/**
+        :(exclude,glob)packages/shared/**/*.test.ts
+        :(glob)packages/backend/package.json
+        :(glob)packages/backend/index.ts
+        :(glob)packages/backend/convex/**
+        :(exclude,glob)packages/backend/convex/**/*.test.ts
+        :(glob)pnpm-workspace.yaml
+        :(glob)patches/**
+        :(glob)scripts/build-android-release.sh
+        :(glob)scripts/check-clerk-native-api.sh
+      # A boat.dev runner. It has no Android SDK: the shared workflow installs
+      # the command line tools and sdk_packages when it finds none.
+      runs_on: boat-large
+      upload_dry_run_artifact: true # artifact eva-android-dry-run
+      pre_setup_command: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium || true
+        sudo docker image prune --all --force || true
+        df -h /
+      # Public build-time values, from repository variables (Settings,
+      # Secrets and variables, Actions, Variables). They match the web app's
+      # VITE_CLERK_PUBLISHABLE_KEY and VITE_CONVEX_URL on Vercel.
+      build_env: |
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        EXPO_PUBLIC_CONVEX_URL=${{ vars.EXPO_PUBLIC_CONVEX_URL }}
+        EXPO_PUBLIC_WEB_URL=${{ vars.EXPO_PUBLIC_WEB_URL }}
+        EAS_PROJECT_ID=${{ vars.EAS_PROJECT_ID }}
+      # Fail early and clearly: apps/mobile/src/config.ts has no defaults, and
+      # Clerk must have the Native API on.
+      pre_build_command: |
+        missing=0
+        for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_WEB_URL; do
+          if [ -z "${!name:-}" ]; then
+            echo "::error::Repository variable $name is empty. Set it under Settings, Secrets and variables, Actions, Variables (see apps/mobile/RELEASE.md)."
+            missing=1
+          fi
+        done
+        [ "$missing" -eq 0 ] || exit 1
+        # The APK is blank on launch if Clerk's Native API is off for this key.
+        bash scripts/check-clerk-native-api.sh
+    secrets: inherit
+
+  # Wake the Grok automerge bot. This used to be a separate workflow
+  # (grok-automerge-ready.yml) that started its own run on every pull_request
+  # synchronize / ready_for_review. It lives here now so no second run starts.
+  # No `needs`: it must not wait for check. It fires only on ready_for_review
+  # (a draft marked ready) and synchronize (push / rebase), the same two events
+  # as before, so opened and reopened send no webhook. A failed webhook must
+  # not turn the CI run red, so the curl step is continue-on-error and a
+  # failure prints a ::warning:: annotation.
+  grok-wake:
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'ready_for_review' || github.event.action == 'synchronize') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # Skip the husky `prepare` hook during install.
-      HUSKY: "0"
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # The schema gate diffs against the merge base, so it needs history.
-          fetch-depth: 0
-
-      # Reads the version from the root package.json `packageManager` field,
-      # which satisfies engines.pnpm (>=10 <11).
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      # Every step below runs even after an earlier one fails, so one push
-      # reports every problem instead of one per round trip.
-
-      # tsc only — `convex codegen` must never run in automation because it
-      # uploads to the linked deployment. convex/_generated is checked in, so
-      # `tsc -p convex/tsconfig.json` resolves without it.
-      - name: Typecheck
-        if: ${{ !cancelled() }}
-        run: pnpm typecheck
-
-      - name: Lint
-        if: ${{ !cancelled() }}
-        run: pnpm lint
-
-      # Fails on a new React Compiler bailout that is not in the baseline.
-      - name: React Compiler bailouts
-        if: ${{ !cancelled() }}
-        run: node scripts/compiler-check.mjs
-
-      # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
-      - name: Design system drift
-        if: ${{ !cancelled() }}
-        run: node scripts/design-check.mjs
-
-      # Blocks a Convex schema field/table/union member being removed while
-      # live rows may still hold it. See docs/eva-convex.md > Migrations.
-      - name: Schema narrowing gate
-        if: ${{ !cancelled() }}
-        env:
-          # On push, GITHUB_BASE_REF is empty; compare against the pushed-from
-          # commit instead so direct-to-main commits are covered too.
-          SCHEMA_NARROWING_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
-        run: node scripts/check-schema-narrowing.mjs
+      - name: Send webhook to Grok automerge bot
+        continue-on-error: true
+        run: |
+          echo "Sending ${{ github.event.action }} webhook for PR #${{ github.event.pull_request.number }}..."
+          if curl -f -X POST "${{ secrets.GROK_BOT_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.GROK_BOT_WEBHOOK_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event": "${{ github.event.action }}",
+              "repo": "${{ github.repository }}",
+              "pr": ${{ github.event.pull_request.number }},
+              "title": ${{ toJSON(github.event.pull_request.title) }},
+              "html_url": "${{ github.event.pull_request.html_url }}",
+              "draft": ${{ github.event.pull_request.draft }}
+            }'; then
+            echo "Webhook sent successfully."
+          else
+            echo "::warning::Grok automerge webhook failed for PR #${{ github.event.pull_request.number }} (${{ github.event.action }}). The CI run is not failed by this."
+          fi

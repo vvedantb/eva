@@ -1,0 +1,60 @@
+/*
+ * Eva's look for Stageshow demos. Every kit token reads an Eva design token, so
+ * the demos follow the visitor's theme and accent the way the app does; the
+ * stage's `theme` prop only switches the kit's shadows and inks.
+ */
+.landing-stage .ss-stage {
+  --ss-canvas: var(--background);
+  --ss-surface: var(--surface-card);
+  --ss-chrome: var(--surface-card);
+  --ss-well: var(--surface-secondary);
+  --ss-raised: var(--overlay);
+  --ss-fill: var(--default);
+  --ss-line: var(--border);
+  --ss-line-faint: color-mix(in oklab, var(--border) 60%, transparent);
+  --ss-text-strong: var(--foreground);
+  --ss-text: var(--muted);
+  --ss-text-faint: color-mix(in oklab, var(--muted) 75%, transparent);
+  --ss-icon: var(--muted);
+  --ss-icon-faint: color-mix(in oklab, var(--muted) 50%, transparent);
+  --ss-accent: var(--accent);
+  --ss-accent-2: var(--chart-3);
+  --ss-accent-soft: color-mix(in oklab, var(--accent) 10%, transparent);
+  --ss-accent-text: var(--accent);
+  --ss-success: var(--success);
+  --ss-success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --ss-success-text: var(--status-done);
+  --ss-warning: var(--warning);
+  --ss-warning-soft: color-mix(in oklab, var(--warning) 14%, transparent);
+  --ss-warning-text: var(--warning-strong);
+  --ss-danger: var(--danger);
+  --ss-danger-soft: color-mix(in oklab, var(--danger) 10%, transparent);
+  --ss-danger-text: var(--destructive-strong);
+  --ss-font: var(--font-sans);
+  --ss-mono: var(--font-mono);
+  --ss-radius-sm: min(var(--radius), 0.5rem);
+  --ss-radius-md: min(var(--radius), 0.625rem);
+  --ss-radius-lg: clamp(0.75rem, var(--radius), 1rem);
+  --ss-radius-window: clamp(0.75rem, var(--radius), 1rem);
+
+  /* A tile beside the showcase's copy card: Eva's muted well, same radius. */
+  overflow: hidden;
+  background: var(--ss-well);
+  border-radius: clamp(0.75rem, var(--radius), 1rem);
+}
+
+/* Dark depth comes from a lighter surface, not a shadow. */
+.landing-stage .ss-stage[data-theme="dark"] {
+  --ss-raised: var(--default);
+}
+
+/* The loop seam: the scene fades out and back around a snap to `initial`. */
+.landing-stage .landing-stage__scene {
+  position: absolute;
+  inset: 0;
+  transition: opacity 280ms ease;
+}
+
+.landing-stage .ss-stage[data-mark="veil"] .landing-stage__scene {
+  opacity: 0;
+}

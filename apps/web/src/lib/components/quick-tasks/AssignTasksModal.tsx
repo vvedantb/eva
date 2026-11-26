@@ -4,6 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useState } from "react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -41,20 +42,13 @@ export function AssignTasksModal({
   const { repoId } = useRepo();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.map((task) =>
-            task._id === args.id
-              ? { ...task, assignedTo: args.assignedTo ?? undefined }
-              : task,
-          ),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (current) =>
+        current.map((task) =>
+          task._id === args.id
+            ? { ...task, assignedTo: args.assignedTo ?? undefined }
+            : task,
+        ),
+      );
     },
   );
   const users = useQuery(api.users.listAll);

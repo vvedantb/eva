@@ -3,10 +3,10 @@
 import { useRef, useEffect } from "react";
 import type { MutableRefObject } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   GanttProvider,
@@ -21,10 +21,9 @@ import {
   ListEnter,
 } from "@vvedantb/ui";
 import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
-import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { TimelineBar } from "./_components/TimelineBar";
@@ -38,12 +37,13 @@ import {
 } from "@/lib/utils/mutationToast";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
-type ProjectProgress = FunctionReturnType<
-  typeof api.projects.listTaskProgress
->[number];
 
 interface ProjectsTimelineProps {
   projects: Project[];
+  /** The project's derived stage (`projectStatus`). */
+  stageOf: (projectId: string) => ProjectStage;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   basePath: string;
   range: GanttRange;
   zoom: number;
@@ -51,41 +51,12 @@ interface ProjectsTimelineProps {
   onZoomChange: (zoom: number) => void;
 }
 
-// status.color is only used by the sidebar dot fallback (we supply a phase icon
-// instead), but GanttFeature requires it, so map phases to their bar colour.
-const phaseStatusMap: Record<ProjectPhase, GanttStatus> = {
-  draft: {
-    id: "draft",
-    name: "Draft",
-    color: "rgb(var(--muted-foreground) / 0.5)",
-  },
-  finalized: { id: "finalized", name: "Finalized", color: "rgb(59 130 246)" },
-  in_progress: {
-    id: "in_progress",
-    name: "In Progress",
-    color: "rgb(var(--status-progress-bar))",
-  },
-  business_review: {
-    id: "business_review",
-    name: "Business Review",
-    color: "rgb(var(--status-business-review-bar))",
-  },
-  code_review: {
-    id: "code_review",
-    name: "Code Review",
-    color: "rgb(var(--status-code-review-bar))",
-  },
-  completed: {
-    id: "completed",
-    name: "Merged",
-    color: "rgb(var(--status-done-bar))",
-  },
-  cancelled: {
-    id: "cancelled",
-    name: "Cancelled",
-    color: "rgb(var(--status-cancelled-bar))",
-  },
-};
+// status.color is only used by the sidebar dot fallback (we supply a stage
+// icon instead), but GanttFeature requires it, so map stages to their bar colour.
+function stageStatus(stage: ProjectStage): GanttStatus {
+  const { label, barColor } = projectStageConfig[stage];
+  return { id: stage, name: label, color: barColor };
+}
 
 /** Lives inside GanttProvider so it can read scrollToToday from context and
  *  hand it to the toolbar, which renders outside the provider. */
@@ -106,6 +77,8 @@ function GanttTodayBridge({
 
 export function ProjectsTimeline({
   projects,
+  stageOf,
+  statuses,
   basePath,
   range,
   zoom,
@@ -114,27 +87,21 @@ export function ProjectsTimeline({
 }: ProjectsTimelineProps) {
   const navigate = useNavigate();
   const { repo } = useRepo();
-  const progressList = useQuery(api.projects.listTaskProgress, {
-    repoId: repo._id,
-  });
   const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
-      const currentList = localStore.getQuery(api.projects.list, {
-        repoId: repo._id,
-      });
-      if (currentList !== undefined) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.list,
-          { repoId: repo._id },
+      const {
+        id: _id,
+        priority,
+        projectLead,
+        model,
+        providerAccountId,
+        ...safeFields
+      } = args;
+      patchLoadedQuery(
+        localStore,
+        api.projects.list,
+        { repoId: repo._id },
+        (currentList) =>
           currentList.map((p) =>
             p._id === args.id
               ? {
@@ -146,9 +113,6 @@ export function ProjectsTimeline({
                   ...(projectLead !== undefined
                     ? { projectLead: projectLead ?? undefined }
                     : {}),
-                  ...(codeReviewer !== undefined
-                    ? { codeReviewer: codeReviewer ?? undefined }
-                    : {}),
                   ...(model !== undefined ? { model: model ?? undefined } : {}),
                   ...(providerAccountId !== undefined
                     ? { providerAccountId: providerAccountId ?? undefined }
@@ -156,15 +120,9 @@ export function ProjectsTimeline({
                 }
               : p,
           ),
-        );
-      }
+      );
     },
   );
-
-  const progressMap = new Map<string, ProjectProgress>();
-  for (const entry of progressList ?? []) {
-    progressMap.set(entry.projectId, entry);
-  }
 
   const scheduled: GanttFeature[] = [];
   const scheduledProjectMap = new Map<string, Project>();
@@ -178,7 +136,7 @@ export function ProjectsTimeline({
         name: project.title,
         startAt: new Date(project.projectStartDate),
         endAt: new Date(project.projectEndDate),
-        status: phaseStatusMap[project.phase],
+        status: stageStatus(stageOf(project._id)),
       });
     } else {
       unscheduled.push(project);
@@ -243,8 +201,7 @@ export function ProjectsTimeline({
           <GanttSidebar headerTitle="Projects" headerMeta="Progress">
             {features.map((feature, index) => {
               const project = scheduledProjectMap.get(feature.id);
-              const phase = project?.phase ?? "draft";
-              const config = phaseConfig[phase];
+              const config = projectStageConfig[stageOf(feature.id)];
               const Icon = config.icon;
               return (
                 <ListEnter key={feature.id} index={index}>
@@ -255,7 +212,7 @@ export function ProjectsTimeline({
                     meta={
                       project ? (
                         <TimelineSidebarMeta
-                          progress={progressMap.get(feature.id)}
+                          counts={statuses.get(feature.id)?.counts}
                           lead={project.projectLead}
                           members={project.members}
                           fallbackUserId={project.userId}
@@ -271,8 +228,6 @@ export function ProjectsTimeline({
             <GanttHeader />
             <GanttFeatureList>
               {features.map((feature, index) => {
-                const phase =
-                  scheduledProjectMap.get(feature.id)?.phase ?? "draft";
                 return (
                   <ListEnter
                     key={feature.id}
@@ -287,8 +242,8 @@ export function ProjectsTimeline({
                     >
                       <TimelineBar
                         name={feature.name}
-                        phase={phase}
-                        progress={progressMap.get(feature.id)}
+                        stage={stageOf(feature.id)}
+                        counts={statuses.get(feature.id)?.counts}
                       />
                     </GanttFeatureItem>
                   </ListEnter>
@@ -307,6 +262,7 @@ export function ProjectsTimeline({
 
       <UnscheduledProjectsSection
         projects={unscheduled}
+        stageOf={stageOf}
         basePath={basePath}
         onSchedule={handleSchedule}
       />

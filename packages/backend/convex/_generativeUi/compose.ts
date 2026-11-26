@@ -9,8 +9,8 @@
  * answer is picked from candidates we built, so composition is fast and the
  * output cannot contain anything the catalog does not define.
  *
- * Imports stay confined to json-render, the shared catalog and the two leaf
- * modules beside this file; reaching into `mcp/*` would put a `"use node"`
+ * Imports stay confined to json-render and the leaf modules beside this
+ * file (the catalog among them); reaching into `mcp/*` would put a `"use node"`
  * chunk in an import cycle, which breaks the Convex prod push.
  */
 
@@ -19,9 +19,11 @@ import {
   experimental_createEvaluator,
   type Spec,
 } from "@json-render/core";
-import { chatUiCatalog } from "@eva/shared/generativeUi";
+import { chatUiCatalog } from "./catalog";
 import { buildChatUiCandidates } from "./candidates";
 import { appendMissingBlocks } from "./completeness";
+import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
+import { errorMessageOf } from "@vvedantb/server/ai";
 import {
   MAX_PANEL_ELEMENTS,
   renderUiInput,
@@ -43,12 +45,6 @@ const INSTRUCTIONS = {
     "Never put a paragraph, table, code block or image inside a horizontal Stack. Buttons belong in the button row, not beside body copy.",
 };
 
-function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "Unknown error";
-}
-
 function countElements(spec: Spec): number {
   return Object.keys(spec.elements).length;
 }
@@ -61,12 +57,12 @@ function countElements(spec: Spec): number {
 export async function composeChatUiPanel(
   input: RenderUiInputRaw,
 ): Promise<ComposeOutcome> {
-  const apiKey = process.env.AI_GATEWAY_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
+  const apiKey = readAiGatewayKey();
+  if (!apiKey) {
     return {
       ok: false,
       errorCode: "missing_config",
-      error: "AI_GATEWAY_API_KEY is not set on this Convex deployment.",
+      error: AI_GATEWAY_KEY_MISSING,
     };
   }
 
@@ -158,7 +154,7 @@ export async function composeChatUiPanel(
       stopReason,
     };
   } catch (error) {
-    const message = messageOf(error);
+    const message = errorMessageOf(error);
     console.error("[generativeUi] compose failed:", message);
     return { ok: false, errorCode: "provider_error", error: message };
   }

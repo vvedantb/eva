@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { IconPlus } from "@tabler/icons-react";
@@ -11,7 +11,11 @@ import {
   sessionSourceViewAllClass,
   useSourcePanelItem,
 } from "@/lib/components/sandbox/SessionSourcePane";
-import type { ChatSourceArg } from "@/lib/components/sandbox/chatSource";
+import type {
+  ChatSource,
+  ChatSourceArg,
+} from "@/lib/components/sandbox/chatSource";
+import { ChatSourceLink } from "@/lib/components/sandbox/ChatSourceBadge";
 import { DocumentList } from "./DocumentList";
 import { NewDocumentDialog } from "./NewDocumentDialog";
 import { SourceDocumentEditor } from "./SourceDocumentEditor";
@@ -32,7 +36,23 @@ export function useSourceDocuments(source: ChatSourceArg) {
  * the repo Documents sidebar (with a source badge). Here, rows and "New" open
  * an inline editor so notes are written without leaving the chat.
  */
-export function SessionDocumentsPanel({ source }: { source: ChatSourceArg }) {
+/** A project's Documents tab: its summary and the child tasks it rolls up. */
+export interface ProjectDocumentsContext {
+  /** The coordinator's summary doc, pinned first; undefined before it writes one. */
+  summaryDocId: string | undefined;
+  /** Live task counts, above the summary row and its body. */
+  counts: ReactNode;
+  /** The child task that wrote a Log entry (`sourceTaskId`). */
+  taskSource: (taskId: string) => ChatSource | undefined;
+}
+
+export function SessionDocumentsPanel({
+  source,
+  project,
+}: {
+  source: ChatSourceArg;
+  project?: ProjectDocumentsContext;
+}) {
   const { docs, documentCount } = useSourceDocuments(source);
   const { repoId, basePath } = useRepo();
   const { openId, openRow, open, close } = useSourcePanelItem(docs);
@@ -41,14 +61,44 @@ export function SessionDocumentsPanel({ source }: { source: ChatSourceArg }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   if (openId === CHAT_LOG_PANEL_ITEM) {
+    const taskSourceOf = project?.taskSource;
     return (
-      <ChatLogView source={source} entries={logEntries ?? []} onBack={close} />
+      <ChatLogView
+        source={source}
+        entries={logEntries ?? []}
+        onBack={close}
+        entrySource={
+          taskSourceOf
+            ? (entry) => {
+                const task = entry.sourceTaskId
+                  ? taskSourceOf(entry.sourceTaskId)
+                  : undefined;
+                return task ? (
+                  <ChatSourceLink source={task} sandboxTab="documents" />
+                ) : null;
+              }
+            : undefined
+        }
+      />
     );
   }
 
   if (openRow) {
-    return <SourceDocumentEditor doc={openRow} onBack={close} />;
+    return (
+      <SourceDocumentEditor
+        doc={openRow}
+        onBack={close}
+        header={
+          openRow._id === project?.summaryDocId ? project.counts : undefined
+        }
+      />
+    );
   }
+
+  const summaryDoc = project?.summaryDocId
+    ? docs?.find((doc) => doc._id === project.summaryDocId)
+    : undefined;
+  const otherDocs = (docs ?? []).filter((doc) => doc !== summaryDoc);
 
   const handleCreate = async (title: string) => {
     const created = await createDoc({ repoId, title, content: "", source });
@@ -77,15 +127,24 @@ export function SessionDocumentsPanel({ source }: { source: ChatSourceArg }) {
       }
       loading={docs === undefined || logEntries === undefined}
     >
+      {summaryDoc ? (
+        <>
+          <div className="px-3 pt-3">{project?.counts}</div>
+          <DocumentList docs={[summaryDoc]} onOpen={open} emptyDescription="" />
+        </>
+      ) : null}
       <ChatLogRow
         entries={logEntries ?? []}
         onOpen={() => open(CHAT_LOG_PANEL_ITEM)}
       />
-      <DocumentList
-        docs={docs ?? []}
-        onOpen={open}
-        emptyDescription="Create a note for this chat, or ask the agent to write one. Documents also appear in the Documents sidebar."
-      />
+      {summaryDoc && otherDocs.length === 0 ? null : (
+        <DocumentList
+          docs={otherDocs}
+          onOpen={open}
+          showTaskSource={project !== undefined}
+          emptyDescription="Create a note for this chat, or ask the agent to write one. Documents also appear in the Documents sidebar."
+        />
+      )}
       <NewDocumentDialog
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}

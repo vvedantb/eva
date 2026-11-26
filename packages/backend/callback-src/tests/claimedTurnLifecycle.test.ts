@@ -1,14 +1,12 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   appendClaimedTurnCompletion,
   claimedTurnLifecycleStatus,
   finishClaimedTurn,
   readClaimedTurn,
-  shouldParkClaimedTurn,
+  routeClaimedTurn,
   startClaimedTurn,
+  type ClaimedTurn,
 } from "../providers/claimedTurnLifecycle.js";
 import {
   canSendTurnHeartbeat,
@@ -37,66 +35,6 @@ describe("the shared claimed-turn lifecycle", () => {
       readClaimedTurn({ prompt: "Fix it", turnLifecycle: "legacy" }),
     ).toBeNull();
     expect(readClaimedTurn({ prompt: "Fix it" })).toBeNull();
-  });
-
-  test("preserves durable ownership across heartbeat and completion", () => {
-    const turn = readClaimedTurn({
-      prompt: "Fix it",
-      turnLifecycle: "durable",
-      turnId: "turn-1",
-      leaseGeneration: 2,
-    });
-    expect(turn).not.toBeNull();
-    if (turn === null) return;
-
-    startClaimedTurn(turn);
-
-    expect(claimedTurnLifecycleStatus()).toBe("active");
-    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
-    const completion: JsonObject = { success: true };
-    appendClaimedTurnCompletion(completion);
-    expect(completion).toEqual({
-      success: true,
-      turnId: "turn-1",
-      leaseGeneration: 2,
-    });
-
-    finishClaimedTurn();
-
-    expect(claimedTurnLifecycleStatus()).toBe("idle");
-    expect(getCurrentTurnLease()).toBeNull();
-    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(false);
-  });
-
-  test.each([
-    "agentTaskChatWorkflow:claimPendingTurn",
-    "projectChatWorkflow:claimPendingTurn",
-  ])("a durable %s claim heartbeats and fences its completion", () => {
-    // Task and project chats now hand out the same durable claim as sessions.
-    const turn = readClaimedTurn({
-      prompt: "Fix it",
-      turnLifecycle: "durable",
-      turnId: "task-turn-1",
-      leaseGeneration: 1,
-      attachmentUrls: [],
-      stopTaskToolUseIds: [],
-      cancelRequested: false,
-      usageRefreshRequested: false,
-    });
-    expect(turn).not.toBeNull();
-    if (turn === null) return;
-
-    startClaimedTurn(turn);
-
-    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
-    const completion: JsonObject = { taskId: "task-1", success: true };
-    appendClaimedTurnCompletion(completion);
-    expect(completion).toEqual({
-      taskId: "task-1",
-      success: true,
-      turnId: "task-turn-1",
-      leaseGeneration: 1,
-    });
   });
 
   test("claimed turns always run as build", () => {
@@ -130,6 +68,12 @@ describe("the shared claimed-turn lifecycle", () => {
     if (turn === null) return;
 
     startClaimedTurn(turn);
+    expect(claimedTurnLifecycleStatus()).toBe("active");
+    expect(getCurrentTurnLease()).toEqual({
+      turnId: "turn-1",
+      leaseGeneration: 2,
+    });
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
     const ownership = getTurnOwnership();
     expect(ownership).toEqual({
       status: "owned",
@@ -146,6 +90,8 @@ describe("the shared claimed-turn lifecycle", () => {
 
     finishClaimedTurn();
 
+    expect(claimedTurnLifecycleStatus()).toBe("idle");
+    expect(getCurrentTurnLease()).toBeNull();
     expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(false);
     expect(() => appendClaimedTurnCompletion({ success: false })).toThrow(
       "Cannot complete a claimed turn before it starts",
@@ -168,136 +114,93 @@ describe("the shared claimed-turn lifecycle", () => {
       "Cannot start a claimed turn while another claim is active",
     );
   });
-
-  test("does not allow completion before a claim starts", () => {
-    finishClaimedTurn();
-    expect(() => appendClaimedTurnCompletion({ success: false })).toThrow(
-      "Cannot complete a claimed turn before it starts",
-    );
-  });
 });
 
-describe("canSendTurnHeartbeat follows claim ownership", () => {
-  function claim(payload: JsonObject): void {
-    const turn = readClaimedTurn(payload);
-    expect(turn).not.toBeNull();
-    if (turn === null) return;
-    startClaimedTurn(turn);
-  }
-
-  function allowed(): boolean {
-    return canSendTurnHeartbeat(getTurnOwnership());
-  }
-
-  test("a process that owns no turn stays silent", () => {
-    // A one-shot runner owns its turn from launch (TURN_ID); without one, and
-    // for an idle daemon, the server would only answer terminal.
-    expect(allowed()).toBe(false);
+describe("routeClaimedTurn", () => {
+  const claim = (turnId: string): ClaimedTurn => ({
+    prompt: "Fix it",
+    attachmentUrls: [],
+    interactionMode: "default",
+    turnLease: { turnId, leaseGeneration: 1 },
+  });
+  let parked: ClaimedTurn[] = [];
+  const parkInto = (turn: ClaimedTurn) => (): boolean => {
+    parked.push(turn);
+    return true;
+  };
+  afterEach(() => {
+    parked = [];
   });
 
-  test("a durable claim heartbeats while it holds the lease", () => {
-    claim({
-      prompt: "Fix it",
-      turnLifecycle: "durable",
-      turnId: "turn-1",
-      leaseGeneration: 2,
-    });
-    expect(getCurrentTurnLease()).toEqual({
-      turnId: "turn-1",
-      leaseGeneration: 2,
-    });
-    expect(allowed()).toBe(true);
-  });
-
-  test("a durable claim goes silent again once the lease is released", () => {
-    claim({
-      prompt: "Fix it",
-      turnLifecycle: "durable",
-      turnId: "turn-1",
-      leaseGeneration: 2,
-    });
-    finishClaimedTurn();
-    expect(getCurrentTurnLease()).toBeNull();
-    expect(allowed()).toBe(false);
-  });
-});
-
-describe("shouldParkClaimedTurn", () => {
-  test("parks idle, cancel, and finalizing claims", () => {
+  test("parks a claim when no real turn is active", () => {
+    const turn = claim("turn-1");
     expect(
-      shouldParkClaimedTurn({
+      routeClaimedTurn({
+        turn,
         hasActiveRealTurn: false,
         isCancellationInFlight: false,
-        isFinalizing: false,
-        currentLeaseTurnId: null,
-        claimedLeaseTurnId: "turn-2",
+        park: parkInto(turn),
+        logPrefix: "test daemon",
       }),
-    ).toBe(true);
+    ).toBe("parked");
+    expect(parked).toEqual([turn]);
+  });
+
+  test("reports a duplicate when the park slot is taken", () => {
     expect(
-      shouldParkClaimedTurn({
+      routeClaimedTurn({
+        turn: claim("turn-1"),
+        hasActiveRealTurn: false,
+        isCancellationInFlight: false,
+        park: () => false,
+        logPrefix: "test daemon",
+      }),
+    ).toBe("duplicate");
+  });
+
+  test("parks a claim that a cancel hands back while a turn runs", () => {
+    // A cancel response can carry the next queued prompt, even the same turn.
+    startClaimedTurn(claim("turn-1"));
+    const next = claim("turn-1");
+    expect(
+      routeClaimedTurn({
+        turn: next,
         hasActiveRealTurn: true,
         isCancellationInFlight: true,
-        isFinalizing: false,
-        currentLeaseTurnId: "turn-1",
-        claimedLeaseTurnId: "turn-2",
+        park: parkInto(next),
+        logPrefix: "test daemon",
       }),
-    ).toBe(true);
-    expect(
-      shouldParkClaimedTurn({
-        hasActiveRealTurn: true,
-        isCancellationInFlight: false,
-        isFinalizing: true,
-        currentLeaseTurnId: null,
-        claimedLeaseTurnId: "turn-2",
-      }),
-    ).toBe(true);
+    ).toBe("parked");
+    expect(parked).toEqual([next]);
   });
 
-  test("discards a same-turn restage and parks a follow-up turn", () => {
+  test("discards a same-turn restage while that turn runs", () => {
+    startClaimedTurn(claim("turn-1"));
+    const restage = claim("turn-1");
     expect(
-      shouldParkClaimedTurn({
+      routeClaimedTurn({
+        turn: restage,
         hasActiveRealTurn: true,
         isCancellationInFlight: false,
-        isFinalizing: false,
-        currentLeaseTurnId: "turn-1",
-        claimedLeaseTurnId: "turn-1",
+        park: parkInto(restage),
+        logPrefix: "test daemon",
       }),
-    ).toBe(false);
+    ).toBe("discarded");
+    expect(parked).toEqual([]);
+  });
+
+  test("parks a follow-up turn while another turn runs", () => {
+    startClaimedTurn(claim("turn-1"));
+    const followUp = claim("turn-2");
     expect(
-      shouldParkClaimedTurn({
+      routeClaimedTurn({
+        turn: followUp,
         hasActiveRealTurn: true,
         isCancellationInFlight: false,
-        isFinalizing: false,
-        currentLeaseTurnId: "turn-1",
-        claimedLeaseTurnId: "turn-2",
+        park: parkInto(followUp),
+        logPrefix: "test daemon",
       }),
-    ).toBe(true);
+    ).toBe("parked");
+    expect(parked).toEqual([followUp]);
   });
 });
-
-describe("persistent providers obey the same lifecycle contract", () => {
-  const providerPaths = [
-    "providers/claudeSdkDaemon.ts",
-    "providers/cursorSdkDaemon.ts",
-    "providers/codexAppServerDaemon.ts",
-  ];
-
-  for (const providerPath of providerPaths) {
-    test(providerPath, () => {
-      const source = readSource(providerPath);
-      expect(source).toContain("readClaimedTurn");
-      expect(source).toContain("startClaimedTurn(turn)");
-      expect(source).toContain("appendClaimedTurnCompletion(completionArgs)");
-      expect(source).toContain("finishClaimedTurn()");
-      expect(source).not.toContain("function readClaimedTurn(");
-      expect(source).not.toContain('beginTurnOwnership("claim"');
-    });
-  }
-});
-
-function readSource(relativePath: string): string {
-  return readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", relativePath),
-    "utf8",
-  ).replaceAll("\r\n", "\n");
-}

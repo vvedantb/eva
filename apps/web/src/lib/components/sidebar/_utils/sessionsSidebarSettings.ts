@@ -1,3 +1,12 @@
+import {
+  APP_SORT_ORDERS,
+  clampSessionPreviewCount,
+  DEFAULT_SESSION_PREVIEW_COUNT,
+  SESSION_SORT_ORDERS,
+  type AppSortOrder,
+  type SessionSortOrder,
+} from "@eva/shared";
+
 /** localStorage key for Sessions sidebar sort / preview prefs. */
 export const SESSIONS_SIDEBAR_SETTINGS_KEY = "eva:sessions-sidebar-settings:v1";
 
@@ -8,11 +17,25 @@ export const SESSIONS_APP_GROUPS_OPEN_KEY = "eva:sessions-app-groups-open:v1";
 export const LINKED_SESSION_GROUPS_OPEN_KEY =
   "eva:linked-session-groups-open:v1";
 
-export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
-export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
-
-export const SESSION_SORT_ORDERS = ["updated_at", "created_at"] as const;
-export type SessionSortOrder = (typeof SESSION_SORT_ORDERS)[number];
+// The sort orders and sort helpers live in `@eva/shared`, which the phone
+// Sessions tab shares; this module stays the web's one import for them.
+export {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  type AppSortOrder,
+  type SessionSortOrder,
+};
+export { clampSessionPreviewCount, DEFAULT_SESSION_PREVIEW_COUNT };
+export {
+  APP_SORT_LABELS,
+  filterSessionsStartedBy,
+  MAX_SESSION_PREVIEW_COUNT,
+  MIN_SESSION_PREVIEW_COUNT,
+  SESSION_SORT_LABELS,
+  sessionActivityAt,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+} from "@eva/shared";
 
 const SESSION_LIST_MODES = ["active", "archived"] as const;
 export type SessionListMode = (typeof SESSION_LIST_MODES)[number];
@@ -26,26 +49,10 @@ export const SESSION_LAYOUT_LABELS: Record<SessionLayout, string> = {
   folder: "Folder",
 };
 
-export const MIN_SESSION_PREVIEW_COUNT = 2;
-export const MAX_SESSION_PREVIEW_COUNT = 10;
-export const DEFAULT_SESSION_PREVIEW_COUNT = 3;
-
-export const APP_SORT_LABELS: Record<AppSortOrder, string> = {
-  updated_at: "Last user message",
-  created_at: "Created at",
-  manual: "Manual",
-};
-
-export const SESSION_SORT_LABELS: Record<SessionSortOrder, string> = {
-  updated_at: "Last user message",
-  created_at: "Created at",
-};
-
 export interface SessionsSidebarSettings {
   appSortOrder: AppSortOrder;
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
-  listMode: SessionListMode;
   layout: SessionLayout;
   /** Hide sessions another teammate started. */
   onlyMine: boolean;
@@ -55,7 +62,6 @@ export const DEFAULT_SESSIONS_SIDEBAR_SETTINGS: SessionsSidebarSettings = {
   appSortOrder: "updated_at",
   sessionSortOrder: "updated_at",
   sessionPreviewCount: DEFAULT_SESSION_PREVIEW_COUNT,
-  listMode: "active",
   layout: "list",
   onlyMine: false,
 };
@@ -88,70 +94,26 @@ export function isSessionLayout(value: string): value is SessionLayout {
   return false;
 }
 
-export function clampSessionPreviewCount(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_SESSION_PREVIEW_COUNT;
-  return Math.min(
-    MAX_SESSION_PREVIEW_COUNT,
-    Math.max(MIN_SESSION_PREVIEW_COUNT, Math.round(value)),
-  );
-}
-
-/** Activity timestamp for sidebar session rows. */
-export function sessionActivityAt(session: {
-  updatedAt?: number;
-  _creationTime: number;
-}): number {
-  return session.updatedAt ?? session._creationTime;
-}
-
-/** The user who started a session; older rows have no `createdBy`. */
-export function sessionStartedBy<T extends string>(session: {
-  userId: T;
-  createdBy?: T;
-}): T {
-  return session.createdBy ?? session.userId;
-}
 
 /**
- * Keeps only sessions `userId` started. Stays `undefined` (loading) while the
- * rows or the current user are still loading.
+ * Normalises stored prefs. Builds a fresh object so stale keys from older
+ * versions (for example `listMode`, which is no longer persisted) drop out.
  */
-export function filterSessionsStartedBy<
-  T extends { userId: string; createdBy?: string },
->(sessions: T[] | undefined, userId: string | undefined): T[] | undefined {
-  if (sessions === undefined || userId === undefined) return undefined;
-  return sessions.filter((session) => sessionStartedBy(session) === userId);
-}
-
-/**
- * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
- * list, chrome tabs, session switcher) sorts through it.
- */
-export function sortSessionsForSidebar<
-  T extends { updatedAt?: number; _creationTime: number },
->(sessions: T[], order: SessionSortOrder): T[] {
-  if (order === "updated_at") {
-    return sessions.toSorted(
-      (a, b) => sessionActivityAt(b) - sessionActivityAt(a),
-    );
-  }
-  return sessions.toSorted((a, b) => b._creationTime - a._creationTime);
-}
-
-export function sortAppsForSidebar<
-  T extends { _id: string; _creationTime: number },
->(
-  apps: T[],
-  order: AppSortOrder,
-  latestActivityByAppId: ReadonlyMap<string, number>,
-): T[] {
-  if (order === "manual") return apps;
-  if (order === "created_at") {
-    return apps.toSorted((a, b) => b._creationTime - a._creationTime);
-  }
-  return apps.toSorted((a, b) => {
-    const aAt = latestActivityByAppId.get(a._id) ?? a._creationTime;
-    const bAt = latestActivityByAppId.get(b._id) ?? b._creationTime;
-    return bAt - aAt;
-  });
+export function parseSessionsSidebarSettings(
+  raw: SessionsSidebarSettings,
+): SessionsSidebarSettings {
+  return {
+    appSortOrder: isAppSortOrder(raw.appSortOrder)
+      ? raw.appSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.appSortOrder,
+    sessionSortOrder: isSessionSortOrder(raw.sessionSortOrder)
+      ? raw.sessionSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.sessionSortOrder,
+    sessionPreviewCount: clampSessionPreviewCount(raw.sessionPreviewCount),
+    layout:
+      typeof raw.layout === "string" && isSessionLayout(raw.layout)
+        ? raw.layout
+        : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.layout,
+    onlyMine: raw.onlyMine === true,
+  };
 }

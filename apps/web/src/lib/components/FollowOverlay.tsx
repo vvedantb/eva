@@ -8,6 +8,7 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Button } from "@vvedantb/ui";
 import { useFollow } from "@/lib/contexts/FollowContext";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 
 export function FollowOverlay() {
   const { following, stopFollowing } = useFollow();
@@ -54,7 +55,8 @@ function FollowOverlayInner({
   const lastSeenPath = userData?.lastSeenPath;
 
   useEffect(() => {
-    if (!lastSeenPath) return;
+    // Another user's path: follow it only while it stays on-app.
+    if (!lastSeenPath || !isInternalAppHref(lastSeenPath)) return;
 
     if (lastPathRef.current === undefined) {
       lastPathRef.current = lastSeenPath;
@@ -95,7 +97,7 @@ function FollowOverlayInner({
             size="icon"
             variant="ghost"
             aria-label="Stop following"
-            className="max-sm:hit-target h-5 w-5 rounded-full text-primary-foreground/80 hover:bg-primary/80 hover:text-primary-foreground max-sm:size-7"
+            className="max-sm:hit-target h-5 w-5 text-primary-foreground/80 hover:bg-primary/80 hover:text-primary-foreground max-sm:size-7"
             onClick={stopFollowing}
           >
             <IconX size={14} />

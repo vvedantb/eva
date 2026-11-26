@@ -28,7 +28,7 @@ import {
   Sheen,
 } from "../../_components/motion";
 
-const FABLE: AIModel = "claude:claude-fable-5-1";
+const FABLE: AIModel = "claude:claude-fable-5-2";
 
 /** The same trimmed set and five ticks the shipped simple view uses. */
 const SIMPLE_OPTIONS = getSimpleViewModelOptions(AI_MODEL_OPTIONS, FABLE);

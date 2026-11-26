@@ -4,19 +4,15 @@ import { useRef } from "react";
 import { useQueryState } from "nuqs";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { toast } from "@vvedantb/ui";
+import { MESSAGE_LINK_PARAM, messageLinkHref } from "@eva/shared/messageLink";
 import { messageLinkParser } from "@/lib/search-params";
-
-/** `?message=<id>`: the chat message a shared link points at. */
-const MESSAGE_LINK_PARAM = "message";
 
 /**
  * The current page URL aimed at one message. The rest of the URL stays
  * (`?chat=2`, `?subagent=…`), so the link opens the same chat it came from.
  */
 export function messageLinkUrl(messageId: string): string {
-  const url = new URL(window.location.href);
-  url.searchParams.set(MESSAGE_LINK_PARAM, messageId);
-  return url.href;
+  return messageLinkHref(window.location.href, messageId);
 }
 
 export function copyMessageLink(messageId: string) {
@@ -32,14 +28,24 @@ export function useLinkedMessageId(): string | null {
 }
 
 /**
- * Scrolls a linked message into view once its row is in the DOM. Mount it
+ * Scrolls one message into view once its row is in the DOM: a shared link
+ * (`?message=`, centred) or a jump-rail tick (`start`, smooth). Mount it
  * inside `<Conversation>`, keyed by the message id, after the row renders.
  *
  * A ref callback, not an effect: this node mounts in the same commit as the
  * rows, so its attach is the "the row exists now" signal. `stopScroll` comes
- * first, or stick-to-bottom pulls an opening chat back down to the end.
+ * first, or stick-to-bottom pulls the chat back down to the end; a jump that
+ * waited on older history may find the chat locked to the bottom again.
  */
-export function ChatLinkedMessageScroll({ messageId }: { messageId: string }) {
+export function ChatMessageScroll({
+  messageId,
+  block,
+  smooth = false,
+}: {
+  messageId: string;
+  block: ScrollLogicalPosition;
+  smooth?: boolean;
+}) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
   // React re-attaches a ref whose callback identity changes; scroll only once.
   const scrolledRef = useRef(false);
@@ -54,7 +60,7 @@ export function ChatLinkedMessageScroll({ messageId }: { messageId: string }) {
         ?.querySelector<HTMLElement>(
           `[data-message-id="${CSS.escape(messageId)}"]`,
         )
-        ?.scrollIntoView({ block: "center" });
+        ?.scrollIntoView({ block, behavior: smooth ? "smooth" : "auto" });
     });
   };
 

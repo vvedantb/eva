@@ -6,6 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import { cn } from "@eva/ui";
 import {
@@ -20,11 +21,10 @@ import {
   RelativeDateTime,
 } from "@vvedantb/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
-import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
+import { mentionTokensToEditableText } from "@eva/shared";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
-import { getUserDisplayName } from "./task-detail-constants";
 import {
   CommentMentionInput,
   type CommentMentionInputHandle,
@@ -36,7 +36,8 @@ import {
   DELETED_COMMENT_PLACEHOLDER,
   isCommentDeleted,
   type TaskComment,
-} from "../_utils/commentThread";
+  getUserDisplayName,
+} from "@eva/shared/taskDetail";
 
 type Users = FunctionReturnType<typeof api.users.listAll>;
 
@@ -45,6 +46,8 @@ interface CommentActivityItemProps {
   taskId: Id<"agentTasks">;
   users: Users | undefined;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
+  /** An archived task: no edit or delete. */
+  readOnly?: boolean;
 }
 
 /** Author name: quieter than a heading, so the comment body stays the emphasis. */
@@ -92,6 +95,7 @@ export function CommentActivityItem({
   taskId,
   users,
   onDeleteRequest,
+  readOnly = false,
 }: CommentActivityItemProps) {
   const currentUserId = useQuery(api.auth.me);
   const { repo, basePath } = useRepo();
@@ -108,14 +112,8 @@ export function CommentActivityItem({
   const updateComment = useMutation(
     api.taskComments.update,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) =>
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
         entry._id === args.id ? { ...entry, content: args.content } : entry,
       ),
     );
@@ -124,7 +122,7 @@ export function CommentActivityItem({
   const isDeleted = isCommentDeleted(comment);
   const isAuthor =
     comment.authorId !== undefined && comment.authorId === currentUserId;
-  const canManage = isAuthor && !isDeleted;
+  const canManage = isAuthor && !isDeleted && !readOnly;
 
   const startEditing = () => {
     setEditText(mentionTokensToEditableText(comment.content));

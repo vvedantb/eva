@@ -188,14 +188,15 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
       return typeof raw === "string" && raw ? originOf(raw) : "";
     }
-    const parentOrigin = injectedParentOrigin() || (document.referrer ? originOf(document.referrer) : "");
+    const parentOrigin = injectedParentOrigin() || originOf(window.location.ancestorOrigins?.item(0) ?? "") || (document.referrer ? originOf(document.referrer) : "");
     let modeActive = false;
     let selectedEl = null;
     let overlay = null;
     let labelEl = null;
     let rectRaf = 0;
     function post(payload) {
-      window.parent.postMessage(payload, parentOrigin || "*");
+      if (!parentOrigin) return;
+      window.parent.postMessage(payload, parentOrigin);
     }
     function ensureOverlay() {
       if (overlay) return;
@@ -583,7 +584,47 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         event.preventDefault();
         clearAll();
         post({ type: "eva-preview-annotate-dismissed" });
+        return;
       }
+      const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA");
+      if ((event.key === "f" || event.key === "F") && !event.metaKey && !event.ctrlKey && !event.altKey && !typing) {
+        event.preventDefault();
+        setFrozen(!frozen);
+      }
+    }
+    let frozen = false;
+    let frozenAnimations = [];
+    let frozenMedia = [];
+    let freezeStyle = null;
+    function setFrozen(next) {
+      if (next === frozen) return;
+      frozen = next;
+      if (next) {
+        frozenAnimations = document.getAnimations().filter((animation) => animation.playState === "running");
+        for (const animation of frozenAnimations) animation.pause();
+        frozenMedia = Array.from(
+          document.querySelectorAll("video, audio")
+        ).filter((media) => !media.paused);
+        for (const media of frozenMedia) media.pause();
+        freezeStyle = document.createElement("style");
+        freezeStyle.setAttribute("data-eva-annotate", "freeze");
+        freezeStyle.textContent = "*, *::before, *::after { animation-play-state: paused !important; }";
+        document.head.appendChild(freezeStyle);
+      } else {
+        freezeStyle?.remove();
+        freezeStyle = null;
+        for (const animation of frozenAnimations) {
+          try {
+            animation.play();
+          } catch {
+          }
+        }
+        for (const media of frozenMedia) void media.play().catch(() => {
+        });
+        frozenAnimations = [];
+        frozenMedia = [];
+      }
+      post({ type: "eva-preview-annotate-frozen", frozen });
     }
     function onScrollOrResize() {
       if (!modeActive || !selectedEl) return;
@@ -1030,13 +1071,17 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     window.addEventListener("message", (event) => {
-      if (parentOrigin && event.origin !== parentOrigin) return;
+      if (!parentOrigin || event.origin !== parentOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       const type = Reflect.get(data, "type");
       if (type === "eva-preview-annotate-mode") {
         const active = Reflect.get(data, "active") === true;
         setMode(active);
+        return;
+      }
+      if (type === "eva-preview-annotate-freeze") {
+        setFrozen(Reflect.get(data, "active") === true);
         return;
       }
       if (type === "eva-preview-annotate-clear") {

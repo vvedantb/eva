@@ -39,6 +39,9 @@ pass after the owner-boundary repair. A regression test that never demonstrably
 failed proves the mock, not the fix. One regression at the owner boundary
 covers the bug; do not replay the same scenario at every layer it crosses.
 
+A regression test must fail on the old code, and it must run in CI (`pnpm
+test`). A test that nothing runs protects nothing.
+
 ## Junk patterns
 
 The shared checklist for both modes: the authoring gate rejects a new test that
@@ -138,7 +141,7 @@ Never edit source or tests while Vitest is running in the checkout. Follow
 `$openclaw-testing`; route heavy proof through its `$crabbox` rules.
 
 1. Run the smallest owner and sibling tests with
-   `node scripts/run-vitest.mjs <path-or-filter>`.
+   `bun test <path-or-filter>` in the package.
 2. For removed source greps or plan assertions, run the executable script or
    dry-run that owns the real contract.
 3. Run targeted formatting, then `git diff --check`.

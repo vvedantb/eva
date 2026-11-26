@@ -47,6 +47,16 @@ export const CONVEX_FUNCTIONS_READY_LOG_LINE = "Convex functions ready";
  */
 export const CONVEX_FUNCTIONS_READY_ATTEMPTS = 60;
 
+/** Shell command printing the config.json paths the `convex dev` daemon wrote. */
+function findLocalDeploymentConfig(repoDir: string): string {
+  return `find ${repoDir} -name node_modules -prune -o -path "*/.convex/local/*/config.json" -print`;
+}
+
+/** Shell command printing one field of the config.json held in `$eva_cfg`. */
+function readLocalDeploymentField(field: string): string {
+  return `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))${field})' "$eva_cfg"`;
+}
+
 /**
  * Shell lines that push the repo's functions onto the already-running local
  * backend, for the seed script to run *after* its seed commands.
@@ -65,12 +75,9 @@ export const CONVEX_FUNCTIONS_READY_ATTEMPTS = 60;
  * withhold. `repoDir` is the seed script's cwd.
  */
 export function buildConvexPostSeedPushLines(repoDir: string): string[] {
-  const findConfig = `find ${repoDir} -name node_modules -prune -o -path "*/.convex/local/*/config.json" -print`;
-  const readField = (field: string) =>
-    `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))${field})' "$eva_cfg"`;
   return [
     'echo "SEEDRUN-STAGE:convex-push"',
-    `eva_cfg=$(${findConfig} 2>/dev/null | head -1)`,
+    `eva_cfg=$(${findLocalDeploymentConfig(repoDir)} 2>/dev/null | head -1)`,
     // A repo that runs a Convex daemon always leaves this config behind, so its
     // absence means the daemon never got a backend up. Failing here is the
     // point: a build that quietly skipped the push would go green with a
@@ -81,9 +88,9 @@ export function buildConvexPostSeedPushLines(repoDir: string): string[] {
     "  exit 1",
     "else",
     `  eva_app=$(cd "$(dirname "$eva_cfg")/../../.." && pwd)`,
-    `  eva_port=$(${readField('["ports"]["cloud"]')})`,
+    `  eva_port=$(${readLocalDeploymentField('["ports"]["cloud"]')})`,
     "  { set +x; } 2>/dev/null",
-    `  eva_key=$(${readField('["adminKey"]')})`,
+    `  eva_key=$(${readLocalDeploymentField('["adminKey"]')})`,
     '  echo "convex-push: $eva_app -> http://127.0.0.1:$eva_port"',
     "  eva_pushed=0",
     "  for eva_try in 1 2 3; do",
@@ -97,6 +104,88 @@ export function buildConvexPostSeedPushLines(repoDir: string): string[] {
     "fi",
   ];
 }
+
+/**
+ * Sticky file the watchdog writes when it sees the backend hold documents while
+ * no schema is active, i.e. the seed loaded data before any push landed.
+ */
+const CONVEX_DATA_BEFORE_SCHEMA_FLAG = "/tmp/eva-convex-data-before-schema";
+
+/** Consecutive failed health checks, 10s apart, before the watchdog fails the seed. */
+const CONVEX_BACKEND_WATCHDOG_MISSES = 6;
+
+/**
+ * Shell lines that start a watchdog on the local backend for the rest of the
+ * seed run, once the readiness gate has seen it healthy.
+ *
+ * The supervisor only restarts a backend that never came up. One that dies
+ * later — mid-import on CarePulse eprocurement, every build since 2026-10-28 —
+ * leaves `convex dev` retrying forever and the seed command blocked on it, so
+ * the build only ends at the workflow timeout as "state: running", with the
+ * cause scrolled out of the log tail. The watchdog writes the failure marker
+ * (the poll step reads it at once), records memory and OOM evidence at the
+ * moment of death, and kills the seed script. `$$` is the script's own PID.
+ *
+ * While healthy and until a schema is active, it also asks the backend whether
+ * it holds documents with no schema. Then the first push must validate every
+ * document and backfill every index at once — on eprocurement (1.1M documents)
+ * that passed 14 GB of 16 and the kernel OOM-killed the backend. So an OOM kill
+ * gets its cause in the marker:
+ * - `convex-oom-before-schema`: data was loaded before the functions were pushed.
+ * - `convex-backend-oom`: the schema was in place; the data needs more memory.
+ */
+export function buildConvexBackendWatchdogLines(repoDir: string): string[] {
+  const query = (path: string) =>
+    `curl -sf -m 10 -X POST "http://127.0.0.1:$eva_port/api/query" -H 'Content-Type: application/json' -H "Authorization: Convex $eva_key" -d '{"path":"${path}","args":[{}],"format":"json"}' 2>/dev/null`;
+  return [
+    "(",
+    // A check every 10s would flood the xtrace'd seed log; the admin key stays out of it too.
+    "  { set +x; } 2>/dev/null",
+    "  eva_misses=0",
+    "  eva_schema=0",
+    `  eva_cfg=$(${findLocalDeploymentConfig(repoDir)} 2>/dev/null | head -1)`,
+    `  [ -n "$eva_cfg" ] && eva_port=$(${readLocalDeploymentField('["ports"]["cloud"]')}) && eva_key=$(${readLocalDeploymentField('["adminKey"]')})`,
+    "  while sleep 10; do",
+    `    if curl -sf -m 10 ${CONVEX_LOCAL_BACKEND_HEALTH_URL} >/dev/null 2>&1; then`,
+    "      eva_misses=0",
+    '      if [ "$eva_schema" = 0 ] && [ -n "$eva_key" ]; then',
+    `        if ${query("_system/frontend/getSchemas")} | grep -q '"active":"'; then`,
+    "          eva_schema=1",
+    `          rm -f ${CONVEX_DATA_BEFORE_SCHEMA_FLAG}`,
+    `        elif [ ! -f ${CONVEX_DATA_BEFORE_SCHEMA_FLAG} ] && ${query("_system/frontend/tableSize:sizeOfAllTables")} | grep -qE '"value":[1-9]'; then`,
+    `          touch ${CONVEX_DATA_BEFORE_SCHEMA_FLAG}`,
+    '          echo "convex-watchdog: the backend holds documents but no schema; the first push will validate and index all of them at once"',
+    "        fi",
+    "      fi",
+    "      continue",
+    "    fi",
+    "    eva_misses=$((eva_misses+1))",
+    `    [ $eva_misses -lt ${CONVEX_BACKEND_WATCHDOG_MISSES} ] && continue`,
+    '    echo "convex-watchdog: local backend stopped answering on :3210 during the seed run"',
+    "    free -m 2>&1",
+    "    sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process|oom' | tail -n 10",
+    "    pgrep -a convex-local-backend 2>&1 || echo 'convex-watchdog: no convex-local-backend process'",
+    // dmesg truncates the process name to 15 characters.
+    "    if ! sudo dmesg 2>/dev/null | grep -q 'Killed process [0-9]* (convex-local-ba'; then",
+    '      echo "SEEDRUN-FAILED:convex-backend-down"',
+    `    elif [ -f ${CONVEX_DATA_BEFORE_SCHEMA_FLAG} ]; then`,
+    '      echo "convex-watchdog: OOM-killed. The seed loaded data before any functions push, so the push validated and indexed every document at once. Fix the seed command: set env vars, push functions (convex dev --once), then import."',
+    '      echo "SEEDRUN-FAILED:convex-oom-before-schema"',
+    "    else",
+    '      echo "convex-watchdog: OOM-killed with the schema in place; the data needs more memory than this sandbox has."',
+    '      echo "SEEDRUN-FAILED:convex-backend-oom"',
+    "    fi",
+    "    kill -TERM $$ 2>/dev/null",
+    "    exit 0",
+    "  done",
+    ") &",
+    "eva_convex_watchdog=$!",
+  ];
+}
+
+/** Stops the watchdog before stop commands shut the backend down on purpose. */
+export const STOP_CONVEX_BACKEND_WATCHDOG_LINE =
+  'kill "$eva_convex_watchdog" 2>/dev/null || true';
 
 /**
  * Wedge signature `convex dev` prints while it cannot reach the local backend.

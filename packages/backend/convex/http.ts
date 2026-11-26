@@ -3,11 +3,13 @@ import {
   registerMcpRoutes,
   sha256Hex,
   timingSafeEqual,
+  verifyGithubStyleSignature,
 } from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import {
   previewActivityHmacMessage,
@@ -18,6 +20,8 @@ import {
   parseCiPassed,
   parseRepoEvents,
 } from "./_automationEvents/events";
+import { parseAxiomAlert } from "./_automationEvents/axiomAlert";
+import { AXIOM_ALERT_PATH_PREFIX } from "./_automations/alertWebhook";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
 import {
@@ -34,15 +38,6 @@ import {
 } from "./mcp/native";
 
 const http = httpRouter();
-
-/** Verifies the MCP bootstrap authorization token from the request header. */
-function verifyMcpBootstrapToken(request: Request): boolean {
-  const auth = request.headers.get("Authorization");
-  if (!auth) return false;
-  const expected = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!expected) return false;
-  return timingSafeEqual(auth, `MCPBootstrap ${expected}`);
-}
 
 /** Verifies the EVA deploy key from the request Authorization header. */
 function verifyDeployKey(request: Request): boolean {
@@ -113,6 +108,14 @@ http.route({
     const leaseGeneration = Number(params.get("leaseGeneration"));
     if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
       return new Response("Invalid turn lease generation", { status: 400 });
+    }
+    // VM memory sample (the daemon sends one at most every 30s). Logged only,
+    // so Axiom shows memory pressure before a VM dies with no stop reason.
+    const memAvailableMb = params.get("memAvailableMb");
+    if (memAvailableMb !== null) {
+      console.log(
+        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"}`,
+      );
     }
     const lease = await ctx.runMutation(internal.turns.heartbeat, {
       turnId,
@@ -234,24 +237,6 @@ function parseEnvVarsBody(
 }
 
 http.route({
-  path: "/api/mcp/bootstrap",
-  method: "GET",
-  handler: httpAction(async (_ctx, request) => {
-    if (!verifyMcpBootstrapToken(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-    const deployKey = process.env.EVA_DEPLOY_KEY;
-    if (!deployKey) {
-      return new Response(
-        "EVA_DEPLOY_KEY is not configured in Convex env vars",
-        { status: 500 },
-      );
-    }
-    return Response.json({ deployKey });
-  }),
-});
-
-http.route({
   path: "/api/mcp/env-vars",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
@@ -326,11 +311,23 @@ http.route({
       console.warn(`[git-credentials][denied] ${resolved.reason}`);
       return new Response("Forbidden", { status: 403 });
     }
+    if (resolved.kind === "read_only") {
+      // A project coordinator's sandbox: it reads, it never pushes.
+      const readOnly = await ctx.runAction(
+        internal.githubAuth.mintReadOnlyRepoToken,
+        {
+          installationId: resolved.installationId,
+          githubId: resolved.githubId,
+          name: resolved.name,
+        },
+      );
+      return Response.json({ username: "x-access-token", ...readOnly });
+    }
     if (resolved.kind === "sibling") {
       console.log(
         `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
-      const siblingToken: string = await ctx.runAction(
+      const sibling = await ctx.runAction(
         internal.githubAuth.mintSiblingRepoToken,
         {
           installationId: resolved.installationId,
@@ -338,10 +335,7 @@ http.route({
           name: resolved.name,
         },
       );
-      return Response.json({
-        username: "x-access-token",
-        token: siblingToken,
-      });
+      return Response.json({ username: "x-access-token", ...sibling });
     }
     if (resolved.kind === "linked") {
       // A multi-repo session's linked repo: a full token, but for that repo's
@@ -351,11 +345,12 @@ http.route({
       );
     }
 
-    const token: string = await ctx.runAction(
+    const credential = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
       { installationId: resolved.installationId },
     );
-    return Response.json({ username: "x-access-token", token });
+    // `expiresAt` (unix seconds) bounds the helper's cache; see gitCredentials.ts.
+    return Response.json({ username: "x-access-token", ...credential });
   }),
 });
 
@@ -517,15 +512,17 @@ const pushWebhookSchema = z.object({
 });
 
 const SKILLS_ROOT_PREFIXES = [".agents/skills", ".claude/skills"];
+const EVA_CONFIG_ROOT_PREFIXES = [".eva"];
 
-/** True when a commit touches a supported skill root, or when GitHub sent no
+/** True when a commit touches one of the given roots, or when GitHub sent no
  * path lists (force-push / truncated payloads) so we still resync. */
-function pushTouchesSkills(
+function pushTouchesRoots(
   commits: Array<{
     added: string[];
     modified: string[];
     removed: string[];
   }>,
+  prefixes: ReadonlyArray<string>,
 ): boolean {
   if (commits.length === 0) return true;
   let sawAnyPath = false;
@@ -537,7 +534,7 @@ function pushTouchesSkills(
     ]) {
       sawAnyPath = true;
       if (
-        SKILLS_ROOT_PREFIXES.some(
+        prefixes.some(
           (prefix) => path === prefix || path.startsWith(`${prefix}/`),
         )
       ) {
@@ -548,15 +545,54 @@ function pushTouchesSkills(
   return !sawAnyPath;
 }
 
-/** Verifies a GitHub webhook HMAC-SHA256 signature against the shared secret. */
-async function verifyWebhookSignature(
-  body: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
-  return timingSafeEqual(computed, signature);
-}
+/** Larger bodies are refused before parsing; a real alert is a few KB. */
+const MAX_ALERT_BODY_BYTES = 256 * 1024;
+
+/**
+ * Axiom custom webhook notifier for an "Axiom alerts to tasks" install. The
+ * path names the automation; `Authorization: Bearer <secret>` proves the
+ * caller. Resolved monitors and repeat alerts answer 200 and do nothing.
+ */
+http.route({
+  pathPrefix: AXIOM_ALERT_PATH_PREFIX,
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const automationId = new URL(request.url).pathname.slice(
+      AXIOM_ALERT_PATH_PREFIX.length,
+    );
+    const body = await request.text();
+    if (body.length > MAX_ALERT_BODY_BYTES) {
+      return new Response("Alert body too large", { status: 413 });
+    }
+    const auth = request.headers.get("Authorization") ?? "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+    const parsed = parseAxiomAlert(body);
+    if (parsed.kind === "invalid") {
+      return new Response("Expected Axiom's default webhook JSON", {
+        status: 400,
+      });
+    }
+    // Check the secret even for a resolve, so the URL answers the same way
+    // to every caller without one.
+    const result = await ctx.runMutation(
+      internal._automationEvents.dispatch.receiveAlert,
+      {
+        automationId,
+        secretHash: token === "" ? null : await sha256Hex(token),
+        alert: parsed.kind === "alert" ? parsed.alert : null,
+      },
+    );
+    switch (result) {
+      case "unauthorized":
+        return new Response("Invalid secret", { status: 401 });
+      case "not_found":
+        return new Response("Unknown alert webhook", { status: 404 });
+      default:
+        return new Response(result, { status: 200 });
+    }
+  }),
+});
 
 http.route({
   path: "/api/github/webhook",
@@ -573,10 +609,9 @@ http.route({
       });
     }
 
-    if (
-      !signature ||
-      !(await verifyWebhookSignature(body, signature, secret))
-    ) {
+    // `verifyGithubStyleSignature` checks the `sha256=<hex>` header in constant
+    // time and rejects a null header, so a missing signature fails here too.
+    if (!(await verifyGithubStyleSignature(secret, body, signature))) {
       return new Response("Invalid signature", { status: 401 });
     }
 
@@ -713,12 +748,19 @@ http.route({
         );
         await ctx.scheduler.runAfter(
           0,
-          internal.githubWebhook.handlePushForSkillSync,
+          internal.githubWebhook.handlePushToBaseBranch,
           {
             owner: parsed.data.repository.owner.login,
             name: parsed.data.repository.name,
             branch,
-            touchedSkillsPath: pushTouchesSkills(parsed.data.commits),
+            touchedSkillsPath: pushTouchesRoots(
+              parsed.data.commits,
+              SKILLS_ROOT_PREFIXES,
+            ),
+            touchedEvaConfig: pushTouchesRoots(
+              parsed.data.commits,
+              EVA_CONFIG_ROOT_PREFIXES,
+            ),
           },
         );
       }
@@ -733,7 +775,7 @@ http.route({
  * installations resume setup; anything else lands on the codebase list.
  */
 function githubAuthReturnUrl(installationId: number | null): string {
-  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
     ? `${webAppUrl}/home`
     : `${webAppUrl}/setup/${installationId}`;
@@ -808,7 +850,7 @@ http.route({
 });
 
 function connectorAuthReturnUrl(returnPath: string | null): string {
-  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   const path =
     returnPath &&
     returnPath.startsWith("/settings") &&
@@ -913,7 +955,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

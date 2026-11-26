@@ -19,11 +19,13 @@ function DateEnd({
   placeholder,
   format,
   onChange,
+  disabled,
 }: {
   value: number | undefined;
   placeholder: string;
   format: string;
   onChange: (epoch: number | null) => void;
+  disabled: boolean;
 }) {
   const selected = value ? new Date(value) : undefined;
 
@@ -31,6 +33,7 @@ function DateEnd({
     <Popover>
       <PopoverTrigger asChild>
         <button
+          disabled={disabled}
           className={`rounded px-0.5 transition-colors hover:text-foreground ${selected ? "" : "text-muted-foreground"}`}
         >
           {selected ? dayjs(selected).format(format) : placeholder}
@@ -51,18 +54,21 @@ function DateEnd({
  * Project start and end as one "start → end" row. Each end keeps its own
  * calendar popover, so either date can still be set or cleared on its own.
  * The year is written once when both ends share it, and a project with no end
- * date yet reads as "ongoing".
+ * date yet reads as "ongoing". `disabled` (an archived project) shows the
+ * dates with no popovers.
  */
 export function ProjectDateRangeField({
   start,
   end,
   onStartChange,
   onEndChange,
+  disabled,
 }: {
   start: number | undefined;
   end: number | undefined;
   onStartChange: (epoch: number | null) => void;
   onEndChange: (epoch: number | null) => void;
+  disabled: boolean;
 }) {
   const sharesYear =
     start !== undefined &&
@@ -80,6 +86,7 @@ export function ProjectDateRangeField({
         placeholder="Start date"
         format={sharesYear ? "MMM D" : "MMM D, YYYY"}
         onChange={onStartChange}
+        disabled={disabled}
       />
       <span className="text-muted-foreground">→</span>
       <DateEnd
@@ -87,6 +94,7 @@ export function ProjectDateRangeField({
         placeholder={start === undefined ? "End date" : "Ongoing"}
         format="MMM D, YYYY"
         onChange={onEndChange}
+        disabled={disabled}
       />
     </div>
   );
