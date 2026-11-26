@@ -69,7 +69,7 @@ function useOwnedSandbox(owner: Owner | null) {
         const { sessionId } = await ensureOwned({ owner });
         await startSandbox({ sessionId });
       } catch {
-        toast.error("Could not start the sandbox. Try again.");
+        toast.error("Couldn't start sandbox");
       }
       setWaking(false);
     },

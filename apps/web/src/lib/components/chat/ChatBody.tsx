@@ -164,7 +164,7 @@ interface InlineCard {
     | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
-interface ChatBodyProps {
+export interface ChatBodyProps {
   /**
    * The codebase this chat belongs to. Absent for Manager Ave, which has none:
    * skills, the prompt stash and repo mentions switch off.

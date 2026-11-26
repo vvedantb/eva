@@ -6,6 +6,7 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { Spinner, TabsTransition, useRequestConfirm } from "@vvedantb/ui";
 import { useTaskDetail } from "./useTaskDetail";
 import { TaskDetailsPane } from "./TaskDetailsPane";
@@ -260,12 +261,14 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          sandbox.status === "closed" &&
-          sandboxId !== undefined &&
-          canStartSandbox &&
-          !hasActiveRun
-        }
+        autoWakeEligible={sandboxAutoWakeEligible({
+          status: sandbox.status,
+          sandboxId,
+          sandboxError: sandbox.sandboxError,
+          canStart: canStartSandbox,
+          isBusy: hasActiveRun,
+        })}
+        isArchived={isArchived}
         collapsed={collapsed}
         onToggle={onToggle}
         miniPlayer={
@@ -317,6 +320,7 @@ export function TaskDetailInline({
           taskId={taskId}
           isSandboxActive={isSandboxActive}
           isSandboxToggling={isSandboxStarting || isSandboxStopping}
+          isSandboxStopping={isSandboxStopping}
           sandboxStartupActivity={sandboxStartupActivity}
           onOpenFile={openFile}
           onViewDiff={openDiffs}

@@ -59,6 +59,7 @@ export function ProjectTaskChat({
         taskId={taskId}
         isSandboxActive={isSandboxActive}
         isSandboxToggling={isSandboxStarting || isSandboxStopping}
+        isSandboxStopping={isSandboxStopping}
         sandboxStartupActivity={sandboxStartupActivity}
         onOpenFile={(path) => expand({ file: path })}
         onViewDiff={(path) =>

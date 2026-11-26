@@ -1,13 +1,10 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
+import { useSandboxControls } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useOwnedSession } from "@/lib/components/sandbox/useOwnedSession";
-import { sandboxStartupEntityId } from "@eva/shared";
-import { toast } from "@vvedantb/ui";
 
 /**
  * A project's sandbox: its session's (`useOwnedSession`), which the project
@@ -21,55 +18,21 @@ export function useProjectSandbox(projectId: Id<"projects">) {
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
 
-  const lifecycle = useSandboxLifecycle(sandbox.status);
-
-  const isSandboxActive = sandbox.status === "active";
-  const isSandboxStartingFromStatus = sandbox.status === "starting";
-
-  const sandboxStartupStreaming = useQuery(
-    api.streaming.get,
-    isSandboxStartingFromStatus && sandbox.owner
-      ? { entityId: sandboxStartupEntityId(sandbox.owner) }
-      : "skip",
-  );
-
-  const onSession = async (
-    action: (args: { sessionId: Id<"sessions"> }) => Promise<null>,
-  ) => {
-    const { sessionId } = await projectSession.ensure();
-    return await action({ sessionId });
-  };
-
-  const handleStartSandbox = () =>
-    lifecycle.run("start", async () => {
-      try {
-        await onSession(startSessionSandbox);
-      } catch (err) {
-        console.error("Failed to start project sandbox:", err);
-        toast.error("Could not start the sandbox. Try again.");
-      }
-    });
-
-  const handleStopSandbox = () =>
-    lifecycle.run("stop", async () => {
-      try {
-        await stopWorkSandbox({ target: { projectId } });
-      } catch (err) {
-        console.error("Failed to stop project sandbox:", err);
-        toast.error("Could not stop the sandbox. Try again.");
-      }
-    });
+  const controls = useSandboxControls({
+    status: sandbox.status,
+    owner: sandbox.owner,
+    start: async () => {
+      const { sessionId } = await projectSession.ensure();
+      return await startSessionSandbox({ sessionId });
+    },
+    stop: () => stopWorkSandbox({ target: { projectId } }),
+  });
 
   return {
     /** The project's session and chat; the sandbox fields come off it. */
     projectSession,
     sandbox,
-    isSandboxActive,
-    isSandboxStarting: lifecycle.isStarting,
-    isSandboxStopping: lifecycle.isStopping,
-    sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
     sandboxId: sandbox.sandboxId,
-    handleStartSandbox,
-    handleStopSandbox,
+    ...controls,
   };
 }

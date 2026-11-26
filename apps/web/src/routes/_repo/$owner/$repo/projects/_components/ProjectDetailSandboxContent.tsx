@@ -1,5 +1,6 @@
 import { Activity, type ReactNode } from "react";
 import type { Id, SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
@@ -76,7 +77,7 @@ export function ProjectDetailSandboxContent({
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
     handleStartSandbox,
-    handleStopSandbox,
+    handleSandboxToggle,
   } = sandbox;
   // An archived project opens read-only: no wake, no composer.
   const isArchived = project.archivedAt !== undefined;
@@ -117,13 +118,14 @@ export function ProjectDetailSandboxContent({
         isSandboxStopping || isArchived ? undefined : handleStartSandbox
       }
       isSandboxStarting={isSandboxStarting}
-      autoWakeEligible={
-        sandbox.sandbox.status === "closed" &&
-        projectSandboxId !== undefined &&
-        !isArchived &&
-        // Still loading counts as busy: never wake under a live turn.
-        chatTurnOpen === false
-      }
+      autoWakeEligible={sandboxAutoWakeEligible({
+        status: sandbox.sandbox.status,
+        sandboxId: projectSandboxId,
+        sandboxError: sandbox.sandbox.sandboxError,
+        canStart: !isArchived,
+        isBusy: chatTurnOpen,
+      })}
+      isArchived={isArchived}
       collapsed={collapsed}
       onToggle={onToggle}
       onCloseThread={onCloseThread}
@@ -141,6 +143,7 @@ export function ProjectDetailSandboxContent({
       projectSession={sandbox.projectSession}
       isSandboxActive={isSandboxActive}
       isSandboxToggling={isSandboxStarting || isSandboxStopping}
+      isSandboxStopping={isSandboxStopping}
       sandboxStartupActivity={sandboxStartupActivity}
       onOpenFile={openFile}
       onViewDiff={openDiffs}
@@ -152,10 +155,7 @@ export function ProjectDetailSandboxContent({
       }}
       onThreadOpen={onThreadOpen}
       isArchived={isArchived}
-      onSandboxToggle={(action) => {
-        if (action === "start") void handleStartSandbox();
-        else void handleStopSandbox();
-      }}
+      onSandboxToggle={handleSandboxToggle}
     />
   );
 

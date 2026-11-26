@@ -453,6 +453,7 @@ export {
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
 export {
   PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  sandboxAutoWakeEligible,
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,
