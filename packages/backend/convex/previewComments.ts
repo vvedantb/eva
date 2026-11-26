@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { parseAnnotationDisplay } from "@eva/shared/previewAnnotationDisplay";
-import { authQuery } from "./functions";
+import { getUserDisplayName } from "@eva/shared/taskDetail";
+import { authMutation, authQuery } from "./functions";
 import { getSessionChatWithAccess } from "./_sessionChats/helpers";
 import type { QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 /**
  * The preview comments drawer: every "Select element" annotation of one chat,
@@ -38,6 +39,8 @@ const previewCommentValidator = v.union(
     ...commentFields,
     /** Unset until a reply row exists (the turn has not started yet). */
     reply: v.optional(replyValidator),
+    /** Set once someone marks the comment done; unset while it is open. */
+    resolved: v.optional(v.object({ at: v.number(), byName: v.string() })),
   }),
   v.object({
     kind: v.literal("queued"),
@@ -91,6 +94,21 @@ async function findReply(ctx: QueryCtx, comment: Doc<"messages">) {
   return undefined;
 }
 
+/** Display names for the people who resolved comments, one read each. */
+async function namesOf(
+  ctx: QueryCtx,
+  userIds: readonly Id<"users">[],
+): Promise<Map<Id<"users">, string>> {
+  const unique = [...new Set(userIds)];
+  const users = await Promise.all(unique.map((id) => ctx.db.get(id)));
+  const names = new Map<Id<"users">, string>();
+  unique.forEach((id, index) => {
+    const user = users[index];
+    if (user) names.set(id, getUserDisplayName(user));
+  });
+  return names;
+}
+
 /** The feedback without the `[Annotated …]` suffix the chat shows. */
 function feedbackOf(content: string): string {
   return parseAnnotationDisplay(content)?.feedback ?? content;
@@ -122,11 +140,18 @@ export const list = authQuery({
       .filter((row) => row.role === "user" && row.annotation !== undefined)
       .sort((a, b) => b._creationTime - a._creationTime)
       .slice(0, MAX_COMMENTS);
+    const resolverNames = await namesOf(
+      ctx,
+      newest.flatMap((row) =>
+        row.annotation?.resolvedBy ? [row.annotation.resolvedBy] : [],
+      ),
+    );
     const messages = await Promise.all(
       newest.map(async (row) => {
         const annotation = row.annotation;
         if (!annotation) return null;
         const reply = await findReply(ctx, row);
+        const { resolvedAt, resolvedBy } = annotation;
         return {
           kind: "message" as const,
           id: row._id,
@@ -135,6 +160,15 @@ export const list = authQuery({
           pagePath: annotation.pagePath,
           timestamp: row.timestamp,
           ...(reply ? { reply } : {}),
+          ...(resolvedAt !== undefined
+            ? {
+                resolved: {
+                  at: resolvedAt,
+                  byName:
+                    (resolvedBy && resolverNames.get(resolvedBy)) ?? "Someone",
+                },
+              }
+            : {}),
         };
       }),
     );
@@ -156,5 +190,32 @@ export const list = authQuery({
       ...waiting.sort((a, b) => b.timestamp - a.timestamp),
       ...messages.flatMap((comment) => (comment ? [comment] : [])),
     ];
+  },
+});
+
+/**
+ * Marks a preview comment done, or opens it again. Anyone who can open the
+ * chat may do either, as with doc comments. Queued comments have no row yet,
+ * so they cannot be resolved.
+ */
+export const setResolved = authMutation({
+  args: { id: v.id("messages"), resolved: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.id);
+    const chatId = row ? ctx.db.normalizeId("sessionChats", row.parentId) : null;
+    if (!row || !row.annotation || !chatId) {
+      throw new Error("Comment not found");
+    }
+    await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
+    const { resolvedAt, resolvedBy, ...open } = row.annotation;
+    void resolvedAt;
+    void resolvedBy;
+    await ctx.db.patch(row._id, {
+      annotation: args.resolved
+        ? { ...open, resolvedAt: Date.now(), resolvedBy: ctx.userId }
+        : open,
+    });
+    return null;
   },
 });

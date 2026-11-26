@@ -1,10 +1,17 @@
 "use client";
 
 import type { FunctionReturnType } from "convex/server";
-import type { api, Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import { compactRelativeTime } from "@eva/shared/dates";
+import { useMutation } from "convex/react";
+import { cn } from "@eva/ui";
 import { Button } from "@vvedantb/ui";
-import { IconArrowUpRight } from "@tabler/icons-react";
+import {
+  IconArrowBackUp,
+  IconArrowUpRight,
+  IconCheck,
+} from "@tabler/icons-react";
+import { catchMutationError } from "@/lib/utils/mutationToast";
 
 export type PreviewComment = FunctionReturnType<
   typeof api.previewComments.list
@@ -18,8 +25,16 @@ export function PreviewCommentCard({
   comment: PreviewComment;
   onViewInChat: (messageId: Id<"messages">) => void;
 }) {
+  const setResolved = useMutation(api.previewComments.setResolved);
+  const resolved = comment.kind === "message" ? comment.resolved : undefined;
   return (
-    <div className="rounded-lg bg-card p-2.5 smooth-shadow-ring">
+    <div
+      className={cn(
+        "rounded-lg bg-card p-2.5 smooth-shadow-ring",
+        // Done, but still readable: the reader may want to reopen it.
+        resolved && "opacity-70",
+      )}
+    >
       <div className="mb-1.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
         <span className="min-w-0 truncate rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-foreground">
           {comment.element}
@@ -32,8 +47,35 @@ export function PreviewCommentCard({
         {comment.feedback}
       </p>
       <CommentReply comment={comment} />
+      {resolved ? (
+        <p className="mt-2 text-2xs text-muted-foreground">
+          Resolved by {resolved.byName} · {compactRelativeTime(resolved.at)}
+        </p>
+      ) : null}
       {comment.kind === "message" ? (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {/* Same controls as a doc comment thread (DocCommentThread). */}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              void catchMutationError(
+                setResolved({ id: comment.id, resolved: !resolved }),
+                resolved
+                  ? "Could not reopen the comment"
+                  : "Could not resolve the comment",
+                "preview-comment-resolve",
+              ).catch(() => {});
+            }}
+          >
+            {resolved ? (
+              <IconArrowBackUp className="size-3.5" aria-hidden />
+            ) : (
+              <IconCheck className="size-3.5" aria-hidden />
+            )}
+            {resolved ? "Reopen" : "Resolve"}
+          </Button>
           <Button
             size="sm"
             variant="secondary"

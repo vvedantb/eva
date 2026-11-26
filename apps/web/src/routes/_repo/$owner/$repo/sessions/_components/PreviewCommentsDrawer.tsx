@@ -27,6 +27,11 @@ function pagePathname(path: string): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
 }
 
+/** Done: someone marked it resolved. Queued comments are always open. */
+export function isResolved(comment: PreviewComment): boolean {
+  return comment.kind === "message" && comment.resolved !== undefined;
+}
+
 /** Comments grouped by page, newest group first (input is newest first). */
 function groupByPage(
   comments: readonly PreviewComment[],
@@ -90,16 +95,26 @@ function DrawerPanel({
   onClose: () => void;
 }) {
   const [scope, setScope] = useState<"page" | "all">("page");
+  const [status, setStatus] = useState<"open" | "resolved">("open");
   const currentPage = pagePathname(previewPath);
-  const onPage = comments.filter(
+  // Each row counts within the other row's choice, so a tab's number is what
+  // that tab will show.
+  const inScope = (comment: PreviewComment) =>
+    scope === "all" || pagePathname(comment.pagePath) === currentPage;
+  const inStatus = (comment: PreviewComment) =>
+    isResolved(comment) === (status === "resolved");
+  const withStatus = comments.filter(inStatus);
+  const withScope = comments.filter(inScope);
+  const onPageCount = withStatus.filter(
     (comment) => pagePathname(comment.pagePath) === currentPage,
-  );
+  ).length;
+  const resolvedCount = withScope.filter(isResolved).length;
+  const shown = withStatus.filter(inScope);
   const width = previewCommentsDrawerWidth(box);
   const groups =
     scope === "all"
-      ? groupByPage(comments)
-      : [{ pagePath: currentPage, comments: onPage }];
-  const shown = scope === "all" ? comments : onPage;
+      ? groupByPage(shown)
+      : [{ pagePath: currentPage, comments: shown }];
 
   return createPortal(
     <div
@@ -134,21 +149,37 @@ function DrawerPanel({
           active={scope === "page"}
           onSelect={() => setScope("page")}
         >
-          On this page ({onPage.length})
+          On this page ({onPageCount})
         </CommentFilterTab>
         <CommentFilterTab
           active={scope === "all"}
           onSelect={() => setScope("all")}
         >
-          All comments ({comments.length})
+          All comments ({withStatus.length})
+        </CommentFilterTab>
+      </div>
+      <div className="flex items-center gap-1 px-3 pb-1.5 max-sm:gap-2.5">
+        <CommentFilterTab
+          active={status === "open"}
+          onSelect={() => setStatus("open")}
+        >
+          Open ({withScope.length - resolvedCount})
+        </CommentFilterTab>
+        <CommentFilterTab
+          active={status === "resolved"}
+          onSelect={() => setStatus("resolved")}
+        >
+          Resolved ({resolvedCount})
         </CommentFilterTab>
       </div>
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto p-3">
         {shown.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            {scope === "page"
-              ? "No comments on this page. Use Select element to add one."
-              : "No comments yet. Use Select element to add one."}
+            {status === "resolved"
+              ? "No resolved comments."
+              : scope === "page"
+                ? "No open comments on this page. Use Select element to add one."
+                : "No open comments. Use Select element to add one."}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
