@@ -307,7 +307,8 @@ export const createTaskPullRequest = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
-    relatedPrs: v.array(siblingPrValidator),
+    // Optional: a task run in flight across the deploy calls without it.
+    relatedPrs: v.optional(v.array(siblingPrValidator)),
     draft: v.optional(v.boolean()),
   },
   returns: v.string(),
@@ -328,7 +329,7 @@ export const createTaskPullRequest = internalAction({
         taskDescription: args.taskDescription,
         rootDirectory: args.rootDirectory,
         changeRequests: args.changeRequests,
-        relatedPrs: args.relatedPrs,
+        relatedPrs: args.relatedPrs ?? [],
       }),
       labels: taskPullRequestLabels({
         rootDirectory: args.rootDirectory,
@@ -350,7 +351,8 @@ export const refreshTaskPullRequestBody = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
-    relatedPrs: v.array(siblingPrValidator),
+    // Optional: a task run in flight across the deploy calls without it.
+    relatedPrs: v.optional(v.array(siblingPrValidator)),
   },
   returns: v.string(),
   handler: async (_ctx, args): Promise<string> => {
@@ -367,7 +369,7 @@ export const refreshTaskPullRequestBody = internalAction({
         taskDescription: args.taskDescription,
         rootDirectory: args.rootDirectory,
         changeRequests: args.changeRequests,
-        relatedPrs: args.relatedPrs,
+        relatedPrs: args.relatedPrs ?? [],
       }),
     });
   },
