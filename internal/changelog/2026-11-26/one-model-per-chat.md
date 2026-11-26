@@ -6,4 +6,4 @@
 - Sessions: a new session's picks go on its Main chat; a new chat tab inherits from the chat it was opened from, else from Main.
 - UI: the Project page (web and phone) and the quick task Properties panel (web) no longer have a model row; the chat composer is the one picker. The phone reads a task's model for @-mentions from its chat (`sessions.getOwnedWithSeed` now returns `model`).
 - API: `projects.create`, `projects.update` and `agentTasks.update` drop `model` and `providerAccountId` (and the trait args); create-task paths keep them as the chat's picks.
-- Migration `dataMigrations:moveModelToChats` copies stored picks onto a chat that has no model yet, then clears the old fields. The schema drops them in the follow-up PR.
+- Migration `dataMigrations:moveModelToChats` copies stored picks onto a chat that has no model yet, then clears the old fields. After it has run, the schema drops them (`schema-narrowing-ok: moveModelToChats`) and the migration is deleted.
