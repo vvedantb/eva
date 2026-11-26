@@ -29,7 +29,7 @@ FOLLOW ALL OF THESE RULES
 - Avoid useEffect; use it only when absolutely necessary (it invites performance regressions), preferring derived state, event handlers or `useSyncExternalStore`.
 - Never call a component as a function in render; name hook-calling helpers `use*` (the compiler memoises capitalised calls and skips them).
 - Do not run dev / lint / build unless the user asks.
-- After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
+- After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (one file in `internal/changelog/<YYYY-MM-DD>/`).
 - Tests: default is no new test; a test must call real code and fail when behaviour breaks; never regex source files.
 - Before a PR that touches async code, run `/parallel-awaits` with `--diff origin/main`.
 - Eliminate duplication, centralise your changes so its easier to update them
