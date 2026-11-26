@@ -15,13 +15,16 @@ export function AssistantQuestionRecord({ step }: { step: ActivityStep }) {
   if (!current) return null;
   const total = questions.length;
   return (
-    <div className="my-2 rounded-surface bg-card">
+    <div className="relative my-2 rounded-surface bg-card">
       <ActivityQuestionCard
         questions={[current]}
         {...(step.answers ? { answers: step.answers } : {})}
       />
+      {/* Sits over the right end of the card's "Question" header row (p-3 +
+          16px row → centred 28px buttons at top-1.5). The card is from
+          @vvedantb/ui and has no header slot. */}
       {total > 1 ? (
-        <div className="flex items-center justify-end gap-1 px-3 pb-2">
+        <div className="absolute top-1.5 right-2 flex items-center gap-1">
           <span className="mr-1 text-2xs font-medium tabular-nums text-muted-foreground">
             {index + 1}/{total}
           </span>
