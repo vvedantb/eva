@@ -32,6 +32,8 @@ export {
   getPullRequestCard,
 } from "./_github/pullRequests";
 
+export { getIssueCard } from "./_github/issues";
+
 export { getEvaMergeShare } from "./_github/mergeShare";
 
 export {
