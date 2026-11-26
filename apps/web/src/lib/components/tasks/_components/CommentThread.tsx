@@ -23,6 +23,8 @@ interface CommentThreadProps {
   repliesByParentId: Map<Id<"taskComments">, TaskComment[]>;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
   depth?: number;
+  /** An archived task: no reply box, edit or delete. */
+  readOnly?: boolean;
 }
 
 function ReplyThreads({
@@ -32,6 +34,7 @@ function ReplyThreads({
   repliesByParentId,
   onDeleteRequest,
   depth,
+  readOnly,
 }: {
   replies: TaskComment[];
   taskId: Id<"agentTasks">;
@@ -39,6 +42,7 @@ function ReplyThreads({
   repliesByParentId: Map<Id<"taskComments">, TaskComment[]>;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
   depth: number;
+  readOnly: boolean;
 }) {
   if (replies.length === 0) return null;
 
@@ -62,6 +66,7 @@ function ReplyThreads({
               repliesByParentId={repliesByParentId}
               onDeleteRequest={onDeleteRequest}
               depth={depth + 1}
+              readOnly={readOnly}
             />
           </div>
         </ListEnter>
@@ -77,6 +82,7 @@ export function CommentThread({
   repliesByParentId,
   onDeleteRequest,
   depth = 0,
+  readOnly = false,
 }: CommentThreadProps) {
   const replies = repliesByParentId.get(comment._id) ?? [];
 
@@ -91,6 +97,7 @@ export function CommentThread({
             taskId={taskId}
             users={users}
             onDeleteRequest={onDeleteRequest}
+            readOnly={readOnly}
           />
         </div>
         <ReplyThreads
@@ -100,11 +107,16 @@ export function CommentThread({
           repliesByParentId={repliesByParentId}
           onDeleteRequest={onDeleteRequest}
           depth={depth}
+          readOnly={readOnly}
         />
-        <Separator className={THREAD_SEPARATOR_CLASS} />
-        <div className={cn(THREAD_ROW_X_CLASS, "py-2")}>
-          <CommentReplyComposer taskId={taskId} parentId={comment._id} />
-        </div>
+        {readOnly ? null : (
+          <>
+            <Separator className={THREAD_SEPARATOR_CLASS} />
+            <div className={cn(THREAD_ROW_X_CLASS, "py-2")}>
+              <CommentReplyComposer taskId={taskId} parentId={comment._id} />
+            </div>
+          </>
+        )}
       </Surface>
     );
   }
@@ -116,6 +128,7 @@ export function CommentThread({
         taskId={taskId}
         users={users}
         onDeleteRequest={onDeleteRequest}
+        readOnly={readOnly}
       />
       <ReplyThreads
         replies={replies}
@@ -124,6 +137,7 @@ export function CommentThread({
         repliesByParentId={repliesByParentId}
         onDeleteRequest={onDeleteRequest}
         depth={depth}
+        readOnly={readOnly}
       />
     </div>
   );

@@ -478,6 +478,7 @@ export function TaskDetailInline({
                       taskActivity={taskActivity}
                       users={users}
                       isProjectTask={isProjectTask}
+                      readOnly={isArchived}
                     />
                   </div>
                 </div>

@@ -92,6 +92,7 @@ export function TaskActivity({
   onReply,
   onEdit,
   onDelete,
+  readOnly,
 }: {
   taskId: Id<"agentTasks">;
   isProjectTask: boolean;
@@ -103,6 +104,8 @@ export function TaskActivity({
   onReply: (comment: TaskComment) => void;
   onEdit: (comment: TaskComment) => void;
   onDelete: (id: Id<"taskComments">) => void;
+  /** An archived task (or one in an archived project): the hold menu keeps reactions and Copy only. */
+  readOnly: boolean;
 }) {
   const theme = EVA_THEME[useScheme()];
   // The held comment and where it is on screen, for the hold menu.
@@ -162,7 +165,7 @@ export function TaskActivity({
   const menuReactions = menuFor
     ? reactionsFor("comment", menuFor._id)
     : undefined;
-  const ownComment = menuFor !== null && menuFor.authorId === currentUserId;
+  const ownComment = !readOnly && menuFor !== null && menuFor.authorId === currentUserId;
   return (
     <View className="gap-3">
       {held && menuFor && menuReactions ? (
@@ -178,7 +181,7 @@ export function TaskActivity({
           groups={menuReactions.groups}
           onToggleReaction={menuReactions.toggle}
           onMoreReactions={() => setPickingFor(menuFor)}
-          onReply={() => onReply(menuFor)}
+          onReply={readOnly ? undefined : () => onReply(menuFor)}
           onEdit={ownComment ? () => onEdit(menuFor) : undefined}
           copyText={mentionTokensToEditableText(menuFor.content)}
           onDelete={ownComment ? () => setDeleting(menuFor) : undefined}

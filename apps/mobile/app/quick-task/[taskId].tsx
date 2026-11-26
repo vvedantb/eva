@@ -322,6 +322,7 @@ function TaskOverview({
           task={task}
           users={users}
           projects={projects}
+          taskProject={project ?? undefined}
           allTags={allTags}
           update={update}
           readOnly={readOnly}
@@ -338,6 +339,7 @@ function TaskOverview({
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
+              readOnly={readOnly}
               onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
@@ -403,10 +405,13 @@ function TaskProperties({
   allTags,
   update,
   readOnly,
+  taskProject,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** The task's own project (`projects.get`): it names an archived project, which the live list leaves out. */
+  taskProject: FunctionReturnType<typeof api.projects.get> | undefined;
   allTags: string[];
   update: UpdateTask;
   readOnly: boolean;
@@ -420,7 +425,7 @@ function TaskProperties({
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
   const project = task.projectId
-    ? projects?.find((entry) => entry._id === task.projectId)
+    ? (taskProject ?? projects?.find((entry) => entry._id === task.projectId))
     : undefined;
   const status =
     task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
