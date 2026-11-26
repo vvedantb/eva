@@ -1,7 +1,7 @@
 import { api } from "@eva/backend";
 import { getNotificationAppearance } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { inboxDoneTarget, inboxNewCountLabel } from "@eva/shared/inbox";
+import { inboxDoneTarget, inboxNewCountLabel, joinInboxLine } from "@eva/shared/inbox";
 import { IconCheck } from "@tabler/icons-react-native";
 import {
   Avatar,
@@ -57,7 +57,7 @@ export function InboxRowItem({
   const appearance = row.notice ? getNotificationAppearance(row.notice) : undefined;
   const Glyph = appearance ? NOTIFICATION_ICONS[appearance.icon] : undefined;
   const tone = appearance ? toneColors(appearance.tone, scheme) : undefined;
-  const detail = [row.contextLabel, row.preview].filter(Boolean).join(" · ");
+  const detail = joinInboxLine(row.contextLabel, row.preview, " · ");
   return (
     <SwipeableRow trailingActions={actions} enabled={actions.length > 0}>
       <View className="flex-row items-center gap-3 px-4">

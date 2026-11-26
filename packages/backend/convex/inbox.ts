@@ -8,6 +8,7 @@ import {
   inboxHistoryRow,
   inboxGroupForNeedsYou,
   inboxPreview,
+  joinInboxLine,
   mergeInboxRows,
 } from "@eva/shared/inbox";
 import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
@@ -385,8 +386,7 @@ function noticeOf(n: Doc<"notifications">): InboxRow["notice"] {
 /** "PR merged · moved to done", "New comment: can we also cache…". */
 function alertLine(event: string | undefined, message: string | undefined): string | undefined {
   const text = message ? inboxPreview(message) : undefined;
-  if (event && text) return `${event}: ${text}`;
-  return event ?? text;
+  return joinInboxLine(event, text, ": ");
 }
 
 /** A task's project title, for the source line ("Checkout v2 · #902"). */

@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@eva/ui";
 import { Badge, RelativeDateTime } from "@vvedantb/ui";
 import { IconMessage } from "@tabler/icons-react";
-import { inboxNewCountLabel } from "@eva/shared/inbox";
+import { inboxNewCountLabel, joinInboxLine } from "@eva/shared/inbox";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   NotificationIcon,
@@ -40,7 +40,7 @@ export function InboxRowItem({
   }, [selected]);
   /* eslint-enable no-effect/no-event-handler */
 
-  const detail = [row.contextLabel, row.preview].filter(Boolean).join(" · ");
+  const detail = joinInboxLine(row.contextLabel, row.preview, " · ");
   return (
     // design-check-ignore-next-line — a full-width two-line row; Button would force control height and padding
     <button

@@ -250,3 +250,23 @@ export function inboxHistoryRow(n: Doc<"notifications">): {
     notice: { type: n.type, title: n.title, message: n.message },
   };
 }
+
+/** Whether `text` already opens with `lead` ("PR merged · moved to done" opens with "PR Merged"). */
+function opensWith(text: string, lead: string): boolean {
+  return text.toLowerCase().startsWith(lead.toLowerCase());
+}
+
+/**
+ * Two parts of a row's second line, joined with `separator`, the second
+ * dropped to its own text when it repeats the first: "PR Merged · PR merged ·
+ * moved to done" reads "PR merged · moved to done".
+ */
+export function joinInboxLine(
+  first: string | undefined,
+  second: string | undefined,
+  separator: string,
+): string | undefined {
+  if (!first) return second;
+  if (!second) return first;
+  return opensWith(second, first) ? second : `${first}${separator}${second}`;
+}
