@@ -27,6 +27,7 @@ import {
   errorMessage,
   signAndLaunchScript,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
+  PREFER_OOM_KILL_LINE,
   sessionClaudeUuid,
   restartUnresponsiveSandbox,
 } from "./helpers";
@@ -569,9 +570,9 @@ export const runBackgroundCommands = internalAction({
         //
         // CarePulse local backends: plant glibc-safe binary + unset agent mode.
         // See convexLocalBackend.ts (anonymous mode rejects --local-backend-version).
-        const scriptBody = isConvexCommand
-          ? buildConvexBackgroundScriptBody(command)
-          : command;
+        const scriptBody = `${PREFER_OOM_KILL_LINE}\n${
+          isConvexCommand ? buildConvexBackgroundScriptBody(command) : command
+        }`;
         console.log(
           `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );

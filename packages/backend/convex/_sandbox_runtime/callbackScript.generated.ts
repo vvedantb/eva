@@ -1202,22 +1202,51 @@ function parseMeminfo(text) {
   return {
     memTotalMb: Math.round(total / 1024),
     memAvailableMb: Math.round(available / 1024),
+    swapTotalMb: Math.round(swapTotal / 1024),
     swapUsedMb: Math.round((swapTotal - swapFree) / 1024)
   };
 }
+function parseOomKills(vmstat) {
+  const match = /^oom_kill (\\d+)\$/m.exec(vmstat);
+  return match ? Number(match[1]) : null;
+}
+function readVmMemory() {
+  try {
+    return parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
+  } catch {
+    return null;
+  }
+}
+function readOomKills() {
+  try {
+    return parseOomKills(readFileSync3("/proc/vmstat", "utf8"));
+  } catch {
+    return null;
+  }
+}
 function appendVmMemory(body, now = Date.now()) {
   if (now - lastSampleAt < VM_MEMORY_SAMPLE_INTERVAL_MS) return;
-  let sample = null;
-  try {
-    sample = parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
-  } catch {
-    return;
-  }
+  const sample = readVmMemory();
   if (sample === null) return;
   lastSampleAt = now;
   body.set("memTotalMb", String(sample.memTotalMb));
   body.set("memAvailableMb", String(sample.memAvailableMb));
   body.set("swapUsedMb", String(sample.swapUsedMb));
+  const oomKills = readOomKills();
+  if (oomKills !== null) body.set("oomKills", String(oomKills));
+}
+var LOW_MEMORY_AVAILABLE_MB = 1024;
+function isLowMemory(sample) {
+  return sample.memAvailableMb < LOW_MEMORY_AVAILABLE_MB || sample.swapTotalMb > 0 && sample.swapUsedMb * 2 > sample.swapTotalMb;
+}
+function lowMemoryNotice(sample = readVmMemory()) {
+  if (sample === null || !isLowMemory(sample)) return null;
+  return [
+    \`Eva: this sandbox is low on memory (\${sample.memAvailableMb} MB RAM free, \${sample.swapUsedMb} of \${sample.swapTotalMb} MB swap used).\`,
+    "A memory-heavy command now can freeze the VM and end this turn.",
+    "Avoid full-repo type checks, builds and test suites; check one package or file instead.",
+    "Never start a second dev server."
+  ].join(" ");
 }
 
 // callback-src/http/convexClient.ts
@@ -6169,9 +6198,19 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...hasRepoMcpFile ? { strictMcpConfig: true } : {},
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...effortOption,
-    ...thinkingOption
+    ...thinkingOption,
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [warnOnLowMemory] }] }
   };
 }
+var warnOnLowMemory = async () => {
+  const notice = lowMemoryNotice();
+  return notice === null ? {} : {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: notice
+    }
+  };
+};
 async function runClaudeSdkAttempt(sessionMode) {
   beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
   let attemptOutput = "";
