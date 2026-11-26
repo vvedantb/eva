@@ -1810,6 +1810,10 @@ export const docFields = {
   // Save-as-document from a session plan). Manual New Document leaves these
   // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
   ...chatSourceFields,
+  // The chat thread and turn that made it (`create_eva_doc`), for its inline
+  // card under that reply. Docs made any other way have neither.
+  chatParentId: v.optional(chatParentIdValidator),
+  messageId: v.optional(v.id("messages")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.

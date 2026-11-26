@@ -74,6 +74,7 @@ import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFram
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
+import { ChatDocCard } from "@/lib/components/docs/ChatDocCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
@@ -884,12 +885,16 @@ function ChatBodyInner({
     hasOlderHistory,
   );
 
-  // Artifacts saved in this chat (`create_artifact`) and the agent's
-  // `submit_feedback` reports. Placed by the same rule as the cards above, but
-  // kept apart: they sit with the turn's output and never trade places with
-  // its prose behind a tab.
+  // Artifacts and docs saved in this chat (`create_artifact`,
+  // `create_eva_doc`) and the agent's `submit_feedback` reports. Placed by the
+  // same rule as the cards above, but kept apart: they sit with the turn's
+  // output and never trade places with its prose behind a tab.
   const chatArtifacts = useQuery(
     api.artifacts.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const chatDocs = useQuery(
+    api.docs.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
   // Thumbs on turns and the agent's reports.
@@ -905,6 +910,12 @@ function ChatBodyInner({
         messageId: artifact.messageId,
         createdAt: artifact.createdAt,
         node: <ChatArtifactCard key={artifact._id} artifact={artifact} />,
+      })),
+      ...(chatDocs ?? []).map((doc) => ({
+        _id: doc._id,
+        messageId: doc.messageId,
+        createdAt: doc.createdAt,
+        node: <ChatDocCard key={doc._id} doc={doc} basePath={repo?.basePath} />,
       })),
       ...feedback.agentReports.map((report) => ({
         _id: report._id,
