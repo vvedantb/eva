@@ -136,7 +136,15 @@ export function NewProjectModal({
         if (!v) handleClose();
       }}
     >
-      <DialogContent className="max-w-2xl gap-0 p-0">
+      <DialogContent
+        className="max-w-2xl gap-0 p-0"
+        // Radix focuses the first focusable element (a header button); the
+        // prompt is what the person types into, so it takes focus instead.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          editorRef.current?.focus();
+        }}
+      >
         <div className="scrollbar px-5 pt-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
           <DescriptionMentionEditor
             ref={editorRef}

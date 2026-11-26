@@ -831,7 +831,15 @@ export function QuickTaskModal({
           if (!v) handleClose();
         }}
       >
-        <DialogContent className="max-w-3xl gap-0 p-0">
+        <DialogContent
+          className="max-w-3xl gap-0 p-0"
+          // Radix focuses the first focusable element (a header button); the
+          // prompt is what the person types into, so it takes focus instead.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            editorRef.current?.focus();
+          }}
+        >
           <div
             className={`pt-5 transition-colors duration-[var(--motion-fast)] ${
               isDragOver ? "bg-primary/5" : ""
