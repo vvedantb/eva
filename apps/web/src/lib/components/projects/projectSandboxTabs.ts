@@ -8,6 +8,7 @@ import {
  * order. Prefixed so they never clash with the coordinator's own tabs.
  */
 const PROJECT_TASK_TABS = [
+  "task-details",
   "task-chat",
   "task-preview",
   "task-browser",
@@ -20,8 +21,23 @@ export function isProjectTaskTab(value: string): value is ProjectTaskTab {
 }
 
 /**
- * The open task's tabs that have content: Chat always; Preview and Browser
- * while its sandbox runs; Review once it has a PR.
+ * The tab a project task opens on, in the panel and on its full page: a task
+ * still in To Do (added and never started, or sent back after a run) opens on
+ * Details (its prompt, status and properties); one that has moved on opens on
+ * Chat. The status is the fact every row carries; run summaries can outlive
+ * their runs.
+ */
+export function defaultProjectTaskTab(task: {
+  status: string;
+}): "task-details" | "task-chat" {
+  return task.status === "todo" || task.status === "draft"
+    ? "task-details"
+    : "task-chat";
+}
+
+/**
+ * The open task's tabs that have content: Details and Chat always; Preview
+ * and Browser while its sandbox runs; Review once it has a PR.
  */
 export function visibleProjectTaskTabs(task: {
   sandboxStatus?: string;

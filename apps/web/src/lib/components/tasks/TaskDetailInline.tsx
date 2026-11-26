@@ -5,30 +5,15 @@ import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import {
-  api,
-  taskScheduledAt,
-  type Id,
-  type SandboxOwner,
-} from "@eva/backend";
-import { cn } from "@eva/ui";
-import {
-  Badge,
-  Spinner,
-  TabsTransition,
-  useRequestConfirm,
-} from "@vvedantb/ui";
-import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import { IconClock } from "@tabler/icons-react";
-import dayjs from "@eva/shared/dates";
+import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { Spinner, TabsTransition, useRequestConfirm } from "@vvedantb/ui";
 import { useTaskDetail } from "./useTaskDetail";
-import { TaskHeader } from "./_components/TaskHeader";
-import { TaskDescription } from "./_components/TaskDescription";
-import { TaskAttachments } from "./_components/TaskAttachments";
-import { ActivityTimeline } from "./_components/ActivityTimeline";
-import { TaskSubscribers } from "./_components/TaskSubscribers";
-import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
-import { StatusFieldsSection } from "./_components/StatusFieldsSection";
+import {
+  TASK_DETAILS_TAB,
+  TaskDetailsPane,
+  type TaskDetailsTab,
+} from "./TaskDetailsPane";
+import { TaskDetailsRailFrame } from "./TaskDetailsRailFrame";
 import { TaskFooter } from "./_components/TaskFooter";
 import {
   ResolveConfirmDialog,
@@ -73,17 +58,21 @@ interface TaskDetailInlineProps {
   taskId: Id<"agentTasks">;
   allTags?: string[];
   routing?: UseTaskDetailRouting;
+  /**
+   * `project-task` only: open the right pane on Details (a task that has
+   * never run). A `?file=` / `?diffFile=` in the URL still wins.
+   */
+  openOnDetails?: boolean;
 }
 
 export function TaskDetailInline({
   taskId,
   allTags = [],
   routing,
+  openOnDetails = false,
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
   const { basePath } = useRepo();
-  /** Which detail pane is on screen below `md`; both show at `md` and up. */
-  const [showMobileProperties, setShowMobileProperties] = useState(false);
   const [fileViewerPath, setFileViewerPath] = useQueryState(
     "file",
     fileViewerPathParser,
@@ -93,9 +82,18 @@ export function TaskDetailInline({
   const simpleView = useSimpleView();
   // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
   // it, so a reload lands back on Files / Review. A tab the user picks
-  // afterwards overrides that for this mount.
-  const [pickedSandboxTab, setEmbeddedSandboxTab] =
-    useState<SandboxTab | null>(null);
+  // afterwards overrides that for this mount. A project task that has never
+  // run starts on Details.
+  const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<
+    SandboxTab | TaskDetailsTab | null
+  >(
+    routing?.mode === "project-task" &&
+      openOnDetails &&
+      !fileViewerPath &&
+      !diffFile
+      ? TASK_DETAILS_TAB.value
+      : null,
+  );
   const urlSandboxTab: SandboxTab = simpleView
     ? "preview"
     : fileViewerPath
@@ -109,26 +107,18 @@ export function TaskDetailInline({
     api.sessionWorkflow.prewarmDaemon,
   );
 
+  const detail = useTaskDetail(taskId, routing);
   const {
     isLoading,
     isNotFound,
     task,
     status,
-    comments,
-    taskActivity,
-    users,
-    creatorUser,
-    projects,
-    isOwner,
     hasActiveRun,
-    isProjectTask,
     isArchived,
     hasRuns,
-    canEditTaskText: canEditText,
     latestPrUrl,
     latestPrError,
     latestDeployment,
-    baseBranch,
     executionError,
     showResolveConfirm,
     setShowResolveConfirm,
@@ -158,14 +148,13 @@ export function TaskDetailInline({
     isCreatingPr,
     handleCreatePr,
     taskSession,
-  } = useTaskDetail(taskId, routing);
+  } = detail;
   const { sandbox } = taskSession;
   // A task chats in a session chat (a project task's own chat in the
   // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId;
   const isAgentActive = useTaskAgentActive(chatParentId, task);
-  const scheduledAt = task ? taskScheduledAt(task) : undefined;
   const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -206,7 +195,7 @@ export function TaskDetailInline({
   };
 
   // Must stay above early returns — same hooks-order constraint as openFile.
-  const handleSandboxTabChange = (tab: SandboxTab) => {
+  const handleSandboxTabChange = (tab: SandboxTab | TaskDetailsTab) => {
     if (routing?.mode === "quick-sandbox") {
       if (tab === "prd" || !isTaskRouteSandboxTab(tab)) {
         routing.quick.onSandboxTabChange("preview");
@@ -246,8 +235,42 @@ export function TaskDetailInline({
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
-  const activeSandboxTab: SandboxTab =
+  const activeSandboxTab: SandboxTab | TaskDetailsTab =
     routing?.mode === "quick-sandbox" ? routeSandboxTab : embeddedSandboxTab;
+
+  const detailsPane = (
+    <TaskDetailsPane
+      taskId={taskId}
+      task={task}
+      detail={detail}
+      allTags={allTags}
+    />
+  );
+  // A project task's right pane leads with Details. Before its sandbox
+  // exists, Details sits beside the "no sandbox yet" state on a small rail.
+  const isProjectTaskPage = routing?.mode === "project-task";
+  const withDetailsRail = (
+    emptyState: ReactNode,
+    collapsed: boolean,
+    onToggle: () => void,
+  ) =>
+    isProjectTaskPage ? (
+      <TaskDetailsRailFrame
+        activeTab={
+          activeSandboxTab === TASK_DETAILS_TAB.value
+            ? TASK_DETAILS_TAB.value
+            : "preview"
+        }
+        onTabChange={handleSandboxTabChange}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        details={detailsPane}
+      >
+        {emptyState}
+      </TaskDetailsRailFrame>
+    ) : (
+      emptyState
+    );
 
   // Always mount the sandbox panel when the task can have a sandbox so tabs
   // (Diffs, etc.) stay reachable while stopped — same as sessions. Panes
@@ -286,6 +309,7 @@ export function TaskDetailInline({
         }
         collapsed={collapsed}
         onToggle={onToggle}
+        details={isProjectTaskPage ? detailsPane : undefined}
         miniPlayer={
           isQuickTask && task.numId !== undefined
             ? {
@@ -296,18 +320,22 @@ export function TaskDetailInline({
         }
       />
     ) : (
-      <SandboxEmptyRailFrame
-        collapsed={collapsed}
-        onToggle={onToggle}
-        showToggle={routing?.mode !== "project-task"}
-      >
-        <div className="flex flex-col items-center gap-3 text-center">
-          <p className="text-sm text-muted-foreground">
-            No sandbox for this task yet — it becomes available once the task
-            has run
-          </p>
-        </div>
-      </SandboxEmptyRailFrame>
+      withDetailsRail(
+        <SandboxEmptyRailFrame
+          collapsed={isProjectTaskPage ? false : collapsed}
+          onToggle={onToggle}
+          showToggle={!isProjectTaskPage}
+        >
+          <div className="flex flex-col items-center gap-3 text-center">
+            <p className="text-sm text-muted-foreground">
+              No sandbox for this task yet — it becomes available once the task
+              has run
+            </p>
+          </div>
+        </SandboxEmptyRailFrame>,
+        collapsed,
+        onToggle,
+      )
     );
 
   const layout = (
@@ -379,137 +407,27 @@ export function TaskDetailInline({
           }
         </SandboxWorkspace>
       ) : (
-        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
-          <SandboxNotStartedRail
-            collapsed={rightPanelCollapsed}
-            onToggle={onToggleRightPanel}
-            ownerLabel="task"
-            showToggle={routing?.mode !== "project-task"}
-            isPending={sandbox.sessionPending}
-            onStart={
-              canStartSandbox && !isSandboxStopping
-                ? () => void handleStartSandbox()
-                : undefined
-            }
-            isStarting={isSandboxStarting}
-          />
-        ))
+        layout(({ rightPanelCollapsed, onToggleRightPanel }) =>
+          withDetailsRail(
+            <SandboxNotStartedRail
+              collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
+              onToggle={onToggleRightPanel}
+              ownerLabel="task"
+              showToggle={!isProjectTaskPage}
+              isPending={sandbox.sessionPending}
+              onStart={
+                canStartSandbox && !isSandboxStopping
+                  ? () => void handleStartSandbox()
+                  : undefined
+              }
+              isStarting={isSandboxStarting}
+            />,
+            rightPanelCollapsed,
+            onToggleRightPanel,
+          ),
+        )
       )}
     </SandboxSurfaceProviders>
-  );
-
-  const detailContent = (
-    <TaskReactionsProvider taskId={taskId}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Below `md` the two columns stack, which buried Status / Priority /
-            Labels / Project under the whole (unbounded) activity timeline — on a
-            phone the only way to change a task's status was to scroll past every
-            run and comment. One pane at a time instead, same model the split
-            primitives use, following ProjectTabs' CSS-gated shape so desktop
-            keeps rendering both columns with no JS involved.
-            Local state, not a URL tab: on desktop both panes are on screen at
-            once, so there is nothing here worth linking to. */}
-        <div className="shrink-0 md:hidden">
-          <MobilePaneSwitcher
-            labels={{ left: "Overview", right: "Properties" }}
-            showingRight={showMobileProperties}
-            onSelect={(pane) => setShowMobileProperties(pane === "right")}
-          />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar md:overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[14fr_6fr] md:grid-rows-1 md:overflow-hidden">
-            {/* Only one column is hidden at a time below `md`, and the scroller
-                above stays the single scroll owner for whichever is showing. */}
-            <div
-              className={cn(
-                "min-h-0 min-w-0 md:flex md:flex-1 md:flex-col md:overflow-hidden",
-                showMobileProperties && "max-md:hidden",
-              )}
-            >
-              <div className="flex min-h-0 min-w-0 flex-col overflow-x-hidden md:flex-1 md:overflow-y-auto md:scrollbar">
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="shrink-0 space-y-4 px-4 pt-4 md:px-6 md:pr-6 md:pt-5">
-                    <div>
-                      <TaskHeader
-                        taskNumber={task?.taskNumber}
-                        title={task?.title}
-                        canEditTaskText={canEditText}
-                        hasActiveRun={hasActiveRun}
-                        taskId={taskId}
-                      />
-                      {scheduledAt ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="gap-1 text-xs font-normal text-muted-foreground"
-                          >
-                            <IconClock size={11} />
-                            {status === "todo"
-                              ? "Scheduled for"
-                              : "Was scheduled for"}{" "}
-                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
-                          </Badge>
-                        </div>
-                      ) : null}
-                    </div>
-                    <TaskDescription
-                      description={task?.description}
-                      canEditTaskText={canEditText}
-                      hasActiveRun={hasActiveRun}
-                      taskId={taskId}
-                      inline={true}
-                    />
-
-                    <TaskAttachments taskId={taskId} readOnly={isArchived} />
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                      <div className="text-sm font-medium text-foreground">
-                        Activity
-                      </div>
-                      <TaskSubscribers taskId={taskId} users={users} />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col sm:mt-4">
-                    <ActivityTimeline
-                      taskId={taskId}
-                      createdAt={task.createdAt}
-                      creatorUser={creatorUser}
-                      comments={comments}
-                      taskActivity={taskActivity}
-                      users={users}
-                      isProjectTask={isProjectTask}
-                      readOnly={isArchived}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* `mt-6` is gone: it separated this from the overview when the two
-                stacked, and as its own pane it starts at the top instead. */}
-            <div
-              className={cn(
-                "flex min-w-0 shrink-0 flex-col overflow-x-hidden px-4 pb-4 max-md:pt-4 md:overflow-hidden md:px-0 md:pb-0 md:pl-8 md:pr-6 md:pt-5",
-                !showMobileProperties && "max-md:hidden",
-              )}
-            >
-              <StatusFieldsSection
-                taskId={taskId}
-                task={task}
-                status={status}
-                users={users}
-                projects={projects}
-                baseBranch={baseBranch}
-                latestDeployment={latestDeployment}
-                hasRuns={hasRuns}
-                isOwner={isOwner}
-                allTags={allTags}
-                readOnly={isArchived}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </TaskReactionsProvider>
   );
 
   const actionsSlotElement = quickTaskHeaderActionsSlot?.actionsElement;
@@ -591,7 +509,7 @@ export function TaskDetailInline({
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
           panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          {isSandboxViewActive ? sandboxContent : detailContent}
+          {isSandboxViewActive ? sandboxContent : detailsPane}
         </TabsTransition>
       </div>
       <ResolveConfirmDialog

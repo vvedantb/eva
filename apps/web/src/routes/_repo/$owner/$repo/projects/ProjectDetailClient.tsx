@@ -23,7 +23,10 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
-import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import type {
+  ProjectSandboxTab,
+  ProjectTaskTab,
+} from "@/lib/components/projects/projectSandboxTabs";
 import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
@@ -105,13 +108,13 @@ export function ProjectDetailClient({
     });
   };
 
-  // A task opens in the rail on its Chat tab (`?task=`), beside the
-  // coordinator's chat.
-  const openTask = (taskNumId: number) => {
+  // A task opens in the rail (`?task=`), beside the coordinator's chat, on
+  // `tab` (`defaultProjectTaskTab`: Details until it has run, then Chat).
+  const openTask = (taskNumId: number, tab: ProjectTaskTab) => {
     if (!projectPathSegment) return;
     void navigate({
       to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/sandbox/task-chat`,
+        `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
       ),
       search: (prev) => ({ ...prev, task: taskNumId }),
     });
