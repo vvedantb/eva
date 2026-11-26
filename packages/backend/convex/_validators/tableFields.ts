@@ -626,6 +626,12 @@ export const agentTaskFields = {
   // /tmp/eva-attachment-* at launch so the agent can read them.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
+  /**
+   * Repos besides `repoId` this task changes in the same sandbox (a project
+   * coordinator's multi-repo task). Its work session gets one `sessionRepos`
+   * row per repo (`insertWorkSession`), each with its own PR.
+   */
+  linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   projectId: v.optional(v.id("projects")),
   /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
   origin: v.optional(taskOriginValidator),

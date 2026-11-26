@@ -662,6 +662,13 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     });
   }
 
+  const linkedRepoNamesArg = z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Project coordinator only: other repos this task changes together with its own (same name grammar as repoName). They are checked out in the same sandbox and each gets its own PR. Use it only when one change must land in several repos together.',
+    );
+
   const taskArgs = {
     title: z
       .string()
@@ -708,6 +715,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .describe(
         'Project tasks: the phase this task belongs to (a label like "Phase 1: API"), for grouping only.',
       ),
+    linkedRepoNames: linkedRepoNamesArg,
   };
 
   type TaskInput = {
@@ -718,6 +726,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     app?: string;
     projectId?: string;
     phaseLabel?: string;
+    linkedRepoNames?: string[];
   };
 
   const caller = projectCallerOf(credentials.owner);
@@ -757,6 +766,31 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   /**
+   * A coordinator task's linked repos (`linkedRepoNames`), resolved like
+   * `repoName`. Only the coordinator may pass them; the backend checks access
+   * and refuses the home repo or a repeat.
+   */
+  async function coordinatorLinkedRepoIds(
+    names: readonly string[] | undefined,
+    userId: string,
+  ): Promise<{ linkedRepoIds?: string[] } | ReturnType<typeof toolErrorResult>> {
+    if (names === undefined || names.length === 0) return {};
+    if (caller?.role !== "coordinator") {
+      return toolErrorResult(
+        "linkedRepoNames works only in a project coordinator chat.",
+      );
+    }
+    const repos = await getUserRepos(userId);
+    const linkedRepoIds: string[] = [];
+    for (const name of names) {
+      const resolved = matchRepoByName(repos, name, undefined);
+      if ("content" in resolved) return resolved;
+      linkedRepoIds.push(resolved.repo.id);
+    }
+    return { linkedRepoIds };
+  }
+
+  /**
    * The coordinator creates tasks in its project: `todo` and approved, in any
    * repo the user can access, so the scheduler starts them at once. One call is one
    * batch card in the coordinator chat.
@@ -768,6 +802,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       title?: string;
       description?: string;
       repoId?: string;
+      linkedRepoIds?: string[];
       phaseLabel?: string;
     }>,
   ) {
@@ -836,6 +871,11 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const { userId } = await getContext();
         const project = coordinatorProject(input.projectId);
         if (typeof project === "object") return project;
+        if (input.linkedRepoNames !== undefined && input.linkedRepoNames.length > 0) {
+          return toolErrorResult(
+            "linkedRepoNames works only with create_task or create_tasks_batch in a project coordinator chat.",
+          );
+        }
         const result = await createTaskForRepo(input, userId);
         if ("content" in result) return result;
 
@@ -871,6 +911,11 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const { userId } = await getContext();
         const project = coordinatorProject(input.projectId);
         if (typeof project === "object") return project;
+        const linked = await coordinatorLinkedRepoIds(
+          input.linkedRepoNames,
+          userId,
+        );
+        if ("content" in linked) return linked;
         if (project !== undefined) {
           const repo = await coordinatorRepoId(input.repoName, input.app, userId);
           if ("content" in repo) return repo;
@@ -879,6 +924,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
               title: input.title,
               description: input.description,
               ...repo,
+              ...linked,
               phaseLabel: input.phaseLabel,
             },
           ]);
@@ -901,7 +947,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       name: "create_tasks_batch",
       description: `Create multiple tasks at once, and optionally group them into a project. Each task in the array has a title and a description.
 
-In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (any repo you can access; default the home repo) and a phaseLabel.`,
+In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (any repo you can access; default the home repo), linkedRepoNames (other repos the same change must land in) and a phaseLabel.`,
       mutating: true,
       input: {
         repoName: z
@@ -935,6 +981,7 @@ In a project coordinator chat the batch joins this project (do not pass projectT
                 .string()
                 .optional()
                 .describe("Project coordinator only: this task's phase label."),
+              linkedRepoNames: linkedRepoNamesArg,
             }),
           )
           .describe("Ordered array of tasks to create"),
@@ -974,14 +1021,25 @@ In a project coordinator chat the batch joins this project (do not pass projectT
               userId,
             );
             if ("content" in repo) return repo;
+            const linked = await coordinatorLinkedRepoIds(
+              task.linkedRepoNames,
+              userId,
+            );
+            if ("content" in linked) return linked;
             tasks.push({
               title: task.title,
               description: task.description,
               ...repo,
+              ...linked,
               phaseLabel: task.phaseLabel,
             });
           }
           return createProjectTasks(caller.projectId, userId, tasks);
+        }
+        if (input.tasks.some((task) => (task.linkedRepoNames?.length ?? 0) > 0)) {
+          return toolErrorResult(
+            "linkedRepoNames works only in a project coordinator chat.",
+          );
         }
         if (input.repoName === undefined) {
           return toolErrorResult('Pass "repoName": which repo the tasks run in.');

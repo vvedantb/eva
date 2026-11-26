@@ -26,6 +26,9 @@ import {
   buildPrBody,
   buildTaskPrSections,
   buildProjectPrSections,
+  siblingPrValidator,
+  upsertRelatedPrsBlock,
+  type SiblingPr,
 } from "./prBody";
 import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
 import {
@@ -49,6 +52,7 @@ function buildTaskPullRequestBody(params: {
   taskDescription: string | undefined;
   rootDirectory: string;
   changeRequests: string[];
+  relatedPrs: readonly SiblingPr[];
 }): string {
   const sections = buildTaskPrSections(
     params.taskDescription,
@@ -61,7 +65,10 @@ function buildTaskPullRequestBody(params: {
     params.projectId,
     params.rootDirectory || undefined,
   );
-  return buildPrBody(sections, evaUrl);
+  return upsertRelatedPrsBlock(
+    buildPrBody(sections, evaUrl),
+    params.relatedPrs,
+  );
 }
 
 /**
@@ -141,6 +148,7 @@ async function openTaskPr(
       taskDescription: data.taskDescription,
       rootDirectory: data.rootDirectory,
       changeRequests: data.changeRequests,
+      relatedPrs: data.relatedPrs,
     }),
     labels: taskPullRequestLabels({
       rootDirectory: data.rootDirectory,
@@ -299,6 +307,8 @@ export const createTaskPullRequest = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
+    // Optional: a task run in flight across the deploy calls without it.
+    relatedPrs: v.optional(v.array(siblingPrValidator)),
     draft: v.optional(v.boolean()),
   },
   returns: v.string(),
@@ -319,6 +329,7 @@ export const createTaskPullRequest = internalAction({
         taskDescription: args.taskDescription,
         rootDirectory: args.rootDirectory,
         changeRequests: args.changeRequests,
+        relatedPrs: args.relatedPrs ?? [],
       }),
       labels: taskPullRequestLabels({
         rootDirectory: args.rootDirectory,
@@ -340,6 +351,8 @@ export const refreshTaskPullRequestBody = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
+    // Optional: a task run in flight across the deploy calls without it.
+    relatedPrs: v.optional(v.array(siblingPrValidator)),
   },
   returns: v.string(),
   handler: async (_ctx, args): Promise<string> => {
@@ -356,6 +369,7 @@ export const refreshTaskPullRequestBody = internalAction({
         taskDescription: args.taskDescription,
         rootDirectory: args.rootDirectory,
         changeRequests: args.changeRequests,
+        relatedPrs: args.relatedPrs ?? [],
       }),
     });
   },

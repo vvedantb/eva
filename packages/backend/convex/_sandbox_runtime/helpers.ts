@@ -741,11 +741,20 @@ export async function signAndLaunchScript(
   // means the agent is told about the same workspace on all of them. Absent entirely for single-repo sessions.
   // Annotated locally so this `runQuery` cannot feed a generated-api type
   // cycle back into `_generated/api.d.ts`.
+  // A task run launches by task id: its clones live on the task's session.
+  const workspaceSession =
+    launchSession ??
+    (entityIdField === "taskId"
+      ? await ctx.runQuery(internal.sessions.getForEntityInternal, {
+          entityKind: "task",
+          entityId,
+        })
+      : null);
   let linkedRepos: LinkedRepoEnvRow[] = [];
-  if (launchSession && (launchSession.linkedRepoCount ?? 0) > 0) {
+  if (workspaceSession && (workspaceSession.linkedRepoCount ?? 0) > 0) {
     const linkedRows: LinkedRepoEnvRow[] = await ctx.runQuery(
       internal.sessions.listLinkedReposInternal,
-      { sessionId: launchSession._id },
+      { sessionId: workspaceSession._id },
     );
     linkedRepos = linkedRows;
   }

@@ -13,6 +13,7 @@ import dayjs from "@eva/shared/dates";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { TaskHeader } from "./_components/TaskHeader";
+import { TaskRepoBadges } from "./_components/TaskRepoBadges";
 import { TaskDescription } from "./_components/TaskDescription";
 import { TaskAttachments } from "./_components/TaskAttachments";
 import { ActivityTimeline } from "./_components/ActivityTimeline";
@@ -141,6 +142,7 @@ export function TaskDetailsPane({
                           taskId={taskId}
                         />
                       ) : null}
+                      <TaskRepoBadges task={task} />
                       {scheduledAt ? (
                         <div className="mt-2 flex items-center gap-2">
                           <Badge

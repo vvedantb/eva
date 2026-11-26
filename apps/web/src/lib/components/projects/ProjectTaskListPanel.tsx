@@ -313,7 +313,10 @@ export function ProjectTaskListPanel({
             <GroupHeader label="Pull requests" count={pullRequests.length} />
             <AccordionContent className="pt-1 pb-0">
               {pullRequests.map((task) => (
-                <ProjectTaskPrRow key={task._id} task={task} />
+                <ProjectTaskPrRow
+                  key={`${task._id}:${task.prUrl}`}
+                  task={task}
+                />
               ))}
             </AccordionContent>
           </AccordionItem>

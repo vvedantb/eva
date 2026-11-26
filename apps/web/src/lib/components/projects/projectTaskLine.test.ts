@@ -127,6 +127,25 @@ describe("project task PRs and counts", () => {
     ).toBe("12 · PR");
   });
 
+  it("lists a multi-repo task's PRs one per repo, each with its repo", () => {
+    const prs = projectTaskPullRequests([
+      task({
+        numId: 4,
+        status: "code_review",
+        prUrl: "https://github.com/acme/web/pull/12",
+        prState: "open",
+        repoPrs: [
+          { prUrl: "https://github.com/acme/web/pull/12", prState: "merged", repoName: "web" },
+          { prUrl: "https://github.com/acme/api/pull/7", prState: "open", repoName: "api" },
+        ],
+      }),
+    ]);
+    expect(prs.map((row) => projectTaskPrLine(row))).toEqual([
+      "#12 · Merged · web · via #4",
+      "#7 · Open · api · via #4",
+    ]);
+  });
+
   it("counts the non-empty statuses in list order", () => {
     expect(
       projectStatusCountsLine({

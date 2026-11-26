@@ -16,7 +16,7 @@ import {
   IconEye,
   IconGitPullRequest,
 } from "@tabler/icons-react";
-import { prStateLabel } from "@eva/shared";
+import { prStateLabel, pullRequestRepoLabel } from "@eva/shared";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   pullRequestContextFromRow,
@@ -36,7 +36,7 @@ const ROW_ICON_BUTTON_CLASS = cn(
 /**
  * The Pull requests tab: every PR the session, quick task or project holds —
  * the one Eva opened, each linked repo's, and any the agent opened on a side
- * branch. Picking one points Summary, Timeline and Code at it. Rows reuse the
+ * branch. Rows name their repo once the list spans several. Picking one points Summary, Timeline and Code at it. Rows reuse the
  * sidebar Reviews row's layout (state-coloured icon, title, then number and
  * age) so a PR reads the same in both places. Dragging a row into the
  * composer attaches the PR as context for the next prompt.
@@ -71,6 +71,7 @@ export function PullRequestsTab({
           <li key={pr._id}>
             <PullRequestRow
               pr={pr}
+              repoLabel={pullRequestRepoLabel(pr, items)}
               selected={pr._id === selectedId}
               onSelect={() => onSelect(pr._id)}
             />
@@ -83,10 +84,13 @@ export function PullRequestsTab({
 
 function PullRequestRow({
   pr,
+  repoLabel,
   selected,
   onSelect,
 }: {
   pr: ReviewPullRequest;
+  /** Set while the list spans several repos (`pullRequestRepoLabel`). */
+  repoLabel: string | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -127,10 +131,8 @@ function PullRequestRow({
           <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
             <span className="shrink-0">#{pr.prNumber}</span>
             <span className="shrink-0">{prStateLabel(pr.state)}</span>
-            {pr.linkedRepo ? (
-              <span className="truncate">
-                {pr.repoOwner}/{pr.repoName}
-              </span>
+            {repoLabel ? (
+              <span className="truncate">{repoLabel}</span>
             ) : null}
             {pr.headBranch ? (
               <span className="truncate font-mono">{pr.headBranch}</span>

@@ -1,3 +1,6 @@
+import { v, type Infer } from "convex/values";
+import { upsertBlockAboveFooter } from "./_github/prBodyBlocks";
+
 type PrSection = { heading: string; content: string };
 
 /** Builds the Task / Change Requests sections used in task PR bodies.
@@ -73,8 +76,40 @@ export function buildPrBody(sections: PrSection[], evaUrl?: string): string {
   return parts.join("\n");
 }
 
-/** One sibling pull request opened by the same multi-repo session. */
-export type SiblingPr = { label: string; url: string };
+/** One sibling pull request opened by the same multi-repo session or task. */
+export const siblingPrValidator = v.object({
+  label: v.string(),
+  url: v.string(),
+});
+export type SiblingPr = Infer<typeof siblingPrValidator>;
+
+export const RELATED_PRS_START = "<!-- eva-related-prs -->";
+export const RELATED_PRS_END = "<!-- /eva-related-prs -->";
+
+/**
+ * Inserts or replaces a multi-repo task's "Related pull requests" block (its
+ * linked repos' PRs) above the Eva footer. The block is marked, so a later
+ * patch replaces it and the description rewrite leaves it alone. No siblings
+ * removes the block, so a single-repo task's body is unchanged.
+ */
+export function upsertRelatedPrsBlock(
+  body: string,
+  siblingPrs: readonly SiblingPr[],
+): string {
+  const content =
+    siblingPrs.length === 0
+      ? ""
+      : [
+          "## Related pull requests",
+          ...siblingPrs.map((pr) => `- [${pr.label}](${pr.url})`),
+        ].join("\n");
+  return upsertBlockAboveFooter(
+    body,
+    RELATED_PRS_START,
+    RELATED_PRS_END,
+    content,
+  );
+}
 
 /**
  * Appends a "Related PRs" section listing the other pull requests a multi-repo
