@@ -9,6 +9,7 @@ import { MAX_THREAD_REPLIES } from "./_messages/replies";
 import { joinThread } from "./_messages/threadParticipants";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
 import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
+import { backfilledCloseTimes } from "./_agentTasks/closeTimes";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -178,5 +179,20 @@ export const handTriageToEva = dataMigrations.define({
   table: "projects",
   migrateOne: async (ctx, project) => {
     await handProjectTriageToEva(ctx, project);
+  },
+});
+
+/**
+ * Stamps `shippedAt` / `closedAt` on project tasks closed before the progress
+ * chart existed (`backfilledCloseTimes`). Open or already stamped tasks are
+ * left alone, so it is safe to re-run. Run once after the deploy:
+ *
+ *   npx convex run dataMigrations:backfillTaskCloseTimes --prod
+ */
+export const backfillTaskCloseTimes = dataMigrations.define({
+  table: "agentTasks",
+  migrateOne: async (ctx, task) => {
+    if (task.projectId === undefined) return;
+    return (await backfilledCloseTimes(ctx, task)) ?? undefined;
   },
 });

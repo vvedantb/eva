@@ -624,6 +624,10 @@ export const agentTaskFields = {
   // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
   /** Archived: hidden from lists, still opens by URL; `unarchive` clears it. */
   archivedAt: v.optional(v.number()),
+  /** When its PR merged or it was marked Done; cleared if it reopens (`reconcileTaskCloseTimes`). */
+  shippedAt: v.optional(v.number()),
+  /** When it left the open list (shipped, archived or cancelled); cleared if it reopens. */
+  closedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
   // User-attached input files (paperclip / paste in the quick task composer),

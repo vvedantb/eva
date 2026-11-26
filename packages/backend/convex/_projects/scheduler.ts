@@ -4,6 +4,7 @@ import {
   tasksToStart,
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
+import { reconcileTaskCloseTimes } from "../_agentTasks/closeTimes";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { filterUnarchived, isEntityArchived } from "../numId";
@@ -403,6 +404,7 @@ export async function mergeHandedTask(
     updatedAt: Date.now(),
   });
   await syncOwnedSessionWithTaskStatus(ctx, task, task.status, "cancelled");
+  await reconcileTaskCloseTimes(ctx, task._id);
   return into;
 }
 

@@ -1,4 +1,5 @@
 import type { Infer } from "convex/values";
+import { reconcileTaskCloseTimes } from "../_agentTasks/closeTimes";
 import {
   combineRepoPrStates,
   isLivePrState,
@@ -370,6 +371,8 @@ export async function syncOwnerPrSummary(
     await ctx.db.patch(owner.sessionId, summary);
   } else if (owner.kind === "task") {
     await ctx.db.patch(owner.taskId, summary);
+    // A merged PR ships the task (`shippedAt`); a reopened one undoes it.
+    await reconcileTaskCloseTimes(ctx, owner.taskId);
   } else {
     await ctx.db.patch(owner.projectId, summary);
   }
