@@ -4,12 +4,12 @@ import {
 } from "@/lib/search-params";
 
 /**
- * The tabs of a task opened in the coordinator's panel (`?task=`), in rail
- * order. Prefixed so they never clash with the coordinator's own tabs.
+ * The panel tabs of the selected task tab (`?task=`), in rail order. Its chat
+ * is in the chat column. Prefixed so they never clash with the coordinator's
+ * own tabs.
  */
 const PROJECT_TASK_TABS = [
   "task-details",
-  "task-chat",
   "task-preview",
   "task-browser",
   "task-review",
@@ -21,23 +21,41 @@ export function isProjectTaskTab(value: string): value is ProjectTaskTab {
 }
 
 /**
- * The tab a project task opens on, in the panel and on its full page: a task
- * still in To Do (added and never started, or sent back after a run) opens on
- * Details (its prompt, status and properties); one that has moved on opens on
- * Chat. The status is the fact every row carries; run summaries can outlive
- * their runs.
+ * A project task's full page opens on Details while the task is still in To
+ * Do (added and never started, or sent back after a run), else on its chat.
+ * The status is the fact every row carries; run summaries can outlive their
+ * runs.
  */
-export function defaultProjectTaskTab(task: {
-  status: string;
-}): "task-details" | "task-chat" {
-  return task.status === "todo" || task.status === "draft"
-    ? "task-details"
-    : "task-chat";
+export function projectTaskOpensOnDetails(task: { status: string }): boolean {
+  return task.status === "todo" || task.status === "draft";
+}
+
+/** The most task tabs a project's chat column holds; a 6th closes the oldest. */
+export const MAX_PROJECT_TASK_TABS = 5;
+
+/**
+ * The project's task tabs, in order: `?tasks=` plus the selected `?task=`
+ * when it is not in the list (an old `?task=` link opens that one tab).
+ * Repeats go; past the limit the oldest tabs close, never the selected one.
+ */
+export function projectTaskTabList(
+  tasks: ReadonlyArray<number>,
+  selected: number | null,
+): number[] {
+  const unique = [...new Set(tasks)];
+  const all =
+    selected === null || unique.includes(selected)
+      ? unique
+      : [...unique, selected];
+  const others = all.filter((numId) => numId !== selected);
+  const room = MAX_PROJECT_TASK_TABS - (selected === null ? 0 : 1);
+  const kept = new Set(others.slice(Math.max(0, others.length - room)));
+  return all.filter((numId) => numId === selected || kept.has(numId));
 }
 
 /**
- * The open task's tabs that have content: Details and Chat always; Preview
- * and Browser while its sandbox runs; Review once it has a PR.
+ * The selected task's tabs that have content: Details always; Preview and
+ * Browser while its sandbox runs; Review once it has a PR.
  */
 export function visibleProjectTaskTabs(task: {
   sandboxStatus?: string;
@@ -52,10 +70,10 @@ export function visibleProjectTaskTabs(task: {
 }
 
 /**
- * The coordinator rail's tabs: the project's Tasks first, then the sandbox
- * tabs every owner shares. Tasks is project-only, so it is not a `SandboxTab`.
- * Replies (an open reply thread, `?thread=`) shows only while a thread is
- * open; the task tabs only while a task is open (`?task=`).
+ * The panel's tabs: the coordinator's (the project's Tasks first, then the
+ * sandbox tabs every owner shares; Tasks is project-only, so it is not a
+ * `SandboxTab`) and the selected task tab's. Replies (an open reply thread,
+ * `?thread=`) shows only while a thread is open.
  */
 export type ProjectSandboxTab =
   | "tasks"

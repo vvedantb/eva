@@ -12,7 +12,7 @@ import { TaskDetailInline } from "@/lib/components/tasks/TaskDetailInline";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectSummaryDocLink } from "./ProjectSummarySection";
-import { defaultProjectTaskTab } from "./projectSandboxTabs";
+import { projectTaskOpensOnDetails } from "./projectSandboxTabs";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
@@ -99,7 +99,7 @@ export function ProjectTaskView({
           void navigate({ to: toInternalRepoHref(coordinatorHref) })
         }
         routing={{ mode: "project-task" }}
-        openOnDetails={defaultProjectTaskTab(task) === "task-details"}
+        openOnDetails={projectTaskOpensOnDetails(task)}
       />
     </div>
   );

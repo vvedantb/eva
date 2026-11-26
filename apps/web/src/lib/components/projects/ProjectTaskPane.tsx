@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { IconArrowsDiagonal, IconX } from "@tabler/icons-react";
+import { IconArrowsDiagonal } from "@tabler/icons-react";
 import {
   Button,
   Spinner,
@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
 } from "@vvedantb/ui";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
-import { TaskSandboxChatPanel, useTaskChatBinding } from "@/lib/components/tasks/TaskSandboxChatPanel";
+import { useTaskChatBinding } from "@/lib/components/tasks/TaskSandboxChatPanel";
 import { useTaskDetail } from "@/lib/components/tasks/useTaskDetail";
 import type { UseTaskDetailRouting } from "@/lib/components/tasks/useTaskDetailControls";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
@@ -30,25 +30,49 @@ import { TaskDetailsPane } from "@/lib/components/tasks/TaskDetailsPane";
 import type { ProjectTaskTab } from "./projectSandboxTabs";
 
 /** The task's own chat and sandbox, as on its full page. */
-const PROJECT_TASK_ROUTING: UseTaskDetailRouting = { mode: "project-task" };
+export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
+  mode: "project-task",
+};
 
-/** The sandbox pane each task tab shows; Details and Chat are not panes. */
+/** The sandbox pane each task tab shows; Details is not a pane. */
 const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> =
   {
     "task-details": null,
-    "task-chat": null,
     "task-preview": "preview",
     "task-browser": "browser",
     "task-review": "review",
   };
 
 /**
- * A project task opened in the coordinator's panel (`?task=`): a header with
- * its number and title, Expand (its full page) and ✕, then its Details (the
- * quick task's overview), its own chat and its Preview, Browser and Review
- * panes. An archived task is read-only, as on
- * its full page. Files, Agents and the terminal live on the full page:
- * opening them from the chat expands to it.
+ * What the panel has no room for opens the task's full page: Files
+ * (`?file=`), a diff (`?diffFile=`), Agents. Diffs show on Review while the
+ * task has a PR.
+ */
+export function useProjectTaskExpand({
+  fullPageHref,
+  prUrl,
+  onShowReview,
+}: {
+  /** The task's full page (pre-internal form). */
+  fullPageHref: string;
+  prUrl: string | undefined;
+  onShowReview: () => void;
+}) {
+  const navigate = useNavigate();
+  const expand = (search: Record<string, string> = {}) =>
+    void navigate({ to: toInternalRepoHref(fullPageHref), search });
+  const openDiffs = () => {
+    if (prUrl !== undefined) onShowReview();
+    else expand();
+  };
+  return { expand, openDiffs };
+}
+
+/**
+ * The selected task tab's panel: a header with its number and title and
+ * Expand (its full page), then its Details (the quick task's overview) and
+ * its Preview, Browser and Review panes. Its chat is in the chat column
+ * (`ProjectTaskChat`). An archived task is read-only, as on its full page.
  */
 export function ProjectTaskPane({
   taskId,
@@ -59,57 +83,44 @@ export function ProjectTaskPane({
   fullPageHref,
   collapsed,
   onSelectTab,
-  onClose,
 }: {
   taskId: Id<"agentTasks">;
   numId: number | undefined;
   title: string;
   /** The task's own PR; Review shows only with one. */
   prUrl: string | undefined;
-  /** The active task tab; null while a coordinator tab is active. */
-  tab: ProjectTaskTab | null;
+  tab: ProjectTaskTab;
   /** The task's full page (pre-internal form). */
   fullPageHref: string;
   collapsed: boolean;
   onSelectTab: (tab: ProjectTaskTab) => void;
-  onClose: () => void;
 }) {
-  const navigate = useNavigate();
   const detail = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
-  const paneTab = tab === null ? null : PANE_TAB[tab];
+  const paneTab = PANE_TAB[tab];
   // Mount the sandbox panes on the first visit to one of their tabs, then
-  // keep them while this task stays open (the parent keys it by task).
+  // keep them while this task stays selected (the parent keys it by task).
   const [panesVisited, setPanesVisited] = useState(paneTab !== null);
   if (paneTab !== null && !panesVisited) setPanesVisited(true);
-
-  const expand = (search: Record<string, string> = {}) =>
-    void navigate({ to: toInternalRepoHref(fullPageHref), search });
-  const openDiffs = () => {
-    if (prUrl !== undefined) onSelectTab("task-review");
-    else expand();
-  };
+  const { expand, openDiffs } = useProjectTaskExpand({
+    fullPageHref,
+    prUrl,
+    onShowReview: () => onSelectTab("task-review"),
+  });
 
   const {
     task,
-    isArchived,
     canStartSandbox,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
-    sandboxStartupActivity,
     handleStartSandbox,
-    handleStopSandbox,
     hasActiveRun,
     taskSession,
   } = detail;
   const { sandbox } = taskSession;
 
   return (
-    <div
-      className={
-        tab === null ? "hidden" : "flex h-full min-h-0 flex-col overflow-hidden"
-      }
-    >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex h-10 shrink-0 items-center gap-2 px-3">
         <EntityNumLabel numId={numId} className="text-xs" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -128,14 +139,6 @@ export function ProjectTaskPane({
           </TooltipTrigger>
           <TooltipContent side="bottom">Open full page</TooltipContent>
         </Tooltip>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Close task"
-          onClick={onClose}
-        >
-          <IconX className="size-4" />
-        </Button>
       </div>
       {detail.isLoading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -160,31 +163,6 @@ export function ProjectTaskPane({
                 />
               </KeepAlivePane>
             ) : null}
-            <KeepAlivePane
-              active={tab === "task-chat"}
-              className="flex h-full min-h-0 flex-col overflow-hidden"
-            >
-              <TaskSandboxChatPanel
-                taskId={taskId}
-                isSandboxActive={isSandboxActive}
-                isSandboxToggling={isSandboxStarting || isSandboxStopping}
-                sandboxStartupActivity={sandboxStartupActivity}
-                onOpenFile={(path) => expand({ file: path })}
-                onViewDiff={(path) =>
-                  path === undefined ? openDiffs() : expand({ diffFile: path })
-                }
-                onOpenAgentsTab={() => expand()}
-                isArchived={isArchived}
-                onSandboxToggle={
-                  canStartSandbox || isSandboxActive
-                    ? (action) => {
-                        if (action === "start") void handleStartSandbox();
-                        else void handleStopSandbox();
-                      }
-                    : undefined
-                }
-              />
-            </KeepAlivePane>
             {sandbox.owner && task?.repoId && panesVisited ? (
               <ProjectTaskSandboxPanes
                 taskId={taskId}
@@ -238,10 +216,7 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /**
-   * The pane on screen; null while Details, Chat or a coordinator tab is
-   * active.
-   */
+  /** The pane on screen; null while Details is active. */
   paneTab: "preview" | "browser" | "review" | null;
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;

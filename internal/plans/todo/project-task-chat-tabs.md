@@ -36,3 +36,12 @@
 
 - tsc (web), lint, web tests, design-check and compiler-check.
 - Browser: open #903 from Tasks (tab appears, chat column shows its chat, panel shows its Details); open #907 (third tab); back to Eva (coordinator chat and tabs); ✕ on a tab; reload keeps tabs; open a 6th task closes the oldest; Expand; an archived task tab.
+
+## Changes while building
+
+- Eva's tab also shows the running mark, while the coordinator's turn runs (the session bar shows it on Main too).
+- Selecting a task tab always opens its Details; Eva's tab returns to the coordinator tab it left (kept in memory; after a reload it is Tasks).
+- A project whose coordinator session does not exist yet has no chat tabs, as it had no rail: its Tasks rows still open the full page.
+- The chat column and the panel each read the task with `useTaskDetail` (Convex shares the subscriptions). A Start pressed in one shows "Starting" in the other once the sandbox status changes.
+- `?tasks=` with one tab is written as a number: the router quotes a lone numeric string.
+- The task panel header keeps its number, title and Expand; only ✕ goes.

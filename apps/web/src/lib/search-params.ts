@@ -476,8 +476,13 @@ export const subagentParser = parseAsString.withOptions(tabOptions);
 /** The open reply thread in a coordinator chat: its root message id. */
 export const replyThreadParser = parseAsString.withOptions(tabOptions);
 
-/** The task open in a project's side panel (`?task=`): its numId. */
+/** A project's selected task tab (`?task=`): its numId; absent = Eva. */
 export const projectPanelTaskParser = parseAsInteger.withOptions(tabOptions);
+
+/** A project's open task tabs (`?tasks=903,907`), in tab order. */
+export const projectTaskTabsParser = parseAsArrayOf(parseAsInteger)
+  .withDefault([])
+  .withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")
