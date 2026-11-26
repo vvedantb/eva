@@ -21,28 +21,6 @@ export async function clearStreamingActivity(
   }
 }
 
-/** Creates or updates the streaming activity record for a given entity. */
-export async function upsertStreamingActivity(
-  ctx: MutationCtx,
-  entityId: string,
-  currentActivity: string,
-): Promise<void> {
-  const existing = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-    .first();
-  const now = Date.now();
-  if (existing) {
-    await ctx.db.patch(existing._id, { currentActivity, lastUpdatedAt: now });
-  } else {
-    await ctx.db.insert("streamingActivity", {
-      entityId,
-      currentActivity,
-      lastUpdatedAt: now,
-    });
-  }
-}
-
 /** Extracts a JSON block from text, handling code fences and raw JSON objects. */
 export function extractJsonBlock(text: string): string {
   const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);

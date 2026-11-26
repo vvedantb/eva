@@ -18,12 +18,6 @@ export function entityDaemonPaths(
   };
 }
 
-const LEGACY_SESSION_DAEMON_PATHS: DaemonPaths = {
-  pid: "/tmp/eva-daemon.pid",
-  entity: "/tmp/eva-daemon.entity",
-  opts: "/tmp/eva-daemon.opts",
-};
-
 function shellQuote(value: string): string {
   return JSON.stringify(value);
 }
@@ -89,30 +83,16 @@ export function buildDaemonAliveCheckCmd(
     `if [ "$(cat __OPTS__ 2>/dev/null)" = ${optsLit} ]; then echo alive; else echo optsmismatch; fi; ` +
     `else echo stale; fi`;
 
-  function condition(paths: DaemonPaths): string {
-    const pid = shellQuote(paths.pid);
-    const entity = shellQuote(paths.entity);
-    return (
-      `eva_pid_live ${pid} && ` +
-      `[ "$(cat ${entity} 2>/dev/null)" = ${entityIdLit} ]`
-    );
-  }
-
-  function branch(paths: DaemonPaths): string {
-    const branchBody = body.replace("__OPTS__", paths.opts);
-    return `if ${condition(paths)}; then ${branchBody}`;
-  }
-
-  const scoped = entityDaemonPaths(entityIdField, entityId);
-  const check =
-    entityIdField === "sessionId"
-      ? `${branch(scoped)}; ${branch(LEGACY_SESSION_DAEMON_PATHS).replace(/^if /, "elif ")}; else echo cold; fi`
-      : `${branch(scoped)}; else echo cold; fi`;
-  return `${DAEMON_PID_LIVE_FN}; ${check}`;
+  const paths = entityDaemonPaths(entityIdField, entityId);
+  const condition =
+    `eva_pid_live ${shellQuote(paths.pid)} && ` +
+    `[ "$(cat ${shellQuote(paths.entity)} 2>/dev/null)" = ${entityIdLit} ]`;
+  const branchBody = body.replace("__OPTS__", paths.opts);
+  return `${DAEMON_PID_LIVE_FN}; if ${condition}; then ${branchBody}; else echo cold; fi`;
 }
 
 /**
- * Kills the entity-scoped daemon (and legacy session markers when applicable).
+ * Kills the entity-scoped daemon.
  *
  * Kills the whole descendant TREE and waits for the root to exit, because a
  * lone SIGTERM to the daemon pid is not enough on either count:
@@ -132,8 +112,7 @@ export function buildDaemonAliveCheckCmd(
  * completion. Descendant pids are collected before the root dies so orphans are
  * still reached. `pgrep -P` walks the tree by parent pid, so unlike `pgrep -f`
  * it cannot match this command's own `bash -lc` wrapper. Callers allow a 10s
- * exec timeout; at most two pidfiles are reaped, so the worst case is ~6s of
- * waiting.
+ * exec timeout; one pidfile is reaped, so the worst case is ~3s of waiting.
  *
  * `reap` goes through `eva_pid_live`, so a pidfile the reboot's pid allocation
  * re-issued to something else is unlinked rather than signalled. Without that
@@ -150,18 +129,12 @@ export function buildKillEntityDaemonCmd(
     `reap() { eva_pid_live "$1" || return 0; pid="$(cat "$1" 2>/dev/null)"; kill_tree "$pid" TERM; for i in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done; kill_tree "$pid" KILL; }`,
   ];
 
-  function reapParts(paths: DaemonPaths): string[] {
-    return [
-      `reap ${shellQuote(paths.pid)}`,
-      `rm -f ${shellQuote(paths.pid)} ${shellQuote(paths.opts)} ${shellQuote(paths.entity)}`,
-    ];
-  }
-
-  parts.push(...reapParts(entityDaemonPaths(entityIdField, entityId)));
-  if (entityIdField === "sessionId") {
-    parts.push(...reapParts(LEGACY_SESSION_DAEMON_PATHS));
-  }
-  parts.push("true");
+  const paths = entityDaemonPaths(entityIdField, entityId);
+  parts.push(
+    `reap ${shellQuote(paths.pid)}`,
+    `rm -f ${shellQuote(paths.pid)} ${shellQuote(paths.opts)} ${shellQuote(paths.entity)}`,
+    "true",
+  );
   return parts.join("; ");
 }
 

@@ -11,6 +11,7 @@ import {
   forkThreadTitle,
   getSessionReadOnlyMessage,
   formatForkPrompt,
+  isChatTurnExecuting,
   isOtherUserChatMessage,
   MAX_PARALLEL_CHATS,
   messageAttachments,
@@ -235,7 +236,8 @@ export default function ChatScreen() {
     );
   }
 
-  const working = turn !== undefined && turn !== null;
+  // The web rule: a finished reply ends a stale open turn, so Stop never sticks.
+  const working = isChatTurnExecuting({ status: turn, messages });
   const { canReply } = chat;
   // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
   const runningCount = runningChats?.length ?? 0;

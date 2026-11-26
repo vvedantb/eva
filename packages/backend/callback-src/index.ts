@@ -118,7 +118,7 @@ materializeSystemSkills();
 startBranchWatcher();
 
 // Interactive chats keep one provider process warm and claim staged turns.
-// Jobs (tasks / automations / arena) omit CLAIM_MUTATION and stay one-shot.
+// One-shot agents (automations, docs, evaluations) omit CLAIM_MUTATION.
 if (CLAIM_MUTATION) {
   if (PROVIDER === "claude") {
     await runSdkDaemon();
@@ -296,8 +296,8 @@ try {
   appendCurrentTurnLease(completionArgs);
 
   // Durability BEFORE completion: commit + push the turn's work so a VM death
-  // after this point cannot erase it (no-op for task runs — the commit gate
-  // and the run workflow's own push steps own those semantics).
+  // after this point cannot erase it (no-op for automation runs — the commit
+  // gate and the automation workflow's own push steps own those semantics).
   persistTurnWork();
 
   try {

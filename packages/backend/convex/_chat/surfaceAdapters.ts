@@ -222,32 +222,19 @@ export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
 
 /**
  * A turn owner that is not a chat: a one-shot agent (a task's run is a chat
- * turn). It
- * has no placeholder, queue or synthetic turn, so it does not fit
- * `ChatSurfaceAdapter`. `interview` works on a chat row and is told apart from
- * its chat turns by the turn's lane.
+ * turn). It has no placeholder, queue or synthetic turn, so it does not fit
+ * `ChatSurfaceAdapter`.
  */
 export type AgentTurnOwner =
   | { kind: "automation"; id: Id<"automationRuns"> }
   | { kind: "doc"; id: Id<"docs"> }
-  | { kind: "evaluation"; id: Id<"evaluationReports"> }
-  /** Filed under the project's session. */
-  | { kind: "interview"; id: Id<"sessions"> };
+  | { kind: "evaluation"; id: Id<"evaluationReports"> };
 
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
   chat: ChatAdapterVisitor<R>;
   agent: (owner: AgentTurnOwner) => R;
 };
-
-/** The one lane, the project interview: filed under the project's session. */
-function laneOwner(
-  db: DatabaseReader,
-  entityId: string,
-): AgentTurnOwner | null {
-  const id = db.normalizeId("sessions", entityId);
-  return id ? { kind: "interview", id } : null;
-}
 
 function laneFreeAgentOwner(
   db: DatabaseReader,
@@ -272,10 +259,9 @@ export function turnAdapterForEntity<R>(
   turn: { entityId: string; lane?: TurnLane },
   visit: TurnAdapterVisitor<R>,
 ): R | null {
-  if (turn.lane !== undefined) {
-    const owner = laneOwner(db, turn.entityId);
-    return owner ? visit.agent(owner) : null;
-  }
+  // A legacy lane turn (the retired summary and interview) has no owner now:
+  // the caller closes it.
+  if (turn.lane !== undefined) return null;
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
   if (chatId) return visit.chat(sessionChatAdapter, chatId);
   const owner = laneFreeAgentOwner(db, turn.entityId);

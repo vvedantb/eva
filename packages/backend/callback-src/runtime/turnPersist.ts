@@ -142,9 +142,10 @@ function tipAlreadyPublished(exclusion: readonly string[]): boolean {
  * 53 and task 213 (6 Aug 2026) both lost completed turns to exactly that
  * window. Once this has run, "turn completed" implies "work is on origin".
  *
- * Deliberately skipped for task runs (RUN_ID / REQUIRE_TASK_COMMIT): the run
- * workflow owns commit semantics there — the commit gate must keep failing
- * agents that did not commit, and the run's own push/PR steps follow.
+ * Deliberately skipped for automation runs (RUN_ID / REQUIRE_TASK_COMMIT): the
+ * automation workflow owns commit semantics there — the commit gate must keep
+ * failing agents that did not commit, and the run's own push/PR steps follow.
+ * A task run is a chat turn now, so it persists like any other.
  * Only ever acts on eva-owned branches (`eva/…`); never main or a base branch.
  * With the sender's `manualSideBranchPublish` flag on, Eva pins the one branch
  * it may publish (`AUTO_PUBLISH_BRANCH_GIT_CONFIG`), so side branches the agent

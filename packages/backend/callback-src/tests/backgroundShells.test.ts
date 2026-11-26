@@ -19,8 +19,8 @@ mock.module("../http/convexClient.js", () => ({
 /** A fresh module per test: config reads the entity env at import time. */
 async function loadForSession() {
   stubEnv("AI_PROVIDER", "claude");
-  stubEnv("ENTITY_ID_FIELD", "sessionId");
-  stubEnv("ENTITY_ID", "s1");
+  stubEnv("ENTITY_ID_FIELD", "chatId");
+  stubEnv("ENTITY_ID", "c1");
   freshModules();
   return import("../runtime/backgroundShells.js");
 }
@@ -48,7 +48,7 @@ describe("backgroundShells", () => {
       {
         path: "backgroundProcesses:register",
         args: {
-          sessionId: "s1",
+          sessionId: "c1",
           key: "toolu_abc",
           command: "while true; do sleep 1; done",
           shellId,
@@ -77,7 +77,7 @@ describe("backgroundShells", () => {
     expect(convexCalls).toEqual([
       {
         path: "backgroundProcesses:markExitedByShellId",
-        args: { sessionId: "s1", shellId: "bash_9" },
+        args: { sessionId: "c1", shellId: "bash_9" },
       },
     ]);
   });

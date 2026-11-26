@@ -150,6 +150,7 @@ export {
   chatStreamingEntityId,
   findStreamingTargetMessage,
 } from "./chatStreaming";
+export { isChatTurnExecuting } from "./chatTurnExecuting";
 export {
   threadAnswerContent,
   threadPendingQuestion,

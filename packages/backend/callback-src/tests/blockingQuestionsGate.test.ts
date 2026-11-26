@@ -37,16 +37,14 @@ afterEach(() => {
 });
 
 describe("BLOCKING_QUESTIONS_ENABLED", () => {
-  test("is on for the three chat surfaces that can answer", async () => {
-    for (const entityIdField of ["sessionId", "taskId", "projectId"]) {
-      expect(await gateWith({ entityIdField })).toBe(true);
-    }
+  test("is on for a chat turn, which can answer", async () => {
+    expect(await gateWith({ entityIdField: "chatId" })).toBe(true);
   });
 
-  test("is off for a run, whatever the surface", async () => {
-    for (const entityIdField of ["sessionId", "taskId", "projectId"]) {
-      expect(await gateWith({ entityIdField, runId: "run_123" })).toBe(false);
-    }
+  test("is off for a run", async () => {
+    expect(
+      await gateWith({ entityIdField: "chatId", runId: "run_123" }),
+    ).toBe(false);
   });
 
   test("is off for surfaces with no answering UI", async () => {

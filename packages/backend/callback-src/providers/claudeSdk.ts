@@ -436,11 +436,7 @@ function buildSdkOptionsFromParts(
     // connecting" instead of reporting its tools missing.
     CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0",
   };
-  if (
-    CLAIM_MUTATION ||
-    ENTITY_ID_FIELD === "sessionId" ||
-    ENTITY_ID_FIELD === "chatId"
-  ) {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
 
