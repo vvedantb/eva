@@ -15,6 +15,7 @@ import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
 import { findSiblingsOf } from "../_githubRepos/helpers";
+import { listSandboxOwnerRows } from "../_sandbox/owner";
 
 /** Full snapshot build doc as returned to the client. */
 const snapshotBuildReturnValidator = v.object({
@@ -156,29 +157,26 @@ export const triggerScheduledBuild = internalMutation({
 });
 
 /**
- * Internal: all sandbox ids with a real product owner. Credential-helper rows
- * are intentionally excluded: they are implementation detail rows created for
- * every sandbox, including leaked seed-prep sandboxes.
+ * Internal: the subset of `sandboxIds` with a real product owner (a session,
+ * a doc or an automation run). Credential-helper rows are intentionally
+ * excluded: they are implementation detail rows created for every sandbox,
+ * including leaked seed-prep sandboxes.
  */
 export const listReferencedSandboxIds = internalQuery({
-  args: {},
+  args: { sandboxIds: v.array(v.string()) },
   returns: v.array(v.string()),
-  handler: async (ctx) => {
-    const ids: string[] = [];
-    const add = (sandboxId: string | undefined): void => {
-      if (sandboxId && !ids.includes(sandboxId)) ids.push(sandboxId);
-    };
-
-    const sessions = await ctx.db.query("sessions").collect();
-    for (const session of sessions) add(session.sandboxId);
-
-    const docs = await ctx.db.query("docs").collect();
-    for (const doc of docs) add(doc.sandboxId);
-
-    const automationRuns = await ctx.db.query("automationRuns").collect();
-    for (const run of automationRuns) add(run.sandboxId);
-
-    return ids;
+  handler: async (ctx, args) => {
+    const referenced: string[] = [];
+    for (const sandboxId of args.sandboxIds) {
+      const rows = await listSandboxOwnerRows(ctx.db, sandboxId);
+      if (
+        rows.sessions.length + rows.docs.length + rows.automationRuns.length >
+        0
+      ) {
+        referenced.push(sandboxId);
+      }
+    }
+    return referenced;
   },
 });
 

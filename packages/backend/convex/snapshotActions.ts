@@ -998,24 +998,44 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     )) {
       protectedIds.add(name);
     }
-    const knownSandboxIds = new Set(
-      await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
-    );
-
     // Only protect resume snaps for sandboxes Eva still points at. Vercel
     // Sandbox.list also returns ghosts / stopped leftovers whose current snap
     // would otherwise stay protected forever.
-    let liveSandboxCount = 0;
-    let evaSandboxCount = 0;
-    const sandboxes = await Sandbox.list(creds);
-    for await (const sandbox of sandboxes) {
-      liveSandboxCount += 1;
-      const ours = knownSandboxIds.has(sandbox.name);
-      if (!ours && foreignSandboxDeployment(sandbox.tags) === null) continue;
-      if (ours) evaSandboxCount += 1;
+    const listedSandboxes: Array<{
+      name: string;
+      foreign: boolean;
+      currentSnapshotId: string | undefined;
+    }> = [];
+    for await (const sandbox of await Sandbox.list(creds)) {
       const currentId = sandbox.currentSnapshotId;
-      if (typeof currentId === "string" && currentId.length > 0) {
-        protectedIds.add(currentId);
+      listedSandboxes.push({
+        name: sandbox.name,
+        foreign: foreignSandboxDeployment(sandbox.tags) !== null,
+        currentSnapshotId:
+          typeof currentId === "string" && currentId.length > 0
+            ? currentId
+            : undefined,
+      });
+    }
+    // Batched so one query's index lookups stay well under Convex's limits.
+    const knownSandboxIds = new Set<string>();
+    for (let i = 0; i < listedSandboxes.length; i += 500) {
+      const batch = listedSandboxes.slice(i, i + 500).map((s) => s.name);
+      for (const id of await ctx.runQuery(
+        internal.repoSnapshots.listReferencedSandboxIds,
+        { sandboxIds: batch },
+      )) {
+        knownSandboxIds.add(id);
+      }
+    }
+    const liveSandboxCount = listedSandboxes.length;
+    let evaSandboxCount = 0;
+    for (const sandbox of listedSandboxes) {
+      const ours = knownSandboxIds.has(sandbox.name);
+      if (!ours && !sandbox.foreign) continue;
+      if (ours) evaSandboxCount += 1;
+      if (sandbox.currentSnapshotId !== undefined) {
+        protectedIds.add(sandbox.currentSnapshotId);
       }
     }
 
