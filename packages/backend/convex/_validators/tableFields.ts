@@ -603,6 +603,8 @@ export const sessionChatFields = {
   // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots
   /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** When a person last posted in this chat's main transcript; the other unread watermark (see chatReads). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Composer settings, sticky per chat (see the matching session comments
   // for each field's contract).
   providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -707,6 +709,8 @@ export const agentTaskFields = {
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this task for completion notifications
@@ -904,6 +908,8 @@ export const sessionFields = {
   ...chatDaemonEntityFields,
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
   // True while a new session's sandbox finishes pulling the latest base branch
@@ -1270,6 +1276,8 @@ export const projectFields = {
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this project's chat for completion

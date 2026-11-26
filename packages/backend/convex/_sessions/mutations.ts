@@ -30,6 +30,7 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
+import { recordPersonChatPost } from "../chatReads";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import { requestSessionSandboxStop } from "./sandbox";
 import {
@@ -276,10 +277,15 @@ export async function createSession(
     // startExecute, so its mentions are notified here instead.
     const session = await ctx.db.get(sessionId);
     if (session) {
-      await notifyChatMentions(ctx, {
+      const mentionedIds = await notifyChatMentions(ctx, {
         content,
         authorUserId: ctx.userId,
         surface: { kind: "session", session },
+      });
+      await recordPersonChatPost(ctx, {
+        parentId: mainChat._id,
+        authorId: ctx.userId,
+        mentionedIds,
       });
     }
     if (title === DEFAULT_SESSION_TITLE) {

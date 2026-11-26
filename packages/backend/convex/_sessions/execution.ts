@@ -39,6 +39,7 @@ import {
   selectUsageLimitRetryUserMessage,
 } from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
+import { recordPersonChatPost } from "../chatReads";
 import {
   ensureOwnerChat,
   reviveCoordinatorSession,
@@ -480,10 +481,16 @@ export const startExecute = authMutation({
     });
 
     // Notify before the turn runs or queues so a mention fires either way.
-    await notifyChatMentions(ctx, {
+    const mentionedIds = await notifyChatMentions(ctx, {
       content: args.message,
       authorUserId: ctx.userId,
       surface: { kind: "session", session, chat },
+    });
+    // The user row is already stored (the client sends addMessage first).
+    await recordPersonChatPost(ctx, {
+      parentId: chat._id,
+      authorId: ctx.userId,
+      mentionedIds,
     });
 
     const repo = await ctx.db.get(session.repoId);
@@ -870,10 +877,15 @@ export async function sendSessionChatMessage(
     source: "chat",
     userId: params.userId,
   });
-  await notifyChatMentions(ctx, {
+  const mentionedIds = await notifyChatMentions(ctx, {
     content: params.displayContent ?? params.content,
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
+  });
+  await recordPersonChatPost(ctx, {
+    parentId: chat._id,
+    authorId: params.userId,
+    mentionedIds,
   });
   // A project task waiting on its question takes this as the answer; a
   // coordinator-chat message for teammates only is stored as a quiet comment.
