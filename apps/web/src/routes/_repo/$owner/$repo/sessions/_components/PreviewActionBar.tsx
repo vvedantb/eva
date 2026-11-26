@@ -17,7 +17,7 @@ import {
   IconPencil,
   IconPlayerPause,
 } from "@tabler/icons-react";
-import { previewCommentsDrawerWidth } from "./PreviewCommentsDrawer";
+import { previewCommentsDrawerSpace } from "./PreviewCommentsDrawer";
 import { useIframeBox } from "./useIframeBox";
 import { usePreviewFreeze } from "./usePreviewFreeze";
 import { usePreviewScreenshot } from "./usePreviewScreenshot";
@@ -60,7 +60,7 @@ export function PreviewActionBar({
   if (hidden || !box || box.width === 0 || box.height === 0) return null;
   // Centred over the part of the page the open drawer leaves visible.
   const visibleWidth =
-    box.width - (comments?.active ? previewCommentsDrawerWidth(box) : 0);
+    box.width - (comments?.active ? previewCommentsDrawerSpace(box) : 0);
 
   return createPortal(
     <div
