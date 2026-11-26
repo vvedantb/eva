@@ -31,9 +31,7 @@ export const resolveNumId = authQuery({
     const doc = await ctx.db.get(id);
     if (!doc || doc.repoId !== args.repoId) return null;
     // Tasks and projects are archived, never deleted: an archived one opens.
-    const archivable =
-      args.entityType === "agentTasks" || args.entityType === "projects";
-    if (!archivable && doc.deletedAt !== undefined) return null;
+    if ("deletedAt" in doc && doc.deletedAt !== undefined) return null;
     return doc.numId ?? null;
   },
 });

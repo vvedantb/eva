@@ -248,7 +248,7 @@ export const activateDraft = authMutation({
  * Deletes a draft row with the run summary and subscription `saveDraft` made.
  * A draft is unsent text: it is deleted, never archived.
  */
-export async function deleteDraftRow(
+async function deleteDraftRow(
   ctx: MutationCtx,
   draftId: Id<"agentTasks">,
 ): Promise<void> {
