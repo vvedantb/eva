@@ -985,9 +985,9 @@ function ChatMessageRow({
                     lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
-                  // The coordinator chat caps every person's bubble at 70%, as the web (Eva's is capped in `EvaReply`).
+                  // The coordinator chat caps every person's bubble at 70%, as the web; Eva's reply is full width.
                   className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
-                  style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}

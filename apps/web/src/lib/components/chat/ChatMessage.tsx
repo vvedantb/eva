@@ -914,7 +914,8 @@ function AssistantTurnContent({
   );
 
   return bubble ? (
-    <div className={cn("min-w-0", COORDINATOR_BUBBLE_MAX_WIDTH)}>
+    // Full width, as a reply in any other chat; only people's bubbles are capped.
+    <div className="w-full min-w-0">
       {toolbar ? (
         <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
       ) : (
