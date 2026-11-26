@@ -9,7 +9,12 @@ import {
   IconMessages,
   IconX,
 } from "@tabler/icons-react";
-import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
+import {
+  Button,
+  ConversationEmptyState,
+  toast,
+  useDocumentVisible,
+} from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
 import {
   chatStreamingEntityId,
@@ -23,8 +28,14 @@ import {
   parsePendingQuestion,
   type ParsedQuestion,
 } from "@eva/shared/pendingQuestion";
+import {
+  findNewMessageIds,
+  useThreadReadState,
+} from "@eva/shared/chatReadState";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
+import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
+import { ThreadFollowButton } from "@/lib/components/chat/replies/ThreadFollowButton";
 import type {
   ChatParentId,
   ChatRepo,
@@ -98,6 +109,16 @@ export function ReplyThreadView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, onClose]);
   const currentUserId = useQuery(api.auth.me);
+  // On screen (panel open, tab visible): read, and a "New" line above the
+  // first reply that was not.
+  const visible = useDocumentVisible();
+  const { state: readState, newSinceAt } = useThreadReadState({
+    rootId,
+    active: isOpen && visible,
+  });
+  const firstNewId = thread
+    ? findNewMessageIds(thread.replies, newSinceAt, currentUserId ?? undefined)[0]
+    : undefined;
   const roots = useQuery(api.messages.listThreadRoots, {
     parentId: chatParentId,
   });
@@ -111,6 +132,7 @@ export function ReplyThreadView({
       <div className="flex h-10 shrink-0 items-center gap-2 px-3">
         <IconMessages className="size-4 text-muted-foreground" />
         <span className="flex-1 text-sm font-medium">Replies</span>
+        <ThreadFollowButton rootId={rootId} state={readState} />
         <Button
           size="icon-xs"
           variant="ghost"
@@ -158,6 +180,11 @@ export function ReplyThreadView({
                     key={message._id}
                     className={index === 0 ? "pb-2" : undefined}
                   >
+                    {message._id === firstNewId ? (
+                      <div className="pb-3">
+                        <ChatNewDivider />
+                      </div>
+                    ) : null}
                     <ChatMessage
                       message={message}
                       animateIn={false}

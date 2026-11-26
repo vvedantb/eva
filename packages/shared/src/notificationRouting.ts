@@ -42,12 +42,27 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: true,
       email: "instant",
     },
-    // Reply to your comment, or in a thread you are in.
+    // Eva answered the question you asked her in a reply thread. In Needs
+    // you with the questions: it answers something you asked.
+    thread_answer: {
+      inbox: "needs_you",
+      toast: true,
+      push: true,
+      email: "digest",
+    },
+    // Reply to your comment.
     comment_reply: {
       inbox: "updates",
       toast: true,
       push: true,
       email: "instant",
+    },
+    // A reply in a thread you follow.
+    thread_reply: {
+      inbox: "updates",
+      toast: true,
+      push: true,
+      email: "digest",
     },
     task_assigned: {
       inbox: "updates",

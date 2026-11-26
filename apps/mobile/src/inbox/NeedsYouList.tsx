@@ -71,7 +71,8 @@ export function NeedsYouList({ rows }: { rows: NeedsYouRow[] | undefined }) {
 function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
-  const open = () => openAppLink({ chatTarget: row.chatTarget, href: row.href, repoId: row.repoId });
+  const open = () =>
+    openAppLink({ chatTarget: row.chatTarget, threadRootId: row.threadRootId, href: row.href, repoId: row.repoId });
   return (
     <View className="flex-row items-center gap-3 px-4">
       <Pressable
