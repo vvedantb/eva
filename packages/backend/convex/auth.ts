@@ -200,7 +200,11 @@ export const setTheme = authMutation({
 /** The current user's email and push choices, defaults filled in. */
 export const getNotificationPrefs = authQuery({
   args: {},
-  returns: v.object({ email: emailPreferenceValidator, push: v.boolean() }),
+  returns: v.object({
+    email: emailPreferenceValidator,
+    push: v.boolean(),
+    productUpdates: v.boolean(),
+  }),
   handler: async (ctx) => {
     const user = await ctx.db.get(ctx.userId);
     return resolveNotificationPrefs(user?.notificationPrefs);
@@ -212,6 +216,7 @@ export const setNotificationPrefs = authMutation({
   args: {
     email: v.optional(emailPreferenceValidator),
     push: v.optional(v.boolean()),
+    productUpdates: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

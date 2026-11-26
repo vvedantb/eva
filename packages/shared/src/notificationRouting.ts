@@ -185,17 +185,27 @@ export function isEmailPreference(value: string): value is EmailPreference {
 }
 
 /** A person's notification channels with the defaults filled in. */
-export type NotificationPrefs = { email: EmailPreference; push: boolean };
+export type NotificationPrefs = {
+  email: EmailPreference;
+  push: boolean;
+  /** The changelog broadcast, apart from notifications: opt-in. */
+  productUpdates: boolean;
+};
 
 /**
  * The stored choices with defaults: email `instant` (decision 3, plan
- * `notifications-v2-5.md`) and push on. Desktop pop-ups are per device
+ * `notifications-v2-5.md`), push on, product updates off (opt-in: product
+ * news, not your own work). Desktop pop-ups are per device
  * (web `desktopNotifications.ts`), not stored here.
  */
 export function resolveNotificationPrefs(
   prefs: StoredNotificationPrefs,
 ): NotificationPrefs {
-  return { email: prefs?.email ?? "instant", push: prefs?.push ?? true };
+  return {
+    email: prefs?.email ?? "instant",
+    push: prefs?.push ?? true,
+    productUpdates: prefs?.productUpdates ?? false,
+  };
 }
 
 /**

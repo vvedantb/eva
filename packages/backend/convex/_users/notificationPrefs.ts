@@ -3,8 +3,8 @@ import type { Doc } from "../_generated/dataModel";
 
 /**
  * The patch that turns the old email opt-in into the email choice
- * (`dataMigrations:migrateNotificationPrefs`): `true` → "instant", `false` →
- * "off". Only a settings switch ever wrote `false` (signup and onboarding
+ * (`dataMigrations:migrateNotificationPrefs`): `true` → "instant" and Product
+ * updates on (the old switch covered the changelog too), `false` → "off". Only a settings switch ever wrote `false` (signup and onboarding
  * never did), so it is a person's choice and stays off. Unset stays unset
  * (the default, "instant"). Clears the legacy field either way; a choice made
  * since the deploy wins. Undefined when there is nothing to do.
@@ -20,6 +20,10 @@ export function notificationPrefsFromLegacy(
   const email: EmailPreference = legacy ? "instant" : "off";
   return {
     emailNotificationsEnabled: undefined,
-    notificationPrefs: { ...user.notificationPrefs, email },
+    notificationPrefs: {
+      ...user.notificationPrefs,
+      email,
+      ...(legacy ? { productUpdates: true } : {}),
+    },
   };
 }

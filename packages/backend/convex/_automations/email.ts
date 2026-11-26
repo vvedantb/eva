@@ -30,8 +30,8 @@ import { createNotification } from "../notifications";
 import { repoBasePath } from "@eva/shared";
 import { findChangelogAutomation } from "../changelog";
 import {
-  collectEmailRecipients,
   collectEmailRecipientsAmong,
+  collectProductUpdateRecipients,
 } from "../users";
 import { loadRunWithAccess } from "./helpers";
 import { resolveAutomationDoc } from "./systemAutomations";
@@ -76,7 +76,8 @@ export function renderAutomationEmail(opts: {
 
 /**
  * Who an automation's email goes to. The weekly changelog broadcasts to every
- * opted-in user; any other automation emails only the opted-in members of its
+ * user who turned Product updates on; any other automation emails the members
+ * (notification email not off) of its
  * repo's team (or the repo's connector when the repo has no team).
  */
 async function collectRunEmailRecipients(
@@ -87,7 +88,7 @@ async function collectRunEmailRecipients(
     automation.title === CHANGELOG_AUTOMATION_TITLE &&
     (await findChangelogAutomation(db))?._id === automation._id
   ) {
-    return await collectEmailRecipients(db);
+    return await collectProductUpdateRecipients(db);
   }
   const repo = await db.get(automation.repoId);
   if (!repo) return [];

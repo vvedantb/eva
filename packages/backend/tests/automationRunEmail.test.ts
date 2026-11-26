@@ -39,6 +39,7 @@ async function succeededRun(
       clerkId: OWNER,
       email: "owner@example.com",
       firstName: "Owner",
+      notificationPrefs: { productUpdates: true },
     });
     const teammateId = await ctx.db.insert("users", {
       clerkId: "clerk|teammate",
@@ -49,10 +50,11 @@ async function succeededRun(
       email: "opted-out@example.com",
       notificationPrefs: { email: "off" },
     });
-    // Opted in, but on another tenant's team.
+    // Product updates on, but on another tenant's team.
     await ctx.db.insert("users", {
       clerkId: "clerk|outsider",
       email: "outsider@example.com",
+      notificationPrefs: { productUpdates: true },
     });
     const teamId = await ctx.db.insert("teams", {
       name: "Eva",
@@ -150,17 +152,18 @@ describe("automation run email", () => {
   );
 
   test(
-    "the weekly changelog still broadcasts to every opted-in user",
+    "the weekly changelog goes to every user with Product updates on, only",
     async () => {
       const f = await succeededRun({
         emailAutoSend: true,
         title: CHANGELOG_AUTOMATION_TITLE,
       });
       const delivery = await f.forDelivery();
+      // The teammate has notification email (the default) but never turned
+      // Product updates on.
       expect(delivery?.recipients.map((r) => r.email).sort()).toEqual([
         "outsider@example.com",
         "owner@example.com",
-        "teammate@example.com",
       ]);
     },
     TIMEOUT_MS,

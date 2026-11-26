@@ -136,7 +136,7 @@ describe("migrateNotificationPrefs", () => {
           return ctx.db.get(id);
         };
         const cases: Array<[Doc<"users"> | null, Prefs]> = [
-          [await user(true), { email: "instant" }],
+          [await user(true), { email: "instant", productUpdates: true }],
           [await user(false), { email: "off" }],
           [await user(undefined), undefined],
           // A choice made since the deploy wins.

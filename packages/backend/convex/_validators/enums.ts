@@ -484,6 +484,8 @@ export const notificationPrefsValidator = v.object({
   email: v.optional(emailPreferenceValidator),
   /** Phone push. Unset means on. */
   push: v.optional(v.boolean()),
+  /** "What's new in Eva" changelog emails. Opt-in: unset means off. */
+  productUpdates: v.optional(v.boolean()),
 });
 
 export const presentationStatusValidator = v.union(

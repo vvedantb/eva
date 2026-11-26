@@ -31,6 +31,8 @@ export default function SettingsScreen() {
   });
   const pushOn = prefs?.push ?? true;
   const togglePush = (push: boolean) => void setPrefs({ push });
+  const productUpdatesOn = prefs?.productUpdates ?? false;
+  const toggleProductUpdates = (productUpdates: boolean) => void setPrefs({ productUpdates });
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const scheme = useScheme();
 
@@ -57,6 +59,25 @@ export default function SettingsScreen() {
               value={prefs?.email ?? "instant"}
               options={EMAIL_PREFERENCE_OPTIONS}
               onChange={(email) => void setPrefs({ email })}
+            />
+          </SettingsSection>
+          <SettingsSection title="Product updates" bodyVariant="list">
+            {/* The changelog broadcast: opt-in, apart from notification email (as the web). */}
+            <SettingsToggleRow
+              title="Email"
+              checked={productUpdatesOn}
+              disabled={prefs === undefined}
+              onCheckedChange={toggleProductUpdates}
+              action={
+                <Switch
+                  size="md"
+                  checked={productUpdatesOn}
+                  disabled={prefs === undefined}
+                  onCheckedChange={toggleProductUpdates}
+                  offColor={EVA_THEME[scheme].muted}
+                  thumbStyle={{ backgroundColor: productUpdatesOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
+                />
+              }
             />
           </SettingsSection>
           <SettingsSection

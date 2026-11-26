@@ -76,9 +76,9 @@ export const get = authQuery({
 type EmailRecipient = { userId: Id<"users">; email: string; name?: string };
 
 /**
- * The user as a broadcast recipient (weekly changelog, automation emails), or
- * null without an email address or with email turned off. Broadcasts follow
- * the one email choice, so its default (instant) includes them.
+ * The user as an automation email recipient, or null without an email address
+ * or with notification email turned off. (The changelog broadcast follows
+ * Product updates instead: `collectProductUpdateRecipients`.)
  */
 function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
   if (!user?.email) return null;
@@ -93,14 +93,19 @@ function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
 }
 
 /**
- * Every user with an email address and email not turned off, across
- * all teams. Only the weekly changelog broadcast may use this.
+ * Every user with an email address who turned Product updates on, across all
+ * teams. Only the weekly changelog broadcast may use this: product news is
+ * opt-in, apart from notification email (which is on by default).
  */
-export async function collectEmailRecipients(
+export async function collectProductUpdateRecipients(
   db: DatabaseReader,
 ): Promise<EmailRecipient[]> {
   const users = await db.query("users").collect();
-  return users.flatMap((user) => toEmailRecipient(user) ?? []);
+  return users.flatMap((user) =>
+    user.email && resolveNotificationPrefs(user.notificationPrefs).productUpdates
+      ? [{ userId: user._id, email: user.email, name: user.firstName ?? user.fullName }]
+      : [],
+  );
 }
 
 /** The given users that have an email address and email not turned off. */

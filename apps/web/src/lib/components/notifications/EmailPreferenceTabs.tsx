@@ -11,18 +11,23 @@ import {
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** Instant / Daily digest / Off: settings → Notifications and onboarding. */
+/** Saves notification choices, shown at once (optimistic). */
+export function useSetNotificationPrefs() {
+  return useMutation(api.auth.setNotificationPrefs).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.auth.getNotificationPrefs, {});
+      if (current) {
+        localStore.setQuery(api.auth.getNotificationPrefs, {}, {
+          ...current,
+          ...args,
+        });
+      }
+    },
+  );
+}
+
 export function EmailPreferenceTabs({ email }: { email: EmailPreference }) {
-  const setPrefs = useMutation(
-    api.auth.setNotificationPrefs,
-  ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getNotificationPrefs, {});
-    if (current) {
-      localStore.setQuery(api.auth.getNotificationPrefs, {}, {
-        ...current,
-        ...args,
-      });
-    }
-  });
+  const setPrefs = useSetNotificationPrefs();
 
   return (
     <Tabs

@@ -9,13 +9,16 @@ import {
   SettingsSection,
 } from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { mutationError } from "@/lib/utils/mutationToast";
+import { catchMutationError, mutationError } from "@/lib/utils/mutationToast";
 import {
   disableDesktopNotifications,
   enableDesktopNotifications,
   useDesktopNotifications,
 } from "@/lib/components/notifications/desktopNotifications";
-import { EmailPreferenceTabs } from "@/lib/components/notifications/EmailPreferenceTabs";
+import {
+  EmailPreferenceTabs,
+  useSetNotificationPrefs,
+} from "@/lib/components/notifications/EmailPreferenceTabs";
 
 /**
  * Email is stored per person (`users.notificationPrefs`); desktop pop-ups are
@@ -23,6 +26,7 @@ import { EmailPreferenceTabs } from "@/lib/components/notifications/EmailPrefere
  */
 export function NotificationsSettingsClient() {
   const prefs = useQuery(api.auth.getNotificationPrefs);
+  const setPrefs = useSetNotificationPrefs();
   const desktop = useDesktopNotifications();
 
   const toggleDesktop = async (checked: boolean) => {
@@ -55,6 +59,23 @@ export function NotificationsSettingsClient() {
         <SettingsToggleRow
           title="Delivery"
           action={<EmailPreferenceTabs email={prefs.email} />}
+        />
+        {/* The changelog broadcast: opt-in, apart from notification email. */}
+        <SettingsToggleRow
+          title="Product updates"
+          action={
+            <Switch
+              checked={prefs.productUpdates}
+              onCheckedChange={(productUpdates) =>
+                void catchMutationError(
+                  setPrefs({ productUpdates }),
+                  "Couldn't update notifications",
+                  "product-updates",
+                )
+              }
+              aria-label="Product updates"
+            />
+          }
         />
       </SettingsSection>
       <SettingsSection title="Desktop notifications" bodyVariant="list">
