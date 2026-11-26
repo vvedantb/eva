@@ -1,5 +1,6 @@
 import type { Doc } from "@eva/backend";
-import { prStateLabel } from "./prState";
+import { prStateLabel, type PrState } from "./prState";
+import { repoDisplayLabel } from "./repoTile";
 import { prNumberFromGithubUrl } from "./prReview";
 import { ARCHIVE_LIST_MODE_LABELS } from "./archive";
 import {
@@ -392,6 +393,98 @@ export function projectTaskPullRequests<
     }
     return row.prUrl !== undefined ? [{ ...row, prUrl: row.prUrl }] : [];
   });
+}
+
+/**
+ * A task's own stage in words, for its Details: Triage until approved, then
+ * To do, Working, In review, Done or Cancelled. The Tasks list groups by
+ * display status instead (a task in review sits under "Blocked" there).
+ */
+export function projectTaskStageLabel(
+  stage: ProjectTaskStage,
+  row: Pick<ProjectTaskRow, "approvedAt" | "locked">,
+): string {
+  switch (stage) {
+    case "todo":
+      return row.approvedAt !== undefined || row.locked === true
+        ? "To do"
+        : "Triage";
+    case "in_progress":
+      return "Working";
+    case "in_review":
+      return "In review";
+    case "launched":
+      return "Done";
+    case "cancelled":
+      return "Cancelled";
+  }
+}
+
+/** What `projectTaskFacts` reads of a project task (its `agentTasks` row). */
+export interface FactsProjectTaskRow extends ProjectTaskRow {
+  repoId?: string;
+  linkedRepoIds?: readonly string[];
+  phaseLabel?: string;
+  archivedAt?: number;
+}
+
+/**
+ * A project task's Details facts, for web and phone: the plain text
+ * "Working · Phase 2 · docs", then its PR links. The text is the task's own
+ * stage (`projectTaskStageLabel`: "In review", not the list's "Blocked"
+ * group), the phase, and on a multi-repo task
+ * each repo without a PR. A PR link names its repo on a multi-repo task, so
+ * each repo shows once. A `listByProject` row carries the server's facts; a
+ * bare task row reads as never failed.
+ */
+export function projectTaskFacts<
+  Pr extends { prUrl: string; state: PrState; repoId: string; repoName: string },
+>(
+  row: FactsProjectTaskRow,
+  repos: ReadonlyArray<{
+    _id: string;
+    name: string;
+    label?: string;
+    rootDirectory?: string;
+  }>,
+  prs: readonly Pr[],
+): {
+  text: string;
+  /** Each PR with its link label: "#12", or "api #12" on a multi-repo task. */
+  prs: Array<Pr & { label: string }>;
+} {
+  const view = projectTaskView(row, false);
+  const status = row.archivedAt !== undefined ? "Archived" : projectTaskStageLabel(view.stage, row);
+  const linked = row.linkedRepoIds ?? [];
+  const multiRepo = linked.length > 0;
+  const repoLabel = (repoId: string) => {
+    const repo = repos.find((entry) => entry._id === repoId);
+    return repo ? repoDisplayLabel(repo) : undefined;
+  };
+  const prRepoIds = new Set(prs.map((pr) => pr.repoId));
+  const reposWithoutPr = multiRepo
+    ? [row.repoId, ...linked].flatMap((repoId) =>
+        repoId === undefined || prRepoIds.has(repoId) ? [] : [repoLabel(repoId)],
+      )
+    : [];
+  return {
+    text: [
+      status,
+      row.phaseLabel,
+      ...reposWithoutPr,
+    ]
+      .filter((part) => part !== undefined && part !== "")
+      .join(" · "),
+    prs: prs.map((pr) => ({
+      ...pr,
+      label: [
+        multiRepo ? (repoLabel(pr.repoId) ?? pr.repoName) : undefined,
+        prShortLabel(pr.prUrl),
+      ]
+        .filter((part) => part !== undefined && part !== "")
+        .join(" "),
+    })),
+  };
 }
 
 /**

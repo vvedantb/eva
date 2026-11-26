@@ -19,7 +19,11 @@ import { TaskAttachments } from "./_components/TaskAttachments";
 import { ActivityTimeline } from "./_components/ActivityTimeline";
 import { TaskSubscribers } from "./_components/TaskSubscribers";
 import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
-import { StatusFieldsSection } from "./_components/StatusFieldsSection";
+import {
+  StatusFieldsSection,
+  TaskModelRow,
+} from "./_components/StatusFieldsSection";
+import { ProjectTaskFacts } from "./_components/ProjectTaskFacts";
 import type { useTaskDetail } from "./useTaskDetail";
 
 /**
@@ -58,9 +62,11 @@ type TaskDetailsData = Pick<
 >;
 
 /**
- * A task's overview: title, prompt, attachments and activity with comments,
- * beside its status and properties. An archived task is read-only. Below `md`
- * one column shows at a time (Overview / Properties).
+ * A task's overview: title, prompt, attachments and activity with comments.
+ * A quick task has its status and properties beside it; below `@2xl` one
+ * column shows at a time (Overview / Properties). A project task is one
+ * column: its read-only facts and its model sit under the prompt. An
+ * archived task is read-only.
  */
 export function TaskDetailsPane({
   taskId,
@@ -100,16 +106,105 @@ export function TaskDetailsPane({
   } = detail;
   const scheduledAt = taskScheduledAt(task);
 
+  /** Title, prompt and activity; a project task adds its facts and model. */
+  const overview = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 space-y-4 px-4 pt-4 @2xl:px-6 @2xl:pr-6 @2xl:pt-5">
+        <div>
+          {showHeader ? (
+            <TaskHeader
+              taskNumber={task.taskNumber}
+              title={task.title}
+              canEditTaskText={canEditText}
+              hasActiveRun={hasActiveRun}
+              taskId={taskId}
+            />
+          ) : null}
+          {/* A project task names its repos and PRs in its facts line. */}
+          {isProjectTask ? null : <TaskRepoBadges task={task} />}
+          {scheduledAt ? (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="gap-1 text-xs font-normal text-muted-foreground"
+              >
+                <IconClock size={11} />
+                {status === "todo" ? "Scheduled for" : "Was scheduled for"}{" "}
+                {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
+              </Badge>
+            </div>
+          ) : null}
+        </div>
+        <TaskDescription
+          description={task.description}
+          canEditTaskText={canEditText}
+          hasActiveRun={hasActiveRun}
+          taskId={taskId}
+          inline={true}
+        />
+
+        <TaskAttachments taskId={taskId} readOnly={isArchived} />
+
+        {isProjectTask ? (
+          <>
+            <ProjectTaskFacts task={task} />
+            {/* `-mx-2` lines the field row's own inset up with the prompt. */}
+            <div className="-mx-2">
+              <TaskModelRow
+                taskId={taskId}
+                task={task}
+                status={status}
+                hasRuns={hasRuns}
+                isOwner={isOwner}
+                readOnly={isArchived}
+                title="Model"
+              />
+            </div>
+          </>
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+          <div className="text-sm font-medium text-foreground">Activity</div>
+          <TaskSubscribers taskId={taskId} users={users} />
+        </div>
+      </div>
+      <div className="mt-3 flex flex-col sm:mt-4">
+        <ActivityTimeline
+          taskId={taskId}
+          createdAt={task.createdAt}
+          creatorUser={creatorUser}
+          comments={comments}
+          taskActivity={taskActivity}
+          users={users}
+          isProjectTask={isProjectTask}
+          readOnly={isArchived}
+        />
+      </div>
+    </div>
+  );
+
+  // A project task's status, phase, repos and PRs are read-only facts: one
+  // column, no Properties.
+  if (isProjectTask) {
+    return (
+      <TaskReactionsProvider taskId={taskId}>
+        <div className="@container flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar">
+          {overview}
+        </div>
+      </TaskReactionsProvider>
+    );
+  }
+
   return (
     <TaskReactionsProvider taskId={taskId}>
       <div className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Below `@2xl` (the pane, not the window: it also sits in the narrow
-            project side panel) the two columns stack, which buried Status / Priority /
-            Labels / Project under the whole (unbounded) activity timeline — on a
-            phone the only way to change a task's status was to scroll past every
-            run and comment. One pane at a time instead, same model the split
-            primitives use, following ProjectTabs' CSS-gated shape so desktop
-            keeps rendering both columns with no JS involved.
+        {/* Below `@2xl` (the pane, not the window) the two columns stack,
+            which buried Status / Priority / Labels / Project under the whole
+            (unbounded) activity timeline — on a phone the only way to change
+            a task's status was to scroll past every run and comment. One pane
+            at a time instead, same model the split primitives use, following
+            ProjectTabs' CSS-gated shape so desktop keeps rendering both
+            columns with no JS involved.
             Local state, not a URL tab: on desktop both panes are on screen at
             once, so there is nothing here worth linking to. */}
         <div className="shrink-0 @2xl:hidden">
@@ -130,64 +225,7 @@ export function TaskDetailsPane({
               )}
             >
               <div className="flex min-h-0 min-w-0 flex-col overflow-x-hidden @2xl:flex-1 @2xl:overflow-y-auto @2xl:scrollbar">
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="shrink-0 space-y-4 px-4 pt-4 @2xl:px-6 @2xl:pr-6 @2xl:pt-5">
-                    <div>
-                      {showHeader ? (
-                        <TaskHeader
-                          taskNumber={task.taskNumber}
-                          title={task.title}
-                          canEditTaskText={canEditText}
-                          hasActiveRun={hasActiveRun}
-                          taskId={taskId}
-                        />
-                      ) : null}
-                      <TaskRepoBadges task={task} />
-                      {scheduledAt ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="gap-1 text-xs font-normal text-muted-foreground"
-                          >
-                            <IconClock size={11} />
-                            {status === "todo"
-                              ? "Scheduled for"
-                              : "Was scheduled for"}{" "}
-                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
-                          </Badge>
-                        </div>
-                      ) : null}
-                    </div>
-                    <TaskDescription
-                      description={task.description}
-                      canEditTaskText={canEditText}
-                      hasActiveRun={hasActiveRun}
-                      taskId={taskId}
-                      inline={true}
-                    />
-
-                    <TaskAttachments taskId={taskId} readOnly={isArchived} />
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                      <div className="text-sm font-medium text-foreground">
-                        Activity
-                      </div>
-                      <TaskSubscribers taskId={taskId} users={users} />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col sm:mt-4">
-                    <ActivityTimeline
-                      taskId={taskId}
-                      createdAt={task.createdAt}
-                      creatorUser={creatorUser}
-                      comments={comments}
-                      taskActivity={taskActivity}
-                      users={users}
-                      isProjectTask={isProjectTask}
-                      readOnly={isArchived}
-                    />
-                  </div>
-                </div>
+                {overview}
               </div>
             </div>
             {/* `mt-6` is gone: it separated this from the overview when the two
