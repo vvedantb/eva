@@ -13,6 +13,7 @@ import {
 import type { LocalChatDraft } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
+import { takePageSelection } from "@/lib/components/ave/pageSelection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** One Manager Ave per user, so one draft per browser. */
@@ -105,7 +106,18 @@ export function useAveChat() {
     // No `finally`: React Compiler bails on the whole file when it meets one.
     try {
       await catchMutationError(
-        sendMessage({ content, clientId }),
+        sendMessage({
+          content,
+          clientId,
+          // Read at send time: the panel floats over every page, so Ave needs
+          // the one the user is on now, not the one they opened it from.
+          pageContext: {
+            path: `${window.location.pathname}${window.location.search}`,
+            title: document.title,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            selection: takePageSelection(),
+          },
+        }),
         "Couldn't send to Manager Ave",
         "ave-send",
       );

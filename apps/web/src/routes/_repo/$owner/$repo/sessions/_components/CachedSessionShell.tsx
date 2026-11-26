@@ -10,8 +10,11 @@ import { useSessionByNumId } from "@/lib/useResolveByNumId";
 import { SessionDetailClient } from "../SessionDetailClient";
 import { useSessionRouteSandboxTab } from "../_utils/useSessionRouteSandboxTab";
 import { workspaceRootPath } from "@eva/shared";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 
 interface CachedSessionShellProps {
   numId: string;
@@ -63,6 +66,7 @@ function CachedSessionShellInner({
   const navigate = useNavigate();
   const { basePath, repoId } = useRepo();
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
   // What the session tree is told. Turning active is immediate; turning
@@ -112,7 +116,7 @@ function CachedSessionShellInner({
   const sessionParams = { owner, repo: repoParam, numId };
 
   const openFile = (path: string) => {
-    if (simpleView) return;
+    if (isHiddenTab("files")) return;
     // A file the agent touched in a linked checkout has to select that repo's
     // root, or the Files tree would list the primary beside another repo's
     // file. `undefined` drops a stale root when a primary file is opened.
@@ -157,7 +161,7 @@ function CachedSessionShellInner({
       {/* Only the visible shell may redirect — a hidden shell firing Navigate
           would hijack the active session's URL. */}
       {isActiveRoute ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={sandboxTab}
           to="/$owner/$repo/sessions/$numId/$sandboxTab"
           params={{ owner, repo: repoParam, numId }}

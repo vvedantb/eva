@@ -157,7 +157,6 @@ export {
   threadTurnStatusText,
 } from "./replyThreads";
 export {
-  EVA_SENDER_NAME,
   findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
@@ -454,5 +453,7 @@ export {
   collectQuestionSteps,
   getSessionReadOnlyMessage,
   isSandboxLifecycleAlert,
+  splitStepsAtQuestions,
   visibleChatMessages,
 } from "./chatRows";
+export type { QuestionSplitChunk } from "./chatRows";

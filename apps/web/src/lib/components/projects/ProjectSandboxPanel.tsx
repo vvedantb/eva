@@ -24,7 +24,7 @@ import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
@@ -243,7 +243,7 @@ export function ProjectSandboxPanel({
       {projectPathSegment &&
       typeof ownerParam === "string" &&
       typeof repoParam === "string" ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={activeTab}
           to="/$owner/$repo/projects/$numId/sandbox/$sandboxTab"
           params={{

@@ -57,6 +57,14 @@ import {
 const DEFAULT_EDITOR_CLASS =
   "relative block w-full whitespace-pre-wrap wrap-break-word bg-transparent text-sm outline-hidden data-empty:before:pointer-events-none data-empty:before:select-none data-empty:before:absolute data-empty:before:text-muted-foreground/90 data-empty:before:content-[attr(data-placeholder)] data-suggestion:after:pointer-events-none data-suggestion:after:select-none data-suggestion:after:text-muted-foreground/50 data-suggestion:after:content-[attr(data-suggestion)]";
 
+// A suggestion on an empty editor is a next-message prediction: the ghost text
+// ends with a "Tab" key pill. The placeholder is empty then, so `::before`
+// draws the pill, and `order` moves it after the `::after` ghost text. The
+// editor becomes a flex row for this, so the caret stays at the start and a
+// long prediction truncates (compact pill) or wraps (stacked) before the pill.
+const PREDICTION_KEY_PILL_CLASS =
+  "data-empty:data-suggestion:flex data-empty:data-suggestion:after:min-w-0 data-empty:data-suggestion:after:overflow-hidden data-empty:data-suggestion:after:text-ellipsis data-empty:data-suggestion:before:static data-empty:data-suggestion:before:order-1 data-empty:data-suggestion:before:ms-1.5 data-empty:data-suggestion:before:inline-flex data-empty:data-suggestion:before:h-5 data-empty:data-suggestion:before:shrink-0 data-empty:data-suggestion:before:self-end data-empty:data-suggestion:before:items-center data-empty:data-suggestion:before:rounded-full data-empty:data-suggestion:before:bg-foreground/5 dark:data-empty:data-suggestion:before:bg-foreground/12 data-empty:data-suggestion:before:px-2 data-empty:data-suggestion:before:text-xs data-empty:data-suggestion:before:font-medium data-empty:data-suggestion:before:text-foreground/80 data-empty:data-suggestion:before:content-['Tab']";
+
 /** The picker entry types, shared with the phone composer. */
 export type { MentionItem, SlashItem };
 
@@ -1184,6 +1192,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         })}
         className={cn(
           DEFAULT_EDITOR_CLASS,
+          PREDICTION_KEY_PILL_CLASS,
           // `role="combobox"` opts into the base-layer pointer cursor meant for
           // pickers. This one is typed into, so put the caret back — while
           // leaving a disabled editor on the base `not-allowed`.

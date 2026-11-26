@@ -1277,6 +1277,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
           z.string(),
         );
+        // Anchor it to this chat's turn, so it shows as a card under the reply.
+        if (entityKind !== undefined && chatContentId !== undefined) {
+          await ctx.runMutation(internal.docs.anchorToChat, {
+            docId,
+            entityKind,
+            entityId: chatContentId,
+          });
+        }
 
         return toolJsonResult({
           docId,

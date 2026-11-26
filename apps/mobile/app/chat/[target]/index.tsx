@@ -3,7 +3,6 @@ import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findNewMessageIds, useChatReadState, useChatRecap } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
-  EVA_SENDER_NAME,
   buildPrecedingUserTurns,
   chatStreamingEntityId,
   collectForkPrefix,
@@ -71,7 +70,7 @@ import { DayDivider, NewDivider } from "@/chat/DayDivider";
 import { ThreadSummary } from "@/chat/ThreadSummary";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
-import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { EvaReply, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
@@ -509,14 +508,10 @@ export default function ChatScreen() {
                 joinsPrevious={bubbleGroups.joinsPrevious.has(message._id)}
                 joinsNext={bubbleGroups.joinsNext.has(message._id)}
                 senderName={
-                  // One name over a run of one sender's bubbles: a teammate's first name, or "Eva" over her coordinator replies.
-                  bubbleGroups.joinsPrevious.has(message._id)
-                    ? undefined
-                    : chat.project !== undefined && message.role === "assistant"
-                      ? EVA_SENDER_NAME
-                      : fromTeammate && message.userId
-                        ? teammateNames.get(message.userId)
-                        : undefined
+                  // One name over a run of a teammate's bubbles.
+                  fromTeammate && message.userId && !bubbleGroups.joinsPrevious.has(message._id)
+                    ? teammateNames.get(message.userId)
+                    : undefined
                 }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
@@ -990,9 +985,9 @@ function ChatMessageRow({
                     lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
-                  // The coordinator chat caps every person's bubble at 70%, as the web (Eva's is capped in `EvaBubble`).
+                  // The coordinator chat caps every person's bubble at 70%, as the web; Eva's reply is full width.
                   className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
-                  style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
@@ -1001,7 +996,7 @@ function ChatMessageRow({
                       {userBody}
                     </TeammateBubble>
                   ) : evaReply ? (
-                    <EvaBubble joinsNext={joinsNext}>{replyBody}</EvaBubble>
+                    <EvaReply>{replyBody}</EvaReply>
                   ) : (
                     // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
                     // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
@@ -1016,7 +1011,7 @@ function ChatMessageRow({
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" && !joinsNext ? (
                     <MessageFooter
-                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}
+                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : undefined}
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
@@ -1024,7 +1019,7 @@ function ChatMessageRow({
                     />
                   ) : threadControl ? (
                     // A grouped bubble has no footer: the replies keep their own line.
-                    <View className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}>{threadControl}</View>
+                    <View className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
                 {after}

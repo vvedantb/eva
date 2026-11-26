@@ -3,6 +3,7 @@
 import { AveLauncherButton } from "@/lib/components/ave/AveLauncherButton";
 import { AvePanel } from "@/lib/components/ave/AvePanel";
 import { useAveLauncherPosition } from "@/lib/components/ave/useAveLauncherPosition";
+import { AVE_SURFACE_ATTR } from "@/lib/components/ave/pageSelection";
 
 function preloadAvePanelBody() {
   void import("@/lib/components/ave/AvePanelBody");
@@ -38,7 +39,7 @@ export function AveLauncherSurface({
     useAveLauncherPosition();
 
   return (
-    <div className="contents" style={cssVars}>
+    <div {...AVE_SURFACE_ATTR} className="contents" style={cssVars}>
       {isMounted ? (
         <AvePanel visible={isOpen && !isHidden} onMinimize={onMinimize} />
       ) : null}

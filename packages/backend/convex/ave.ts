@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { authMutation, authQuery } from "./functions";
-import { aveMessageFields } from "./_validators/tableFields";
+import {
+  aveMessageFields,
+  avePageContextArgValidator,
+} from "./_validators/tableFields";
+import { resolvePageEntity } from "./_ave/pageEntity";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import {
   findLiveThread,
@@ -15,6 +19,10 @@ import {
  */
 
 const MAX_MESSAGE_CHARS = 20_000;
+/** Page path, title and zone are short; cap them so a bad client cannot bloat context. */
+const MAX_PAGE_FIELD_CHARS = 500;
+/** A selection is quoted to Ave as is; a few paragraphs is plenty. */
+const MAX_SELECTION_CHARS = 4_000;
 /** The chat shows the recent conversation; older rows stay in the table. */
 const LIST_LIMIT = 200;
 
@@ -97,7 +105,11 @@ export const getStreaming = authQuery({
 });
 
 export const send = authMutation({
-  args: { content: v.string(), clientId: v.string() },
+  args: {
+    content: v.string(),
+    clientId: v.string(),
+    pageContext: avePageContextArgValidator,
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const content = args.content.trim();
@@ -105,6 +117,11 @@ export const send = authMutation({
     if (content.length > MAX_MESSAGE_CHARS) {
       throw new Error("Message is too long for Manager Ave");
     }
+    const page = args.pageContext;
+    const path = page.path.slice(0, MAX_PAGE_FIELD_CHARS);
+    const selection = page.selection?.trim().slice(0, MAX_SELECTION_CHARS);
+    // Resolved now, not at run time: Ave should see the page as the user saw it.
+    const entity = await resolvePageEntity(ctx.db, ctx.userId, path);
     const thread = await getOrCreateLiveThread(ctx, ctx.userId);
     await ctx.db.insert("aveMessages", {
       threadId: thread._id,
@@ -113,6 +130,13 @@ export const send = authMutation({
       timestamp: Date.now(),
       userId: ctx.userId,
       clientId: args.clientId,
+      pageContext: {
+        path,
+        title: page.title.slice(0, MAX_PAGE_FIELD_CHARS),
+        timeZone: page.timeZone.slice(0, MAX_PAGE_FIELD_CHARS),
+        ...(selection ? { selection } : {}),
+        ...(entity ? { entity } : {}),
+      },
     });
     await requestRun(ctx, thread);
     return null;

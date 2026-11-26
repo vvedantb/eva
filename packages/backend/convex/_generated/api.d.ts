@@ -55,6 +55,7 @@ import type * as _automations_systemInstall from "../_automations/systemInstall.
 import type * as _automations_triageMapping from "../_automations/triageMapping.js";
 import type * as _automations_triggers from "../_automations/triggers.js";
 import type * as _ave_context from "../_ave/context.js";
+import type * as _ave_pageEntity from "../_ave/pageEntity.js";
 import type * as _ave_prompt from "../_ave/prompt.js";
 import type * as _ave_run from "../_ave/run.js";
 import type * as _ave_threads from "../_ave/threads.js";
@@ -651,6 +652,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/triageMapping": typeof _automations_triageMapping;
   "_automations/triggers": typeof _automations_triggers;
   "_ave/context": typeof _ave_context;
+  "_ave/pageEntity": typeof _ave_pageEntity;
   "_ave/prompt": typeof _ave_prompt;
   "_ave/run": typeof _ave_run;
   "_ave/threads": typeof _ave_threads;
