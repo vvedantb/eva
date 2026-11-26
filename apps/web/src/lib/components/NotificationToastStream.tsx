@@ -30,6 +30,10 @@ import {
   isDesktopNotificationsEnabled,
   showDesktopNotification,
 } from "@/lib/components/notifications/desktopNotifications";
+import {
+  isAwaitingRouting,
+  notificationToasts,
+} from "@eva/shared/notificationRouting";
 
 const TOAST_LIMIT = 4;
 const TOAST_TTL_MS = 9000;
@@ -41,19 +45,6 @@ type ToastEntry = {
   notification: Notification;
   expiresAt: number;
 };
-
-/**
- * Whether a notification has finished arriving. A mention is written to the
- * inbox before routing has judged it, and its urgency decides whether it
- * announces itself at all — so an unrouted mention is held back rather than
- * toasted on the guess that it matters. Routing lands seconds later and the
- * row arrives properly then. Every other type is complete on insert.
- */
-function hasArrived(notification: Notification): boolean {
-  return !(
-    notification.type === "mention" && notification.urgency === undefined
-  );
-}
 
 export function NotificationToastStream() {
   // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
@@ -99,7 +90,12 @@ export function NotificationToastStream() {
     if (!notifications) {
       return;
     }
-    const arrived = notifications.filter(hasArrived);
+    // A chat mention is written before routing has judged it, and its urgency
+    // decides whether it announces itself at all: it is held back until
+    // routing lands seconds later. Every other row is complete on insert.
+    const arrived = notifications.filter(
+      (notification) => !isAwaitingRouting(notification),
+    );
     const currentIds = new Set(arrived.map((notification) => notification._id));
     const seenNotificationIds = seenNotificationIdsRef.current;
     if (!seenNotificationIds) {
@@ -112,11 +108,9 @@ export function NotificationToastStream() {
     );
     seenNotificationIdsRef.current = currentIds;
 
-    // Routing judged these incidental, so they are inbox-only: seen (they will
-    // not toast later) but never announced.
-    const announced = newlyArrived.filter(
-      (notification) => notification.urgency !== "low",
-    );
+    // The routing table (and urgency on top) decides what announces itself;
+    // the rest is seen (it will not toast later) but stays in the inbox only.
+    const announced = newlyArrived.filter(notificationToasts);
     if (announced.length === 0) {
       return;
     }

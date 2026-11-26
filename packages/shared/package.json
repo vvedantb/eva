@@ -34,6 +34,7 @@
     "./modelPricing": "./src/modelPricing.ts",
     "./needsYou": "./src/needsYou.ts",
     "./notificationGroups": "./src/notificationGroups.ts",
+    "./notificationRouting": "./src/notificationRouting.ts",
     "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",

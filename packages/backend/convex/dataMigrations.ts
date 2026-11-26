@@ -347,3 +347,27 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/** Notification types no code creates any more (`notificationTypeValidator`). */
+const DEAD_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  "routine_complete",
+  "export_ready",
+  "run_completed",
+  "run_failed",
+  "rate_limit",
+]);
+
+/**
+ * Deletes notification rows of the dead types. Run after the deploy:
+ *
+ *   npx convex run --prod dataMigrations:deleteDeadNotifications
+ *
+ * A later change then drops `routine_complete`, `run_completed` and
+ * `run_failed` from `notificationTypeValidator`.
+ */
+export const deleteDeadNotifications = dataMigrations.define({
+  table: "notifications",
+  migrateOne: async (ctx, row) => {
+    if (DEAD_NOTIFICATION_TYPES.has(row.type)) await ctx.db.delete(row._id);
+  },
+});

@@ -1,7 +1,7 @@
 # v2.5 — Notifications for chats, threads and comments
 
 **Date:** 26 November 2026
-**Status:** TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
+**Status:** C built (26 November 2026). A, B, D TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
 **Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
 
 ## Today (inventory, origin/main, 26 November 2026)
@@ -60,7 +60,7 @@ One rule for every event: **who** gets it (participants), **how urgent** it is, 
 
 - **A — Threads:** participants, thread unread, deep links, clearing rules, reply/Eva-answer notifications.
 - **B — Chat unread for people's messages:** unread dot and NEW divider for teammate messages; quiet comments light the dot.
-- **C — Delivery:** one routing table (above), comment mention fixes, failed-routing fallback, digest fixes, Needs you coverage, dead types.
+- **C — Delivery:** one routing table (above), comment mention fixes, failed-routing fallback, digest fixes, Needs you coverage, dead types. **Built.**
 - **D — Preferences and phone badge:** settings UI web + phone, push toggle, app badge.
 
 Each PR ships on web and phone together.
@@ -73,3 +73,16 @@ Each PR ships on web and phone together.
 | 2 | Thread participants are automatic (root author, repliers, people mentioned in it, the person Eva answers), each with Unfollow. |
 | 3 | Email default for people who never changed the setting: instant for mentions, direct replies, assignments and Eva's questions; daily digest for the rest. A person who turned email off stays off. |
 | 4 | Order: C (delivery fixes) → A (threads) → B (chat unread) → D (preferences and phone badge). |
+
+## Changes while building
+
+### C — Delivery (26 November 2026)
+
+- The table lives in `@eva/shared/notificationRouting` (`NOTIFICATION_ROUTES` plus `notificationToasts`, `notificationPushes`, `notificationEmail`, `isNeedsYouNotification`, `isAwaitingRouting`).
+- Types not in the table: `changes_requested` toasts, no push, no email (as before); `session_archived` is inbox only (it no longer toasts); `system` toasts, no push, digest. `comment_reply` is both "reply to your comment" and a thread reply today, so both are instant email with push until A splits them.
+- Urgency `normal` means the table, except on a chat mention (a `mention` without `commentId`), where it is Jev's fyi and waits for the digest. Comment mentions are created with `normal` and keep the instant email.
+- Failed routing falls back to `normal`, so it goes in the digest (no instant email). Before it had the 15-minute instant email.
+- Digest window: since the previous weekday run (no per-user state). With `emailedAt` stamped, an overlap never repeats a row.
+- Needs you: an agent `notify_user` row is a `system` row with a `chatTarget`; an automation's email draft has none, so it stays out. Posting in a chat clears every Needs you row for that chat, not only mentions.
+- Doc comments have no edit mutation, so only task comment edits notify new mentions.
+- Dead types: prod still held `routine_complete` (2), `run_completed` (1166) and `run_failed` (7) rows. Convex refuses a deploy whose schema rejects stored rows, so those three stay in the validator as legacy until `dataMigrations:deleteDeadNotifications` has run; a follow-up drops them. `export_ready` and `rate_limit` had no rows and are removed. `scripts/check-schema-narrowing.mjs` does not watch `_validators/enums.ts`, where the union lives, so it would not have caught this.

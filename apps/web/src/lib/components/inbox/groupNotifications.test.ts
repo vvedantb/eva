@@ -90,14 +90,14 @@ describe("groupNotifications", () => {
     const groups = groupNotifications(
       [
         notification("a", { type: "mention" }),
-        notification("b", { type: "run_completed" }),
+        notification("b", { type: "task_complete" }),
         notification("c", { type: "mention" }),
       ],
       "type",
       repoById,
     );
 
-    expect(groups.map((g) => g.label)).toEqual(["Mention", "Run Done"]);
+    expect(groups.map((g) => g.label)).toEqual(["Mention", "Task Done"]);
     expect(groups[0]?.items.map((n) => n.title)).toEqual(["a", "c"]);
   });
 

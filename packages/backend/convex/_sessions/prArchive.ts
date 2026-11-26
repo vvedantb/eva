@@ -64,7 +64,7 @@ export function sessionPrArchiveNotificationCopy(args: {
   };
 }
 
-/** Inbox-only notice to the session owner. Never emails (see DIGEST_EXCLUDED_TYPES). */
+/** Inbox-only notice to the session owner. Never emails (`@eva/shared/notificationRouting`). */
 async function notifySessionOwnerOfPrArchive(
   ctx: MutationCtx,
   session: Doc<"sessions">,

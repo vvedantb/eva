@@ -218,14 +218,14 @@ describe("mentions in Needs you", () => {
         `${mentionToken("Tom Mate", f.teammateId)} can you check the copy?`,
       );
       const before = await f.teammate.query(api.needsYou.list, {});
-      const mention = before.find((row) => row.key.startsWith("mention:"));
+      const mention = before.find((row) => row.key.startsWith("notification:"));
       expect(mention?.group).toBe("question");
       expect(mention?.source).toBe("project");
       expect(mention?.projectTitle).toBe("Checkout");
       expect(mention?.chatTarget).toBe(f.projectId);
       // The author is not mentioned: nothing for them.
       const authorRows = await f.author.query(api.needsYou.list, {});
-      expect(authorRows.some((row) => row.key.startsWith("mention:"))).toBe(
+      expect(authorRows.some((row) => row.key.startsWith("notification:"))).toBe(
         false,
       );
 
@@ -236,7 +236,7 @@ describe("mentions in Needs you", () => {
         `${mentionToken("Ana Author", f.authorId)} looks good`,
       );
       const after = await f.teammate.query(api.needsYou.list, {});
-      expect(after.some((row) => row.key.startsWith("mention:"))).toBe(false);
+      expect(after.some((row) => row.key.startsWith("notification:"))).toBe(false);
     },
     TIMEOUT_MS,
   );

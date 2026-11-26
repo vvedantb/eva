@@ -1,12 +1,10 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { NotificationIconName, NotificationTone } from "@eva/shared";
 import {
-  IconAlertTriangle,
   IconArchive,
   IconAt,
   IconCheck,
   IconExclamationCircle,
-  IconFileExport,
   IconGitMerge,
   IconGitPullRequestClosed,
   IconInfoCircle,
@@ -30,7 +28,6 @@ import type { Scheme } from "@/ui/theme";
  */
 export const NOTIFICATION_ICONS: Record<NotificationIconName, ComponentType<IconProps>> = {
   Repeat: IconRepeat,
-  FileExport: IconFileExport,
   Check: IconCheck,
   UserPlus: IconUserPlus,
   Progress: IconProgress,
@@ -40,7 +37,6 @@ export const NOTIFICATION_ICONS: Record<NotificationIconName, ComponentType<Icon
   At: IconAt,
   PlayerPlay: IconPlayerPlay,
   ExclamationCircle: IconExclamationCircle,
-  AlertTriangle: IconAlertTriangle,
   InfoCircle: IconInfoCircle,
   Archive: IconArchive,
   GitMerge: IconGitMerge,
