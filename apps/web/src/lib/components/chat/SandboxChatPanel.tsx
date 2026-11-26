@@ -59,6 +59,8 @@ export interface SandboxChatPanelProps {
   onSandboxToggle?: (action: "start" | "stop") => void;
   /** The owner is archived: the chat is read-only (no composer, no wake). */
   isArchived?: boolean;
+  /** Left of the usage chip, on the same row (a project's chat tabs). */
+  headerLeft?: ReactNode;
 }
 
 /** The live chat state a host's slots read. */
@@ -119,6 +121,7 @@ export function SandboxChatPanel({
   projectTaskCards,
   onSandboxToggle,
   isArchived = false,
+  headerLeft,
   assistantBubbles = false,
   replyThreads = false,
   onThreadOpen,
@@ -394,6 +397,7 @@ export function SandboxChatPanel({
       ) : (
         <>
           <SandboxChatHeaderActions
+            left={headerLeft}
             repoId={repo._id}
             model={model}
             providerAccountId={binding.providerAccountId}

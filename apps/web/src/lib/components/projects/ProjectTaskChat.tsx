@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { Id } from "@eva/backend";
 import { Spinner } from "@vvedantb/ui";
 import { TaskSandboxChatPanel } from "@/lib/components/tasks/TaskSandboxChatPanel";
@@ -9,7 +10,7 @@ import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailContro
 import { useProjectTaskExpand } from "./ProjectTaskPane";
 
 /**
- * The selected task tab's own chat, in the project's chat column. An
+ * An open task tab's own chat, in the project's chat column. An
  * archived task's chat is read-only. Files, a diff without a PR and Agents
  * open the task's full page; a diff with a PR shows the panel's Review.
  */
@@ -18,6 +19,7 @@ export function ProjectTaskChat({
   prUrl,
   fullPageHref,
   onShowReview,
+  headerLeft,
 }: {
   taskId: Id<"agentTasks">;
   /** The task's own PR. */
@@ -25,6 +27,8 @@ export function ProjectTaskChat({
   /** The task's full page (pre-internal form). */
   fullPageHref: string;
   onShowReview: () => void;
+  /** The project's chat tabs, on the chat's header row. */
+  headerLeft?: ReactNode;
 }) {
   const {
     isLoading,
@@ -44,10 +48,14 @@ export function ProjectTaskChat({
   });
 
   if (isLoading) {
+    // The tab row stays while the task loads: tabs never jump.
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center">
-        <Spinner size="sm" />
-      </div>
+      <>
+        {headerLeft}
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <Spinner size="sm" />
+        </div>
+      </>
     );
   }
   return (
@@ -67,6 +75,7 @@ export function ProjectTaskChat({
         }
         onOpenAgentsTab={() => expand()}
         isArchived={isArchived}
+        headerLeft={headerLeft}
         onSandboxToggle={
           canStartSandbox || isSandboxActive
             ? (action) => {

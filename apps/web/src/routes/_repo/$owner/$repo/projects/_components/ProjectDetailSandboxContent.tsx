@@ -137,8 +137,25 @@ export function ProjectDetailSandboxContent({
     />
   );
 
+  // Chat tabs need the panel (a task tab shows its tabs there): a project
+  // with no session yet has only Eva's chat, and no tab row. The row sits in
+  // the shown chat's header, left of its usage chip, so tabs and chip share
+  // one line.
+  const chatTabs = sandbox.sandbox.owner ? (
+    <ProjectChatTabs
+      rows={rows}
+      selected={onEva ? null : taskTabs.selected}
+      evaRunning={chatTurnOpen === true}
+      isArchived={isArchived}
+      onSelect={taskTabs.select}
+      onClose={taskTabs.close}
+      onAskEva={taskTabs.askEva}
+    />
+  ) : undefined;
+
   const evaChat = (
     <ProjectSandboxChatPanel
+      headerLeft={chatTabs}
       projectId={projectId}
       projectSession={sandbox.projectSession}
       isSandboxActive={isSandboxActive}
@@ -159,35 +176,36 @@ export function ProjectDetailSandboxContent({
     />
   );
 
-  // Chat tabs need the panel (a task tab shows its tabs there): a project
-  // with no session yet has only Eva's chat.
+  // Every chat stays mounted behind its tab (Eva's and each open task's, at
+  // most `MAX_PROJECT_TASK_TABS`): switching tabs is instant and keeps each
+  // composer's draft. A hidden `<Activity>` unmounts effects, so a hidden
+  // chat marks nothing read and listens to no keys.
   const chatColumn = () =>
     sandbox.sandbox.owner ? (
       <div className="flex h-full min-h-0 flex-col">
-        <ProjectChatTabs
-          rows={rows}
-          selected={onEva ? null : taskTabs.selected}
-          evaRunning={chatTurnOpen === true}
-          isArchived={isArchived}
-          onSelect={taskTabs.select}
-          onClose={taskTabs.close}
-          onAskEva={taskTabs.askEva}
-        />
-        {/* Eva's chat stays alive behind a task tab: back is instant. */}
+        {/* A task tab whose row still loads shows no chat yet: keep the tabs. */}
+        {!onEva && selectedRow === undefined ? chatTabs : null}
         <Activity mode={onEva ? "visible" : "hidden"}>
           <div className="flex min-h-0 flex-1 flex-col">{evaChat}</div>
         </Activity>
-        {selectedRow && projectPathSegment ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <ProjectTaskChat
-              key={selectedRow._id}
-              taskId={selectedRow._id}
-              prUrl={selectedRow.prUrl}
-              fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedRow.numId}`}
-              onShowReview={() => taskTabs.showTab("task-review")}
-            />
-          </div>
-        ) : null}
+        {projectPathSegment
+          ? rows.map(({ numId, row }) => (
+              <Activity
+                key={row._id}
+                mode={row._id === selectedRow?._id ? "visible" : "hidden"}
+              >
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <ProjectTaskChat
+                    taskId={row._id}
+                    prUrl={row.prUrl}
+                    fullPageHref={`${basePath}/projects/${projectPathSegment}/${numId}`}
+                    onShowReview={() => taskTabs.showTab("task-review")}
+                    headerLeft={chatTabs}
+                  />
+                </div>
+              </Activity>
+            ))
+          : null}
       </div>
     ) : (
       evaChat
