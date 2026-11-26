@@ -9,11 +9,10 @@ import { cancelScheduledFunction } from "../_scheduling/helpers";
  * A task's run schedule (`agentTasks.run`):
  *
  *   idle ──schedule──▶ scheduled ──fire──▶ idle
- *   scheduled / retry_pending ──cancelSchedule──▶ idle
+ *   scheduled ──cancelSchedule──▶ idle
  *
  * `undefined` is idle. A run itself is a task-mode chat turn
- * (`taskRunTurn.ts`); `retry_pending` is only left on old rows, and fires
- * like a schedule. The kanban `status` is separate.
+ * (`taskRunTurn.ts`). The kanban `status` is separate.
  *
  * Every write of `run` goes through this module.
  */
@@ -26,12 +25,10 @@ export function taskRunState(task: TaskRunSource): TaskRun | undefined {
   return task.run;
 }
 
-/** When the next scheduled or retry run fires, if one is pending. */
+/** When the next scheduled run fires, if one is pending. */
 export function taskScheduledAt(task: TaskRunSource): number | undefined {
   const run = taskRunState(task);
-  return run?.state === "scheduled" || run?.state === "retry_pending"
-    ? run.at
-    : undefined;
+  return run?.state === "scheduled" ? run.at : undefined;
 }
 
 export type TaskRunEvent =
@@ -55,13 +52,11 @@ export function nextTaskRun(
   event: TaskRunEvent,
 ): TaskRunTransition {
   switch (event.type) {
-    /** A user schedule replaces any pending schedule or retry. */
+    /** A user schedule replaces any pending schedule. */
     case "schedule":
       return to({ state: "scheduled", at: event.at, jobId: event.jobId });
     case "cancelSchedule":
-      if (current?.state !== "scheduled" && current?.state !== "retry_pending") {
-        return reject("Task is not scheduled");
-      }
+      if (current?.state !== "scheduled") return reject("Task is not scheduled");
       return to(undefined);
     /**
      * The job fired. It only owns a schedule that is still pending, due, and
@@ -69,12 +64,7 @@ export function nextTaskRun(
      * reschedule leaves the old job's run stale.
      */
     case "fire":
-      if (
-        current?.state !== "scheduled" &&
-        current?.state !== "retry_pending"
-      ) {
-        return reject("Task is not scheduled");
-      }
+      if (current?.state !== "scheduled") return reject("Task is not scheduled");
       if (current.at > event.now) return reject("Schedule is not due");
       if (event.at !== undefined && event.at !== current.at) {
         return reject("Schedule was replaced");
@@ -104,7 +94,7 @@ async function cancelJob(
   ctx: MutationCtx,
   run: TaskRun | undefined,
 ): Promise<void> {
-  if (run?.state === "scheduled" || run?.state === "retry_pending") {
+  if (run?.state === "scheduled") {
     await cancelScheduledFunction(ctx, run.jobId);
   }
 }
@@ -134,7 +124,7 @@ export async function scheduleTaskRun(
   return result;
 }
 
-/** Cancels a pending schedule or retry, using the job id the state holds. */
+/** Cancels a pending schedule, using the job id the state holds. */
 export async function cancelTaskRunSchedule(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,

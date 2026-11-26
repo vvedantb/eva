@@ -664,7 +664,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
       )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
-      orchestratorNotification: next.orchestratorNotification,
       sentViaOrchestrator: next.sentViaOrchestrator,
       taskRun: next.taskRun,
     });

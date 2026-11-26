@@ -120,24 +120,6 @@ describe("idle pause sweep", () => {
   );
 
   test(
-    "the earlier idle-stop toggle still switches the sweep off",
-    async () => {
-      const { t, sessionId } = await fixture();
-      await t.run(async (ctx) => {
-        await ctx.db.insert("appSettings", {
-          sandboxAutoStopEnabled: false,
-          sandboxAutoStopTime: "22:00",
-          sandboxAutoStopTimeZone: "UTC",
-          sandboxIdleStopEnabled: false,
-        });
-      });
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await sessionStatus(t, sessionId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "on: an hours-idle session and task are moved to stopping with their sandbox ids kept",
     async () => {
       const { t, sessionId, taskSessionId } = await fixture();

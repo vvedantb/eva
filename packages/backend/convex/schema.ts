@@ -206,6 +206,7 @@ const schema = defineSchema({
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
   // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
+  /** @deprecated Never written; rows deleted by clearLegacyFields. */
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
@@ -267,9 +268,10 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
-  // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
-  // directly; `backfillSessionChats` empties this table and it can then be
-  // dropped from the schema.
+  /**
+   * @deprecated Legacy daemon-poll mirror. Chat daemons poll their
+   * `sessionChats` row directly; rows deleted by clearLegacyFields.
+   */
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],

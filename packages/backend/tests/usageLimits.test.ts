@@ -6,8 +6,6 @@ import {
 import {
   isUsageLimitReadingFresh,
   parseUsageLimitRowKey,
-  pickCanonicalRow,
-  pickLegacyRows,
   presentReading,
   USAGE_LIMIT_READING_MAX_AGE_MS,
 } from "../convex/_usageLimits/rows";
@@ -53,36 +51,6 @@ describe("usage limit report semantics", () => {
     expect(
       isUsageLimitReadingFresh(NOW - USAGE_LIMIT_READING_MAX_AGE_MS - 1, NOW),
     ).toBe(false);
-  });
-});
-
-/**
- * A reading is keyed by the credential it measures. Rows written while the key
- * still included the repo share an index range with the account rows that
- * replaced them, so the filter that separates them is the one thing that keeps
- * the popover off per-repo numbers.
- */
-describe("canonical row selection", () => {
-  const canonical = { repoId: undefined, capturedAt: NOW };
-  const legacyOne = { repoId: "repo-1", capturedAt: NOW - 1 };
-  const legacyTwo = { repoId: "repo-2", capturedAt: NOW - 2 };
-
-  it("picks the row with no repo, whatever order the range returns", () => {
-    expect(pickCanonicalRow([legacyOne, canonical, legacyTwo])).toBe(canonical);
-    expect(pickCanonicalRow([canonical])).toBe(canonical);
-  });
-
-  it("reports no row when the range holds only legacy ones", () => {
-    expect(pickCanonicalRow([legacyOne, legacyTwo])).toBeNull();
-    expect(pickCanonicalRow([])).toBeNull();
-  });
-
-  it("hands `report` every legacy row to delete, and nothing else", () => {
-    expect(pickLegacyRows([legacyOne, canonical, legacyTwo])).toEqual([
-      legacyOne,
-      legacyTwo,
-    ]);
-    expect(pickLegacyRows([canonical])).toEqual([]);
   });
 });
 
