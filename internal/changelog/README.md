@@ -1,10 +1,14 @@
 # Changelog
 
-The eva changelog, split one file per month: `YYYY-MM.md` (newest month first below).
+One file per entry, in a folder per day: `YYYY-MM-DD/<slug>.md`, for example `2026-11-26/archive-replaces-delete.md`. Two PRs never edit the same file, so entries never conflict.
 
-New entries go at the **top** of the current month's file, directly under its `# Changelog — <Month YYYY>` heading. If the current month has no file yet, create it with that heading.
+An entry file is `# <Title>` followed by bullets: what changed and why, and the architectural reason if any. The folder gives the date. The slug is the title in kebab case, short.
 
-Entry format: `## <Title> - <YYYY-MM-DD>` followed by bullets describing what changed and why.
+Only medium-to-large changes and features get an entry, not quick fixes or bug fixes.
+
+## History
+
+Entries up to 26 November 2026 are in one file per month. Do not edit these files.
 
 - [2026-11.md](2026-11.md)
 - [2026-10.md](2026-10.md)
