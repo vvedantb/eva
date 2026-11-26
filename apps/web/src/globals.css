@@ -300,7 +300,7 @@
     color-mix(in oklab, var(--eva-blob-tone) 22%, transparent),
     transparent
   );
-  animation: var(--eva-blob-path) 14s ease-in-out infinite alternate;
+  animation: var(--eva-blob-path) 7s ease-in-out infinite alternate;
   will-change: transform;
 }
 
