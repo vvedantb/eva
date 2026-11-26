@@ -152,7 +152,12 @@ export function ProjectTaskPane({
                 active={tab === "task-details"}
                 className="flex h-full min-h-0 flex-col overflow-hidden"
               >
-                <TaskDetailsPane taskId={taskId} task={task} detail={detail} />
+                <TaskDetailsPane
+                  taskId={taskId}
+                  task={task}
+                  detail={detail}
+                  showHeader={false}
+                />
               </KeepAlivePane>
             ) : null}
             <KeepAlivePane
