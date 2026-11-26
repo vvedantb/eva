@@ -13,6 +13,11 @@ Date: 2026-11-25
 The "Changed files" card under an agent reply is gone on web and phone, everywhere: the PR, Diffs tab and Review pane already show what changed. Removed with it: web and phone `ChangedFilesCard`, `useChangedFilesExpansion` (its localStorage state), `findLastAssistantMessageId`, the `showChangedFiles` / `isLatestAssistantTurn` / `onOpenDiff` props, and the shared `collectChangedFiles` and its grouping helpers. The path helpers stay, renamed `@eva/shared` `sandboxFilePath.ts`. The phone diff screen stays (the hold menu and the branch row open it).
 
 In the coordinator chat (Eva's bubbles, main chat and reply threads, web and phone) a finished reply shows its text only, with no "Worked for" fold of steps.
+## Coordinator chat: narrower bubbles, more space, time in the toolbar
+
+Date: 2026-11-26
+
+Coordinator chat bubbles (Eva, you and teammates; main chat and threads) are at most 70% of the column, not 85% (web `COORDINATOR_BUBBLE_MAX_WIDTH`; phone `EvaBubble` and the person rows). On web, messages there sit 20px apart, not 12, so the hover toolbar on a bubble's top edge does not crowd the message above; a run of one sender's bubbles stays 4px apart. The toolbar ends with the time: "10:17 PM", or "10:17 PM · 2m" (finish time and duration) on Eva's replies; the bubble's time tooltip is gone. The phone keeps its 12px gap (no hover toolbar there).
 
 ## Session follow-ups send only the guard rails
 

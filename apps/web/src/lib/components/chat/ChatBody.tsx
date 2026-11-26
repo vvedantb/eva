@@ -518,6 +518,9 @@ function ChatBodyInner({
   // still-streaming older turn's tokens (see findStreamingTargetMessage).
   const streamingTarget = findStreamingTargetMessage(displayMessages);
   const streamingTargetId = streamingTarget?._id;
+  // The coordinator chat spaces messages 20px, not 12: its hover toolbar
+  // sits on a bubble's top edge.
+  const messageGap = assistantBubbles ? "gap-5" : "gap-3";
 
   const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
     string | null
@@ -1017,8 +1020,12 @@ function ChatBodyInner({
     return (
       <div
         key={message._id}
-        // A run of one sender's bubbles sits 4px apart, not 12.
-        className={cn("flex flex-col gap-3", joinsPrevious && "-mt-2")}
+        // A run of one sender's bubbles sits 4px apart, not 12 (20 in the
+        // coordinator chat, whose hover toolbar sits on a bubble's top edge).
+        className={cn(
+          "flex flex-col gap-3",
+          joinsPrevious && (assistantBubbles ? "-mt-4" : "-mt-2"),
+        )}
       >
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
@@ -1099,7 +1106,7 @@ function ChatBodyInner({
         resize={streamingTargetId ? "smooth" : "instant"}
       >
         <ConversationContent
-          className="gap-3 p-3 max-w-3xl mx-auto w-full"
+          className={cn("p-3 max-w-3xl mx-auto w-full", messageGap)}
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
           // reader's place itself, and two corrections would add up.
           // Until the backlog commits, the content is only the last turn: the
@@ -1167,12 +1174,16 @@ function ChatBodyInner({
                     .map((message) => renderMessage(message, true))
                 : null}
               <ChatLastTurn>
-                {displayMessages
-                  .slice(lastUserMessageIndex)
-                  .map((message) => renderMessage(message))}
-                {/* Inside the last turn, which pads to the viewport height:
-                    after it, the card would sit a screen below the reply. */}
-                {recapCard}
+                {/* The kit's last turn spaces its rows 12px; this keeps the
+                    chat's own message gap there too. */}
+                <div className={cn("flex flex-col", messageGap)}>
+                  {displayMessages
+                    .slice(lastUserMessageIndex)
+                    .map((message) => renderMessage(message))}
+                  {/* Inside the last turn, which pads to the viewport height:
+                      after it, the card would sit a screen below the reply. */}
+                  {recapCard}
+                </div>
               </ChatLastTurn>
             </>
           )}
