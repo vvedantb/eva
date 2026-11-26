@@ -650,9 +650,10 @@ if (values["include-env"]) {
 
 if (values["sandbox-env"]) {
   const rules = loadSandboxEnv(appDir);
-  const { values: env, missing } = await resolveSandboxEnv(
-    rules,
-    readSourceEnv,
+  // A "copy" var the source does not have stays unset, as a missing "eva" one.
+  const sourceNames = listEnvNames(`env list ${sourceName}`, [], sourceAuth);
+  const { values: env, missing } = await resolveSandboxEnv(rules, (name) =>
+    sourceNames.includes(name) ? readSourceEnv(name) : undefined,
   );
   for (const [name, value] of env) setTargetEnv(name, value);
   // Clear what an older seed copied: a stale source secret must not survive.
@@ -667,11 +668,7 @@ if (values["sandbox-env"]) {
       ...targetAuth,
     });
   }
-  const unlisted = listEnvNames(
-    `env list ${sourceName}`,
-    [],
-    sourceAuth,
-  ).filter((name) => !Object.hasOwn(rules, name));
+  const unlisted = sourceNames.filter((name) => !Object.hasOwn(rules, name));
   console.log(
     `\nSet ${env.size} sandbox env var(s): ${[...env.keys()].join(", ")}`,
   );
