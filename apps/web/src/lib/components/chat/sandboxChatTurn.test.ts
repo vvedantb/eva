@@ -4,39 +4,26 @@ import type { Id } from "@eva/backend";
 import {
   sandboxChatKeys,
   sendSandboxTurn,
-  type SandboxTurnAddArgs,
-  type SandboxTurnEnqueueArgs,
+  type SandboxTurnExpectation,
   type SandboxTurnPorts,
+  type SandboxTurnSendArgs,
   type SandboxTurnSettings,
-  type SandboxTurnStartArgs,
 } from "./sandboxChatTurn";
 
-type Call =
-  | { port: "add"; args: SandboxTurnAddArgs }
-  | { port: "start"; args: SandboxTurnStartArgs }
-  | { port: "enqueue"; args: SandboxTurnEnqueueArgs };
+type Call = { args: SandboxTurnSendArgs; expected: SandboxTurnExpectation };
 
-/** Ports that record each call and settle only when the test says so. */
+/** Ports that record each send and settle only when the test says so. */
 function deferredPorts() {
   const calls: Call[] = [];
   const settles: Array<(error?: Error) => void> = [];
-  const pending = () =>
-    new Promise<null>((resolve, reject) => {
-      settles.push((error) => (error ? reject(error) : resolve(null)));
-    });
   const ports: SandboxTurnPorts = {
-    add: (args) => {
-      calls.push({ port: "add", args });
-      return pending();
+    send: (args, expected) => {
+      calls.push({ args, expected });
+      return new Promise<null>((resolve, reject) => {
+        settles.push((error) => (error ? reject(error) : resolve(null)));
+      });
     },
-    start: (args) => {
-      calls.push({ port: "start", args });
-      return pending();
-    },
-    enqueue: (args) => {
-      calls.push({ port: "enqueue", args });
-      return pending();
-    },
+    postError: () => Promise.resolve(null),
   };
   const settleAll = (error?: Error) => {
     for (const settle of settles) settle(error);
@@ -54,7 +41,7 @@ const SETTINGS: SandboxTurnSettings = {
 };
 
 describe("sendSandboxTurn", () => {
-  test("queue mode only enqueues, falling back to the execution effort", async () => {
+  test("one send carries the prompt, display text and composer picks", async () => {
     const { ports, calls, settleAll } = deferredPorts();
     const sent = sendSandboxTurn(
       ports,
@@ -66,21 +53,26 @@ describe("sendSandboxTurn", () => {
     await sent;
     expect(calls).toEqual([
       {
-        port: "enqueue",
+        expected: "queue",
         args: {
           message: "full prompt",
           displayContent: "short",
-          model: "claude:opus",
-          reasoningLevel: "high",
-          fastMode: true,
-          providerAccountId: ACCOUNT,
+          annotation: undefined,
           attachmentStorageIds: undefined,
+          sourceProposedPlanId: undefined,
+          // No picker effort: the execution effort is the fallback.
+          settings: {
+            model: "claude:opus",
+            reasoningLevel: "high",
+            fastMode: true,
+            providerAccountId: ACCOUNT,
+          },
         },
       },
     ]);
   });
 
-  test("start mode fires add and start together, before either settles", async () => {
+  test("the picker's effort wins over the execution payload", async () => {
     const { ports, calls, settleAll } = deferredPorts();
     const sent = sendSandboxTurn(
       ports,
@@ -88,34 +80,12 @@ describe("sendSandboxTurn", () => {
       { message: "hello" },
       "start",
     );
-    // Both are in flight at once: the optimistic turn-open must apply before
-    // the user row round-trips.
-    expect(calls.map((call) => call.port)).toEqual(["add", "start"]);
     settleAll();
     await sent;
-    expect(calls[0]?.args).toMatchObject({
-      content: "hello",
-      reasoningLevel: "low",
+    expect(calls[0]).toMatchObject({
+      expected: "start",
+      args: { message: "hello", settings: { reasoningLevel: "low" } },
     });
-    // The picker's effort wins over the execution payload on both rows.
-    expect(calls[1]?.args).toMatchObject({
-      message: "hello",
-      reasoningLevel: "low",
-    });
-  });
-
-  test("the chat row shows the display text; the agent gets the full prompt", async () => {
-    const { ports, calls, settleAll } = deferredPorts();
-    const sent = sendSandboxTurn(
-      ports,
-      SETTINGS,
-      { message: "rich prompt", displayContent: "compact" },
-      "start",
-    );
-    settleAll();
-    await sent;
-    expect(calls[0]?.args).toMatchObject({ content: "compact" });
-    expect(calls[1]?.args).toMatchObject({ message: "rich prompt" });
   });
 
   test("a server rejection propagates so the caller keeps its chips", async () => {

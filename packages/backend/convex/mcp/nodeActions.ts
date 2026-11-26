@@ -1502,20 +1502,9 @@ export const orchestratorStopAgent = internalAction({
       );
       return null;
     }
-    // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
-    // a project's own chat.
-    if (kind === "task") {
-      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
-        target: { taskId: id },
-      });
-      return null;
-    }
-    const owned = (await readOwnedChatAsUser(clerkUserId, kind, id))?.session;
-    if (owned?.chatId !== undefined) {
-      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
-        target: { chatId: owned.chatId },
-      });
-    }
+    // The apps' chat Stop (`chats.stop`): a task's run and chat, a project's
+    // own chat.
+    await runAsUser("mutation", clerkUserId, "chats:stop", { target: id });
     return null;
   },
 });

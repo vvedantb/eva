@@ -7,11 +7,11 @@ import { findOpenTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
 /**
- * The composer picks send or queue from its own subscription, so a burst of
+ * MCP's direct send picks send or queue from its own read, so a burst of
  * sends can all reach `startExecute` before it sees the first turn. Each one
  * used to start, so two turns ran at once. A send that lands behind a running
- * turn must queue instead, and its composer-stored user row must go (the
- * dequeue inserts its own).
+ * turn must queue instead, and its stored user row must go (the dequeue
+ * inserts its own).
  */
 
 const TIMEOUT_MS = 30_000;
@@ -113,7 +113,7 @@ describe("a send that lands behind a running turn", () => {
       ]);
 
       const outcome = await f.asUser.mutation(
-        api.sessionWorkflow.startExecute,
+        api._sessions.execution.startExecute,
         { chatId, message: BURST_MESSAGE, model: "claude:sonnet" },
       );
 
@@ -140,7 +140,7 @@ describe("a send that lands behind a running turn", () => {
         { role: "assistant", content: "" },
       ]);
 
-      await f.asUser.mutation(api.sessionWorkflow.startExecute, {
+      await f.asUser.mutation(api._sessions.execution.startExecute, {
         chatId,
         message: BURST_MESSAGE,
         model: "claude:sonnet",
@@ -165,7 +165,7 @@ describe("a send that lands behind a running turn", () => {
         { role: "assistant", content: "" },
       ]);
 
-      await f.asUser.mutation(api.sessionWorkflow.startExecute, {
+      await f.asUser.mutation(api._sessions.execution.startExecute, {
         chatId,
         message: BURST_MESSAGE,
         model: "claude:sonnet",

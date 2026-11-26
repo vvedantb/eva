@@ -27,7 +27,7 @@ export type OwnedChatBindingCommon = Pick<
  * account drive the composer, and sends go through the session chat ports.
  * Before the chat exists there is no chat to read (`entity` is undefined)
  * and the backend's `chatSeed` (what `ensureOwned` gives the chat) shows in
- * the picker. Stop is `sessions.stopChatTurn` on the chat (which also stops a
+ * the picker. Stop is `chats.stop` on the chat (which also stops a
  * task run streaming into it), or on `stopTarget` before the chat exists.
  */
 export function useOwnedChatBinding({
@@ -48,7 +48,7 @@ export function useOwnedChatBinding({
   const { owned, session, chatSource, chatSeed } = ownedSession;
   const chatModel = useChatModel(chatSource, normalizeAIModel(chatSeed?.model));
   const ports = useSessionTurnPorts(chatSource, common.accounts);
-  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
+  const stopChat = useMutation(api.chats.stop);
   const { model, chat } = chatModel;
   // No chat row yet: show what the backend will seed it with.
   const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
@@ -94,9 +94,9 @@ export function useOwnedChatBinding({
     // Stopping never creates the session.
     cancel: () =>
       owned?.chatId !== undefined
-        ? stopChatTurn({ target: { chatId: owned.chatId } })
+        ? stopChat({ target: owned.chatId })
         : stopTarget !== undefined
-          ? stopChatTurn({ target: stopTarget })
+          ? stopChat({ target: stopTarget.taskId })
           : Promise.resolve(null),
   };
 }

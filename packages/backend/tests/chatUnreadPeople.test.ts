@@ -99,14 +99,14 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 const mention = (f: Fixture, name: Name) => `@[${name}](${f.users[name]})`;
 
-/** The web composer's send: the user row first, then the turn. */
+/** MCP's direct send (`orchestratorDelivery`): the user row first, then the turn. */
 async function send(f: Fixture, name: Name, message: string) {
   await f.as(name).mutation(api.sessions.addMessage, {
     chatId: f.chatId,
     role: "user",
     content: message,
   });
-  return f.as(name).mutation(api.sessionWorkflow.startExecute, {
+  return f.as(name).mutation(api._sessions.execution.startExecute, {
     chatId: f.chatId,
     message,
     model: DEFAULT_AI_MODEL,

@@ -1,4 +1,4 @@
-import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import type { FunctionArgs } from "convex/server";
 import type {
   AIModel,
   api,
@@ -34,38 +34,27 @@ export function withSessionChat<T>(
   return typeof chat === "string" ? run(chat) : chat().then(run);
 }
 
-// The session chat validators, with the chat id bound by the ports.
-type SessionAddArgs = FunctionArgs<typeof api.sessions.addMessage>;
-export type SandboxTurnAddArgs = Omit<SessionAddArgs, "chatId" | "role"> & {
-  /** Defaults to `user`. */
-  role?: SessionAddArgs["role"];
-};
-export type SandboxTurnStartArgs = Omit<
-  FunctionArgs<typeof api.sessionWorkflow.startExecute>,
-  "chatId" | "attachmentStorageIds" | "sourceProposedPlanId"
->;
-export type SandboxTurnEnqueueArgs = Omit<
-  FunctionArgs<typeof api.sessionWorkflow.enqueueMessage>,
-  "chatId"
+/** `chats.send`, with the chat bound by the ports. */
+export type SandboxTurnSendArgs = Omit<
+  FunctionArgs<typeof api.chats.send>,
+  "target"
 >;
 
-/** Start fields passed apart from the composer settings. */
-export interface SandboxTurnStartExtras {
-  attachmentStorageIds?: Id<"_storage">[];
-  /** The proposed plan this turn implements. */
-  sourceProposedPlanId?: Id<"proposedPlans">;
-}
+/**
+ * How the client expects a send to land. The server alone decides; this only
+ * picks the optimistic paint: "start" shows the user bubble and opens the
+ * turn at once, "queue" waits for the queue row.
+ */
+export type SandboxTurnExpectation = "queue" | "start";
 
-/** One chat's workflow mutations, with the chat's id already bound. */
+/** One chat's mutations, with the chat already bound. */
 export interface SandboxTurnPorts {
-  add: (args: SandboxTurnAddArgs) => Promise<null>;
-  start: (
-    args: SandboxTurnStartArgs,
-    extras: SandboxTurnStartExtras,
-  ) => Promise<FunctionReturnType<
-    typeof api.sessionWorkflow.startExecute
-  > | null>;
-  enqueue: (args: SandboxTurnEnqueueArgs) => Promise<null>;
+  send: (
+    args: SandboxTurnSendArgs,
+    expected: SandboxTurnExpectation,
+  ) => Promise<null>;
+  /** Posts an assistant error row (a failed preview annotation send). */
+  postError: (content: string) => Promise<null>;
 }
 
 /** The composer settings a turn runs on. */
@@ -86,65 +75,41 @@ export interface SandboxTurnInput {
   /** Preview annotations: stored on the user row for the comments drawer. */
   annotation?: PreviewAnnotation;
   attachmentStorageIds?: Id<"_storage">[];
-  /** Sessions: the proposed plan this turn implements. Dropped when queued. */
+  /** Sessions: the proposed plan this turn implements. */
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
 /**
- * Delivers one turn. `queue` parks it behind the running turn; `start` posts
- * the user row and starts the turn. Rejects when the server rejects, so a
- * caller can tell a delivered send from a failed one.
+ * Sends one turn through `chats.send`; the server starts or queues it.
+ * `expected` only picks the optimistic paint. Rejects when the server
+ * rejects, so a caller can tell a delivered send from a failed one.
  */
 export async function sendSandboxTurn(
   ports: SandboxTurnPorts,
   settings: SandboxTurnSettings,
   input: SandboxTurnInput,
-  mode: "queue" | "start",
+  expected: SandboxTurnExpectation,
 ): Promise<void> {
   const { model, effortLevel, executionTraits, providerAccountId } = settings;
   // The picker's effort wins. The execution payload leaves out the provider
   // default, so it is only the fallback.
   const reasoningLevel = effortLevel ?? executionTraits.reasoningLevel;
-  if (mode === "queue") {
-    await ports.enqueue({
+  await ports.send(
+    {
       message: input.message,
       displayContent: input.displayContent,
       annotation: input.annotation,
-      model,
-      ...executionTraits,
-      reasoningLevel,
-      providerAccountId,
       attachmentStorageIds: input.attachmentStorageIds,
-    });
-    return;
-  }
-  // Fired together, not one after the other: `startExecute`'s optimistic
-  // status must apply at once, so a second send before the server answers
-  // queues. Convex runs one client's mutations in order, so the user row
-  // still lands first.
-  await Promise.all([
-    ports.add({
-      content: input.displayContent ?? input.message,
-      annotation: input.annotation,
-      attachmentStorageIds: input.attachmentStorageIds,
-      providerAccountId,
-      model,
-      reasoningLevel,
-    }),
-    ports.start(
-      {
-        message: input.message,
+      sourceProposedPlanId: input.sourceProposedPlanId,
+      settings: {
         model,
         ...executionTraits,
         reasoningLevel,
         providerAccountId,
       },
-      {
-        attachmentStorageIds: input.attachmentStorageIds,
-        sourceProposedPlanId: input.sourceProposedPlanId,
-      },
-    ),
-  ]);
+    },
+    expected,
+  );
 }
 
 /**
@@ -169,7 +134,7 @@ export function sandboxAnnotationSender(
     isExecuting,
     enqueue: send("queue"),
     send: send("start"),
-    postError: (content) => ports.add({ role: "assistant", content }),
+    postError: ports.postError,
   });
 }
 

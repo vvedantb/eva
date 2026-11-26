@@ -8,10 +8,7 @@ import {
   getTaskWithAccess,
 } from "../functions";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
-import {
-  getSessionChatWithAccess,
-  type SessionChatContext,
-} from "../_sessionChats/helpers";
+import type { SessionChatContext } from "../_sessionChats/helpers";
 import { stopTaskRun } from "../_agentTasks/taskRunTurn";
 import { cancelChatExecution } from "./execution";
 import {
@@ -25,9 +22,10 @@ import { requestSessionSandboxStop } from "./sandbox";
  * The two Stops. Web, mobile and MCP all call these, so a Stop does the same
  * thing on every surface:
  *
- *   stopChatTurn     stops the agent in one chat: the chat's open turn, and
- *                    the task run shown in it (a quick task's or project
- *                    task's run). Queued messages then start.
+ *   chats.stop       stops the agent in one chat (`stopChat` / `stopTask`
+ *                    here): the chat's open turn, and the task run shown in
+ *                    it (a quick task's or project task's run). What was
+ *                    queued before it waits for Steer.
  *   stopWorkSandbox  sleeps the sandbox of a session, task or project. It is
  *                    refused while the agent works on that sandbox (any chat
  *                    turn or a task run): stop the
@@ -72,34 +70,6 @@ export async function stopTask(
     await findWorkChat(ctx.db, { kind: "task", task }),
   );
 }
-
-/**
- * The Stop button of a chat. Name the chat, or the task when its chat may not
- * exist yet (a quick task's first run).
- */
-export const stopChatTurn = authMutation({
-  args: {
-    target: v.union(
-      v.object({ chatId: v.id("sessionChats") }),
-      v.object({ taskId: v.id("agentTasks") }),
-    ),
-  },
-  returns: v.null(),
-  handler: async (ctx, { target }) => {
-    if ("chatId" in target) {
-      await stopChat(
-        ctx,
-        await getSessionChatWithAccess(ctx.db, target.chatId, ctx.userId),
-      );
-      return null;
-    }
-    await stopTask(
-      ctx,
-      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId),
-    );
-    return null;
-  },
-});
 
 /** Stopping kills the VM under any agent still working on it. */
 async function sessionIsHeld(

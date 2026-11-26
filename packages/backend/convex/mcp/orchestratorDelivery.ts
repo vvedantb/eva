@@ -141,8 +141,9 @@ const SESSION_CHAT_MUTATIONS = {
 /**
  * The mutations that put one message into an existing chat, in order. Shared
  * by every MCP send path (master session and user token alike) so a message
- * from outside the web app lands exactly as a composer send does — and never
- * as a new task, session or project.
+ * from outside the apps lands in the chat — never as a new task, session or
+ * project. The apps send through `chats.send` instead, where the server picks
+ * start or queue; MCP still picks it here (`AgentDelivery`).
  *
  * `start` is two calls because `startExecute` only stages the assistant
  * placeholder: the user row has to be inserted first or the turn runs with no

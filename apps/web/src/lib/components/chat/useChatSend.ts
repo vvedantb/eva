@@ -17,42 +17,42 @@ import { readableSendError } from "./chatBodyUtils";
 import type { ChatSendOptions } from "./ChatBody";
 import {
   sendSandboxTurn,
-  type SandboxTurnAddArgs,
   type SandboxTurnPorts,
+  type SandboxTurnSendArgs,
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
 import type { ChatDraftTarget } from "./useChatDraftSeed";
 
 /**
- * Optimistic update for a chat's `addMessage`: the user's bubble and an empty
- * assistant placeholder show at once, before the mutation round-trips. Every
- * chat (session, quick task, project) attaches this to its own `addMessage`.
- * Patches every live transcript subscription of the chat (`useChatTranscript`):
- * the tail it paints first and the `since` list it follows.
+ * Optimistic paint for a send the client expects to start (`chats.send`):
+ * the user's bubble and an empty assistant placeholder show at once, before
+ * the mutation round-trips. Every chat (session, quick task, project) sends
+ * through `useSessionTurnPorts`, which applies this. Patches every live
+ * transcript subscription of the chat (`useChatTranscript`): the tail it
+ * paints first and the `since` list it follows.
  */
 export function insertSentTurnOptimistically(
   localStore: OptimisticLocalStore,
   parentId: TranscriptParentId,
-  args: SandboxTurnAddArgs,
+  args: SandboxTurnSendArgs,
   accounts: ReadonlyArray<ModelAccount>,
 ) {
-  if ((args.role ?? "user") !== "user") return;
   const now = Date.now();
   const userMsg: TranscriptMessage = {
     _id: tempId("messages"),
     _creationTime: now,
     parentId,
     role: "user",
-    content: args.content,
+    content: args.displayContent ?? args.message,
     timestamp: now,
     activityLog: "",
     attachmentStorageIds: args.attachmentStorageIds,
     credentialSourceLabel: resolveCredentialSourceLabel(
-      args.providerAccountId,
+      args.settings?.providerAccountId,
       accounts,
     ),
-    model: args.model,
-    reasoningLevel: args.reasoningLevel,
+    model: args.settings?.model,
+    reasoningLevel: args.settings?.reasoningLevel,
   };
   const assistantPlaceholder: TranscriptMessage = {
     _id: tempId("messages"),
@@ -97,7 +97,8 @@ export interface ChatTurnSendOptions extends ChatSendOptions {
 /**
  * Send / queue / cancel for one chat: a session chat tab, a quick task or a
  * project. The surface hands over its mutations (`ports`) and settings; the
- * prompt, the queue-or-start rule and the failure toast live here only.
+ * prompt, the optimistic queue-or-start guess and the failure toast live here
+ * only. The server makes the real queue-or-start decision (`chats.send`).
  */
 export function useChatSend({
   ports,
@@ -107,7 +108,7 @@ export function useChatSend({
   isExecuting,
   queuesSends,
 }: {
-  /** The chat's mutations; `add` carries `insertSentTurnOptimistically`. */
+  /** The chat's mutations; `send` carries `insertSentTurnOptimistically`. */
   ports: SandboxTurnPorts;
   settings: SandboxTurnSettings;
   /** Stops whatever turn owns the chat bubble. */
@@ -115,7 +116,7 @@ export function useChatSend({
   /** The `drafts` row "Restore draft" writes back to. */
   /** Undefined for a chat not created yet: a failed send cannot restore a draft. */
   draftTarget: ChatDraftTarget | undefined;
-  /** A turn owns the chat: the send queues behind it. */
+  /** A turn owns the chat: the send is expected to queue behind it. */
   isExecuting: boolean;
   /**
    * An idle chat still queues: Eva is asleep (the queue wakes her) or a usage
@@ -163,7 +164,7 @@ export function useChatSend({
     const draftContent = options?.draftContent ?? content;
     // Hoisted out of the `try`: React Compiler bails on the whole file when it
     // meets expression-level control flow inside one (vvedantb/no-value-block-in-try).
-    const mode = isExecuting || queuesSends ? "queue" : "start";
+    const expected = isExecuting || queuesSends ? "queue" : "start";
     const input = {
       message: appendReviewCommentsToPrompt(content, sentComments),
       attachmentStorageIds,
@@ -174,7 +175,7 @@ export function useChatSend({
       // delivered send from a failed one unless this settles with it. The
       // composer still empties instantly — ChatBody observes this promise
       // instead of blocking its submit on it.
-      await sendSandboxTurn(ports, settings, input, mode);
+      await sendSandboxTurn(ports, settings, input, expected);
     } catch (error) {
       // The optimistic user bubble has rolled back too, so the toast is the
       // only thing left standing for this turn.

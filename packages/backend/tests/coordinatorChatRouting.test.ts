@@ -112,7 +112,7 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** The web composer's send: the user row first, then the turn. */
+/** MCP's direct send: the user row first, then the turn. */
 async function send(
   f: Fixture,
   who: Fixture["author"],
@@ -123,7 +123,7 @@ async function send(
     role: "user",
     content: message,
   });
-  return who.mutation(api.sessionWorkflow.startExecute, {
+  return who.mutation(api._sessions.execution.startExecute, {
     chatId: f.chatId,
     message,
     model: DEFAULT_AI_MODEL,
@@ -172,11 +172,10 @@ describe("coordinator chat routing", () => {
         turns: 0,
       });
 
-      // The phone and the queued web path store it once, and queue nothing.
-      await f.author.mutation(api._sessions.execution.enqueueMessage, {
-        chatId: f.chatId,
+      // The apps' send (`chats.send`) stores it once, and queues nothing.
+      await f.author.mutation(api.chats.send, {
+        target: f.chatId,
         message: `${mentionToken("Tom Mate", f.teammateId)} and the colours`,
-        model: DEFAULT_AI_MODEL,
       });
       expect(await chatState(f)).toEqual({
         users: 2,

@@ -148,7 +148,7 @@ describe("quick tasks on sessions", () => {
       );
 
       const delivered = await f.asUser.mutation(
-        api.sessionWorkflow.startExecute,
+        api._sessions.execution.startExecute,
         { chatId, message: "follow-up", model: DEFAULT_AI_MODEL },
       );
       expect(delivered).toBe("queued");

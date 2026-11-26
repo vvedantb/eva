@@ -49,7 +49,7 @@ export function useSessionChatBinding({
   // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
   const ports = useSessionTurnPorts(chatId, accounts.options);
-  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
+  const stopChat = useMutation(api.chats.stop);
 
   return {
     entity: { kind: "session", sessionId, chatId },
@@ -75,6 +75,6 @@ export function useSessionChatBinding({
     switchProviderAccount: chatModel.setProviderAccountId,
     isSwitchingAccount: chatModel.isSwitchingAccount,
     ports,
-    cancel: () => stopChatTurn({ target: { chatId } }),
+    cancel: () => stopChat({ target: chatId }),
   };
 }

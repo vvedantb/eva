@@ -34,8 +34,9 @@ export function useChatTurnOpen(
 }
 
 /**
- * Optimistic update for a direct send's `startExecute`: marks the chat's turn
- * open at once, so a second send before the server answers queues behind this
+ * Optimistic update for a send the client expects to start (`chats.send`):
+ * marks the chat's turn open at once, so a second send before the server
+ * answers queues behind this
  * one instead of racing it. No turn id exists yet, so it uses the `legacy`
  * shape. The server's real status replaces it when the mutation lands, which
  * also undoes it when the server queued the send or rejected it.

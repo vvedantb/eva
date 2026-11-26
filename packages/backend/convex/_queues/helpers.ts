@@ -290,10 +290,10 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 }
 
 /**
- * Drops the user row the composer stored (`addMessage`) for a send that
+ * Drops the user row MCP stored (`addMessage`) for a send that
  * `startExecute` queued instead of starting: the dequeue inserts its own row,
- * so keeping it would show the prompt twice. The composer picks send or queue
- * from its own subscription, so a burst of sends can all reach `startExecute`
+ * so keeping it would show the prompt twice. MCP picks send or queue from its
+ * own read, so a burst of sends can all reach `startExecute`
  * before it sees the first turn. Their rows interleave with that turn's
  * placeholder, so this takes the newest matching user row since the last
  * finished reply, not just the newest row. Returns the row's attachments.
