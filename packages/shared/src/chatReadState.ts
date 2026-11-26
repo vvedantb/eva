@@ -112,15 +112,18 @@ export function useThreadReadState({
   }
 
   const hasUnread = (state?.unread ?? 0) > 0;
+  // Mark only once the state has loaded: the "New" line is captured from it
+  // above, and marking first would leave nothing unread to place it at.
+  const loaded = state !== undefined;
   /* eslint-disable no-effect/no-event-handler --
      The triggers are the thread coming on screen (web panel and tab, phone
      focus and foreground, a deep link: no single event across both apps)
      and a reply landing, which arrives as a live-query change. Opening
      marks even with no unread replies: it reads the thread's notifications. */
   useEffect(() => {
-    if (!active) return;
+    if (!active || !loaded) return;
     void markRead({ rootId });
-  }, [rootId, active, hasUnread, markRead]);
+  }, [rootId, active, loaded, hasUnread, markRead]);
   /* eslint-enable no-effect/no-event-handler */
 
   return { state, newSinceAt: captured !== null && captured.rootId === rootId ? captured.anchor : undefined };
