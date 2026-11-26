@@ -53,7 +53,9 @@ export function MessageToolbar({
   return (
     <div
       className={cn(
-        "absolute -top-4 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
+        // 24px up: the 28px card sits in the 20px gap above the bubble and
+        // overlaps only its top padding, never the first line of text.
+        "absolute -top-6 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
         // Hover or keyboard focus on the message shows it; an open comment
         // box or menu keeps it up while the pointer is inside the popup.
         "pointer-events-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
