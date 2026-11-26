@@ -363,6 +363,13 @@ export const turnLaneValidator = v.literal("interview");
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
 /** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
+/**
+ * A chat turn that runs its task (Run, Resolve Conflicts, a scheduled or
+ * auto-started run) rather than answering a message: it moves the task's
+ * status when it opens and closes (`_agentTasks/taskRunTurn.ts`).
+ */
+export const taskRunMarkerValidator = v.object({ mode: runModeValidator });
+
 export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
@@ -393,6 +400,8 @@ export const turnFields = {
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /** A chat turn that runs its task (`taskRunMarkerValidator`). */
+  taskRun: v.optional(taskRunMarkerValidator),
   /**
    * Set by the lease reconciler the first time it finds the lease expired
    * while the sandbox process was still alive; cleared by the next successful
@@ -1513,7 +1522,10 @@ export const messageFields = {
   isSyntheticTurn: v.optional(v.boolean()),
   // The task run that wrote this row: its prompt (user) or its reply
   // (assistant). Chat-turn helpers that pick rows by recency skip these.
+  // Project tasks only; a quick task's run is a chat turn (`taskRun`).
   runId: v.optional(v.id("agentRuns")),
+  // User rows: this message ran the task (`taskRunMarkerValidator`).
+  taskRun: v.optional(taskRunMarkerValidator),
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
@@ -1650,6 +1662,8 @@ export const queuedMessageFields = {
   // A reply that @mentioned Eva in a thread: the reply row is already stored,
   // so the dequeue skips the user row, and Eva's answer joins this thread.
   replyTo: v.optional(v.id("messages")),
+  // A queued task run (`taskRunMarkerValidator`); its turn carries it on.
+  taskRun: v.optional(taskRunMarkerValidator),
 };
 
 export const taskSandboxEventFields = {

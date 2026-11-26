@@ -13,7 +13,7 @@ import { clearStreamingActivity, upsertActivityLog } from "./helpers";
  */
 
 /** What started a run, as the chat's user row says it. */
-function runChatPrompt(p: {
+export function runChatPrompt(p: {
   task: Pick<Doc<"agentTasks">, "title" | "description">;
   mode: Doc<"agentRuns">["mode"];
   isFirstRun: boolean;

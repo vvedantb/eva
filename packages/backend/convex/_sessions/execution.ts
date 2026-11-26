@@ -116,6 +116,8 @@ async function stageAndStartChatTurn(
     settings: TurnSettings;
     /** A retry of a thread turn: Eva answers in that thread again. */
     replyTo?: Id<"messages">;
+    /** A retried task run stays one (`_agentTasks/taskRunTurn.ts`). */
+    taskRun?: Doc<"turns">["taskRun"];
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -188,6 +190,7 @@ async function stageAndStartChatTurn(
     model: normalizedModel,
     sandboxId: session.sandboxId,
     repoId: session.repoId,
+    taskRun: params.taskRun,
   });
   const pendingTurn = usesDaemonPull
     ? buildDaemonPendingTurn({
@@ -268,6 +271,8 @@ async function enqueueChatMessage(
     sentViaOrchestrator?: boolean;
     /** A thread reply for Eva: her answer joins this root's thread. */
     replyTo?: Id<"messages">;
+    /** This message runs the chat's task (`_agentTasks/taskRunTurn.ts`). */
+    taskRun?: Doc<"queuedMessages">["taskRun"];
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -300,6 +305,7 @@ async function enqueueChatMessage(
     attachmentStorageIds: settings.attachmentStorageIds,
     sentViaOrchestrator: params.sentViaOrchestrator,
     replyTo: params.replyTo,
+    taskRun: params.taskRun,
   });
   await ctx.db.patch(chat._id, {
     lastModel: settings.model,
@@ -347,6 +353,7 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       context,
       repo,
       actingUserId,
+      taskRun: turn.taskRun,
       ...(await threadTurnMessage(ctx, turn.replyTo, lastUserContent)),
       // Raw sticky traits: `stageAndStartChatTurn` normalises them through
       // `launchTraitsFromStored` before they reach any daemon launch, so this
@@ -431,6 +438,7 @@ export const retryLastTurnWithAccount = authMutation({
       context,
       repo,
       actingUserId: ctx.userId,
+      taskRun: userMessage.taskRun,
       ...(await threadTurnMessage(ctx, failedReplyTo, userMessage.content)),
       settings: {
         model: userMessage.model ?? normalizeAIModel(chat.lastModel),
@@ -919,23 +927,68 @@ export async function sendStickyChatMessage(
     attachmentStorageIds?: Id<"_storage">[];
   },
 ): Promise<void> {
-  const { chat } = params.context;
   await sendSessionChatMessage(ctx, {
     context: params.context,
     userId: params.userId,
     content: params.content,
-    settings: {
-      model: params.model,
-      ...launchTraitsFromStored(params.model, {
-        reasoningLevel: chat.lastReasoningLevel,
-        thinkingEnabled: chat.lastThinkingEnabled,
-        use1mContext: chat.lastUse1mContext,
-        fastMode: chat.lastFastMode,
-      }),
-      providerAccountId: chat.providerAccountId,
-      attachmentStorageIds: params.attachmentStorageIds,
-    },
+    settings: stickyTurnSettings(
+      params.context.chat,
+      params.model,
+      params.attachmentStorageIds,
+    ),
   });
+}
+
+/** A turn on the chat's sticky model, traits and account. */
+function stickyTurnSettings(
+  chat: Doc<"sessionChats">,
+  model: Doc<"turns">["model"],
+  attachmentStorageIds?: Id<"_storage">[],
+): TurnSettings {
+  return {
+    model,
+    ...launchTraitsFromStored(model, {
+      reasoningLevel: chat.lastReasoningLevel,
+      thinkingEnabled: chat.lastThinkingEnabled,
+      use1mContext: chat.lastUse1mContext,
+      fastMode: chat.lastFastMode,
+    }),
+    providerAccountId: chat.providerAccountId,
+    attachmentStorageIds,
+  };
+}
+
+/**
+ * Queues a task's run as a chat message on the chat's sticky picks and
+ * drains the queue: it runs at once on an idle chat, after the running turn
+ * otherwise, and a sleeping sandbox wakes for it. `content` is what the agent
+ * gets; `displayContent` is what the chat shows. The caller checks access.
+ */
+export async function queueTaskRunMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    displayContent: string;
+    taskRun: NonNullable<Doc<"queuedMessages">["taskRun"]>;
+    attachmentStorageIds?: Id<"_storage">[];
+  },
+): Promise<void> {
+  const { chat } = params.context;
+  await enqueueChatMessage(ctx, {
+    context: params.context,
+    userId: params.userId,
+    content: params.content,
+    displayContent: params.displayContent,
+    taskRun: params.taskRun,
+    settings: stickyTurnSettings(
+      chat,
+      normalizeAIModel(chat.lastModel),
+      params.attachmentStorageIds,
+    ),
+  });
+  await drainChatQueueQuietly(ctx, chat._id);
 }
 
 /**

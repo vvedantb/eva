@@ -21,6 +21,8 @@ export {
   assignToProject,
 } from "./_agentTasks/mutations";
 
+export { getRunFacts } from "./_agentTasks/runFacts";
+
 export {
   startExecution,
   scheduleExecution,

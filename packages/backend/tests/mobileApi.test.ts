@@ -22,6 +22,7 @@ import {
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 import { openTurn } from "../convex/_chat/turnStore";
+import { hasActiveQuickTaskRun } from "../convex/_agentTasks/taskRunStatus";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -643,10 +644,14 @@ describe("mobile api", () => {
       expect(plan.skippedCount).toBe(1);
       const failed = await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }));
       expect(failed).toBe(0);
-      const runsOf = (taskId: Id<"agentTasks">) =>
-        t.run((ctx) => ctx.db.query("agentRuns").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect());
-      expect(await runsOf(mine)).toHaveLength(1);
-      expect(await runsOf(theirs)).toHaveLength(0);
+      // A quick task's run is a task-mode message in its chat.
+      const isRunning = (taskId: Id<"agentTasks">) =>
+        t.run(async (ctx) => {
+          const task = await ctx.db.get(taskId);
+          return task !== null && (await hasActiveQuickTaskRun(ctx.db, task));
+        });
+      expect(await isRunning(mine)).toBe(true);
+      expect(await isRunning(theirs)).toBe(false);
       // A second Run (the row menu's "Run Eva") on a task that is running fails and is counted, not thrown.
       expect(await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }))).toBe(1);
     },

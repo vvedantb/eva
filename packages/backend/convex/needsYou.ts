@@ -1,3 +1,4 @@
+import { quickTaskRunFailedAt } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { entityHref, repoBasePath } from "@eva/shared";
 import {
@@ -12,7 +13,6 @@ import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import { loadProjectTaskRows } from "./_projects/taskTable";
-import { latestTaskRun } from "./_projects/runSettings";
 import { isSessionArchived } from "./_sessions/archive";
 
 /**
@@ -273,8 +273,9 @@ async function quickTaskRows(
   const quick = (tasks: Doc<"agentTasks">[]) =>
     tasks.filter((task) => task.projectId === undefined);
   const todoTasks = quick(todo);
-  const latestRuns = await Promise.all(
-    todoTasks.map((task) => latestTaskRun(db, task._id)),
+  // A quick task runs as task-mode turns in its chat (`taskRunStatus.ts`).
+  const failedAts = await Promise.all(
+    todoTasks.map((task) => quickTaskRunFailedAt(db, task)),
   );
   const candidates = [
     ...quick([...codeReview, ...businessReview]).map((task) => ({
@@ -283,11 +284,11 @@ async function quickTaskRows(
       at: task.updatedAt,
     })),
     ...todoTasks.map((task, index) => {
-      const run = latestRuns[index];
+      const failedAt = failedAts[index] ?? null;
       return {
         task,
-        lastRunFailed: run?.status === "error",
-        at: run?.finishedAt ?? task.updatedAt,
+        lastRunFailed: failedAt !== null,
+        at: failedAt ?? task.updatedAt,
       };
     }),
   ];

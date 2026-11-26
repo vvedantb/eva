@@ -1,10 +1,5 @@
 export {
-  get,
-  getWithDetails,
-  listByTask,
   getTaskIdsWithLatestRunError,
-  getLatestDeploymentStatuses,
-  getLatestDeploymentByProject,
 } from "./_agentRuns/queries";
 
 export {

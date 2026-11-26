@@ -2,7 +2,9 @@ import { v, type Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { startTaskRun } from "../_taskWorkflow/startRun";
-import { aiModelValidator, runModeValidator } from "../validators";
+import { startQuickTaskRun } from "./taskRunTurn";
+import { hasActiveQuickTaskRun } from "./taskRunStatus";
+import { runModeValidator } from "../validators";
 import {
   assertTaskNotArchived,
   authMutation,
@@ -14,8 +16,9 @@ import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranc
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
 /**
- * Starts a task now: a run and its workflow. The one start for `startExecution`
- * and "Save and Run" on a new task (`createQuickTask`, `activateDraft`).
+ * Starts a task now. The one start for `startExecution` and "Save and Run" on
+ * a new task (`createQuickTask`, `activateDraft`). A quick task runs as a
+ * task-mode turn in its chat (`taskRunTurn.ts`); a project task as a run.
  */
 export async function startTaskExecution(
   ctx: MutationCtx & { userId: Id<"users"> },
@@ -39,6 +42,16 @@ export async function startTaskExecution(
   if (!repo) {
     throw new Error("Repository not found");
   }
+  if (task.projectId === undefined) {
+    // A pending schedule is replaced by this run.
+    await cancelTaskRunSchedule(ctx, taskId);
+    await startQuickTaskRun(ctx, task, {
+      mode: options.mode,
+      userId: ctx.userId,
+      commentId: options.triggeringCommentId,
+    });
+    return;
+  }
   // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
   if (await hasActiveRun(ctx.db, taskId)) {
     throw new Error("Task already has an active execution");
@@ -47,7 +60,7 @@ export async function startTaskExecution(
   const firstOnBranch = await isFirstTaskOnBranch(ctx.db, taskId);
   const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
 
-  const runId = await startTaskRun(ctx, {
+  await startTaskRun(ctx, {
     task,
     repo,
     userId: ctx.userId,
@@ -62,42 +75,23 @@ export async function startTaskExecution(
     clearPendingChangeRequest: true,
     rollbackStatus: "todo",
   });
-
-  return {
-    runId,
-    taskId,
-    repoId: task.repoId,
-    installationId: repo.installationId,
-    projectId: task.projectId,
-    baseBranch,
-    isFirstTaskOnBranch: firstOnBranch,
-    model: task.model ?? repo.defaultModel,
-  };
 }
 
-/** Starts task execution by creating a run and launching the workflow. */
+/** Runs a task now (Run, Retry, Resolve Conflicts). */
 export const startExecution = authMutation({
   args: {
     id: v.id("agentTasks"),
     mode: v.optional(runModeValidator),
     triggeringCommentId: v.optional(v.id("taskComments")),
   },
-  returns: v.object({
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    installationId: v.number(),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  }),
-  handler: async (ctx, args) =>
+  returns: v.null(),
+  handler: async (ctx, args) => {
     await startTaskExecution(ctx, args.id, {
       mode: args.mode,
       triggeringCommentId: args.triggeringCommentId,
-    }),
+    });
+    return null;
+  },
 });
 
 /** Schedules a task for future execution at a specified time. */
@@ -115,13 +109,11 @@ export const scheduleExecution = authMutation({
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
+    const running =
+      task.projectId === undefined
+        ? await hasActiveQuickTaskRun(ctx.db, task)
+        : await hasActiveRun(ctx.db, args.id);
+    if (running) {
       throw new Error("Task already has an active execution");
     }
     if (args.scheduledAt <= Date.now()) {

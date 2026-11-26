@@ -32,7 +32,7 @@ type TaskDetailsData = Pick<
   | "hasRuns"
   | "canEditTaskText"
   | "baseBranch"
-  | "latestDeployment"
+  | "deploymentStatus"
 >;
 
 /**
@@ -68,7 +68,7 @@ export function TaskDetailsPane({
     hasRuns,
     canEditTaskText: canEditText,
     baseBranch,
-    latestDeployment,
+    deploymentStatus,
   } = detail;
   const scheduledAt = taskScheduledAt(task);
 
@@ -175,7 +175,7 @@ export function TaskDetailsPane({
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
-                latestDeployment={latestDeployment}
+                deploymentStatus={deploymentStatus}
                 hasRuns={hasRuns}
                 isOwner={isOwner}
                 allTags={allTags ?? []}
