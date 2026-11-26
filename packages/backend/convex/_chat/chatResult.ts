@@ -291,8 +291,7 @@ export async function insertAssistantPlaceholderIfNeeded(
     lastTurnMessage.role === "assistant" &&
     lastTurnMessage.content === "" &&
     lastTurnMessage.finishedAt === undefined &&
-    lastTurnMessage.isSyntheticTurn !== true &&
-    lastTurnMessage.runId === undefined
+    lastTurnMessage.isSyntheticTurn !== true
   ) {
     return "existing";
   }

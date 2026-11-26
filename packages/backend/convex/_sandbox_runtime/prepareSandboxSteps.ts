@@ -14,7 +14,6 @@ type PrepareSandboxArgs = {
   streamingEntityId: string;
   ephemeral: boolean;
   existingSandboxId?: string;
-  attachRunId?: Id<"agentRuns">;
   baseBranch?: string;
   branchName?: string;
   createRetry?: { maxAttempts: number; initialBackoffMs: number; base: number };
@@ -107,7 +106,6 @@ export async function prepareSandboxSteps(
       repoName: args.repoName,
       ephemeral: args.ephemeral,
       repoId: args.repoId,
-      attachRunId: args.attachRunId,
       streamingEntityId: args.streamingEntityId,
     },
     args.createRetry ? { retry: args.createRetry } : undefined,

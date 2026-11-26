@@ -1,5 +1,5 @@
-import { runStreamingEntityId } from "./runChatTurn";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
+import type { runModeValidator } from "../validators";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -10,11 +10,6 @@ import {
 } from "../_pullRequests/store";
 import { siblingPrValidator } from "../prBody";
 import { taskStatusValidator } from "../_validators/enums";
-import {
-  buildTraitsExecutionPayload,
-  reasoningLevelValidator,
-  runModeValidator,
-} from "../validators";
 import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   buildImplementationPrompt,
@@ -22,7 +17,6 @@ import {
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
-import { childTaskProjectBlock } from "../_sessions/sessionPrompt";
 import { buildLinkedReposSection } from "../prompts";
 
 const MONTH_NAMES = [
@@ -69,18 +63,6 @@ async function getChangeRequestContents(
     .map((c) => c.content);
 }
 
-/** The linked repos of the task's session (`sessionRepos`); none before it exists. */
-async function listSessionRepos(
-  ctx: QueryCtx,
-  sessionId: Id<"sessions"> | undefined,
-): Promise<Doc<"sessionRepos">[]> {
-  if (sessionId === undefined) return [];
-  return await ctx.db
-    .query("sessionRepos")
-    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-    .collect();
-}
-
 /** Resolves `@` mention tokens in text an agent prompt carries. */
 async function resolveTextForPrompt(
   ctx: QueryCtx,
@@ -109,7 +91,7 @@ export async function buildTaskRunPrompt(
   p: {
     task: Doc<"agentTasks">;
     repo: Doc<"githubRepos">;
-    mode: Doc<"agentRuns">["mode"];
+    mode: Infer<typeof runModeValidator>;
     branchName: string;
     /** Comments before this were handled by an earlier run. */
     commentsSince: number | undefined;
@@ -221,150 +203,9 @@ export async function buildTaskRunPrompt(
   return { prompt, resolvedTaskDescription };
 }
 
-/** Fetches task and repo config to build the prompt and sandbox parameters for a run. */
-export const getTaskData = internalQuery({
-  args: {
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    runId: v.id("agentRuns"),
-    projectId: v.optional(v.id("projects")),
-    /** The task's own session: its sandbox is the one the run reuses. */
-    ownedSessionId: v.optional(v.id("sessions")),
-    branchName: v.optional(v.string()),
-    mode: v.optional(runModeValidator),
-  },
-  returns: v.object({
-    prompt: v.string(),
-    /** The run's chat stream: its turn, runner and sandbox prep write here. */
-    streamingEntityId: v.string(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.string(),
-    taskTitle: v.string(),
-    taskDescription: v.optional(v.string()),
-    // Files the user attached when creating the task; materialized into the
-    // sandbox at launch so the agent can read them.
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    // Trait overrides for the run, already reduced to the non-default ones so
-    // the runner falls back to each model's own behaviour otherwise.
-    traits: v.object({
-      reasoningLevel: v.optional(reasoningLevelValidator),
-      thinkingEnabled: v.optional(v.boolean()),
-      use1mContext: v.optional(v.boolean()),
-      fastMode: v.optional(v.boolean()),
-    }),
-    deploymentProjectName: v.optional(v.string()),
-    rootDirectory: v.string(),
-    devPort: v.optional(v.number()),
-    devCommand: v.optional(v.string()),
-    /** The task's session clones other repos too (`sessionRepos`). */
-    hasLinkedRepos: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    const [task, repo, successfulRuns, linkedRepoRows] = await Promise.all([
-      ctx.db.get(args.taskId),
-      ctx.db.get(args.repoId),
-      // Only surface comments the last successful run hasn't already
-      // addressed (see the cutoff below).
-      ctx.db
-        .query("agentRuns")
-        .withIndex("by_task_and_status", (q) =>
-          q.eq("taskId", args.taskId).eq("status", "success"),
-        )
-        .collect(),
-      listSessionRepos(ctx, args.ownedSessionId),
-    ]);
-    if (!task) throw new Error("Task not found");
-    if (!repo) throw new Error("Repository not found");
-
-    let projectContext: { title: string; description?: string } | undefined;
-    // A child task's run carries the same project half its chat turns do:
-    // its place in the project and the brief.
-    let projectBlock = "";
-    if (args.projectId) {
-      const project = await ctx.db.get(args.projectId);
-      if (project) {
-        projectContext = {
-          title: project.title,
-          description: await resolveTextForPrompt(
-            ctx,
-            project.description ?? undefined,
-            args.repoId,
-          ),
-        };
-        projectBlock = await childTaskProjectBlock(ctx, project);
-      }
-    }
-    // The coordinator's retry note or the answer to the task's question.
-    const run = await ctx.db.get(args.runId);
-    const runNote = run?.note?.trim() ?? "";
-    // The run streams into its chat turn (`openRunChatTurn`).
-    const streamingEntityId = run && (await runStreamingEntityId(ctx.db, run));
-    if (!streamingEntityId) throw new Error("Task run has no chat turn");
-
-    // Only surface comments the last successful run hasn't already addressed,
-    // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
-    // latest successful run's startedAt (not finishedAt), so comments added
-    // while that run was in-flight still carry over. Failed/errored runs are
-    // NOT cutoffs — their comments stay unaddressed for the next retry.
-    const latestSuccessfulRun = successfulRuns.reduce<Doc<"agentRuns"> | null>(
-      (latest, run) => {
-        if (run.startedAt === undefined) return latest;
-        if (
-          latest === null ||
-          latest.startedAt === undefined ||
-          run.startedAt > latest.startedAt
-        ) {
-          return run;
-        }
-        return latest;
-      },
-      null,
-    );
-    const branchName = args.branchName || taskBranchName(task);
-    const rootDirectory = repo.rootDirectory ?? "";
-    const { prompt, resolvedTaskDescription } = await buildTaskRunPrompt(ctx, {
-      task,
-      repo,
-      mode: args.mode,
-      branchName,
-      commentsSince: latestSuccessfulRun?.startedAt,
-      // Continuity for a "Make changes" re-run: what the last success did.
-      previousRunSummary:
-        latestSuccessfulRun?.resultSummary?.trim() || undefined,
-      projectContext,
-      linkedRepoRows,
-    });
-
-    return {
-      prompt: [prompt, projectBlock, runNote]
-        .filter((block) => block !== "")
-        .join("\n\n"),
-      streamingEntityId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      taskTitle: task.title,
-      taskDescription: resolvedTaskDescription ?? task.description,
-      attachmentStorageIds: task.attachmentStorageIds,
-      traits: buildTraitsExecutionPayload(task.model, {
-        effortLevel: task.reasoningLevel,
-        thinkingEnabled: task.thinkingEnabled,
-        use1mContext: task.use1mContext,
-        fastMode: task.fastMode,
-      }),
-      deploymentProjectName: repo.deploymentProjectName,
-      rootDirectory,
-      devPort: repo.devPort,
-      devCommand: repo.devCommand,
-      hasLinkedRepos: linkedRepoRows.length > 0,
-    };
-  },
-});
-
 /** Fetches everything the manual Create PR action needs in one round-trip:
- * task/repo metadata for the GitHub call, the latest run to attach the
- * resulting URL to, and the change-request enrichment for the body. */
+ * task/repo metadata for the GitHub call and the change-request enrichment
+ * for the body. */
 export const getTaskPrCreationData = internalQuery({
   args: {
     taskId: v.id("agentTasks"),
@@ -382,18 +223,13 @@ export const getTaskPrCreationData = internalQuery({
     projectId: v.optional(v.id("projects")),
     isQuickTask: v.boolean(),
     taskStatus: taskStatusValidator,
-    latestRunId: v.union(v.id("agentRuns"), v.null()),
     existingPrUrl: v.union(v.string(), v.null()),
     changeRequests: v.array(v.string()),
     relatedPrs: v.array(siblingPrValidator),
   }),
   handler: async (ctx, args) => {
-    const [task, runs, changeRequests, relatedPrs] = await Promise.all([
+    const [task, changeRequests, relatedPrs] = await Promise.all([
       ctx.db.get(args.taskId),
-      ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-        .collect(),
       getChangeRequestContents(ctx, args.taskId),
       taskRelatedPrLinks(ctx.db, args.taskId),
     ]);
@@ -403,11 +239,6 @@ export const getTaskPrCreationData = internalQuery({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const sortedRuns = runs.sort(
-      (a, b) =>
-        (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
-    );
-    const latestRun = sortedRuns[0] ?? null;
     const branchName = taskBranchName(task);
     // Only a live PR blocks a new one: after a merge or close, new commits on
     // the branch need a fresh PR.
@@ -430,9 +261,6 @@ export const getTaskPrCreationData = internalQuery({
       projectId: task.projectId,
       isQuickTask: task.projectId === undefined,
       taskStatus: task.status,
-      // A quick task's runs are chat turns: its PR names no run.
-      latestRunId:
-        latestRun && task.projectId !== undefined ? latestRun._id : null,
       existingPrUrl: livePr?.prUrl ?? null,
       changeRequests,
       relatedPrs,

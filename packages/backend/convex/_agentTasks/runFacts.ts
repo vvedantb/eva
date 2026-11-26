@@ -1,15 +1,21 @@
 import { v } from "convex/values";
-import { authQuery, hasTaskAccess } from "../functions";
+import type { Id } from "../_generated/dataModel";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+  isTaskVisibleTo,
+} from "../functions";
 import { deploymentStatusValidator } from "../validators";
 import { findWorkSession } from "../_sessions/owner";
 import { taskHasRun } from "./runSummary";
-import { hasActiveTaskRun } from "./taskRunStatus";
+import { hasActiveTaskRun, taskRunFailedAt } from "./taskRunStatus";
 
 /**
  * What the task page, card menu and phone need to know about a task's runs:
- * task-mode turns in its chat (`taskRunTurn.ts`), plus the `agentRuns` rows
- * of runs from before that. One read for quick and project tasks, so the
- * clients never branch on the task kind.
+ * the task-mode turns in its chat (`taskRunTurn.ts`). One read for quick and
+ * project tasks, so the clients never branch on the task kind. A PR that
+ * failed to open shows as an alert in the chat, not here.
  */
 export const getRunFacts = authQuery({
   args: { taskId: v.id("agentTasks") },
@@ -18,8 +24,6 @@ export const getRunFacts = authQuery({
       hasRuns: v.boolean(),
       /** A run is going or waiting to start. */
       hasActiveRun: v.boolean(),
-      /** The latest run's PR failure (project runs; a quick task's shows in its chat). */
-      latestPrError: v.optional(v.string()),
       deploymentStatus: v.optional(deploymentStatusValidator),
     }),
     v.null(),
@@ -27,26 +31,45 @@ export const getRunFacts = authQuery({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
-    const [session, hasRuns, turnActive, runs] = await Promise.all([
+    const [session, hasRuns, hasActiveRun] = await Promise.all([
       findWorkSession(ctx.db, { kind: "task", task }),
       taskHasRun(ctx.db, task._id),
       hasActiveTaskRun(ctx.db, task),
-      // Runs from before runs became chat turns.
-      ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect(),
     ]);
-    runs.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
     return {
       hasRuns,
-      hasActiveRun:
-        turnActive ||
-        runs.some((run) => run.status === "queued" || run.status === "running"),
-      latestPrError: runs.find((run) => run.prError)?.prError,
-      deploymentStatus:
-        session?.deploymentStatus ??
-        runs.find((run) => run.deploymentStatus)?.deploymentStatus,
+      hasActiveRun,
+      deploymentStatus: session?.deploymentStatus,
     };
+  },
+});
+
+/**
+ * The tasks, of those named, whose last run failed and that is still their
+ * latest outcome (`taskRunFailedAt`): the failed badge on task lists and
+ * project panels. A task of `repoId` needs only the draft check; any other
+ * task the full access check.
+ */
+export const getTaskIdsWithFailedRun = authQuery({
+  args: {
+    repoId: v.id("githubRepos"),
+    taskIds: v.array(v.id("agentTasks")),
+  },
+  returns: v.array(v.id("agentTasks")),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const failed = await Promise.all(
+      args.taskIds.map(async (taskId): Promise<Id<"agentTasks"> | null> => {
+        const task = await ctx.db.get(taskId);
+        if (!task) return null;
+        const visible =
+          task.repoId === args.repoId
+            ? isTaskVisibleTo(task, ctx.userId)
+            : await hasTaskAccess(ctx.db, task, ctx.userId);
+        if (!visible) return null;
+        return (await taskRunFailedAt(ctx.db, task)) !== null ? taskId : null;
+      }),
+    );
+    return failed.filter((id): id is Id<"agentTasks"> => id !== null);
   },
 });

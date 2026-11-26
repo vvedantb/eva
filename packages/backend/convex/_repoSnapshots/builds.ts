@@ -169,9 +169,6 @@ export const listReferencedSandboxIds = internalQuery({
       if (sandboxId && !ids.includes(sandboxId)) ids.push(sandboxId);
     };
 
-    const runs = await ctx.db.query("agentRuns").collect();
-    for (const run of runs) add(run.sandboxId);
-
     const sessions = await ctx.db.query("sessions").collect();
     for (const session of sessions) add(session.sandboxId);
 

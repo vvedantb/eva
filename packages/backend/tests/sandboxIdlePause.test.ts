@@ -299,7 +299,7 @@ describe("sandbox owner state (leak sweep)", () => {
   test(
     "closed and idle is a leak; active, stopping, busy and unowned are not",
     async () => {
-      const { t, sessionId, taskId, taskSessionId, repoId } = await fixture();
+      const { t, sessionId, taskSessionId, repoId } = await fixture();
       const state = (sandboxId: string) =>
         t.query(internal.sandboxIdlePause.getSandboxOwnerState, { sandboxId });
 
@@ -308,16 +308,13 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "stopping" });
-        // A quick-task run's open turn holds its session's VM.
+        // A task's Run (a task-mode turn) holds its session's VM.
         await ctx.db.patch(taskSessionId, { status: "closed" });
         await ctx.db.insert("turns", {
-          entityId: await ctx.db.insert("agentRuns", {
-            taskId,
-            status: "running",
-            logs: [],
-          }),
+          entityId: taskSessionId,
           sessionId: taskSessionId,
-          streamingEntityId: "task-run",
+          streamingEntityId: String(taskSessionId),
+          taskRun: { mode: "implementation" },
           state: "running",
           open: true,
           turnStartedAt: Date.now(),

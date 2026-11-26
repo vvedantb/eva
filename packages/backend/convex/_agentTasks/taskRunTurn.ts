@@ -1,9 +1,13 @@
+import type { Infer } from "convex/values";
 import type { MutationCtx } from "../_generated/server";
+import type { runModeValidator } from "../validators";
 import type { Doc, Id } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import { ensureWorkSession } from "../_sessions/ownedSession";
+import { findWorkChat } from "../_sessions/ownerState";
+import { closeTaskReports, findOpenAsk } from "../_projects/reports";
 import { queueTaskRunMessage } from "../_sessions/execution";
 import { taskBranchName } from "../_git/branchNames";
-import { runChatPrompt } from "../_taskWorkflow/runChatTurn";
 import { buildTaskRunPrompt } from "../_taskWorkflow/queries";
 import {
   projectRunSettings,
@@ -21,7 +25,26 @@ import { hasActiveTaskRun } from "./taskRunStatus";
  * in the same chat never changes the status.
  */
 
-type TaskRunMode = NonNullable<Doc<"agentRuns">["mode"]>;
+type TaskRunMode = Infer<typeof runModeValidator>;
+
+/** What started a run, as the chat's user row says it. */
+export function runChatPrompt(p: {
+  task: Pick<Doc<"agentTasks">, "title" | "description">;
+  mode: TaskRunMode;
+  isFirstRun: boolean;
+  comment: string | undefined;
+  note: string | undefined;
+}): string {
+  if (p.mode === "resolve_conflicts") return "Resolve merge conflicts";
+  if (p.comment !== undefined) return p.comment;
+  if (p.note !== undefined) return p.note;
+  if (p.isFirstRun) {
+    return p.task.description
+      ? `${p.task.title}\n\n${p.task.description}`
+      : p.task.title;
+  }
+  return "Run again";
+}
 
 /**
  * Runs a task now: queues its run as a task-mode message in the task's chat.
@@ -124,4 +147,40 @@ export async function autoStartTaskRun(
   if (!task) throw new Error("Task not found");
   if (await hasActiveTaskRun(ctx.db, task)) return;
   await startTaskRunTurn(ctx, task, { userId });
+}
+
+/**
+ * Stops a task's run that is not a live turn (the chat Stop closes that one,
+ * and its close hook moves the task): a Run still waiting in the queue, or a
+ * project task waiting on the answer to its question. The queued Run goes,
+ * the question closes, the task is To Do again and its project's scheduler
+ * looks again. A no-op when the task has neither. The caller checks access.
+ */
+export async function stopTaskRun(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  const owned = await findWorkChat(ctx.db, { kind: "task", task });
+  const queued = owned
+    ? (
+        await ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) =>
+            q.eq("parentId", owned.chat._id),
+          )
+          .collect()
+      ).filter((row) => row.taskRun !== undefined)
+    : [];
+  const ask = await findOpenAsk(ctx.db, task._id);
+  if (queued.length === 0 && ask === null) return;
+  for (const row of queued) await ctx.db.delete(row._id);
+  if (ask) await closeTaskReports(ctx, task._id);
+  if (task.status === "in_progress") {
+    await ctx.db.patch(task._id, { status: "todo", updatedAt: Date.now() });
+  }
+  if (task.projectId !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
+      projectId: task.projectId,
+    });
+  }
 }

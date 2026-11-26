@@ -134,7 +134,7 @@ describe("a quick task's Run is a turn in its chat", () => {
       expect(await status()).toBe("todo");
       // The failed Run is the task's latest outcome: the card shows it.
       expect(
-        await asUser.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await asUser.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: ids.repoId,
           taskIds: [ids.taskId],
         }),
@@ -167,7 +167,7 @@ describe("a quick task's Run is a turn in its chat", () => {
       await endTurn({ mode: "implementation" }, "error");
       await endTurn(undefined, "done");
       expect(
-        await asUser.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await asUser.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: ids.repoId,
           taskIds: [ids.taskId],
         }),

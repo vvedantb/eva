@@ -75,7 +75,7 @@ export function QuickTasksKanbanBoard({
   const tasks = externalTasks;
 
   const taskIds = tasks.map((t) => t._id);
-  const errorTaskIds = useQuery(api.agentRuns.getTaskIdsWithLatestRunError, {
+  const errorTaskIds = useQuery(api.agentTasks.getTaskIdsWithFailedRun, {
     repoId,
     taskIds,
   });

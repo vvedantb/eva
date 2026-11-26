@@ -668,28 +668,6 @@ async function attachChatMediaIfAny(
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 
-/**
- * Attaches uploaded media to the run doc, for task runs.
- *
- * A run writes no `messages` row — the quick task's first-run chat turn and the
- * timeline row are both rendered from the run itself — so its media hangs off
- * the run instead of the last message.
- */
-async function attachRunMediaIfAny(
-  uploaded: { storageId: string; fileName: string }[],
-): Promise<void> {
-  if (uploaded.length === 0) return;
-  await callConvexWithRetry(
-    "mutation",
-    "agentRuns:attachMedia",
-    {
-      id: RUN_ID ?? "",
-      mediaStorageIds: uploaded.map((item) => item.storageId),
-    },
-    3,
-  );
-}
-
 /** Completion fields that carry agent/CLI text into chat and Convex logs. */
 const REDACTED_COMPLETION_FIELDS: readonly string[] = [
   "result",
@@ -721,20 +699,13 @@ export async function sendTurnCompletion(
 }
 
 /**
- * Sends the completion mutation and attaches sandbox media around it.
- *
- * A chat turn harvests after completion, so `screenshots:attachMedia` can patch
- * the assistant message that was just written. A task run harvests *before*:
- * its media hangs off the run doc, which already exists, and completing a run
- * hands control back to the task workflow — which pushes, opens the PR and
- * stops the sandbox out from under a late upload.
+ * Sends the completion mutation, then attaches sandbox media to the chat
+ * reply it just wrote (`screenshots:attachMedia`). A one-shot automation run
+ * (`RUN_ID`) has no chat reply, so it harvests nothing.
  */
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  // The run harvest runs while the lease is still held: the server has not
-  // closed the turn yet, so its heartbeats stay valid during the upload.
-  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   // Every caller fences the payload with its turn lease before this point.
   const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
@@ -748,8 +719,7 @@ export async function deliverCompletionWithMedia(
 /**
  * Scans sandbox `recordings/` then `screenshots/` under the repo root and the
  * app rootDirectory, uploads all captured media (videos first, in capture
- * order), and attaches it to the turn's chat reply — or, for a task run, to the
- * run doc that the chat renders its first turn from.
+ * order), and attaches it to the turn's chat reply.
  * Shared by the one-shot callback and the Claude sdk-daemon finalize path —
  * daemon turns previously skipped this, so chat never showed agent
  * recordings.
@@ -859,11 +829,7 @@ export async function uploadAndAttachSandboxMedia(
   }
 
   try {
-    if (RUN_ID) {
-      await attachRunMediaIfAny(uploaded);
-    } else {
-      await attachChatMediaIfAny(uploaded, target);
-    }
+    await attachChatMediaIfAny(uploaded, target);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }

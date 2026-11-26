@@ -33,9 +33,6 @@ export {
   forcePushBranch,
   stopSandbox,
   requestStopSandbox,
-  claimSandboxForTaskRun,
-  finishTaskRunSandboxMutation,
-  attachTaskRunSandbox,
 
   patchSessionDevServer,
   sandboxReady,

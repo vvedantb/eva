@@ -696,11 +696,9 @@ export const clearStuckWorkingState = internalMutation({
       .collect();
     let deletedPlaceholders = 0;
     for (const message of messages) {
-      // A task run's reply is settled by the run itself (`runChatTurn.ts`).
       if (
         message.role === "assistant" &&
         message.isSystemAlert !== true &&
-        message.runId === undefined &&
         message.content === "" &&
         message.finishedAt === undefined
       ) {

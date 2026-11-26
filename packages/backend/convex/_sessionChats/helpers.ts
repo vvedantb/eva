@@ -137,12 +137,7 @@ export async function findChatByNumber(
  * slots. One indexed read over the session's open turns. The chat's own open
  * turn never counts: at send time the new turn supersedes it, and at dequeue
  * time the chat is idle so any open turn of its own is a leftover.
- *
- * A run from before runs became chat turns (`agentRuns`) is filed under its
- * task's own session, and it holds the whole sandbox: while one is open no
- * chat may start, so a message sent mid-run queues behind it (the run's
- * `closeTurn` drains the queue). A task-mode turn is a chat turn and counts
- * as one.
+ * A task's run is a chat turn and counts as one.
  */
 export async function sessionChatHasFreeSlot(
   db: DatabaseReader,
@@ -154,9 +149,6 @@ export async function sessionChatHasFreeSlot(
       q.eq("sessionId", context.session._id).eq("open", true),
     )
     .collect();
-  if (openTurns.some((turn) => db.normalizeId("agentRuns", turn.entityId))) {
-    return false;
-  }
   const siblingsRunning = openTurns.filter(
     (turn) => turn.entityId !== String(context.chat._id),
   ).length;

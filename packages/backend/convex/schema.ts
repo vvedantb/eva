@@ -1,7 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
-  activityLogTypeValidator,
   webhookEventStatusValidator,
   messageFields,
   aveThreadFields,
@@ -131,10 +130,8 @@ const schema = defineSchema({
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
 
-  agentRuns: defineTable(agentRunFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_status", ["taskId", "status"])
-    .index("by_status", ["status"]),
+  // Empty; kept until `deleteRunTurns` has run (see `agentRunFields`).
+  agentRuns: defineTable(agentRunFields),
 
   // Every pull request linked to a session, quick task or project. An owner
   // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.
@@ -160,15 +157,6 @@ const schema = defineSchema({
   })
     .index("by_task", ["taskId"])
     .index("by_repo", ["repoId"]),
-
-  agentRunActivityLogs: defineTable({
-    runId: v.id("agentRuns"),
-    activityLog: v.string(),
-    type: v.optional(activityLogTypeValidator),
-    updatedAt: v.number(),
-  })
-    .index("by_run", ["runId"])
-    .index("by_run_and_type", ["runId", "type"]),
 
   githubRepos: defineTable(githubRepoFields)
     .index("by_github_id", ["githubId"])

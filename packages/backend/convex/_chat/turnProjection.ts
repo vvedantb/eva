@@ -1,6 +1,5 @@
 import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
@@ -174,7 +173,6 @@ function turnOwnerId(
   return (
     db.normalizeId("sessionChats", id) ??
     db.normalizeId("sessions", id) ??
-    db.normalizeId("agentRuns", id) ??
     db.normalizeId("automationRuns", id) ??
     db.normalizeId("docs", id) ??
     db.normalizeId("evaluationReports", id)
@@ -216,15 +214,12 @@ export async function openTurnWorkflowId(
   return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
 }
 
-/**
- * One "sandbox busy" status for a quick task: its main run and its chat turn
- * share one sandbox, and the queue already treats them as exclusive.
- */
+/** A task is busy while its chat has a turn open: a run is a chat turn. */
 export function taskIsExecuting(
-  task: Pick<Doc<"agentTasks">, "_id"> & TaskRunSource,
+  task: Pick<Doc<"agentTasks">, "_id">,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return isTaskRunning(task) || openChatEntityIds.has(String(task._id));
+  return openChatEntityIds.has(String(task._id));
 }
 
 /** A project is busy while its coordinator chat has a turn open. */
