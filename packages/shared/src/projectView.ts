@@ -252,6 +252,32 @@ export function isUnapprovedTodoTask(row: ProjectTaskRow): boolean {
   );
 }
 
+/**
+ * A project task in To Do: until its chat has a message, the chat opens on
+ * its prompt (title, prompt and an action) in place of an empty chat.
+ */
+export function showsProjectTaskPrompt(task: {
+  projectId?: string;
+  status: Doc<"agentTasks">["status"];
+}): boolean {
+  return task.projectId !== undefined && task.status === "todo";
+}
+
+/**
+ * The prompt card's action: Approve in Triage (`approveProjectTasks`), else
+ * Start (`agentTasks.startExecution`). None while a run starts, or on a
+ * read-only (archived) task.
+ */
+export function projectTaskPromptAction(
+  row: ProjectTaskRow,
+  state: { hasActiveRun: boolean; readOnly: boolean },
+): "approve" | "start" | undefined {
+  if (state.readOnly || state.hasActiveRun || row.status !== "todo") {
+    return undefined;
+  }
+  return isUnapprovedTodoTask(row) ? "approve" : "start";
+}
+
 /** The todo tasks a person approves with one "Approve all". */
 export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
   rows: readonly Row[],
@@ -429,7 +455,8 @@ export interface FactsProjectTaskRow extends ProjectTaskRow {
 }
 
 /**
- * A project task's Details facts, for web and phone: the plain text
+ * A project task's status and PR line under its title in its header, for
+ * web and phone: the plain text
  * "Working · Phase 2 · docs", then its PR links. The text is the task's own
  * stage (`projectTaskStageLabel`: "In review", not the list's "Blocked"
  * group), the phase, and on a multi-repo task

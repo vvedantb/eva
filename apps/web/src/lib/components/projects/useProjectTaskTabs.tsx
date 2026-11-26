@@ -18,7 +18,6 @@ import {
 } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
-import { TASK_DETAILS_TAB } from "@/lib/components/tasks/TaskDetailsPane";
 import {
   isProjectTaskTab,
   PROJECT_DEFAULT_SANDBOX_TAB,
@@ -35,7 +34,6 @@ import {
 const TASK_TAB_DESCRIPTORS: {
   [Tab in ProjectTaskTab]: SandboxTabDescriptor & { value: Tab };
 } = {
-  "task-details": TASK_DETAILS_TAB,
   "task-preview": {
     value: "task-preview",
     label: "Preview",
@@ -72,9 +70,9 @@ export interface ProjectTaskTabs {
   numIds: number[];
   /** The selected task tab's numId; null while Eva's tab is selected. */
   selected: number | null;
-  /** Opens a task as a tab (or selects its tab), on Details. */
+  /** Opens a task as a tab (or selects its tab), on its default panel tab. */
   open: (numId: number) => void;
-  /** Selects a task tab on Details, or Eva's tab (null). */
+  /** Selects a task tab on its default panel tab, or Eva's tab (null). */
   select: (numId: number | null) => void;
   /** ✕ on a task tab; the selected one hands over to the tab on its left. */
   close: (numId: number) => void;
@@ -85,7 +83,8 @@ export interface ProjectTaskTabs {
 /**
  * The project's chat tabs, in the URL: `?tasks=` (the open task tabs) and
  * `?task=` (the selected one; absent = Eva). The panel tab is the path
- * segment: a task tab shows its own tabs (Details first); Eva's tab returns
+ * segment: a task tab opens on the coordinator's default tab, which the panel
+ * reads as the task's default (`defaultProjectTaskTab`); Eva's tab returns
  * to the coordinator tab it left.
  */
 export function useProjectTaskTabs({
@@ -122,7 +121,7 @@ export function useProjectTaskTabs({
     if (selected === null && !isProjectTaskTab(sandboxTab)) {
       setCoordinatorTab(sandboxTab);
     }
-    const tab = next === null ? coordinatorTab : "task-details";
+    const tab = next === null ? coordinatorTab : PROJECT_DEFAULT_SANDBOX_TAB;
     void navigate({
       to: toInternalRepoHref(
         `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,

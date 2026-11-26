@@ -10,10 +10,11 @@ export function useSimpleView(): boolean {
 }
 
 const SIMPLE_VIEW_SANDBOX_TABS = new Set([
-  // A project task's Details (TaskDetailsPane): its prompt and properties.
-  "task-details",
   "preview",
   "browser",
+  // A project task's own Preview and Browser in the project panel.
+  "task-preview",
+  "task-browser",
   "prd",
   "designs",
   "artifacts",

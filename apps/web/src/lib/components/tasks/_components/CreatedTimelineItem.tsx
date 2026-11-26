@@ -12,16 +12,11 @@ type User = NonNullable<FunctionReturnType<typeof api.users.listAll>>[number];
 export function CreatedTimelineItem({
   createdAt,
   creatorUser,
-  isProjectTask,
 }: {
   createdAt: number;
   creatorUser: User | undefined;
-  isProjectTask: boolean;
 }) {
   const actorName = creatorUser ? getUserDisplayName(creatorUser) : "Someone";
-  const actionLabel = isProjectTask
-    ? "created the task"
-    : "created the quick task";
 
   return (
     <div className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground">
@@ -41,7 +36,7 @@ export function CreatedTimelineItem({
         <span data-pii className="font-medium text-foreground">
           {actorName}
         </span>
-        {` ${actionLabel}`}
+        {" created the quick task"}
         <span className="text-muted-foreground/50" aria-hidden>
           {" "}
           ·{" "}

@@ -9,7 +9,6 @@ import {
   PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   formatEntityNumLabel,
-  mentionTokensToEditableText,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
@@ -20,7 +19,6 @@ import {
   canEditTaskText,
   getUserDisplayName,
   taskTextLockReason,
-  type ReactionGroup,
 } from "@eva/shared/taskDetail";
 import {
   IconChecklist,
@@ -45,15 +43,15 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { Pressable, Text, TextInput, View, type TextStyle } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
 } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ComposerMentionChips, UserMessageText } from "@/chat/MentionChip";
+import { ComposerMentionChips } from "@/chat/MentionChip";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync, type DraftTarget } from "@/chat/useDraftSync";
@@ -71,32 +69,23 @@ import {
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import {
-  ReactionChips,
-  TaskActivity,
-  useTaskReactions,
-} from "@/quickTasks/TaskActivity";
+import { TaskActivity, useTaskReactions } from "@/quickTasks/TaskActivity";
 import {
   CommentModeChip,
-  EmojiPickerSheet,
-  ReactableMenu,
   TaskSubscribers,
-  measureHeld,
-  type HeldRect,
   useCommentMutations,
   type CommentMode,
 } from "@/quickTasks/TaskDiscussion";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { useTaskGitActions } from "@/sandbox/OwnedSandboxActions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
-import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 import { ArchivedBar } from "@/ui/ArchivedBar";
-import { ProjectTaskDetails } from "@/quickTasks/ProjectTaskDetails";
+import { TaskDescription, TaskTitle } from "@/quickTasks/TaskText";
 
-/** A quick-task row (`getAllTasks`) or a project task row (`listByProject`): one validator, the wider inferred type. */
+/** A quick-task row (`getAllTasks`); `listByProject` shares its validator. */
 type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -106,8 +95,7 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * One quick task, as the web task page (`TaskDetailInline`) on a phone, in one
  * column: the number and title, the description, the attachments, the web
  * Properties pane (Status, Priority, Code Reviewer, Labels, Project, each a
- * sheet that writes at once; a project task shows its read-only facts and its
- * Model instead, `ProjectTaskDetails`), then Activity (subscribers, the timeline, and
+ * sheet that writes at once), then Activity (subscribers, the timeline, and
  * each comment's menu: reactions, Reply, Edit, Copy text, Delete) and the
  * comment box, which also replies and edits. The header
  * "…" is the row's long-press menu. The bottom bar opens the task chat (with
@@ -116,10 +104,9 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * Routes as `/quick-task/<taskId>?repo=<repoId>&numId=<numId>`; the task
  * resolves through the repo's quick tasks (live, then archived), so its id
  * keeps its table type. An archived task opens read-only under its
- * `ArchivedBar`. A project task is never a quick task: it resolves by its number
- * (`getByNumId`), then through its project's list (`listByProject`, the
- * archived one for a task archived on its own). A task of an archived project
- * is read-only too, without the bar.
+ * `ArchivedBar`. A project task is never a quick task: it resolves by its
+ * number (`getByNumId`) and opens as its chat, as on the web (a link to it
+ * lands here).
  */
 export default function QuickTaskScreen() {
   const router = useRouter();
@@ -141,20 +128,17 @@ export default function QuickTaskScreen() {
   const byNumber =
     repo !== undefined && archivedTasks !== undefined && quickTask === undefined && Number.isInteger(numId);
   const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
-  const projectId = numbered?._id === params.taskId ? numbered.projectId : undefined;
-  // A project task archived on its own is in its project's archived list.
-  const projectTasks = useQuery(
-    api.agentTasks.listByProject,
-    projectId ? { projectId, archived: numbered?.archivedAt !== undefined } : "skip",
-  );
-  const task = quickTask ?? projectTasks?.find((candidate) => candidate._id === params.taskId);
+  // A project task is its chat.
+  if (numbered?._id === params.taskId && numbered.projectId !== undefined) {
+    return <Redirect href={{ pathname: "/chat/[target]", params: { target: numbered._id } }} />;
+  }
+  const task = quickTask;
 
   const loading =
     repos === undefined ||
     (repo !== undefined && tasks === undefined) ||
     (liveTask === undefined && tasks !== undefined && archivedTasks === undefined) ||
-    (byNumber && numbered === undefined) ||
-    (projectId !== undefined && projectTasks === undefined);
+    (byNumber && numbered === undefined);
   if (loading || !repo || !task || !tasks) {
     return (
       <View className="flex-1">
@@ -319,24 +303,14 @@ function TaskOverview({
           </View>
         ) : null}
 
-        {task.projectId ? (
-          <ProjectTaskDetails
-            task={task}
-            currentUserId={currentUserId ?? undefined}
-            hasRuns={(runs?.length ?? 0) > 0}
-            readOnly={readOnly}
-            update={update}
-          />
-        ) : (
-          <TaskProperties
-            task={task}
-            users={users}
-            projects={projects}
-            allTags={allTags}
-            update={update}
-            readOnly={readOnly}
-          />
-        )}
+        <TaskProperties
+          task={task}
+          users={users}
+          projects={projects}
+          allTags={allTags}
+          update={update}
+          readOnly={readOnly}
+        />
 
         <FieldGroup title="Activity">
           <TaskSubscribers taskId={task._id} users={users} />
@@ -347,7 +321,6 @@ function TaskOverview({
               creator={creator}
               users={users}
               reactionsFor={reactionsFor}
-              isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
               readOnly={readOnly}
               onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
@@ -535,196 +508,6 @@ function TaskProperties({
             "Couldn't change the project",
           )
         }
-      />
-    </>
-  );
-}
-
-/** The web `TaskHeader` title: a tap edits it while editable; Return or leaving the field saves a changed, non-empty title. */
-function TaskTitle({
-  title,
-  editable,
-  lockReason,
-  onSave,
-}: {
-  title: string;
-  editable: boolean;
-  lockReason: string | undefined;
-  onSave: (title: string) => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const [editing, setEditing] = useState<string | null>(null);
-  const style: TextStyle = {
-    fontSize: 18,
-    lineHeight: 26,
-    fontWeight: "600",
-    color: theme.foreground,
-  };
-  if (editing !== null) {
-    const save = () => {
-      const trimmed = editing.trim();
-      if (trimmed && trimmed !== title) onSave(trimmed);
-      setEditing(null);
-    };
-    return (
-      <TextInput
-        autoFocus
-        accessibilityLabel="Task title"
-        value={editing}
-        onChangeText={setEditing}
-        // Return blurs (`blurAndSubmit`), so leaving the field is the one save.
-        onBlur={save}
-        returnKeyType="done"
-        submitBehavior="blurAndSubmit"
-        multiline
-        className="font-instrument-sans-semibold rounded-lg px-2 py-1"
-        style={{
-          ...style,
-          marginHorizontal: -8,
-          backgroundColor: theme.secondary,
-        }}
-      />
-    );
-  }
-  return (
-    <Pressable
-      accessibilityRole={editable ? "button" : "header"}
-      accessibilityLabel={displayTitle(title)}
-      accessibilityHint={editable ? "Edits the title" : lockReason}
-      disabled={!editable}
-      onPress={() => setEditing(title)}
-      className="active:opacity-70"
-    >
-      <Text
-        accessibilityRole="header"
-        className="font-instrument-sans-semibold"
-        style={style}
-      >
-        {displayTitle(title)}
-      </Text>
-    </Pressable>
-  );
-}
-
-/**
- * The web `TaskDescription`: the Markdown with mention chips, or "No
- * description". While editable a tap opens the mention composer on it ("Add
- * description..." when empty); its send saves, Cancel leaves it as it was.
- * A long press opens the reactions (and Edit, Copy text), as the web hover.
- */
-function TaskDescription({
-  description,
-  repoId,
-  model,
-  editable,
-  reactions,
-  onSave,
-}: {
-  description: string | undefined;
-  repoId: Id<"githubRepos">;
-  model: QuickTask["model"];
-  editable: boolean;
-  reactions: { groups: ReactionGroup[]; toggle: (emoji: string) => void };
-  onSave: (description: string) => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const composer = useMentionComposer(
-    repoId,
-    getAIModelProvider(normalizeAIModel(model)),
-  );
-  const [editing, setEditing] = useState(false);
-  // Where the held description is on screen, while its hold menu is open.
-  const [menuAnchor, setMenuAnchor] = useState<HeldRect | null>(null);
-  const box = useRef<View>(null);
-  const [pickingEmoji, setPickingEmoji] = useState(false);
-  const text = description?.trim() ?? "";
-  if (editing) {
-    return (
-      <View className="gap-2">
-        <PromptInput
-          value={composer.text}
-          onChangeText={composer.setText}
-          menu={
-            composer.menu ? (
-              <MentionMenu
-                menu={composer.menu}
-                onPick={composer.pick}
-                onDismiss={composer.dismiss}
-              />
-            ) : null
-          }
-          header={
-            composer.picks.length > 0 ? (
-              <ComposerMentionChips
-                picks={composer.picks}
-                onRemove={composer.removePick}
-              />
-            ) : undefined
-          }
-          onSubmit={(next) => {
-            const tokenized = composer.tokenize(next).trim();
-            if (tokenized !== text) onSave(tokenized);
-            setEditing(false);
-          }}
-          placeholder="Add description..."
-          accessibilityLabel="Task description"
-        />
-        <View className="flex-row justify-end">
-          <Button variant="ghost" size="sm" onPress={() => setEditing(false)}>
-            Cancel
-          </Button>
-        </View>
-      </View>
-    );
-  }
-  const body = text ? (
-    <UserMessageText content={text} />
-  ) : (
-    <Text
-      className="font-instrument-sans text-sm"
-      style={{ color: withAlpha(theme.mutedForeground, 0.6) }}
-    >
-      {editable ? "Add description..." : "No description"}
-    </Text>
-  );
-  const startEditing = () => {
-    composer.load(text);
-    setEditing(true);
-  };
-  return (
-    <>
-      <Pressable
-        accessibilityRole={editable ? "button" : undefined}
-        accessibilityLabel={
-          editable ? (text ? "Edit description" : "Add description") : undefined
-        }
-        accessibilityHint="Long press to react"
-        onPress={editable ? startEditing : undefined}
-        ref={box}
-        onLongPress={() => measureHeld(box.current, setMenuAnchor)}
-        className="rounded-lg active:opacity-70"
-      >
-        {body}
-      </Pressable>
-      {reactions.groups.length > 0 ? (
-        <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} />
-      ) : null}
-      <ReactableMenu
-        anchor={menuAnchor}
-        onClose={() => setMenuAnchor(null)}
-        // The description, drawn again over the page.
-        preview={<View style={{ backgroundColor: theme.background }}>{body}</View>}
-        groups={reactions.groups}
-        onToggleReaction={reactions.toggle}
-        onMoreReactions={() => setPickingEmoji(true)}
-        onEdit={editable ? startEditing : undefined}
-        copyText={text ? mentionTokensToEditableText(text) : undefined}
-      />
-      <EmojiPickerSheet
-        open={pickingEmoji}
-        onOpenChange={setPickingEmoji}
-        groups={reactions.groups}
-        onPick={reactions.toggle}
       />
     </>
   );
