@@ -42,15 +42,16 @@ export function ActivityTimeline({
   comments,
   taskActivity,
   users,
-  isProjectTask,
+  readOnly,
 }: {
   taskId: Id<"agentTasks">;
   createdAt: number | undefined;
   creatorUser: User | undefined;
-  isProjectTask: boolean;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
+  /** An archived task: comments show, but nobody can add, reply, edit or delete. */
+  readOnly: boolean;
 }) {
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
@@ -105,7 +106,6 @@ export function ActivityTimeline({
           key="created"
           createdAt={item.timestamp}
           creatorUser={creatorUser}
-          isProjectTask={isProjectTask}
         />
       );
     }
@@ -141,6 +141,7 @@ export function ActivityTimeline({
                     taskId={taskId}
                     users={users}
                     repliesByParentId={repliesByParentId}
+                    readOnly={readOnly}
                     onDeleteRequest={(commentId) =>
                       requestConfirm(
                         () => setDeletingCommentId(commentId),
@@ -180,7 +181,7 @@ export function ActivityTimeline({
           })
         )}
 
-        <TaskActivityComposer taskId={taskId} />
+        {readOnly ? null : <TaskActivityComposer taskId={taskId} />}
       </div>
 
       <Dialog

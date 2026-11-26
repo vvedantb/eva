@@ -1,19 +1,20 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
-import { archiveSessionDoc } from "./_sessions/mutations";
-import { isSessionArchived } from "./_sessions/archive";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
   buildSessionBranchName,
 } from "./_git/branchNames";
 import { recordPullRequest } from "./_pullRequests/store";
-import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
+import { MAX_THREAD_REPLIES } from "./_messages/replies";
+import { joinThread } from "./_messages/threadParticipants";
+import { teamMentionRecipients } from "./_mentions/mentionRecipients";
+import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -56,30 +57,6 @@ export const dataMigrations = new Migrations<DataModel, typeof schema>(
 /** Generic runner: `npx convex run dataMigrations:run '{fn:"dataMigrations:…"}'`. */
 export const run = dataMigrations.runner();
 
-/** Backfills compact task latest-run rows so list queries stop reading run logs. */
-export const backfillAgentTaskRunSummaries = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (ctx, task) => {
-    if (!task.repoId) return;
-    const existing = await ctx.db
-      .query("agentTaskRunSummaries")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .unique();
-    if (existing) return;
-
-    const latestRun = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .order("desc")
-      .first();
-    await ctx.db.insert("agentTaskRunSummaries", {
-      taskId: task._id,
-      repoId: task.repoId,
-      lastRunStartedAt: latestRun?.startedAt,
-    });
-  },
-});
-
 /** Moves large SKILL.md bodies out of rows read by repoSkills.listByRepo. */
 export const splitRepoSkillContent = dataMigrations.define({
   table: "repoSkills",
@@ -114,73 +91,6 @@ export const backfillLogUsageFields = dataMigrations.define({
   },
 });
 
-/*
- * Manager Ave rebuild (Ave now lives in `aveThreads`). Run in order, then drop
- * the deprecated fields and delete these five:
- *   users.orchestratorSessionId, sessions.isOrchestrator,
- *   sessions/agentTasks/projects.watchedByOrchestrator,
- *   queuedMessages.orchestratorNotification
- */
-
-/** Archives each pre-rebuild Ave session (stops its sandbox) and drops the pointer. */
-export const retireOrchestratorSessions = dataMigrations.define({
-  table: "users",
-  migrateOne: async (ctx, user) => {
-    if (user.orchestratorSessionId === undefined) return;
-    const session = await ctx.db.get(user.orchestratorSessionId);
-    if (session) {
-      if (!isSessionArchived(session)) await archiveSessionDoc(ctx, session);
-      // A wake-up queued behind a busy old master would otherwise drain into
-      // the archived chat and restart its sandbox.
-      const queued = await ctx.db
-        .query("queuedMessages")
-        .withIndex("by_parent_and_created", (q) =>
-          q.eq("parentId", session._id),
-        )
-        .collect();
-      for (const row of queued) await ctx.db.delete(row._id);
-    }
-    return { orchestratorSessionId: undefined };
-  },
-});
-
-export const clearSessionOrchestratorFields = dataMigrations.define({
-  table: "sessions",
-  migrateOne: async (_ctx, session) => {
-    if (
-      session.isOrchestrator === undefined &&
-      session.watchedByOrchestrator === undefined
-    ) {
-      return;
-    }
-    return { isOrchestrator: undefined, watchedByOrchestrator: undefined };
-  },
-});
-
-export const clearTaskOrchestratorWatch = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (_ctx, task) => {
-    if (task.watchedByOrchestrator === undefined) return;
-    return { watchedByOrchestrator: undefined };
-  },
-});
-
-export const clearProjectOrchestratorWatch = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (_ctx, project) => {
-    if (project.watchedByOrchestrator === undefined) return;
-    return { watchedByOrchestrator: undefined };
-  },
-});
-
-export const clearQueuedOrchestratorNotification = dataMigrations.define({
-  table: "queuedMessages",
-  migrateOne: async (_ctx, row) => {
-    if (row.orchestratorNotification === undefined) return;
-    return { orchestratorNotification: undefined };
-  },
-});
-
 /**
  * `backfillPullRequests`: moves every PR link into the `pullRequests` table.
  * Run once per deployment, straight after the deploy that adds the table:
@@ -198,7 +108,6 @@ export const backfillPullRequests = dataMigrations.runner([
   internal.dataMigrations.backfillSessionPullRequests,
   internal.dataMigrations.backfillSessionRepoPullRequests,
   internal.dataMigrations.backfillProjectPullRequests,
-  internal.dataMigrations.backfillRunPullRequests,
 ]);
 
 async function scheduleGitHubRefresh(
@@ -285,35 +194,6 @@ export const backfillProjectPullRequests = dataMigrations.define({
   },
 });
 
-/** Runs are visited oldest first, so a task's newest PR ends up primary. */
-export const backfillRunPullRequests = dataMigrations.define({
-  table: "agentRuns",
-  migrateOne: async (ctx, run) => {
-    if (run.prUrl === undefined) return;
-    const task = await ctx.db.get(run.taskId);
-    if (task) {
-      // The state is a guess the GitHub refresh replaces: the task's status
-      // for its PR, terminal for the PRs earlier runs left behind.
-      const state =
-        task.status === "done"
-          ? "merged"
-          : task.status === "cancelled"
-            ? "closed"
-            : task.status === "code_review"
-              ? "open"
-              : "draft";
-      await recordRunPullRequest(ctx, {
-        runId: run._id,
-        taskId: task._id,
-        prUrl: run.prUrl,
-        state,
-      });
-      await scheduleGitHubRefresh(ctx, run.prUrl);
-    }
-    return { prUrl: undefined };
-  },
-});
-
 /**
  * Caps every stored `backgroundAgents` array at the settled-entry limit that
  * `mergeBackgroundAgents` now enforces on write. Small batches: an unpruned
@@ -347,3 +227,65 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/** Few chats per batch: one chat reads all its threads and their replies. */
+const THREAD_PARTICIPANTS_BATCH = 5;
+
+/**
+ * Reply threads from before `threadParticipants` (notifications v2.5, part
+ * A): each thread's root author, repliers and the people either mentions
+ * become following participants, read up to now so no old thread shows
+ * "N new". Idempotent: an existing row keeps its follow choice.
+ *
+ * `npx convex run --prod dataMigrations:backfillThreadParticipants`
+ */
+export const backfillThreadParticipants = dataMigrations.define({
+  table: "sessionChats",
+  batchSize: THREAD_PARTICIPANTS_BATCH,
+  migrateOne: async (ctx, chat) => {
+    const roots = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_last_reply_at", (q) =>
+        q.eq("parentId", chat._id).gt("lastReplyAt", 0),
+      )
+      .take(MAX_THREAD_REPLIES);
+    const now = Date.now();
+    for (const root of roots) {
+      const replies = await ctx.db
+        .query("messages")
+        .withIndex("by_reply_to", (q) => q.eq("replyTo", root._id))
+        .take(MAX_THREAD_REPLIES);
+      const people = new Set<Id<"users">>();
+      for (const message of [root, ...replies]) {
+        if (message.role === "user" && message.userId !== undefined) {
+          people.add(message.userId);
+        }
+        for (const userId of await teamMentionRecipients(
+          ctx,
+          message.content,
+          chat.repoId,
+          new Set(),
+        )) {
+          people.add(userId);
+        }
+      }
+      for (const userId of people) {
+        await joinThread(ctx, root._id, userId, now);
+      }
+    }
+  },
+});
+
+/**
+ * Projects have no Triage any more: every project task still waiting there
+ * goes to the project's coordinator (Eva), which groups or starts it. One
+ * wake per project; safe to re-run. Run once after the deploy:
+ *
+ *   npx convex run dataMigrations:handTriageToEva --prod
+ */
+export const handTriageToEva = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    await handProjectTriageToEva(ctx, project);
+  },
+});

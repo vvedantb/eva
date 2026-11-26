@@ -10,14 +10,15 @@ import { syncOwnedSessionWithTaskStatus } from "./_sessions/ownedSession";
 import { onProjectTasksChanged } from "./functions";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
-  allPullRequestsTerminal,
   derivePrStateFromEvent,
   findPullRequestByUrl,
+  linkedPullRequestTaskId,
   listOwnerPullRequests,
   ownerRef,
   recordPullRequest,
   resolvePrOwnerFromBranch,
   setPullRequestState,
+  taskPrSummary,
   type PrState,
 } from "./_pullRequests/store";
 import { findReposByOwnerAndName } from "./_githubRepos/helpers";
@@ -91,6 +92,8 @@ export const handlePullRequestEvent = internalMutation({
     if (nextState === null || nextState === previousState) return null;
 
     const owner = row.owner;
+    // A linked repo's PR on a multi-repo task's session counts toward the task.
+    const linkedTaskId = await linkedPullRequestTaskId(ctx.db, row);
     if (owner.kind === "session") {
       await reconcileSessionArchiveState(ctx, owner.sessionId);
       // A "merged" event can be a false positive: GitHub marks a PR merged
@@ -104,21 +107,23 @@ export const handlePullRequestEvent = internalMutation({
           { prUrl: row.prUrl, mergeCommitSha: args.mergeCommitSha },
         );
       }
-      return null;
+      if (linkedTaskId === undefined) return null;
     }
 
     const terminal = nextState === "merged" || nextState === "closed";
     let finished = false;
     // A project's own (legacy) PR only keeps its row state: no new work goes
     // to a project branch, and the project's status is derived from its tasks.
-    if (owner.kind === "task" && terminal) {
-      finished = await applyTaskPrClosed(ctx, owner.taskId, row);
+    const taskId = owner.kind === "task" ? owner.taskId : linkedTaskId;
+    if (taskId !== undefined && terminal) {
+      finished = await applyTaskPrClosed(ctx, taskId, row);
       // A merge lets the task's project start the tasks that waited for it.
-      const task = await ctx.db.get(owner.taskId);
+      const task = await ctx.db.get(taskId);
       if (nextState === "merged" && task?.projectId !== undefined) {
         await onProjectTasksChanged(ctx, task.projectId);
       }
     }
+    const eventTaskId = owner.kind === "session" ? taskId : owner.taskId;
     if (terminal) {
       // Audit trail of the close; "skipped" when the owner did not move
       // (another PR is still live, or it had already finished).
@@ -129,7 +134,7 @@ export const handlePullRequestEvent = internalMutation({
         merged: nextState === "merged",
         status: finished ? "completed" : "skipped",
         createdAt: Date.now(),
-        ...(owner.taskId !== undefined ? { taskId: owner.taskId } : {}),
+        ...(eventTaskId !== undefined ? { taskId: eventTaskId } : {}),
       });
     }
     return null;
@@ -191,7 +196,8 @@ async function attachUntrackedPullRequest(
 /**
  * A task's status follows its PRs: done once every PR is terminal and one
  * merged, cancelled once every PR is closed unmerged. A task with a second PR
- * still open stays where it is. A project's child task whose PR closed
+ * still open stays where it is. A multi-repo task is done only once every
+ * repo's PR merged (`taskPrSummary`). A project's child task whose PR closed
  * unmerged is not cancelled: it shows "needs you" and its dependents wait.
  */
 async function applyTaskPrClosed(
@@ -202,9 +208,9 @@ async function applyTaskPrClosed(
   const task = await ctx.db.get(taskId);
   if (!task) return false;
   if (task.status === "done" || task.status === "cancelled") return false;
-  const rows = await listOwnerPullRequests(ctx.db, { kind: "task", taskId });
-  if (!allPullRequestsTerminal(rows)) return false;
-  const merged = rows.some((pr) => pr.state === "merged");
+  const { prState } = await taskPrSummary(ctx.db, taskId);
+  if (prState !== "merged" && prState !== "closed") return false;
+  const merged = prState === "merged";
   if (!merged && task.projectId !== undefined) return false;
 
   const now = Date.now();

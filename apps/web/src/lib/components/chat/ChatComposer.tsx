@@ -59,7 +59,7 @@ import type {
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
-import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
+import { useQueuedMessageMutations } from "@eva/shared/queuedMessageMutations";
 import { PendingSketchDrain } from "@/lib/components/chat/_components/PendingSketchDrain";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
@@ -102,6 +102,8 @@ export interface ChatModelPicker {
 interface ChatComposerProps {
   /** Absent (Manager Ave): no skills, stash or repo mentions. */
   repo?: ChatRepo;
+  /** A project coordinator chat: `@Eva` is in the mention picker. */
+  mentionEva?: boolean;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
   /** Queue panel heading when the queue waits on something; default "Queued". */
@@ -147,6 +149,7 @@ interface ChatComposerProps {
 
 export function ChatComposer({
   repo,
+  mentionEva,
   conversationId,
   queuedMessages,
   queueLabel,
@@ -201,7 +204,7 @@ export function ChatComposer({
     deleteQueuedMessage,
     reorderQueuedMessages,
     steerQueuedMessage,
-  } = useQueuedMessageMutations(queuedMessages);
+  } = useQueuedMessageMutations(queuedMessages[0]?.parentId);
   // Convex draft wins when both are passed (existing sessions).
   const seed = draft ?? localDraft;
 
@@ -344,6 +347,7 @@ export function ChatComposer({
   const inputChrome = (
     <ComposerInputChrome
       repo={repo}
+      mentionEva={mentionEva}
       mentionRef={mentionRef}
       skillItems={skillItems}
       plusDataItems={plusDataItems}

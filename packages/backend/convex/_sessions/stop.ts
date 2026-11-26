@@ -7,19 +7,16 @@ import {
   getSessionWithAccess,
   getTaskWithAccess,
 } from "../functions";
-import { isTaskRunning } from "../_agentTasks/runState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
   getSessionChatWithAccess,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
-import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
-import { findOpenAsk } from "../_projects/reports";
+import { stopTaskRun } from "../_agentTasks/taskRunTurn";
 import { cancelChatExecution } from "./execution";
 import {
   sessionOwner,
   findWorkSession,
-  sessionOwnerTaskId,
 } from "./owner";
 import { findWorkChat } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
@@ -40,22 +37,17 @@ import { requestSessionSandboxStop } from "./sandbox";
  */
 
 /**
- * Stops what holds one chat: the owner task's run when one runs, or a project
- * task's wait for the answer to its ask (no run is open then; the stop
- * closes the ask, rule 7 in `_projects/reports.ts`), and the chat's own turn.
- * Each half is a no-op when idle. The caller checks access.
+ * Stops what holds one chat: the owner task's run that is not a live turn (a
+ * queued Run, or a project task's wait for the answer to its ask, rule 7 in
+ * `_projects/reports.ts`; `stopTaskRun`), and the chat's own turn, a Run
+ * included. Each half is a no-op when idle. The caller checks access.
  */
 async function stopOwnerTurn(
   ctx: MutationCtx,
   task: Doc<"agentTasks"> | null,
   chat: SessionChatContext | null,
 ): Promise<void> {
-  if (
-    task &&
-    (isTaskRunning(task) || (await findOpenAsk(ctx.db, task._id)) !== null)
-  ) {
-    await cancelTaskRun(ctx, task);
-  }
+  if (task) await stopTaskRun(ctx, task);
   if (chat) await cancelChatExecution(ctx, chat, { holdQueue: true });
 }
 
@@ -114,12 +106,8 @@ async function sessionIsHeld(
   db: DatabaseReader,
   session: Doc<"sessions">,
 ): Promise<boolean> {
-  const ownerTaskId = sessionOwnerTaskId(session);
-  const ownerTask = ownerTaskId ? await db.get(ownerTaskId) : null;
-  return (
-    (ownerTask !== null && isTaskRunning(ownerTask)) ||
-    (await hasOpenChatTurn(db, session._id))
-  );
+  // A task's run is a chat turn too.
+  return await hasOpenChatTurn(db, session._id);
 }
 
 export const SANDBOX_HELD_ERROR =

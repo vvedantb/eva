@@ -1,9 +1,10 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
-import { IconChecklist } from "@tabler/icons-react";
+import { IconChecklist, IconMessages } from "@tabler/icons-react";
+import { useQueryState } from "nuqs";
+import { ReplyThreadView } from "@/lib/components/chat/replies/ReplyThreadView";
+import { replyThreadParser } from "@/lib/search-params";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -14,31 +15,33 @@ import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
+import { useSandboxRail } from "@/lib/components/sandbox/useSandboxRail";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
-import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
-import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
+import { SandboxRailPanes } from "@/lib/components/sandbox/SandboxRailPanes";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectChatBinding } from "./ProjectSandboxChatPanel";
-import {
-  SessionArtifactsPanel,
-  useSourceArtifacts,
-} from "@/lib/components/artifacts/SessionArtifactsPanel";
-import {
-  SessionDocumentsPanel,
-  useSourceDocuments,
-} from "@/lib/components/docs/SessionDocumentsPanel";
+import { useSourceArtifacts } from "@/lib/components/artifacts/SessionArtifactsPanel";
+import { useSourceDocuments } from "@/lib/components/docs/SessionDocumentsPanel";
 import { useProjectDocuments } from "./useProjectDocuments";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
-import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
-import { useProjectTaskStatus } from "./useProjectStatus";
+import {
+  isProjectSandboxTab,
+  defaultProjectTaskTab,
+  isProjectTaskTab,
+  visibleProjectTaskTabs,
+  type ProjectSandboxTab,
+} from "./projectSandboxTabs";
+import {
+  useProjectTaskStatus,
+  type ProjectTaskListRow,
+} from "./useProjectStatus";
+import { ProjectTaskPane } from "./ProjectTaskPane";
+import { projectTaskRailTabs } from "./useProjectTaskTabs";
 
 /** Sandbox tabs a task's sandbox has but the coordinator's does not. */
 const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
@@ -49,6 +52,13 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "editor",
   "files",
 ]);
+
+/** The rail tab of an open reply thread; same descriptor shape as Tasks. */
+const REPLIES_TAB: SandboxTabDescriptor = {
+  value: "replies",
+  label: "Replies",
+  icon: { kind: "component", Icon: IconMessages },
+};
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -67,16 +77,29 @@ interface ProjectSandboxPanelProps {
   sandboxTab: ProjectSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The sandbox is closed and the host would allow a Start: no last-start
-   * error, not read-only, no run or build owning it. Combined in
-   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
-   */
+  /** `sandboxAutoWakeEligible`; combined in SandboxPaneSlots with the setting. */
   autoWakeEligible?: boolean;
+  /** The project is archived: no per-agent stop. */
+  isArchived: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   /** Mini-player title; Expand returns to this project's Preview tab. */
   title: string;
+  /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
+  onCloseThread: () => void;
+  /**
+   * The selected chat tab's task (`?task=`): the panel shows its tabs only.
+   * Undefined on Eva's tab.
+   */
+  selectedTask: ProjectTaskListRow | undefined;
+  /** A task tab is selected but its row is still loading. */
+  selectedTaskLoading: boolean;
+  /** The tasks open as chat tabs: the Tasks tab marks their rows. */
+  openTaskIds: ReadonlySet<string>;
+  /** Opens a task as a chat tab (a Tasks tab row). */
+  onOpenTask: (taskNumId: number) => void;
+  /** The Tasks tab's "+": Eva's tab with her composer focused. */
+  onAskEva: () => void;
 }
 
 export function ProjectSandboxPanel({
@@ -96,52 +119,79 @@ export function ProjectSandboxPanel({
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
+  isArchived,
   collapsed = false,
   onToggle,
   title,
+  onCloseThread,
+  selectedTask,
+  selectedTaskLoading,
+  openTaskIds,
+  onOpenTask,
+  onAskEva,
 }: ProjectSandboxPanelProps) {
-  const simpleView = useSimpleView();
+  // An open reply thread adds the Replies tab (projects v2, PR D).
+  const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const chatBinding = useProjectChatBinding(projectId, projectSession);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const rail = useSandboxRail({
+    owner,
+    sandboxId,
+    isActive,
+    repoId,
+    devPort,
+    devCommand,
+    binding: chatBinding,
+  });
   const chatKeys = sandboxChatKeys(chatBinding.entity);
 
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
-
+  const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { status: taskStatus } = useProjectTaskStatus(
+    projectId,
+    repoId,
+  );
+  // A selected task tab shows its own tabs only: Review, else Preview, by
+  // default (`defaultProjectTaskTab`). A task with none (it has not run, its
+  // sandbox sleeps and it has no PR) shows the coordinator's Tasks.
+  const taskSelected = selectedTask !== undefined || selectedTaskLoading;
+  const taskTabs = selectedTask ? visibleProjectTaskTabs(selectedTask) : [];
   // The coordinator only reads code and delegates: no dev server, no edits,
   // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
-  const activeTab: ProjectSandboxTab = COORDINATOR_HIDDEN_TABS.has(sandboxTab)
-    ? "tasks"
-    : sandboxTab;
-  const projectDocuments = useProjectDocuments(projectId, repoId);
-  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
-  const triageCount = taskStatus?.counts.triage ?? 0;
-  // Tasks leads the rail; its badge counts what waits in Triage.
+  // Replies without an open thread (an old link) lands on Tasks too, as
+  // does a task tab on Eva's tab.
+  const activeTab: ProjectSandboxTab = taskSelected
+    ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
+      ? sandboxTab
+      : selectedTask
+        ? defaultProjectTaskTab(selectedTask)
+        : "tasks"
+    : COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
+        isProjectTaskTab(sandboxTab) ||
+        (sandboxTab === "replies" && !threadId)
+      ? "tasks"
+      : sandboxTab;
+  const needsYouCount = taskStatus?.counts.blocked ?? 0;
+  // Tasks leads the rail; its badge counts its Needs you group.
   const tasksTab: SandboxTabDescriptor = {
     value: "tasks",
     label: "Tasks",
     icon: { kind: "component", Icon: IconChecklist },
-    count: triageCount > 0 ? triageCount : undefined,
+    count: needsYouCount > 0 ? needsYouCount : undefined,
     indicatorLabel:
-      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+      needsYouCount > 0
+        ? `${needsYouCount} ${needsYouCount === 1 ? "task needs" : "tasks need"} you`
+        : undefined,
   };
 
-  // Content-keyed Agents tab, folded from the chat transcript the project's
-  // chat panel already subscribes to (same entity ids). Artifacts stay on the
-  // project: the backend files its session's artifacts under it.
+  // Artifacts stay on the project: the backend files its session's
+  // artifacts under it.
   const artifactSource = { kind: "project" as const, projectId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
-    parentId: chatKeys.parentId,
-    streamingEntityId: chatKeys.streamingEntityId,
-    backgroundAgents: chatBinding.doc?.backgroundAgents,
-    sandboxRunning: isActive,
-  });
+  const { agents, hasAgents, hasRunningAgents } = rail.roster;
 
   const navigateToSandboxTab = (tab: ProjectSandboxTab) => {
     if (!projectPathSegment) return;
@@ -163,14 +213,6 @@ export function ProjectSandboxPanel({
     });
   };
 
-  const preview = useSandboxPreview({
-    owner,
-    sandboxId,
-    isActive,
-    repoId,
-    devPort,
-  });
-
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
   // This surface has no custom tabs, so the tab bar only emits builtin ids.
@@ -188,7 +230,7 @@ export function ProjectSandboxPanel({
       {projectPathSegment &&
       typeof ownerParam === "string" &&
       typeof repoParam === "string" ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={activeTab}
           to="/$owner/$repo/projects/$numId/sandbox/$sandboxTab"
           params={{
@@ -207,13 +249,24 @@ export function ProjectSandboxPanel({
             collapsed={collapsed}
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
-            enabledTabs={enabledTabs}
-            leadingTabs={[tasksTab]}
-            showAgentsTab={hasAgents}
+            // A task tab's rail holds its own tabs only.
+            enabledTabs={taskSelected ? [] : enabledTabs}
+            leadingTabs={
+              taskTabs.length > 0
+                ? projectTaskRailTabs(taskTabs)
+                : taskSelected
+                  ? [tasksTab]
+                  : threadId
+                  ? [tasksTab, REPLIES_TAB]
+                  : [tasksTab]
+            }
+            showArtifactsTab={!taskSelected}
+            showDocumentsTab={!taskSelected}
+            showAgentsTab={!taskSelected && hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
             documentCount={documentCount}
-            agentBrowsingAt={viewState?.agentBrowsingAt}
+            agentBrowsingAt={rail.agentBrowsingAt}
             fileList={fileList}
             consoleDock={panes.consoleDock}
             terminalPanel={terminalPanel}
@@ -230,58 +283,58 @@ export function ProjectSandboxPanel({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
+              openTaskIds={openTaskIds}
+              onOpenTask={onOpenTask}
+              onAskEva={onAskEva}
             />
           </KeepAlivePane>
-          <div
-            className={
-              activeTab === "artifacts"
-                ? "flex h-full min-h-0 flex-col overflow-hidden"
-                : "hidden"
-            }
-          >
-            <SessionArtifactsPanel source={artifactSource} />
-          </div>
-          <div
-            className={
-              activeTab === "documents"
-                ? "flex h-full min-h-0 flex-col overflow-hidden"
-                : "hidden"
-            }
-          >
-            <SessionDocumentsPanel
-              source={artifactSource}
-              project={projectDocuments}
+          {selectedTask && projectPathSegment && isProjectTaskTab(activeTab) ? (
+            <ProjectTaskPane
+              key={selectedTask._id}
+              row={selectedTask}
+              tab={activeTab}
+              fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedTask.numId}`}
+              collapsed={collapsed}
+              onSelectTab={navigateToSandboxTab}
             />
-          </div>
-          <div
-            className={
-              !simpleView && activeTab === "agents"
-                ? "h-full min-h-0"
-                : "hidden"
-            }
+          ) : null}
+          <KeepAlivePane
+            active={activeTab === "replies"}
+            className="flex h-full min-h-0 flex-col overflow-hidden"
           >
-            <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
-          </div>
-          <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
+            {threadId && chatKeys.parentId ? (
+              <ReplyThreadView
+                rootId={threadId}
+                chatParentId={chatKeys.parentId}
+                repo={{ id: repoId, basePath }}
+                model={chatBinding.model}
+                isOpen={activeTab === "replies"}
+                onOpen={(rootId) => void setThreadId(rootId)}
+                onClose={onCloseThread}
+              />
+            ) : null}
+          </KeepAlivePane>
+          {/* The coordinator has no Files tab. */}
+          <SandboxRailPanes
+            activeTab={activeTab}
+            artifactSource={artifactSource}
+            projectDocuments={projectDocuments}
+            agents={{
+              entity: chatBinding.entity,
+              list: agents,
+              isReadOnly: isArchived,
+            }}
+          />
+          <ReviewChatTargetProvider value={rail.reviewTarget}>
             <SandboxPaneSlots
+              {...rail.paneSlots}
               activeTab={activeTab}
               panes={panes}
-              preview={preview}
-              owner={owner}
-              sandboxId={sandboxId}
-              isActive={isActive}
-              repoId={repoId}
               cacheKey={String(projectId)}
-              devCommand={devCommand}
               prUrl={prUrl}
-              agentBrowsingAt={viewState?.agentBrowsingAt}
-              onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-              // Backend starts the app in the Console tmux session after startup.
-              runConsoleDevCommandOnConnect={false}
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
-              onAnnotationSubmit={submitAnnotation}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
               // A collapsed rail keeps its preview parked.
@@ -294,7 +347,6 @@ export function ProjectSandboxPanel({
                     }
                   : undefined
               }
-              viewState={viewState}
             />
           </ReviewChatTargetProvider>
         </div>

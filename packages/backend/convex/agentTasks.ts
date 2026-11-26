@@ -4,6 +4,7 @@ export {
   getByNumId,
   countSandboxTasks,
   getAllTasks,
+  listArchived,
   getStatusesByIds,
   listAttachments,
   listOpenTaskTitles,
@@ -12,13 +13,15 @@ export {
 export {
   update,
   updateStatus,
-  remove,
-  restore,
+  archive,
+  unarchive,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,
   assignToProject,
 } from "./_agentTasks/mutations";
+
+export { getRunFacts, getTaskIdsWithFailedRun } from "./_agentTasks/runFacts";
 
 export {
   startExecution,
@@ -32,6 +35,7 @@ export {
   countDrafts,
   saveDraft,
   activateDraft,
+  deleteDraft,
 } from "./_agentTasks/drafts";
 
 export {

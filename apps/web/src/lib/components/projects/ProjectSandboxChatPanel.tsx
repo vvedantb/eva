@@ -10,25 +10,28 @@ import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBindin
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
-import { CoordinatorPausedBanner } from "./CoordinatorPausedBanner";
 
 export function ProjectSandboxChatPanel({
   projectId,
   projectSession,
+  onThreadOpen,
   ...panel
 }: SandboxChatPanelProps & {
   projectId: Id<"projects">;
   projectSession: OwnedSession;
+  /** Opens a reply thread in the rail's Replies tab. */
+  onThreadOpen?: (messageId: string) => void;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
-  // The coordinator chat only: its paused line, and Eva's replies as
-  // bubbles (it only talks and delegates, so there are no diffs to frame).
+  // The coordinator chat only: Eva's replies as bubbles (it only talks and
+  // delegates, so there are no diffs to frame).
   return (
     <SandboxChatPanel
       binding={binding}
       {...panel}
-      preInputBanner={<CoordinatorPausedBanner projectId={projectId} />}
       assistantBubbles
+      replyThreads
+      onThreadOpen={onThreadOpen}
     />
   );
 }

@@ -1,4 +1,8 @@
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+import {
+  buildAnnotationDisplay as buildDisplayText,
+  type PreviewAnnotation,
+} from "@eva/shared/previewAnnotationDisplay";
 
 export interface PreviewAnnotationContext {
   tagName: string;
@@ -284,11 +288,13 @@ export function parseAnnotationInbound(
 /**
  * Drops the build-time hash CSS Modules / styled-components append to a class
  * (`Button_root__x7f2a` → `Button_root`), which is noise in a one-line chip.
+ * Next.js CSS Modules end the hash with `_` (`Overview-module__Ozj5PW_` →
+ * `Overview-module`), so trailing underscores belong to the hash too.
  * Underscore only — a hyphen rule would eat ordinary utility classes
  * (`items-center` → `items`).
  */
 function cleanClassName(cls: string): string {
-  return cls.replace(/_[a-zA-Z0-9]{5,}$/, "");
+  return cls.replace(/_+[a-zA-Z0-9]{5,}_*$/, "");
 }
 
 /** One-line identity of the annotated element, e.g. `<button.primary>`. */
@@ -301,12 +307,21 @@ export function elementChip(ctx: PreviewAnnotationContext): string {
   return `<${ctx.tagName}${cls}>`;
 }
 
+/** Where an annotation points, stored on its chat row (comments drawer). */
+export function annotationRef(ctx: PreviewAnnotationContext): PreviewAnnotation {
+  return {
+    pagePath: ctx.pagePath,
+    element: elementChip(ctx),
+    selector: ctx.selector,
+  };
+}
+
 /** Compact chat-display line for an annotation submission. */
 export function buildAnnotationDisplay(
   feedback: string,
   ctx: PreviewAnnotationContext,
 ): string {
-  return `${feedback.trim()}\n\n[Annotated ${elementChip(ctx)} on ${ctx.pagePath}]`;
+  return buildDisplayText(feedback, annotationRef(ctx));
 }
 
 /** Rich agent prompt with element context for the session workflow. */

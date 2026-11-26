@@ -1,19 +1,23 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import type { ProjectChatTaskCards } from "@/lib/components/projects/ProjectChatTaskCard";
 import { useMutation } from "convex/react";
-import type { ReactNode } from "react";
-import { api } from "@eva/backend";
-import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
+import { api, type Id } from "@eva/backend";
+import { sandboxChatEmptyState, sandboxComposerState } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useOlderTranscript } from "@/lib/hooks/useChatTranscript";
-import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
-import { ChatBody } from "./ChatBody";
+import {
+  useOlderTranscript,
+  type TranscriptMessage,
+} from "@/lib/hooks/useChatTranscript";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { catchMutationError } from "@/lib/utils/mutationToast";
+import { ChatBody, type ChatBodyProps } from "./ChatBody";
 import { SandboxBranchChip } from "./SandboxBranchChip";
 import {
   sandboxTurnSettings,
+  usageAccountLabel,
   useSandboxChatTranscript,
   type SandboxChatBinding,
 } from "./sandboxChatBinding";
@@ -27,14 +31,21 @@ import {
 } from "./sandboxChatSurface";
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
+import { useQueryState } from "nuqs";
+import type { ReactNode } from "react";
+import { replyThreadParser } from "@/lib/search-params";
+import { ThreadTurnStatus } from "@/lib/components/chat/replies/ThreadTurnStatus";
 import { useChatQueueGate } from "./useChatQueueGate";
-import { useChatSend } from "./useChatSend";
+import { useChatSend, type ChatTurnSendOptions } from "./useChatSend";
 import { useSandboxChatDraft } from "./useSandboxChatDraft";
 
-/** What the page around a task or project sandbox chat hands it. */
+/** What the page around a sandbox chat hands it. */
 export interface SandboxChatPanelProps {
   isSandboxActive: boolean;
+  /** Starting or stopping. */
   isSandboxToggling?: boolean;
+  /** Stopping (not a start): the empty state says so. */
+  isSandboxStopping?: boolean;
   /** Startup steps while the preview sandbox wakes; undefined otherwise. */
   sandboxStartupActivity?: string;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
@@ -43,89 +54,169 @@ export interface SandboxChatPanelProps {
   onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
+  /** A project's coordinator chat: task cards under Eva's replies (`ChatBody`). */
+  projectTaskCards?: ProjectChatTaskCards;
   onSandboxToggle?: (action: "start" | "stop") => void;
+  /** The owner is archived: the chat is read-only (no composer, no wake). */
+  isArchived?: boolean;
 }
 
+/** The live chat state a host's slots read. */
+export interface SandboxChatState {
+  isExecuting: boolean;
+  /** The live transcript; undefined while it loads. */
+  messages: TranscriptMessage[] | undefined;
+  queuedCount: number;
+  handleSend: (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatTurnSendOptions,
+  ) => Promise<void>;
+  /** The usage chip's account name. */
+  usageAccountLabel: string;
+}
+
+/** Owner-only parts a host adds around and inside the shared chat. */
+interface SandboxChatSlots {
+  /**
+   * Wraps the chat in the host's own page header (a session's header, tabs
+   * and read-only banner). Default: the plan usage chip above the chat.
+   */
+  frame?: (chat: ReactNode, state: SandboxChatState) => ReactNode;
+  /** Rows above the usage-limit card (a session's publish recovery). */
+  beforeBanner?: (state: SandboxChatState) => ReactNode;
+  /** Chips after the agents chip (a session's background processes). */
+  statusChips?: ReactNode;
+  /** In place of the startup block when set (a session's slot wait). */
+  transcriptTail?: (state: SandboxChatState) => ReactNode;
+  /** Under a message (a session's proposed plans). */
+  afterMessage?: (messageId: string, state: SandboxChatState) => ReactNode;
+  onForkTranscript?: ChatBodyProps["onForkTranscript"];
+  turnCheckpoint?: ChatBodyProps["turnCheckpoint"];
+}
+
+const OWNER_TITLE: Record<SandboxChatBinding["ownerLabel"], string> = {
+  session: "Session",
+  task: "Task",
+  project: "Project",
+};
+
 /**
- * The sandbox chat for a quick task or a project. The entity only supplies a
- * binding; the transcript, send rule, failure toast, queue gate, account
- * handoff and blocking question are the same for both.
+ * The sandbox chat for a session chat tab, a quick task, a project task or a
+ * project. The owner only supplies a binding (and a session its slots); the
+ * transcript, send rule, failure toasts, queue gate, account handoff,
+ * blocking question, empty state and read-only rules are the same for all.
  */
 export function SandboxChatPanel({
   binding,
   isSandboxActive,
   isSandboxToggling = false,
+  isSandboxStopping = false,
   sandboxStartupActivity,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
+  projectTaskCards,
   onSandboxToggle,
-  preInputBanner,
+  isArchived = false,
   assistantBubbles = false,
-}: SandboxChatPanelProps & {
-  binding: SandboxChatBinding;
-  /** Owner-specific notice above the composer (a paused coordinator). */
-  preInputBanner?: ReactNode;
-  /** Eva's replies in a bubble with her mark (the project coordinator). */
-  assistantBubbles?: boolean;
-}) {
+  replyThreads = false,
+  onThreadOpen,
+  emptyState,
+  frame,
+  beforeBanner,
+  statusChips,
+  transcriptTail,
+  afterMessage,
+  onForkTranscript,
+  turnCheckpoint,
+}: SandboxChatPanelProps &
+  SandboxChatSlots & {
+    binding: SandboxChatBinding;
+    /** Eva's replies in a bubble with her mark (the project coordinator). */
+    assistantBubbles?: boolean;
+    /**
+     * Messages take replies in threads (the project coordinator). The open
+     * thread is the `?thread=` param; the page shows it beside the chat.
+     */
+    replyThreads?: boolean;
+    /**
+     * Opens a thread the page's way (the project rail's Replies tab). Without
+     * it, opening only sets `?thread=`.
+     */
+    onThreadOpen?: (messageId: string) => void;
+    /** In place of the empty chat (`ChatBody` `emptyState`). */
+    emptyState?: ReactNode;
+  }) {
   const { repo, basePath } = useRepo();
-  const { entity, doc, model, firstRun, ownerLabel } = binding;
+  const [, setThreadId] = useQueryState("thread", replyThreadParser);
+  const { entity, doc, model, ownerLabel, active } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
   // the first send creates it.
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
+  // A hidden cached session shell reads nothing live; held reads keep what
+  // it last painted.
+  const liveParentId = active ? parentId : undefined;
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
   // `messages` is the live part; the rendered transcript adds the history
   // above it once the reader goes there.
   const history = useOlderTranscript({
-    parentId: parentId ?? "skip",
+    parentId: liveParentId ?? "skip",
     live: messages,
-    active: true,
+    active,
   });
-  const queuedMessages = useQuery(
+  const queuedMessages = useHeldQuery(
     api.queuedMessages.listByParent,
-    parentId ? { parentId } : "skip",
+    liveParentId ? { parentId: liveParentId } : "skip",
   );
-  const chatStreaming = useQuery(
+  const chatStreaming = useHeldQuery(
     api.streaming.get,
-    streamingEntityId ? { entityId: streamingEntityId } : "skip",
+    active && streamingEntityId ? { entityId: streamingEntityId } : "skip",
   );
-  // The first run streams to its own row while it owns the bubble.
-  const streaming = firstRun?.isInProgress ? firstRun.streaming : chatStreaming;
+  // Eva's open turn answers in a reply thread: the main chat shows no running
+  // bubble for it, only a status line that opens the thread.
+  const threadTurn = useHeldQuery(
+    api.messages.openThreadTurn,
+    replyThreads && liveParentId ? { parentId: liveParentId } : "skip",
+  );
+  const streaming = threadTurn ? undefined : chatStreaming;
+  const openThread = (messageId: string) => {
+    if (onThreadOpen) onThreadOpen(messageId);
+    else void setThreadId(messageId);
+  };
   // Same entityId the sandbox posts with (the entity id, not the stream key).
-  const blockingQuestion = useQuery(
+  const blockingQuestion = useHeldQuery(
     api.pendingQuestions.getActive,
-    parentId ? { entityId: parentId } : "skip",
+    liveParentId ? { entityId: liveParentId } : "skip",
   );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const { draftBundle, isDraftLoading } = useSandboxChatDraft(draftTarget);
-  const { isSwitchingAccount, switchProviderAccount } =
-    useProviderAccountHandoff({
-      persist: binding.persistAccount,
-      prewarm: binding.prewarm,
-    });
-
-  const setProviderAccountId = async (next: string | null) => {
-    await switchProviderAccount(binding.resolveAccountId(next) ?? null);
-  };
+  const accountId = binding.providerAccountId ?? null;
 
   const queueGate = useChatQueueGate({
     parentId,
     messages: messages ?? [],
     queuedMessages: queuedMessages ?? [],
     model,
-    accountId: binding.providerAccountId,
+    accountId,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     isSandboxActive,
     setModel: binding.setModel,
-    setAccount: setProviderAccountId,
+    setAccount: (next) =>
+      binding.switchProviderAccount(binding.resolveAccountId(next) ?? null),
   });
   const composer = sandboxComposerState({
     isSandboxActive,
-    isSwitchingAccount,
+    isSwitchingAccount: binding.isSwitchingAccount,
     isExecuting,
     isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
+  const empty = sandboxChatEmptyState({
+    isSandboxActive,
+    isSandboxStopping,
+    isSandboxToggling,
+    activeTitle: `Ask Eva anything about this ${ownerLabel}'s running sandbox.`,
   });
 
   const { handleSend, handleCancel, hasPendingReviewComments } = useChatSend({
@@ -142,11 +233,15 @@ export function SandboxChatPanel({
     answers: Record<string, string>,
   ) => {
     if (!parentId) return;
-    await answerPendingQuestion({
-      entityId: parentId,
-      toolUseId,
-      answer: JSON.stringify(answers),
-    });
+    await catchMutationError(
+      answerPendingQuestion({
+        entityId: parentId,
+        toolUseId,
+        answer: JSON.stringify(answers),
+      }),
+      "Couldn't submit answer",
+      "sandbox-pending-answer",
+    );
   };
 
   const chatSurface = buildSandboxChatSurface({
@@ -154,124 +249,159 @@ export function SandboxChatPanel({
     repoId: repo._id,
     model,
     isExecuting,
+    isReadOnly: isArchived,
     doc,
-    canSwitchAccount: true,
+    // A stopped sandbox still gets the offer: sending wakes it. Until the
+    // sticky account loads there is no account to exclude, so no offer.
+    canSwitchAccount: !isArchived && binding.providerAccountId !== undefined,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
-    switchProviderAccount,
+    switchProviderAccount: binding.switchProviderAccount,
     isSandboxActive,
-    sendCommand: (command) =>
-      handleSend(command, undefined, { skipReviewComments: true }),
+    sendCommand: isArchived
+      ? undefined
+      : (command) =>
+          handleSend(command, undefined, { skipReviewComments: true }),
   });
 
-  // The first run opens the chat, so it shows once nothing older is left.
-  const chatMessages = [
-    ...(history.hasOlder ? [] : (firstRun?.turn ?? [])),
-    ...(history.messages ?? []),
-  ];
-  const usageAccountLabel =
-    binding.providerAccountId === null
-      ? "Team"
-      : (binding.accounts.find(
-          (account) => account.id === binding.providerAccountId,
-        )?.label ?? "Selected account");
+  const state: SandboxChatState = {
+    isExecuting,
+    messages,
+    queuedCount: queuedMessages?.length ?? 0,
+    handleSend,
+    usageAccountLabel: usageAccountLabel(binding),
+  };
+  const chatMessages = history.messages ?? messages ?? [];
+  const isSandboxStarting = isSandboxToggling && !isSandboxStopping;
 
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <SandboxChatHeaderActions
-        repoId={repo._id}
-        model={model}
-        providerAccountId={binding.providerAccountId}
-        usageAccountLabel={usageAccountLabel}
-      />
-      <SubagentThreadLayer
-        surface={chatSurface}
-        parentTitle={doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")}
+  const chat = (
+    <SubagentThreadLayer
+      surface={chatSurface}
+      parentTitle={doc?.title ?? OWNER_TITLE[ownerLabel]}
+      messages={chatMessages}
+      streamingActivity={streaming?.currentActivity}
+      sandboxRunning={isSandboxActive}
+      onOpenFile={onOpenFile}
+    >
+      <ChatBody
+        repo={{ id: repo._id, basePath }}
+        conversationId={parentId ?? `${ownerLabel}-chat`}
+        chatParentId={parentId}
+        isRouteActive={active}
         messages={chatMessages}
+        // No chat yet (the first send or run creates it): nothing loads.
+        isLoadingMessages={parentId !== undefined && messages === undefined}
+        hasOlderHistory={history.hasOlder}
+        onLoadOlderHistory={history.loadOlder}
+        onReachHistory={history.reach}
+        isReachingHistory={history.isReaching}
+        queuedMessages={queuedMessages ?? []}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streaming?.currentActivity}
-        sandboxRunning={isSandboxActive}
-        onOpenFile={onOpenFile}
-      >
-        <ChatBody
-          repo={{ id: repo._id, basePath }}
-          conversationId={parentId ?? `${ownerLabel}-chat`}
-          chatParentId={parentId}
-          messages={chatMessages}
-          isLoadingMessages={messages === undefined}
-          hasOlderHistory={history.hasOlder}
-          onLoadOlderHistory={history.loadOlder}
-          onReachHistory={history.reach}
-          isReachingHistory={history.isReaching}
-          queuedMessages={queuedMessages ?? []}
-          queueLabel={queueGate.queueLabel(isExecuting)}
-          streamingActivity={streaming?.currentActivity}
-          streamingContent={streaming?.currentContent}
-          streamingPendingQuestion={streaming?.pendingQuestion}
-          blockingQuestion={blockingQuestion ?? undefined}
-          onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
-          isExecuting={isExecuting}
-          isInputDisabled={composer.isInputDisabled}
-          placeholder={composer.placeholder}
-          emptyStateTitle={
-            isSandboxActive
-              ? `Ask Eva anything about this ${ownerLabel}'s running sandbox.`
-              : SANDBOX_CHAT_COPY.asleepTitle
-          }
-          emptyStateDescription={
-            isSandboxActive
-              ? SANDBOX_CHAT_COPY.activeDescription
-              : SANDBOX_CHAT_COPY.asleepDescription
-          }
-          disabledReason={composer.disabledReason}
-          onStartSandbox={startSandboxHandler(
-            isSandboxActive,
-            isSandboxToggling,
-            onSandboxToggle,
-          )}
-          modelPicker={{
-            model,
-            setModel: queueGate.setModel,
-            modelOptions: binding.modelOptions,
-            accounts: binding.accounts,
-            accountId: binding.providerAccountId,
-            onAccountChange: queueGate.setAccount,
-            displayTraits: binding.displayTraits,
-            onTraitsChange: binding.onTraitsChange,
-          }}
-          onSend={handleSend}
-          onCancel={handleCancel}
-          preInputContent={
+        streamingContent={streaming?.currentContent}
+        streamingPendingQuestion={streaming?.pendingQuestion}
+        // A thread turn's question is answered in its thread.
+        blockingQuestion={threadTurn ? undefined : (blockingQuestion ?? undefined)}
+        onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
+        isExecuting={isExecuting}
+        isInputDisabled={composer.isInputDisabled}
+        isArchived={isArchived}
+        placeholder={composer.placeholder}
+        emptyStateTitle={empty.title}
+        emptyStateDescription={empty.description}
+        emptyState={emptyState}
+        disabledReason={composer.disabledReason}
+        onStartSandbox={startSandboxHandler(
+          isSandboxActive,
+          isSandboxToggling,
+          isArchived ? undefined : onSandboxToggle,
+        )}
+        modelPicker={{
+          model,
+          setModel: queueGate.setModel,
+          modelOptions: binding.modelOptions,
+          accounts: binding.accounts,
+          accountId,
+          onAccountChange: queueGate.setAccount,
+          displayTraits: binding.displayTraits,
+          onTraitsChange: binding.onTraitsChange,
+        }}
+        onSend={handleSend}
+        onCancel={handleCancel}
+        onForkTranscript={onForkTranscript}
+        afterMessage={
+          afterMessage
+            ? (messageId) => afterMessage(messageId, state)
+            : undefined
+        }
+        turnCheckpoint={turnCheckpoint}
+        preInputContent={
+          <>
+            {threadTurn ? (
+              <ThreadTurnStatus
+                preview={threadTurn.preview}
+                hasQuestion={threadTurn.hasQuestion}
+                onOpen={() => openThread(threadTurn.rootId)}
+              />
+            ) : null}
             <SandboxChatPreInput
               surface={chatSurface}
-              beforeBanner={preInputBanner}
+              beforeBanner={beforeBanner?.(state)}
             />
-          }
-          composerChips={<SandboxChatStatusChips surface={chatSurface} />}
-          underCardLeading={
-            <SandboxBranchChip
-              branch={doc?.sandboxBranch}
-              isSandboxActive={isSandboxActive}
-              intendedBranch={binding.intendedBranch}
-            />
-          }
-          draft={draftBundle}
-          isDraftLoading={isDraftLoading}
-          onOpenFile={onOpenFile}
-          onViewDiff={onViewDiff}
-          hasPendingContext={hasPendingReviewComments}
-          onOpenAgentsTab={onOpenAgentsTab}
-          assistantBubbles={assistantBubbles}
-          backgroundAgents={doc?.backgroundAgents}
-          sandboxRunning={isSandboxActive}
-          transcriptTail={sandboxStartupTail(
+          </>
+        }
+        composerChips={
+          <SandboxChatStatusChips surface={chatSurface}>
+            {statusChips}
+          </SandboxChatStatusChips>
+        }
+        underCardLeading={
+          <SandboxBranchChip
+            branch={doc?.sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={binding.intendedBranch}
+          />
+        }
+        draft={draftBundle}
+        isDraftLoading={isDraftLoading}
+        onOpenFile={onOpenFile}
+        onViewDiff={onViewDiff}
+        hasPendingContext={hasPendingReviewComments}
+        onOpenAgentsTab={onOpenAgentsTab}
+        projectTaskCards={projectTaskCards}
+        assistantBubbles={assistantBubbles}
+        onOpenThread={replyThreads ? openThread : undefined}
+        backgroundAgents={doc?.backgroundAgents}
+        sandboxRunning={isSandboxActive}
+        transcriptTail={
+          transcriptTail?.(state) ??
+          // A running turn shows its own bubble; the startup block is for a
+          // wake with nothing else on screen.
+          sandboxStartupTail(
             sandboxStartupActivity,
-            sandboxStartupActivity !== undefined &&
-              !isSandboxActive &&
-              !isExecuting,
-          )}
-        />
-      </SubagentThreadLayer>
+            isSandboxStarting && !isSandboxActive && !isExecuting,
+          )
+        }
+      />
+    </SubagentThreadLayer>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col">
+      {frame ? (
+        frame(chat, state)
+      ) : (
+        <>
+          <SandboxChatHeaderActions
+            repoId={repo._id}
+            model={model}
+            providerAccountId={binding.providerAccountId}
+            usageAccountLabel={state.usageAccountLabel}
+          />
+          {chat}
+        </>
+      )}
       {queueGate.switchDialog}
     </div>
   );

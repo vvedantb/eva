@@ -111,10 +111,11 @@ http.route({
     }
     // VM memory sample (the daemon sends one at most every 30s). Logged only,
     // so Axiom shows memory pressure before a VM dies with no stop reason.
+    // `oomKills` is the kernel's count since boot: a rise means an OOM kill.
     const memAvailableMb = params.get("memAvailableMb");
     if (memAvailableMb !== null) {
       console.log(
-        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"}`,
+        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"} oomKills=${params.get("oomKills") ?? "?"}`,
       );
     }
     const lease = await ctx.runMutation(internal.turns.heartbeat, {

@@ -2,17 +2,12 @@
 
 import {
   type IconBell,
-  IconRepeat,
-  IconFileExport,
   IconCheck,
-  IconAlertTriangle,
-  IconExclamationCircle,
   IconInfoCircle,
   IconUserPlus,
   IconMessage,
   IconMessageReply,
   IconAt,
-  IconPlayerPlay,
   IconProgress,
   IconPencil,
   IconArchive,
@@ -20,7 +15,6 @@ import {
   IconGitPullRequestClosed,
   IconMessageQuestion,
 } from "@tabler/icons-react";
-import { cn } from "@eva/ui";
 import { Avatar, AvatarFallback } from "@vvedantb/ui";
 import type { BadgeProps } from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
@@ -45,8 +39,6 @@ export type NotificationAppearance = {
 
 /** The Tabler component for each shared icon name. */
 const ICONS: Record<NotificationIconName, typeof IconBell> = {
-  Repeat: IconRepeat,
-  FileExport: IconFileExport,
   Check: IconCheck,
   UserPlus: IconUserPlus,
   Progress: IconProgress,
@@ -54,9 +46,6 @@ const ICONS: Record<NotificationIconName, typeof IconBell> = {
   Pencil: IconPencil,
   MessageReply: IconMessageReply,
   At: IconAt,
-  PlayerPlay: IconPlayerPlay,
-  ExclamationCircle: IconExclamationCircle,
-  AlertTriangle: IconAlertTriangle,
   InfoCircle: IconInfoCircle,
   Archive: IconArchive,
   GitMerge: IconGitMerge,
@@ -113,30 +102,20 @@ export function getNotificationAppearance(
   return { icon: ICONS[icon], label, ...TONE_CLASSES[tone] };
 }
 
-/**
- * The type marker as a bare coloured glyph, for the inbox's trailing status
- * column: a green check for done, a red circle for failed, and so on. No
- * container — it reads as a status, not as a second avatar.
- */
+/** The type's icon in its colour: the trailing status column of an Inbox row. */
 export function NotificationStatusIcon({
   notification,
-  className,
 }: {
   notification: Pick<Notification, "type" | "title" | "message">;
-  className?: string;
 }) {
   const config = getNotificationAppearance(notification);
   const Icon = config.icon;
-
   return (
     <span
       role="img"
       aria-label={config.label}
       title={config.label}
-      className={cn(
-        "flex size-4 shrink-0 items-center justify-center",
-        className,
-      )}
+      className="flex size-4 shrink-0 items-center justify-center"
     >
       <Icon size={16} className={config.iconColor} />
     </span>

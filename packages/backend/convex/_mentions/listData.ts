@@ -2,10 +2,11 @@ import { v } from "convex/values";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
-import { entityVisible } from "../numId";
+import { archivedProjectIds, entityVisible, filterLiveTasks } from "../numId";
 import { standaloneOnly } from "../_sessions/owner";
 import { findRepoByPath } from "../_githubRepos/helpers";
 import { OPEN_TASK_STATUSES } from "../validators";
+import { getUserDisplayName } from "@eva/shared/taskDetail";
 import {
   DATA_MENTION_BADGE,
   DATA_MENTION_KINDS,
@@ -28,6 +29,9 @@ const dataMentionItemValidator = v.object({
   /** Full doc body — only set for document entities in getEntity. */
   content: v.optional(v.string()),
   numId: v.optional(v.number()),
+  /** Hover card only (getEntity): last change and who created it. */
+  updatedAt: v.optional(v.number()),
+  authorName: v.optional(v.string()),
 });
 
 type DataMentionItem = {
@@ -38,7 +42,22 @@ type DataMentionItem = {
   description?: string;
   content?: string;
   numId?: number;
+  updatedAt?: number;
+  authorName?: string;
 };
+
+/** Name and last change for the hover card, shared by every non-doc kind. */
+async function cardMeta(
+  db: QueryCtx["db"],
+  row: { _creationTime: number; updatedAt?: number },
+  authorId: Id<"users"> | undefined,
+): Promise<{ updatedAt: number; authorName?: string }> {
+  const author = authorId === undefined ? null : await db.get(authorId);
+  return {
+    updatedAt: row.updatedAt ?? row._creationTime,
+    ...(author !== null ? { authorName: getUserDisplayName(author) } : {}),
+  };
+}
 
 function previewOneLine(text: string, maxLength = 72): string {
   const singleLine = text.replace(/\s+/g, " ").trim();
@@ -118,8 +137,8 @@ export const listData = authQuery({
 
     const projects = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_deleted", (q) =>
-        q.eq("repoId", args.repoId).eq("deletedAt", undefined),
+      .withIndex("by_repo_and_archived", (q) =>
+        q.eq("repoId", args.repoId).eq("archivedAt", undefined),
       )
       .order("desc")
       .take(MENTION_LIST_CAP);
@@ -136,20 +155,21 @@ export const listData = authQuery({
     }
 
     // Open work only — done tasks rarely need @-mention and dominate large repos.
-    const taskArrays = await Promise.all(
-      OPEN_TASK_STATUSES.map((status) =>
+    const [archivedProjects, ...taskArrays] = await Promise.all([
+      archivedProjectIds(ctx.db, args.repoId),
+      ...OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
-          .withIndex("by_repo_status_and_deleted", (q) =>
+          .withIndex("by_repo_status_and_archived", (q) =>
             q
               .eq("repoId", args.repoId)
               .eq("status", status)
-              .eq("deletedAt", undefined),
+              .eq("archivedAt", undefined),
           )
           .take(MENTION_LIST_CAP),
       ),
-    );
-    for (const task of taskArrays.flat()) {
+    ]);
+    for (const task of filterLiveTasks(taskArrays.flat(), archivedProjects)) {
       const description = task.description?.trim();
       items.push({
         kind: "quickTask",
@@ -205,6 +225,11 @@ export const getEntity = authQuery({
           label: visible.title,
           badge: DATA_MENTION_BADGE.session,
           ...(visible.numId !== undefined ? { numId: visible.numId } : {}),
+          ...(await cardMeta(
+            ctx.db,
+            visible,
+            visible.createdBy ?? visible.userId,
+          )),
         };
         return item;
       }
@@ -212,8 +237,8 @@ export const getEntity = authQuery({
 
     const projectId = ctx.db.normalizeId("projects", args.id);
     if (projectId) {
-      const project = await ctx.db.get(projectId);
-      const visible = entityVisible(project);
+      // An archived project still resolves: its chip opens it read-only.
+      const visible = await ctx.db.get(projectId);
       if (visible && visible.repoId === args.repoId) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
@@ -223,6 +248,7 @@ export const getEntity = authQuery({
           badge: DATA_MENTION_BADGE.project,
           ...(description ? { description: previewOneLine(description) } : {}),
           ...(visible.numId !== undefined ? { numId: visible.numId } : {}),
+          ...(await cardMeta(ctx.db, visible, visible.userId)),
         };
         return item;
       }
@@ -230,8 +256,8 @@ export const getEntity = authQuery({
 
     const taskId = ctx.db.normalizeId("agentTasks", args.id);
     if (taskId) {
-      const task = await ctx.db.get(taskId);
-      const visible = entityVisible(task);
+      // An archived task still resolves: its chip opens it read-only.
+      const visible = await ctx.db.get(taskId);
       if (
         visible &&
         visible.repoId === args.repoId &&
@@ -245,6 +271,7 @@ export const getEntity = authQuery({
           badge: DATA_MENTION_BADGE.quickTask,
           ...(description ? { description: previewOneLine(description) } : {}),
           ...(visible.numId !== undefined ? { numId: visible.numId } : {}),
+          ...(await cardMeta(ctx.db, visible, visible.createdBy)),
         };
         return item;
       }

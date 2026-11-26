@@ -22,7 +22,7 @@ import {
   SKILL_CHIP_CLASS,
 } from "@/lib/components/mentions";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
-import { parseMentionChipHref } from "@eva/shared";
+import { EVA_MENTION_ID, parseMentionChipHref } from "@eva/shared";
 import { remarkMentionChips } from "./remarkMentionChips";
 import { ChatMarkdownLink } from "./ChatMarkdownLink";
 
@@ -105,9 +105,14 @@ export function AtMentionChip({
   repoId: Id<"githubRepos">;
   onNavigateToData: (e: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const entity = useQuery(api.mentions.getEntity, { id, repoId });
+  // `@Eva` names no row: nothing to look up, and no hover card.
+  const isEva = id === EVA_MENTION_ID;
+  const entity = useQuery(
+    api.mentions.getEntity,
+    isEva ? "skip" : { id, repoId },
+  );
 
-  if (entity === undefined) {
+  if (isEva || entity === undefined) {
     // Kind not resolved yet — render a neutral, non-interactive placeholder
     // rather than guessing (a click during this window must not misfire).
     return <span className={MENTION_CHIP_CLASS}>@{label}</span>;

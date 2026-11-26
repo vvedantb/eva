@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v33";
+const SCRIPT_VERSION = "stream-v34";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -61,6 +61,11 @@ interface PreviewProxyAuthParams {
    * pass the exposed port here so grants and /preview-auth stay aligned.
    */
   authPort?: number;
+  /**
+   * Hex HMAC key for the session cookie (`previewSessionSecret`). Stable per
+   * sandbox port, so cookies survive a proxy restart.
+   */
+  sessionSecret: string;
   /**
    * Activity heartbeat for the idle-pause sweep: the proxy POSTs
    * `sandboxId` + `hmac` (+ the session's Clerk `subject`) to `activityUrl`
@@ -273,11 +278,11 @@ if (GATE_ENABLED) {
     console.error("Eva preview proxy: invalid grant public key", e);
   }
 }
-// Random per-process secret for the proxy's own session cookie. The proxy only
-// holds the grant's public key (cannot mint long-lived grants), so it exchanges
-// a validated short-lived grant for an HMAC session cookie it can verify itself.
-// A proxy restart invalidates sessions, which just forces a fast re-auth.
-const SESSION_SECRET = crypto.randomBytes(32);
+// Secret for the proxy's own session cookie. The proxy only holds the grant's
+// public key (cannot mint long-lived grants), so it exchanges a validated
+// short-lived grant for an HMAC session cookie it can verify itself. Convex
+// derives the secret per sandbox port, so a proxy restart keeps cookies valid.
+const SESSION_SECRET = Buffer.from(${JSON.stringify(params.sessionSecret)}, "hex");
 
 function b64urlToBuf(s) {
   let v = String(s).replace(/-/g, "+").replace(/_/g, "/");
@@ -1095,8 +1100,7 @@ function rewriteHtml(html, injects, tabPrefix, pings) {
   return out;
 }
 
-// Vercel exposes each sandbox port on its OWN "*.vercel.run" subdomain (unlike
-// Daytona's single host + port-prefix scheme). The proxy has no way to learn
+// Vercel exposes each sandbox port on its OWN "*.vercel.run" subdomain. The proxy has no way to learn
 // its own external hostname (Vercel's edge terminates TLS before this
 // process), so it cannot rewrite a redirect to "the current host, new path" —
 // it can only strip the host entirely and rely on the browser resolving a
@@ -1476,11 +1480,36 @@ server.listen(proxyPort, "0.0.0.0", function handleListen() {
 `.trim();
 }
 
+/**
+ * Proxy health read through the port's public URL. On Vercel this takes about
+ * 35 ms; the in-sandbox `curl` exec below takes about 410 ms. Null when the
+ * port has no public route or the request fails.
+ */
+async function publicProxyHealth(
+  sandbox: SandboxHandle,
+  proxyPort: number,
+): Promise<string | null> {
+  try {
+    const { url } = await sandbox.previewUrl(proxyPort);
+    const res = await fetch(new URL(HEALTH_PATH, url), {
+      signal: AbortSignal.timeout(2_000),
+    });
+    return res.ok ? (await res.text()).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function proxyAlreadyRunning(
   sandbox: SandboxHandle,
   targetPort: number,
   proxyPort: number,
 ): Promise<boolean> {
+  const expected = `target=${targetPort};${SCRIPT_VERSION}`;
+  // Fast path only: any other answer (old version, other target, edge error)
+  // falls through to the exec check, so a wrong public reply costs time, not
+  // correctness.
+  if ((await publicProxyHealth(sandbox, proxyPort)) === expected) return true;
   try {
     const health = await execHandle(
       sandbox,
@@ -1489,7 +1518,7 @@ async function proxyAlreadyRunning(
       "/tmp",
     );
     // Version suffix forces a relaunch when the script changes across deploys.
-    return health.trim() === `target=${targetPort};${SCRIPT_VERSION}`;
+    return health.trim() === expected;
   } catch {
     return false;
   }

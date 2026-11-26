@@ -24,9 +24,9 @@ import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
-import type { AnnotationSubmit } from "./annotationSend";
+import type { PreviewAnnotationTarget } from "./annotationSend";
 import {
-  isSimpleViewHiddenSandboxTab,
+  useIsHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
@@ -67,8 +67,8 @@ interface SandboxPaneSlotsProps {
    * Required on purpose: an optional prop here let one surface silently lose
    * menu items. Add a new preview tool as a required prop too.
    */
-  /** Preview select-element → owner chat submit. */
-  onAnnotationSubmit: AnnotationSubmit;
+  /** Preview select-element → owner chat, and its comments drawer. */
+  annotation: PreviewAnnotationTarget;
   /**
    * The visible preview may float into the mini-player. `undefined` only
    * while this pane is not on screen (collapsed rail, cached sibling).
@@ -161,7 +161,7 @@ export function SandboxPaneSlots({
   runConsoleDevCommandOnConnect = true,
   onStartSandbox,
   isSandboxStarting,
-  onAnnotationSubmit,
+  annotation,
   miniPlayer,
   previewPortOptions,
   viewState,
@@ -171,10 +171,8 @@ export function SandboxPaneSlots({
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
   const wake = { onStartSandbox, isSandboxStarting };
-  const resolvedTab =
-    simpleView && isSimpleViewHiddenSandboxTab(activeTab)
-      ? "preview"
-      : activeTab;
+  const isHiddenTab = useIsHiddenSandboxTab();
+  const resolvedTab = isHiddenTab(activeTab) ? "preview" : activeTab;
   const entityId = sandboxOwnerParentId(owner);
   // Idle pause: a VM tab in the foreground AND in use keeps the sandbox awake
   // (presence beacon, always on). With the setting fully on, the same tab
@@ -284,7 +282,7 @@ export function SandboxPaneSlots({
               }}
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
-              onAnnotationSubmit={onAnnotationSubmit}
+              annotation={annotation}
               miniPlayer={
                 resolvedTab === "preview" && resolvedPreviewActive === id
                   ? miniPlayer

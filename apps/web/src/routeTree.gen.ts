@@ -13,8 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
-import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
-import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -28,6 +26,11 @@ import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
 import { Route as DevLandingDemosRouteImport } from './routes/dev/landing-demos'
 import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
+import { Route as SlidesIndexRouteImport } from './routes/slides/index'
+import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
+import { Route as SlidesBeeRouteImport } from './routes/slides/bee'
+import { Route as SlidesFridaySessionRouteImport } from './routes/slides/friday-session'
+import { Route as SlidesIntroToEvaRouteImport } from './routes/slides/intro-to-eva'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
 import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
@@ -166,16 +169,6 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
   path: '/agent-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PreviewAuthRoute = PreviewAuthRouteImport.update({
-  id: '/preview-auth',
-  path: '/preview-auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SlidesRoute = SlidesRouteImport.update({
-  id: '/slides',
-  path: '/slides',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
   id: '/automations',
   path: '/automations',
@@ -239,6 +232,31 @@ const DevLandingDemosRoute = DevLandingDemosRouteImport.update({
 const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
   id: '/dev/ui-gallery',
   path: '/dev/ui-gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesIndexRoute = SlidesIndexRouteImport.update({
+  id: '/slides/',
+  path: '/slides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesAnnualCdmRoute = SlidesAnnualCdmRouteImport.update({
+  id: '/slides/annual-cdm',
+  path: '/slides/annual-cdm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesBeeRoute = SlidesBeeRouteImport.update({
+  id: '/slides/bee',
+  path: '/slides/bee',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesFridaySessionRoute = SlidesFridaySessionRouteImport.update({
+  id: '/slides/friday-session',
+  path: '/slides/friday-session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesIntroToEvaRoute = SlidesIntroToEvaRouteImport.update({
+  id: '/slides/intro-to-eva',
+  path: '/slides/intro-to-eva',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalArtifactsIndexRoute = GlobalArtifactsIndexRouteImport.update({
@@ -945,8 +963,6 @@ const RepoOwnerRepoQuickTasksNumIdSandboxReviewDiffsDiffViewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -960,6 +976,11 @@ export interface FileRoutesByFullPath {
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides/': typeof SlidesIndexRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1083,8 +1104,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
@@ -1097,6 +1116,11 @@ export interface FileRoutesByTo {
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides': typeof SlidesIndexRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/connections': typeof GlobalSettingsConnectionsRoute
@@ -1199,8 +1223,6 @@ export interface FileRoutesById {
   '/_global': typeof GlobalRouteWithChildren
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
-  '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1214,6 +1236,11 @@ export interface FileRoutesById {
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides/': typeof SlidesIndexRoute
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1339,8 +1366,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-callback'
-    | '/preview-auth'
-    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1354,6 +1379,11 @@ export interface FileRouteTypes {
     | '/dev/feature-previews'
     | '/dev/landing-demos'
     | '/dev/ui-gallery'
+    | '/slides/annual-cdm'
+    | '/slides/bee'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides/'
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
@@ -1477,8 +1507,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent-callback'
-    | '/preview-auth'
-    | '/slides'
     | '/automations'
     | '/ave'
     | '/changelog'
@@ -1491,6 +1519,11 @@ export interface FileRouteTypes {
     | '/dev/feature-previews'
     | '/dev/landing-demos'
     | '/dev/ui-gallery'
+    | '/slides/annual-cdm'
+    | '/slides/bee'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
     | '/settings/connections'
@@ -1592,8 +1625,6 @@ export interface FileRouteTypes {
     | '/_global'
     | '/_repo'
     | '/agent-callback'
-    | '/preview-auth'
-    | '/slides'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1607,6 +1638,11 @@ export interface FileRouteTypes {
     | '/dev/feature-previews'
     | '/dev/landing-demos'
     | '/dev/ui-gallery'
+    | '/slides/annual-cdm'
+    | '/slides/bee'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides/'
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
     | '/_global/settings/accounts'
@@ -1733,11 +1769,14 @@ export interface RootRouteChildren {
   GlobalRoute: typeof GlobalRouteWithChildren
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
-  PreviewAuthRoute: typeof PreviewAuthRoute
-  SlidesRoute: typeof SlidesRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   DevLandingDemosRoute: typeof DevLandingDemosRoute
   DevUiGalleryRoute: typeof DevUiGalleryRoute
+  SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
+  SlidesBeeRoute: typeof SlidesBeeRoute
+  SlidesFridaySessionRoute: typeof SlidesFridaySessionRoute
+  SlidesIntroToEvaRoute: typeof SlidesIntroToEvaRoute
+  SlidesIndexRoute: typeof SlidesIndexRoute
   PKindIdRoute: typeof PKindIdRoute
 }
 
@@ -1769,20 +1808,6 @@ declare module '@tanstack/react-router' {
       path: '/agent-callback'
       fullPath: '/agent-callback'
       preLoaderRoute: typeof AgentCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/preview-auth': {
-      id: '/preview-auth'
-      path: '/preview-auth'
-      fullPath: '/preview-auth'
-      preLoaderRoute: typeof PreviewAuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/slides': {
-      id: '/slides'
-      path: '/slides'
-      fullPath: '/slides'
-      preLoaderRoute: typeof SlidesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -1874,6 +1899,41 @@ declare module '@tanstack/react-router' {
       path: '/dev/ui-gallery'
       fullPath: '/dev/ui-gallery'
       preLoaderRoute: typeof DevUiGalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/': {
+      id: '/slides/'
+      path: '/slides'
+      fullPath: '/slides/'
+      preLoaderRoute: typeof SlidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/annual-cdm': {
+      id: '/slides/annual-cdm'
+      path: '/slides/annual-cdm'
+      fullPath: '/slides/annual-cdm'
+      preLoaderRoute: typeof SlidesAnnualCdmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/bee': {
+      id: '/slides/bee'
+      path: '/slides/bee'
+      fullPath: '/slides/bee'
+      preLoaderRoute: typeof SlidesBeeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/friday-session': {
+      id: '/slides/friday-session'
+      path: '/slides/friday-session'
+      fullPath: '/slides/friday-session'
+      preLoaderRoute: typeof SlidesFridaySessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/intro-to-eva': {
+      id: '/slides/intro-to-eva'
+      path: '/slides/intro-to-eva'
+      fullPath: '/slides/intro-to-eva'
+      preLoaderRoute: typeof SlidesIntroToEvaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/artifacts/': {
@@ -3370,11 +3430,14 @@ const rootRouteChildren: RootRouteChildren = {
   GlobalRoute: GlobalRouteWithChildren,
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
-  PreviewAuthRoute: PreviewAuthRoute,
-  SlidesRoute: SlidesRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   DevLandingDemosRoute: DevLandingDemosRoute,
   DevUiGalleryRoute: DevUiGalleryRoute,
+  SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
+  SlidesBeeRoute: SlidesBeeRoute,
+  SlidesFridaySessionRoute: SlidesFridaySessionRoute,
+  SlidesIntroToEvaRoute: SlidesIntroToEvaRoute,
+  SlidesIndexRoute: SlidesIndexRoute,
   PKindIdRoute: PKindIdRoute,
 }
 export const routeTree = rootRouteImport

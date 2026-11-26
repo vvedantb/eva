@@ -14,6 +14,7 @@ import {
 import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import {
+  parseAsBoolean,
   parseAsString,
   parseAsStringLiteral,
   parseAsArrayOf,
@@ -400,46 +401,14 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-// The Inbox's two views: what waits for you (derived, no read state) and the
-// notification feed. Needs you is the default.
-export const inboxViews = ["needs", "updates"] as const;
-export type InboxView = (typeof inboxViews)[number];
-export const inboxViewParser = parseAsStringLiteral(inboxViews)
-  .withDefault("needs")
-  .withOptions(searchOptions);
-
-export function isInboxView(s: string): s is InboxView {
-  return inboxViews.some((view) => view === s);
-}
-
-// "archived" is a separate list rather than a third state of the same one: the
-// backend splits the 100-row window on `archivedAt`, so Unread only ever means
-// "unread and not archived".
-export const inboxFilters = ["all", "unread", "archived"] as const;
-export type InboxFilter = (typeof inboxFilters)[number];
-export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
-  .withDefault("all")
-  .withOptions(searchOptions);
-
-export function isInboxFilter(s: string): s is InboxFilter {
-  return inboxFilters.some((filter) => filter === s);
-}
-
-// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
-// is part of what you are looking at, so it rides the URL with the filter.
-export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
-export type InboxGroup = (typeof inboxGroups)[number];
-export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
-  .withDefault("day")
-  .withOptions(searchOptions);
-
-export function isInboxGroup(s: string): s is InboxGroup {
-  return inboxGroups.some((group) => group === s);
-}
-
-// Selected notification id in the two-pane inbox, kept in the URL so the
-// selection survives reload and a notification can be linked directly.
+// The selected Inbox row (its `key`: a chat's owner id or `notification:<id>`),
+// kept in the URL so the selection survives reload and can be linked.
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
+
+// The Inbox's History (`?history=true`): the whole notification feed, read and Done ones too.
+export const inboxHistoryParser = parseAsBoolean
+  .withDefault(false)
+  .withOptions(searchOptions);
 
 // The comment a notification click-through is aimed at. Written by the backend
 // into the notification href (`?comment=<id>`), never by the UI, so it replaces
@@ -472,6 +441,17 @@ export const chatParser = parseAsInteger.withOptions(tabOptions);
  * signs in the agent user.
  */
 export const subagentParser = parseAsString.withOptions(tabOptions);
+
+/** The open reply thread in a coordinator chat: its root message id. */
+export const replyThreadParser = parseAsString.withOptions(tabOptions);
+
+/** A project's selected task tab (`?task=`): its numId; absent = Eva. */
+export const projectPanelTaskParser = parseAsInteger.withOptions(tabOptions);
+
+/** A project's open task tabs (`?tasks=903,907`), in tab order. */
+export const projectTaskTabsParser = parseAsArrayOf(parseAsInteger)
+  .withDefault([])
+  .withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")

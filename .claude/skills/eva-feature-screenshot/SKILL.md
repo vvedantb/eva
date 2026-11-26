@@ -96,7 +96,7 @@ report screenshot.
 ## Workflow
 
 1. **Pin down what shipped.** If the user hasn't said which feature, ask — one question, not a
-   survey. `git log --oneline -15`, `git diff --stat`, or `internal/changelog/` (newest month file)
+   survey. `git log --oneline -15`, `git diff --stat`, or `internal/changelog/` (newest date folder)
    usually name it.
    You need the feature and the URL that shows it.
 

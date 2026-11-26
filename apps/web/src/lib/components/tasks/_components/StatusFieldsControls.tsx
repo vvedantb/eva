@@ -59,9 +59,10 @@ import type {
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
+/** The task branch's latest deployment (`agentTasks.getRunFacts`). */
+export type TaskDeploymentStatus = NonNullable<
+  FunctionReturnType<typeof api.agentTasks.getRunFacts>
+>["deploymentStatus"];
 type Users = FunctionReturnType<typeof api.users.listAll> | undefined;
 type ProjectOptions = FunctionReturnType<typeof api.projects.list>;
 type TaskDoc = Doc<"agentTasks"> | undefined;
@@ -94,13 +95,16 @@ export function StatusSelectField({
   taskId,
   status,
   updateStatus,
+  disabled,
 }: {
   taskId: Id<"agentTasks">;
   status: TaskStatus | undefined;
   updateStatus: UpdateStatus;
+  disabled: boolean;
 }) {
   return (
     <Select
+      disabled={disabled}
       value={status ?? ""}
       onValueChange={(val) => {
         const matched = TASK_STATUSES.find((s) => s === val);
@@ -139,13 +143,16 @@ export function PrioritySelectField({
   taskId,
   priority,
   updateTask,
+  disabled,
 }: {
   taskId: Id<"agentTasks">;
   priority: Priority | undefined;
   updateTask: UpdateTask;
+  disabled: boolean;
 }) {
   return (
     <Select
+      disabled={disabled}
       value={priority ?? NO_PRIORITY_VALUE}
       onValueChange={(val) => {
         if (val === NO_PRIORITY_VALUE) {
@@ -196,11 +203,13 @@ export function ReviewerSelectField({
   assignedTo,
   users,
   updateTask,
+  disabled,
 }: {
   taskId: Id<"agentTasks">;
   assignedTo: Id<"users"> | undefined;
   users: Users;
   updateTask: UpdateTask;
+  disabled: boolean;
 }) {
   const assignedUser = assignedTo
     ? users?.find((u) => u._id === assignedTo)
@@ -212,6 +221,7 @@ export function ReviewerSelectField({
 
   return (
     <Select
+      disabled={disabled}
       value={assignedTo ?? UNASSIGNED_VALUE}
       onValueChange={(val) => {
         if (val === UNASSIGNED_VALUE) {
@@ -339,10 +349,12 @@ export function BaseBranchRow({
   status,
   baseBranch,
   updateTask,
+  disabled,
 }: {
   taskId: Id<"agentTasks">;
   hasProject: boolean;
   status: TaskStatus | undefined;
+  disabled: boolean;
   baseBranch: string;
   updateTask: UpdateTask;
 }) {
@@ -359,6 +371,7 @@ export function BaseBranchRow({
         >
           {status === "todo" ? (
             <BranchSelect
+              disabled={disabled}
               value={baseBranch}
               onValueChange={(val) => {
                 updateTask({ id: taskId, baseBranch: val });
@@ -390,14 +403,14 @@ export function BaseBranchRow({
 
 export function DeploymentRow({
   viewVercelDeployment,
-  latestDeployment,
+  deploymentStatus,
 }: {
   viewVercelDeployment: boolean;
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
 }) {
   return (
     <AnimatePresence initial={false}>
-      {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
+      {viewVercelDeployment && deploymentStatus ? (
         <m.div
           key="vercel-deployment"
           className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}
@@ -409,12 +422,12 @@ export function DeploymentRow({
           <IconBrandVercelFilled
             size={14}
             className={
-              DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+              DEPLOYMENT_STATUS_CONFIG[deploymentStatus]
                 ?.iconColor ?? "text-muted-foreground"
             }
           />
           <span>
-            {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+            {DEPLOYMENT_STATUS_CONFIG[deploymentStatus]
               ?.label ?? "Unknown"}
           </span>
         </m.div>
@@ -429,12 +442,14 @@ export function ProjectSelectField({
   projectOptions,
   onCreateProject,
   updateTask,
+  disabled,
 }: {
   taskId: Id<"agentTasks">;
   projectId: Id<"projects"> | undefined;
   projectOptions: ProjectOptions;
   onCreateProject: () => void;
   updateTask: UpdateTask;
+  disabled: boolean;
 }) {
   const hasSelectedProject =
     projectId !== undefined &&
@@ -448,6 +463,7 @@ export function ProjectSelectField({
 
   return (
     <Select
+      disabled={disabled}
       value={selectedProjectValue}
       onValueChange={(val) => {
         if (val === NEW_PROJECT_VALUE) {

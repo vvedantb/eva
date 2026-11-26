@@ -24,7 +24,6 @@ const IDLE_PAUSE_MODES: ReadonlyArray<{
   label: string;
 }> = [
   { value: "off", label: "Off" },
-  { value: "dry-run", label: "Dry run" },
   { value: "on", label: "On" },
 ];
 
@@ -38,8 +37,7 @@ function isIdlePauseMode(value: string): value is SandboxIdlePauseMode {
  * - Daily auto-stop: the entered time is interpreted in the browser's timezone
  *   (captured on save) and a backend cron stops every running sandbox then.
  * - Idle pause: a 5-minute cron pauses any sandbox whose agent has finished and
- *   that nobody has touched for the configured grace. "Dry run" only logs what
- *   it would pause, so the rule can be watched before it acts.
+ *   that nobody has touched for the configured grace.
  *
  * Both bind directly to their Convex query with an optimistic update — no
  * local form state.

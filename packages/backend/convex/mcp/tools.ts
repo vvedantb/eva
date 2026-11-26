@@ -662,8 +662,20 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     });
   }
 
+  const linkedRepoNamesArg = z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Project coordinator only: other repos this task changes together with its own (same name grammar as repoName). They are checked out in the same sandbox and each gets its own PR. Use it only when one change must land in several repos together.',
+    );
+
   const taskArgs = {
-    title: z.string().describe("Short task title"),
+    title: z
+      .string()
+      .optional()
+      .describe(
+        "Short task title. If omitted, the task is titled from its description.",
+      ),
     description: z
       .string()
       .describe(
@@ -703,16 +715,18 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .describe(
         'Project tasks: the phase this task belongs to (a label like "Phase 1: API"), for grouping only.',
       ),
+    linkedRepoNames: linkedRepoNamesArg,
   };
 
   type TaskInput = {
-    title: string;
+    title?: string;
     description: string;
     repoName?: string;
     baseBranch?: string;
     app?: string;
     projectId?: string;
     phaseLabel?: string;
+    linkedRepoNames?: string[];
   };
 
   const caller = projectCallerOf(credentials.owner);
@@ -752,6 +766,31 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   /**
+   * A coordinator task's linked repos (`linkedRepoNames`), resolved like
+   * `repoName`. Only the coordinator may pass them; the backend checks access
+   * and refuses the home repo or a repeat.
+   */
+  async function coordinatorLinkedRepoIds(
+    names: readonly string[] | undefined,
+    userId: string,
+  ): Promise<{ linkedRepoIds?: string[] } | ReturnType<typeof toolErrorResult>> {
+    if (names === undefined || names.length === 0) return {};
+    if (caller?.role !== "coordinator") {
+      return toolErrorResult(
+        "linkedRepoNames works only in a project coordinator chat.",
+      );
+    }
+    const repos = await getUserRepos(userId);
+    const linkedRepoIds: string[] = [];
+    for (const name of names) {
+      const resolved = matchRepoByName(repos, name, undefined);
+      if ("content" in resolved) return resolved;
+      linkedRepoIds.push(resolved.repo.id);
+    }
+    return { linkedRepoIds };
+  }
+
+  /**
    * The coordinator creates tasks in its project: `todo` and approved, in any
    * repo the user can access, so the scheduler starts them at once. One call is one
    * batch card in the coordinator chat.
@@ -760,9 +799,10 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     projectId: string,
     userId: string,
     tasks: Array<{
-      title: string;
+      title?: string;
       description?: string;
       repoId?: string;
+      linkedRepoIds?: string[];
       phaseLabel?: string;
     }>,
   ) {
@@ -785,6 +825,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   async function createTaskForRepo(
     input: TaskInput,
     userId: string,
+    run: boolean,
   ): Promise<
     | { taskId: string; repoFullName: string }
     | ReturnType<typeof toolErrorResult>
@@ -800,27 +841,20 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     // behind them fall back to `repo.defaultModel`, and that per-repo choice
     // (provider, cost, plan limits) is the one the MCP surface must not
     // override. Per-turn sends (orchestratorSendMessage) keep their override.
-    const taskId = await mcpCallAsUser(
-      ctx,
-      clerkUserId,
+    // A project task from an agent outside the coordinator goes to the
+    // project's coordinator, or starts when `run` (`createAgentTask`).
+    const taskId = await ctx.runMutation(
+      internal._agentTasks.mutations.createAgentTask,
       {
-        type: "mutation",
-        path: "_agentTasks/mutations:createQuickTask",
-        args: {
-          repoId: repo.id,
-          title: input.title,
-          description: input.description,
-          ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
-          ...(input.projectId ? { projectId: input.projectId } : {}),
-          ...(input.projectId && input.phaseLabel
-            ? { phaseLabel: input.phaseLabel }
-            : {}),
-          // A project task from an agent outside the coordinator waits in
-          // Triage for a person's approval.
-          approved: false,
-        },
+        userId,
+        run,
+        repoId: repo.id,
+        title: input.title,
+        description: input.description,
+        baseBranch: input.baseBranch || undefined,
+        projectId: input.projectId,
+        phaseLabel: input.projectId ? input.phaseLabel : undefined,
       },
-      z.string(),
     );
 
     await watchTaskAsAve(taskId);
@@ -839,19 +873,27 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const { userId } = await getContext();
         const project = coordinatorProject(input.projectId);
         if (typeof project === "object") return project;
-        const result = await createTaskForRepo(input, userId);
+        if (input.linkedRepoNames !== undefined && input.linkedRepoNames.length > 0) {
+          return toolErrorResult(
+            "linkedRepoNames works only with create_task or create_tasks_batch in a project coordinator chat.",
+          );
+        }
+        const result = await createTaskForRepo(input, userId, true);
         if ("content" in result) return result;
 
-        await mcpCallAsUser(
-          ctx,
-          clerkUserId,
-          {
-            type: "mutation",
-            path: "_agentTasks/execution:startExecution",
-            args: { id: result.taskId },
-          },
-          jsonValue,
-        );
+        // A project's scheduler starts its task (`createAgentTask`).
+        if (input.projectId === undefined) {
+          await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "mutation",
+              path: "_agentTasks/execution:startExecution",
+              args: { id: result.taskId },
+            },
+            jsonValue,
+          );
+        }
 
         return toolJsonResult({
           taskId: result.taskId,
@@ -874,6 +916,11 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const { userId } = await getContext();
         const project = coordinatorProject(input.projectId);
         if (typeof project === "object") return project;
+        const linked = await coordinatorLinkedRepoIds(
+          input.linkedRepoNames,
+          userId,
+        );
+        if ("content" in linked) return linked;
         if (project !== undefined) {
           const repo = await coordinatorRepoId(input.repoName, input.app, userId);
           if ("content" in repo) return repo;
@@ -882,11 +929,12 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
               title: input.title,
               description: input.description,
               ...repo,
+              ...linked,
               phaseLabel: input.phaseLabel,
             },
           ]);
         }
-        const result = await createTaskForRepo(input, userId);
+        const result = await createTaskForRepo(input, userId, false);
         if ("content" in result) return result;
 
         return toolJsonResult({
@@ -904,7 +952,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       name: "create_tasks_batch",
       description: `Create multiple tasks at once, and optionally group them into a project. Each task in the array has a title and a description.
 
-In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (any repo you can access; default the home repo) and a phaseLabel.`,
+In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (any repo you can access; default the home repo), linkedRepoNames (other repos the same change must land in) and a phaseLabel.`,
       mutating: true,
       input: {
         repoName: z
@@ -916,11 +964,18 @@ In a project coordinator chat the batch joins this project (do not pass projectT
         tasks: z
           .array(
             z.object({
-              title: z.string().describe("Short task title"),
+              title: z
+                .string()
+                .optional()
+                .describe(
+                  "Short task title. If omitted, the task is titled from its description.",
+                ),
               description: z
                 .string()
                 .optional()
-                .describe("Full prompt/instructions for the task"),
+                .describe(
+                  "Full prompt/instructions for the task. Required when title is omitted.",
+                ),
               repoName: z
                 .string()
                 .optional()
@@ -931,6 +986,7 @@ In a project coordinator chat the batch joins this project (do not pass projectT
                 .string()
                 .optional()
                 .describe("Project coordinator only: this task's phase label."),
+              linkedRepoNames: linkedRepoNamesArg,
             }),
           )
           .describe("Ordered array of tasks to create"),
@@ -970,14 +1026,25 @@ In a project coordinator chat the batch joins this project (do not pass projectT
               userId,
             );
             if ("content" in repo) return repo;
+            const linked = await coordinatorLinkedRepoIds(
+              task.linkedRepoNames,
+              userId,
+            );
+            if ("content" in linked) return linked;
             tasks.push({
               title: task.title,
               description: task.description,
               ...repo,
+              ...linked,
               phaseLabel: task.phaseLabel,
             });
           }
           return createProjectTasks(caller.projectId, userId, tasks);
+        }
+        if (input.tasks.some((task) => (task.linkedRepoNames?.length ?? 0) > 0)) {
+          return toolErrorResult(
+            "linkedRepoNames works only in a project coordinator chat.",
+          );
         }
         if (input.repoName === undefined) {
           return toolErrorResult('Pass "repoName": which repo the tasks run in.');
@@ -999,7 +1066,7 @@ In a project coordinator chat the batch joins this project (do not pass projectT
             args: {
               repoId: repo.id,
               tasks: input.tasks.map((t) => ({
-                title: t.title,
+                ...(t.title ? { title: t.title } : {}),
                 ...(t.description ? { description: t.description } : {}),
               })),
               ...(input.projectTitle
@@ -1113,6 +1180,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
                 "A person already answered this task's question, and the task went on with that answer. Your message was not sent. Send it again only if it adds something.",
               );
             }
+            await ctx.runMutation(
+              internal._projects.chatTaskCards.linkTaskToTurn,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
             return toolJsonResult({
               ...entitySummary(target),
               delivered: "started",
@@ -1153,6 +1224,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             sentViaOrchestrator: true,
           },
         );
+
+        // The coordinator gave one of its tasks work: a card under its reply.
+        if (caller?.role === "coordinator") {
+          await ctx.runMutation(
+            internal._projects.chatTaskCards.linkTaskToTurn,
+            { projectId: caller.projectId, taskId: target.targetId },
+          );
+        }
 
         return toolJsonResult({
           ...entitySummary(target),
@@ -1215,6 +1294,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
           z.string(),
         );
+        // Anchor it to this chat's turn, so it shows as a card under the reply.
+        if (entityKind !== undefined && chatContentId !== undefined) {
+          await ctx.runMutation(internal.docs.anchorToChat, {
+            docId,
+            entityKind,
+            entityId: chatContentId,
+          });
+        }
 
         return toolJsonResult({
           docId,

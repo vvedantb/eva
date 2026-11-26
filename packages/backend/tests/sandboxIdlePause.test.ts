@@ -9,7 +9,7 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * The idle-pause sweep must be a strict no-op while the setting is off (every
- * existing deployment), log-only in dry-run, and when on must only ever stop a
+ * existing deployment), and when on must only ever stop a
  * sandbox that is active, idle past both graces, not busy and not being looked
  * at. Each guard is pinned here with real Convex rows.
  */
@@ -66,7 +66,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 async function setMode(
   t: Fixture["t"],
-  mode: "off" | "dry-run" | "on",
+  mode: "off" | "on",
 ): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("appSettings", {
@@ -114,36 +114,6 @@ describe("idle pause sweep", () => {
       });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("stopping");
-      expect(await sessionStatus(t, taskSessionId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "the earlier idle-stop toggle still switches the sweep off",
-    async () => {
-      const { t, sessionId } = await fixture();
-      await t.run(async (ctx) => {
-        await ctx.db.insert("appSettings", {
-          sandboxAutoStopEnabled: false,
-          sandboxAutoStopTime: "22:00",
-          sandboxAutoStopTimeZone: "UTC",
-          sandboxIdleStopEnabled: false,
-        });
-      });
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await sessionStatus(t, sessionId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "dry-run decides but never stops",
-    async () => {
-      const { t, sessionId, taskSessionId } = await fixture();
-      await setMode(t, "dry-run");
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await sessionStatus(t, sessionId)).toBe("active");
       expect(await sessionStatus(t, taskSessionId)).toBe("active");
     },
     TIMEOUT_MS,
@@ -311,7 +281,7 @@ describe("sandbox owner state (leak sweep)", () => {
   test(
     "closed and idle is a leak; active, stopping, busy and unowned are not",
     async () => {
-      const { t, sessionId, taskId, taskSessionId, repoId } = await fixture();
+      const { t, sessionId, taskSessionId, repoId } = await fixture();
       const state = (sandboxId: string) =>
         t.query(internal.sandboxIdlePause.getSandboxOwnerState, { sandboxId });
 
@@ -320,16 +290,13 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "stopping" });
-        // A quick-task run's open turn holds its session's VM.
+        // A task's Run (a task-mode turn) holds its session's VM.
         await ctx.db.patch(taskSessionId, { status: "closed" });
         await ctx.db.insert("turns", {
-          entityId: await ctx.db.insert("agentRuns", {
-            taskId,
-            status: "running",
-            logs: [],
-          }),
+          entityId: taskSessionId,
           sessionId: taskSessionId,
-          streamingEntityId: "task-run",
+          streamingEntityId: String(taskSessionId),
+          taskRun: { mode: "implementation" },
           state: "running",
           open: true,
           turnStartedAt: Date.now(),
@@ -356,6 +323,60 @@ describe("sandbox owner state (leak sweep)", () => {
         { sandboxId: "sbx-session", repoId },
         { sandboxId: "sbx-task", repoId },
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a doc interview VM is wanted only through its agent grace",
+    async () => {
+      const { t, repoId } = await fixture();
+      await setMode(t, "on");
+      const now = Date.now();
+      const docId = await t.run(async (ctx) => {
+        const docId = await ctx.db.insert("docs", {
+          repoId,
+          title: "Spec",
+          content: "",
+          sandboxId: "sbx-doc",
+          createdAt: now - 3 * HOUR,
+          updatedAt: now - 3 * HOUR,
+        });
+        await ctx.db.insert("turns", {
+          entityId: docId,
+          streamingEntityId: String(docId),
+          state: "done",
+          open: false,
+          turnStartedAt: now - 2 * 60_000,
+          finishedAt: now - 60_000,
+          leaseExpiresAt: now,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId,
+        });
+        return docId;
+      });
+      const state = () =>
+        t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
+          sandboxId: "sbx-doc",
+        });
+
+      // The user is typing the next answer: inside the 5-minute grace.
+      expect(await state()).toBe("wanted");
+
+      await t.run(async (ctx) => {
+        for (const turn of await ctx.db.query("turns").collect()) {
+          await ctx.db.patch(turn._id, { finishedAt: now - HOUR });
+        }
+        // A crashed workflow's stale slot must not pin the VM.
+        await ctx.db.patch(docId, { activeWorkflowId: "stale-workflow" });
+      });
+      expect(await state()).toBe("closed");
+      expect(
+        await t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
+          sandboxIds: ["sbx-doc"],
+        }),
+      ).toEqual([{ sandboxId: "sbx-doc", repoId }]);
     },
     TIMEOUT_MS,
   );

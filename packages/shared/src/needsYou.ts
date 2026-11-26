@@ -1,4 +1,5 @@
 import type { NeedsYouReason } from "./projectStatus";
+import { ownerLabel } from "./chatSourceLabel";
 
 /**
  * The Inbox's "Needs you" view: work that waits for a person, across
@@ -11,7 +12,6 @@ import type { NeedsYouReason } from "./projectStatus";
 export const NEEDS_YOU_GROUPS = [
   "question",
   "review",
-  "triage",
   "failed",
 ] as const;
 export type NeedsYouGroup = (typeof NEEDS_YOU_GROUPS)[number];
@@ -19,7 +19,6 @@ export type NeedsYouGroup = (typeof NEEDS_YOU_GROUPS)[number];
 export const NEEDS_YOU_GROUP_LABELS: Record<NeedsYouGroup, string> = {
   question: "Questions",
   review: "To review",
-  triage: "Triage",
   failed: "Failed",
 };
 
@@ -35,8 +34,6 @@ export function needsYouGroupForProjectTask(
       return "question";
     case "review":
       return "review";
-    case "approve":
-      return "triage";
     case "failed":
       return "failed";
     default:
@@ -81,7 +78,7 @@ export function needsYouSourceLabel(row: {
   if (row.source === "project") {
     return row.projectTitle ? `Project · ${row.projectTitle}` : "Project";
   }
-  return row.source === "quick_task" ? "Quick task" : "Session";
+  return ownerLabel(row.source);
 }
 
 /**

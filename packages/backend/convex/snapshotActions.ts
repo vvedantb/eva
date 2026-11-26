@@ -1,5 +1,6 @@
 "use node";
 
+import type { SnapshotState } from "./_sandbox_runtime/snapshotStates";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -282,11 +283,8 @@ export const launchSeedRun = internalAction({
         `if [ -f ${SEED_ENV_FILE} ]; then set -a; . ${SEED_ENV_FILE}; set +a; rm -f ${SEED_ENV_FILE}; echo "seed-only env vars loaded; xtrace off"; else echo "SEEDRUN-FAILED:seed-env-missing"; exit 1; fi`,
       );
     }
-    // Daytona used to bake its whole agent-CLI toolchain (claude, codex,
-    // opencode, supabase, docker, ...) into the sandbox's Image
-    // at build time — every fresh Daytona sandbox already had them.
-    //
-    // Vercel has NO equivalent custom Image: a fresh Vercel sandbox boots its
+    // Vercel has NO custom Image for the agent-CLI toolchain (claude, codex,
+    // opencode, supabase, docker, ...): a fresh Vercel sandbox boots its
     // bare base image with none of this installed. The ONLY place the CLIs get
     // installed for Vercel is right here, once, on the seed-prep sandbox —
     // they end up on disk only because this stage runs before the capture
@@ -680,7 +678,11 @@ export const pollSeedRun = internalAction({
  * in getRepoSnapshotName), ready to run the app's background/seed/stop commands.
  */
 export const createSeedPrepSandbox = internalAction({
-  args: { repoId: v.id("githubRepos"), imageSnapshot: v.string() },
+  args: {
+    repoId: v.id("githubRepos"),
+    /** Base Image `snap_*` id; absent means a fresh sandbox + clone. */
+    imageSnapshot: v.optional(v.string()),
+  },
   returns: v.union(
     v.object({ ok: v.literal(true), sandboxId: v.string() }),
     v.object({ ok: v.literal(false), error: v.string() }),
@@ -701,12 +703,6 @@ export const createSeedPrepSandbox = internalAction({
     }
     const { credentials, sandboxEnvVars } = resolved;
     const client = getSandboxClient(credentials);
-    // Vercel snapshot IDs are `snap_*`. If a non-`snap_*` name is passed (e.g.
-    // a stale/legacy value), fall back to a fresh sandbox (no snapshot source)
-    // so the first build can bootstrap the chain by cloning the repo from scratch.
-    const effectiveImageSnapshot = !args.imageSnapshot.startsWith("snap_")
-      ? undefined
-      : args.imageSnapshot;
     if (!repo) throw new Error("Repo not found");
     const seedPrepLifecycle = {
       ...SESSION_LIFECYCLE,
@@ -723,7 +719,7 @@ export const createSeedPrepSandbox = internalAction({
       repo.name,
       { ...sandboxEnvVars, REPO_ID: args.repoId },
       seedPrepLifecycle,
-      effectiveImageSnapshot,
+      args.imageSnapshot,
       undefined, // onSandboxAcquired
       undefined, // onProgress
       { mode: "all" }, // syncStrategy
@@ -800,9 +796,7 @@ export const triggerSeededSnapshot = internalAction({
     sandboxId: v.string(),
     seededName: v.string(),
   },
-  // Returns the effective snapshot identifier used by the provider. On the
-  // now-removed Daytona provider this equaled seededName (name IS the id); on
-  // Vercel it is the `snap_*` id returned by the API. The workflow must use
+  // Returns the `snap_*` id Vercel generated (distinct from seededName). The workflow must use
   // this value — not seededName — when polling and writing seededSnapshotName
   // to the DB.
   returns: v.object({ snapshotId: v.string() }),
@@ -822,11 +816,11 @@ export const triggerSeededSnapshot = internalAction({
 
 /**
  * Seeded-snapshot build — POLL step. Returns the snapshot entity's current state
- * ("active" on success, "error"/"build_failed" on failure, otherwise still
- * building; "pending" if it is not registered yet).
+ * ("ready" on success, "error" on failure, "pending" while it is still
+ * capturing or not registered yet).
  *
  * We poll the SNAPSHOT entity, not the sandbox state: a sandbox snapshot can
- * reach "active" while the source sandbox still reports "snapshotting", so a
+ * be ready while the source sandbox still reports "snapshotting", so a
  * sandbox-state poll can wait out the whole window and wrongly record a fallback
  * for a snapshot that actually succeeded. The snapshot's own state is the
  * authoritative signal — the same one the base-Image build polls.
@@ -836,17 +830,18 @@ export const pollSeededSnapshotState = internalAction({
     repoId: v.id("githubRepos"),
     seededName: v.string(),
   },
-  returns: v.string(),
-  handler: async (ctx, args): Promise<string> => {
+  returns: v.union(
+    v.literal("ready"),
+    v.literal("pending"),
+    v.literal("error"),
+  ),
+  handler: async (ctx, args): Promise<SnapshotState> => {
     const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
     const client = getSandboxClient(credentials);
     // Not registered yet (or a transient lookup miss) → treat as still pending.
     const snapshot = await client.getSnapshot(args.seededName);
     if (!snapshot) return "pending";
-    // SandboxSnapshotInfo.status uses "ready" for success; the workflow polls
-    // for "active" (the Daytona-era term). Map "ready" → "active" so the
-    // existing isTerminalSnapshotState / state === "active" checks still work.
-    return snapshot.status === "ready" ? "active" : snapshot.status;
+    return snapshot.status;
   },
 });
 
@@ -921,8 +916,7 @@ export const stopAllRepoSandboxes = internalAction({
 /**
  * Deletes a seeded snapshot by its id/name so previous `snap_*` captures don't
  * accumulate — the single-snapshot build makes a fresh capture each run.
- * Best-effort: a missing snapshot, or a legacy `seeded-*` name left over from
- * the now-removed Daytona provider, just no-ops (deleteSnapshot returns false).
+ * Best-effort: a missing snapshot just no-ops (deleteSnapshot returns false).
  */
 export const deleteSeededSnapshot = internalAction({
   args: { snapshotName: v.string(), repoId: v.id("githubRepos") },
@@ -1004,24 +998,44 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     )) {
       protectedIds.add(name);
     }
-    const knownSandboxIds = new Set(
-      await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
-    );
-
     // Only protect resume snaps for sandboxes Eva still points at. Vercel
     // Sandbox.list also returns ghosts / stopped leftovers whose current snap
     // would otherwise stay protected forever.
-    let liveSandboxCount = 0;
-    let evaSandboxCount = 0;
-    const sandboxes = await Sandbox.list(creds);
-    for await (const sandbox of sandboxes) {
-      liveSandboxCount += 1;
-      const ours = knownSandboxIds.has(sandbox.name);
-      if (!ours && foreignSandboxDeployment(sandbox.tags) === null) continue;
-      if (ours) evaSandboxCount += 1;
+    const listedSandboxes: Array<{
+      name: string;
+      foreign: boolean;
+      currentSnapshotId: string | undefined;
+    }> = [];
+    for await (const sandbox of await Sandbox.list(creds)) {
       const currentId = sandbox.currentSnapshotId;
-      if (typeof currentId === "string" && currentId.length > 0) {
-        protectedIds.add(currentId);
+      listedSandboxes.push({
+        name: sandbox.name,
+        foreign: foreignSandboxDeployment(sandbox.tags) !== null,
+        currentSnapshotId:
+          typeof currentId === "string" && currentId.length > 0
+            ? currentId
+            : undefined,
+      });
+    }
+    // Batched so one query's index lookups stay well under Convex's limits.
+    const knownSandboxIds = new Set<string>();
+    for (let i = 0; i < listedSandboxes.length; i += 500) {
+      const batch = listedSandboxes.slice(i, i + 500).map((s) => s.name);
+      for (const id of await ctx.runQuery(
+        internal.repoSnapshots.listReferencedSandboxIds,
+        { sandboxIds: batch },
+      )) {
+        knownSandboxIds.add(id);
+      }
+    }
+    const liveSandboxCount = listedSandboxes.length;
+    let evaSandboxCount = 0;
+    for (const sandbox of listedSandboxes) {
+      const ours = knownSandboxIds.has(sandbox.name);
+      if (!ours && !sandbox.foreign) continue;
+      if (ours) evaSandboxCount += 1;
+      if (sandbox.currentSnapshotId !== undefined) {
+        protectedIds.add(sandbox.currentSnapshotId);
       }
     }
 

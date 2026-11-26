@@ -5,8 +5,10 @@ import {
   buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
+  CHAT_LINKS_INSTRUCTION,
   CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
+  MANAGER_AVE_INSTRUCTION,
   COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
   VISUAL_CHANGE_INSTRUCTION,
@@ -14,6 +16,7 @@ import {
 import type { LinkedRepoPromptRow } from "../prompts";
 import { stripMentionTokens } from "../_mentions/resolveDocMentions";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+import { getAIModelProvider } from "../_validators/aiModels";
 
 /**
  * Facts about the chat's own runtime that Eva already knows, stated up front
@@ -118,6 +121,43 @@ export function buildTitleDigest(
     .join("\n\n");
 }
 
+/**
+ * Eva's chat rules that never change between chats or turns. Claude gets them
+ * as its system prompt (`chatSystemPrompt`); other providers have no system
+ * prompt hook, so they ride the first turn's message.
+ */
+const CHAT_STATIC_INSTRUCTIONS = `
+
+## Shared Browser (user-visible):
+For browser verification or browsing the running app so the user can watch live:
+1. Call eva MCP \`browser_start\` (starts the shared desktop Chrome with CDP on 9222).
+2. Run \`agent-browser connect 9222\` once; all further agent-browser commands drive that Chrome.
+3. Call \`browser_lock\` before interacting, \`browser_unlock\` when done.
+4. Skip \`set viewport\` in this mode (Chrome is already 1920×1080).
+If \`browser_start\` fails or is unavailable, fall back to plain headless agent-browser (current behavior).
+
+## Recordings / screenshots in chat (required):
+When the user asks for a recording, walkthrough video, or screenshot:
+1. Write the file under \`/tmp/repo/recordings/\` (video: \`agent-browser record start /tmp/repo/recordings/<name>.webm\` … \`record stop\`) or \`/tmp/repo/screenshots/\` (stills). ALWAYS pass absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's. A few seconds after \`record start\`, verify the .webm exists and is growing (\`ls -la /tmp/repo/recordings/\`); a missing/0-byte file means recording is broken (usually no ffmpeg) — do not retry-loop, capture screenshots instead and tell the user.
+2. Those two folders are DELIVERABLE-ONLY: every file still in them when the turn ends is uploaded and posted into the chat. Save working captures — page-state checks, login verification, "did my change render" screenshots — to \`/tmp/checks/\` instead, never to the deliverable folders. When you finish, the deliverable folders must contain exactly what the user asked for and nothing else.
+3. Leave the deliverable files on disk when you finish the turn. Eva uploads them to Convex storage and renders them in chat with the video player (speed controls). Do not paste a URL instead. After posting, Eva moves each file into \`.posted/\` inside the same folder (e.g. \`/tmp/repo/screenshots/.posted/\`) — reuse those copies in later turns instead of recapturing. Never delete \`.posted/\`; copying a file from it back into the deliverable folder posts it to chat again.
+4. Never use \`create_artifact\` (or any /artifacts/… link) for these captures — artifacts are for HTML docs, not session walkthrough media.
+5. Never use \`pkill -f\`, \`pgrep -f\`, \`killall\`, or another broad command-line match to clean up ffmpeg, Chrome, or recording processes. The recording instructions are present in the parent agent's command line, so a broad match can terminate this turn. Stop recordings with \`agent-browser record stop\`. If you manually start a process, capture its exact PID when launching it and only stop that PID.
+6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
+7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
+8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${CHAT_LINKS_INSTRUCTION}${MANAGER_AVE_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}`;
+
+/**
+ * The launch-time system prompt for a session chat's agent. Only Claude takes
+ * one natively: the others prepend `SYSTEM_PROMPT` to every turn's message,
+ * which would undo the first-turn-only saving.
+ */
+export function chatSystemPrompt(model: string): string | undefined {
+  return getAIModelProvider(model) === "claude"
+    ? CHAT_STATIC_INSTRUCTIONS.trim()
+    : undefined;
+}
+
 /** Eva-specific session constraints; exploration is left to the claude_code factory preset. */
 export function buildEditPrompt({
   repo,
@@ -130,6 +170,8 @@ export function buildEditPrompt({
   planContent = "",
   readableRepos = [],
   linkedRepos = [],
+  followUp = false,
+  staticInSystemPrompt = false,
   runtime,
 }: {
   repo: { owner: string; name: string; baseBranch?: string };
@@ -142,6 +184,13 @@ export function buildEditPrompt({
   planContent?: string;
   readableRepos?: ReadonlyArray<{ owner: string; name: string }>;
   linkedRepos?: LinkedRepoPromptRow[];
+  /**
+   * The provider session already holds this chat's full instructions from an
+   * earlier turn. Send only the guard rails, so each message stays small.
+   */
+  followUp?: boolean;
+  /** The agent got `CHAT_STATIC_INSTRUCTIONS` as its system prompt. */
+  staticInSystemPrompt?: boolean;
   runtime?: ChatRuntimeFacts;
 }): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
@@ -161,35 +210,27 @@ Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPo
 
 ## Preview link (the running app has one):
 That dev server is reachable from outside the sandbox. When the user asks for "the link", "the preview", "the URL", or to open something you built, call eva MCP \`get_preview_url\` — with no arguments it answers for this chat, and \`path\` points it at a route ("/demo/referral-portal"). Paste the \`previewUrl\` it returns. Never reply that no link exists, and never guess a staging or production address for unmerged work: the branch is not deployed, but this sandbox is serving it right now. The link needs an Eva login and dies with the sandbox, so say that rather than presenting it as a public address.`;
-  const browserSection = `
+  const guardRails = `Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
+- Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
+- If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\``;
+  // User- and repo-owned instructions ride every turn; Eva's reference
+  // sections were sent on the first turn and stay in the resumed session.
+  // Readable repos are reference only, so they ride the first turn.
+  const ownedInstructions = (readableReposBlock: string) =>
+    `${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${readableReposBlock}${buildRootDirectoryInstruction(rootDirectory)}`;
+  if (followUp) {
+    return `${message}${planContext}
 
-## Shared Browser (user-visible):
-For browser verification or browsing the running app so the user can watch live:
-1. Call eva MCP \`browser_start\` (starts the shared desktop Chrome with CDP on 9222).
-2. Run \`agent-browser connect 9222\` once; all further agent-browser commands drive that Chrome.
-3. Call \`browser_lock\` before interacting, \`browser_unlock\` when done.
-4. Skip \`set viewport\` in this mode (Chrome is already 1920×1080).
-If \`browser_start\` fails or is unavailable, fall back to plain headless agent-browser (current behavior).
-
-## Recordings / screenshots in chat (required):
-When the user asks for a recording, walkthrough video, or screenshot:
-1. Write the file under \`/tmp/repo/recordings/\` (video: \`agent-browser record start /tmp/repo/recordings/<name>.webm\` … \`record stop\`) or \`/tmp/repo/screenshots/\` (stills). ALWAYS pass absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's. A few seconds after \`record start\`, verify the .webm exists and is growing (\`ls -la /tmp/repo/recordings/\`); a missing/0-byte file means recording is broken (usually no ffmpeg) — do not retry-loop, capture screenshots instead and tell the user.
-2. Those two folders are DELIVERABLE-ONLY: every file still in them when the turn ends is uploaded and posted into the chat. Save working captures — page-state checks, login verification, "did my change render" screenshots — to \`/tmp/checks/\` instead, never to the deliverable folders. When you finish, the deliverable folders must contain exactly what the user asked for and nothing else.
-3. Leave the deliverable files on disk when you finish the turn. Eva uploads them to Convex storage and renders them in chat with the video player (speed controls). Do not paste a URL instead. After posting, Eva moves each file into \`.posted/\` inside the same folder (e.g. \`/tmp/repo/screenshots/.posted/\`) — reuse those copies in later turns instead of recapturing. Never delete \`.posted/\`; copying a file from it back into the deliverable folder posts it to chat again.
-4. Never use \`create_artifact\` (or any /artifacts/… link) for these captures — artifacts are for HTML docs, not session walkthrough media.
-5. Never use \`pkill -f\`, \`pgrep -f\`, \`killall\`, or another broad command-line match to clean up ffmpeg, Chrome, or recording processes. The recording instructions are present in the parent agent's command line, so a broad match can terminate this turn. Stop recordings with \`agent-browser record stop\`. If you manually start a process, capture its exact PID when launching it and only stop that PID.
-6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
-7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
-8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.`;
+${guardRails}
+- Never commit images/video or \`plan.md\`. Never run \`gh pr create\` for this branch. The full Eva session instructions from earlier in this conversation still apply.${ownedInstructions("")}`;
+  }
   const runtimeSection = runtime
     ? buildChatRuntimeSection(runtime, branchName, devPortText)
     : "";
-  return `${message}${planContext}${devServerSection}${runtimeSection}${browserSection}
+  return `${message}${planContext}${devServerSection}${runtimeSection}
 
-Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
-- Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
-- If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
+${guardRails}
 - Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh side branch, named after this one so Eva links the new PR to this chat: \`git fetch origin && git checkout --no-track -b ${branchName}-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/${branchName}-<short-slug>:refs/heads/${branchName}-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.${runtime?.askTeammatesEnabled === true ? ASK_TEAMMATES_INSTRUCTION : ""}
-- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${staticInSystemPrompt ? "" : CHAT_STATIC_INSTRUCTIONS}${ownedInstructions(buildReadableReposBlock(readableRepos))}`;
 }

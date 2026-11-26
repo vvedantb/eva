@@ -44,7 +44,7 @@ describe("computeHasUnread", () => {
   const base = {
     isOwn: true,
     hasReadRow: false,
-    lastTurnFinishedAt: 200,
+    lastActivityAt: 200,
     lastReadAt: undefined,
   };
 
@@ -52,8 +52,8 @@ describe("computeHasUnread", () => {
     expect(computeHasUnread(base)).toBe(true);
   });
 
-  test("a chat that never finished a turn is never unread (no backfill)", () => {
-    expect(computeHasUnread({ ...base, lastTurnFinishedAt: undefined })).toBe(
+  test("a chat with no activity is never unread (no backfill)", () => {
+    expect(computeHasUnread({ ...base, lastActivityAt: undefined })).toBe(
       false,
     );
   });

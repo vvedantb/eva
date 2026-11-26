@@ -1,5 +1,6 @@
 "use node";
 
+import { createHmac } from "node:crypto";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
@@ -41,6 +42,20 @@ export function getPreviewGrantPublicJwk(): JWK {
   const publicJwk: JWK = { ...jwk };
   delete publicJwk.d;
   return publicJwk;
+}
+
+/**
+ * HMAC key (hex) for the proxy's session cookie on one sandbox port. Derived,
+ * not random, so a proxy restart (sandbox resume, new script version) keeps
+ * every open cookie valid and the visitor skips the sign-in handoff. It is a
+ * one-way HMAC of the private key: knowing it does not reveal the grant key.
+ */
+export function previewSessionSecret(sandboxId: string, port: number): string {
+  const d = readPrivateJwk().d;
+  if (!d) throw new Error("PREVIEW_GRANT_PRIVATE_KEY has no private part");
+  return createHmac("sha256", d)
+    .update(`eva-preview-session:${sandboxId}:${port}`)
+    .digest("hex");
 }
 
 /** Signs a short-lived ES256 preview grant bound to a specific sandbox + port. */

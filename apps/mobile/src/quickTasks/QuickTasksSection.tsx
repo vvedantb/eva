@@ -1,15 +1,18 @@
 import { api, type Id } from "@eva/backend";
 import {
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
   QUICK_TASK_LIST_DEFAULTS,
   TASK_STATUS_LABELS,
   TASK_TAGS,
   applyQuickTaskFilters,
+  archiveCopy,
   clearedQuickTaskFilters,
   groupByTaskStatus,
   quickTaskTodoDrafts,
   runAllPlan,
   startAll,
-  visibleDrafts,
+  type ArchiveListMode,
   type DisplayTaskStatus,
   type QuickTaskListFilters,
 } from "@eva/shared";
@@ -36,6 +39,7 @@ import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { persistedIdSet } from "@/storage/persistedStore";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
+import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
@@ -73,7 +77,9 @@ export function useQuickTaskRepo() {
  * (`useQuickTaskActions`). It opens as the web does: the repo's quick tasks
  * (never a project's), recently updated first (`QUICK_TASK_LIST_DEFAULTS`). A `SectionList`, as a
  * repo's tasks have no cap. "Select" in a row's menu starts the web select
- * mode with its bulk bar (`QuickTaskBulkBar`). The web kanban, drag between
+ * mode with its bulk bar (`QuickTaskBulkBar`). An Active / Archived switch,
+ * as the sessions list, shows the archived tasks (`agentTasks.listArchived`)
+ * instead, without drafts, Run All or select. The web kanban, drag between
  * sections and "Import from Linear" are not here.
  */
 export function QuickTasksSection() {
@@ -93,13 +99,36 @@ export function QuickTasksSection() {
   );
 }
 
+/** The list query for each mode, as the sessions list. */
+const QUICK_TASK_LIST_QUERIES = {
+  active: api.agentTasks.getAllTasks,
+  archived: api.agentTasks.listArchived,
+};
+
+const MODE_OPTIONS = ARCHIVE_LIST_MODES.map((value) => ({ value, label: ARCHIVE_LIST_MODE_LABELS[value] }));
+
 function QuickTaskList({ repo }: { repo: Repo }) {
+  // Not persisted: the list opens on Active each time, as the sessions list.
+  const [mode, setMode] = useState<ArchiveListMode>("active");
+  return (
+    <View className="flex-1">
+      <View className="px-4 pb-2">
+        <SegmentedTabs value={mode} options={MODE_OPTIONS} onChange={setMode} />
+      </View>
+      {/* Keyed on the mode: its search, filters, selection and open sections start fresh. */}
+      <QuickTaskModeList key={mode} repo={repo} mode={mode} />
+    </View>
+  );
+}
+
+function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }) {
   const { openNew } = useQuickTaskRepo();
-  const tasks = useQuery(api.agentTasks.getAllTasks, { repoId: repo._id });
-  // The user's own drafts (private to them), at the top of To Do.
-  const drafts = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
+  const archived = mode === "archived";
+  const tasks = useQuery(QUICK_TASK_LIST_QUERIES[mode], { repoId: repo._id });
+  // The user's own drafts (private to them), at the top of To Do; never in Archived.
+  const drafts = useQuery(api.agentTasks.listDrafts, archived ? "skip" : { repoId: repo._id });
   const errorTaskIds = useQuery(
-    api.agentRuns.getTaskIdsWithLatestRunError,
+    api.agentTasks.getTaskIdsWithFailedRun,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
   const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
@@ -122,11 +151,13 @@ function QuickTaskList({ repo }: { repo: Repo }) {
     repo,
     users,
     projects,
-    onSelect: (task) => {
-      impactHaptic("light");
-      setSelecting(true);
-      setSelected(new Set([task._id]));
-    },
+    onSelect: archived
+      ? undefined
+      : (task) => {
+          impactHaptic("light");
+          setSelecting(true);
+          setSelected(new Set([task._id]));
+        },
   });
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
@@ -153,8 +184,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   };
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
-  // `remove` is a soft delete: a removed draft stays until the list drops it.
-  const liveDrafts = visibleDrafts(drafts ?? []);
+  const liveDrafts = drafts ?? [];
   const shownDrafts = quickTaskTodoDrafts(liveDrafts, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...tasks.flatMap((task) => task.tags ?? [])])].sort();
@@ -170,6 +200,9 @@ function QuickTaskList({ repo }: { repo: Repo }) {
     setRunningAll(false);
   };
 
+  if (tasks.length === 0 && archived) {
+    return <EmptyState icon={IconChecklist} title={archiveCopy("task").emptyArchived} />;
+  }
   if (tasks.length === 0 && liveDrafts.length === 0) {
     return (
       <EmptyState
@@ -230,7 +263,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
               count={section.count}
               open={section.open}
               onToggle={() => toggle(section.status)}
-              onRunAll={section.status === "todo" && todoCount > 0 ? () => setRunAllOpen(true) : undefined}
+              onRunAll={!archived && section.status === "todo" && todoCount > 0 ? () => setRunAllOpen(true) : undefined}
               runningAll={runningAll}
             />
           )}

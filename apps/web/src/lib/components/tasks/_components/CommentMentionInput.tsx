@@ -10,6 +10,7 @@ import {
   DataMentionHoverCardBody,
   mergeMentionItems,
 } from "@/lib/components/mentions";
+import type { MentionItem } from "@eva/shared";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
@@ -27,6 +28,11 @@ interface CommentMentionInputProps {
   initialSkillMap?: Map<string, string>;
   /** When true, blocks all input. Used while a draft is loading. */
   disabled?: boolean;
+  /**
+   * Extra people-like items offered first (the coordinator's thread replies
+   * add Eva). Their chips do not navigate and show no profile card.
+   */
+  extraPeopleItems?: MentionItem[];
 }
 
 export const CommentMentionInput = forwardRef<
@@ -42,6 +48,7 @@ export const CommentMentionInput = forwardRef<
     initialMentionMap,
     initialSkillMap,
     disabled,
+    extraPeopleItems = [],
   },
   ref,
 ) {
@@ -49,7 +56,10 @@ export const CommentMentionInput = forwardRef<
   const peopleItems = usePeopleMentionItems(repo._id);
   const dataItems = useDataMentionItems(repo._id);
   const navigateToData = useDataMentionNavigate(basePath, repo._id);
-  const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
+  const merged = mergeMentionItems(peopleItems, dataItems);
+  const extraIds = new Set(extraPeopleItems.map((item) => item.id));
+  const items = [...extraPeopleItems, ...merged.items];
+  const peopleIds = new Set([...merged.peopleIds, ...extraIds]);
 
   return (
     <MentionEditor
@@ -64,7 +74,7 @@ export const CommentMentionInput = forwardRef<
         void navigateToData(id);
       }}
       renderMentionChipHoverCard={(id) =>
-        peopleIds.has(id) ? (
+        extraIds.has(id) ? null : peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
         ) : (
           <DataMentionHoverCardBody entityId={id} repoId={repo._id} />

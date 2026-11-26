@@ -27,7 +27,7 @@ interface ProjectsListViewProps {
   visiblePhases: Set<ProjectStage>;
   /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
-  onDelete: (id: Id<"projects">, title: string) => void;
+  onArchive: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
   onToggleSelect?: (
@@ -40,7 +40,7 @@ export function ProjectsListView({
   projectsByPhase,
   visiblePhases,
   statuses,
-  onDelete,
+  onArchive,
   isSelecting = false,
   selectedIds,
   onToggleSelect,
@@ -142,13 +142,14 @@ export function ProjectsListView({
                               sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}
+                              archived={project.archivedAt !== undefined}
                               href={
                                 entityPathSegment(project)
                                   ? `${basePath}/projects/${entityPathSegment(project)}`
                                   : `${basePath}/projects`
                               }
-                              onDelete={() =>
-                                onDelete(project._id, project.title)
+                              onArchive={() =>
+                                onArchive(project._id, project.title)
                               }
                               isSelecting={isSelecting}
                               isSelected={selectedIds?.has(project._id)}

@@ -13,6 +13,7 @@ import { allocateNumId } from "../numId";
 import {
   aiModelValidator,
   getAIModelProvider,
+  previewAnnotationValidator,
   reasoningLevelValidator,
   roleValidator,
 } from "../validators";
@@ -29,6 +30,7 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
+import { recordPersonChatPost } from "../chatReads";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import { requestSessionSandboxStop } from "./sandbox";
 import {
@@ -42,7 +44,7 @@ import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,
 } from "../repoGroups";
-import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
+import { insertSessionRepos } from "./repos";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
@@ -218,37 +220,15 @@ export async function createSession(
   const mainChat = await ensureMainChat(ctx, created);
 
   // Every linked repo is checked out on the SAME branch name as the primary,
-  // off its own default base. The rows are the sandbox's clone list, so they
-  // must exist before the startup workflow runs.
-  for (const linkedRepo of linkedRepos) {
-    await ctx.db.insert("sessionRepos", {
-      sessionId,
-      repoId: linkedRepo._id,
-      owner: linkedRepo.owner,
-      name: linkedRepo.name,
-      installationId: linkedRepo.installationId,
-      path: linkedRepoDir(linkedRepo.name),
-      branchName,
-      baseBranch: resolveSessionBaseBranch(
-        { baseBranch: undefined },
-        linkedRepo,
-      ),
-      installDependencies,
-      ...(linkedRepo.devPort !== undefined
-        ? { devPort: linkedRepo.devPort }
-        : {}),
-      ...(linkedRepo.devCommand !== undefined
-        ? { devCommand: linkedRepo.devCommand }
-        : {}),
-    });
-  }
-  if (linkedRepos.length > 0) {
-    await ctx.db.patch(sessionId, {
-      linkedRepoCount: linkedRepos.length,
-      ...(args.repoGroupId !== undefined
-        ? { repoGroupId: args.repoGroupId }
-        : {}),
-    });
+  // off its own default base.
+  await insertSessionRepos(
+    ctx,
+    { sessionId, branchName },
+    linkedRepos,
+    installDependencies,
+  );
+  if (linkedRepos.length > 0 && args.repoGroupId !== undefined) {
+    await ctx.db.patch(sessionId, { repoGroupId: args.repoGroupId });
   }
 
   await workflow.start(
@@ -297,10 +277,15 @@ export async function createSession(
     // startExecute, so its mentions are notified here instead.
     const session = await ctx.db.get(sessionId);
     if (session) {
-      await notifyChatMentions(ctx, {
+      const mentionedIds = await notifyChatMentions(ctx, {
         content,
         authorUserId: ctx.userId,
         surface: { kind: "session", session },
+      });
+      await recordPersonChatPost(ctx, {
+        parentId: mainChat._id,
+        authorId: ctx.userId,
+        mentionedIds,
       });
     }
     if (title === DEFAULT_SESSION_TITLE) {
@@ -337,6 +322,8 @@ export const addMessage = authMutation({
     reasoningLevel: v.optional(reasoningLevelValidator),
     /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
+    /** Preview "Select element" sends: where the annotation points. */
+    annotation: v.optional(previewAnnotationValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -372,6 +359,7 @@ export const addMessage = authMutation({
             model: args.model,
             reasoningLevel: args.reasoningLevel,
             sentViaOrchestrator: args.sentViaOrchestrator,
+            annotation: args.annotation,
           }
         : {}),
     });

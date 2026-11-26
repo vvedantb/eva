@@ -19,6 +19,7 @@ import {
   evalFixStatusValidator,
   notificationTypeValidator,
   notificationUrgencyValidator,
+  notificationPrefsValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
   prRecapOriginValidator,
@@ -32,7 +33,6 @@ import {
   routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
-  sandboxProviderKindValidator,
   sessionStatusValidator,
   interactionModeValidator,
   snapshotBuildKindValidator,
@@ -57,7 +57,6 @@ import {
   evalIssueValidator,
   arenaScenarioResultValidator,
   experimentalFlagsValidator,
-  logEntryValidator,
   repoShaValidator,
   sandboxGitSyncValidator,
   scopeCheckValidator,
@@ -70,6 +69,37 @@ import {
 import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 import { sessionOwnerValidator } from "../_sessions/owner";
+
+/** Where the user was in Eva when they messaged Manager Ave, as the web app sends it. */
+const avePageContextArgFields = {
+  /** Path plus search, e.g. `/acme/web/sessions/12?tab=diff`. */
+  path: v.string(),
+  title: v.string(),
+  /** IANA zone, e.g. `Europe/London`. */
+  timeZone: v.string(),
+  /** Text the user last selected on that page, if any. */
+  selection: v.optional(v.string()),
+};
+export const avePageContextArgValidator = v.object(avePageContextArgFields);
+
+/** The session, quick task, project or doc the page shows (`_ave/pageEntity.ts`). */
+export const avePageEntityValidator = v.object({
+  kind: v.union(
+    v.literal("session"),
+    v.literal("quick task"),
+    v.literal("project"),
+    v.literal("doc"),
+  ),
+  title: v.string(),
+  /** Sessions and quick tasks only: projects and docs have no status. */
+  status: v.optional(v.string()),
+});
+
+/** Stored on the user's Ave row: what the client sent plus what the server found at that path. */
+export const avePageContextValidator = v.object({
+  ...avePageContextArgFields,
+  entity: v.optional(avePageEntityValidator),
+});
 
 export const userFields = {
   clerkId: v.optional(v.string()),
@@ -88,16 +118,15 @@ export const userFields = {
   lastSeenPath: v.optional(v.string()),
   lastChangelogDismissedAt: v.optional(v.number()),
   onboardingCompletedAt: v.optional(v.number()),
-  emailNotificationsEnabled: v.optional(v.boolean()),
+  // emailNotificationsEnabled removed: `notificationPrefs` replaced it.
+  // schema-narrowing-ok: migrateNotificationPrefs
+  /** Email and push choices (settings → Notifications). Sparse: missing = default. */
+  notificationPrefs: v.optional(notificationPrefsValidator),
   /** Opt-in experimental features (settings → Experimental). */
   experimentalFlags: v.optional(experimentalFlagsValidator),
   /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  /**
-   * @deprecated Pre-rebuild Manager Ave session pointer. Nothing reads or writes
-   * it; `retireOrchestratorSessions` clears it, then the field is dropped. Ave
-   * lives in `aveThreads` now.
-   */
+  /** @deprecated Pre-rebuild Manager Ave session pointer; cleared by clearLegacyFields. */
   orchestratorSessionId: v.optional(v.id("sessions")),
   /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
   grokBotWebhookUrl: v.optional(v.string()),
@@ -226,6 +255,10 @@ export const repoEntityCounterFields = {
 /** Per-repo sequential id for readable URLs. Optional until backfill completes. */
 export const entityNumIdFields = {
   numId: v.optional(v.number()),
+};
+
+/** Soft delete, for the tables that still delete (tasks and projects archive: `archivedAt`). */
+export const softDeleteFields = {
   deletedAt: v.optional(v.number()),
 };
 
@@ -300,8 +333,9 @@ export const chatReadParentIdValidator = v.union(
 );
 
 /**
- * Every durable turn owner: the three chats, quick-task runs, and the rows the
- * one-shot agents work on (automation runs, docs, evaluation reports).
+ * Every durable turn owner: the chats (a task's run is a chat turn) and the
+ * rows the one-shot agents work on (automation runs, docs, evaluation
+ * reports).
  */
 // Task chat turns removed (moved to session chats in 1b/2); a project keeps
 // its interview lane turns. schema-narrowing-ok: clearLegacyOwnerChatFields
@@ -309,22 +343,30 @@ export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
   // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
-  v.id("agentRuns"),
+  // Run turns removed with the run table. schema-narrowing-ok: deleteRunTurns
   v.id("automationRuns"),
   v.id("docs"),
   v.id("evaluationReports"),
 );
 
 /**
- * A one-shot agent that works on a row which also owns chat turns. The lane
- * keeps its turn apart from the chat's: chat turns leave it unset.
+ * Legacy: the retired project interview's turn on a session row, kept apart
+ * from the chat's turns. No writer any more; old rows may still hold it, and
+ * readers skip any turn that has a lane.
  */
 // Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
 export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
-/** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
+/** Durable ownership record for one agent turn: a chat turn (a task's run included) or a one-shot agent. */
+/**
+ * A chat turn that runs its task (Run, Resolve Conflicts, a scheduled or
+ * auto-started run) rather than answering a message: it moves the task's
+ * status when it opens and closes (`_agentTasks/taskRunTurn.ts`).
+ */
+export const taskRunMarkerValidator = v.object({ mode: runModeValidator });
+
 export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
@@ -343,11 +385,20 @@ export const turnFields = {
   error: v.optional(v.string()),
   workflowId: v.optional(v.string()),
   placeholderMessageId: v.optional(v.id("messages")),
+  /**
+   * The thread root a chat turn answers in (a reply that @mentioned Eva).
+   * Its retries, alerts and continuations join the same thread.
+   */
+  replyTo: v.optional(v.id("messages")),
+  /** A thread turn: the person whose @Eva reply woke her; her answer notifies them. */
+  askedBy: v.optional(v.id("users")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /** A chat turn that runs its task (`taskRunMarkerValidator`). */
+  taskRun: v.optional(taskRunMarkerValidator),
   /**
    * Set by the lease reconciler the first time it finds the lease expired
    * while the sandbox process was still alive; cleared by the next successful
@@ -368,7 +419,7 @@ export const pendingTurnFields = {
 
 export const pendingTurnValidator = v.optional(v.object(pendingTurnFields));
 
-/** Small daemon-poll row kept separate from heavyweight session documents. */
+/** @deprecated Pre-chat daemon-poll mirror; rows deleted by clearLegacyFields. */
 export const sessionDaemonStateFields = {
   sessionId: v.id("sessions"),
   repoId: v.id("githubRepos"),
@@ -409,8 +460,9 @@ export const chatDaemonEntityFields = {
   // When the user last pressed Stop. Messages queued before it stay queued
   // until the user presses Steer (see `nextRunnableQueuedMessage`).
   queueHeldAt: v.optional(v.number()),
-  // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
-  // for project and task chat daemons.
+  // Level-triggered: the usage chip asks the live Claude daemon to report plan
+  // windows. claimPendingTurn returns it without clearing; the refresh action
+  // clears it when it stops waiting.
   usageRefreshRequestedAt: v.optional(v.number()),
   // Self-expiring fence set by prewarm around a daemon kill. See
   // `_chat/daemonClaimPause.ts`: while it is in the future claimPendingTurn
@@ -445,13 +497,11 @@ export const prOwnerValidator = v.union(
   v.object({
     kind: v.literal("task"),
     taskId: v.id("agentTasks"),
-    runId: v.optional(v.id("agentRuns")),
   }),
   v.object({
     kind: v.literal("project"),
     projectId: v.id("projects"),
     taskId: v.optional(v.id("agentTasks")),
-    runId: v.optional(v.id("agentRuns")),
   }),
 );
 
@@ -562,6 +612,8 @@ export const sessionChatFields = {
   // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots
   /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** When a person last posted in this chat's main transcript; the other unread watermark (see chatReads). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Composer settings, sticky per chat (see the matching session comments
   // for each field's contract).
   providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -593,21 +645,20 @@ export const taskRunValidator = v.union(
     at: v.number(),
     jobId: v.id("_scheduled_functions"),
   }),
+  /** @deprecated Behaves like `scheduled`; cleared by clearLegacyFields. */
   v.object({
     state: v.literal("retry_pending"),
     at: v.number(),
     jobId: v.id("_scheduled_functions"),
   }),
-  v.object({
-    state: v.literal("running"),
-    workflowId: v.string(),
-    /** Absent only on rows migrated from the legacy `activeWorkflowId`. */
-    runId: v.optional(v.id("agentRuns")),
-  }),
+  // `running` went with run rows. schema-narrowing-ok: removeAgentRuns
 );
 
 export const agentTaskFields = {
   ...entityNumIdFields,
+  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
+  /** Archived: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
   // User-attached input files (paperclip / paste in the quick task composer),
@@ -615,6 +666,12 @@ export const agentTaskFields = {
   // /tmp/eva-attachment-* at launch so the agent can read them.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
+  /**
+   * Repos besides `repoId` this task changes in the same sandbox (a project
+   * coordinator's multi-repo task). Its work session gets one `sessionRepos`
+   * row per repo (`insertWorkSession`), each with its own PR.
+   */
+  linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   projectId: v.optional(v.id("projects")),
   /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
   origin: v.optional(taskOriginValidator),
@@ -657,18 +714,32 @@ export const agentTaskFields = {
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
   /**
-   * When this project task was approved to run: at creation for the
-   * coordinator's tasks, from Triage by a person for feedback. The project
-   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
-   * Absent on quick tasks and on project tasks waiting in Triage.
+   * When this project task was approved to run: every project task is, at
+   * creation (a person's is handed to the coordinator at the same time,
+   * `handTasksToCoordinator`). The project scheduler (`scheduleReadyTasks`)
+   * starts only approved `todo` tasks. Absent on quick tasks and drafts.
    */
   approvedAt: v.optional(v.number()),
+  /**
+   * When this task, added by a person, an agent or feedback, was handed to
+   * the coordinator (`handTasksToCoordinator`). While set, the scheduler never starts the task: the
+   * coordinator starts it (`start_task`) or adds it to an open task
+   * (`merge_task_into`). Cleared when the coordinator starts it.
+   */
+  handedToCoordinatorAt: v.optional(v.number()),
+  /**
+   * The open task the coordinator added this handed task to
+   * (`merge_task_into`). The item itself is cancelled ("Added to #N").
+   */
+  mergedIntoTaskId: v.optional(v.id("agentTasks")),
   /** Restarts the coordinator spent on this failed task (at most 1). */
   coordinatorRetries: v.optional(v.number()),
   /**
@@ -679,61 +750,9 @@ export const agentTaskFields = {
   ...prSummaryFields,
 };
 
-export const agentRunFields = {
-  taskId: v.id("agentTasks"),
-  status: runStatusValidator,
-  logs: v.array(logEntryValidator),
-  startedAt: v.optional(v.number()),
-  finishedAt: v.optional(v.number()),
-  finalizingAt: v.optional(v.number()),
-  resultSummary: v.optional(v.string()),
-  /**
-   * Text this run's prompt carries from whoever started it: the
-   * coordinator's note on a retry, or the answer to the task's question
-   * (`_projects/scheduler.ts` `startProjectTask`).
-   */
-  note: v.optional(v.string()),
-  /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
-  prUrl: v.optional(v.string()),
-  error: v.optional(v.string()),
-  prError: v.optional(v.string()),
-  errorType: v.optional(errorTypeValidator),
-  limitResetAt: v.optional(v.number()),
-  exitReason: v.optional(v.string()),
-  sandboxId: v.optional(v.string()),
-  repoId: v.optional(v.id("githubRepos")),
-  deploymentStatus: v.optional(deploymentStatusValidator),
-  deploymentUrl: v.optional(v.string()),
-  mode: v.optional(runModeValidator),
-  // Who started this run (button click or "Make changes" submit). Absent on
-  // runs created before this field existed.
-  triggeredBy: v.optional(v.id("users")),
-  // The change-request comment that started this run, set only for "Make
-  // changes" runs. Lets the timeline link a run to its comment explicitly
-  // rather than guessing by timestamp.
-  triggeringCommentId: v.optional(v.id("taskComments")),
-  // Snapshot of which credential powered this run ("Team" or the account
-  // label). Stored at insert so history stays readable if the account is
-  // renamed or deleted later.
-  credentialSourceLabel: v.optional(v.string()),
-  // Snapshot of the model used for this run. Absent on runs created before
-  // this field existed.
-  model: v.optional(aiModelValidator),
-  // Screenshots and recordings the agent left in the sandbox deliverable
-  // folders, uploaded as the run finishes. A run has no `messages` row to hang
-  // media on — it renders as the quick task's first chat turn or as a timeline
-  // row, both built from this doc — so the ids live here instead.
-  mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  /**
-   * The start attempt a quick task run's claim took on its session
-   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
-   * fail exactly that start. Absent when the run reused an active session.
-   */
-  sessionStartAttempt: v.optional(v.number()),
-};
-
 export const sessionFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
   title: v.string(),
@@ -836,6 +855,8 @@ export const sessionFields = {
   ...chatDaemonEntityFields,
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
   // True while a new session's sandbox finishes pulling the latest base branch
@@ -848,9 +869,9 @@ export const sessionFields = {
   // background heal so it never relaunches daemons the lifecycle is about to
   // launch itself (double launch orphaned children and truncated logs).
   sandboxServicesPending: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild Manager Ave flag; cleared by migration, then dropped. */
+  /** @deprecated Pre-rebuild Manager Ave flag; cleared by clearLegacyFields. */
   isOrchestrator: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this session for completion notifications. Set
   // implicitly when Ave touches this session (send/create) or via watch_agent;
@@ -1050,8 +1071,6 @@ export const snapshotBuildFields = {
   // "base" (image only) vs "seeded" (boots + seeds DB before capture).
   // Optional: legacy rows predate this field and render without a type.
   kind: v.optional(snapshotBuildKindValidator),
-  // Sandbox provider used for this build (set at workflow start).
-  provider: v.optional(sandboxProviderKindValidator),
   logs: v.string(),
   error: v.optional(v.string()),
   workflowRunId: v.optional(v.number()),
@@ -1167,6 +1186,9 @@ export const teamFields = {
 
 export const projectFields = {
   ...entityNumIdFields,
+  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
+  /** Archived with its tasks: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
   /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
@@ -1201,7 +1223,9 @@ export const projectFields = {
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
@@ -1234,6 +1258,7 @@ export const automationTriggerValidator = v.union(
 
 export const automationFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   title: v.string(),
   description: v.string(),
@@ -1361,6 +1386,31 @@ export const logFields = {
   ...logUsageFields,
 };
 
+/**
+ * Where a preview annotation points ("Select element" in the preview). Set on
+ * the user row (and its queued row) so the preview comments drawer can list a
+ * chat's annotations without reading the chat text. `selector` is unset on
+ * rows the backfill recovered from that text.
+ */
+const previewAnnotationFields = {
+  pagePath: v.string(),
+  element: v.string(),
+  selector: v.optional(v.string()),
+};
+
+/** What a send carries (and its queued row): no resolve state yet. */
+export const previewAnnotationValidator = v.object(previewAnnotationFields);
+
+/**
+ * The user row's annotation: the send's fields plus resolve state, written
+ * only by `previewComments.setResolved`. Both unset while the comment is open.
+ */
+export const storedPreviewAnnotationValidator = v.object({
+  ...previewAnnotationFields,
+  resolvedAt: v.optional(v.number()),
+  resolvedBy: v.optional(v.id("users")),
+});
+
 export const messageFields = {
   role: roleValidator,
   content: v.string(),
@@ -1373,6 +1423,8 @@ export const messageFields = {
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
+  /** User rows sent from the preview's "Select element" tool. */
+  annotation: v.optional(storedPreviewAnnotationValidator),
   isSystemAlert: v.optional(v.boolean()),
   // System alerts that did not fail the session (it keeps running) render
   // amber. Unset alerts with `errorDetail` render as errors.
@@ -1402,6 +1454,9 @@ export const messageFields = {
   // Convex-side guard only — synthetic continuations are rendered like normal
   // turns; the UI does not read this flag.
   isSyntheticTurn: v.optional(v.boolean()),
+  // `runId` went with run rows. schema-narrowing-ok: removeAgentRuns
+  // User rows: this message ran the task (`taskRunMarkerValidator`).
+  taskRun: v.optional(taskRunMarkerValidator),
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
@@ -1425,7 +1480,8 @@ export const messageFields = {
   // Turn checkpoint (assistant rows on session, quick-task and project chat):
   // sandbox git HEAD when the turn started and after persistTurnWork
   // committed/pushed at turn end. Equal shas mean the turn changed no code.
-  // Absent on turns from pre-checkpoint callback bundles and on task runs.
+  // Absent on turns from pre-checkpoint callback bundles and on automation
+  // runs (`RUN_ID`). A task run is a chat turn, so it checkpoints too.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
   // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
@@ -1436,8 +1492,17 @@ export const messageFields = {
   afterShas: v.optional(v.array(repoShaValidator)),
   // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
   // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
-  // three chat surfaces; task runs never checkpoint and so never carry one.
+  // chat turns; automation runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
+  // Reply threads (coordinator chat): a reply carries its root message's id.
+  // Replies stay in the chat's rows (same `parentId`) so turns, recaps and
+  // watchdogs see them, but the transcript reads only rows without `replyTo`.
+  replyTo: v.optional(v.id("messages")),
+  // Root rows: how many replies, when the last one landed, and up to
+  // `MAX_THREAD_REPLIERS` most recent distinct repliers (the avatars under it).
+  replyCount: v.optional(v.number()),
+  lastReplyAt: v.optional(v.number()),
+  replierIds: v.optional(v.array(v.id("users"))),
 };
 
 /**
@@ -1486,6 +1551,8 @@ export const aveMessageFields = {
    * capped results), replayed as model context on later runs.
    */
   modelMessages: v.optional(v.string()),
+  /** User rows: the Eva page the user had open when they sent it. */
+  pageContext: v.optional(avePageContextValidator),
 };
 
 export const queuedMessageFields = {
@@ -1493,6 +1560,8 @@ export const queuedMessageFields = {
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
+  /** Copied to the user row when the queue starts it (see messageFields). */
+  annotation: v.optional(previewAnnotationValidator),
   createdAt: v.number(),
   // Sort key for queue run order. Enqueue sets Date.now() (appends to the end);
   // the reorder mutation rewrites this to 0-based positions. Optional so the
@@ -1511,7 +1580,7 @@ export const queuedMessageFields = {
   interactionMode: v.optional(interactionModeValidator),
   // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by migration. */
+  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by clearLegacyFields. */
   orchestratorNotification: v.optional(v.boolean()),
   // Same idea for a message the orchestrator sent to a BUSY child: without it
   // the "via orchestrator" badge was lost on exactly the messages that had to
@@ -1522,8 +1591,14 @@ export const queuedMessageFields = {
   // over and waits for its ack. A turn that ends first sends it as the next
   // queued turn (the row sits at the front). See `_chat/steer.ts`.
   steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
+  // A reply that @mentioned Eva in a thread: the reply row is already stored,
+  // so the dequeue skips the user row, and Eva's answer joins this thread.
+  replyTo: v.optional(v.id("messages")),
+  // A queued task run (`taskRunMarkerValidator`); its turn carries it on.
+  taskRun: v.optional(taskRunMarkerValidator),
 };
 
+/** @deprecated Never written; rows deleted by clearLegacyFields. */
 export const taskSandboxEventFields = {
   taskId: v.id("agentTasks"),
   event: taskSandboxEventValidator,
@@ -1573,6 +1648,18 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
+// One row per (person, reply thread): who takes part and hears about replies
+// (plan `notifications-v2-5.md`, part A). Created automatically for the
+// root's author, repliers, people mentioned in the thread and the person Eva
+// answers. `following: false` is an Unfollow and stays: joining again does
+// not undo it. `lastReadAt` drives the thread's "N new" and "New" line.
+export const threadParticipantFields = {
+  rootId: v.id("messages"),
+  userId: v.id("users"),
+  following: v.boolean(),
+  lastReadAt: v.optional(v.number()),
+};
+
 // One row per (user, chat): when the user last saw it. "Read" is per user, so
 // it cannot live on the shared chat doc. `repoId` lets a list query load one
 // user's rows for one repo in a single indexed read.
@@ -1583,6 +1670,21 @@ export const chatReadFields = {
   lastReadAt: v.number(),
   /** Last time the chat was on screen, read or not (chat rows only; recaps). */
   lastVisitedAt: v.optional(v.number()),
+  /**
+   * When the user pressed Done on the chat in the Inbox: it leaves "New since
+   * you looked" until something newer happens in it (see inbox.ts).
+   */
+  doneAt: v.optional(v.number()),
+  /**
+   * When the user last read new activity in the chat (`chatReads.markRead`).
+   * Later than `doneAt`: the chat stays in the Inbox, read, until Done.
+   */
+  seenNewAt: v.optional(v.number()),
+  /**
+   * When the user first posted in the chat or was @mentioned in it
+   * (`recordPersonChatPost`): the Inbox's "took part" rule.
+   */
+  joinedAt: v.optional(v.number()),
 };
 
 // One row per (user, repo): when the user last opened the repo's Today page,
@@ -1619,12 +1721,11 @@ export const chatRecapFields = {
 // `sandboxAutoStop` cron stops every active sandbox so none are left running
 // overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
 // (the local date "YYYY-MM-DD" of the last occurrence that was swept).
-// Idle pause (`sandboxIdlePause` cron): `off` is today's behaviour, `dry-run`
-// only logs which sandboxes would pause, `on` pauses them. All three fields are
+// Idle pause (`sandboxIdlePause` cron): `off` does nothing, `on` pauses idle
+// sandboxes. All three fields are
 // optional so existing rows need no migration; readers default to off / 5 / 20.
 export const sandboxIdlePauseModeValidator = v.union(
   v.literal("off"),
-  v.literal("dry-run"),
   v.literal("on"),
 );
 
@@ -1637,10 +1738,9 @@ export const appSettingsFields = {
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
   /**
-   * Settings of the earlier idle-stop sweep (2026-10-05), kept so rows saved
-   * before the sweeps were unified keep their behaviour. Read only as a
-   * fallback when `sandboxIdlePauseMode` is unset (`resolveIdleThresholds`);
-   * never written any more.
+   * @deprecated Settings of the earlier idle-stop sweep (2026-10-05). Nothing
+   * reads them; cleared by clearLegacyFields, which copies them into the
+   * `sandboxIdlePause*` fields first.
    */
   sandboxIdleStopEnabled: v.optional(v.boolean()),
   sandboxIdleStopMinutes: v.optional(v.number()),
@@ -1759,6 +1859,7 @@ export const feedbackFields = {
 
 export const docFields = {
   ...entityNumIdFields,
+  ...softDeleteFields,
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
@@ -1766,6 +1867,10 @@ export const docFields = {
   // Save-as-document from a session plan). Manual New Document leaves these
   // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
   ...chatSourceFields,
+  // The chat thread and turn that made it (`create_eva_doc`), for its inline
+  // card under that reply. Docs made any other way have neither.
+  chatParentId: v.optional(chatParentIdValidator),
+  messageId: v.optional(v.id("messages")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -2023,11 +2128,8 @@ export const backgroundProcessFields = {
  */
 export const agentUsageLimitFields = {
   /**
-   * Legacy. Readings used to be keyed per repo, and the rows written then still
-   * name the repo they were reported on; new rows never set it. Nothing reads
-   * them — plan headroom is a fact about the credential, so a per-repo row was
-   * the same number filed under the wrong key — and they age out of the 24h
-   * freshness window on their own, so `report` just deletes any it walks past.
+   * @deprecated Readings used to be keyed per repo; new rows never set it.
+   * clearLegacyFields deletes the rows that still carry it.
    */
   repoId: v.optional(v.id("githubRepos")),
   provider: usageLimitProviderValidator,
@@ -2242,9 +2344,20 @@ export const projectTaskBatchFields = {
 };
 
 /**
+ * An open task the coordinator acted on in one turn (started, gave work to,
+ * retried), for the task card under that reply. Tasks it created come from
+ * `projectTaskBatches`. `messageId` is the coordinator turn.
+ */
+export const projectChatTaskLinkFields = {
+  projectId: v.id("projects"),
+  messageId: v.id("messages"),
+  taskId: v.id("agentTasks"),
+  createdAt: v.number(),
+};
+
+/**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
- * request idempotent; `sentAt` marks it delivered in a turn; `heldAt` marks a
- * request the hourly cap held back (it waits for a person).
+ * request idempotent; `sentAt` marks it delivered in a turn.
  */
 export const projectCoordinatorWakeFields = {
   projectId: v.id("projects"),
@@ -2252,13 +2365,14 @@ export const projectCoordinatorWakeFields = {
     v.literal("ask"),
     v.literal("failed"),
     v.literal("batch_done"),
+    v.literal("triage"),
   ),
   key: v.string(),
   /** One line for the coordinator's wake-up message. */
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
-  heldAt: v.optional(v.number()),
+  // heldAt removed with the hourly cap. schema-narrowing-ok: clearCoordinatorWakeHeldAt
 };
 
 export const notificationFields = {
@@ -2295,6 +2409,9 @@ export const notificationFields = {
   // The chat this notification is about (session, quick task or project id),
   // so the mobile inbox can open it without parsing `href`.
   chatTarget: v.optional(v.string()),
+  // The reply thread it is about: the phone opens that thread, opening it
+  // reads the notification, and posting in it answers its mentions.
+  threadRootId: v.optional(v.id("messages")),
 };
 
 export const repoEnvVarFields = {
@@ -2305,7 +2422,7 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  snapshotName: v.string(),
+  // snapshotName removed with Daytona. schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
@@ -2316,7 +2433,7 @@ export const repoSnapshotFields = {
   // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
   // Vercel base Image capture (`snap_*`) from a running sandbox — separate
-  // from `snapshotName` and per-app `seededSnapshotName`.
+  // from per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -2385,5 +2502,6 @@ export const routedMessageFields = {
   context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  /** @deprecated Never written; cleared by clearLegacyFields. */
   mirroredMessageId: v.optional(v.id("messages")),
 };

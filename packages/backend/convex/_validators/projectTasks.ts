@@ -16,6 +16,7 @@ export const projectTaskFactsValidator = v.object({
   status: taskStatusValidator,
   prState: v.optional(prStateValidator),
   approved: v.boolean(),
+  withCoordinator: v.optional(v.boolean()),
   halted: v.optional(v.union(v.literal("failed"), v.literal("cancelled"))),
   usageLimited: v.boolean(),
   runPending: v.boolean(),
@@ -28,7 +29,6 @@ const needsYouValidator = v.union(
   v.literal("failed"),
   v.literal("stopped"),
   v.literal("pr_closed"),
-  v.literal("approve"),
   v.literal("review"),
   v.literal("question"),
 );
@@ -52,7 +52,8 @@ export const projectTaskRowValidator = v.union(
       v.literal("todo"),
       v.literal("cancelled"),
     ),
-    approved: v.boolean(),
+    /** Handed to the coordinator and not started (`start_task` / `merge_task_into`). */
+    withCoordinator: v.boolean(),
     phaseLabel: v.optional(v.string()),
     repoId: v.optional(v.id("githubRepos")),
     /** `owner/name` of the task's repo. */

@@ -194,8 +194,6 @@ export const priorityValidator = v.union(
 );
 
 export const notificationTypeValidator = v.union(
-  v.literal("routine_complete"),
-  v.literal("export_ready"),
   v.literal("task_complete"),
   v.literal("task_assigned"),
   v.literal("status_changed"),
@@ -203,14 +201,18 @@ export const notificationTypeValidator = v.union(
   v.literal("changes_requested"),
   v.literal("comment_reply"),
   v.literal("mention"),
-  v.literal("run_completed"),
-  v.literal("run_failed"),
-  v.literal("rate_limit"),
   v.literal("system"),
   // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
   // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
+  // A person replied in a reply thread you follow (task comment replies stay
+  // `comment_reply`: they route differently).
+  v.literal("thread_reply"),
+  // Eva answered the question you asked her in a reply thread.
+  v.literal("thread_answer"),
+  // routine_complete, run_completed and run_failed removed: no code created
+  // them. schema-narrowing-ok: deleteDeadNotifications
 );
 
 /** The chat surfaces: a session, a quick task or a project. */
@@ -284,8 +286,6 @@ export const snapshotBuildKindValidator = v.union(
   v.literal("seeded"),
 );
 
-export const sandboxProviderKindValidator = v.literal("vercel");
-
 export const teamMemberRoleValidator = v.union(
   v.literal("owner"),
   v.literal("member"),
@@ -296,7 +296,6 @@ export const runModeValidator = v.union(
   v.literal("resolve_conflicts"),
 );
 
-export const activityLogTypeValidator = v.literal("run");
 
 export const webhookEventStatusValidator = v.union(
   v.literal("pending"),
@@ -464,6 +463,19 @@ export const notificationUrgencyValidator = v.union(
   v.literal("normal"),
   v.literal("high"),
 );
+
+/** A person's notification channels. Sparse: a missing key is the default. */
+export const notificationPrefsValidator = v.object({
+  /**
+   * Notification email: urgent ones at once, the rest in the daily digest.
+   * Unset means on.
+   */
+  email: v.optional(v.boolean()),
+  /** Phone push. Unset means on. */
+  push: v.optional(v.boolean()),
+  /** "What's new in Eva" changelog emails. Opt-in: unset means off. */
+  productUpdates: v.optional(v.boolean()),
+});
 
 export const presentationStatusValidator = v.union(
   v.literal("live"),

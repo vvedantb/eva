@@ -9,17 +9,22 @@ import {
 } from "./functions";
 import { createNotification } from "./notifications";
 import { entityHref } from "@eva/shared";
-import { isEntityDeleted } from "./numId";
+import { isEntityArchived, isEntityDeleted } from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import {
-  drainSessionChatQueues,
-} from "./_queues/helpers";
-import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
+  ensureMainChat,
+  findMainChat,
+  type SessionChatContext,
+} from "./_sessionChats/helpers";
+import {
+  queueSystemChatMessage,
+  stickyTurnSettings,
+} from "./_sessions/execution";
 import { ensureOwnerChat, loadOwnerEntity } from "./_sessions/ownedSession";
 import { findWorkChat } from "./_sessions/ownerState";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
-  DEFAULT_AI_MODEL,
+  normalizeAIModel,
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
@@ -249,8 +254,8 @@ async function loadSource(
       title: task.title,
       ownerUserId: task.createdBy,
       lastModel: undefined,
-      deleted: isEntityDeleted(task),
-      archived: false,
+      deleted: false,
+      archived: isEntityArchived(task),
     };
   }
   const id = ctx.db.normalizeId("projects", sourceId);
@@ -266,8 +271,8 @@ async function loadSource(
     title: project.title,
     ownerUserId: project.userId,
     lastModel: undefined,
-    deleted: isEntityDeleted(project),
-    archived: false,
+    deleted: false,
+    archived: isEntityArchived(project),
   };
 }
 
@@ -376,19 +381,17 @@ function notifyEntityArgs(
 }
 
 /**
- * Where a source's transcript and queue live: a session's Main chat, or the
- * chat a task or project talks in (`ensureOwnerChat`, created on first need).
- * Undefined when the source is gone.
+ * Where a source's transcript and queue live: a session's Main chat (created
+ * for a pre-chat legacy session), or the chat a task or project talks in
+ * (`ensureOwnerChat`, created on first need). `model` falls back to the
+ * source's last model while the chat has none. Undefined when the source is
+ * gone.
  */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
-  | {
-      sessionId: Id<"sessions">;
-      parentId: Id<"sessionChats">;
-      model: Doc<"sessions">["lastModel"];
-    }
+  | { context: SessionChatContext; model: Doc<"sessions">["lastModel"] }
   | undefined
 > {
   if (source.ref.kind === "session") {
@@ -396,8 +399,7 @@ async function transcriptParent(
     if (!session) return undefined;
     const chat = await ensureMainChat(ctx, session);
     return {
-      sessionId: session._id,
-      parentId: chat._id,
+      context: { session, chat },
       model: chat.lastModel ?? source.lastModel,
     };
   }
@@ -408,12 +410,8 @@ async function transcriptParent(
       : { kind: "project", projectId: source.ref.id },
   );
   if (!entity) return undefined;
-  const { session, chat } = await ensureOwnerChat(ctx, entity);
-  return {
-    sessionId: session._id,
-    parentId: chat._id,
-    model: chat.lastModel ?? source.lastModel,
-  };
+  const context = await ensureOwnerChat(ctx, entity);
+  return { context, model: context.chat.lastModel ?? source.lastModel };
 }
 
 async function insertSystemAlert(
@@ -424,7 +422,7 @@ async function insertSystemAlert(
   const parent = await transcriptParent(ctx, source);
   if (!parent) return undefined;
   return await ctx.db.insert("messages", {
-    parentId: parent.parentId,
+    parentId: parent.context.chat._id,
     role: "assistant",
     content,
     timestamp: Date.now(),
@@ -442,17 +440,19 @@ async function enqueueSourceWake(
   if (source.deleted || source.archived) return;
   const parent = await transcriptParent(ctx, source);
   if (!parent) return;
-  const now = Date.now();
-  await ctx.db.insert("queuedMessages", {
-    parentId: parent.parentId,
+  // The reply runs like any send: on the chat's sticky model, traits and
+  // account. A teammate wrote it, not an MCP caller: no "via MCP" badge.
+  await queueSystemChatMessage(ctx, {
+    context: parent.context,
+    userId,
     content,
     displayContent,
-    createdAt: now,
-    order: now,
-    userId,
-    model: parent.model ?? DEFAULT_AI_MODEL,
+    settings: stickyTurnSettings(
+      parent.context.chat,
+      normalizeAIModel(parent.model),
+    ),
+    sentViaOrchestrator: false,
   });
-  await drainSessionChatQueues(ctx, parent.sessionId);
 }
 
 type DirectoryMember = {

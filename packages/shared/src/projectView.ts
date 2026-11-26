@@ -1,6 +1,8 @@
 import type { Doc } from "@eva/backend";
-import { prStateLabel } from "./prState";
+import { prStateLabel, type PrState } from "./prState";
+import { repoDisplayLabel } from "./repoTile";
 import { prNumberFromGithubUrl } from "./prReview";
+import { ARCHIVE_LIST_MODE_LABELS } from "./archive";
 import {
   projectStatus,
   projectTaskDisplayStatus,
@@ -17,7 +19,7 @@ import {
 
 // How web and phone show a project's derived status (`./projectStatus`) from
 // the rows they already load: `agentTasks.listByProject` plus the tasks whose
-// latest run failed (`agentRuns.getTaskIdsWithLatestRunError`).
+// latest run failed (`agentTasks.getTaskIdsWithFailedRun`).
 
 /** Project stages in workflow order: kanban columns and list sections. */
 export const PROJECT_STAGES = [
@@ -37,9 +39,8 @@ export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
  * the order of the task counts and progress bar parts a project shows.
  */
 export const PROJECT_TASK_DISPLAY_STATUSES = [
-  "triage",
-  "working",
   "blocked",
+  "working",
   "idle",
   "archived",
 ] as const satisfies readonly ProjectTaskDisplayStatus[];
@@ -48,15 +49,14 @@ export const PROJECT_TASK_DISPLAY_STATUS_LABELS: Record<
   ProjectTaskDisplayStatus,
   string
 > = {
-  triage: "Triage",
   working: "Working",
-  blocked: "Blocked",
+  blocked: "Needs you",
   idle: "Idle",
   archived: "Archived",
 };
 
 /**
- * Why a task waits for a person, in plain words: a Blocked row's second line
+ * Why a task waits for a person, in plain words: a Needs you row's second line
  * (`projectTaskSummaryLine`). Review and question rows add the PR or the
  * question when they know it.
  */
@@ -65,7 +65,6 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   failed: "Failed twice",
   stopped: "Run stopped",
   pr_closed: "PR closed",
-  approve: "Needs approval",
   review: "Needs you: review",
   question: "Asks you a question",
 };
@@ -73,24 +72,8 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
 /** A task that asked its coordinator a question and waits for the answer. */
 export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
 
-/**
- * The delete confirm's note: `projects.remove` keeps a project's child tasks
- * as quick tasks (it refuses while one runs, and says so).
- */
-export function projectDeleteNote(count: number): string {
-  return `${count === 1 ? "Its" : "Their"} tasks stay as quick tasks.`;
-}
-
-/** The project's coordinator hit its hourly cap of automatic turns. */
-export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
-
-/**
- * The coordinator chat's one-line notice while the hourly cap holds its
- * wake-ups back. A person's message releases them, so the line asks for one.
- */
-export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
-  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
-}
+/** A task handed to the coordinator that it has not started or merged yet. */
+export const WITH_COORDINATOR_LABEL = "With Eva";
 
 /** The fields of an `agentTasks.listByProject` row the status rules read. */
 export interface ProjectTaskRow {
@@ -99,6 +82,8 @@ export interface ProjectTaskRow {
   status: Doc<"agentTasks">["status"];
   prState?: Doc<"agentTasks">["prState"];
   approvedAt?: number;
+  /** Handed to the coordinator (`withCoordinator`). */
+  handedToCoordinatorAt?: number;
   run?: Doc<"agentTasks">["run"];
   coordinatorRetries?: number;
   /** A task in a repo the caller cannot access: only status fields are set. */
@@ -113,8 +98,7 @@ export interface ProjectTaskRow {
 /**
  * One row as the shared rules read it. A row with the server's `facts` uses
  * them as they are. Without them the usage limit and open asks never show
- * here. A locked row counts as approved: its approval is not
- * the caller's to give.
+ * here. A locked row counts as approved.
  */
 export function projectTaskFactsFromRow(
   row: ProjectTaskRow,
@@ -128,6 +112,8 @@ export function projectTaskFactsFromRow(
     status: row.status,
     prState: row.prState,
     approved: row.locked === true || row.approvedAt !== undefined,
+    withCoordinator:
+      row.status === "todo" && row.handedToCoordinatorAt !== undefined,
     halted: failed && !runPending ? "failed" : undefined,
     usageLimited: false,
     runPending,
@@ -159,6 +145,7 @@ export function projectTaskView(
     displayStatus: projectTaskDisplayStatus(facts),
     needsYou: projectTaskNeedsYou(facts),
     waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
+    withCoordinator: facts.withCoordinator === true,
   };
 }
 
@@ -167,6 +154,8 @@ export interface ProjectTaskView {
   displayStatus: ProjectTaskDisplayStatus;
   needsYou: NeedsYouReason | undefined;
   waitingForCoordinator: boolean;
+  /** Handed to the coordinator; not started yet. */
+  withCoordinator?: boolean;
 }
 
 /** What `listTaskReports` returns for one report or ask. */
@@ -205,25 +194,22 @@ export function projectTaskNotesByTask(
 
 /**
  * What the projects list reads for each project (`listStatusesForRepo`):
- * the derived stage and task counts by display status, how many tasks need a
- * person, and whether the coordinator is paused at its hourly cap.
+ * the derived stage and task counts by display status, and how many tasks
+ * need a person.
  */
 export interface ProjectListStatus {
   stage: ProjectStage;
   counts: ProjectStatus["counts"];
   needsYouCount: number;
-  coordinatorPaused: boolean;
 }
 
 /**
  * Why a project on the list needs a person, in a few words, or undefined
- * when it does not. A paused coordinator comes first: nothing moves until a
- * person writes to it.
+ * when it does not.
  */
 export function projectListNeedsYouLabel(
   status: ProjectListStatus,
 ): string | undefined {
-  if (status.coordinatorPaused) return COORDINATOR_PAUSED_LABEL;
   if (status.needsYouCount === 0) return undefined;
   return status.needsYouCount === 1
     ? "1 task needs you"
@@ -251,22 +237,31 @@ export function projectArchivedShare(counts: ProjectStatus["counts"]): {
 }
 
 /**
- * True for a todo task nobody approved yet that the caller can see: what
- * Approve (`approveProjectTasks`) and Reject act on in Triage.
+ * A project task in To Do: until its chat has a message, the chat opens on
+ * its prompt (title, prompt and an action) in place of an empty chat.
  */
-export function isUnapprovedTodoTask(row: ProjectTaskRow): boolean {
-  return (
-    row.locked !== true &&
-    row.status === "todo" &&
-    row.approvedAt === undefined
-  );
+export function showsProjectTaskPrompt(task: {
+  projectId?: string;
+  status: Doc<"agentTasks">["status"];
+}): boolean {
+  return task.projectId !== undefined && task.status === "todo";
 }
 
-/** The todo tasks a person approves with one "Approve all". */
-export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
-  rows: readonly Row[],
-): Row["_id"][] {
-  return rows.filter(isUnapprovedTodoTask).map((row) => row._id);
+/**
+ * The prompt card's action: "with_eva" while the task is handed to the
+ * coordinator (a quiet `WITH_COORDINATOR_LABEL` line, no button), else Start
+ * (`agentTasks.startExecution`) on an approved todo task. None while a run
+ * starts, or on a read-only (archived) task.
+ */
+export function projectTaskPromptAction(
+  row: ProjectTaskRow,
+  state: { hasActiveRun: boolean; readOnly: boolean },
+): "start" | "with_eva" | undefined {
+  if (state.readOnly || state.hasActiveRun || row.status !== "todo") {
+    return undefined;
+  }
+  if (row.handedToCoordinatorAt !== undefined) return "with_eva";
+  return row.approvedAt !== undefined ? "start" : undefined;
 }
 
 /** What `projectTaskSummaryLine` reads of an `agentTasks.listByProject` row. */
@@ -276,6 +271,16 @@ export interface SummarizableProjectTaskRow {
   phaseLabel?: string;
   prUrl?: string;
   prState?: Doc<"agentTasks">["prState"];
+  /** The open task the coordinator added this handed task to. */
+  mergedIntoTaskId?: string;
+  /** Archived on its own: listed under Archived (`projectTaskStatusSections`). */
+  archivedAt?: number;
+  /** A multi-repo task's PRs, one per repo (`listByProject`). */
+  repoPrs?: ReadonlyArray<{
+    prUrl: string;
+    prState: NonNullable<Doc<"agentTasks">["prState"]>;
+    repoName: string;
+  }>;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -289,21 +294,28 @@ export function prShortLabel(prUrl: string): string {
 function projectTaskReason(
   row: SummarizableProjectTaskRow,
   view: ProjectTaskView,
-  facts: { ask: string | undefined; failed: boolean; authorName: string | undefined },
+  facts: {
+    ask: string | undefined;
+    failed: boolean;
+    mergedIntoNumId: number | undefined;
+  },
 ): string {
   switch (view.displayStatus) {
-    case "triage":
-      return facts.authorName
-        ? `Added by ${facts.authorName}`
-        : NEEDS_YOU_LABELS.approve;
     case "working":
       return view.waitingForCoordinator
         ? WAITING_FOR_COORDINATOR_LABEL
         : PROJECT_TASK_DISPLAY_STATUS_LABELS.working;
     case "idle":
-      return "Waiting for a free slot";
+      return view.withCoordinator === true
+        ? WITH_COORDINATOR_LABEL
+        : "Waiting for a free slot";
     case "archived":
-      if (row.status === "cancelled") return "Cancelled";
+      if (row.archivedAt !== undefined) return ARCHIVE_LIST_MODE_LABELS.archived;
+      if (row.status === "cancelled") {
+        return facts.mergedIntoNumId !== undefined
+          ? `Added to #${facts.mergedIntoNumId}`
+          : "Cancelled";
+      }
       return row.prState === "merged" ? "Merged" : "Done";
     case "blocked":
       break;
@@ -319,9 +331,8 @@ function projectTaskReason(
 /**
  * A project task row's second line, one plain sentence for web and phone:
  * "#904 · Needs you: review PR #9003 · api · Phase 2 · 1 report". The task
- * number, the one reason for its display status (who added a Triage task, a
- * Blocked task's needs-you reason or open question, Idle's wait, Archived's
- * end), the repo when it is not the project's (`otherRepoLabel`), the phase,
+ * number, the one reason for its display status (a Needs you task's reason
+ * or open question, Idle's wait or "With Eva", Archived's end), the repo when it is not the project's (`otherRepoLabel`), the phase,
  * and the open report count.
  */
 export function projectTaskSummaryLine(
@@ -330,19 +341,25 @@ export function projectTaskSummaryLine(
   extra: {
     notes: ProjectTaskNotes | undefined;
     failed: boolean;
-    /** Who added a Triage task, by first name, once known. */
-    authorName: string | undefined;
     /** Set only when the task's repo differs from the project's home repo. */
     otherRepoLabel: string | undefined;
+    /** The task number of a task, by id: names a merged item's target. */
+    numIdOf?: (taskId: string) => number | undefined;
+    /** The task is open as a chat tab beside Eva (web). */
+    open?: boolean;
   },
 ): string {
   const reports = extra.notes?.reports.length ?? 0;
   return [
     row.numId !== undefined ? `#${row.numId}` : undefined,
+    extra.open === true ? "Open" : undefined,
     projectTaskReason(row, view, {
       ask: extra.notes?.ask,
       failed: extra.failed,
-      authorName: extra.authorName,
+      mergedIntoNumId:
+        row.mergedIntoTaskId !== undefined
+          ? extra.numIdOf?.(row.mergedIntoTaskId)
+          : undefined,
     }),
     extra.otherRepoLabel,
     row.phaseLabel,
@@ -352,31 +369,159 @@ export function projectTaskSummaryLine(
     .join(" · ");
 }
 
-/** The tasks that have a PR: the task list's Pull requests group, in list order. */
+/**
+ * The tasks that have a PR: the task list's Pull requests group, in list
+ * order. A multi-repo task is one entry per repo's PR, labelled with its
+ * repo (`repoName`); a single-repo task is one entry, as before.
+ */
 export function projectTaskPullRequests<
   Row extends SummarizableProjectTaskRow & { locked?: boolean },
->(rows: readonly Row[]): Array<Row & { prUrl: string }> {
-  return rows.flatMap((row) =>
-    row.locked !== true && row.prUrl !== undefined
-      ? [{ ...row, prUrl: row.prUrl }]
-      : [],
-  );
+>(rows: readonly Row[]): Array<Row & { prUrl: string; repoName?: string }> {
+  return rows.flatMap((row) => {
+    if (row.locked === true) return [];
+    if (row.repoPrs !== undefined && row.repoPrs.length > 0) {
+      return row.repoPrs.map((pr) => ({
+        ...row,
+        prUrl: pr.prUrl,
+        prState: pr.prState,
+        repoName: pr.repoName,
+      }));
+    }
+    return row.prUrl !== undefined ? [{ ...row, prUrl: row.prUrl }] : [];
+  });
 }
 
-/** A Pull requests row's second line: "#9003 · Open · via #904". */
+/**
+ * A task's own stage in words, for its header: To do, Working, In review,
+ * Done or Cancelled. The Tasks list groups by display status instead (a task
+ * in review sits under "Needs you" there).
+ */
+export function projectTaskStageLabel(stage: ProjectTaskStage): string {
+  switch (stage) {
+    case "todo":
+      return "To do";
+    case "in_progress":
+      return "Working";
+    case "in_review":
+      return "In review";
+    case "launched":
+      return "Done";
+    case "cancelled":
+      return "Cancelled";
+  }
+}
+
+/**
+ * One task card under Eva's reply (`projects.listChatTaskCards`), for web and
+ * phone: the task's number, title, view and its own stage in words, from the
+ * project's task list (`agentTasks.listByProject`) so it stays live. Null for
+ * a task not in the list (archived), locked to the reader, or with no number
+ * to open it by.
+ */
+export function projectChatTaskCard<
+  Row extends ProjectTaskRow & { numId?: number; title: string },
+>(
+  rows: readonly Row[],
+  taskId: string,
+  failedTaskIds: ReadonlySet<string>,
+): { numId: number; title: string; view: ProjectTaskView; stageLabel: string } | null {
+  const row = rows.find((entry) => entry._id === taskId);
+  if (!row || row.locked === true || row.numId === undefined) return null;
+  const view = projectTaskView(row, failedTaskIds.has(row._id));
+  return {
+    numId: row.numId,
+    title: row.title,
+    view,
+    stageLabel: projectTaskStageLabel(view.stage),
+  };
+}
+
+/** What `projectTaskFacts` reads of a project task (its `agentTasks` row). */
+export interface FactsProjectTaskRow extends ProjectTaskRow {
+  repoId?: string;
+  linkedRepoIds?: readonly string[];
+  phaseLabel?: string;
+  archivedAt?: number;
+}
+
+/**
+ * A project task's status and PR line under its title in its header, for
+ * web and phone: the plain text
+ * "Working · Phase 2 · docs", then its PR links. The text is the task's own
+ * stage (`projectTaskStageLabel`: "In review", not the list's "Needs you"
+ * group), the phase, and on a multi-repo task
+ * each repo without a PR. A PR link names its repo on a multi-repo task, so
+ * each repo shows once. A `listByProject` row carries the server's facts; a
+ * bare task row reads as never failed.
+ */
+export function projectTaskFacts<
+  Pr extends { prUrl: string; state: PrState; repoId: string; repoName: string },
+>(
+  row: FactsProjectTaskRow,
+  repos: ReadonlyArray<{
+    _id: string;
+    name: string;
+    label?: string;
+    rootDirectory?: string;
+  }>,
+  prs: readonly Pr[],
+): {
+  text: string;
+  /** Each PR with its link label: "#12", or "api #12" on a multi-repo task. */
+  prs: Array<Pr & { label: string }>;
+} {
+  const view = projectTaskView(row, false);
+  const status = row.archivedAt !== undefined ? "Archived" : projectTaskStageLabel(view.stage);
+  const linked = row.linkedRepoIds ?? [];
+  const multiRepo = linked.length > 0;
+  const repoLabel = (repoId: string) => {
+    const repo = repos.find((entry) => entry._id === repoId);
+    return repo ? repoDisplayLabel(repo) : undefined;
+  };
+  const prRepoIds = new Set(prs.map((pr) => pr.repoId));
+  const reposWithoutPr = multiRepo
+    ? [row.repoId, ...linked].flatMap((repoId) =>
+        repoId === undefined || prRepoIds.has(repoId) ? [] : [repoLabel(repoId)],
+      )
+    : [];
+  return {
+    text: [
+      status,
+      row.phaseLabel,
+      ...reposWithoutPr,
+    ]
+      .filter((part) => part !== undefined && part !== "")
+      .join(" · "),
+    prs: prs.map((pr) => ({
+      ...pr,
+      label: [
+        multiRepo ? (repoLabel(pr.repoId) ?? pr.repoName) : undefined,
+        prShortLabel(pr.prUrl),
+      ]
+        .filter((part) => part !== undefined && part !== "")
+        .join(" "),
+    })),
+  };
+}
+
+/**
+ * A Pull requests row's second line: "#9003 · Open · via #904", with the
+ * repo for a multi-repo task's PR ("#12 · Open · api · via #904").
+ */
 export function projectTaskPrLine(
-  row: SummarizableProjectTaskRow & { prUrl: string },
+  row: SummarizableProjectTaskRow & { prUrl: string; repoName?: string },
 ): string {
   return [
     prShortLabel(row.prUrl),
     prStateLabel(row.prState),
+    row.repoName || undefined,
     row.numId !== undefined ? `via #${row.numId}` : undefined,
   ]
     .filter((part) => part !== undefined)
     .join(" · ");
 }
 
-/** The task counts as one muted line: "3 triage · 2 blocked · 1 archived". */
+/** The task counts as one muted line: "2 needs you · 3 working · 1 archived". */
 export function projectStatusCountsLine(
   counts: ProjectStatus["counts"],
 ): string {
@@ -419,27 +564,42 @@ export interface SectionableProjectTaskRow extends ProjectTaskRow {
   lastRunStartedAt?: number;
 }
 
+/** A task archived on its own: Archived, waiting for no one. */
+function archivedTaskView(row: ProjectTaskRow): ProjectTaskView {
+  return {
+    ...projectTaskView(row, false),
+    displayStatus: "archived",
+    needsYou: undefined,
+    waitingForCoordinator: false,
+  };
+}
+
 /**
  * A project's task list: one section per display status that has tasks
- * (Triage, Working, Blocked, Idle, Archived), each row with its view. Idle
- * keeps the project's order (`taskNumber`); every other section puts the
- * latest run first, else the newest task. Every section but Archived starts
- * open.
+ * (Needs you, Working, Idle, Archived), each row with its view. Tasks
+ * archived on their own (`archivedRows`, `listByProject` with `archived`)
+ * join Archived beside the done and cancelled tasks. Idle keeps the
+ * project's order (`taskNumber`); every other section puts the latest run
+ * first, else the newest task. Every section but Archived starts open.
  */
 export function projectTaskStatusSections<
   Row extends SectionableProjectTaskRow,
 >(
   rows: readonly Row[],
   failedTaskIds: ReadonlySet<string>,
+  archivedRows: readonly Row[] = [],
 ): Array<{
   status: ProjectTaskDisplayStatus;
   tasks: Array<{ row: Row; view: ProjectTaskView }>;
   defaultOpen: boolean;
 }> {
-  const viewed = rows.map((row) => ({
-    row,
-    view: projectTaskView(row, failedTaskIds.has(row._id)),
-  }));
+  const viewed = [
+    ...rows.map((row) => ({
+      row,
+      view: projectTaskView(row, failedTaskIds.has(row._id)),
+    })),
+    ...archivedRows.map((row) => ({ row, view: archivedTaskView(row) })),
+  ];
   const lastRun = (row: Row) => row.lastRunStartedAt ?? row.createdAt;
   return PROJECT_TASK_DISPLAY_STATUSES.flatMap((status) => {
     const matching = viewed.filter(

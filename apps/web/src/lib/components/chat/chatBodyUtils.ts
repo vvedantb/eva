@@ -1,16 +1,13 @@
-import { getAIModelProvider, type api, type Doc, type Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
-  collectChangedFiles,
   collectQuestionSteps,
   otherUserIdsInChat,
   readableErrorMessage,
   stripReviewCommentBlocks,
   turnErrorTitle as sharedTurnErrorTitle,
-  type ChangedFile,
   type ChatUserAttribution,
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -19,6 +16,8 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 export { buildPrecedingUserTurns } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat streams into the same bubble.
 export { findStreamingTargetMessage } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile Stop button follows the same turn rule.
+export { isChatTurnExecuting } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
   findBubbleGroups,
@@ -41,9 +40,8 @@ export interface ChatRepo {
 /** The id a chat's messages hang off: a session chat, or a pre-chat session. */
 export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
-// `_id` is widened to `string` so callers can prepend client-built synthetic
-// turns (the quick task's first-run activity in the sandbox chat) without
-// forging a branded id. Real docs stay assignable; nothing in the chat tree
+// `_id` is widened to `string` so client-built rows (optimistic sends) fit
+// without forging a branded id. Real docs stay assignable; nothing in the chat tree
 // feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
 // `aveMessages` rows (keyed by thread, not by chat entity) fit too.
 export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
@@ -110,10 +108,9 @@ export function chatNeedsOtherUserDirectory(
   return otherUserIdsInChat(messages, currentUserId).length > 0;
 }
 
-/** Streaming / changed-files / question-record flags for an assistant row. */
+/** Streaming and question-record flags for an assistant row. */
 export function getAssistantTurnState(message: ChatBodyMessage): {
   isStreamingPlaceholder: boolean;
-  changedFiles: ChangedFile[];
   questionSteps: ActivityStep[];
 } {
   const isStreamingPlaceholder =
@@ -128,7 +125,6 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
       : [];
   return {
     isStreamingPlaceholder,
-    changedFiles: collectChangedFiles(steps),
     questionSteps: collectQuestionSteps(steps),
   };
 }
@@ -178,20 +174,6 @@ export function findLastUserMessageIndex(messages: ChatBodyMessage[]): number {
   return -1;
 }
 
-/** Latest non-alert assistant turn, used for adaptive changed-file disclosure. */
-export function findLastAssistantMessageId(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">
-  >,
-): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    if (message.role === "assistant") return message._id;
-  }
-  return undefined;
-}
-
 /** User turns a chat renders when it opens; older turns load on scroll. */
 export const TRANSCRIPT_TURN_WINDOW = 25;
 
@@ -217,73 +199,4 @@ export function findTurnWindowStart(
     start = i;
   }
   return 0;
-}
-
-type TurnShapeMessage = Pick<
-  ChatBodyMessage,
-  "role" | "content" | "isSystemAlert" | "finishedAt"
-> & { _id: string };
-
-type ChatTurnStatus = NonNullable<
-  FunctionReturnType<typeof api.turns.getChatStatus>
->;
-
-/**
- * Whether an assistant turn is executing for one chat. One rule for every
- * surface (session, quick task, project) and every reader of it (composer,
- * queue, subagent thread, Agents roster, design panel), so they cannot
- * disagree on the same chat:
- * - a run the surface renders as a turn (a quick task's first run) counts
- *   while it runs;
- * - otherwise the chat's durable turn is canonical, synthetic turns included;
- * - except when that turn's own reply bubble has finished: the server closes
- *   the turn and finishes its bubble in one mutation, so a finished bubble
- *   proves the turn is over even if the status the client holds is stale
- *   (seen in prod: Stop button and beam stayed until a refresh);
- * - message shape only covers the first render while that status loads, so a
- *   stale empty bubble cannot keep a settled turn "executing".
- * Streaming rows are not an input: they can outlive their turn, so callers
- * gate them on this result instead.
- */
-export function isChatTurnExecuting({
-  status,
-  messages,
-  isFirstRunInProgress = false,
-}: {
-  /** `api.turns.getChatStatus`: `null` = no open turn, `undefined` = loading. */
-  status: ChatTurnStatus | null | undefined;
-  /** The chat transcript; `undefined` while it loads. */
-  messages: ReadonlyArray<TurnShapeMessage> | undefined;
-  /** A quick task's first run, rendered as this chat's first turn. */
-  isFirstRunInProgress?: boolean;
-}): boolean {
-  if (isFirstRunInProgress) return true;
-  if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
-  if (status === null) return false;
-  if (status.source !== "durable" || status.placeholderMessageId === undefined) {
-    return true;
-  }
-  // Not in the transcript yet (or deleted): trust the open turn.
-  const reply = messages?.find((m) => m._id === status.placeholderMessageId);
-  return reply?.finishedAt === undefined;
-}
-
-/**
- * Whether a chat still has an unfinished Working bubble: the load-time
- * fallback of `isChatTurnExecuting`. System alerts (`isSystemAlert`) are
- * skipped — they can append mid-turn and must not read as a finished reply.
- */
-function isAssistantTurnInProgress(
-  messages: ReadonlyArray<TurnShapeMessage>,
-): boolean {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    return (
-      message.role === "assistant" &&
-      !message.content &&
-      message.finishedAt === undefined
-    );
-  }
-  return false;
 }

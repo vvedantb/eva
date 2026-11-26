@@ -1,6 +1,6 @@
-import { v, type ObjectType } from "convex/values";
+import { ConvexError, v, type ObjectType } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   taskStatusValidator,
@@ -10,12 +10,15 @@ import {
 import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
+  assertProjectNotArchived,
+  assertTaskNotArchived,
   authMutation,
   getProjectWithAccess,
   getRepoWithAccess,
   hasRepoAccess,
   hasTaskAccess,
-  softDeleteAgentTask,
+  archiveAgentTask,
+  normalizeIdOrThrow,
   onProjectTasksChanged,
 } from "../functions";
 import { allocateNumId } from "../numId";
@@ -58,6 +61,9 @@ import {
   updateTaskArgs,
 } from "./updateTask";
 import { closeTaskReports } from "../_projects/reports";
+import { handTasksToCoordinator } from "../_projects/scheduler";
+import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
+import { startTaskExecution } from "./execution";
 
 // Status transitions that notify subscribers. Mid-run automated transitions
 // (todo/in_progress) are intentionally excluded; those patch status directly
@@ -77,15 +83,14 @@ export const update = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     // Moving a task needs access to where it lands, not only where it is.
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     }
     if (args.projectId && args.projectId !== task.projectId) {
-      await getProjectWithAccess(
-        ctx.db,
-        args.projectId,
-        ctx.userId,
+      assertProjectNotArchived(
+        await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
       );
     }
     const updates = await buildTaskUpdates(ctx, task, args);
@@ -101,6 +106,10 @@ export const update = authMutation({
     });
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
+    }
+    // A task moved into a project goes to its coordinator, unless it started.
+    if (args.projectId && args.projectId !== task.projectId) {
+      await handTasksToCoordinator(ctx, args.projectId, [task._id]);
     }
     await logTaskUpdateActivity(ctx, task, args);
     await notifyTaskAssignee(ctx, task, args);
@@ -119,6 +128,7 @@ export const updateStatus = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     // Only a todo task runs from a schedule, so leaving todo drops it.
     if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
@@ -126,6 +136,10 @@ export const updateStatus = authMutation({
       status: args.status,
       updatedAt: Date.now(),
     });
+    // A project task back in todo that nobody approved goes to the coordinator.
+    if (task.projectId !== undefined && args.status === "todo") {
+      await handTasksToCoordinator(ctx, task.projectId, [task._id]);
+    }
 
     if (previousStatus !== args.status) {
       await logTaskActivity(
@@ -252,6 +266,7 @@ export const removeAttachment = authMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     const remaining = (task.attachmentStorageIds ?? []).filter(
       (storageId) => storageId !== args.storageId,
     );
@@ -266,54 +281,54 @@ export const removeAttachment = authMutation({
   },
 });
 
-/** Soft-deletes a task (row retained; hidden from lists and direct URLs). */
-export const remove = authMutation({
+/**
+ * Archives a task: hidden from lists, its page still opens read-only. Cancels
+ * its scheduled run and retires its session (sandbox stopped).
+ */
+export const archive = authMutation({
   args: { id: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    await softDeleteAgentTask(ctx, args.id);
+    // A draft is unsent text: `deleteDraft` deletes it.
+    if (task.status === "draft") throw new ConvexError("Delete the draft instead");
+    await archiveAgentTask(ctx, args.id);
     await retireOwnedSession(ctx, { kind: "task", taskId: args.id });
+    if (task.projectId) await onProjectTasksChanged(ctx, task.projectId);
     return null;
   },
 });
 
 /**
- * Clears a soft delete, putting the task back in the lists it vanished from —
- * the Undo behind bulk delete.
- *
- * Only the row returns. `softDeleteAgentTask` also cancels the task's scheduled
- * run, drops its run summary and queues its sandbox for deletion; none of those
- * can be undone, so a restored task comes back without them. A quick task's
- * session is the exception: the delete only archived it, so it comes back.
+ * Brings an archived task back to the lists it left. A cancelled scheduled
+ * run stays cancelled. A live task gets its session back; a done or cancelled
+ * task's session stays retired with its status.
  */
-export const restore = authMutation({
+export const unarchive = authMutation({
   args: { id: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    if (task.deletedAt === undefined) return null;
+    if (task.archivedAt === undefined) return null;
     await ctx.db.patch(args.id, {
-      deletedAt: undefined,
+      archivedAt: undefined,
       updatedAt: Date.now(),
     });
-    // The delete retired the task's session; a live task gets it back. A
-    // done/cancelled task stays retired with its status.
     if (!isTerminalTaskStatus(task.status)) {
       await reviveOwnedSession(ctx, { kind: "task", taskId: task._id });
     }
+    if (task.projectId) await onProjectTasksChanged(ctx, task.projectId);
     return null;
   },
 });
 
-const createQuickTaskArgs = {
+/** A new task's fields, apart from its title and prompt. */
+const newTaskFields = {
   repoId: v.id("githubRepos"),
-  title: v.string(),
-  description: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   model: v.optional(aiModelValidator),
   // null = Team; omitted = default to creator's personal account for model.
@@ -326,34 +341,44 @@ const createQuickTaskArgs = {
   assignedTo: v.optional(v.id("users")),
   priority: v.optional(priorityValidator),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /**
-   * A project task is approved at creation unless this is false; an
-   * unapproved one waits in Triage until a person approves it
-   * (`approveProjectTasks`).
-   */
-  approved: v.optional(v.boolean()),
+};
+
+/**
+ * What `createTodoTask` makes a task from. People's forms send the prompt
+ * (`description`) alone and the title comes from it (`initialTitle`); agents
+ * (MCP, the coordinator) may pass their own `title`.
+ */
+type NewTodoTask = ObjectType<typeof newTaskFields> & {
+  title?: string;
+  description?: string;
   /** A project task's phase label (`agentTasks.phaseLabel`). */
-  phaseLabel: v.optional(v.string()),
+  phaseLabel?: string;
+  /** Repos besides `repoId` (`agentTasks.linkedRepoIds`); the caller checks access. */
+  linkedRepoIds?: Id<"githubRepos">[];
 };
 
 /**
  * Creates one `todo` task, in a project when `projectId` is set (next
  * `taskNumber`; the repo may be any the user can access).
- * The one insert for `createQuickTask` and the coordinator's tasks
- * (`_projects/batches.ts`).
+ * The one insert for `createQuickTask`, agents' `create_task` and the
+ * coordinator's tasks (`_projects/batches.ts`). A project task either starts
+ * (`start`: approved, the scheduler runs it) or goes to the project's
+ * coordinator at once (`handTasksToCoordinator`), which starts it or adds it
+ * to an open task.
  */
 export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
-  args: ObjectType<typeof createQuickTaskArgs>,
+  args: NewTodoTask,
   options: {
-    /** A project task is approved at creation: the scheduler may start it. */
-    approved: boolean;
+    /** A project task starts at once; else it is handed to the coordinator. */
+    start: boolean;
   },
 ): Promise<Id<"agentTasks">> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
     throw new Error("Not authorized");
   const repo = await ctx.db.get(args.repoId);
   if (!repo) throw new Error("Repo not found");
+  const { title, generate } = initialTitle(args.title, args.description);
   const now = Date.now();
   if (args.projectId) {
     await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
@@ -377,9 +402,12 @@ export async function createTodoTask(
           ctx.userId,
         );
   const taskId = await ctx.db.insert("agentTasks", {
-    title: args.title,
+    title,
     description: args.description,
     repoId: args.repoId,
+    ...(args.linkedRepoIds !== undefined && args.linkedRepoIds.length > 0
+      ? { linkedRepoIds: args.linkedRepoIds }
+      : {}),
     status: "todo",
     createdAt: now,
     updatedAt: now,
@@ -400,22 +428,33 @@ export async function createTodoTask(
     phaseLabel:
       args.projectId !== undefined ? args.phaseLabel?.trim() || undefined : undefined,
     approvedAt:
-      args.projectId !== undefined && options.approved ? now : undefined,
+      args.projectId !== undefined && options.start ? now : undefined,
     numId,
   });
   await createTaskRunSummary(ctx, taskId, args.repoId);
   await ensureSubscribed(ctx, taskId, ctx.userId);
-  // Creating an approved project task approves it: the scheduler may start it.
-  if (args.projectId !== undefined && options.approved) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.buildWorkflow.scheduleReadyTasks,
-      { projectId: args.projectId },
+  if (generate) {
+    await scheduleGeneratedTitle(
+      ctx,
+      { kind: "task", taskId },
+      args.description ?? "",
+      title,
     );
+  }
+  if (args.projectId !== undefined) {
+    if (options.start) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.projectId },
+      );
+    } else {
+      await handTasksToCoordinator(ctx, args.projectId, [taskId]);
+    }
   }
   await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
     taskId,
-    title: args.title,
+    title,
     description: args.description,
     existingTags: normalizeTaskTags(args.tags) ?? [],
   });
@@ -428,7 +467,7 @@ export async function createTodoTask(
       await createNotification(ctx, {
         userId: args.assignedTo,
         type: "task_assigned",
-        title: `Assigned: "${args.title}"`,
+        title: `Assigned: "${title}"`,
         repoId: args.repoId,
         projectId: args.projectId,
         taskId,
@@ -439,12 +478,67 @@ export async function createTodoTask(
   return taskId;
 }
 
-/** Creates a single task in "todo" status, optionally assigned to a project. */
+/**
+ * Creates a task from a person's prompt; the title comes from it. "Save"
+ * files it in To Do, or hands a project task to the project's coordinator.
+ * "Save and Run" (`run`) starts it: a project task is approved, so the
+ * project's scheduler runs it; any other task starts now.
+ */
 export const createQuickTask = authMutation({
-  args: createQuickTaskArgs,
+  args: {
+    ...newTaskFields,
+    description: v.string(),
+    run: v.optional(v.boolean()),
+  },
   returns: v.id("agentTasks"),
-  handler: (ctx, args) =>
-    createTodoTask(ctx, args, { approved: args.approved !== false }),
+  handler: async (ctx, args) => {
+    const { run, ...fields } = args;
+    const taskId = await createTodoTask(ctx, fields, {
+      start: run === true,
+    });
+    if (run && args.projectId === undefined) {
+      await startTaskExecution(ctx, taskId);
+    }
+    return taskId;
+  },
+});
+
+/**
+ * An agent's `create_task` / `create_and_run_task` outside a project's
+ * coordinator (`mcp/tools.ts`): as `createQuickTask`, with the agent's own
+ * title when it gives one. A project task starts when `run` (its project's
+ * scheduler runs it), else it goes to the project's coordinator.
+ */
+export const createAgentTask = internalMutation({
+  args: {
+    userId: v.string(),
+    run: v.boolean(),
+    repoId: v.string(),
+    projectId: v.optional(v.string()),
+    title: v.optional(v.string()),
+    description: v.string(),
+    baseBranch: v.optional(v.string()),
+    phaseLabel: v.optional(v.string()),
+  },
+  returns: v.id("agentTasks"),
+  handler: async (ctx, args) => {
+    const userId = normalizeIdOrThrow(ctx.db, "users", args.userId, "User");
+    return await createTodoTask(
+      { ...ctx, userId },
+      {
+        repoId: normalizeIdOrThrow(ctx.db, "githubRepos", args.repoId, "Repo"),
+        projectId:
+          args.projectId === undefined
+            ? undefined
+            : normalizeIdOrThrow(ctx.db, "projects", args.projectId, "Project"),
+        title: args.title,
+        description: args.description,
+        baseBranch: args.baseBranch,
+        phaseLabel: args.phaseLabel,
+      },
+      { start: args.run },
+    );
+  },
 });
 
 /** Creates multiple tasks at once for a given repo. */
@@ -500,7 +594,9 @@ export const assignToProject = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    assertProjectNotArchived(
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
+    );
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
@@ -516,19 +612,22 @@ export const assignToProject = authMutation({
         maxTaskNumber = t.taskNumber;
       }
     }
-    let assigned = 0;
+    const moved: Id<"agentTasks">[] = [];
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
-      assigned++;
+      await assertTaskNotArchived(ctx.db, task);
+      moved.push(taskId);
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
-        taskNumber: maxTaskNumber + assigned,
+        taskNumber: maxTaskNumber + moved.length,
         updatedAt: Date.now(),
       });
     }
+    // A moved task that has not started goes to the coordinator at once.
+    await handTasksToCoordinator(ctx, args.projectId, moved);
     return null;
   },
 });
@@ -537,9 +636,10 @@ export const assignToProject = authMutation({
 export const createTasksBatch = authMutation({
   args: {
     repoId: v.id("githubRepos"),
+    /** A task without a title takes one from its description (`initialTitle`). */
     tasks: v.array(
       v.object({
-        title: v.string(),
+        title: v.optional(v.string()),
         description: v.optional(v.string()),
       }),
     ),
@@ -568,9 +668,10 @@ export const createTasksBatch = authMutation({
     const taskIds: Id<"agentTasks">[] = [];
     for (let i = 0; i < args.tasks.length; i++) {
       const task = args.tasks[i];
+      const { title, generate } = initialTitle(task.title, task.description);
       const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
       const taskId = await ctx.db.insert("agentTasks", {
-        title: task.title,
+        title,
         description: task.description,
         repoId: args.repoId,
         taskNumber: i + 1,
@@ -588,6 +689,14 @@ export const createTasksBatch = authMutation({
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
       await ensureSubscribed(ctx, taskId, ctx.userId);
+      if (generate) {
+        await scheduleGeneratedTitle(
+          ctx,
+          { kind: "task", taskId },
+          task.description ?? "",
+          title,
+        );
+      }
       taskIds.push(taskId);
     }
 
@@ -606,6 +715,7 @@ export const createTasksBatch = authMutation({
       for (const taskId of taskIds) {
         await ctx.db.patch(taskId, { projectId });
       }
+      await handTasksToCoordinator(ctx, projectId, taskIds);
       await onProjectTasksChanged(ctx, projectId);
     }
 

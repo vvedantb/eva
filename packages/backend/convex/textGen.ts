@@ -8,6 +8,7 @@ import {
   selectTagsByProbability,
   TASK_TAGS,
   TASK_TAG_DESCRIPTIONS,
+  tokenizedToDisplayText,
   type TaskTag,
 } from "@eva/shared";
 import { v } from "convex/values";
@@ -17,10 +18,14 @@ import { getActionRepoWithAccess } from "./functions";
 import { readBoolean } from "./_jev/answers";
 import { evaluateDecision } from "./_jev/client";
 import { buildTitleDigest } from "./_sessions/prompts";
+import { ownedSessionOwnerValidator } from "./_sessions/owner";
 import { chatTurnEntityIdValidator } from "./validators";
 
-/** Cheap gateway model for session titles — one-line change later. */
-const TEXT_GEN_MODEL = "openai/gpt-5-nano";
+/** Cheap gateway model for titles, tags, completions and polish. Same as Ave. */
+const TEXT_GEN_MODEL = "openai/gpt-6-luna";
+
+/** Luna's lowest effort; it rejects gpt-5's "minimal". */
+const NO_REASONING = { reasoningEffort: "none", textVerbosity: "low" };
 
 /** Trims, then strips one pair of wrapping quotes the model sometimes adds. */
 function stripWrappingQuotes(raw: string): string {
@@ -39,10 +44,26 @@ function cleanGeneratedTitle(raw: string): string {
 }
 
 /**
+ * A short title for a request (a session's first message, a task's or a
+ * project's prompt), or "" when the model returns none. Uses the flex
+ * service tier (~0.5x cost, higher latency OK — titles are background). If
+ * flex can't be applied, Gateway falls back to the default tier (best-effort).
+ */
+async function generateRequestTitle(
+  noun: "task" | "project",
+  request: string,
+): Promise<string> {
+  const { text } = await generateText({
+    model: TEXT_GEN_MODEL,
+    prompt: `Generate a concise 3-8 word title for this coding ${noun}. Summarize the request, don't restate it. Reply with the title only — no quotes, no trailing punctuation.\n\n${noun === "task" ? "Task" : "Project"}: ${request.slice(0, 2000)}`,
+    providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+  });
+  return cleanGeneratedTitle(text);
+}
+
+/**
  * Generates a short session title from the first user message via AI Gateway.
- * Uses flex service tier (~0.5x cost, higher latency OK — titles are background).
  * Non-fatal: missing key / model errors leave the placeholder title in place.
- * If flex can't be applied, Gateway falls back to default tier/rate (best-effort).
  */
 export const generateSessionTitle = internalAction({
   args: {
@@ -52,12 +73,7 @@ export const generateSessionTitle = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const { text } = await generateText({
-        model: TEXT_GEN_MODEL,
-        prompt: `Generate a concise 3-8 word title for this coding task. Summarize the request, don't restate it. Reply with the title only — no quotes, no trailing punctuation.\n\nTask: ${args.message.slice(0, 2000)}`,
-        providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
-      });
-      const title = cleanGeneratedTitle(text);
+      const title = await generateRequestTitle("task", args.message);
       if (!title) {
         return null;
       }
@@ -67,6 +83,39 @@ export const generateSessionTitle = internalAction({
       });
     } catch (error) {
       console.error("[textGen.generateSessionTitle]", error);
+    }
+    return null;
+  },
+});
+
+/**
+ * Generates a task's or project's title from its prompt, as a session's from
+ * its first message (`_shared/ownerTitle.ts`). Non-fatal: a failure leaves
+ * the first-line title in place.
+ */
+export const generateOwnerTitle = internalAction({
+  args: {
+    owner: ownedSessionOwnerValidator,
+    prompt: v.string(),
+    fallbackTitle: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const title = await generateRequestTitle(
+        args.owner.kind,
+        tokenizedToDisplayText(args.prompt),
+      );
+      if (!title) {
+        return null;
+      }
+      await ctx.runMutation(internal._shared.ownerTitle.applyGeneratedTitle, {
+        owner: args.owner,
+        fallbackTitle: args.fallbackTitle,
+        title,
+      });
+    } catch (error) {
+      console.error("[textGen.generateOwnerTitle]", error);
     }
     return null;
   },
@@ -255,14 +304,9 @@ Continue the partial text below from exactly where it stops. Reply with the cont
 
 Partial text:
 ${args.text.slice(-MAX_COMPLETION_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, so a tight cap
+        // Reasoning tokens count against maxOutputTokens, so a tight cap
         // returns an empty string. Keep reasoning off and clip in cleanCompletion.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
         stopSequences: ["\n"],
       });
@@ -352,12 +396,7 @@ Conversation:
 ${digest}`,
         // Same trade-off as completeTextInternal: the user is looking at an
         // empty composer, so latency beats depth.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
       });
       return cleanPrediction(text);
@@ -438,14 +477,9 @@ Rewrite the transcript so it reads as if it were typed, following every rule:
 
 Transcript:
 ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, and the output
+        // Reasoning tokens count against maxOutputTokens, and the output
         // roughly mirrors the input length, so keep reasoning off and the cap high.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 2048,
       });
       return stripWrappingQuotes(text);

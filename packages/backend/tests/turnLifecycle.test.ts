@@ -150,7 +150,7 @@ describe("expiredTurnLeaseDecision", () => {
   test("a dead process on a live sandbox finalises immediately", () => {
     expect(
       expiredTurnLeaseDecision({
-        liveness: { alive: false, reason: "pid_dead_or_exec_failed" },
+        liveness: { alive: false, reason: "pid_dead" },
         silentSince: undefined,
         now,
       }),

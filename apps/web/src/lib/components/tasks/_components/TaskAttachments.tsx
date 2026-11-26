@@ -19,9 +19,15 @@ import { withMutationToast } from "@/lib/utils/mutationToast";
  * "Files" section for a task's attachments. Each card opens the stored blob in a
  * new tab; hovering reveals a remove button. Removing deletes the stored blob,
  * so it is confirmed first and cannot be undone. Files can only be added when
- * the task is created.
+ * the task is created. A read-only (archived) task shows no remove button.
  */
-export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
+export function TaskAttachments({
+  taskId,
+  readOnly,
+}: {
+  taskId: Id<"agentTasks">;
+  readOnly: boolean;
+}) {
   const attachments = useQuery(api.agentTasks.listAttachments, { taskId });
   const removeAttachment = useMutation(api.agentTasks.removeAttachment);
   // The file awaiting confirmation, held until the user confirms or cancels.
@@ -52,6 +58,15 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
       return;
     }
     setIsRemoving(false);
+  }
+
+  function confirmRemove(file: { storageId: Id<"_storage">; label: string }) {
+    requestConfirm(
+      () => setPending(file),
+      () => {
+        void removeStored(file);
+      },
+    );
   }
 
   async function handleConfirm() {
@@ -89,21 +104,18 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
                       <AttachmentCard
                         contentType={attachment.contentType}
                         url={attachment.url}
-                        onRemove={() => {
-                          const next = {
-                            storageId: attachment.storageId,
-                            label: labelForAttachment(
-                              undefined,
-                              attachment.contentType,
-                            ),
-                          };
-                          requestConfirm(
-                            () => setPending(next),
-                            () => {
-                              void removeStored(next);
-                            },
-                          );
-                        }}
+                        onRemove={
+                          readOnly
+                            ? undefined
+                            : () =>
+                                confirmRemove({
+                                  storageId: attachment.storageId,
+                                  label: labelForAttachment(
+                                    undefined,
+                                    attachment.contentType,
+                                  ),
+                                })
+                        }
                       />
                     </a>
                   </ListEnter>

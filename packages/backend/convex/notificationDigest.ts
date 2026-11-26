@@ -6,22 +6,23 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
 import { buildNotificationDigestHtml } from "./emailTemplates";
+import { digestWindowStart } from "./_notifications/digestWindow";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 /**
  * Sends the daily unread-notification digest. For every user with an email and
- * at least one unread notification, builds an HTML summary and emails it.
- * One failed send is logged and skipped so it does not abort the whole batch.
- * Invoked by the daily cron (see crons.ts).
+ * at least one unread, not yet emailed notification since the previous weekday
+ * run, builds an HTML summary, emails it and stamps the rows `emailedAt`, so
+ * the instant email never sends them again. One failed send is logged and
+ * skipped so it does not abort the whole batch. Invoked by the cron (crons.ts).
  */
 export const sendDailyDigests = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     const appUrl = getEvaBaseUrl();
-    // Only summarise notifications from the past 24 hours, matching the daily
-    // cadence — older unread items stay in the in-app inbox.
-    const since = Date.now() - 24 * 60 * 60 * 1000;
+    // Since the previous weekday run: Monday covers the weekend. Older unread
+    // items stay in the in-app inbox.
+    const since = digestWindowStart(Date.now());
     const recipients = await ctx.runQuery(
       internal.notifications.getDigestRecipients,
       { since },
@@ -35,13 +36,16 @@ export const sendDailyDigests = internalAction({
         recipientName: recipient.name,
         appUrl,
         notifications: recipient.notifications,
-        subtext: "From the past 24 hours",
+        subtext: "Since the last digest",
       });
       try {
         await sendEmail({
           to: recipient.email,
           subject: `You have ${count} unread notification${count === 1 ? "" : "s"}`,
           html,
+        });
+        await ctx.runMutation(internal.notifications.markEmailed, {
+          notificationIds: recipient.notifications.map((n) => n.id),
         });
         sent += 1;
       } catch (error) {

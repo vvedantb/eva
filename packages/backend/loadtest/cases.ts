@@ -3,6 +3,9 @@
 // Args come from the seeded refs, so every case touches the scaled data.
 import { getFunctionName } from "convex/server";
 import type { FunctionArgs, FunctionReference } from "convex/server";
+// The subpath, not the barrel: plain Node cannot resolve the barrel's
+// extensionless imports.
+import { transcriptTailArgs } from "@eva/shared/chatTranscript";
 import { z } from "zod";
 import { api } from "../convex/_generated/api.js";
 import type { Id, TableNames } from "../convex/_generated/dataModel.js";
@@ -89,9 +92,9 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("pendingQuestions.getActive", "session open", api.pendingQuestions.getActive, (r) => ({ entityId: r.mainChatId })),
   q("proposedPlans.listBySession", "session open", api.proposedPlans.listBySession, (r) => ({ sessionId: r.sessionId })),
   q("chatReads.isUnread", "session open", api.chatReads.isUnread, (r) => ({ parentId: r.mainChatId })),
-  // What a chat paints from first: `TRANSCRIPT_TAIL_MESSAGES` (30) in the web
-  // app's `useChatTranscript`. Compare with `messages.listByParent` above.
-  q("messages.listByParent.tail", "session open", api.messages.listByParent, (r) => ({ parentId: r.mainChatId, tail: 30 })),
+  // What a chat paints from first, with the same args as the web and phone
+  // (`transcriptTailArgs`). Compare with `messages.listByParent` above.
+  q("messages.listByParent.tail", "session open", api.messages.listByParent, (r) => transcriptTailArgs(r.mainChatId)),
   q("pullRequests.listForOwner", "session PR chrome", api.pullRequests.listForOwner, (r) => ({ owner: sessionOwner(r.sessionId) })),
   q("projects.list", "projects page", api.projects.list, (r) => ({ repoId: r.repoId })),
   q("projects.listTaskProgress", "projects page", api.projects.listTaskProgress, (r) => ({ repoId: r.repoId })),
@@ -99,7 +102,7 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("agentTasks.countSandboxTasks", "sidebar badge", api.agentTasks.countSandboxTasks, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listDrafts", "tasks board", api.agentTasks.listDrafts, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listByProject", "project page", api.agentTasks.listByProject, (r) => ({ projectId: r.projectId })),
-  q("agentRuns.listByTask", "task page", api.agentRuns.listByTask, (r) => ({ taskId: r.taskId })),
+  q("agentTasks.getRunFacts", "task page", api.agentTasks.getRunFacts, (r) => ({ taskId: r.taskId })),
   q("taskComments.listByTask", "task page", api.taskComments.listByTask, (r) => ({ taskId: r.taskId })),
   q("taskActivity.listByTask", "task page", api.taskActivity.listByTask, (r) => ({ taskId: r.taskId })),
   q("notifications.list", "inbox", api.notifications.list, () => ({})),

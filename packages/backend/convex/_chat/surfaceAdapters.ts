@@ -15,6 +15,7 @@ import {
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import { agentJobOwner, type AgentJobOwner } from "../_agentJobs/owner";
 import { markAllRunningExited } from "../backgroundProcesses";
 import type { TurnLane } from "../validators";
 import {
@@ -221,48 +222,17 @@ export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
 ) => R;
 
 /**
- * A turn owner that is not a chat: a quick-task run or a one-shot agent. It
- * has no placeholder, queue or synthetic turn, so it does not fit
- * `ChatSurfaceAdapter`. `interview` works on a chat row and is told apart from
- * its chat turns by the turn's lane.
+ * A turn owner that is not a chat: a one-shot agent job (a task's run is a
+ * chat turn). It has no placeholder, queue or synthetic turn, so it does not
+ * fit `ChatSurfaceAdapter`.
  */
-export type AgentTurnOwner =
-  | { kind: "run"; id: Id<"agentRuns"> }
-  | { kind: "automation"; id: Id<"automationRuns"> }
-  | { kind: "doc"; id: Id<"docs"> }
-  | { kind: "evaluation"; id: Id<"evaluationReports"> }
-  /** Filed under the project's session. */
-  | { kind: "interview"; id: Id<"sessions"> };
+export type AgentTurnOwner = AgentJobOwner;
 
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
   chat: ChatAdapterVisitor<R>;
   agent: (owner: AgentTurnOwner) => R;
 };
-
-/** The one lane, the project interview: filed under the project's session. */
-function laneOwner(
-  db: DatabaseReader,
-  entityId: string,
-): AgentTurnOwner | null {
-  const id = db.normalizeId("sessions", entityId);
-  return id ? { kind: "interview", id } : null;
-}
-
-function laneFreeAgentOwner(
-  db: DatabaseReader,
-  entityId: string,
-): AgentTurnOwner | null {
-  const runId = db.normalizeId("agentRuns", entityId);
-  if (runId) return { kind: "run", id: runId };
-  const automationRunId = db.normalizeId("automationRuns", entityId);
-  if (automationRunId) return { kind: "automation", id: automationRunId };
-  const docId = db.normalizeId("docs", entityId);
-  if (docId) return { kind: "doc", id: docId };
-  const reportId = db.normalizeId("evaluationReports", entityId);
-  if (reportId) return { kind: "evaluation", id: reportId };
-  return null;
-}
 
 /**
  * Picks the adapter for a durable turn by its `entityId` table and lane, then
@@ -274,13 +244,12 @@ export function turnAdapterForEntity<R>(
   turn: { entityId: string; lane?: TurnLane },
   visit: TurnAdapterVisitor<R>,
 ): R | null {
-  if (turn.lane !== undefined) {
-    const owner = laneOwner(db, turn.entityId);
-    return owner ? visit.agent(owner) : null;
-  }
+  // A legacy lane turn (the retired summary and interview) has no owner now:
+  // the caller closes it.
+  if (turn.lane !== undefined) return null;
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
   if (chatId) return visit.chat(sessionChatAdapter, chatId);
-  const owner = laneFreeAgentOwner(db, turn.entityId);
+  const owner = agentJobOwner(db, turn.entityId);
   return owner ? visit.agent(owner) : null;
 }
 

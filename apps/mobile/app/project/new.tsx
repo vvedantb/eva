@@ -8,7 +8,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BaseBranchChip } from "@/chat/BranchChips";
@@ -20,17 +20,18 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
 /**
  * A new project, as the web `NewProjectModal` on a phone: a full screen in
- * place of the dialog. The repo (the web takes it from the page), the title
- * and the description ("Describe the feature…"), then the web option chips,
- * each opening a bottom sheet: base branch and priority. A project has no
- * interview or plan step: its coordinator chat plans it, so the project is
- * created without one (`skipPlanning`). "Create Project" sits at the bottom
- * in thumb reach; it is off until there is a title and a description, and
- * says why to a screen reader (`newProjectSubmitBlocker`, the web tooltip).
- * It calls the web's `projects.create`, then replaces this screen with the
- * project's coordinator chat, so back does not return to the spent form.
- * Return on the title moves to the description. Not here from the web: the
- * rich-text editor (plain text here) and the keyboard shortcut.
+ * place of the dialog. The repo (the web takes it from the page), one prompt
+ * ("Describe the project…"; the server titles the project from it), then the
+ * web option chips, each opening a bottom sheet: base branch and priority. A
+ * project has no interview or plan step: its coordinator chat plans it.
+ * "Save" and "Save and Run" sit at the bottom in thumb reach; they are off
+ * until there is a prompt, and say why to a screen reader
+ * (`newProjectSubmitBlocker`, the web tooltip). Both call the web's
+ * `projects.create`; "Save and Run" (`run`) also sends the prompt as the
+ * coordinator chat's first message. Then the project's coordinator chat
+ * replaces this screen, so back does not return to the spent form. Not here
+ * from the web: @ mentions and / skills, and the keyboard shortcut (Return is
+ * a newline, as the phone's session composer).
  */
 export default function NewProjectScreen() {
   const router = useRouter();
@@ -62,39 +63,35 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const insets = useSafeAreaInsets();
-  // The description field, for Return on the title: focus is imperative.
-  const descriptionRef = useRef<TextInput>(null);
   const [picked, setPicked] = useState<Id<"githubRepos">>(initialRepo._id);
   const repo = repos.find((candidate) => candidate._id === picked) ?? initialRepo;
   const createProject = useMutation(api.projects.create);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   // The base branch is kept with its repo; a new repo starts on its default (web `useBaseBranchState`).
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
-  const [saving, setSaving] = useState(false);
+  // Which button is saving, for its spinner; null when idle.
+  const [saving, setSaving] = useState<"save" | "run" | null>(null);
   const repoBranch = repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const baseBranch = pickedBranch?.repoId === repo._id ? pickedBranch.branch : repoBranch;
-  const blocker = newProjectSubmitBlocker(saving, title, description);
+  const blocker = newProjectSubmitBlocker(saving !== null, prompt);
 
-  const submit = async () => {
+  const submit = async (run: boolean) => {
     if (blocker !== undefined) return;
-    setSaving(true);
+    setSaving(run ? "run" : "save");
     try {
       const projectId = await createProject({
         repoId: repo._id,
-        title: title.trim(),
-        rawInput: description.trim(),
+        rawInput: prompt.trim(),
         baseBranch,
         priority,
-        // No interview or plan: the coordinator chat plans the project.
-        skipPlanning: true,
+        run,
       });
       toast.success("Project created");
       router.replace({ pathname: "/chat/[target]", params: { target: projectId } });
     } catch {
       toast.error("Couldn't create project");
-      setSaving(false);
+      setSaving(null);
     }
   };
 
@@ -112,27 +109,14 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
               rememberRepo(repoId);
             }}
           />
-          {/* Web: a borderless `text-base font-medium` title over the description, min 160 high. */}
+          {/* Web: one borderless prompt, min 160 high. */}
           <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Project title"
+            value={prompt}
+            onChangeText={setPrompt}
+            placeholder="Describe the project…"
             placeholderTextColor={theme.mutedForeground}
-            accessibilityLabel="Project title"
+            accessibilityLabel="Describe the project"
             autoFocus
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => descriptionRef.current?.focus()}
-            className="font-instrument-sans-medium min-h-11 text-base"
-            style={{ color: theme.foreground, fontWeight: "500" }}
-          />
-          <TextInput
-            ref={descriptionRef}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe the feature…"
-            placeholderTextColor={theme.mutedForeground}
-            accessibilityLabel="Description"
             multiline
             textAlignVertical="top"
             className="font-instrument-sans min-h-40 py-2 text-base"
@@ -146,11 +130,24 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
             <PriorityChip value={priority} onChange={setPriority} />
           </View>
         </ScrollView>
-        {/* Web footer: Create Project (Cancel is the header back). */}
-        <View className="px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
-          <Button onPress={() => void submit()} disabled={blocker !== undefined} loading={saving} accessibilityHint={blocker}>
-            Create Project
-          </Button>
+        {/* Web footer: Save and Save and Run (Cancel is the header back). */}
+        <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
+          <View className="min-w-0 flex-1">
+            <Button
+              variant="secondary"
+              onPress={() => void submit(true)}
+              disabled={blocker !== undefined}
+              loading={saving === "run"}
+              accessibilityHint={blocker}
+            >
+              Save and Run
+            </Button>
+          </View>
+          <View className="min-w-0 flex-1">
+            <Button onPress={() => void submit(false)} disabled={blocker !== undefined} loading={saving === "save"} accessibilityHint={blocker}>
+              Save
+            </Button>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Screen>

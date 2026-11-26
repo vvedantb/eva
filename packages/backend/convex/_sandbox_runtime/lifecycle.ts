@@ -14,7 +14,8 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
-import { isSandboxGoneError } from "./sandboxErrors";
+import { isSandboxGoneError, SandboxCommandFailedError } from "./sandboxErrors";
+import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 import { errorMessage } from "@vvedantb/server";
 
@@ -120,11 +121,8 @@ export const verifySandboxLiveness = internalAction({
 
     // Sandbox is started — verify the callback runner PID is still alive.
     // Short timeout so we never block the watchdog path on exec hangs.
-    const pidAlive = await execHandle(sandbox, CALLBACK_LIVENESS_COMMAND, 5)
-      .then(() => true)
-      .catch(() => false);
-
-    if (pidAlive) {
+    const callback = await probeSandbox(sandbox, CALLBACK_LIVENESS_COMMAND);
+    if (callback === "yes") {
       return {
         alive: true,
         reason: "sandbox_started_pid_alive",
@@ -133,14 +131,8 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    const agentAlive = await execHandle(
-      sandbox,
-      AGENT_PROCESS_LIVENESS_COMMAND,
-      5,
-    )
-      .then(() => true)
-      .catch(() => false);
-    if (agentAlive) {
+    const agent = await probeSandbox(sandbox, AGENT_PROCESS_LIVENESS_COMMAND);
+    if (agent === "yes") {
       return {
         alive: true,
         reason: "agent_process_running_callback_pid_stale",
@@ -149,16 +141,45 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    // Exec failing on a started sandbox most likely means the PID is dead
-    // (test/kill returned non-zero). Treat as dead so the watchdog cleans up.
+    // A probe that timed out or was killed proves nothing. A VM deep in swap
+    // answers that way while its daemon is frozen, not dead: session 1054's
+    // turn was finalised as process_dead, then heartbeated 3 minutes later
+    // (2026-11-26). Report alive, so the bounded silent-turn grace decides.
+    if (callback === "unknown" || agent === "unknown") {
+      return {
+        alive: true,
+        reason: "probe_exec_failed",
+        sandboxState: state,
+      };
+    }
+
     return {
       alive: false,
-      reason: "pid_dead_or_exec_failed",
+      reason: "pid_dead",
       sandboxState: state,
       pidAlive: false,
     };
   },
 });
+
+/**
+ * Runs a liveness check. "no" only when the command ran and exited 1–127 (a
+ * real negative from `test`, `kill -0` or `pgrep`). A timeout, a transport
+ * error or a signal exit (128+, e.g. 137 SIGKILL) is "unknown".
+ */
+async function probeSandbox(
+  sandbox: SandboxHandle,
+  command: string,
+): Promise<"yes" | "no" | "unknown"> {
+  try {
+    await execHandle(sandbox, command, 5);
+    return "yes";
+  } catch (error) {
+    return error instanceof SandboxCommandFailedError && error.exitCode < 128
+      ? "no"
+      : "unknown";
+  }
+}
 
 /** Kills running CLI processes (claude-code, codex, run-design) inside a sandbox. */
 export const killSandboxProcess = internalAction({
@@ -338,47 +359,6 @@ export const captureStalledTurnDiagnostics = internalAction({
   },
 });
 
-/**
- * Captures post-mortem diagnostics from a sandbox whose run was killed by the
- * watchdog, persists them on the run, then stops (not deletes) the sandbox.
- * Quick-task sandboxes are persistent — the paused filesystem keeps any
- * uncommitted work and unpushed commits recoverable, and the next run resumes
- * it. Capture is best-effort — the stop proceeds regardless.
- */
-export const captureDiagnosticsAndStopSandbox = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    runId: v.id("agentRuns"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    try {
-      const trimmed = await readKillDiagnostics(
-        ctx,
-        args.repoId,
-        args.sandboxId,
-      );
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
-      );
-      await ctx.runMutation(internal.taskWorkflow.appendRunLog, {
-        runId: args.runId,
-        message: `Sandbox diagnostics captured before stop:\n${trimmed}`,
-      });
-    } catch (error) {
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorMessage(error)}`,
-      );
-    }
-    await ctx.runAction(internal.sandbox.stopSandbox, {
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-    });
-    return null;
-  },
-});
-
 /** Deletes a sandbox, silently ignoring already-deleted sandboxes. */
 export const deleteSandbox = internalAction({
   args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
@@ -434,22 +414,4 @@ export const archiveSandbox = internalAction({
     }
     return null;
   },
-});
-
-/** Returns the active sandbox provider for a repo (for workflow thaw id selection). Vercel is the only provider. */
-export const getSandboxProviderKind = internalAction({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
-});
-
-/**
- * Provider for a snapshot config. Vercel is the only provider, so this
- * always resolves "vercel"; kept as an internalAction (name unchanged) since
- * it is still part of the public `internal.sandbox.*` surface.
- */
-export const getSnapshotSandboxProviderKind = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
 });

@@ -1,7 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
-  activityLogTypeValidator,
   webhookEventStatusValidator,
   messageFields,
   aveThreadFields,
@@ -10,7 +9,6 @@ import {
   automationRunFields,
   changelogVoteFields,
   agentTaskFields,
-  agentRunFields,
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
@@ -25,6 +23,7 @@ import {
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  threadParticipantFields,
   chatReadFields,
   standupReadFields,
   chatRecapFields,
@@ -75,6 +74,7 @@ import {
   workProfileFields,
   projectTaskReportFields,
   projectTaskBatchFields,
+  projectChatTaskLinkFields,
   projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
@@ -109,7 +109,7 @@ const schema = defineSchema({
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
-    .index("by_repo_and_deleted", ["repoId", "deletedAt"])
+    .index("by_repo_and_archived", ["repoId", "archivedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
   // projectDetails table removed. schema-narrowing-ok: deleteProjectDetails
@@ -117,22 +117,17 @@ const schema = defineSchema({
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_status", ["repoId", "status"])
-    .index("by_repo_status_and_deleted", ["repoId", "status", "deletedAt"])
-    .index("by_repo_status_deleted_and_creator", [
+    .index("by_repo_status_and_archived", ["repoId", "status", "archivedAt"])
+    .index("by_repo_status_archived_and_creator", [
       "repoId",
       "status",
-      "deletedAt",
+      "archivedAt",
       "createdBy",
     ])
     .index("by_repo_and_updatedAt", ["repoId", "updatedAt"])
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
-
-  agentRuns: defineTable(agentRunFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_status", ["taskId", "status"])
-    .index("by_status", ["status"]),
 
   // Every pull request linked to a session, quick task or project. An owner
   // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.
@@ -159,15 +154,6 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_repo", ["repoId"]),
 
-  agentRunActivityLogs: defineTable({
-    runId: v.id("agentRuns"),
-    activityLog: v.string(),
-    type: v.optional(activityLogTypeValidator),
-    updatedAt: v.number(),
-  })
-    .index("by_run", ["runId"])
-    .index("by_run_and_type", ["runId", "type"]),
-
   githubRepos: defineTable(githubRepoFields)
     .index("by_github_id", ["githubId"])
     .index("by_installation", ["installationId"])
@@ -190,6 +176,10 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
 
+  threadParticipants: defineTable(threadParticipantFields)
+    .index("by_root", ["rootId"])
+    .index("by_user_and_root", ["userId", "rootId"]),
+
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
@@ -208,10 +198,15 @@ const schema = defineSchema({
   projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
     "projectId",
   ]),
+  projectChatTaskLinks: defineTable(projectChatTaskLinkFields).index(
+    "by_project_and_message",
+    ["projectId", "messageId"],
+  ),
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
   // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
+  /** @deprecated Never written; rows deleted by clearLegacyFields. */
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
@@ -220,6 +215,15 @@ const schema = defineSchema({
     .index("by_parent", ["parentId"])
     // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
     .index("by_parent_and_role", ["parentId", "role"])
+    // The transcript: rows that are not thread replies (`replyTo` unset).
+    .index("by_parent_and_reply_to", ["parentId", "replyTo"])
+    // A thread's replies, oldest first.
+    .index("by_reply_to", ["replyTo"])
+    // A chat's thread roots (only roots carry `lastReplyAt`).
+    .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
+    // Preview annotations of a chat (the preview comments drawer). Rows with
+    // no annotation sort as undefined, before any path.
+    .index("by_parent_and_annotation_page", ["parentId", "annotation.pagePath"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",
@@ -232,7 +236,10 @@ const schema = defineSchema({
   aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
-    .index("by_parent_and_order", ["parentId", "order"]),
+    .index("by_parent_and_order", ["parentId", "order"])
+    // The main queue panel lists rows without `replyTo`: a queued thread
+    // reply waits in its thread, not in the chat's queue.
+    .index("by_parent_and_reply_to_and_order", ["parentId", "replyTo", "order"]),
   sessions: defineTable(sessionFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
@@ -261,9 +268,10 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
-  // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
-  // directly; `backfillSessionChats` empties this table and it can then be
-  // dropped from the schema.
+  /**
+   * @deprecated Legacy daemon-poll mirror. Chat daemons poll their
+   * `sessionChats` row directly; rows deleted by clearLegacyFields.
+   */
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
@@ -376,8 +384,10 @@ const schema = defineSchema({
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
-    .index("by_repo_and_numId", ["repoId", "numId"]),
+    .index("by_repo_and_numId", ["repoId", "numId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   chatLogEntries: defineTable(chatLogEntryFields)
     .index("by_source_session", ["sourceSessionId"])
@@ -434,6 +444,12 @@ const schema = defineSchema({
   notifications: defineTable(notificationFields)
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
+    // A thread's unread rows for one person: opening the thread reads them.
+    .index("by_user_and_thread_root_and_read", [
+      "userId",
+      "threadRootId",
+      "read",
+    ])
     .index("by_repo", ["repoId"]),
   // Expo push tokens for the mobile app (see push.ts). One row per device.
   pushTokens: defineTable({
@@ -521,7 +537,8 @@ const schema = defineSchema({
     .index("by_automation_and_status", ["automationId", "status"])
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
-    .index("by_repo", ["repoId"]),
+    .index("by_repo", ["repoId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   changelogVotes: defineTable(changelogVoteFields).index(
     "by_run_and_user_and_item",

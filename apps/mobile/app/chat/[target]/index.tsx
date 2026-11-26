@@ -11,27 +11,31 @@ import {
   forkThreadTitle,
   getSessionReadOnlyMessage,
   formatForkPrompt,
+  isChatTurnExecuting,
   isOtherUserChatMessage,
-  MAX_PARALLEL_CHATS,
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
   appendReviewCommentsToPrompt,
   prNumberFromGithubUrl,
   SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
   sandboxComposerState,
+  waitingForSlotLabel,
   type SessionMenuAction,
   tokenizedToDisplayText,
-  toRepoRelativePath,
   turnErrorTitle,
   visibleChatMessages,
   findBubbleGroups,
+  EVA_MENTION_ITEM,
+  archiveCopy,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
@@ -66,9 +70,10 @@ import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { DayDivider, NewDivider } from "@/chat/DayDivider";
+import { ThreadSummary } from "@/chat/ThreadSummary";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
-import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { EvaReply, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
@@ -102,15 +107,17 @@ import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
 import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
-import { TypingIndicator } from "@/chat/TypingIndicator";
+import { EvaTypingText, TypingIndicator } from "@/chat/TypingIndicator";
+import { ThreadTurnStatus } from "@/chat/ThreadTurnStatus";
 import { useDraftSync } from "@/chat/useDraftSync";
 import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
-import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
+import { ProjectTaskFacts, useProjectTaskRow } from "@/projects/ProjectTaskFacts";
+import { ProjectTaskPromptCard } from "@/projects/ProjectTaskPromptCard";
 
 /** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
@@ -120,7 +127,9 @@ type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestion
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
- * One chat (session, quick task or project): the transcript with the web
+ * One chat (session, quick task, project task or project; a project task's
+ * chat is the task, with its status and PR line under the title and, before
+ * its first run, its prompt card in place of the empty chat): the transcript with the web
  * message actions (a teammate's turn on the left with their avatar and first
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
@@ -141,7 +150,7 @@ export default function ChatScreen() {
   const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
-  const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  const chatQuestion = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
   const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
@@ -163,6 +172,13 @@ export default function ChatScreen() {
   // The session's running chats and this chat's queue: a send parked while every run slot is taken.
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
+  // Eva's open turn answers in a reply thread: no running state here, a status line opens the thread.
+  const threadTurn = useQuery(
+    api.messages.openThreadTurn,
+    parentId && chat?.project !== undefined ? { parentId } : "skip",
+  );
+  // A thread turn's question is answered in its thread screen, not here.
+  const pending = threadTurn ? null : chatQuestion;
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -187,7 +203,9 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // A project's coordinator chat: cards for the tasks Eva created or gave work to.
+  const chatProject = chat?.project ? { projectId: chat.project.id, repoId: chat.repoId } : undefined;
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chatProject);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
@@ -203,6 +221,8 @@ export default function ChatScreen() {
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
   const requestRecap = useMutation(api.chatRecaps.requestFull);
+  // A project task's chat is the task: its status and PR line under the title, and its prompt before its first run.
+  const projectTask = useProjectTaskRow(chat?.task?.id);
 
   if (chat === undefined || chat === null) {
     return (
@@ -217,27 +237,32 @@ export default function ChatScreen() {
     );
   }
 
-  const working = turn !== undefined && turn !== null;
+  // The web rule: a finished reply ends a stale open turn, so Stop never sticks.
+  const working = isChatTurnExecuting({ status: turn, messages });
   const { canReply } = chat;
-  // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
-  const runningCount = runningChats?.length ?? 0;
-  const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
-  // The web empty state follows the sandbox: awake, waking, going to sleep, or asleep (a send wakes it).
+  // Queued here while the session's run slots are all taken: the server parked the send.
+  const waitingForSlot = waitingForSlotLabel({
+    isExecuting: working,
+    queuedCount: queued?.length ?? 0,
+    runningChatCount: runningChats?.length ?? 0,
+  });
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
-  const emptyTitle = sandboxAwake
-    ? "No messages yet. Start the conversation!"
-    : sandbox.isStopping
-      ? SANDBOX_CHAT_COPY.stoppingTitle
-      : sandbox.isToggling
-        ? SANDBOX_CHAT_COPY.startingTitle
-        : SANDBOX_CHAT_COPY.asleepTitle;
-  // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
-  const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
-  // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
-  const closedReason = chat.session
-    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
-    : undefined;
-  const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
+  const empty = sandboxChatEmptyState({
+    isSandboxActive: sandboxAwake,
+    isSandboxStopping: sandbox.isStopping,
+    isSandboxToggling: sandbox.isToggling,
+    activeTitle: "No messages yet. Start the conversation!",
+  });
+  // Awake, the web line teaches desktop drop, so the phone keeps the title alone.
+  const emptyTitle = empty.title;
+  const emptyDescription = sandboxAwake ? "" : empty.description;
+  // Why a closed chat takes no message: its task or project is archived, or its session's PR merged or closed, or it was archived (the web banner).
+  const closedReason = chat.archived
+    ? archiveCopy(chat.archived).readOnly
+    : chat.session
+      ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+      : undefined;
+  const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
   // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
@@ -258,14 +283,8 @@ export default function ChatScreen() {
   const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
-  const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
   // The web recovery card reads every message, so a later system alert also hides it.
   const newestMessage = messages?.[messages.length - 1];
-  // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
-  const openDiff = simpleView
-    ? undefined
-    : (path: string | undefined) =>
-        router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
     ? {
@@ -342,6 +361,11 @@ export default function ChatScreen() {
       );
     };
   };
+  // Reply threads, in the project coordinator chat only (the web `replyThreads`).
+  const canOpenThread = (message: { isSystemAlert?: boolean; content: string }) =>
+    chat.project !== undefined && message.isSystemAlert !== true && message.content.trim() !== "";
+  const openThread = (rootId: string) =>
+    router.push({ pathname: "/chat/[target]/thread/[rootId]", params: { target, rootId } });
   // The message footer's actions, behind a press and hold (user choice): built when a message is held.
   const menuFor = (messageId: string) => {
     const message = visible.find((entry) => entry._id === messageId);
@@ -362,6 +386,7 @@ export default function ChatScreen() {
         message.role === "assistant" && canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
           : undefined,
+      onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
     });
   };
   // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
@@ -399,6 +424,7 @@ export default function ChatScreen() {
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
+        subtitle={projectTask ? <ProjectTaskFacts task={projectTask} /> : undefined}
         sessionMenu={
           sessionTarget
             ? {
@@ -444,10 +470,17 @@ export default function ChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            messages === undefined ? (
+            // A task or project that has not chatted yet has no chat to load (`parentId`).
+            messages === undefined && parentId !== undefined ? (
               <CenteredSpinner label="Loading messages" />
-            ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+            ) : (messages?.length ?? 0) === 0 ? (
+              projectTask && showsProjectTaskPrompt(projectTask) ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <ProjectTaskPromptCard task={projectTask} repoId={chat.repoId} readOnly={chat.archived !== undefined} />
+                </View>
+              ) : (
+                <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+              )
             ) : null
           }
           ListHeaderComponent={
@@ -464,9 +497,9 @@ export default function ChatScreen() {
                   <Shimmer>Working…</Shimmer>
                 </View>
               ) : null}
-              {waitingForSlot ? (
+              {waitingForSlot !== undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <Shimmer>{`Waiting for a free slot — ${runningCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`}</Shimmer>
+                  <Shimmer>{waitingForSlot}</Shimmer>
                 </View>
               ) : null}
               {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}
@@ -504,9 +537,7 @@ export default function ChatScreen() {
                 }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
-                isLatestReply={message._id === latestReplyId}
                 turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                onOpenDiff={openDiff}
                 menuFor={menuFor}
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
@@ -516,6 +547,7 @@ export default function ChatScreen() {
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
+                onOpenThread={chat.project !== undefined ? openThread : undefined}
               />
             );
           }}
@@ -545,7 +577,6 @@ export default function ChatScreen() {
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
@@ -553,6 +584,13 @@ export default function ChatScreen() {
             }
             panels={
               <>
+                {threadTurn ? (
+                  <ThreadTurnStatus
+                    preview={threadTurn.preview}
+                    hasQuestion={threadTurn.hasQuestion}
+                    onOpen={() => openThread(threadTurn.rootId)}
+                  />
+                ) : null}
                 <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
                 <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
               </>
@@ -608,7 +646,7 @@ function ChatDock({
   messagesNewestFirst: ChatMessage[];
   /** The chat takes a message (`chat.canReply`). */
   canReply: boolean;
-  /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
+  /** Why the chat is closed (an archived task or project, `getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
   /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
@@ -635,10 +673,16 @@ function ChatDock({
   // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
   // before a task or project chats it has none, so this chat's own target stands in.
   const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), (tokenized) => {
-    draft.save(tokenized);
-    if (tokenized) typing.onActivity();
-  });
+  const composer = useMentionComposer(
+    chat.repoId,
+    getAIModelProvider(normalizeAIModel(chat.model)),
+    (tokenized) => {
+      draft.save(tokenized);
+      if (tokenized) typing.onActivity();
+    },
+    // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
+    chat.project !== undefined ? [EVA_MENTION_ITEM] : [],
+  );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
@@ -849,15 +893,14 @@ function ChatMessageRow({
   senderName,
   teammate,
   live,
-  isLatestReply,
   turn,
-  onOpenDiff,
   menuFor,
   cards,
   outputs,
   onPanelReply,
   onRetryTurn,
   onOpenWebChat,
+  onOpenThread,
   after,
   changes,
 }: {
@@ -878,11 +921,9 @@ function ChatMessageRow({
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
   /** The streaming row's entity id while this is the live reply. */
   live: string | undefined;
-  isLatestReply: boolean;
   /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
-  onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
   /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
   menuFor: (messageId: string) => MessageMenu;
   /** The agent's cards placed under this message (`render_ui`, `render_html`). */
@@ -892,6 +933,8 @@ function ChatMessageRow({
   /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
+  /** The coordinator chat: opens a message's reply thread ("N replies"). */
+  onOpenThread?: (rootId: string) => void;
   /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
   /** A reply that changed code: its Changes chip, over the footer. */
@@ -930,7 +973,10 @@ function ChatMessageRow({
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  const replyBody = isUser ? null : live ? (
+  // The coordinator chats like a person: "Eva is typing…" while it works, then the reply only.
+  const replyBody = isUser ? null : live && evaBubble ? (
+    <EvaTypingText />
+  ) : live ? (
     <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
   ) : (
     <AssistantMessage
@@ -938,8 +984,7 @@ function ChatMessageRow({
       content={message.content}
       activityLog={message.activityLog}
       duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-      isLatestAssistantTurn={isLatestReply}
-      onOpenDiff={onOpenDiff}
+      hideTrace={evaBubble}
       media={message.media}
       tabPanels={tabbed ? cardList : undefined}
       failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
@@ -948,6 +993,11 @@ function ChatMessageRow({
   );
   // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
+  // "N replies" in the footer line, always shown (the web footer's thread control).
+  const threadControl =
+    onOpenThread && (message.replyCount ?? 0) > 0 ? (
+      <ThreadSummary rootId={message._id} replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+    ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
@@ -957,8 +1007,9 @@ function ChatMessageRow({
                     lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
-                  className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
-                  style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
+                  // The coordinator chat caps every person's bubble at 70%, as the web; Eva's reply is full width.
+                  className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
@@ -967,7 +1018,7 @@ function ChatMessageRow({
                       {userBody}
                     </TeammateBubble>
                   ) : evaReply ? (
-                    <EvaBubble joinsNext={joinsNext}>{replyBody}</EvaBubble>
+                    <EvaReply>{replyBody}</EvaReply>
                   ) : (
                     // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
                     // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
@@ -982,11 +1033,15 @@ function ChatMessageRow({
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" && !joinsNext ? (
                     <MessageFooter
-                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}
+                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : undefined}
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
+                      leading={threadControl}
                     />
+                  ) : threadControl ? (
+                    // A grouped bubble has no footer: the replies keep their own line.
+                    <View className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
                 {after}

@@ -5,16 +5,9 @@ import { Button, Popover, PopoverContent, PopoverTrigger, cn } from "@vvedantb/u
 import { IconStack2 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import type { StatusTone } from "./prOverviewMeta";
+import { TONE_TEXT_CLASS } from "./prOverviewMeta";
 import { PrRow } from "@/lib/components/pr-menu/PrRow";
 import { stackVerdict, type PrStack } from "@eva/shared";
-
-const VERDICT_TONE_CLASS: Record<StatusTone, string> = {
-  success: "text-emerald-700 dark:text-emerald-300",
-  failure: "text-destructive",
-  pending: "text-muted-foreground",
-  neutral: "text-muted-foreground",
-};
 
 /**
  * The header's stack control: a quiet "2/4" chip that opens the whole stack,
@@ -47,7 +40,7 @@ export function PrStackPopover({ stack }: { stack: PrStack }) {
           <p
             className={cn(
               "text-sm font-medium",
-              VERDICT_TONE_CLASS[verdict.tone],
+              TONE_TEXT_CLASS[verdict.tone],
             )}
           >
             {verdict.label}

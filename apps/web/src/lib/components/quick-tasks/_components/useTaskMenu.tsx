@@ -3,10 +3,7 @@
 import { useState } from "react";
 import type { Id } from "@eva/backend";
 import { toast, useRequestConfirm } from "@vvedantb/ui";
-import {
-  DeleteTaskDialog,
-  useDeleteAgentTask,
-} from "./DeleteTaskDialog";
+import { ArchiveTaskDialog, useTaskArchive } from "./ArchiveTaskDialog";
 import { MoveTaskDialog, useMoveAgentTask } from "./MoveTaskDialog";
 import type {
   GroupedCodebase,
@@ -15,9 +12,9 @@ import type {
 
 type TaskMenuArgs = Omit<
   TaskCardMenuItemsProps,
-  "variant" | "onDelete" | "onMove"
+  "variant" | "onArchive" | "onUnarchive" | "onMove"
 > & {
-  /** After a delete or move takes the task off this page (the task header). */
+  /** After an archive or move takes the task off this page (the task header). */
   onRemoved?: () => void;
 };
 
@@ -39,30 +36,32 @@ function moveTargetName(
 }
 
 /**
- * Props for `TaskCardMenuItems` plus the Delete and Move confirm dialogs. The
+ * Props for `TaskCardMenuItems` plus the Archive and Move confirm dialogs. The
  * dialogs render beside the menu, not in it: Radix unmounts menu content on
  * close. Shared by the task card and the task header.
  */
 export function useTaskMenu({ onRemoved, ...args }: TaskMenuArgs) {
   const { id, title, groupedCodebases } = args;
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
   const { request: requestConfirm } = useRequestConfirm();
-  const deleteTask = useDeleteAgentTask();
+  const { archive, unarchive } = useTaskArchive();
   const moveTask = useMoveAgentTask();
 
   const menuProps = {
     ...args,
-    onDelete: () =>
+    onArchive: () =>
       requestConfirm(
-        () => setShowDeleteConfirm(true),
+        () => setShowArchiveConfirm(true),
         () => {
-          deleteTask({ id }).then(onRemoved, (err: unknown) => {
-            console.error("Failed to delete task:", err);
-            toast.error("Could not delete the task. Try again.");
+          void archive([id]).then((archived) => {
+            if (archived && onRemoved) onRemoved();
           });
         },
       ),
+    onUnarchive: () => {
+      void unarchive([id]);
+    },
     onMove: (targetId: Id<"githubRepos">) =>
       requestConfirm(
         () => setMoveTarget(targetId),
@@ -77,9 +76,9 @@ export function useTaskMenu({ onRemoved, ...args }: TaskMenuArgs) {
 
   const dialogs = (
     <>
-      <DeleteTaskDialog
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
+      <ArchiveTaskDialog
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
         onDone={onRemoved}
         taskId={id}
         taskTitle={title}
@@ -98,6 +97,6 @@ export function useTaskMenu({ onRemoved, ...args }: TaskMenuArgs) {
   return {
     menuProps,
     dialogs,
-    hasDialogOpen: showDeleteConfirm || moveTarget !== null,
+    hasDialogOpen: showArchiveConfirm || moveTarget !== null,
   };
 }

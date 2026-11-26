@@ -25,7 +25,7 @@ The following are in scope:
 
 ## Out of Scope
 
-- Third-party services (Convex, Clerk, Daytona) — report those to the respective vendors
+- Third-party services (Convex, Clerk, Vercel) — report those to the respective vendors
 - Social engineering attacks
 - Denial of service attacks
 

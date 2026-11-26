@@ -61,7 +61,6 @@ type GroupedCodebase = FunctionReturnType<
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
-type DeploymentStatus = "queued" | "building" | "deployed" | "error";
 
 interface QuickTaskCardProps {
   id: Id<"agentTasks">;
@@ -75,7 +74,6 @@ interface QuickTaskCardProps {
   createdByUser?: User;
   createdAt: number;
   hasError?: boolean;
-  deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
   groupedCodebases?: GroupedCodebase[];
   /**
@@ -108,6 +106,8 @@ interface QuickTaskCardProps {
   hasUnread?: boolean;
   /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
   isAwaitingAnswer?: boolean;
+  /** In the Archived list: the menu offers Unarchive. */
+  archived?: boolean;
 }
 
 export function QuickTaskCard({
@@ -121,7 +121,6 @@ export function QuickTaskCard({
   createdByUser,
   createdAt,
   hasError = false,
-  deploymentStatus: _deploymentStatus,
   sandboxStatus,
   groupedCodebases,
   href,
@@ -139,6 +138,7 @@ export function QuickTaskCard({
   isAgentActive = false,
   hasUnread = false,
   isAwaitingAnswer = false,
+  archived = false,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -164,6 +164,7 @@ export function QuickTaskCard({
     users,
     currentUserId,
     projects,
+    archived,
   });
 
   // One cached subscription per repo, shared by every card on the page.

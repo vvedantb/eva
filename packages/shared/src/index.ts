@@ -65,6 +65,13 @@ export {
   type SlashItem,
 } from "./mentionComposer";
 export {
+  chatMessageRoute,
+  EVA_MENTION_ID,
+  EVA_MENTION_ITEM,
+  mentionsEva,
+  type ChatMessageRoute,
+} from "./chatMessageRoute";
+export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,
   sandboxPausedAlertText,
@@ -86,6 +93,7 @@ export {
   DEFAULT_PREVIEW_PORT,
   DESKTOP_PORT,
   EDITOR_PORT,
+  previewProxyPort,
 } from "./sandboxPorts";
 export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
@@ -117,6 +125,7 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export { titleFromPrompt } from "./promptTitle";
 export {
   composerTraitFields,
   hasComposerTraitUpdate,
@@ -141,6 +150,13 @@ export {
   chatStreamingEntityId,
   findStreamingTargetMessage,
 } from "./chatStreaming";
+export { isChatTurnExecuting } from "./chatTurnExecuting";
+export {
+  threadAnswerContent,
+  threadPendingQuestion,
+  threadRootPreview,
+  threadTurnStatusText,
+} from "./replyThreads";
 export {
   findBubbleGroups,
   firstNameByUserId,
@@ -150,10 +166,12 @@ export {
   type ChatUserAttribution,
 } from "./teammateMessages";
 export {
+  combineRepoPrStates,
   isLivePrState,
   orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestRepoLabel,
   pullRequestsMenuLabel,
   type LivePrState,
   type PrState,
@@ -167,15 +185,27 @@ export {
 } from "./sessionMenu";
 export {
   draftCountAfterRemove,
+  draftPrompt,
   draftsAfterRemove,
-  visibleDrafts,
 } from "./draftVisibility";
+export {
+  ARCHIVE_LABEL,
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
+  UNARCHIVE_LABEL,
+  archiveCopy,
+  isArchiveListMode,
+  type ArchivableKind,
+  type ArchiveListMode,
+} from "./archive";
 export {
   chatSourceKindLabel,
   chatSourceLabel,
   chatSourceShortLabel,
+  ownerLabel,
   type ChatSourceKind,
   type ChatSourceLabelFields,
+  type OwnerLabelKind,
 } from "./chatSourceLabel";
 export { standupEntryHeading, standupEntryTime } from "./standup";
 export {
@@ -232,19 +262,11 @@ export {
   type NotificationTone,
 } from "./notificationAppearance";
 export {
-  collectChangedFiles,
-  groupChangedFilesByRepo,
-  selectChangedFilePreview,
-  shouldAutoExpandChangedFiles,
-  shouldPreviewChangedFiles,
   toRepoRelativePath,
   toSandboxFilePath,
   workspaceRepoName,
   workspaceRootPath,
-  type ChangedFile,
-  type ChangedFileGroup,
-  type ChangedFileStep,
-} from "./changedFiles";
+} from "./sandboxFilePath";
 export {
   DIFF_FILE_KINDS,
   applyIgnoreWhitespace,
@@ -277,7 +299,7 @@ export {
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
-  parseGithubPrLink,
+  parseGithubItemLink,
   prNumberFromGithubUrl,
   prReviewers,
   revertSessionRequest,
@@ -288,7 +310,7 @@ export {
   stackVerdict,
   verdictSuccessTitle,
   type CheckCounts,
-  type GithubPrLink,
+  type GithubItemLink,
   type MergeMethod,
   type PrBlocker,
   type PrCheck,
@@ -317,7 +339,12 @@ export {
   type TimelineEvent,
   type TimelineRow,
 } from "./prTimeline";
-export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
+  sandboxComposerState,
+  waitingForSlotLabel,
+} from "./sandboxComposer";
 export {
   QUEUE_PANEL_LABEL,
   moveQueuedId,
@@ -426,6 +453,7 @@ export {
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
 export {
   PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  sandboxAutoWakeEligible,
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,
@@ -434,5 +462,7 @@ export {
   collectQuestionSteps,
   getSessionReadOnlyMessage,
   isSandboxLifecycleAlert,
+  splitStepsAtQuestions,
   visibleChatMessages,
 } from "./chatRows";
+export type { QuestionSplitChunk } from "./chatRows";

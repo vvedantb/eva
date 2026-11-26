@@ -16,6 +16,9 @@
  * `text-muted-foreground` stay on the package's grey text. */
 @theme inline {
   --color-muted: var(--surface-secondary);
+  --color-mention: var(--mention);
+  --color-mention-foreground: var(--mention-foreground);
+  --color-mention-self: var(--mention-self);
   --text-color-muted: var(--muted);
 }
 
@@ -246,6 +249,11 @@
 
 @utility landing-atmosphere {
   background-color: var(--background);
+  @apply eva-gradient;
+}
+
+/* Eva's brand wash: accent from the top, chart tones at the sides. */
+@utility eva-gradient {
   background-image:
     radial-gradient(
       ellipse 70% 50% at 50% -8%,
@@ -280,6 +288,59 @@
         color-mix(in oklab, var(--chart-3) 5%, transparent),
         transparent 60%
       );
+  }
+}
+
+/* Composer aurora: Eva's brand purple and blue plus a teal, as soft blobs.
+ * Each blob drifts on its own path and pace (`--eva-blob-duration`), so they
+ * move against each other. Transform
+ * only, so it stays on the compositor. "Disable page animations" stops it. */
+@utility eva-blob {
+  position: absolute;
+  width: 60%;
+  aspect-ratio: 1;
+  background-image: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--eva-blob-tone) 22%, transparent),
+    transparent
+  );
+  animation: var(--eva-blob-path) var(--eva-blob-duration, 7s) ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes eva-blob-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-22%, 18%, 0) scale(1.15);
+  }
+  to {
+    transform: translate3d(-8%, 30%, 0) scale(0.9);
+  }
+}
+
+@keyframes eva-blob-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(25%, -15%, 0) scale(0.9);
+  }
+  to {
+    transform: translate3d(12%, 20%, 0) scale(1.05);
+  }
+}
+
+@keyframes eva-blob-c {
+  from {
+    transform: translate3d(-20%, 0, 0) scale(0.95);
+  }
+  50% {
+    transform: translate3d(15%, 12%, 0) scale(1.2);
+  }
+  to {
+    transform: translate3d(5%, -10%, 0) scale(1);
   }
 }
 
@@ -419,12 +480,21 @@
      * for a chromatic accent. The package's `--accent` is the brand colour. */
     --accent-soft: var(--surface-secondary);
     --accent-soft-foreground: var(--foreground);
+    /* @mention chips: a fixed blue, readable on any bubble whatever the
+     * accent (a neutral accent-soft matched a teammate bubble's grey).
+     * `--mention-self` marks a mention of the reader. Phone: EVA_THEME. */
+    --mention: rgb(37 99 235 / 0.12);
+    --mention-foreground: rgb(29 78 216);
+    --mention-self: rgb(37 99 235 / 0.22);
     --chart-1: var(--accent);
     --scrollbar-base: var(--muted);
     --chart-2: rgb(56 189 248);
     --chart-3: rgb(129 140 248);
     --chart-4: rgb(167 139 250);
     --chart-5: rgb(6 182 212);
+    /* Eva's brand pair: the purple and blue of the logo glow. */
+    --eva-brand-purple: #8b3fb8;
+    --eva-brand-blue: #3b7dd8;
     /* Muted categorical ramp for hash-assigned identity colour (tab groups,
      * repo tiles, avatars). Not for status: status uses --status-*. */
     --cat-1: rgb(72 106 168);
@@ -504,6 +574,9 @@
   }
 
   .dark {
+    --mention: rgb(96 165 250 / 0.18);
+    --mention-foreground: rgb(147 197 253);
+    --mention-self: rgb(96 165 250 / 0.3);
     --cat-1: rgb(138 165 214);
     --cat-2: rgb(170 152 214);
     --cat-3: rgb(120 176 172);
@@ -794,37 +867,38 @@
   }
 
   /*
-   * Experimental "Disable page animations" (`html[data-page-motion=off]`).
-   * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
-   * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
-   * (loading UI), `.beam*` (composer beam), LoadingState WAAPI
-   * (sessions sidebar Drive loader).
+   * Experimental "Disable page animations" (`html[data-page-motion=off]`):
+   * every CSS animation and transition is instant. Durations go to 0s (not
+   * `animation: none`) so `animationend` / `transitionend` still fire and
+   * Radix Presence still unmounts. Only loading and live indicators keep
+   * running — spinners (`.animate-spin`, the BorderBeam `.beam::before`),
+   * pulses (`.animate-pulse` / `-ping` / `-bounce`, `.landing-pulse-dot`,
+   * `.landing-preview-pulse`, `.animate-indeterminate`) and shimmers
+   * (`.shimmer-*`) — so a load never looks frozen. LoadingState's pixel grid
+   * runs on WAAPI, so this rule never reaches it. Motion (JS) is made
+   * instant in `PageMotionProvider.tsx`.
    */
-  html[data-page-motion="off"] .animate-in,
-  html[data-page-motion="off"] .animate-out {
+  html[data-page-motion="off"]
+    *:not(
+      .animate-spin,
+      .animate-pulse,
+      .animate-ping,
+      .animate-bounce,
+      .animate-indeterminate,
+      .landing-pulse-dot,
+      .landing-preview-pulse,
+      .shimmer-text,
+      .shimmer-overlay,
+      .shimmer-band,
+      .shimmer-copy
+    ),
+  html[data-page-motion="off"] *:not(.beam)::before,
+  html[data-page-motion="off"] *::after {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
-  }
-
-  html[data-page-motion="off"] .t-heatmap-cell,
-  html[data-page-motion="off"] .t-accordion-content,
-  html[data-page-motion="off"] .t-collapsible-content,
-  html[data-page-motion="off"] .t-anchor-flash,
-  html[data-page-motion="off"] [data-tab-pane] {
-    animation: none !important;
-  }
-
-  html[data-page-motion="off"] .t-modal,
-  html[data-page-motion="off"] .t-modal.is-closing,
-  html[data-page-motion="off"] .t-modal[data-state="closed"] {
+    animation-iteration-count: 1 !important;
     transition-duration: 0s !important;
-    animation: none !important;
-  }
-
-  html[data-page-motion="off"] .t-tabs-pill,
-  html[data-page-motion="off"] .score-bar-fill,
-  html[data-page-motion="off"] .project-progress-fill {
-    transition-duration: 0s !important;
+    transition-delay: 0s !important;
   }
 
   /*
@@ -1055,13 +1129,10 @@ html[data-blur-pid] [data-pii] {
   background-color: var(--segment);
 }
 /* The package side panel's arrow to the active rail tab (`SidePanelTabs.Frame`):
- * slides with the tab pill's timing; page motion off snaps it, as the pill.
- * eva does not import the package `tabs.css`, so the rule lives here. */
+ * slides with the tab pill's timing (page motion off snaps it via the global
+ * rule). eva does not import the package `tabs.css`, so the rule lives here. */
 .t-side-panel-arrow {
   transition: transform var(--tabs-dur) var(--tabs-ease);
-}
-html[data-page-motion="off"] .t-side-panel-arrow {
-  transition-duration: 0s;
 }
 /* A dock pop's neighbour pane slides with it (package `slideNextResize`);
  * only set for that one toggle, so a drag stays instant. eva does not import
@@ -1784,6 +1855,155 @@ html[data-page-hidden] .ave-face *,
   }
 }
 
+/* Presentation decks: on a light slide, Tailwind's white becomes dark ink, so
+   slides written for a dark stage (`text-white/70`, `bg-white/[0.05]`) read on
+   a light one. App windows inside a slide keep `.dark` and real white. See
+   `DeckThemeScope`. */
+.deck-ink-light {
+  --color-white: #18181b;
+}
+.deck-ink-light .dark {
+  --color-white: #fff;
+}
+/* App windows on a light slide: `DeckThemeScope` sets `data-theme="light"`,
+   so they get the package's light tokens whatever the viewer's theme. */
+.deck-app-light {
+  color: var(--foreground);
+}
+/* Solid surfaces slides paint with `var(--deck-*, <dark>)`: the dark value is
+   the fallback, and a light slide supplies its own. */
+.deck-ink-light {
+  --deck-inset: #ffffff;
+  --deck-raised: #ffffff;
+  --deck-chip: #ffffff;
+  --deck-box: #faf9fc;
+  --deck-scrim: rgb(244 244 245 / 0.7);
+  /* Text on a solid ink fill (a `bg-white/70` bar reads as dark here). */
+  --deck-on-ink: rgb(255 255 255 / 0.92);
+}
+
+/* Card and chip fills on a light slide are solid: the same tint mixed into
+   white, so a glow behind a card stays behind it rather than showing through.
+   JS fills use `useSurface()`. */
+.deck-ink-light .bg-white\/\[0\.02\] {
+  background-color: color-mix(in srgb, #18181b 2%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.03\] {
+  background-color: color-mix(in srgb, #18181b 3%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.035\] {
+  background-color: color-mix(in srgb, #18181b 3.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.04\] {
+  background-color: color-mix(in srgb, #18181b 4%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.045\] {
+  background-color: color-mix(in srgb, #18181b 4.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.05\] {
+  background-color: color-mix(in srgb, #18181b 5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.06\] {
+  background-color: color-mix(in srgb, #18181b 6%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.07\] {
+  background-color: color-mix(in srgb, #18181b 7%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.08\] {
+  background-color: color-mix(in srgb, #18181b 8%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.09\] {
+  background-color: color-mix(in srgb, #18181b 9%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.1\] {
+  background-color: color-mix(in srgb, #18181b 10%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.12\] {
+  background-color: color-mix(in srgb, #18181b 12%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.13\] {
+  background-color: color-mix(in srgb, #18181b 13%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.14\] {
+  background-color: color-mix(in srgb, #18181b 14%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.16\] {
+  background-color: color-mix(in srgb, #18181b 16%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.18\] {
+  background-color: color-mix(in srgb, #18181b 18%, #fff);
+}
+
+/* Bee's deck (see `BRAND_CLASS` in deckTone.ts): honey accents and Bee's own
+   typeface, Instrument Sans (SIL OFL 1.1, public/fonts/instrument-sans). */
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/instrument-sans/instrument-sans-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/instrument-sans/instrument-sans-latin-ext.woff2")
+    format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+.deck-brand-bee {
+  /* Honey from Bee's logo, deep enough to read as text on cream. */
+  --deck-brand-a: #f2a516;
+  --deck-brand-b: #c27406;
+  --deck-brand-c: #ffd75e;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+/* Warm cream instead of zinc, and Bee's dark ink. */
+.deck-stage-bee {
+  background-color: #fbf6ec;
+  color: #2a1e0c;
+}
+.deck-stage-bee .deck-ink-light {
+  --color-white: #2a1e0c;
+  --deck-box: #fffaf0;
+}
+/* A section inside a deck takes its project's colours (`DeckSlide.section`). */
+.deck-section-carepulse {
+  /* CarePulse's own blues, deep enough to read on the light stage. */
+  --deck-brand-a: #0c60b5;
+  --deck-brand-b: #4c9deb;
+  --deck-brand-c: #1373cd;
+}
+.deck-section-vmem {
+  --deck-brand-a: #fafafa;
+  --deck-brand-b: #a1a1aa;
+  --deck-brand-c: #52525b;
+}
+.deck-section-flowtape {
+  --deck-brand-a: #2dd4bf;
+  --deck-brand-b: #0d9488;
+  --deck-brand-c: #115e59;
+}
+.deck-section-redline {
+  /* Redline's own red, from its favicon. */
+  --deck-brand-a: #fb7185;
+  --deck-brand-b: #e11d48;
+  --deck-brand-c: #9f1239;
+}
+.deck-section-bee {
+  /* Bee's honey, on the dark stage. */
+  --deck-brand-a: #ffd75e;
+  --deck-brand-b: #f2a516;
+  --deck-brand-c: #c27406;
+}
 /* ───────────────────────────────────────────────────────────────────
  * No zoom on focus. iOS Safari zooms the page when a field under 16px gets
  * focus, and does not zoom back out. The composer (`text-sm`) and about

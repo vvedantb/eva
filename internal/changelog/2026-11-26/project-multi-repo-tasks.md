@@ -1,0 +1,10 @@
+# Projects: tasks across several repos
+
+- The coordinator's `create_task` / `create_tasks_batch` take `linkedRepoNames` (resolved like `repoName`). Every repo is access-checked before anything is written; the home repo or a repeated repo is refused. Stored as `agentTasks.linkedRepoIds` (schema widening only).
+- A task's work session gets one `sessionRepos` row per linked repo (`insertWorkSession`), through the same insert as a multi-repo session (`_sessions/repos.ts:insertSessionRepos`).
+- Task runs now clone linked repos after the sandbox starts, give the agent the linked-repo env and prompt block, and push each linked repo and open its draft PR after the run. Task chat turns publish linked repos too. The clone and publish steps are one helper for sessions and tasks (`_sessions/linkedRepoSteps.ts`).
+- A linked repo's draft PR on a task carries the task description (with its merge order), links the task in Eva and cross-links the task's own PR.
+- The task's `prState` combines one state per repo (`@eva/shared` `combineRepoPrStates`): open while any PR is open, merged only once all merged, else closed. The webhook moves the task to done only then. Cancel, un-cancel and ready/draft apply to the linked PRs as well.
+- Coordinator prompt: one task with `linkedRepoNames` for a change that must land in several repos together; unrelated work stays one repo per task; write the merge order in the description. Child task prompt names the per-repo PRs and the merge order.
+- Web and phone: the task's PR list (Review tab, "Pull requests" sheet) shows each linked repo's PR, and every row names its repo once the list spans several repos. The project Tasks list shows one PR row per repo, labelled with the repo. Web task details show the session repo badges. Single-repo tasks look as before.
+- A multi-repo task's own PR body lists its linked repos' PRs in a marked "Related pull requests" block (`prBody.ts:upsertRelatedPrsBlock`). The task PR body build and refresh include it, and each new linked PR patches the block into the task PR.

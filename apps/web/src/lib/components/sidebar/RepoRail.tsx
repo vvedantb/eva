@@ -82,8 +82,12 @@ const CUTOUT_COLOR = "var(--segment)";
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
 
-function InboxUnreadBadge() {
-  return <UnreadCornerBadge count={useQuery(api.notifications.countUnread)} />;
+/**
+ * What waits for you to act (Inbox → Needs you), not unread notifications:
+ * those are often only for information. Shares the Needs you view's query.
+ */
+function InboxNeedsYouBadge() {
+  return <UnreadCornerBadge count={useQuery(api.needsYou.list, {})?.length} />;
 }
 
 function AutomationsUnreadBadge() {
@@ -223,7 +227,7 @@ function RepoRailView({
                 className="shrink-0"
               />
               <ErrorBoundary>
-                <InboxUnreadBadge />
+                <InboxNeedsYouBadge />
               </ErrorBoundary>
             </Link>
           </Sidebar.RailItem>

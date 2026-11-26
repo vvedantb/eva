@@ -5,7 +5,9 @@ import {
   type ExpoPushListTokensRef,
   type ExpoPushRemoveTokensRef,
   type ExpoPushSendRef,
+  type PushSendParams,
 } from "@vvedantb/server";
+import { resolveNotificationPrefs } from "@eva/shared/notificationRouting";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -20,26 +22,37 @@ import { getCurrentUserId } from "./_auth/currentUser";
 /**
  * Phone push for the Eva mobile app (apps/mobile), sent through the Expo Push
  * API by `@vvedantb/server`. Only two events push: an agent asking a blocking
- * question, and the notification types in `PUSH_NOTIFICATION_TYPES` (see
- * notifications.ts). Pass the chat id the mobile route opens as
- * `data: { target }`. The `pushTokens` table is defined in schema.ts.
+ * question, and the notifications the routing table pushes
+ * (`@eva/shared/notificationRouting`, read by notifications.ts). Pass the
+ * chat id the mobile route opens as `data: { target }`. The `pushTokens`
+ * table is defined in schema.ts. Every push goes through `schedulePush`
+ * below, which honours the person's Push setting
+ * (`users.notificationPrefs.push`).
  */
-export const { register, unregister, listTokensForUser, removeTokens, send, checkReceipts, schedulePush } =
-  createExpoPushFunctions({
-    v,
-    userId: v.id("users"),
-    mutation,
-    internalQuery,
-    internalMutation,
-    internalAction,
-    requireCurrentUserId: async (ctx: MutationCtx) => {
-      const userId = await getCurrentUserId(ctx);
-      if (!userId) throw new Error("Not authenticated");
-      return userId;
-    },
-    // Keep the return annotations: without them `internal` refers to itself (TS7022).
-    listTokensRef: (): ExpoPushListTokensRef<Id<"users">> => internal.push.listTokensForUser,
-    removeTokensRef: (): ExpoPushRemoveTokensRef => internal.push.removeTokens,
-    sendRef: (): ExpoPushSendRef<Id<"users">> => internal.push.send,
-    checkReceiptsRef: (): ExpoPushCheckReceiptsRef => internal.push.checkReceipts,
-  });
+const expoPush = createExpoPushFunctions({
+  v,
+  userId: v.id("users"),
+  mutation,
+  internalQuery,
+  internalMutation,
+  internalAction,
+  requireCurrentUserId: async (ctx: MutationCtx) => {
+    const userId = await getCurrentUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    return userId;
+  },
+  // Keep the return annotations: without them `internal` refers to itself (TS7022).
+  listTokensRef: (): ExpoPushListTokensRef<Id<"users">> => internal.push.listTokensForUser,
+  removeTokensRef: (): ExpoPushRemoveTokensRef => internal.push.removeTokens,
+  sendRef: (): ExpoPushSendRef<Id<"users">> => internal.push.send,
+  checkReceiptsRef: (): ExpoPushCheckReceiptsRef => internal.push.checkReceipts,
+});
+
+export const { register, unregister, listTokensForUser, removeTokens, send, checkReceipts } = expoPush;
+
+/** Queues a push to every device of `params.userId`, unless they turned push off. */
+export async function schedulePush(ctx: MutationCtx, params: PushSendParams<Id<"users">>): Promise<void> {
+  const user = await ctx.db.get(params.userId);
+  if (!resolveNotificationPrefs(user?.notificationPrefs).push) return;
+  await expoPush.schedulePush(ctx, params);
+}

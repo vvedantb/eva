@@ -54,6 +54,7 @@ import { useUpdateProject } from "./useUpdateProject";
 /**
  * Project fields as a single column, one row per field — the Overview tab's
  * right-hand column. Mirrors the task Properties column (StatusFieldsSection).
+ * An archived project's fields are disabled.
  */
 export function ProjectFieldsPanel({
   projectId,
@@ -83,6 +84,7 @@ export function ProjectFieldsPanel({
 
   if (!project) return null;
 
+  const readOnly = project.archivedAt !== undefined;
   const isOwner =
     currentUserId !== undefined && currentUserId === project.userId;
   const creator = (users ?? []).find((user) => user._id === project.userId);
@@ -116,10 +118,12 @@ export function ProjectFieldsPanel({
               updateProject({ id: projectId, priority: p ?? null })
             }
             className={FIELD_TEXT_CLASS}
+            disabled={readOnly}
           />
         </div>
 
         <Select
+          disabled={readOnly}
           value={project.projectLead ?? "none"}
           onValueChange={(val) =>
             updateProject({
@@ -163,6 +167,7 @@ export function ProjectFieldsPanel({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              disabled={readOnly}
               className={`${FIELD_ROW_CLASS} w-full gap-1.5 ${FIELD_TEXT_CLASS} ${!project.members?.length ? "text-muted-foreground" : ""}`}
             >
               <IconUsers size={14} className="text-muted-foreground shrink-0" />
@@ -217,6 +222,7 @@ export function ProjectFieldsPanel({
                   providerAccountId: resolveAccountId(nextAccountId) ?? null,
                 });
               }}
+              disabled={readOnly}
               className={`px-0 ${FIELD_TEXT_CLASS}`}
             />
           </div>
@@ -252,6 +258,7 @@ export function ProjectFieldsPanel({
           onEndChange={(date) =>
             updateProject({ id: projectId, projectEndDate: date ?? undefined })
           }
+          disabled={readOnly}
         />
       </FieldsSection>
 
@@ -260,6 +267,7 @@ export function ProjectFieldsPanel({
           tags={project.tags}
           onUpdate={(tags) => updateProject({ id: projectId, tags })}
           className={`${FIELD_ROW_CLASS} h-10 w-full`}
+          disabled={readOnly}
         />
       </FieldsSection>
 

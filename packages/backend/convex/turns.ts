@@ -19,12 +19,7 @@ import {
   type ChatSurfaceAdapter,
   type ChatAlert,
 } from "./_chat/surfaceAdapters";
-import {
-  tearDownStaleDocWorkflow,
-  tearDownStaleEvaluationWorkflow,
-} from "./workflowWatchdog";
-import { tearDownStaleAutomationRun } from "./_automations/runs";
-import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
+import { tearDownStaleAgentJob } from "./_agentJobs/slot";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
 import {
@@ -53,7 +48,6 @@ import {
 import {
   chatTurnEntityIdValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
@@ -288,8 +282,7 @@ export const markLaunching = internalMutation({
 export const openAgentTurnLease = internalMutation({
   args: {
     entityId: turnEntityIdValidator,
-    lane: v.optional(turnLaneValidator),
-    /** The session whose sandbox the agent holds (a project interview's). */
+    /** The session whose sandbox the agent holds. */
     sessionId: v.optional(v.id("sessions")),
     streamingEntityId: v.string(),
     model: v.optional(v.string()),
@@ -301,7 +294,6 @@ export const openAgentTurnLease = internalMutation({
   handler: async (ctx, args) => {
     const turnId = await openTurn(ctx, {
       entityId: args.entityId,
-      lane: args.lane,
       sessionId: args.sessionId,
       streamingEntityId: args.streamingEntityId,
       model: normalizeAIModel(args.model),
@@ -465,9 +457,8 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 }
 
 /**
- * Finalises one expired agent turn (a quick-task run or a one-shot agent)
- * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
+ * Finalises one expired one-shot agent turn through the same teardown the
+ * `TURN_BACKSTOP_MS` backstop uses (`tearDownStaleAgentJob`).
  */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,
@@ -484,42 +475,8 @@ async function finalizeExpiredAgentTurn(
   console.log(
     `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
   );
-  const workflowId = turn.workflowId;
-  switch (owner.kind) {
-    case "run":
-      await finalizeStalledRun(ctx, owner.id, {
-        ...stalledRunStop({
-          state: turn.state,
-          hasSandbox: turn.sandboxId !== undefined,
-          staleSeconds,
-        }),
-        sandboxId: turn.sandboxId,
-      });
-      break;
-    case "automation":
-      if (workflowId !== undefined) {
-        await tearDownStaleAutomationRun(
-          ctx,
-          owner.id,
-          workflowId,
-          { sandboxId: turn.sandboxId, repoId: turn.repoId },
-          error,
-        );
-      }
-      break;
-    case "doc":
-      if (workflowId !== undefined) {
-        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "evaluation":
-      if (workflowId !== undefined) {
-        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "interview":
-      // The project interview is gone; a leftover turn only closes.
-      break;
+  if (turn.workflowId !== undefined) {
+    await tearDownStaleAgentJob(ctx, owner, turn.workflowId, error);
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });

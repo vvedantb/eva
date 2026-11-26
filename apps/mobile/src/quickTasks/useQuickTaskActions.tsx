@@ -1,14 +1,15 @@
 import { api, type Id } from "@eva/backend";
-import { repoBasePath } from "@eva/shared";
+import { ARCHIVE_LABEL, UNARCHIVE_LABEL, archiveCopy, repoBasePath } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
+  IconArchive,
+  IconArchiveOff,
   IconArrowMoveRight,
   IconClipboard,
   IconFolder,
   IconLink,
   IconPlayerPlay,
   IconSquareCheck,
-  IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react-native";
 import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
@@ -27,7 +28,7 @@ import { useScheme } from "@/ui/theme";
 /** What the menu reads of a task: a `getAllTasks` row or an `agentTasks.listByProject` row. */
 type QuickTask = Pick<
   FunctionReturnType<typeof api.agentTasks.getAllTasks>[number],
-  "_id" | "assignedTo" | "numId" | "projectId" | "status" | "title"
+  "_id" | "archivedAt" | "assignedTo" | "numId" | "projectId" | "status" | "title"
 >;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -45,43 +46,49 @@ function taskWebPath(repo: Repo, task: QuickTask): string {
  * press opens it as a bottom sheet (`openSheet`), with a page per web
  * submenu. Run Eva (outside projects; a first run from To Do, or In
  * Progress), Status, Code Reviewer, Project and Move to codebase, then Copy
- * title, Copy task link and Delete. Move and Delete ask first, with the web
- * dialogs; the rest act at once. Writes are the web mutations. Render
- * `dialogs` once. Not here from the web menu: Open in new tab, the PR
+ * title, Copy task link and Archive. Move and Archive ask first, with the web
+ * dialogs; the rest act at once. An archived task offers only Select, the
+ * copies and Unarchive; a task of an archived project (`readOnly`) only the
+ * copies. Writes are the web mutations. Render `dialogs` once. Not here from the web menu: Open in new tab, the PR
  * submenus and Model.
  */
 export function useQuickTaskActions({
   repo,
   users,
   projects,
-  onDeleted,
+  onArchived,
   extraRows,
   onSelect,
+  readOnly = false,
 }: {
   /** Rows that lead the menu (the overview's sandbox and git actions); given the menu's `close`. */
   extraRows?: (close: () => void) => ReactNode;
   repo: Repo;
   users: User[] | undefined;
   projects: Project[] | undefined;
-  /** After a delete: the overview leaves the deleted task. */
-  onDeleted?: () => void;
+  /** After an archive: the overview leaves the archived task. */
+  onArchived?: () => void;
   /** The list's select mode, starting with this task ticked: "Select" leads the menu when set. */
   onSelect?: (task: QuickTask) => void;
+  /** The task's project is archived: the task is read-only, with no edits. */
+  readOnly?: boolean;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const [target, setTarget] = useState<QuickTask | null>(null);
   const [page, setPage] = useState<Page>("root");
-  const [deleteTarget, setDeleteTarget] = useState<QuickTask | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<QuickTask | null>(null);
   const [moveTarget, setMoveTarget] = useState<{ task: QuickTask; repoId: Id<"githubRepos">; name: string } | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const codebases = useQuery(api.githubRepos.listGroupedByCodebase, {});
-  // The runs decide whether Run Eva is on; only the open menu's task needs them, as on the web.
-  const runs = useQuery(api.agentRuns.listByTask, target ? { taskId: target._id } : "skip");
+  // The run facts decide whether Run Eva is on; only the open menu's task needs them, as on the web.
+  const runFacts = useQuery(api.agentTasks.getRunFacts, target ? { taskId: target._id } : "skip");
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const deleteTask = useMutation(api.agentTasks.remove);
+  const archiveTask = useMutation(api.agentTasks.archive);
+  const unarchiveTask = useMutation(api.agentTasks.unarchive);
+  const copy = archiveCopy("task");
 
   const close = () => {
     setTarget(null);
@@ -90,6 +97,25 @@ export function useQuickTaskActions({
   const act = (run: () => Promise<unknown>, failure: string) => {
     close();
     run().catch(() => toast.error(failure));
+  };
+  const unarchive = (taskId: Id<"agentTasks">) => {
+    unarchiveTask({ id: taskId }).then(
+      () => toast.success(copy.unarchived, { id: "task-unarchive" }),
+      () => toast.error(copy.unarchiveFailed, { id: "task-unarchive" }),
+    );
+  };
+  // The session archive toast's shape: what happened, and Undo.
+  const archive = (taskId: Id<"agentTasks">) => {
+    archiveTask({ id: taskId }).then(
+      () => {
+        toast.success(copy.archived, {
+          id: "task-archive",
+          action: { label: "Undo", onPress: () => unarchive(taskId) },
+        });
+        onArchived?.();
+      },
+      () => toast.error(copy.archiveFailed, { id: "task-archive" }),
+    );
   };
 
   // Web: every other app, each codebase's apps by name (`codebase/app` in a monorepo).
@@ -103,11 +129,65 @@ export function useQuickTaskActions({
   );
   const reviewers = (users ?? []).filter((user) => user.role === "dev");
 
+  const copyRows = (task: QuickTask) => (
+    <>
+      <SheetRow
+        icon={IconClipboard}
+        title="Copy title"
+        onPress={() => {
+          close();
+          void Clipboard.setStringAsync(task.title);
+        }}
+      />
+      <SheetRow
+        icon={IconLink}
+        title="Copy task link"
+        onPress={() => {
+          close();
+          void Clipboard.setStringAsync(`${WEB_URL}${taskWebPath(repo, task)}`);
+        }}
+      />
+    </>
+  );
+
   const body = (task: QuickTask) => {
     // Web `showRunButton`: To Do only offers a first run.
-    const canRun = (task.status === "todo" && runs !== undefined && runs.length === 0) || task.status === "in_progress";
+    const canRun = (task.status === "todo" && runFacts?.hasRuns === false) || task.status === "in_progress";
     switch (page) {
       case "root":
+        if (task.archivedAt !== undefined || readOnly) {
+          return (
+            <>
+              {onSelect ? (
+                <>
+                  <SheetRow
+                    icon={IconSquareCheck}
+                    title="Select"
+                    onPress={() => {
+                      close();
+                      onSelect(task);
+                    }}
+                  />
+                  <MenuDivider />
+                </>
+              ) : null}
+              {copyRows(task)}
+              {task.archivedAt !== undefined ? (
+                <>
+                  <MenuDivider />
+                  <SheetRow
+                    icon={IconArchiveOff}
+                    title={UNARCHIVE_LABEL}
+                    onPress={() => {
+                      close();
+                      unarchive(task._id);
+                    }}
+                  />
+                </>
+              ) : null}
+            </>
+          );
+        }
         return (
           <>
             {extraRows?.(close)}
@@ -142,30 +222,14 @@ export function useQuickTaskActions({
               <SubmenuRow icon={IconArrowMoveRight} title="Move to codebase" onPress={() => setPage("move")} />
             ) : null}
             <MenuDivider />
-            <SheetRow
-              icon={IconClipboard}
-              title="Copy title"
-              onPress={() => {
-                close();
-                void Clipboard.setStringAsync(task.title);
-              }}
-            />
-            <SheetRow
-              icon={IconLink}
-              title="Copy task link"
-              onPress={() => {
-                close();
-                void Clipboard.setStringAsync(`${WEB_URL}${taskWebPath(repo, task)}`);
-              }}
-            />
+            {copyRows(task)}
             <MenuDivider />
             <SheetRow
-              icon={IconTrash}
-              title="Delete"
-              danger
+              icon={IconArchive}
+              title={ARCHIVE_LABEL}
               onPress={() => {
                 close();
-                setDeleteTarget(task);
+                setArchiveTarget(task);
               }}
             />
           </>
@@ -259,25 +323,17 @@ export function useQuickTaskActions({
       >
         {target ? body(target) : null}
       </MenuSheet>
-      {/* The web `DeleteTaskDialog`. */}
+      {/* The web `ArchiveTaskDialog`. */}
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={archiveTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) setArchiveTarget(null);
         }}
-        title="Delete Task"
-        description={
-          <>
-            Are you sure you want to delete <Text className={strongClass} style={strong}>{deleteTarget?.title}</Text>? This action cannot be undone.
-          </>
-        }
-        confirmLabel="Delete"
-        variant="destructive"
+        title={copy.confirmTitle}
+        description={<Text className={strongClass} style={strong}>{archiveTarget?.title}</Text>}
+        confirmLabel={ARCHIVE_LABEL}
         onConfirm={() => {
-          if (!deleteTarget) return;
-          deleteTask({ id: deleteTarget._id })
-            .then(() => onDeleted?.())
-            .catch(() => toast.error("Could not delete the task. Try again."));
+          if (archiveTarget) archive(archiveTarget._id);
         }}
       />
       {/* The web `MoveTaskDialog`. */}
@@ -310,6 +366,8 @@ export function useQuickTaskActions({
       setPage("root");
       setTarget(task);
     },
+    /** Unarchive, with its toast: the archived page's `ArchivedBar`. */
+    unarchive,
     dialogs,
   };
 }

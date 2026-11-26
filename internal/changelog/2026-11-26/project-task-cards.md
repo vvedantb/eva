@@ -1,0 +1,6 @@
+# Projects: task cards under Eva's replies
+
+- When Eva creates a task (`create_task`, `create_tasks_batch`), starts one (`start_task`), adds work to one (`merge_task_into`, `send_chat_message`) or retries one (`retry_task`), a card for that task shows under her reply: the Tasks list's status icon, "#N title" and the task's stage (To do, Working, In review, Done, Cancelled). A click opens the task's chat tab; on the phone a tap opens the task's chat.
+- Created tasks come from `projectTaskBatches.messageId`, which was written but never shown, so tasks Eva created before this change get cards too. The other actions write `projectChatTaskLinks` rows (new table, one per task and turn), anchored to the turn by the same rule as artifacts.
+- `projects.listChatTaskCards` returns only the anchors. Each card reads its task from the project's task list (`agentTasks.listByProject`, shared with the Tasks panel), so its stage stays live. A task the reader cannot open, or an archived task, shows no card.
+- Plans: v2 of projects as orchestrator is marked built. The notifications v2.5, task chat tabs, task in the panel and multi-repo task plans, and the no-Triage mock, move to `internal/plans/implemented/`.

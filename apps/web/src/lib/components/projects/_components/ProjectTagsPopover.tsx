@@ -17,12 +17,15 @@ interface ProjectTagsPopoverProps {
   onUpdate: (tags: string[]) => void;
   /** Trigger classes — lets a field-row caller swap the inline bar sizing. */
   className?: string;
+  /** Read-only: the count shows, the popover does not open. */
+  disabled?: boolean;
 }
 
 export function ProjectTagsPopover({
   tags,
   onUpdate,
   className,
+  disabled = false,
 }: ProjectTagsPopoverProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +56,7 @@ export function ProjectTagsPopover({
     <Popover>
       <PopoverTrigger asChild>
         <button
+          disabled={disabled}
           className={cn(
             "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-muted/60",
             FIELD_TEXT_CLASS,

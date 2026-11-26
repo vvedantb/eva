@@ -65,6 +65,7 @@ export function ChatHeader({
   leadingItems = NO_ITEMS,
   usage,
   sandbox,
+  subtitle,
 }: {
   /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
   repoId: Id<"githubRepos">;
@@ -88,6 +89,8 @@ export function ChatHeader({
   usage?: ReactNode;
   /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
   sandbox?: ReactNode;
+  /** One line under the title: a project task's status and PR line (`ProjectTaskFacts`). */
+  subtitle?: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -122,33 +125,36 @@ export function ChatHeader({
       <HeaderIconButton label="Back" onPress={onBack}>
         <IconChevronLeft size={20} color={foreground} />
       </HeaderIconButton>
-      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
-        {/* Web breadcrumb: the logo at 16 with no border, else a 16 initial tile (the cat colour on a 12% tint), the repo in medium muted, a slash at 50%, the title in semibold. */}
-        <RepoLogo
-          logoUrl={logoUrl}
-          size={16}
-          bordered={false}
-          fallback={
-            <View
-              className="h-4 w-4 items-center justify-center rounded"
-              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
-            >
-              <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
-                {repoLabel.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          }
-        />
-        {/* A long repo name gives up width too, so the title keeps at least half the row. */}
-        <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
-          {repoLabel}
-        </Text>
-        <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
-          /
-        </Text>
-        <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
-          {displayTitle(title)}
-        </Text>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <View className="min-w-0 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
+          {/* Web breadcrumb: the logo at 16 with no border, else a 16 initial tile (the cat colour on a 12% tint), the repo in medium muted, a slash at 50%, the title in semibold. */}
+          <RepoLogo
+            logoUrl={logoUrl}
+            size={16}
+            bordered={false}
+            fallback={
+              <View
+                className="h-4 w-4 items-center justify-center rounded"
+                style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
+              >
+                <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
+                  {repoLabel.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            }
+          />
+          {/* A long repo name gives up width too, so the title keeps at least half the row. */}
+          <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
+            {repoLabel}
+          </Text>
+          <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
+            /
+          </Text>
+          <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
+            {displayTitle(title)}
+          </Text>
+        </View>
+        {subtitle}
       </View>
       <HeaderRail>
         {sandbox}

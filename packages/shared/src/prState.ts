@@ -14,6 +14,21 @@ export function isLivePrState(
 }
 
 /**
+ * One state for a change that spans several repos, from each repo's PR state
+ * (a task with linked repos). Open while any PR is open (draft while the live
+ * ones are all drafts); merged once every PR merged; else closed. With one
+ * repo it is that repo's state. Undefined when no repo has a PR.
+ */
+export function combineRepoPrStates(
+  states: readonly PrState[],
+): PrState | undefined {
+  if (states.length === 0) return undefined;
+  if (states.includes("open")) return "open";
+  if (states.includes("draft")) return "draft";
+  return states.every((state) => state === "merged") ? "merged" : "closed";
+}
+
+/**
  * Colour tone of a PR icon. Each surface maps a tone to its own colour: the
  * web to a `text-*` class, the phone to an `EVA_THEME` value.
  */
@@ -56,6 +71,20 @@ export function prStateTone(state: PrState | undefined): PrStateTone {
  */
 export function orderPrsLiveFirst<T extends { state: PrState }>(prs: readonly T[]): T[] {
   return [...prs].sort((a, b) => Number(isLivePrState(b.state)) - Number(isLivePrState(a.state)));
+}
+
+/**
+ * The repo a row names in a chat's PR list: "owner/name" on every row once
+ * the list spans several repos (a multi-repo session or task), none while
+ * all its PRs are in one repo.
+ */
+export function pullRequestRepoLabel(
+  pr: { repoOwner: string; repoName: string },
+  prs: readonly { repoId: string }[],
+): string | undefined {
+  return new Set(prs.map((row) => row.repoId)).size > 1
+    ? `${pr.repoOwner}/${pr.repoName}`
+    : undefined;
 }
 
 /** The menu entry that holds a chat's PRs when it has more than one. */

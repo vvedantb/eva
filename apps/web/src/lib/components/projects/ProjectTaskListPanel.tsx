@@ -2,33 +2,29 @@
 
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
-import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
+import { repoDisplayLabel } from "@eva/shared";
 import {
   PROJECT_TASK_DISPLAY_STATUS_LABELS,
   projectTaskPullRequests,
   projectTaskStatusSections,
   projectTaskSummaryLine,
-  unapprovedTodoTaskIds,
   type ProjectTaskNotes,
   type ProjectTaskView,
 } from "@eva/shared/projectView";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { Virtuoso } from "react-virtuoso";
-import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
-  Button,
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
-import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ProjectTaskRow } from "./_components/ProjectTaskRow";
 import { ProjectTaskPrRow } from "./_components/ProjectTaskPrRow";
 import {
@@ -39,20 +35,27 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
+/** No task open as a chat tab. */
+const NO_OPEN_TASKS: ReadonlySet<string> = new Set();
+
 /** The Pull requests group's key, beside the display statuses. */
 const PULL_REQUESTS = "pull_requests";
 
 /** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs: their rows are marked. */
+  openTaskIds: ReadonlySet<string>;
   failedTaskIds: ReadonlySet<string>;
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
   basePath: string;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  /** Who added each Triage task, first names by user id ("Added by <name>"). */
-  authorNames: ReadonlyMap<string, string>;
+  /** Task numbers by task id: names where a merged task went. */
+  numIdOf: (taskId: string) => number | undefined;
+  /** An archived project: no row menu. */
+  readOnly: boolean;
 }
 
 function ProjectTaskRowFor({
@@ -70,34 +73,26 @@ function ProjectTaskRowFor({
     <ProjectTaskRow
       task={row}
       view={view}
+      open={context.openTaskIds.has(row._id)}
       line={projectTaskSummaryLine(row, view, {
+        open: context.openTaskIds.has(row._id),
         notes: context.notesByTask.get(row._id),
         failed: context.failedTaskIds.has(row._id),
-        authorName:
-          row.createdBy === undefined
-            ? undefined
-            : context.authorNames.get(row.createdBy),
         otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
+        numIdOf: context.numIdOf,
       })}
       onSelectTask={context.onSelectTask}
       basePath={context.basePath}
+      readOnly={context.readOnly}
     />
   );
 }
 
 /**
  * A group's header on a soft band: the label, the count and a chevron that
- * turns open, all muted. `actions` sit at the band's end, outside the toggle.
+ * turns open, all muted.
  */
-function GroupHeader({
-  label,
-  count,
-  actions,
-}: {
-  label: string;
-  count: number;
-  actions?: ReactNode;
-}) {
+function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-1 rounded-control bg-muted/60 pr-1">
       <AccordionTrigger
@@ -117,7 +112,6 @@ function GroupHeader({
         <span>{label}</span>
         <span className="tabular-nums text-muted-foreground/60">{count}</span>
       </AccordionTrigger>
-      {actions}
     </div>
   );
 }
@@ -125,29 +119,36 @@ function GroupHeader({
 interface ProjectTaskListPanelProps {
   projectId: Id<"projects">;
   tasks: Task[];
+  /** Tasks archived on their own: listed under Archived, with Unarchive. */
+  archivedTasks: Task[];
+  /** An archived project: no row menu. */
+  readOnly: boolean;
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs (`?tasks=`). */
+  openTaskIds?: ReadonlySet<string>;
   /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
 
 /**
- * The project's tasks as flat rows under muted group headers: Triage,
- * Working, Blocked, Idle, Archived (`projectTaskStatusSections`), then the
+ * The project's tasks as flat rows under muted group headers: Needs you,
+ * Working, Idle, Archived (`projectTaskStatusSections`), then the
  * tasks' Pull requests. Archived starts closed.
  */
 export function ProjectTaskListPanel({
   projectId,
   tasks,
+  archivedTasks,
+  readOnly,
   failedTaskIds,
   onSelectTask,
+  openTaskIds = NO_OPEN_TASKS,
   homeRepoId,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
   const firstPaint = useFirstPaintGate();
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  const [isApproving, setIsApproving] = useState(false);
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
   const repos = useQuery(api.githubRepos.list, {});
@@ -156,33 +157,15 @@ export function ProjectTaskListPanel({
   );
 
   const notesByTask = useProjectTaskNotes(projectId);
-  const sections = projectTaskStatusSections(tasks, failedTaskIds);
-  const pullRequests = projectTaskPullRequests(tasks);
-  const toApprove = unapprovedTodoTaskIds(tasks);
-  const triageAuthorIds = [
-    ...new Set(
-      (
-        sections.find((section) => section.status === "triage")?.tasks ?? []
-      ).flatMap(({ row }) =>
-        row.createdBy !== undefined ? [row.createdBy] : [],
-      ),
-    ),
-  ];
-  const authors = useQuery(
-    api.users.getMany,
-    triageAuthorIds.length > 0 ? { ids: triageAuthorIds } : "skip",
+  const numIdById = new Map(
+    [...tasks, ...archivedTasks].map((task) => [String(task._id), task.numId]),
   );
-
-  const approveAll = async () => {
-    setIsApproving(true);
-    await withMutationToast(
-      approveTasks({ projectId, taskIds: toApprove }),
-      toApprove.length === 1 ? "Task approved" : "Tasks approved",
-      "Couldn't approve the tasks",
-      "project-approve",
-    ).catch(() => undefined);
-    setIsApproving(false);
-  };
+  const sections = projectTaskStatusSections(
+    tasks,
+    failedTaskIds,
+    archivedTasks,
+  );
+  const pullRequests = projectTaskPullRequests(tasks);
 
   // Groups come and go with their tasks, so the open set is derived: each
   // group's default, flipped where the reader toggled it.
@@ -215,27 +198,15 @@ export function ProjectTaskListPanel({
 
   const context: RowContext = {
     onSelectTask,
+    openTaskIds,
     failedTaskIds,
     notesByTask,
     basePath,
     homeRepoId,
     reposById,
-    authorNames: firstNameByUserId(authors ?? []),
+    numIdOf: (taskId) => numIdById.get(taskId),
+    readOnly,
   };
-
-  // Tasks added without "Start now" wait in Triage: its header approves them
-  // all.
-  const triageActions =
-    toApprove.length > 0 ? (
-      <Button
-        size="xs"
-        variant="ghost"
-        disabled={isApproving}
-        onClick={() => void approveAll()}
-      >
-        Approve all
-      </Button>
-    ) : undefined;
 
   return (
     <div
@@ -255,7 +226,6 @@ export function ProjectTaskListPanel({
             <GroupHeader
               label={PROJECT_TASK_DISPLAY_STATUS_LABELS[status]}
               count={sectionTasks.length}
-              actions={status === "triage" ? triageActions : undefined}
             />
             <AccordionContent className="pt-1 pb-0">
               {scrollParent ? (
@@ -281,7 +251,10 @@ export function ProjectTaskListPanel({
             <GroupHeader label="Pull requests" count={pullRequests.length} />
             <AccordionContent className="pt-1 pb-0">
               {pullRequests.map((task) => (
-                <ProjectTaskPrRow key={task._id} task={task} />
+                <ProjectTaskPrRow
+                  key={`${task._id}:${task.prUrl}`}
+                  task={task}
+                />
               ))}
             </AccordionContent>
           </AccordionItem>

@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
+import { lastTaskRunOutcome } from "../_agentTasks/taskRunStatus";
 import {
   sessionOwnerProjectId,
   sessionOwnerTaskId,
@@ -18,28 +19,18 @@ type ProjectAccount = Pick<Doc<"projects">, "userId" | "providerAccountId">;
 type ProjectRunSource = ProjectAccount & Pick<Doc<"projects">, "model">;
 type RunSettings = Pick<Doc<"agentTasks">, "model" | "providerAccountId">;
 
-/** The task's newest run, or null before its first. */
-export async function latestTaskRun(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"agentRuns"> | null> {
-  return await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .order("desc")
-    .first();
-}
-
 /**
  * Whether a project task takes its project's model and account at its next
  * start: before its first run, and after a usage limit stopped it, so a
  * changed project account takes over. A running task keeps its copy, and a
  * later pick in the task's own selector stays the task's.
  */
-export function takesProjectSettings(
-  latest: Pick<Doc<"agentRuns">, "errorType"> | null,
-): boolean {
-  return latest === null || latest.errorType === "rate_limit";
+export async function takesProjectSettings(
+  db: DatabaseReader,
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  const last = await lastTaskRunOutcome(db, task);
+  return last === null || last.usageLimited;
 }
 
 /** The model and account a project task copies from its project. */
@@ -63,7 +54,7 @@ export async function taskRunSettings(
 ): Promise<RunSettings> {
   const project =
     task.projectId !== undefined ? await db.get(task.projectId) : null;
-  if (project && takesProjectSettings(await latestTaskRun(db, task._id))) {
+  if (project && (await takesProjectSettings(db, task))) {
     return projectRunSettings(project, task);
   }
   return { model: task.model, providerAccountId: task.providerAccountId };

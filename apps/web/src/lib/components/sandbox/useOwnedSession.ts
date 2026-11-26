@@ -19,6 +19,8 @@ type SandboxGitTarget = FunctionArgs<
 export interface OwnedSandboxFields {
   sandboxId: string | undefined;
   status: Doc<"sessions">["status"] | undefined;
+  /** Why the last start failed; auto-wake leaves a failed start alone. */
+  sandboxError: string | undefined;
   devPort: number | undefined;
   devCommand: string | undefined;
   terminalPanes: Doc<"sessions">["terminalPanes"];
@@ -68,6 +70,7 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   const sandbox: OwnedSandboxFields = {
     sandboxId: session?.sandboxId,
     status: session?.status,
+    sandboxError: session?.sandboxError,
     devPort: session?.devPort,
     devCommand: session?.devCommand,
     terminalPanes: session?.terminalPanes,

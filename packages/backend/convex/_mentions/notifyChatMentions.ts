@@ -7,6 +7,12 @@ import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
 import { sessionOwner } from "../_sessions/owner";
+import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
+import {
+  followingParticipantIds,
+  joinThread,
+  markThreadRead,
+} from "../_messages/threadParticipants";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -89,6 +95,42 @@ async function ownerSurface(
   return surface;
 }
 
+/** Most unread notifications one send looks through for this chat's mentions. */
+const OWN_MENTIONS_SCAN = 100;
+
+/**
+ * Posting in a chat's main transcript answers what asked for you there: your
+ * unread Needs you notifications for this chat (mentions, routed questions,
+ * agent messages) are marked read, so they leave Inbox → Needs you (plan
+ * `projects-v2-chat.md`, decision 3). Those about a reply thread stay: a
+ * thread is answered in the thread (`markThreadRead`). The chat id is
+ * the one `createNotification` stores (`chatTarget`: task, else session,
+ * else project).
+ */
+async function answerOwnChatMentions(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  surface: ChatMentionSurface,
+): Promise<void> {
+  const unread = (
+    await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", userId).eq("read", false),
+      )
+      .order("desc")
+      .take(OWN_MENTIONS_SCAN)
+  ).filter(isNeedsYouNotification);
+  if (unread.length === 0) return;
+  const target = notificationTarget(await ownerSurface(ctx, surface));
+  const chatTarget = target.taskId ?? target.sessionId ?? target.projectId;
+  for (const row of unread) {
+    if (row.chatTarget === chatTarget && row.threadRootId === undefined) {
+      await ctx.db.patch(row._id, { read: true });
+    }
+  }
+}
+
 /** How much of the message routing is shown. Long enough for the ask, short
  * enough that a pasted log does not dominate the judgement. */
 const ROUTING_MESSAGE_LIMIT = 4000;
@@ -112,8 +154,17 @@ export async function notifyChatMentions(
     content: string;
     authorUserId: Id<"users">;
     surface: ChatMentionSurface;
+    /** A reply: the thread's root. Its notifications open that thread. */
+    threadRoot?: Doc<"messages">;
   },
-): Promise<void> {
+): Promise<Id<"users">[]> {
+  // Posting answers what asked for you where you posted: the main chat, or
+  // this one thread.
+  if (args.threadRoot === undefined) {
+    await answerOwnChatMentions(ctx, args.authorUserId, args.surface);
+  } else {
+    await markThreadRead(ctx, args.authorUserId, args.threadRoot);
+  }
   // A task and its session share the repo, so the recipients need no owner
   // read; it only runs once someone is mentioned.
   const recipients = await teamMentionRecipients(
@@ -122,14 +173,17 @@ export async function notifyChatMentions(
     notificationTarget(args.surface).repoId,
     new Set([args.authorUserId]),
   );
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return [];
 
   const [surface, authorName] = await Promise.all([
     ownerSurface(ctx, args.surface),
     authorDisplayName(ctx, args.authorUserId),
   ]);
   const target = notificationTarget(surface);
-  const title = `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`;
+  const title =
+    args.threadRoot === undefined
+      ? `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`
+      : `${authorName} mentioned you in a thread`;
   const message = formatMessagePreview(args.content);
 
   // Routing runs after every notification exists, in one action: the judgement
@@ -147,6 +201,7 @@ export async function notifyChatMentions(
       title,
       message,
       ...target,
+      threadRootId: args.threadRoot?._id,
       routesUrgency: true,
     });
     const mentioned = await ctx.db.get(userId);
@@ -157,7 +212,7 @@ export async function notifyChatMentions(
     });
   }
 
-  if (routed.length === 0) return;
+  if (routed.length === 0) return recipients;
 
   // Jev decides how loudly each mention is delivered. Scheduled rather than
   // awaited because it is a network call, and because a mention must land in
@@ -171,5 +226,73 @@ export async function notifyChatMentions(
     authorName,
     surface: surface.kind,
     entityTitle: surfaceTitle(surface),
+  });
+  return recipients;
+}
+
+/**
+ * Tells the people following a reply thread that someone replied: every
+ * following participant (`threadParticipants`) but the author. Those
+ * @-mentioned in the reply are skipped: `notifyChatMentions` already told
+ * them, and a mention reaches them even after they unfollow.
+ */
+export async function notifyThreadReply(
+  ctx: MutationCtx,
+  args: {
+    content: string;
+    authorUserId: Id<"users">;
+    rootId: Id<"messages">;
+    /** People the reply mentions (`notifyChatMentions`'s recipients). */
+    mentionedIds: readonly Id<"users">[];
+    surface: ChatMentionSurface;
+  },
+): Promise<void> {
+  const skip = new Set<Id<"users">>([args.authorUserId, ...args.mentionedIds]);
+  const recipients = (await followingParticipantIds(ctx.db, args.rootId)).filter(
+    (userId) => !skip.has(userId),
+  );
+  if (recipients.length === 0) return;
+  const [surface, authorName] = await Promise.all([
+    ownerSurface(ctx, args.surface),
+    authorDisplayName(ctx, args.authorUserId),
+  ]);
+  const title = `${authorName} replied in a thread`;
+  const message = formatMessagePreview(args.content);
+  for (const userId of recipients) {
+    await createNotification(ctx, {
+      userId,
+      type: "thread_reply",
+      title,
+      message,
+      ...notificationTarget(surface),
+      threadRootId: args.rootId,
+    });
+  }
+}
+
+/**
+ * Eva answered in a thread: the person whose @Eva reply woke her hears about
+ * it, whether or not they still follow the thread (they asked her). They
+ * become a participant if they were not one.
+ */
+export async function notifyThreadAnswer(
+  ctx: MutationCtx,
+  args: {
+    askerId: Id<"users">;
+    rootId: Id<"messages">;
+    /** Eva's answer. */
+    content: string;
+    surface: ChatMentionSurface;
+  },
+): Promise<void> {
+  await joinThread(ctx, args.rootId, args.askerId);
+  const surface = await ownerSurface(ctx, args.surface);
+  await createNotification(ctx, {
+    userId: args.askerId,
+    type: "thread_answer",
+    title: "Eva answered your question in a thread",
+    message: formatMessagePreview(args.content),
+    ...notificationTarget(surface),
+    threadRootId: args.rootId,
   });
 }

@@ -1,3 +1,4 @@
+import { bumpThreadRoot } from "../_messages/replies";
 import { v } from "convex/values";
 import {
   queueRuntimeContinue,
@@ -186,7 +187,13 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
     now: number,
   ) => Promise<void>;
   /** Inserts an assistant error bubble and touches `updatedAt`. */
-  recordError: (ctx: MutationCtx, id: TId, content: string) => Promise<void>;
+  /** `replyTo`: the failed message was a thread reply; the error joins it. */
+  recordError: (
+    ctx: MutationCtx,
+    id: TId,
+    content: string,
+    replyTo: Id<"messages"> | undefined,
+  ) => Promise<void>;
   /**
    * The wake-up payload for the master session watching this entity, or
    * `undefined` when it is unwatched (or when the surface cannot be watched at
@@ -451,7 +458,7 @@ async function startNextQueuedChatMessage<
     await reclaimQueuedAttachments(ctx, nextMessage);
     const reason =
       error instanceof Error ? error.message : config.defaultStartErrorMessage;
-    await config.recordError(ctx, id, `Error: ${reason}`);
+    await config.recordError(ctx, id, `Error: ${reason}`, nextMessage.replyTo);
     await notifyWatchingOrchestrator("error");
     return false;
   }
@@ -489,7 +496,7 @@ async function startNextQueuedChatMessage<
   if (!guard.ok) {
     // The row is gone and no user message was inserted to take the uploads.
     await reclaimQueuedAttachments(ctx, nextMessage);
-    await config.recordError(ctx, id, guard.error);
+    await config.recordError(ctx, id, guard.error, nextMessage.replyTo);
     // The queued turn is consumed and cannot run, so the child is idle again —
     // without this the master would wait forever on a turn that never starts.
     await notifyWatchingOrchestrator("error");
@@ -525,6 +532,7 @@ async function startNextQueuedChatMessage<
     id,
     nextMessage.model ?? DEFAULT_AI_MODEL,
     config.fallbackProvider(entity),
+    nextMessage.replyTo,
   );
 
   try {
@@ -540,7 +548,12 @@ async function startNextQueuedChatMessage<
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : config.defaultStartErrorMessage;
-    await config.recordError(ctx, id, `Error: ${errorMessage}`);
+    await config.recordError(
+      ctx,
+      id,
+      `Error: ${errorMessage}`,
+      nextMessage.replyTo,
+    );
     await notifyWatchingOrchestrator("error");
     return false;
   }
@@ -634,12 +647,15 @@ const sessionChatQueueConfig: ChatQueueConfig<
     return { ok: true, data: { repo, model: next.model, providerAccountId } };
   },
   insertUserMessage: async (ctx, id, { session }, next, prepared, now) => {
+    // A thread reply's own row was stored when it was sent (`addReply`).
+    if (next.replyTo !== undefined) return;
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
       content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
+      annotation: next.annotation,
       attachmentStorageIds: next.attachmentStorageIds,
       ...(await resolveMessageCredential(
         ctx.db,
@@ -648,8 +664,8 @@ const sessionChatQueueConfig: ChatQueueConfig<
       )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
-      orchestratorNotification: next.orchestratorNotification,
       sentViaOrchestrator: next.sentViaOrchestrator,
+      taskRun: next.taskRun,
     });
   },
   startWorkflow: async (ctx, id, { session, chat }, next, prepared) => {
@@ -659,7 +675,12 @@ const sessionChatQueueConfig: ChatQueueConfig<
       content: "",
       timestamp: Date.now(),
       activityLog: "",
+      // Eva answers a thread reply inside that thread.
+      replyTo: next.replyTo,
     });
+    if (next.replyTo !== undefined) {
+      await bumpThreadRoot(ctx, next.replyTo, undefined);
+    }
     const turnId = await openSessionChatTurn(ctx, {
       chatId: id,
       sessionId: session._id,
@@ -670,6 +691,9 @@ const sessionChatQueueConfig: ChatQueueConfig<
       model: prepared.model,
       sandboxId: session.sandboxId,
       repoId: session.repoId,
+      replyTo: next.replyTo,
+      askedBy: next.userId,
+      taskRun: next.taskRun,
     });
     // Normalised, not forwarded raw: the composer enqueues model defaults
     // explicitly (e.g. reasoning "high"), and the workflow feeds these
@@ -745,13 +769,15 @@ const sessionChatQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: now });
     await trackSessionChatWorkflow(ctx, id, workflowId);
   },
-  recordError: async (ctx, id, content) => {
+  recordError: async (ctx, id, content, replyTo) => {
     await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",
       content,
       timestamp: Date.now(),
+      replyTo,
     });
+    if (replyTo !== undefined) await bumpThreadRoot(ctx, replyTo, undefined);
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: async (ctx, { session }, id) => {

@@ -2,7 +2,7 @@
 
 import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
-import { DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
+import { DESKTOP_PORT, EDITOR_PORT, previewProxyPort } from "@eva/shared";
 import { redactSecrets } from "@eva/shared/redactSecrets";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
@@ -14,7 +14,6 @@ import {
   normalizeAIModel,
   reasoningLevelValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   usesChatDaemon,
 } from "../validators";
 import {
@@ -27,6 +26,7 @@ import {
   errorMessage,
   signAndLaunchScript,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
+  PREFER_OOM_KILL_LINE,
   sessionClaudeUuid,
   restartUnresponsiveSandbox,
 } from "./helpers";
@@ -59,7 +59,7 @@ import {
 } from "./convexLocalBackend";
 import { ensureSwapFile } from "./swap";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
-import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
+import { isSandboxNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
 import { sandboxGitTargetValidator } from "../sandboxGit";
 import {
@@ -120,9 +120,14 @@ import {
   VERCEL_EDITOR_INTERNAL_PORT,
 } from "./previewProxy";
 import { vercelAppListenPort } from "./vercelAppPorts";
-import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
+import {
+  getPreviewGrantPublicJwk,
+  previewSessionSecret,
+  signPreviewGrant,
+} from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
+import { chatSystemPrompt } from "../_sessions/prompts";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
@@ -564,9 +569,9 @@ export const runBackgroundCommands = internalAction({
         //
         // CarePulse local backends: plant glibc-safe binary + unset agent mode.
         // See convexLocalBackend.ts (anonymous mode rejects --local-backend-version).
-        const scriptBody = isConvexCommand
-          ? buildConvexBackgroundScriptBody(command)
-          : command;
+        const scriptBody = `${PREFER_OOM_KILL_LINE}\n${
+          isConvexCommand ? buildConvexBackgroundScriptBody(command) : command
+        }`;
         console.log(
           `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
@@ -949,6 +954,19 @@ async function buildPreviewUrl(
       return { url: "", port: responsePort, ready: false };
     }
     ready = poll.ready;
+  } else if (customTabPort === undefined && handle.state === "running") {
+    // No readiness wait (the `/p` link's fast path), so nothing would notice a
+    // dead dev server. Queue the same recovery the readiness poll uses; it
+    // does nothing when the port already answers, and never delays the link.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.ensureSessionPreviewServices,
+      {
+        sandboxId: args.sandboxId,
+        repoId: args.repoId,
+        expectedPort: upstreamPort,
+      },
+    );
   }
 
   // Always front the service with the in-sandbox auth proxy so open-in-new-tab
@@ -959,22 +977,17 @@ async function buildPreviewUrl(
   //   editor  → proxy on 8080  (upstream 18080)
   //   desktop → proxy on 6080  (upstream 16080)
   const previewPublicJwk = getPreviewGrantPublicJwk();
-  const isVercelDesktopOrEditor =
-    args.port === DESKTOP_PORT || args.port === EDITOR_PORT;
-  const fixedVercelProxyPort = isVercelDesktopOrEditor
-    ? args.port
-    : VERCEL_PREVIEW_PROXY_PORT;
+  const fixedVercelProxyPort = previewProxyPort(args.port);
   // Public route port: on Vercel app/dev previews this is always 3000, never
   // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
-  let previewPort = fixedVercelProxyPort ?? args.port;
+  let previewPort = fixedVercelProxyPort;
   // Same upstream mapping used for the readiness probe above.
   const proxyTargetPort = upstreamPort;
-  const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
   // The proxy fronts the app, so a custom tab gates it on the sandbox being
   // up rather than on `ready` (which describes the tab's own port).
   const proxyUsable =
     customTabPort === undefined ? ready : handle.state === "running";
-  if (proxyUsable && shouldStartPreviewProxy) {
+  if (proxyUsable) {
     try {
       previewPort = await ensurePreviewNavigationProxy(
         handle,
@@ -986,7 +999,11 @@ async function buildPreviewUrl(
           webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
-          authPort: fixedVercelProxyPort ?? args.port,
+          authPort: fixedVercelProxyPort,
+          sessionSecret: previewSessionSecret(
+            args.sandboxId,
+            fixedVercelProxyPort,
+          ),
           ...previewActivityParams(args.sandboxId),
         },
         fixedVercelProxyPort,
@@ -1000,7 +1017,7 @@ async function buildPreviewUrl(
       // If the reserved proxy port fails to start while a preview grant
       // key is configured, silently falling back to the unproxied service
       // port would serve with no auth gate at all. Fail loudly instead.
-      if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
+      if (previewPublicJwk) {
         throw new Error(
           `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
         );
@@ -1020,7 +1037,7 @@ async function buildPreviewUrl(
     const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
       // Grant must match AUTH_PORT (public proxy on Vercel app previews).
-      port: fixedVercelProxyPort ?? args.port,
+      port: fixedVercelProxyPort,
       sub: subject,
     });
     parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
@@ -1077,7 +1094,7 @@ const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
   return (
-    isDaytonaNetworkIssue(message) ||
+    isSandboxNetworkIssue(message) ||
     // Transport only: setup deletes and recreates the VM, so a permanent auth
     // failure or a bare "network" substring must not trigger it.
     isTransientTransportError(message) ||
@@ -1097,7 +1114,6 @@ export const createOrResumeSandbox = internalAction({
     repoName: v.string(),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
   returns: v.object({
@@ -1135,18 +1151,6 @@ export const createOrResumeSandbox = internalAction({
     let deleteSandboxOnFailure = false;
     let attempt = 1;
     const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
     while (true) {
       try {
         if (args.ephemeral) {
@@ -1159,7 +1163,7 @@ export const createOrResumeSandbox = internalAction({
             sandboxEnvVars,
             EPHEMERAL_LIFECYCLE,
             snapshotName,
-            attachRunSandbox,
+            undefined,
             emitProgress,
             { mode: "none" },
           );
@@ -1183,13 +1187,6 @@ export const createOrResumeSandbox = internalAction({
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = prepared.isNew;
           resumeFellBack = prepared.resumeFellBack;
-        }
-
-        if (!args.ephemeral && args.attachRunId && sandbox) {
-          await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-            runId: args.attachRunId,
-            sandboxId: sandbox.id,
-          });
         }
 
         break;
@@ -1555,10 +1552,16 @@ function buildDaemonOptsSig(
   providerAccountCredentialRevision: number | undefined,
   streamingEntityId: string,
   traits: TraitEnvInput,
+  systemPrompt: string | undefined,
 ): string {
   const fastMode =
     traits.fastMode === undefined ? "" : traits.fastMode ? "1" : "0";
-  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}`;
+  // A daemon started with other system prompt text must respawn, or the turn
+  // would leave out instructions the prompt expects the system prompt to hold.
+  const systemPromptSig = systemPrompt
+    ? createHash("sha256").update(systemPrompt).digest("hex").slice(0, 12)
+    : "";
+  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}|${systemPromptSig}`;
 }
 
 function buildTraitEnvVars(traits: TraitEnvInput): Record<string, string> {
@@ -1655,6 +1658,9 @@ async function runPrewarmEntityDaemon(
       );
       return { prewarmed: false };
     }
+    // Every caller is a session chat (`entityTable: "sessionChats"`), whose
+    // turn prompt `buildSessionPrompt` shapes for this system prompt.
+    const systemPrompt = chatSystemPrompt(normalizedModel);
     const providerAccountCredentialRevision = args.providerAccountId
       ? await resolveProviderAccountCredentialRevision(
           ctx,
@@ -1675,6 +1681,7 @@ async function runPrewarmEntityDaemon(
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
       },
+      systemPrompt,
     );
     const probeAliveState = async (): Promise<string> => {
       const alive = await execHandle(
@@ -1893,6 +1900,7 @@ async function runPrewarmEntityDaemon(
         {
           model: normalizedModel,
           allowedTools: args.allowedTools,
+          systemPrompt,
           claimMutation: args.claimMutation,
           openSyntheticTurnMutation: args.openSyntheticTurnMutation,
           completeSyntheticTurnMutation: args.completeSyntheticTurnMutation,
@@ -2257,8 +2265,8 @@ export const launchOnExistingSandbox = internalAction({
 });
 
 /**
- * Launches a one-shot agent (automation, PR recap, summary, doc or project
- * interview, evaluation, test generation) under its own durable turn: opens
+ * Launches a one-shot agent (automation, PR recap, doc interview, evaluation,
+ * test generation) under its own durable turn: opens
  * the turn already leased, then launches with the lease so the callback
  * heartbeats and completes fenced. A launch that throws closes the turn, so
  * the reconciler never tears down a workflow that handled the failure itself.
@@ -2267,18 +2275,16 @@ export const launchAgentTurn = internalAction({
   args: {
     ...launchArgs,
     turnEntityId: turnEntityIdValidator,
-    turnLane: v.optional(turnLaneValidator),
     turnSessionId: v.optional(v.id("sessions")),
     workflowId: v.string(),
   },
   returns: v.null(),
   handler: async (
     ctx,
-    { turnEntityId, turnLane, turnSessionId, workflowId, ...launch },
+    { turnEntityId, turnSessionId, workflowId, ...launch },
   ) => {
     const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
       entityId: turnEntityId,
-      lane: turnLane,
       sessionId: turnSessionId,
       streamingEntityId: launch.streamingEntityId ?? launch.entityId,
       model: launch.model,

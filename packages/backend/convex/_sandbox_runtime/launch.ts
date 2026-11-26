@@ -28,9 +28,8 @@ import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
 
 // Paths baked into the callback script env for each CLI's config directory.
-// These originated as Daytona persistence-volume mount paths; the *_RUNTIME_*
-// paths are still where the callback script looks regardless of whether a
-// volume is mounted there, so they stay here now that Daytona volumes are gone.
+// The callback script reads and writes these on the sandbox disk; no volume is
+// mounted there.
 export const CLAUDE_BASE_CONFIG_DIR = "/home/eva/.claude";
 export const CLAUDE_RUNTIME_CONFIG_DIR = "/tmp/claude-config";
 export const CLAUDE_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.claude-persist";
@@ -665,10 +664,11 @@ export async function launchScript(
     // dying silently under memory pressure while dev servers survived. Lower
     // it here via sudo instead. The opencode server subtree is re-raised to
     // 300 at spawn (callback-src/providers/opencodeServer.ts) — the only agent
-    // process the callback still spawns — so the kernel kill order becomes:
-    // dev servers and agent work first (both recover — preview self-heal and
-    // turn error reporting), the heartbeat/reporting callback last. Fail open
-    // on images without passwordless sudo.
+    // process the callback still spawns — and dev services start at 500
+    // (PREFER_OOM_KILL_LINE in helpers.ts), so the kernel kill order becomes:
+    // dev services first (preview self-heal restarts them), then agent work
+    // (turn error reporting), the heartbeat/reporting callback last. Fail
+    // open on images without passwordless sudo.
     'echo -600 | sudo -n tee "/proc/$(cat /tmp/run-design.pid)/oom_score_adj" >/dev/null 2>&1 || true',
   ].join("\n");
   await writeSandboxFile(

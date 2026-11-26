@@ -146,7 +146,7 @@ describe("public functions refuse callers without repo access", () => {
         }),
       ).rejects.toThrow("Not authorized");
       await expect(
-        f.stranger.mutation(api.projects.remove, { id: f.projectId }),
+        f.stranger.mutation(api.projects.archive, { id: f.projectId }),
       ).rejects.toThrow("Not authorized");
     },
     TIMEOUT_MS,
@@ -273,7 +273,7 @@ describe("pending questions", () => {
     "a stranger cannot read, replace or answer another team's question",
     async () => {
       const f = await fixture();
-      const entityId = String(f.taskId);
+      const entityId = String(f.sessionId);
       await f.owner.mutation(api.pendingQuestions.post, {
         entityId,
         toolUseId: "tool_1",

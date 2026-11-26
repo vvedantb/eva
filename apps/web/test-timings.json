@@ -7,7 +7,6 @@
     "src/lib/components/chat/_components/composerCompact.test.ts": 2503,
     "src/lib/components/chat/chatBodyUtils.test.ts": 2436,
     "src/lib/utils/isChunkLoadError.test.ts": 2422,
-    "src/lib/components/tasks/firstRunChatTurn.test.ts": 2343,
     "src/routes/_repo/$owner/$repo/settings/logs/_utils.test.ts": 1955,
     "src/lib/components/sandbox/previewGestureOverlay.test.ts": 1785,
     "src/lib/components/_utils/convexEnvVars.test.ts": 1757,

@@ -1,17 +1,16 @@
 "use client";
 
-import { toast, convexErrorMessage } from "@vvedantb/ui";
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { convexErrorMessage } from "@vvedantb/ui";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { sandboxStartupEntityId, taskCanStartSandbox } from "@eva/shared";
+import { taskCanStartSandbox } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
+import { useSandboxControls } from "@/lib/components/sandbox/useSandboxLifecycle";
 import type { TaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
@@ -40,6 +39,11 @@ export type UseTaskDetailRouting =
   | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-task" };
+
+/** A project task's own chat and sandbox, as on its full page. */
+export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
+  mode: "project-task",
+};
 
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
@@ -122,35 +126,23 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
 }
 
 /**
- * A task moved back to `todo` after it already ran keeps its branch, so it
- * previews like a reviewed task rather than offering a first run again.
- * Mirrors `isPreviewSandboxAllowed` in the backend.
+ * The task has a sandbox to show: one it can start, or one that exists or is
+ * moving. A task moved back to `todo` after it already ran keeps its branch,
+ * so it previews like a reviewed task rather than offering a first run again
+ * (`taskCanStartSandbox`, mirrors `isPreviewSandboxAllowed` in the backend).
  */
-function deriveSandboxFlags(
+function canViewTaskSandbox(
   task: TaskDetailTask,
   sandbox: OwnedSandboxFields,
   hasRuns: boolean,
-) {
-  const canStartSandbox = taskCanStartSandbox(task?.status, hasRuns);
-
-  const isSandboxActive = sandbox.status === "active";
-  const isSandboxStartingFromStatus = sandbox.status === "starting";
-  const isSandboxStoppingFromStatus = sandbox.status === "stopping";
-  const hasReviewSandbox = sandbox.sandboxId !== undefined;
-  const canViewSandbox =
-    canStartSandbox ||
-    hasReviewSandbox ||
-    isSandboxActive ||
-    isSandboxStartingFromStatus ||
-    isSandboxStoppingFromStatus;
-
-  return {
-    canStartSandbox,
-    isSandboxActive,
-    isSandboxStartingFromStatus,
-    isSandboxStoppingFromStatus,
-    canViewSandbox,
-  };
+): boolean {
+  return (
+    taskCanStartSandbox(task?.status, hasRuns) ||
+    sandbox.sandboxId !== undefined ||
+    sandbox.status === "active" ||
+    sandbox.status === "starting" ||
+    sandbox.status === "stopping"
+  );
 }
 
 function resolveShowSandbox(
@@ -199,122 +191,46 @@ export function useTaskSandboxControls({
   taskSession,
   hasRuns,
   routing,
-  setExecutionError,
 }: {
   taskId: Id<"agentTasks">;
   task: TaskDetailTask;
   taskSession: TaskSession;
   hasRuns: boolean;
   routing: UseTaskDetailRouting | undefined;
-  setExecutionError: (message: string | null) => void;
 }) {
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
-  const runSessionDevServer = useMutation(api.sessions.runDevServer);
-  const runSessionBackgroundCommands = useMutation(
-    api.sessions.runBackgroundCommands,
-  );
   const { sandbox } = taskSession;
-  // Every action targets the session; a running sandbox implies it exists,
-  // so `ensure` only reads it there.
-  const onSession =
-    (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
-    async () => {
-      const { sessionId } = await taskSession.ensure();
-      return await action({ sessionId });
-    };
-  const startSandbox = onSession(startSessionSandbox);
-  const stopSandbox = () => stopWorkSandbox({ target: { taskId } });
-  const runDevServerMutation = onSession(runSessionDevServer);
-  const runBackgroundCommandsMutation = onSession(runSessionBackgroundCommands);
-
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
-  const lifecycle = useSandboxLifecycle(sandbox.status);
-  const [isRunningDevServer, setIsRunningDevServer] = useState(false);
-  const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
-    useState(false);
-  const [showRunDevServerConfirm, setShowRunDevServerConfirm] = useState(false);
 
-  const flags = deriveSandboxFlags(task, sandbox, hasRuns);
-  const sandboxStartupStreaming = useQuery(
-    api.streaming.get,
-    flags.isSandboxStartingFromStatus && sandbox.owner
-      ? { entityId: sandboxStartupEntityId(sandbox.owner) }
-      : "skip",
-  );
-
-  const openSandboxAfterStart = () => {
-    if (routing?.mode === "quick-detail") {
-      routing.quick.onOpenSandboxView("preview");
-    } else {
-      setEmbeddedShowSandbox(true);
-    }
-  };
-
-  const handleStartSandbox = () =>
-    lifecycle.run("start", async () => {
-      try {
-        await startSandbox();
-        openSandboxAfterStart();
-      } catch (err) {
-        console.error("Failed to start sandbox:", err);
-        toast.error("Could not start the sandbox. Try again.");
+  const controls = useSandboxControls({
+    status: sandbox.status,
+    owner: sandbox.owner,
+    // Start targets the session, creating it on first need.
+    start: async () => {
+      const { sessionId } = await taskSession.ensure();
+      return await startSessionSandbox({ sessionId });
+    },
+    stop: () => stopWorkSandbox({ target: { taskId } }),
+    onStarted: () => {
+      if (routing?.mode === "quick-detail") {
+        routing.quick.onOpenSandboxView("preview");
+      } else {
+        setEmbeddedShowSandbox(true);
       }
-    });
-
-  const handleStopSandbox = () =>
-    lifecycle.run("stop", async () => {
-      try {
-        await stopSandbox();
-      } catch (err) {
-        console.error("Failed to stop sandbox:", err);
-        toast.error("Could not stop the sandbox. Try again.");
-      }
-    });
-
-  const handleRunDevServer = async () => {
-    setIsRunningDevServer(true);
-    try {
-      await runDevServerMutation();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to run dev server";
-      setExecutionError(message);
-    }
-    setIsRunningDevServer(false);
-  };
-
-  const handleRunBackgroundCommands = async () => {
-    setIsRunningBackgroundCommands(true);
-    try {
-      await runBackgroundCommandsMutation();
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to run background commands";
-      setExecutionError(message);
-    }
-    setIsRunningBackgroundCommands(false);
-  };
+    },
+  });
 
   return {
-    showRunDevServerConfirm,
-    setShowRunDevServerConfirm,
-
-    canStartSandbox: flags.canStartSandbox,
-    canViewSandbox: flags.canViewSandbox,
+    canStartSandbox: taskCanStartSandbox(task?.status, hasRuns),
+    canViewSandbox: canViewTaskSandbox(task, sandbox, hasRuns),
     showSandbox: resolveShowSandbox(routing, embeddedShowSandbox),
-    isSandboxActive: flags.isSandboxActive,
-    isSandboxStarting: lifecycle.isStarting,
-    sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
-    isSandboxStopping: lifecycle.isStopping,
-    handleStartSandbox,
-    handleStopSandbox,
+    isSandboxActive: controls.isSandboxActive,
+    isSandboxStarting: controls.isSandboxStarting,
+    sandboxStartupActivity: controls.sandboxStartupActivity,
+    isSandboxStopping: controls.isSandboxStopping,
+    handleStartSandbox: controls.handleStartSandbox,
+    handleStopSandbox: controls.handleStopSandbox,
     handleSelectSurface: createSurfaceSelector(routing, setEmbeddedShowSandbox),
-    handleRunDevServer,
-    isRunningDevServer,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
   };
 }

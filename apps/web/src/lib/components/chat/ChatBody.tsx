@@ -67,13 +67,13 @@ import {
 } from "@/lib/contexts/PendingPullRequestsContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
-import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
+import { ChatDocCard } from "@/lib/components/docs/ChatDocCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
@@ -101,7 +101,6 @@ import {
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findBubbleGroups,
-  findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
   firstNameByUserId,
@@ -115,6 +114,10 @@ import {
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import {
+  ProjectChatTaskCard,
+  type ProjectChatTaskCards,
+} from "@/lib/components/projects/ProjectChatTaskCard";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
@@ -161,7 +164,7 @@ interface InlineCard {
     | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
-interface ChatBodyProps {
+export interface ChatBodyProps {
   /**
    * The codebase this chat belongs to. Absent for Manager Ave, which has none:
    * skills, the prompt stash and repo mentions switch off.
@@ -233,6 +236,11 @@ interface ChatBodyProps {
    */
   emptyStateDescription?: string;
   /**
+   * Shown in place of the empty state (title, description, wake button): a
+   * project task's prompt before its first run.
+   */
+  emptyState?: React.ReactNode;
+  /**
    * Why the composer will not send, shown when the user presses Enter on a
    * disabled composer instead of swallowing the keystroke.
    */
@@ -299,6 +307,11 @@ interface ChatBodyProps {
    * hides the sub-agent CTA row under assistant turns.
    */
   onOpenAgentsTab?: () => void;
+  /**
+   * A project's coordinator chat: the task cards under Eva's replies
+   * (`projects.listChatTaskCards`); a card opens its task's chat tab.
+   */
+  projectTaskCards?: ProjectChatTaskCards;
   /** Entity-wide sub-agent lifecycle entries, for the CTA row's live status. */
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
   /** False lets stranded "running" sub-agents read as stale, not live. */
@@ -317,6 +330,11 @@ interface ChatBodyProps {
   hideJumpRail?: boolean;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
+  /**
+   * Reply threads: opens a message's thread. Rows get the Reply action and the
+   * "N replies" row. Must keep its identity, like the fork handler.
+   */
+  onOpenThread?: (messageId: string) => void;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -354,6 +372,7 @@ function ChatBodyInner({
   placeholder,
   emptyStateTitle,
   emptyStateDescription = "",
+  emptyState,
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
   modelPicker,
@@ -370,6 +389,7 @@ function ChatBodyInner({
   onViewDiff,
   hasPendingContext,
   onOpenAgentsTab,
+  projectTaskCards,
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
@@ -378,6 +398,7 @@ function ChatBodyInner({
   onForkTranscript,
   hideJumpRail = false,
   assistantBubbles = false,
+  onOpenThread,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -514,9 +535,9 @@ function ChatBodyInner({
   // still-streaming older turn's tokens (see findStreamingTargetMessage).
   const streamingTarget = findStreamingTargetMessage(displayMessages);
   const streamingTargetId = streamingTarget?._id;
-  const latestAssistantMessageId = findLastAssistantMessageId(displayMessages);
-  const { expandedByMessageId, setMessageExpanded } =
-    useChangedFilesExpansion(conversationId);
+  // The coordinator chat spaces messages 20px, not 12: its hover toolbar
+  // sits on a bubble's top edge.
+  const messageGap = assistantBubbles ? "gap-5" : "gap-3";
 
   const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
     string | null
@@ -879,14 +900,38 @@ function ChatBodyInner({
     hasOlderHistory,
   );
 
-  // Artifacts saved in this chat (`create_artifact`) and the agent's
-  // `submit_feedback` reports. Placed by the same rule as the cards above, but
-  // kept apart: they sit with the turn's output and never trade places with
-  // its prose behind a tab.
+  // Artifacts and docs saved in this chat (`create_artifact`,
+  // `create_eva_doc`) and the agent's `submit_feedback` reports. Placed by the
+  // same rule as the cards above, but kept apart: they sit with the turn's
+  // output and never trade places with its prose behind a tab.
   const chatArtifacts = useQuery(
     api.artifacts.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const chatDocs = useQuery(
+    api.docs.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const chatTaskCards = useQuery(
+    api.projects.listChatTaskCards,
+    projectTaskCards ? { projectId: projectTaskCards.projectId } : "skip",
+  );
+  const taskCardOutputs = projectTaskCards
+    ? (chatTaskCards ?? []).map((card) => ({
+        _id: card.key,
+        messageId: card.messageId,
+        createdAt: card.createdAt,
+        node: (
+          <ProjectChatTaskCard
+            key={card.key}
+            taskId={card.taskId}
+            projectId={projectTaskCards.projectId}
+            repoId={projectTaskCards.repoId}
+            onOpenTask={projectTaskCards.onOpenTask}
+          />
+        ),
+      }))
+    : [];
   // Thumbs on turns and the agent's reports.
   const chatFeedback = useQuery(
     api.feedback.listForChat,
@@ -901,6 +946,13 @@ function ChatBodyInner({
         createdAt: artifact.createdAt,
         node: <ChatArtifactCard key={artifact._id} artifact={artifact} />,
       })),
+      ...(chatDocs ?? []).map((doc) => ({
+        _id: doc._id,
+        messageId: doc.messageId,
+        createdAt: doc.createdAt,
+        node: <ChatDocCard key={doc._id} doc={doc} basePath={repo?.basePath} />,
+      })),
+      ...taskCardOutputs,
       ...feedback.agentReports.map((report) => ({
         _id: report._id,
         messageId: report.messageId,
@@ -1016,8 +1068,12 @@ function ChatBodyInner({
     return (
       <div
         key={message._id}
-        // A run of one sender's bubbles sits 4px apart, not 12.
-        className={cn("flex flex-col gap-3", joinsPrevious && "-mt-2")}
+        // A run of one sender's bubbles sits 4px apart, not 12 (20 in the
+        // coordinator chat, whose hover toolbar sits on a bubble's top edge).
+        className={cn(
+          "flex flex-col gap-3",
+          joinsPrevious && (assistantBubbles ? "-mt-4" : "-mt-2"),
+        )}
       >
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
@@ -1029,16 +1085,10 @@ function ChatBodyInner({
           message={message}
           animateIn={!isBacklog && rowsAnimateIn}
           repo={repo}
-          isLatestAssistantTurn={message._id === latestAssistantMessageId}
-          showChangedFiles={!simpleView}
           // The run's action row sits under its last bubble only.
           showTurnMeta={!simpleView && !joinsNext}
           joinsNext={joinsNext}
           showScopeCheck={showScopeCheck}
-          {...(expandedByMessageId[message._id] !== undefined
-            ? { changedFilesExpanded: expandedByMessageId[message._id] }
-            : {})}
-          onChangedFilesExpandedChange={setMessageExpanded}
           isOtherUser={isOtherUser}
           senderFirstName={senderFirstName}
           assistantBubble={assistantBubbles}
@@ -1068,6 +1118,10 @@ function ChatBodyInner({
             onForkTranscript && canForkMessage(message)
               ? setForkThroughId
               : undefined
+          }
+          // System alerts and empty rows have nothing to reply to.
+          onReply={
+            onOpenThread && canForkMessage(message) ? onOpenThread : undefined
           }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
@@ -1100,7 +1154,7 @@ function ChatBodyInner({
         resize={streamingTargetId ? "smooth" : "instant"}
       >
         <ConversationContent
-          className="gap-3 p-3 max-w-3xl mx-auto w-full"
+          className={cn("p-3 max-w-3xl mx-auto w-full", messageGap)}
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
           // reader's place itself, and two corrections would add up.
           // Until the backlog commits, the content is only the last turn: the
@@ -1121,6 +1175,8 @@ function ChatBodyInner({
               </div>
             ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
+            ) : emptyState ? (
+              emptyState
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
@@ -1168,12 +1224,16 @@ function ChatBodyInner({
                     .map((message) => renderMessage(message, true))
                 : null}
               <ChatLastTurn>
-                {displayMessages
-                  .slice(lastUserMessageIndex)
-                  .map((message) => renderMessage(message))}
-                {/* Inside the last turn, which pads to the viewport height:
-                    after it, the card would sit a screen below the reply. */}
-                {recapCard}
+                {/* The kit's last turn spaces its rows 12px; this keeps the
+                    chat's own message gap there too. */}
+                <div className={cn("flex flex-col", messageGap)}>
+                  {displayMessages
+                    .slice(lastUserMessageIndex)
+                    .map((message) => renderMessage(message))}
+                  {/* Inside the last turn, which pads to the viewport height:
+                      after it, the card would sit a screen below the reply. */}
+                  {recapCard}
+                </div>
               </ChatLastTurn>
             </>
           )}
@@ -1260,6 +1320,7 @@ function ChatBodyInner({
             >
               <ChatComposer
                 repo={repo}
+                mentionEva={assistantBubbles}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
                 queueLabel={queueLabel}

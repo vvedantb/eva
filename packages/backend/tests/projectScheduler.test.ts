@@ -11,11 +11,14 @@ import {
 import { sessionSandboxProfile } from "../convex/_sessions/owner";
 import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 import { modules } from "./_helpers/convexModules";
+import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
+import { ensureWorkSession } from "../convex/_sessions/ownedSession";
+import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
 /**
  * The project as an orchestrator, through the real Convex functions: the
  * scheduler and its cap, the coordinator's tasks (start at once) against
- * a person's unapproved task (waits in Triage), the coordinator's one retry and its wake-ups,
+ * a person's task (handed to the coordinator at once), the coordinator's one retry and its wake-ups,
  * the repos the coordinator may use, locked rows, the roll-up of docs, artifacts and
  * log, the copy of the project's model and account, the coordinator's
  * delete rule, project delete, and the coordinator's sandbox.
@@ -114,30 +117,54 @@ const factsOf = async (f: Fixture, taskId: Id<"agentTasks">) => {
   return facts;
 };
 
+/**
+ * Ends the task's run as a task-mode turn would: any queued run message goes,
+ * and a closed task-mode turn in `state` goes through the real `closeTurn`
+ * (which moves the task's status). Returns the turn's id.
+ */
+async function endRun(
+  f: Fixture,
+  taskId: Id<"agentTasks">,
+  state: "done" | "error",
+): Promise<Id<"turns">> {
+  return f.t.run(async (ctx) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new Error("task missing");
+    const { session, mainChat } = await ensureWorkSession(ctx, {
+      kind: "task",
+      task,
+    });
+    for (const row of await ctx.db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", mainChat._id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    const turnId = await openSessionChatTurn(ctx, {
+      chatId: mainChat._id,
+      sessionId: session._id,
+      streamingEntityId: String(mainChat._id),
+      model: "claude:opus",
+      repoId: f.repoId,
+      taskRun: { mode: "implementation" },
+    });
+    const turn = await ctx.db.get(turnId);
+    if (!turn) throw new Error("turn missing");
+    await closeTurn(
+      ctx,
+      turn,
+      state,
+      state === "error" ? { error: "Tests failed" } : {},
+    );
+    return turnId;
+  });
+}
+
 /** The task's latest run ended in an error and it went back to todo. */
 async function failLatestRun(f: Fixture, taskId: Id<"agentTasks">) {
-  return f.t.run(async (ctx) => {
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    let runId = runs.at(-1)?._id;
-    if (runId === undefined) {
-      runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId: f.repoId,
-        status: "error",
-        logs: [],
-        startedAt: Date.now() - 1_000,
-        error: "Tests failed",
-      });
-    }
-    for (const run of runs) {
-      await ctx.db.patch(run._id, { status: "error", error: "Tests failed" });
-    }
-    await ctx.db.patch(taskId, { status: "todo", run: undefined });
-    return runId;
-  });
+  const turnId = await endRun(f, taskId, "error");
+  await f.t.run((ctx) => ctx.db.patch(taskId, { status: "todo", run: undefined }));
+  return turnId;
 }
 
 /** The run ended and the task sits done with its PR in `prState`. */
@@ -146,15 +173,10 @@ async function finishTask(
   taskId: Id<"agentTasks">,
   prState: "open" | "merged",
 ) {
-  await f.t.run(async (ctx) => {
-    await ctx.db.patch(taskId, { status: "done", prState, run: undefined });
-    for (const run of await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect()) {
-      await ctx.db.patch(run._id, { status: "success" });
-    }
-  });
+  await endRun(f, taskId, "done");
+  await f.t.run((ctx) =>
+    ctx.db.patch(taskId, { status: "done", prState, run: undefined }),
+  );
 }
 
 describe("project scheduler", () => {
@@ -214,7 +236,7 @@ describe("project scheduler", () => {
 
 describe("who starts project tasks", () => {
   test(
-    "the coordinator's tasks are approved and the scheduler runs at once; a person's waits in Triage",
+    "the coordinator's tasks are approved and the scheduler runs at once; a person's goes to the coordinator",
     async () => {
       const f = await fixture(0);
       const created = await f.t.mutation(
@@ -241,25 +263,20 @@ describe("who starts project tasks", () => {
         "in_progress",
       ]);
 
-      // "+" without "Start now": not approved.
-      const triageId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
+      // A person's task without "Start now" goes to the coordinator, and
+      // only the coordinator starts it.
+      const personTaskId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: f.repoId,
         projectId: f.projectId,
-        title: "The button is hard to find",
-        approved: false,
+        description: "The button is hard to find",
       });
       await schedule(f);
-      const triaged = await taskDoc(f, triageId);
-      expect(triaged.status).toBe("todo");
-      expect(triaged.approvedAt).toBeUndefined();
-      expect(projectTaskDisplayStatus(await factsOf(f, triageId))).toBe("triage");
-
-      // A person approves it from Triage: it starts.
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
+      expect((await taskDoc(f, personTaskId)).status).toBe("todo");
+      await f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
         projectId: f.projectId,
-        taskIds: [triageId],
+        taskId: personTaskId,
       });
-      expect((await taskDoc(f, triageId)).status).toBe("in_progress");
+      expect((await taskDoc(f, personTaskId)).status).toBe("in_progress");
     },
     TIMEOUT_MS,
   );
@@ -492,9 +509,9 @@ describe("the project's rows across repos", () => {
   );
 });
 
-describe("deleting project work", () => {
+describe("archiving project work", () => {
   test(
-    "the coordinator may delete only a task that has not started",
+    "the coordinator may archive only a task that has not started",
     async () => {
       const f = await fixture(3);
       const [notStarted, running, inReview] = f.tasks;
@@ -503,7 +520,7 @@ describe("deleting project work", () => {
         await ctx.db.patch(inReview, { status: "code_review" });
       });
       const check = (taskId: Id<"agentTasks">) =>
-        f.t.query(internal.mcp.projectQueries.assertCoordinatorMayDeleteTask, {
+        f.t.query(internal.mcp.projectQueries.assertCoordinatorMayArchiveTask, {
           projectId: f.projectId,
           taskId,
         });
@@ -511,39 +528,48 @@ describe("deleting project work", () => {
       await expect(check(running)).rejects.toThrow("has started");
       await expect(check(inReview)).rejects.toThrow("has started");
 
-      // A todo task with a run pending has started too.
-      await f.t.run((ctx) =>
-        ctx.db.patch(running, {
-          status: "todo",
-          run: { state: "running", workflowId: "wf-1" },
-        }),
-      );
+      // A todo task with a run pending (queued in its chat) has started too.
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
+      await f.asUser.mutation(api.agentTasks.startExecution, { id: running });
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
       await expect(check(running)).rejects.toThrow("has started");
     },
     TIMEOUT_MS,
   );
 
   test(
-    "a project delete is refused while a task runs; otherwise its tasks stay as quick tasks",
+    "a project archive is refused while a task runs; otherwise its tasks stay in it",
     async () => {
       const f = await fixture(2);
       await schedule(f);
       await expect(
-        f.asUser.mutation(api.projects.remove, { id: f.projectId }),
+        f.asUser.mutation(api.projects.archive, { id: f.projectId }),
       ).rejects.toThrow("is running");
-      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.deletedAt).toBeUndefined();
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeUndefined();
 
       await finishTask(f, f.tasks[0], "open");
       await finishTask(f, f.tasks[1], "merged");
-      await f.asUser.mutation(api.projects.remove, { id: f.projectId });
-      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.deletedAt).toBeDefined();
-      for (const id of f.tasks) {
+      const before = await Promise.all(f.tasks.map((id) => taskDoc(f, id)));
+      await f.asUser.mutation(api.projects.archive, { id: f.projectId });
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeDefined();
+      expect(
+        (await f.asUser.query(api.projects.list, { repoId: f.repoId })).map((p) => p._id),
+      ).not.toContain(f.projectId);
+      expect(
+        (await f.asUser.query(api.projects.listArchived, { repoId: f.repoId })).map((p) => p._id),
+      ).toEqual([f.projectId]);
+      for (const [index, id] of f.tasks.entries()) {
         const task = await taskDoc(f, id);
-        expect(task.projectId).toBeUndefined();
-        expect(task.taskNumber).toBeUndefined();
-        expect(task.approvedAt).toBeUndefined();
-        expect(task.deletedAt).toBeUndefined();
+        expect(task.projectId).toBe(f.projectId);
+        expect(task.taskNumber).toBe(before[index]?.taskNumber);
+        expect(task.archivedAt).toBeUndefined();
       }
+      // Unarchive brings the project back with the same tasks.
+      await f.asUser.mutation(api.projects.unarchive, { id: f.projectId });
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeUndefined();
+      expect(
+        (await f.asUser.query(api.agentTasks.listByProject, { projectId: f.projectId })).map((t) => t._id),
+      ).toEqual(f.tasks);
       // Their sessions stay theirs.
       const owners = await f.t.run(async (ctx) =>
         (await ctx.db.query("sessions").collect()).map((s) => s.owner),
@@ -571,3 +597,160 @@ test(
   },
   TIMEOUT_MS,
 );
+
+describe("people's tasks go to the coordinator", () => {
+  /** A person's project task: handed to the coordinator at creation. */
+  const personTask = (f: Fixture, title: string) =>
+    f.asUser.mutation(api.agentTasks.createQuickTask, {
+      repoId: f.repoId,
+      projectId: f.projectId,
+      description: title,
+    });
+
+  const wakes = (f: Fixture) =>
+    f.t.run((ctx) => ctx.db.query("projectCoordinatorWakes").collect());
+
+  test(
+    "a person's task is approved and handed at once, with one wake-up, and starts nothing",
+    async () => {
+      const f = await fixture(0);
+      const a = await personTask(f, "Promo box is hard to find");
+      await schedule(f);
+      expect(await statuses(f, [a])).toEqual(["todo"]);
+      const handed = await taskDoc(f, a);
+      expect(handed.approvedAt).toBeDefined();
+      expect(handed.handedToCoordinatorAt).toBeDefined();
+      const facts = await factsOf(f, a);
+      expect(facts.withCoordinator).toBe(true);
+      expect(projectTaskDisplayStatus(facts)).toBe("idle");
+      expect(projectTaskNeedsYou(facts)).toBeUndefined();
+      const rows = await wakes(f);
+      expect(rows.map((row) => row.reason)).toEqual(["triage"]);
+      expect(rows[0]?.text).toContain("Promo box is hard to find");
+
+      // A second ask is its own wake-up.
+      await personTask(f, "Rename Basket to Cart");
+      expect(await wakes(f)).toHaveLength(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the migration hands old Triage tasks over with one wake-up per project, once",
+    async () => {
+      const f = await fixture(0);
+      const old = (title: string, projectId: Id<"projects">) =>
+        f.t.run((ctx) =>
+          ctx.db.insert("agentTasks", {
+            repoId: f.repoId,
+            projectId,
+            title,
+            status: "todo",
+            numId: 100,
+            createdAt: 0,
+            updatedAt: 0,
+            createdBy: f.userId,
+          }),
+        );
+      const otherProject = await f.t.run((ctx) =>
+        ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Other",
+          rawInput: "Other",
+          numId: 2,
+        }),
+      );
+      const a = await old("Old ask A", f.projectId);
+      const b = await old("Old ask B", f.projectId);
+      const c = await old("Old ask C", otherProject);
+      const migrate = () =>
+        f.t.run(async (ctx) => {
+          const projects = await ctx.db.query("projects").collect();
+          for (const project of projects) {
+            await handProjectTriageToEva(ctx, project);
+          }
+        });
+      await migrate();
+      for (const id of [a, b, c]) {
+        const task = await taskDoc(f, id);
+        expect(task.approvedAt).toBeDefined();
+        expect(task.handedToCoordinatorAt).toBeDefined();
+      }
+      const rows = await wakes(f);
+      expect(rows.map((row) => String(row.projectId)).sort()).toEqual(
+        [String(f.projectId), String(otherProject)].sort(),
+      );
+      expect(rows.find((row) => row.projectId === f.projectId)?.text).toContain(
+        "Old ask B",
+      );
+
+      // A re-run, even with the stamps cleared, wakes no one again.
+      await migrate();
+      await f.t.run((ctx) =>
+        ctx.db.patch(a, { approvedAt: undefined, handedToCoordinatorAt: undefined }),
+      );
+      await migrate();
+      expect(await wakes(f)).toHaveLength(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "merge_task_into closes the item as added to an open task, and refuses bad targets",
+    async () => {
+      const f = await fixture(1);
+      const open = f.tasks[0];
+      if (open === undefined) throw new Error("fixture task missing");
+      const item = await personTask(f, "Copy fix");
+      const other = await personTask(f, "Another fix");
+      const merge = (taskId: Id<"agentTasks">, intoTaskId: Id<"agentTasks">) =>
+        f.t.mutation(internal.buildWorkflow.mergeTaskIntoAsCoordinator, {
+          projectId: f.projectId,
+          taskId,
+          intoTaskId,
+        });
+
+      // Not into itself, not into a finished task.
+      await expect(merge(item, item)).rejects.toThrow("into itself");
+      await f.t.run((ctx) => ctx.db.patch(open, { status: "done" }));
+      await expect(merge(item, open)).rejects.toThrow("finished");
+      await f.t.run((ctx) => ctx.db.patch(open, { status: "in_progress" }));
+
+      expect(await merge(item, open)).toEqual({ intoTaskNumber: 1 });
+      const merged = await taskDoc(f, item);
+      expect(merged.status).toBe("cancelled");
+      expect(merged.mergedIntoTaskId).toBe(open);
+      expect(merged.handedToCoordinatorAt).toBeUndefined();
+      // A merged item cannot be merged or started again.
+      await expect(merge(item, open)).rejects.toThrow("not started");
+      // Nor into a merged (cancelled) item.
+      await expect(merge(other, item)).rejects.toThrow("finished");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the coordinator's tools refuse a task of another project",
+    async () => {
+      const f = await fixture(0);
+      const otherProject = await f.t.run((ctx) =>
+        ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Other",
+          rawInput: "Other",
+          numId: 2,
+        }),
+      );
+      const item = await personTask(f, "Copy fix");
+      await expect(
+        f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
+          projectId: otherProject,
+          taskId: item,
+        }),
+      ).rejects.toThrow("not part of this project");
+    },
+    TIMEOUT_MS,
+  );
+});

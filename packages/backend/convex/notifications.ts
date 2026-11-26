@@ -15,22 +15,16 @@ import {
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
 import { schedulePush } from "./push";
+import {
+  notificationEmail,
+  notificationEmailFor,
+  notificationPushes,
+  resolveNotificationPrefs,
+  type RoutableNotification,
+} from "@eva/shared/notificationRouting";
 
 /** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
-
-/**
- * Notification types worth an instant (debounced) email — high-signal, human-
- * directed activity. Everything else waits for the daily digest. Lower-signal
- * types (run/task completion, system) are intentionally absent.
- */
-const EMAIL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
-  "mention",
-  "comment_reply",
-  "comment_added",
-  "task_assigned",
-  "routed_question",
-]);
 
 /**
  * Notification types whose title does not name the task (e.g. "X mentioned you
@@ -42,17 +36,8 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
   "routed_question",
-]);
-
-/**
- * Notification types that also push to the mobile app: someone needs the
- * user. Agent questions push from pendingQuestions.post, not from here. A
- * routed chat mention (`routesUrgency`) pushes later instead, from
- * `setUrgency` (not `low`) or the routing fallback.
- */
-const PUSH_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
-  "mention",
-  "routed_question",
+  "thread_reply",
+  "thread_answer",
 ]);
 
 /**
@@ -75,24 +60,9 @@ export const HIGH_URGENCY_EMAIL_DELAY_MS = 60_000;
 /**
  * How many unread notifications to scan per user before filtering. Larger than
  * the display limit so impactful items (mentions, merges) are not buried under
- * a backlog of excluded run-completion notifications.
+ * a backlog of rows that are never emailed.
  */
 const DIGEST_SCAN_LIMIT = 200;
-
-/**
- * Notification types excluded from the daily digest. Task/quick-task run
- * finished notifications ("run_completed") are high-volume and low-signal in an
- * email summary; they remain in the in-app notification bell.
- */
-const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
-  "run_completed",
-  "run_failed",
-  // Change requests show in-app only — they re-run Eva, which is low-signal in
-  // an email summary.
-  "changes_requested",
-  // Session auto-archive on PR close/merge is inbox-only; never email.
-  "session_archived",
-]);
 
 /**
  * Creates a notification for a user, auto-generating an href from
@@ -118,6 +88,11 @@ export async function createNotification(
     // Set by chat mentions: mention routing decides urgency afterwards and
     // pushes then, so a `low` mention never buzzes the phone.
     routesUrgency?: boolean;
+    // Known at creation (comment mentions, agent `notify_user`): the modifier
+    // on top of the routing table (`@eva/shared/notificationRouting`).
+    urgency?: Infer<typeof notificationUrgencyValidator>;
+    // Set by reply-thread notifications: the link opens that thread.
+    threadRootId?: Id<"messages">;
   },
 ): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
@@ -150,6 +125,10 @@ export async function createNotification(
         href = entityHref("task", repo, task.numId);
       } else if (project?.numId !== undefined) {
         href = entityHref("project", repo, project.numId);
+        // Reply threads live in the project chat: its rail's Replies tab.
+        if (params.threadRootId !== undefined) {
+          href = `${href}/sandbox/replies?thread=${params.threadRootId}`;
+        }
       } else if (session?.numId !== undefined) {
         href = entityHref("session", repo, session.numId);
       } else {
@@ -191,26 +170,56 @@ export async function createNotification(
     contextLabel,
     commentId: params.commentId,
     chatTarget,
+    threadRootId: params.threadRootId,
+    urgency: params.urgency,
     read: false,
     createdAt: Date.now(),
   });
 
-  if (PUSH_NOTIFICATION_TYPES.has(type) && params.routesUrgency !== true) {
+  // A routed chat mention is delivered once routing has judged it
+  // (`setUrgency`, `routeMentionFallback`).
+  if (params.routesUrgency === true) return notificationId;
+  const routable: RoutableNotification = {
+    type,
+    urgency: params.urgency,
+    commentId: params.commentId,
+    chatTarget,
+  };
+  if (notificationPushes(routable)) {
     await pushNotification(ctx, notificationId);
   }
-
-  // High-signal types get an instant email after a short debounce. The send is
-  // skipped if the user reads it in-app first (see notificationEmail.ts).
-  // Mentions are the exception: routing (mentionRouting.routeMentions) decides
-  // whether they warrant an email at all, and schedules one itself.
-  if (EMAIL_NOTIFICATION_TYPES.has(type) && type !== "mention") {
-    await ctx.scheduler.runAfter(
-      EMAIL_SEND_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: params.userId },
+  // Instant-email types get one after a debounce. The send is skipped if the
+  // user reads it in-app first (see notificationEmail.ts).
+  if (notificationEmail(routable) === "instant") {
+    await scheduleInstantEmail(
+      ctx,
+      params.userId,
+      params.urgency === "high"
+        ? HIGH_URGENCY_EMAIL_DELAY_MS
+        : EMAIL_SEND_DELAY_MS,
     );
   }
   return notificationId;
+}
+
+/**
+ * Queues the instant email sweep, unless the person chose the digest or no
+ * email. The sweep checks the choice again at send time.
+ */
+async function scheduleInstantEmail(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  delayMs: number,
+): Promise<void> {
+  const user = await ctx.db.get(userId);
+  if (!resolveNotificationPrefs(user?.notificationPrefs).email) {
+    return;
+  }
+  await ctx.scheduler.runAfter(
+    delayMs,
+    internal.notificationEmail.sendUnreadForUser,
+    { userId },
+  );
 }
 
 /** Pushes one notification row to the user's phone, opening its chat or the screen its link names. */
@@ -224,10 +233,16 @@ async function pushNotification(
     userId: notification.userId,
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
-    // `target` opens a chat; otherwise the phone opens its own screen for
-    // `href` (with `repoId`), or the web. Older app builds read `target` only.
+    // `target` opens a chat (and `thread` a reply thread in it); otherwise
+    // the phone opens its own screen for `href` (with `repoId`), or the web.
+    // Older app builds read `target` only.
     data: notification.chatTarget
-      ? { target: notification.chatTarget }
+      ? {
+          target: notification.chatTarget,
+          ...(notification.threadRootId
+            ? { thread: notification.threadRootId }
+            : {}),
+        }
       : notification.href
         ? { href: notification.href, repoId: notification.repoId }
         : undefined,
@@ -278,16 +293,17 @@ const notificationValidator = v.object({
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
   chatTarget: v.optional(v.string()),
+  threadRootId: v.optional(v.id("messages")),
   // Undefined = not yet routed (a mention whose routing action has not landed)
   // or legacy; treated as normal everywhere it is read.
   urgency: v.optional(notificationUrgencyValidator),
 });
 
 /**
- * Records the urgency mention routing decided on, and — for `high` — schedules
- * the instant email `createNotification` deliberately skipped. `normal` falls
- * through to the daily digest and `low` stays in the inbox only. `high` and
- * `normal` also push to the phone; `low` does not.
+ * Records the urgency mention routing decided on, and delivers the chat
+ * mention `createNotification` held back: `high` pushes and emails within a
+ * minute, `normal` pushes and waits for the digest, `low` stays in the inbox
+ * only (`@eva/shared/notificationRouting`).
  *
  * Internal use only (mentionRouting.routeMentions). Exempt from the per-row
  * owner check every public notification function makes: the id comes from the
@@ -303,44 +319,49 @@ export const setUrgency = internalMutation({
     const notification = await ctx.db.get(args.notificationId);
     // Archived or deleted between creation and routing: nothing left to route.
     if (!notification) return null;
-    await ctx.db.patch(args.notificationId, { urgency: args.urgency });
-    if (args.urgency !== "low") {
-      await pushNotification(ctx, args.notificationId);
-    }
-    if (args.urgency === "high") {
-      await ctx.scheduler.runAfter(
-        HIGH_URGENCY_EMAIL_DELAY_MS,
-        internal.notificationEmail.sendUnreadForUser,
-        { userId: notification.userId },
-      );
-    }
+    await deliverRoutedMention(ctx, notification, args.urgency);
     return null;
   },
 });
 
 /**
- * Falls back to the pre-routing behaviour when Jev could not judge a mention:
- * the push and the same 15-minute debounced instant email every other
- * high-signal type gets. Leaves `urgency` unset, which reads as normal.
+ * When Jev could not judge a mention, it is delivered as `high`: it toasts,
+ * pushes and emails at once. A mention must not lose its email because the
+ * judge failed (user, 26 November 2026).
  *
  * Internal use only (mentionRouting.routeMentions).
  */
-export const scheduleLegacyMentionEmail = internalMutation({
+export const routeMentionFallback = internalMutation({
   args: { notificationId: v.id("notifications") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const notification = await ctx.db.get(args.notificationId);
     // Archived or deleted between creation and routing: nothing to deliver.
     if (!notification) return null;
-    await pushNotification(ctx, args.notificationId);
-    await ctx.scheduler.runAfter(
-      EMAIL_SEND_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: notification.userId },
-    );
+    await deliverRoutedMention(ctx, notification, "high");
     return null;
   },
 });
+
+/** Stamps a routed chat mention's urgency, then pushes and emails as the table says. */
+async function deliverRoutedMention(
+  ctx: MutationCtx,
+  notification: Doc<"notifications">,
+  urgency: Infer<typeof notificationUrgencyValidator>,
+): Promise<void> {
+  await ctx.db.patch(notification._id, { urgency });
+  const routed = { ...notification, urgency };
+  if (notificationPushes(routed)) {
+    await pushNotification(ctx, notification._id);
+  }
+  if (notificationEmail(routed) === "instant") {
+    await scheduleInstantEmail(
+      ctx,
+      notification.userId,
+      HIGH_URGENCY_EMAIL_DELAY_MS,
+    );
+  }
+}
 
 /** Max ids a single bulk notification mutation will accept. */
 const BULK_ID_LIMIT = 100;
@@ -371,14 +392,15 @@ async function ownedNotifications(
 }
 
 /**
- * Lists the current user's inbox: the 100 most recent notifications, then
- * split by archive state (`archived: true` returns only archived rows, the
- * default only unarchived ones). The window is taken before the split, so a
- * large run of archived rows shortens the list rather than paging past them —
- * acceptable while archiving is an inbox-sized action.
+ * The current user's 100 most recent notifications that are not archived
+ * (the web's new-notification toasts). The window is taken before the archive
+ * filter, so a run of archived rows shortens it rather than paging past them.
  */
 export const list = authQuery({
-  args: { archived: v.optional(v.boolean()) },
+  args: {
+    /** The Inbox's History: every notification, read and archived (Done) ones too. */
+    history: v.optional(v.boolean()),
+  },
   returns: v.array(notificationValidator),
   handler: async (ctx, args) => {
     const recent = await ctx.db
@@ -386,19 +408,9 @@ export const list = authQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
-    const wantArchived = args.archived === true;
-    return recent.filter((n) => (n.archivedAt !== undefined) === wantArchived);
-  },
-});
-
-/** Fetches a single notification by ID, only if it belongs to the current user. */
-export const get = authQuery({
-  args: { id: v.id("notifications") },
-  returns: v.union(notificationValidator, v.null()),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId) return null;
-    return notification;
+    return args.history === true
+      ? recent
+      : recent.filter((n) => n.archivedAt === undefined);
   },
 });
 
@@ -431,73 +443,6 @@ export const markAsRead = authMutation({
       throw new Error("Not found");
     if (!notification.read) {
       await ctx.db.patch(args.id, { read: true });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks a single notification as unread again (inbox right-click menu). Read
- * state is the `read` boolean alone — there is no timestamp to clear.
- */
-export const markAsUnread = authMutation({
-  args: { id: v.id("notifications") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId)
-      throw new Error("Not found");
-    if (notification.read) {
-      await ctx.db.patch(args.id, { read: false });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks all unread notifications as read for the current user. Archived rows
- * are left alone: they are out of the inbox, and touching them here would
- * quietly change what the archived view shows.
- */
-export const markAllAsRead = authMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const unread = await ctx.db
-      .query("notifications")
-      .withIndex("by_user_and_read", (q) =>
-        q.eq("userId", ctx.userId).eq("read", false),
-      )
-      .collect();
-    for (const n of unread) {
-      if (n.archivedAt !== undefined) continue;
-      await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as read (inbox bulk bar). */
-export const markManyAsRead = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (!n.read) await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as unread. */
-export const markManyAsUnread = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (n.read) await ctx.db.patch(n._id, { read: false });
     }
     return null;
   },
@@ -542,10 +487,10 @@ export const unarchiveMany = authMutation({
 });
 
 /**
- * Gathers digest recipients for the daily email: every user with an email address
- * and at least one unread notification created since `since` (the digest window,
- * typically the past 24 hours), along with up to DIGEST_NOTIFICATION_LIMIT of
- * those notifications. Internal use only (daily cron).
+ * Gathers digest recipients for the daily email: every user with an email
+ * address, email not turned off, and at least one unread, not yet emailed
+ * notification created since `since` (`digestWindowStart`), along with up to
+ * DIGEST_NOTIFICATION_LIMIT of those notifications. Internal use only (daily cron).
  */
 export const getDigestRecipients = internalQuery({
   args: { since: v.number() },
@@ -555,6 +500,7 @@ export const getDigestRecipients = internalQuery({
       name: v.optional(v.string()),
       notifications: v.array(
         v.object({
+          id: v.id("notifications"),
           title: v.string(),
           message: v.optional(v.string()),
           href: v.optional(v.string()),
@@ -570,7 +516,8 @@ export const getDigestRecipients = internalQuery({
     const recipients = [];
     for (const user of users) {
       if (!user.email) continue;
-      if (user.emailNotificationsEnabled !== true) continue;
+      const { email } = resolveNotificationPrefs(user.notificationPrefs);
+      if (!email) continue;
       const unread = await ctx.db
         .query("notifications")
         .withIndex("by_user_and_read", (q) =>
@@ -582,10 +529,8 @@ export const getDigestRecipients = internalQuery({
         .filter(
           (n) =>
             n.createdAt >= args.since &&
-            !DIGEST_EXCLUDED_TYPES.has(n.type) &&
-            // Routing judged this one incidental: inbox only, never emailed.
-            n.urgency !== "low" &&
-            n.emailedAt === undefined,
+            n.emailedAt === undefined &&
+            notificationEmailFor(n, email) !== "none",
         )
         .slice(0, DIGEST_NOTIFICATION_LIMIT);
       if (relevant.length === 0) continue;
@@ -593,6 +538,7 @@ export const getDigestRecipients = internalQuery({
         email: user.email,
         name: user.firstName ?? user.fullName,
         notifications: relevant.map((n) => ({
+          id: n._id,
           title: n.title,
           message: n.message,
           href: n.href,
@@ -607,21 +553,10 @@ export const getDigestRecipients = internalQuery({
 });
 
 /**
- * Whether a notification belongs in an instant email. Only mentions carry an
- * urgency, and only a `high` one earns the interruption; `normal` waits for the
- * daily digest and `low` never leaves the inbox. An unrouted mention (urgency
- * undefined) still emails, so a routing failure degrades to the old behaviour.
- */
-function isInstantEmailable(notification: Doc<"notifications">): boolean {
-  if (notification.type !== "mention") return true;
-  return notification.urgency === "high" || notification.urgency === undefined;
-}
-
-/**
  * For an instant notification email: returns the user's unread, not-yet-emailed,
- * high-signal notifications (or null if there is nothing to send — user opted
- * out, has no email, or has already read/been emailed everything). Sweeping all
- * pending items lets a burst within the debounce window collapse into one email.
+ * high-signal notifications (or null if there is nothing to send — the user
+ * chose the digest or no email, has no address, or has read or been emailed
+ * everything). Sweeping all pending items lets a burst within the debounce window collapse into one email.
  * Internal use only (notificationEmail.sendUnreadForUser).
  */
 export const getUnreadEmailableForUser = internalQuery({
@@ -647,7 +582,7 @@ export const getUnreadEmailableForUser = internalQuery({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || !user.email) return null;
-    if (user.emailNotificationsEnabled !== true) return null;
+    const { email } = resolveNotificationPrefs(user.notificationPrefs);
 
     const unread = await ctx.db
       .query("notifications")
@@ -656,11 +591,11 @@ export const getUnreadEmailableForUser = internalQuery({
       )
       .order("desc")
       .take(DIGEST_SCAN_LIMIT);
+    // A digested row carries `emailedAt` too, so it is never sent again here.
     const relevant = unread.filter(
       (n) =>
-        EMAIL_NOTIFICATION_TYPES.has(n.type) &&
         n.emailedAt === undefined &&
-        isInstantEmailable(n),
+        notificationEmailFor(n, email) === "instant",
     );
     if (relevant.length === 0) return null;
 

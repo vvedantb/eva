@@ -12,6 +12,7 @@ import {
   chatSourceFieldsForEntityId,
 } from "../_chatSource/helpers";
 import { chatLogDigestBlock } from "../chatLog";
+import { bumpThreadRoot } from "../_messages/replies";
 
 /** Hard cap on the injected block, including its closing tag. */
 const HANDOFF_CONTEXT_LIMIT = 24_000;
@@ -294,6 +295,8 @@ export async function maybeInsertModelHandoffAlert(
   parentId: HandoffParentId,
   incomingModel: string,
   fallbackPreviousProvider: AIProvider | undefined,
+  /** The thread the incoming turn answers in; the alert joins it. */
+  replyTo?: Id<"messages">,
 ): Promise<void> {
   const handoff = await detectModelHandoff(
     ctx,
@@ -308,23 +311,38 @@ export async function maybeInsertModelHandoffAlert(
     content: handoff.alertContent,
     timestamp: Date.now(),
     isSystemAlert: true,
+    replyTo,
   });
+  if (replyTo !== undefined) await bumpThreadRoot(ctx, replyTo, undefined);
+}
+
+/**
+ * Whether an earlier turn of this chat already reached the agent: some
+ * assistant reply before the current user row finished with content. Then the
+ * provider's resumed session already holds that turn's full instructions.
+ */
+export function hasDeliveredTurn(
+  messages: ReadonlyArray<HandoffMessage>,
+): boolean {
+  const currentIndex = currentUserIndex(messages);
+  if (currentIndex < 0) return false;
+  return messages
+    .slice(0, currentIndex)
+    .some(
+      (message) =>
+        message.role === "assistant" &&
+        message.finishedAt !== undefined &&
+        eligibleTranscriptMessage(message),
+    );
 }
 
 /** Prepends the catch-up block to an agent prompt, when this turn is a handoff. */
 export async function prependModelHandoffContext(
   ctx: QueryCtx,
   parentId: HandoffParentId,
-  incomingModel: string,
-  fallbackPreviousProvider: AIProvider | undefined,
+  handoff: ModelHandoff,
   prompt: string,
 ): Promise<string> {
-  const handoff = await detectModelHandoff(
-    ctx,
-    parentId,
-    incomingModel,
-    fallbackPreviousProvider,
-  );
   if (handoff.kind !== "handoff") return prompt;
   // The incoming provider's own session has not seen this chat: give it the
   // Log too, so agreed decisions survive the switch.

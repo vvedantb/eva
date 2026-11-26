@@ -2,7 +2,6 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { MessageContent } from "@vvedantb/native-ui/ai";
 import type { ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
-import { EvaMark } from "@/ui/EvaMark";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 
@@ -52,13 +51,13 @@ export function TeammateBubble({
   );
 }
 
-/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with her mark. */
-export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
-  return (
-    <SideBubble avatar={<EvaMark size={16} />} joinsNext={joinsNext} className="max-w-[85%]">
-      {children}
-    </SideBubble>
-  );
+/**
+ * Eva's reply in the project coordinator chat, as the web `assistantBubble`:
+ * plain text at full width, with no bubble, avatar or name, so people's
+ * bubbles and Eva's answers read apart.
+ */
+export function EvaReply({ children }: { children: ReactNode }) {
+  return <View className="min-w-0 max-w-full px-1">{children}</View>;
 }
 
 /** Only a run's last bubble shows the avatar and squares its corner against it; the rest keep its 16 of space. */

@@ -10,7 +10,6 @@ export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
 export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPublish";
 export {
-  isTaskRunning,
   taskScheduledAt,
   type TaskRunSource,
 } from "./convex/_agentTasks/runState";
@@ -79,3 +78,5 @@ export {
   type ShortcutDef,
   type ShortcutId,
 } from "./convex/validators";
+export { buildAutomationEmailHtml } from "./convex/emailTemplates";
+// Release trigger: rebuilds the APK once CI is green again (design-check fixed).

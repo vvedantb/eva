@@ -26,6 +26,8 @@ import { type Id, api } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
+  IconArchive,
+  IconArchiveOff,
   IconArrowMoveRight,
   IconClipboard,
   IconCopy,
@@ -34,7 +36,6 @@ import {
   IconGitPullRequest,
   IconLink,
   IconPlayerPlay,
-  IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
@@ -74,15 +75,19 @@ export interface TaskCardMenuItemsProps {
   users?: User[];
   currentUserId?: Id<"users">;
   projects?: Project[];
-  onDelete: () => void;
+  /** An archived task: read-only, so the menu offers Unarchive and no edits. */
+  archived?: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
   onMove: (targetId: Id<"githubRepos">) => void;
 }
 
 /**
  * Quick task menu body shared by the card's right-click menu, the card's kebab
  * and the task header "…" menu. Groups: Run Eva, triage (Status, Code
- * Reviewer), open and copy, PRs, then Move and Delete. Model and project are
- * set on the task page, not here.
+ * Reviewer), open and copy, PRs, then Move and Archive. Model and project are
+ * set on the task page, not here. An archived task keeps only open, copy, PRs
+ * and Unarchive.
  */
 export function TaskCardMenuItems({
   variant,
@@ -100,7 +105,9 @@ export function TaskCardMenuItems({
   users,
   currentUserId,
   projects,
-  onDelete,
+  archived = false,
+  onArchive,
+  onUnarchive,
   onMove,
 }: TaskCardMenuItemsProps) {
   const updateStatus = useMutation(
@@ -127,10 +134,11 @@ export function TaskCardMenuItems({
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
 
-  // A card only needs runs and PRs once the menu is open — Radix mounts menu
-  // content on demand, so these stay per opened menu rather than per card on
-  // the board. PRs come primary first; a project task links its project's.
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
+  // A card only needs run facts and PRs once the menu is open — Radix mounts
+  // menu content on demand, so these stay per opened menu rather than per
+  // card on the board. PRs come primary first; a project task links its
+  // project's.
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: id });
   const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
   // A project task without PRs of its own links its project's, which is a bare
   // URL here: the project's rows are not loaded on a task card.
@@ -143,7 +151,7 @@ export function TaskCardMenuItems({
 
   // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
   const canRun =
-    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    (status === "todo" && runFacts?.hasRuns === false) ||
     status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 
@@ -167,7 +175,7 @@ export function TaskCardMenuItems({
   const moveTargets = groupedCodebases?.filter((codebase) =>
     codebase.apps.some((app) => app._id !== repoId),
   );
-  const hasMoveTargets = moveTargets && moveTargets.length > 0;
+  const hasMoveTargets = !archived && moveTargets && moveTargets.length > 0;
   const hasPrGroup = taskPrs.length > 0 || projectPrUrl !== undefined;
 
   return (
@@ -179,7 +187,7 @@ export function TaskCardMenuItems({
         </>
       ) : null}
 
-      {showRunEva && !projectId && (
+      {showRunEva && !projectId && !archived && (
         <>
           <Item
             disabled={!canRun}
@@ -198,75 +206,79 @@ export function TaskCardMenuItems({
         </>
       )}
 
-      <Sub>
-        <SubTrigger>
-          <StatusIcon size={iconSize} />
-          Status
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={status}
-            onValueChange={(value) => {
-              const matched = TASK_STATUSES.find((s) => s === value);
-              if (!matched) return;
-              updateStatus({ id, status: matched });
-            }}
-          >
-            {TASK_STATUSES.map((s) => {
-              const cfg = statusConfig[s];
-              const Icon = cfg.icon;
-              return (
-                <RadioItem key={s} value={s}>
-                  <Icon size={iconSize} className={cfg.text} />
-                  {cfg.label}
-                </RadioItem>
-              );
-            })}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
+      {archived ? null : (
+        <>
+          <Sub>
+            <SubTrigger>
+              <StatusIcon size={iconSize} />
+              Status
+            </SubTrigger>
+            <SubContent>
+              <RadioGroup
+                value={status}
+                onValueChange={(value) => {
+                  const matched = TASK_STATUSES.find((s) => s === value);
+                  if (!matched) return;
+                  updateStatus({ id, status: matched });
+                }}
+              >
+                {TASK_STATUSES.map((s) => {
+                  const cfg = statusConfig[s];
+                  const Icon = cfg.icon;
+                  return (
+                    <RadioItem key={s} value={s}>
+                      <Icon size={iconSize} className={cfg.text} />
+                      {cfg.label}
+                    </RadioItem>
+                  );
+                })}
+              </RadioGroup>
+            </SubContent>
+          </Sub>
 
-      <Sub>
-        <SubTrigger>
-          <IconUserPlus size={iconSize} />
-          Code Reviewer
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={assignedTo ?? "unassigned"}
-            onValueChange={(value) => {
-              if (value === "unassigned") {
-                updateTask({ id, assignedTo: null });
-              } else {
-                const matchedUser = (users ?? []).find((u) => u._id === value);
-                const userId =
-                  currentUserId === value ? currentUserId : matchedUser?._id;
-                if (!userId) return;
-                updateTask({ id, assignedTo: userId });
-              }
-            }}
-          >
-            {currentUserId && (
-              <RadioItem value={currentUserId}>Assign to me</RadioItem>
-            )}
-            <MenuSeparator />
-            <RadioItem value="unassigned">Unassigned</RadioItem>
-            {(users ?? []).flatMap((user) =>
-              user.role === "dev"
-                ? [
-                    <RadioItem key={user._id} value={user._id}>
-                      <span data-pii>
-                        {user.fullName ?? user.firstName ?? "Unknown"}
-                      </span>
-                    </RadioItem>,
-                  ]
-                : [],
-            )}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
+          <Sub>
+            <SubTrigger>
+              <IconUserPlus size={iconSize} />
+              Code Reviewer
+            </SubTrigger>
+            <SubContent>
+              <RadioGroup
+                value={assignedTo ?? "unassigned"}
+                onValueChange={(value) => {
+                  if (value === "unassigned") {
+                    updateTask({ id, assignedTo: null });
+                  } else {
+                    const matchedUser = (users ?? []).find((u) => u._id === value);
+                    const userId =
+                      currentUserId === value ? currentUserId : matchedUser?._id;
+                    if (!userId) return;
+                    updateTask({ id, assignedTo: userId });
+                  }
+                }}
+              >
+                {currentUserId && (
+                  <RadioItem value={currentUserId}>Assign to me</RadioItem>
+                )}
+                <MenuSeparator />
+                <RadioItem value="unassigned">Unassigned</RadioItem>
+                {(users ?? []).flatMap((user) =>
+                  user.role === "dev"
+                    ? [
+                        <RadioItem key={user._id} value={user._id}>
+                          <span data-pii>
+                            {user.fullName ?? user.firstName ?? "Unknown"}
+                          </span>
+                        </RadioItem>,
+                      ]
+                    : [],
+                )}
+              </RadioGroup>
+            </SubContent>
+          </Sub>
 
-      <MenuSeparator />
+          <MenuSeparator />
+        </>
+      )}
 
       {showOpenInNewTab && href ? (
         <Item
@@ -401,17 +413,23 @@ export function TaskCardMenuItems({
           </SubContent>
         </Sub>
       )}
-      <Item
-        className="text-destructive focus:text-destructive"
-        title={skipConfirmTitle("Delete")}
-        onSelect={() => {
-          onDelete();
-        }}
-      >
-        <IconTrash size={iconSize} />
-        Delete
-        <ConfirmSkipHint />
-      </Item>
+      {archived ? (
+        <Item onSelect={onUnarchive}>
+          <IconArchiveOff size={iconSize} />
+          Unarchive
+        </Item>
+      ) : (
+        <Item
+          title={skipConfirmTitle("Archive")}
+          onSelect={() => {
+            onArchive();
+          }}
+        >
+          <IconArchive size={iconSize} />
+          Archive
+          <ConfirmSkipHint />
+        </Item>
+      )}
     </>
   );
 }

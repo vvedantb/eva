@@ -1,5 +1,5 @@
+import { autoStartTaskRun } from "../_agentTasks/taskRunTurn";
 import { v } from "convex/values";
-import { startTaskRun } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { authMutation } from "../functions";
@@ -8,7 +8,6 @@ import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
 
 /**
@@ -113,7 +112,7 @@ export const createTasksFromFindings = authMutation({
   },
 });
 
-/** Creates a run and starts the task execution workflow for an auto-run automation finding. */
+/** Runs the task an auto-run automation finding created, unless it is running already. */
 export const autoStartTask = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -121,37 +120,7 @@ export const autoStartTask = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-    if (!task.repoId) throw new Error("Task has no repository");
-
-    const repo = await ctx.db.get(task.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
-      return null;
-    }
-
-    try {
-      await startTaskRun(ctx, {
-        task,
-        repo,
-        userId: args.userId,
-        baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
-        isFirstTaskOnBranch: true,
-        clearPendingChangeRequest: false,
-        rollbackStatus: "todo",
-      });
-    } catch {
-      // startTaskRun recorded the failure on the run and rolled the task back.
-    }
-
+    await autoStartTaskRun(ctx, args.taskId, args.userId);
     return null;
   },
 });

@@ -2,7 +2,9 @@
 
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
-import { MENTION_CHIP_CLASS } from "./mentionChipStyles";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { api } from "@eva/backend";
+import { MENTION_CHIP_CLASS, MENTION_CHIP_SELF_CLASS } from "./mentionChipStyles";
 
 interface UserMentionChipProps {
   /** Convex user id from an `@[label](id)` mention token. */
@@ -12,10 +14,14 @@ interface UserMentionChipProps {
 
 /** @mention pill with a Linear-style profile card on hover. */
 export function UserMentionChip({ userId, label }: UserMentionChipProps) {
+  const isMe = useQuery(api.auth.me) === userId;
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
-        <span className={`${MENTION_CHIP_CLASS} cursor-default`} tabIndex={0}>
+        <span
+          className={`${isMe ? MENTION_CHIP_SELF_CLASS : MENTION_CHIP_CLASS} cursor-default`}
+          tabIndex={0}
+        >
           @{label}
         </span>
       </HoverCardTrigger>

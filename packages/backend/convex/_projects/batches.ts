@@ -1,19 +1,14 @@
 import { ConvexError, v, type Infer } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import {
-  authQuery,
   getProjectWithAccess,
   hasRepoAccess,
   normalizeIdOrThrow,
 } from "../functions";
+import { validateRepoGroupMembers } from "../_repoGroups/validate";
 import { createTodoTask } from "../_agentTasks/mutations";
-import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
-import {
-  coordinatorAutoTurnsInLastHour,
-  isCoordinatorPaused,
-  MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-} from "./coordinatorWake";
+import { coordinatorTurnMessageId } from "./chatTaskCards";
 
 /**
  * The tasks a project's coordinator creates (`create_task`,
@@ -23,12 +18,52 @@ import {
  */
 
 const coordinatorTaskInput = v.object({
-  title: v.string(),
+  /** Absent: titled from the description (`initialTitle`). */
+  title: v.optional(v.string()),
   description: v.optional(v.string()),
   /** Any repo the acting user can access; absent is the home repo. */
   repoId: v.optional(v.id("githubRepos")),
+  /**
+   * Repos besides the task's own it changes in the same sandbox, each with
+   * its own PR (`agentTasks.linkedRepoIds`). Any repo the acting user can access.
+   */
+  linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   phaseLabel: v.optional(v.string()),
 });
+
+type CoordinatorTask = Infer<typeof coordinatorTaskInput>;
+
+/** How the errors below name a task. */
+function taskLabel(task: CoordinatorTask): string {
+  return task.title ?? task.description?.slice(0, 60) ?? "a task";
+}
+
+/**
+ * Why a task's repos cannot be checked out side by side, or null when they
+ * can: the multi-repo session rules (`validateRepoGroupMembers`), so the home
+ * repo or a repeated repo in `linkedRepoIds` is refused here, before the
+ * task exists, never when its sandbox starts.
+ */
+async function linkedReposError(
+  ctx: MutationCtx,
+  homeRepoId: Id<"githubRepos">,
+  linkedRepoIds: readonly Id<"githubRepos">[],
+): Promise<string | null> {
+  const repos = await Promise.all(
+    [homeRepoId, ...linkedRepoIds].map((id) => ctx.db.get(id)),
+  );
+  const members: Doc<"githubRepos">[] = [];
+  for (const repo of repos) {
+    if (repo === null) return "One of its repositories no longer exists.";
+    members.push(repo);
+  }
+  const [home, ...linked] = members.map((repo) => ({
+    id: repo._id,
+    owner: repo.owner,
+    name: repo.name,
+  }));
+  return validateRepoGroupMembers(home, linked);
+}
 
 /** Creates the coordinator's tasks and their batch row. */
 export async function createCoordinatorTasks(
@@ -36,22 +71,42 @@ export async function createCoordinatorTasks(
   params: {
     projectId: Id<"projects">;
     userId: Id<"users">;
-    tasks: ReadonlyArray<Infer<typeof coordinatorTaskInput>>;
+    tasks: ReadonlyArray<CoordinatorTask>;
   },
 ): Promise<{ taskIds: Id<"agentTasks">[]; batchId: Id<"projectTaskBatches"> }> {
   const { projectId, userId, tasks } = params;
   if (tasks.length === 0) throw new Error("Create at least one task.");
   const project = await getProjectWithAccess(ctx.db, projectId, userId);
-  // Any repo the acting user can access; checked for every task before any is written.
+  // Any repo the acting user can access, the linked ones too; every task is
+  // checked before any is written.
   const access = await Promise.all(
-    tasks.map((task) =>
-      hasRepoAccess(ctx.db, task.repoId ?? project.repoId, userId),
-    ),
+    tasks.map(async (task) => {
+      const repoIds = [
+        task.repoId ?? project.repoId,
+        ...(task.linkedRepoIds ?? []),
+      ];
+      const allowed = await Promise.all(
+        repoIds.map((repoId) => hasRepoAccess(ctx.db, repoId, userId)),
+      );
+      return allowed.every(Boolean);
+    }),
   );
   for (const [index, task] of tasks.entries()) {
     if (!access[index]) {
       throw new ConvexError(
-        `Cannot create "${task.title}": the user has no access to its repository. Pick a repository they can access, or leave it out to use the project's home repository.`,
+        `Cannot create "${taskLabel(task)}": the user has no access to its repository or a linked one. Pick repositories they can access, or leave repoName out to use the project's home repository.`,
+      );
+    }
+    const linkedRepoIds = task.linkedRepoIds ?? [];
+    if (linkedRepoIds.length === 0) continue;
+    const error = await linkedReposError(
+      ctx,
+      task.repoId ?? project.repoId,
+      linkedRepoIds,
+    );
+    if (error !== null) {
+      throw new ConvexError(
+        `Cannot create "${taskLabel(task)}" across several repos: ${error}. List only repos besides the task's own repo, each once.`,
       );
     }
   }
@@ -67,15 +122,13 @@ export async function createCoordinatorTasks(
           title: task.title,
           description: task.description,
           phaseLabel: task.phaseLabel,
+          linkedRepoIds: task.linkedRepoIds,
         },
-        { approved: true },
+        { start: true },
       ),
     );
   }
-  const parentId = await resolveChatParent(ctx.db, "project", projectId);
-  const messageId = parentId
-    ? await latestChatMessageId(ctx.db, parentId)
-    : undefined;
+  const messageId = await coordinatorTurnMessageId(ctx.db, projectId);
   const batchId = await ctx.db.insert("projectTaskBatches", {
     projectId,
     ...(messageId ? { messageId } : {}),
@@ -94,6 +147,7 @@ export const createTasksFromCoordinator = internalMutation({
       v.object({
         ...coordinatorTaskInput.fields,
         repoId: v.optional(v.string()),
+        linkedRepoIds: v.optional(v.array(v.string())),
       }),
     ),
   },
@@ -110,39 +164,20 @@ export const createTasksFromCoordinator = internalMutation({
         "Project",
       ),
       userId: normalizeIdOrThrow(ctx.db, "users", args.userId, "User"),
-      tasks: args.tasks.map(({ repoId, ...task }) => ({
+      tasks: args.tasks.map(({ repoId, linkedRepoIds, ...task }) => ({
         ...task,
         ...(repoId !== undefined
           ? {
               repoId: normalizeIdOrThrow(ctx.db, "githubRepos", repoId, "Repo"),
             }
           : {}),
+        ...(linkedRepoIds !== undefined && linkedRepoIds.length > 0
+          ? {
+              linkedRepoIds: linkedRepoIds.map((id) =>
+                normalizeIdOrThrow(ctx.db, "githubRepos", id, "Repo"),
+              ),
+            }
+          : {}),
       })),
     }),
-});
-
-/**
- * The coordinator's automatic turns: whether the hourly cap holds a wake-up
- * back (the project then needs a person), and how many it had in the last
- * hour.
- */
-export const getCoordinatorState = authQuery({
-  args: { projectId: v.id("projects") },
-  returns: v.object({
-    paused: v.boolean(),
-    autoTurnsLastHour: v.number(),
-    maxAutoTurnsPerHour: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
-    const [paused, autoTurnsLastHour] = await Promise.all([
-      isCoordinatorPaused(ctx.db, args.projectId),
-      coordinatorAutoTurnsInLastHour(ctx.db, args.projectId, Date.now()),
-    ]);
-    return {
-      paused,
-      autoTurnsLastHour,
-      maxAutoTurnsPerHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-    };
-  },
 });

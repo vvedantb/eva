@@ -29,7 +29,8 @@ export function ChatQuestionDock({
   isLoading,
 }: ChatQuestionDockProps) {
   return (
-    <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
+    // `data-chat-question-dock`: the Inbox's Q key focuses the first answer (`QUESTION_DOCK_SELECTOR`).
+    <div className="p-3 md:p-4 max-w-3xl mx-auto w-full" data-chat-question-dock>
       <div className="max-h-[min(60dvh,34rem)] overflow-y-auto rounded-surface bg-card p-3">
         <MultipleChoiceQuestion
           // Reset selections when the agent moves on to a different question set.

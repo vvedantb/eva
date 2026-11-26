@@ -2,14 +2,10 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { normalizeAIModel } from "../validators";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived } from "../numId";
 import { ensureOwnerChat } from "../_sessions/ownedSession";
 import { queueSystemChatMessage } from "../_sessions/execution";
-import {
-  coordinatorAutoTurnsInLastHour,
-  MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-  undeliveredWakes,
-} from "./coordinatorWake";
+import { undeliveredWakes } from "./coordinatorWake";
 
 // The delivery half of the coordinator's wake-ups (`coordinatorWake.ts`).
 // Apart because it sends through the chat queue (`_sessions/execution.ts`),
@@ -26,33 +22,24 @@ export function coordinatorWakeMessage(
   ].join("\n");
 }
 
-export type WakeDelivery = "none" | "sent" | "held";
+export type WakeDelivery = "none" | "sent";
 
 /**
- * Delivers every undelivered wake-up of the project in one turn (rows the cap
- * held earlier ride along), or holds them at the cap. Nothing new to send
- * means no turn.
+ * Delivers every undelivered wake-up of the project in one turn. Nothing to
+ * send means no turn. Each turn logs one `coordinator_wake` line (project and
+ * reasons), so the turn rate is measured before any cap is set.
  */
 export async function deliverPendingCoordinatorWakes(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<WakeDelivery> {
   const pending = await undeliveredWakes(ctx.db, projectId);
-  if (!pending.some((row) => row.heldAt === undefined)) return "none";
+  if (pending.length === 0) return "none";
   const project = await ctx.db.get(projectId);
   const now = Date.now();
-  if (!project || isEntityDeleted(project)) {
+  if (!project || isEntityArchived(project)) {
     for (const row of pending) await ctx.db.patch(row._id, { sentAt: now });
     return "none";
-  }
-  if (
-    (await coordinatorAutoTurnsInLastHour(ctx.db, projectId, now)) >=
-    MAX_COORDINATOR_AUTO_TURNS_PER_HOUR
-  ) {
-    for (const row of pending) {
-      if (row.heldAt === undefined) await ctx.db.patch(row._id, { heldAt: now });
-    }
-    return "held";
   }
   const context = await ensureOwnerChat(ctx, { kind: "project", project });
   const repo = await ctx.db.get(context.session.repoId);
@@ -68,9 +55,10 @@ export async function deliverPendingCoordinatorWakes(
       providerAccountId: project.providerAccountId,
     },
   });
-  for (const row of pending) {
-    await ctx.db.patch(row._id, { sentAt: now, heldAt: undefined });
-  }
+  for (const row of pending) await ctx.db.patch(row._id, { sentAt: now });
+  console.log(
+    `coordinator_wake project=${projectId} reasons=${pending.map((row) => row.reason).join(",")}`,
+  );
   return "sent";
 }
 

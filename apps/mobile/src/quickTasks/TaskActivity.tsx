@@ -87,14 +87,13 @@ export function TaskActivity({
   creator,
   users,
   reactionsFor,
-  isProjectTask,
   currentUserId,
   onReply,
   onEdit,
   onDelete,
+  readOnly,
 }: {
   taskId: Id<"agentTasks">;
-  isProjectTask: boolean;
   createdAt: number;
   creator: User | undefined;
   users: User[] | undefined;
@@ -103,6 +102,8 @@ export function TaskActivity({
   onReply: (comment: TaskComment) => void;
   onEdit: (comment: TaskComment) => void;
   onDelete: (id: Id<"taskComments">) => void;
+  /** An archived task (or one in an archived project): the hold menu keeps reactions and Copy only. */
+  readOnly: boolean;
 }) {
   const theme = EVA_THEME[useScheme()];
   // The held comment and where it is on screen, for the hold menu.
@@ -162,7 +163,7 @@ export function TaskActivity({
   const menuReactions = menuFor
     ? reactionsFor("comment", menuFor._id)
     : undefined;
-  const ownComment = menuFor !== null && menuFor.authorId === currentUserId;
+  const ownComment = !readOnly && menuFor !== null && menuFor.authorId === currentUserId;
   return (
     <View className="gap-3">
       {held && menuFor && menuReactions ? (
@@ -178,7 +179,7 @@ export function TaskActivity({
           groups={menuReactions.groups}
           onToggleReaction={menuReactions.toggle}
           onMoreReactions={() => setPickingFor(menuFor)}
-          onReply={() => onReply(menuFor)}
+          onReply={readOnly ? undefined : () => onReply(menuFor)}
           onEdit={ownComment ? () => onEdit(menuFor) : undefined}
           copyText={mentionTokensToEditableText(menuFor.content)}
           onDelete={ownComment ? () => setDeleting(menuFor) : undefined}
@@ -223,7 +224,6 @@ export function TaskActivity({
                 item={item}
                 creator={creator}
                 users={users}
-                isProjectTask={isProjectTask}
               />
             ))}
           </View>
@@ -238,9 +238,7 @@ function RailRow({
   item,
   creator,
   users,
-  isProjectTask,
 }: {
-  isProjectTask: boolean;
   item: Exclude<TaskTimelineItem, { kind: "comment" }>;
   creator: User | undefined;
   users: User[] | undefined;
@@ -268,7 +266,7 @@ function RailRow({
         <Text style={strong}>
           {creator ? getUserDisplayName(creator) : "Someone"}
         </Text>
-        {isProjectTask ? " created the task" : " created the quick task"}
+        {" created the quick task"}
       </>
     );
   } else {

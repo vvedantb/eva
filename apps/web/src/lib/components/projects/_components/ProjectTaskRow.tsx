@@ -1,31 +1,21 @@
 "use client";
 
-import { api, type Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { compactRelativeTime } from "@eva/shared/dates";
-import {
-  isUnapprovedTodoTask,
-  type ProjectTaskView,
-} from "@eva/shared/projectView";
+import type { ProjectTaskView } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react";
 import {
-  Button,
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  LIST_ROW_CONTROL_CLASS,
   ListRow,
 } from "@vvedantb/ui";
-import { useMutation } from "convex/react";
 import type { ReactNode } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { TaskCardMenuItems } from "@/lib/components/quick-tasks/_components/TaskCardMenuItems";
 import { useTaskMenu } from "@/lib/components/quick-tasks/_components/useTaskMenu";
 import { entityPathSegment } from "@/lib/numId";
-import {
-  catchMutationError,
-  withMutationToast,
-} from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { ProjectTaskListRow } from "../useProjectStatus";
 import { projectTaskDisplayStatusConfig } from "../ProjectPhaseBadge";
@@ -87,22 +77,29 @@ export function RowAge({
 
 /**
  * One flat row of a project's task list: the display status icon, the
- * title, and `line` (`projectTaskSummaryLine`). A Triage row shows Reject
- * and Approve in place of its age on hover. Right-click opens the task menu.
- * A task in a repo the reader cannot open is a locked row with no link.
+ * title, and `line` (`projectTaskSummaryLine`). Right-click opens the task menu
+ * (Unarchive on a task archived on its own). A read-only (archived) project's
+ * row has neither. A task in a repo the reader cannot open is a locked row
+ * with no link. A task open as a chat tab is marked: a tint and
+ * an accent stripe.
  */
 export function ProjectTaskRow({
   task,
   view,
+  open = false,
   line,
   onSelectTask,
   basePath,
+  readOnly,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
+  /** Open as a chat tab beside Eva. */
+  open?: boolean;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
+  readOnly: boolean;
 }) {
   const config = projectTaskDisplayStatusConfig[view.displayStatus];
   const StatusIcon = config.icon;
@@ -120,6 +117,7 @@ export function ProjectTaskRow({
     assignedTo: task.assignedTo,
     projectId: task.projectId,
     repoId: task.repoId,
+    archived: task.archivedAt !== undefined,
   });
   if (task.locked === true) {
     return (
@@ -143,107 +141,37 @@ export function ProjectTaskRow({
       </ListRow>
     );
   }
-  const triageProjectId =
-    view.displayStatus === "triage" && isUnapprovedTodoTask(task)
-      ? task.projectId
-      : undefined;
+  const row = (
+    <ListRow
+      link={<DynamicLink to={toInternalRepoHref(href)} search={true} />}
+      onClick={(event) => {
+        event.preventDefault();
+        if (!hasDialogOpen) onSelectTask(task._id);
+      }}
+      aria-label={task.title}
+      aria-current={open ? "true" : undefined}
+      // The open task is a muted background, as a selected Inbox row: no stripe, no ring.
+      className={open ? "bg-muted hover:bg-muted" : FLAT_ROW_CLASS}
+      contentClassName={FLAT_ROW_CONTENT_CLASS}
+    >
+      <ProjectFlatRowBody
+        icon={icon}
+        title={task.title}
+        line={line}
+        trailing={<RowAge at={task.updatedAt} />}
+      />
+    </ListRow>
+  );
+  if (readOnly) return row;
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <ListRow
-            link={<DynamicLink to={toInternalRepoHref(href)} search={true} />}
-            onClick={(event) => {
-              event.preventDefault();
-              if (!hasDialogOpen) onSelectTask(task._id);
-            }}
-            aria-label={task.title}
-            className={FLAT_ROW_CLASS}
-            contentClassName={FLAT_ROW_CONTENT_CLASS}
-          >
-            <ProjectFlatRowBody
-              icon={icon}
-              title={task.title}
-              line={line}
-              trailing={
-                triageProjectId !== undefined ? (
-                  <>
-                    <RowAge
-                      at={task.updatedAt}
-                      className="group-hover:hidden group-focus-within:hidden"
-                    />
-                    <TriageButtons
-                      projectId={triageProjectId}
-                      taskId={task._id}
-                    />
-                  </>
-                ) : (
-                  <RowAge at={task.updatedAt} />
-                )
-              }
-            />
-          </ListRow>
-        </ContextMenuTrigger>
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
         <ContextMenuContent onClick={(event) => event.stopPropagation()}>
           <TaskCardMenuItems variant="context" {...menuProps} />
         </ContextMenuContent>
       </ContextMenu>
       {dialogs}
     </>
-  );
-}
-
-/**
- * A Triage row's Reject (cancels the task) and Approve (lets the scheduler
- * start it). They show on row hover or focus only.
- */
-function TriageButtons({
-  projectId,
-  taskId,
-}: {
-  projectId: Id<"projects">;
-  taskId: Id<"agentTasks">;
-}) {
-  const updateStatus = useMutation(api.agentTasks.updateStatus);
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  return (
-    <span
-      className={cn(
-        "hidden shrink-0 items-center gap-1 group-hover:flex group-focus-within:flex",
-        LIST_ROW_CONTROL_CLASS,
-      )}
-    >
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={(event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          void catchMutationError(
-            updateStatus({ id: taskId, status: "cancelled" }),
-            "Couldn't reject the task",
-            "project-task-cancel",
-          );
-        }}
-      >
-        Reject
-      </Button>
-      <Button
-        size="xs"
-        variant="secondary"
-        onClick={(event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          void withMutationToast(
-            approveTasks({ projectId, taskIds: [taskId] }),
-            "Task approved",
-            "Couldn't approve the task",
-            "project-approve",
-          ).catch(() => undefined);
-        }}
-      >
-        Approve
-      </Button>
-    </span>
   );
 }

@@ -1,3 +1,7 @@
+import {
+  onTaskRunTurnClosed,
+  onTaskRunTurnOpened,
+} from "../_agentTasks/taskRunStatus";
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -17,9 +21,7 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
-import {
-  sessionOwnerEntityId,
-} from "../_sessions/owner";
+import { stampChatActivity } from "../chatReads";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -67,8 +69,8 @@ export async function listOpenSessionTurns(
 }
 
 /**
- * The entity's open turn in one lane. Chat turns, runs and most one-shot
- * agents have no lane; a summary or interview turn on a chat row has one.
+ * The entity's open turn in one lane. Every turn opened now has no lane; a
+ * legacy row may still carry one (the retired summary and interview turns).
  */
 export async function findOpenTurn(
   ctx: QueryCtx,
@@ -83,6 +85,26 @@ export async function findOpenTurn(
     .first();
 }
 
+/**
+ * The entity's latest no-lane turn: the open one, else the last closed one.
+ * Follow-up rows (alerts, retries, continuations) read it to find their thread.
+ */
+export async function findLatestTurn(
+  ctx: QueryCtx,
+  entityId: TurnEntityId,
+): Promise<Doc<"turns"> | null> {
+  return (
+    (await findOpenTurn(ctx, entityId)) ??
+    (await ctx.db
+      .query("turns")
+      .withIndex("by_entity_open", (q) =>
+        q.eq("entityId", entityId).eq("lane", undefined).eq("open", false),
+      )
+      .order("desc")
+      .first())
+  );
+}
+
 export async function findOpenSessionTurn(
   ctx: QueryCtx,
   sessionId: Id<"sessions">,
@@ -94,6 +116,12 @@ type OpenTurnFields = {
   streamingEntityId: string;
   /** Chat turns only: runs and one-shot agents have no placeholder message. */
   placeholderMessageId?: Id<"messages">;
+  /** Chat turns only: the thread root this turn answers in. */
+  replyTo?: Id<"messages">;
+  /** Thread turns only: who asked; Eva's answer notifies them. */
+  askedBy?: Id<"users">;
+  /** Chat turns only: this turn runs its task (`taskRunTurn.ts`). */
+  taskRun?: Doc<"turns">["taskRun"];
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
@@ -101,21 +129,20 @@ type OpenTurnFields = {
   repoId: Id<"githubRepos">;
 };
 
-/** Opens a durable turn and supersedes any turn the entity still has open in that lane. */
+/** Opens a durable turn and supersedes any turn the entity still has open. */
 export async function openTurn(
   ctx: MutationCtx,
   params: OpenTurnFields & {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     /**
      * The session the turn holds: a chat's session, or the session whose
-     * sandbox a run or a project interview works on.
+     * sandbox a one-shot agent works on.
      */
     sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenTurn(ctx, params.entityId, params.lane);
+  const previous = await findOpenTurn(ctx, params.entityId);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
@@ -123,7 +150,6 @@ export async function openTurn(
   }
   return await ctx.db.insert("turns", {
     entityId: params.entityId,
-    lane: params.lane,
     sessionId: params.sessionId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
@@ -136,11 +162,14 @@ export async function openTurn(
     }),
     leaseGeneration: 0,
     placeholderMessageId: params.placeholderMessageId,
+    replyTo: params.replyTo,
+    askedBy: params.replyTo === undefined ? undefined : params.askedBy,
     prompt: params.prompt,
     attachmentStorageIds: params.attachmentStorageIds,
     model: params.model,
     sandboxId: params.sandboxId,
     repoId: params.repoId,
+    taskRun: params.taskRun,
   });
 }
 
@@ -157,7 +186,10 @@ export async function openSessionChatTurn(
   },
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
-  return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  // A quick task's run moves its card when its turn starts, as when it ends.
+  if (turn.taskRun !== undefined) await onTaskRunTurnOpened(ctx, sessionId);
+  return turnId;
 }
 
 /**
@@ -363,13 +395,12 @@ export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenTurn(ctx, params.entityId, params.lane);
+  const current = await findOpenTurn(ctx, params.entityId);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -428,42 +459,24 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
-  // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
-  // one-shot lanes (summary, interview) are not replies, and their owner rows
-  // have no such field. Lease sweeps can close a turn after its chat was
-  // hard-deleted, and `patch` throws then. A session chat's turn stamps both
-  // the chat and its session, since the sidebar reads unread per session.
+  // A quick task's run moves its card when its turn ends, however it ends.
+  if (current.taskRun !== undefined) {
+    await onTaskRunTurnClosed(ctx, current, state);
+  }
+  // The unread clock read by `chatReads.ts`: chat turns, a task's runs
+  // included. A legacy lane turn (summary, interview) is not a reply.
+  // `stampChatActivity` stamps the chat, its session and the session's task
+  // or project, and skips a chat that lease sweeps found hard-deleted.
   const chatParentId =
     turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
-  if (chatParentId && (await ctx.db.get(chatParentId))) {
-    await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
-  }
-  const session =
-    turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
-  if (session && chatParentId) {
-    await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's or project's session reads unread on its owner's card, so the
-    // owner gets the watermark too (`chatReads.markRead` reads it with the
-    // chat).
-    const ownerId = sessionOwnerEntityId(session);
-    if (ownerId && (await ctx.db.get(ownerId))) {
-      await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
-    }
-  }
-  if (session && runId) {
-    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
-    // offer them their queued messages now. Scheduled, since the queue
-    // module imports this one.
-    await ctx.scheduler.runAfter(
-      0,
-      internal._queues.helpers.drainQueueQuietly,
-      { parentId: session._id },
-    );
+  if (chatParentId) {
+    await stampChatActivity(ctx, chatParentId, {
+      lastTurnFinishedAt: finishedAt,
+    });
   }
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished": a chat turn or a run counts for the
-  // session that holds the sandbox.
+  // sweep learns "the agent finished": any turn counts for the session that
+  // holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
     turn.sessionId ?? turn.entityId,
@@ -475,9 +488,9 @@ export async function closeOpenTurn(
   ctx: MutationCtx,
   entityId: TurnEntityId,
   state: TerminalTurnState,
-  patch: { error?: string; lane?: TurnLane } = {},
+  patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenTurn(ctx, entityId, patch.lane);
+  const turn = await findOpenTurn(ctx, entityId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
@@ -494,31 +507,30 @@ export async function closeTurnForWorkflow(
 }
 
 /**
- * The fence check every one-shot agent completion runs first. False: the
- * completion holds no current lease, so the caller drops it. True: the caller
- * handles it; the turn is closed here, since
- * the agent's work is over once it reports (the workflow's own steps after
- * that are covered by the `TURN_BACKSTOP_MS` backstop, as before).
+ * The fence check every one-shot agent completion runs first. Null: the
+ * completion holds no current lease, so the caller drops it. A turn: the
+ * caller handles it; the turn is closed here, since the agent's work is over
+ * once it reports (the workflow's own steps after that are covered by the
+ * `TURN_BACKSTOP_MS` backstop).
  */
 export async function settleAgentTurnCompletion(
   ctx: MutationCtx,
   params: {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     success: boolean;
     error: string | null;
   },
-): Promise<boolean> {
+): Promise<Doc<"turns"> | null> {
   // Every one-shot agent launches under a turn and always sends its lease.
   const resolution = await resolveCompletionTurn(ctx, params);
-  if (resolution.status !== "current") return false;
+  if (resolution.status !== "current") return null;
   await closeTurn(
     ctx,
     resolution.turn,
     params.success ? "done" : "error",
     params.success ? {} : { error: params.error ?? "Agent failed" },
   );
-  return true;
+  return resolution.turn;
 }

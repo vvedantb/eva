@@ -5,6 +5,7 @@ import { upsertStreamingActivity } from "../streaming";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { AVE_CONTEXT_ROWS, type AveContextRow } from "./context";
 import { buildAveInstructions } from "./prompt";
+import { avePageContextValidator } from "../_validators/tableFields";
 import { startRun } from "./threads";
 
 /**
@@ -36,6 +37,7 @@ const claimedRunValidator = v.object({
       content: v.string(),
       isSystemAlert: v.optional(v.boolean()),
       modelMessages: v.optional(v.string()),
+      pageContext: v.optional(avePageContextValidator),
     }),
   ),
 });
@@ -60,6 +62,7 @@ export const claimRun = internalMutation({
       content: row.content,
       isSystemAlert: row.isSystemAlert,
       modelMessages: row.modelMessages,
+      pageContext: row.pageContext,
     }));
 
     await clearStreamingActivity(ctx, String(thread._id));
@@ -77,6 +80,13 @@ export const claimRun = internalMutation({
       clerkUserId: user.clerkId,
       instructions: buildAveInstructions({
         now: new Date(),
+        user: {
+          name:
+            user.fullName ??
+            ([user.firstName, user.lastName].filter(Boolean).join(" ") ||
+              undefined),
+          isAdmin: user.isAdmin === true,
+        },
         role: user.role,
         customInstructions: user.customInstructions,
       }),

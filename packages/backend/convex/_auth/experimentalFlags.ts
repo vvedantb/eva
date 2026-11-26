@@ -37,5 +37,6 @@ export function resolveExperimentalFlags(
     prWatch: flags?.prWatch ?? false,
     draftReadiness: flags?.draftReadiness ?? false,
     skillSuggestions: flags?.skillSuggestions ?? false,
+    workspaceTabs: flags?.workspaceTabs ?? false,
   };
 }

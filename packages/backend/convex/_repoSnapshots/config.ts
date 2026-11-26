@@ -56,7 +56,6 @@ export const getRepoSnapshot = authQuery({
       _id: v.id("repoSnapshots"),
       _creationTime: v.number(),
       repoId: v.id("githubRepos"),
-      snapshotName: v.string(),
       schedule: snapshotScheduleValidator,
       enabled: v.optional(v.boolean()),
       cronJobId: v.optional(v.string()),
@@ -108,21 +107,10 @@ export const getRepoSnapshotName = internalQuery({
     const snapshot = await findSnapshotForRepo(ctx.db, args.repoId);
     if (!snapshot) return null;
 
-    // Vercel base Image (`snap_*`) — written by the provider-aware rebuild path.
-    if (snapshot.baseSnapshotId) {
-      return { snapshotName: snapshot.baseSnapshotId };
-    }
-
-    const latestSuccessfulBuild = await ctx.db
-      .query("snapshotBuilds")
-      .withIndex("by_repo_snapshot_and_status", (q) =>
-        q.eq("repoSnapshotId", snapshot._id).eq("status", "success"),
-      )
-      .order("desc")
-      .first();
-
-    if (!latestSuccessfulBuild) return null;
-    return { snapshotName: snapshot.snapshotName };
+    // Vercel base Image (`snap_*`) from the last successful base build.
+    return snapshot.baseSnapshotId
+      ? { snapshotName: snapshot.baseSnapshotId }
+      : null;
   },
 });
 
@@ -244,7 +232,6 @@ export const getRepoSnapshotInternal = internalQuery({
   returns: v.union(
     v.object({
       repoId: v.id("githubRepos"),
-      snapshotName: v.string(),
       // Snapshots build from the repo's default branch — the same branch the
       // `.eva/` config cache follows.
       branch: v.string(),
@@ -260,7 +247,6 @@ export const getRepoSnapshotInternal = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     return {
       repoId: doc.repoId,
-      snapshotName: doc.snapshotName,
       branch: repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       buildCommands: doc.buildCommands,
       seedCommands: doc.seedCommands,
@@ -286,12 +272,6 @@ export const listAllProtectedSnapshotIds = internalQuery({
         .first();
       if (snapConfig?.baseSnapshotId !== undefined) {
         protectedIds.add(snapConfig.baseSnapshotId);
-      }
-      if (
-        snapConfig?.snapshotName !== undefined &&
-        snapConfig.snapshotName.startsWith("snap_")
-      ) {
-        protectedIds.add(snapConfig.snapshotName);
       }
     }
     return [...protectedIds];
@@ -372,7 +352,6 @@ export const saveRepoSnapshot = authMutation({
           const now = Date.now();
           const id = await ctx.db.insert("repoSnapshots", {
             repoId: args.repoId,
-            snapshotName: siblingSnapshot.snapshotName,
             schedule: args.schedule,
             enabled: true,
                 baseSnapshotId: siblingSnapshot.baseSnapshotId,
@@ -395,11 +374,9 @@ export const saveRepoSnapshot = authMutation({
     }
 
     // No shared config found — create a new app-specific row from scratch
-    const snapshotName = `snapshot-${args.repoId}`;
     const now = Date.now();
     const id = await ctx.db.insert("repoSnapshots", {
       repoId: args.repoId,
-      snapshotName,
       schedule: args.schedule,
       enabled: true,
       createdAt: now,
@@ -450,7 +427,7 @@ export const setSnapshotEnabled = authMutation({
   },
 });
 
-/** Deletes a snapshot config, its cron job, and the remote sandbox snapshot. */
+/** Deletes a snapshot config and its cron job. */
 export const deleteRepoSnapshot = authMutation({
   args: { repoSnapshotId: v.id("repoSnapshots") },
   returns: v.null(),
@@ -461,12 +438,6 @@ export const deleteRepoSnapshot = authMutation({
 
     const cronName = `snapshot-rebuild-${config.repoId}`;
     await safeDeleteCron(ctx, cronName);
-
-    await ctx.scheduler.runAfter(
-      0,
-      internal.snapshotActions.deleteSeededSnapshot,
-      { snapshotName: config.snapshotName, repoId: config.repoId },
-    );
 
     await ctx.db.delete(args.repoSnapshotId);
     return null;

@@ -1,34 +1,22 @@
 "use client";
 
 import { useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { isSessionSandboxTab, type SandboxTab } from "@/lib/search-params";
 import { SandboxTabBar } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBar";
 import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
+import { SandboxRailPanes } from "@/lib/components/sandbox/SandboxRailPanes";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
+import { useSandboxRail } from "@/lib/components/sandbox/useSandboxRail";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
-import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
-import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
-import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { useTaskChatBinding } from "./TaskSandboxChatPanel";
-import {
-  SessionArtifactsPanel,
-  useSourceArtifacts,
-} from "@/lib/components/artifacts/SessionArtifactsPanel";
-import {
-  SessionDocumentsPanel,
-  useSourceDocuments,
-} from "@/lib/components/docs/SessionDocumentsPanel";
+import { useSourceArtifacts } from "@/lib/components/artifacts/SessionArtifactsPanel";
+import { useSourceDocuments } from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface TaskSandboxPanelProps {
   taskId: Id<"agentTasks">;
@@ -54,12 +42,10 @@ interface TaskSandboxPanelProps {
   onTabChange: (tab: SandboxTab) => void;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The sandbox is closed and the host would allow a Start: no last-start
-   * error, not read-only, no run or build owning it. Combined in
-   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
-   */
+  /** `sandboxAutoWakeEligible`; combined in SandboxPaneSlots with the setting. */
   autoWakeEligible?: boolean;
+  /** The task is archived: no per-agent stop. */
+  isArchived: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
@@ -71,8 +57,8 @@ interface TaskSandboxPanelProps {
  * panel (Preview, Browser, Diffs, Files, Editor/Computer via +).
  * PRD stays session-only.
  *
- * All shared multi-pane / preview / PTY logic lives in the `sandbox/` module
- * so this file is just a thin orchestrator.
+ * The reads every rail shares are `useSandboxRail`; the shared tabs are
+ * `SandboxRailPanes` and `SandboxPaneSlots`.
  */
 export function TaskSandboxPanel({
   taskId,
@@ -90,38 +76,28 @@ export function TaskSandboxPanel({
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
+  isArchived,
   collapsed = false,
   onToggle,
   miniPlayer,
 }: TaskSandboxPanelProps) {
-  const simpleView = useSimpleView();
   const chatBinding = useTaskChatBinding(taskId);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
-  const chatKeys = sandboxChatKeys(chatBinding.entity);
-
-  // Content-keyed Agents tab, folded from the chat transcript the task's chat
-  // panel already subscribes to (same entity ids). Artifacts stay on the task:
-  // the backend files a quick task's session artifacts under it.
-  const artifactSource = { kind: "task" as const, taskId };
-  const { artifactCount } = useSourceArtifacts(artifactSource);
-  const { documentCount } = useSourceDocuments(artifactSource);
-  const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
-    parentId: chatKeys.parentId,
-    streamingEntityId: chatKeys.streamingEntityId,
-    backgroundAgents: chatBinding.doc?.backgroundAgents,
-    sandboxRunning: isActive,
-  });
-
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
-
-  const preview = useSandboxPreview({
+  const rail = useSandboxRail({
     owner,
     sandboxId,
     isActive,
     repoId,
     devPort,
+    devCommand,
+    binding: chatBinding,
   });
+
+  // Artifacts stay on the task: the backend files a quick task's session
+  // artifacts under it.
+  const artifactSource = { kind: "task" as const, taskId };
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
+  const { agents, hasAgents, hasRunningAgents } = rail.roster;
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
@@ -164,7 +140,7 @@ export function TaskSandboxPanel({
           hasRunningAgents={hasRunningAgents}
           artifactCount={artifactCount}
           documentCount={documentCount}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
+          agentBrowsingAt={rail.agentBrowsingAt}
           fileList={fileList}
           consoleDock={panes.consoleDock}
           terminalPanel={terminalPanel}
@@ -172,66 +148,34 @@ export function TaskSandboxPanel({
       }
     >
       <div className="h-full overflow-hidden">
-        <div
-          className={
-            tabBarValue === "artifacts"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
+        <SandboxRailPanes
+          activeTab={tabBarValue}
+          artifactSource={artifactSource}
+          files={
+            <FilesPanel
+              sandboxId={sandboxId}
+              repoId={repoId}
+              isActive={isActive}
+              fileList={fileList}
+              wake={{ onStartSandbox, isSandboxStarting }}
+            />
           }
-        >
-          <SessionArtifactsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            tabBarValue === "documents"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
-        >
-          <SessionDocumentsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            !simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
-          }
-        >
-          <FilesPanel
-            sandboxId={sandboxId}
-            repoId={repoId}
-            isActive={isActive}
-            fileList={fileList}
-            wake={{ onStartSandbox, isSandboxStarting }}
-          />
-        </div>
-        <div
-          className={
-            !simpleView && tabBarValue === "agents"
-              ? "h-full min-h-0"
-              : "hidden"
-          }
-        >
-          <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
-        </div>
-        <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
+          agents={{
+            entity: chatBinding.entity,
+            list: agents,
+            isReadOnly: isArchived,
+          }}
+        />
+        <ReviewChatTargetProvider value={rail.reviewTarget}>
           <SandboxPaneSlots
+            {...rail.paneSlots}
             activeTab={tabBarValue}
             panes={panes}
-            preview={preview}
-            owner={owner}
-            sandboxId={sandboxId}
-            isActive={isActive}
-            repoId={repoId}
             cacheKey={String(taskId)}
-            devCommand={devCommand}
             prUrl={prUrl}
-            agentBrowsingAt={viewState?.agentBrowsingAt}
-            onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-            // Backend starts the app in the Console tmux session after startup.
-            runConsoleDevCommandOnConnect={false}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             autoWakeEligible={autoWakeEligible}
-            onAnnotationSubmit={submitAnnotation}
             // A collapsed rail is not on screen: no presence beacon, no auto-wake.
             presenceEnabled={!collapsed}
             // A collapsed rail keeps its preview parked.
@@ -240,7 +184,6 @@ export function TaskSandboxPanel({
                 ? { ...miniPlayer, owner }
                 : undefined
             }
-            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>

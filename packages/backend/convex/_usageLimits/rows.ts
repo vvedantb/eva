@@ -11,16 +11,6 @@ import type { usageLimitProviderValidator } from "../validators";
  * account has the same headroom whichever repo it runs on. So a row is keyed by
  * the credential — the connected account, or, for the shared
  * `CLAUDE_CODE_OAUTH_TOKEN` from team/repo env vars, the team that owns it.
- *
- * Rows written while the key still included the repo keep their `repoId`, and
- * they share the `by_provider_account` index range with the account rows that
- * replaced them. Every lookup therefore drops them in JS. The set is tiny (one
- * row per repo the account ever ran on) and `report` deletes the ones it walks
- * past, so the range drains itself within a day — the same day the 24h
- * freshness window stops honouring them anyway.
- *
- * That filter lives here and nowhere else: a reader that forgot it would start
- * showing a per-repo number again, which is the bug this keying replaced.
  */
 
 export type UsageLimitProvider = Infer<typeof usageLimitProviderValidator>;
@@ -89,35 +79,13 @@ export function isUsageLimitReadingFresh(
 }
 
 /**
- * The credential-keyed row in an index range that still holds legacy per-repo
- * rows, and its counterpart. Pure, and generic over the id type so plain
- * strings stand in for the `Id<"githubRepos">` a real row carries: the rule they
- * encode — a row with a `repoId` is a different question's answer — is worth
- * testing without a database.
- */
-export function pickCanonicalRow<T extends { repoId?: string }>(
-  rows: readonly T[],
-): T | null {
-  return rows.find((row) => row.repoId === undefined) ?? null;
-}
-
-export function pickLegacyRows<T extends { repoId?: string }>(
-  rows: readonly T[],
-): T[] {
-  return rows.filter((row) => row.repoId !== undefined);
-}
-
-/**
- * The one canonical row for `key`, or null when the credential has never
- * reported.
+ * The one row for `key`, or null when the credential has never reported.
  */
 export async function findUsageLimitRow(
   db: GenericDatabaseReader<DataModel>,
   key: UsageLimitRowKey,
 ): Promise<Doc<"agentUsageLimits"> | null> {
   if (key.providerAccountId === undefined) {
-    // Legacy rows never set `teamId`, so this range holds only new team rows
-    // and needs no filtering.
     return await db
       .query("agentUsageLimits")
       .withIndex("by_provider_team", (q) =>
@@ -125,40 +93,14 @@ export async function findUsageLimitRow(
       )
       .first();
   }
-  return pickCanonicalRow(
-    await accountRangeRows(db, key.provider, key.providerAccountId),
-  );
-}
-
-/**
- * The rows for `key` that still carry a `repoId`. `report` deletes these as it
- * upserts, which is the only cleanup this migration gets — a one-off script
- * would have to race the daemon still writing rows.
- */
-export async function listLegacyUsageLimitRows(
-  db: GenericDatabaseReader<DataModel>,
-  key: UsageLimitRowKey,
-): Promise<Array<Doc<"agentUsageLimits">>> {
-  // A team row's legacy ancestors reported no account either, so they sit in
-  // the same `providerAccountId: undefined` slot of the account range — for
-  // every team, since a legacy row names a repo and not a team. Sweeping them
-  // all is fine: nothing reads a legacy row any more, whoever it belonged to.
-  return pickLegacyRows(
-    await accountRangeRows(db, key.provider, key.providerAccountId),
-  );
-}
-
-async function accountRangeRows(
-  db: GenericDatabaseReader<DataModel>,
-  provider: UsageLimitProvider,
-  providerAccountId: Id<"userProviderAccounts"> | undefined,
-): Promise<Array<Doc<"agentUsageLimits">>> {
   return await db
     .query("agentUsageLimits")
     .withIndex("by_provider_account", (q) =>
-      q.eq("provider", provider).eq("providerAccountId", providerAccountId),
+      q
+        .eq("provider", key.provider)
+        .eq("providerAccountId", key.providerAccountId),
     )
-    .collect();
+    .first();
 }
 
 /**

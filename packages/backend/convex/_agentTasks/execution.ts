@@ -1,81 +1,66 @@
-import { v } from "convex/values";
-import { startTaskRun } from "../_taskWorkflow/startRun";
-import { aiModelValidator, runModeValidator } from "../validators";
+import { v, type Infer } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
+import { startTaskRunTurn } from "./taskRunTurn";
+import { hasActiveTaskRun } from "./taskRunStatus";
+import { runModeValidator } from "../validators";
 import {
+  assertTaskNotArchived,
   authMutation,
   hasTaskAccess,
-  hasActiveRun,
-  isFirstTaskOnBranch,
 } from "../functions";
-import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
-/** Starts task execution by creating a run and launching the workflow. */
+/**
+ * Starts a task now. The one start for `startExecution` and "Save and Run" on
+ * a new task (`createQuickTask`, `activateDraft`): a task-mode turn in the
+ * task's chat (`taskRunTurn.ts`).
+ */
+export async function startTaskExecution(
+  ctx: MutationCtx & { userId: Id<"users"> },
+  taskId: Id<"agentTasks">,
+  options: {
+    mode?: Infer<typeof runModeValidator>;
+    triggeringCommentId?: Id<"taskComments">;
+  } = {},
+) {
+  const task = await ctx.db.get(taskId);
+  if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+    throw new Error("Task not found");
+  await assertTaskNotArchived(ctx.db, task);
+  if (task.status === "draft") {
+    throw new Error("Cannot execute a draft task");
+  }
+  if (!task.repoId) {
+    throw new Error("Task has no associated repository");
+  }
+  const repo = await ctx.db.get(task.repoId);
+  if (!repo) {
+    throw new Error("Repository not found");
+  }
+  // A pending schedule is replaced by this run.
+  await cancelTaskRunSchedule(ctx, taskId);
+  await startTaskRunTurn(ctx, task, {
+    mode: options.mode,
+    userId: ctx.userId,
+    commentId: options.triggeringCommentId,
+  });
+}
+
+/** Runs a task now (Run, Retry, Resolve Conflicts). */
 export const startExecution = authMutation({
   args: {
     id: v.id("agentTasks"),
     mode: v.optional(runModeValidator),
     triggeringCommentId: v.optional(v.id("taskComments")),
   },
-  returns: v.object({
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    installationId: v.number(),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  }),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.id);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
-      throw new Error("Task not found");
-    if (task.status === "draft") {
-      throw new Error("Cannot execute a draft task");
-    }
-    if (!task.repoId) {
-      throw new Error("Task has no associated repository");
-    }
-    const repo = await ctx.db.get(task.repoId);
-    if (!repo) {
-      throw new Error("Repository not found");
-    }
-    // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
-    if (await hasActiveRun(ctx.db, args.id)) {
-      throw new Error("Task already has an active execution");
-    }
-
-    const firstOnBranch = await isFirstTaskOnBranch(ctx.db, args.id);
-    const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
-
-    const runId = await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: ctx.userId,
-      baseBranch,
-      isFirstTaskOnBranch: firstOnBranch,
+    await startTaskExecution(ctx, args.id, {
       mode: args.mode,
-      triggeredBy: ctx.userId,
-      // Explicit comment (quick-task "Make changes") wins; otherwise consume any
-      // comment parked on the task by an earlier change request.
-      triggeringCommentId:
-        args.triggeringCommentId ?? task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
+      triggeringCommentId: args.triggeringCommentId,
     });
-
-    return {
-      runId,
-      taskId: args.id,
-      repoId: task.repoId,
-      installationId: repo.installationId,
-      projectId: task.projectId,
-      baseBranch,
-      isFirstTaskOnBranch: firstOnBranch,
-      model: task.model ?? repo.defaultModel,
-    };
+    return null;
   },
 });
 
@@ -90,16 +75,11 @@ export const scheduleExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
+    if (await hasActiveTaskRun(ctx.db, task)) {
       throw new Error("Task already has an active execution");
     }
     if (args.scheduledAt <= Date.now()) {
@@ -143,6 +123,7 @@ export const updateScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     if (args.scheduledAt <= Date.now()) {
       throw new Error("Scheduled time must be in the future");
     }

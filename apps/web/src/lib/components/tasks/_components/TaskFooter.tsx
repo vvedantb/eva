@@ -2,8 +2,7 @@
 
 import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useRef } from "react";
-import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { taskScheduledAt, type Doc, type Id } from "@eva/backend";
 import {
   Button,
   Tooltip,
@@ -32,11 +31,10 @@ import {
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
+import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
+import type { TaskDeploymentStatus } from "./StatusFieldsControls";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
 
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
@@ -49,8 +47,7 @@ interface TaskFooterProps {
   hasActiveRun: boolean;
   hasRuns: boolean;
   latestPrUrl: string | undefined;
-  latestPrError: string | undefined;
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
   executionError: string | null;
   isStarting: boolean;
   canStartSandbox: boolean;
@@ -59,15 +56,11 @@ interface TaskFooterProps {
   isSandboxStopping: boolean;
   /** The task's sandbox checkout (a quick task's lives on its session). */
   sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
-  isRunningDevServer: boolean;
-  isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunDevServer: () => void;
-  onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
   onResolveConfirm: () => void;
   variant?: "footer" | "header";
@@ -116,6 +109,7 @@ function getShowRunButton({
 }): boolean {
   return (
     !task?.projectId &&
+    task?.archivedAt === undefined &&
     ((status === "todo" && !hasRuns) ||
       (status === "in_progress" && !hasActiveRun))
   );
@@ -126,17 +120,15 @@ function TaskFooterError({
   motionKey,
   className,
   executionError,
-  latestPrError,
 }: {
   visible: boolean;
   motionKey: string;
   className: string;
   executionError: string | null;
-  latestPrError: string | undefined;
 }) {
   return (
     <AnimatePresence initial={false}>
-      {visible && (executionError || latestPrError) ? (
+      {visible && executionError ? (
         <m.p
           key={motionKey}
           className={className}
@@ -145,7 +137,7 @@ function TaskFooterError({
           exit={{ opacity: 0 }}
           transition={tokenTransition.fast}
         >
-          {executionError ?? latestPrError}
+          {executionError}
         </m.p>
       ) : null}
     </AnimatePresence>
@@ -161,8 +153,7 @@ export function TaskFooter({
   hasActiveRun,
   hasRuns,
   latestPrUrl,
-  latestPrError,
-  latestDeployment,
+  deploymentStatus,
   executionError,
   isStarting,
   canStartSandbox,
@@ -170,15 +161,11 @@ export function TaskFooter({
   isSandboxStarting,
   isSandboxStopping,
   sandbox,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
   canCreatePr,
   isCreatingPr,
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunDevServer,
-  onRunBackgroundCommands,
   onStartExecution,
   onResolveConfirm,
   variant = "footer",
@@ -211,14 +198,12 @@ export function TaskFooter({
     },
     prUrl: latestPrUrl,
     owner: { kind: "task", taskId },
-    hasDeployment: Boolean(latestDeployment?.deploymentStatus),
+    hasDeployment: deploymentStatus !== undefined,
   });
   const moreMenu = getMoreMenuVisibility({
     simpleView,
     hasActiveRun,
     status,
-    canStartSandbox,
-    isSandboxActive,
     isHeader,
     hasPrItems: prLinks.hasItems,
   });
@@ -232,7 +217,6 @@ export function TaskFooter({
         motionKey="footer-error"
         className="text-xs text-destructive text-right"
         executionError={executionError}
-        latestPrError={latestPrError}
       />
       <div className={layout.row}>
         <TaskFooterError
@@ -240,7 +224,6 @@ export function TaskFooter({
           motionKey="header-error"
           className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
           executionError={executionError}
-          latestPrError={latestPrError}
         />
         <AnimatePresence initial={false} mode="popLayout">
           {showRunButton ? (
@@ -265,6 +248,9 @@ export function TaskFooter({
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
         <div className={layout.actions}>
+          {isHeader && task?.archivedAt !== undefined ? (
+            <ArchivedLabel />
+          ) : null}
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}
@@ -281,11 +267,7 @@ export function TaskFooter({
               }}
               visibility={moreMenu}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : moreMenu.showMoreMenu ? (
             <TaskFooterMoreMenu
@@ -294,11 +276,7 @@ export function TaskFooter({
               buttonSize={buttonSize}
               iconSize={iconSize}
               isStarting={isStarting}
-              isRunningDevServer={isRunningDevServer}
-              isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunDevServer={onRunDevServer}
-              onRunBackgroundCommands={onRunBackgroundCommands}
             />
           ) : null}
           <SandboxCommitPushButton

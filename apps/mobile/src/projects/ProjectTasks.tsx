@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
+import { repoDisplayLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   PROJECT_TASK_DISPLAY_STATUS_LABELS,
@@ -8,16 +8,13 @@ import {
   projectTaskPullRequests,
   projectTaskStatusSections,
   projectTaskSummaryLine,
-  unapprovedTodoTaskIds,
   type ProjectTaskView,
 } from "@eva/shared/projectView";
 import { IconLayoutList, IconPlus } from "@tabler/icons-react-native";
 import { Button, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
-import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { Pressable, SectionList, Text, View } from "react-native";
 import { ProjectProgress } from "@/projects/ProjectProgress";
 import { ProjectTaskPrRow, ProjectTaskRow } from "@/projects/ProjectTaskRow";
@@ -35,7 +32,7 @@ type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 /** One list row: a task under its display status, or a task's PR. */
-type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string } };
+type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string; repoName?: string } };
 
 /** The Pull requests group's key, beside the display statuses (web `PULL_REQUESTS`). */
 const PULL_REQUESTS = "pull_requests";
@@ -43,12 +40,13 @@ const PULL_REQUESTS = "pull_requests";
 /**
  * The web project Tasks panel at phone width: a thin progress bar and the
  * counts as one muted line, then a collapsible group per display status
- * that has tasks, Triage, Working, Blocked, Idle, Archived
- * (`projectTaskStatusSections`; Archived starts folded), and the tasks'
+ * that has tasks, Needs you, Working, Idle, Archived
+ * (`projectTaskStatusSections`; Archived starts folded, and holds the tasks
+ * archived on their own, whose menu offers Unarchive), and the tasks'
  * Pull requests. Rows are flat (`ProjectTaskRow`, `ProjectTaskPrRow`).
- * Triage carries "Approve all" (every todo task nobody approved yet). The
- * first group carries "+" (a new task, to Triage unless "Start now"), or the
- * empty state does when there are no tasks.
+ * The first group carries "+" (New task: Eva's chat, as the web "+"; work
+ * goes in through her chat), or the empty state does when there are no
+ * tasks. An archived project's list is read-only: no "+", no row menu.
  */
 export function ProjectTasks({
   project,
@@ -70,22 +68,11 @@ export function ProjectTasks({
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const repos = useQuery(api.githubRepos.list, {});
   const notesByTask = useProjectTaskNotes(project._id);
+  const archivedTasks = useQuery(api.agentTasks.listByProject, { projectId: project._id, archived: true });
   const actions = useQuickTaskActions({ repo, users, projects });
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  const [approving, setApproving] = useState(false);
   // Sections the user folded or unfolded, against each one's `defaultOpen`.
   const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
-  const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds);
-  // One lookup for the people who added the Triage tasks ("Added by <name>").
-  const authorIds = [
-    ...new Set(
-      (sections.find((section) => section.status === "triage")?.tasks ?? []).flatMap(({ row }) =>
-        row.createdBy !== undefined ? [row.createdBy] : [],
-      ),
-    ),
-  ];
-  const authors = useQuery(api.users.getMany, authorIds.length > 0 ? { ids: authorIds } : "skip");
-  const authorNames = firstNameByUserId(authors ?? []);
+  const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds, archivedTasks ?? []);
 
   if (tasks === undefined) {
     return (
@@ -97,10 +84,11 @@ export function ProjectTasks({
       />
     );
   }
-  const openNewTask = () =>
-    router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
+  const live = project.archivedAt === undefined;
+  // The web "+": Eva's chat (the coordinator's), where work goes in.
+  const openNewTask = () => router.push({ pathname: "/chat/[target]", params: { target: project._id } });
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
-  const toApprove = unapprovedTodoTaskIds(tasks);
+  const numIdById = new Map([...tasks, ...(archivedTasks ?? [])].map((task) => [String(task._id), task.numId]));
   const pullRequests = projectTaskPullRequests(tasks);
   const status = projectStatusFromRows(tasks, failedTaskIds);
   const groups = [
@@ -120,19 +108,9 @@ export function ProjectTasks({
     return projectTaskSummaryLine(row, view, {
       notes: notesByTask.get(row._id),
       failed: failedTaskIds.has(row._id),
-      authorName: row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined,
       otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
+      numIdOf: (taskId) => numIdById.get(taskId),
     });
-  };
-
-  const approveAll = () => {
-    setApproving(true);
-    approveTasks({ projectId: project._id, taskIds: toApprove })
-      .then(
-        () => toast.success(toApprove.length === 1 ? "Task approved" : "Tasks approved"),
-        () => toast.error("Couldn't approve the tasks"),
-      )
-      .then(() => setApproving(false));
   };
 
   return (
@@ -143,7 +121,7 @@ export function ProjectTasks({
           const open = group.defaultOpen !== toggled.has(group.key);
           return { ...group, first: index === 0, count: group.items.length, open, data: open ? group.items : [] };
         })}
-        keyExtractor={(item) => `${item.kind}:${item.row._id}`}
+        keyExtractor={(item) => (item.kind === "pr" ? `pr:${item.row._id}:${item.row.prUrl}` : `task:${item.row._id}`)}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           sections.length > 0 ? (
@@ -167,24 +145,17 @@ export function ProjectTasks({
               open={section.open}
               onToggle={() => toggle(section.key)}
               trailing={
-                section.first || section.key === "triage" ? (
+                live && section.first ? (
                   <View className="mr-1 flex-row items-center gap-1">
-                    {section.key === "triage" && toApprove.length > 0 ? (
-                      <Button size="sm" variant="ghost" fullWidth={false} loading={approving} disabled={approving} onPress={approveAll}>
-                        Approve all
-                      </Button>
-                    ) : null}
                     {/* The web outline "+": a 44 square here, in place of the web 24. */}
-                    {section.first ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New task"
-                        onPress={openNewTask}
-                        className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-                      >
-                        <IconPlus size={14} color={muted} />
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="New task"
+                      onPress={openNewTask}
+                      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
+                    >
+                      <IconPlus size={14} color={muted} />
+                    </Pressable>
                   </View>
                 ) : undefined
               }
@@ -199,8 +170,7 @@ export function ProjectTasks({
               task={item.row}
               view={item.view}
               line={lineFor(item.row, item.view)}
-              projectId={project._id}
-              onLongPress={() => actions.openSheet(item.row)}
+              onLongPress={live ? () => actions.openSheet(item.row) : undefined}
             />
           )
         }
@@ -209,14 +179,16 @@ export function ProjectTasks({
             icon={IconLayoutList}
             title="No tasks"
             action={
-              <Button
-                size="sm"
-                fullWidth={false}
-                leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
-                onPress={openNewTask}
-              >
-                New task
-              </Button>
+              live ? (
+                <Button
+                  size="sm"
+                  fullWidth={false}
+                  leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
+                  onPress={openNewTask}
+                >
+                  New task
+                </Button>
+              ) : undefined
             }
           />
         }

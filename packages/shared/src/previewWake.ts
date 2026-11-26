@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Mirrors the backend's `sandboxIdlePauseModeValidator`. */
-export type SandboxIdlePauseMode = "off" | "dry-run" | "on";
+export type SandboxIdlePauseMode = "off" | "on";
 
 export const PREVIEW_WAKE_KINDS = ["session", "task", "project"] as const;
 export type PreviewWakeKind = (typeof PREVIEW_WAKE_KINDS)[number];

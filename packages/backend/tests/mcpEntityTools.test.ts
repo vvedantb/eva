@@ -91,13 +91,8 @@ async function fixture() {
       title: "Bump the deps",
       status: "active",
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "success",
-      logs: [],
-    });
     await recordPullRequest(ctx, {
-      owner: { kind: "task", taskId, runId },
+      owner: { kind: "task", taskId },
       repoId,
       prUrl: TASK_PR_URL,
       state: "draft",
@@ -254,13 +249,13 @@ describe("list_entities returns what the caller can already open", () => {
     expect(truncated).toBe(true);
   });
 
-  test("soft-deleted rows are not listed", async () => {
+  test("deleted sessions and archived tasks and projects are not listed", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      const deletedAt = Date.now();
-      await ctx.db.patch(f.sessionId, { deletedAt });
-      await ctx.db.patch(f.taskId, { deletedAt });
-      await ctx.db.patch(f.projectId, { deletedAt });
+      const at = Date.now();
+      await ctx.db.patch(f.sessionId, { deletedAt: at });
+      await ctx.db.patch(f.taskId, { archivedAt: at });
+      await ctx.db.patch(f.projectId, { archivedAt: at });
     });
 
     const ids = (await listFor(f)).entities.map((entity) => entity.id);
@@ -377,9 +372,22 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
 
   test("a task reports its run; a project only its coordinator chat", async () => {
     const f = await fixture();
+    // The task's run is a task-mode turn open in its own session.
     await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, {
-        run: { state: "running", workflowId: "wf_task_run" },
+      const session = await ctx.db.get(f.taskSessionId);
+      if (!session) throw new Error("task session missing");
+      await ctx.db.insert("turns", {
+        entityId: f.taskSessionId,
+        sessionId: f.taskSessionId,
+        streamingEntityId: String(f.taskSessionId),
+        state: "running",
+        open: true,
+        turnStartedAt: Date.now(),
+        leaseExpiresAt: Date.now() + 120_000,
+        leaseGeneration: 1,
+        model: "claude:sonnet",
+        repoId: session.repoId,
+        taskRun: { mode: "implementation" },
       });
     });
 

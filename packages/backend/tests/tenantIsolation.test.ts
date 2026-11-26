@@ -99,12 +99,27 @@ async function fixture() {
       updatedAt: now,
       createdBy: strangerId,
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "error",
-      logs: [],
-      startedAt: now,
+    // The task's last run failed: a failed task-mode turn in its own chat.
+    const taskSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "task", taskId },
       repoId,
+      userId: ownerId,
+      title: "Task",
+      status: "closed",
+    });
+    await ctx.db.insert("turns", {
+      entityId: taskSessionId,
+      sessionId: taskSessionId,
+      streamingEntityId: String(taskSessionId),
+      state: "error",
+      open: false,
+      turnStartedAt: now,
+      finishedAt: now,
+      leaseExpiresAt: now,
+      leaseGeneration: 1,
+      model: "claude:opus",
+      repoId,
+      taskRun: { mode: "implementation" },
     });
     const sessionId = await ctx.db.insert("sessions", {
       owner: { kind: "standalone" },
@@ -137,7 +152,6 @@ async function fixture() {
       taskId,
       draftId,
       strangerTaskId,
-      runId,
       chatId,
       docId,
     };
@@ -153,7 +167,7 @@ async function fixture() {
 
 describe("a draft is private to its creator", () => {
   test(
-    "a teammate cannot read or list it, and a project delete still detaches it",
+    "a teammate cannot read or list it, and a project archive keeps it in the project",
     async () => {
       const f = await fixture();
       expect(await f.mate.query(api.agentTasks.get, { id: f.draftId })).toBeNull();
@@ -169,10 +183,10 @@ describe("a draft is private to its creator", () => {
       });
       expect(ownerList.map((task) => task._id)).toEqual([f.taskId, f.draftId]);
 
-      await f.mate.mutation(api.projects.remove, { id: f.projectId });
+      await f.mate.mutation(api.projects.archive, { id: f.projectId });
       const draft = await f.t.run((ctx) => ctx.db.get(f.draftId));
-      expect(draft?.projectId).toBeUndefined();
-      expect(draft?.deletedAt).toBeUndefined();
+      expect(draft?.projectId).toBe(f.projectId);
+      expect(draft?.archivedAt).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -204,7 +218,7 @@ describe("tasks cannot cross into another tenant", () => {
       await expect(
         f.owner.mutation(api.agentTasks.createQuickTask, {
           repoId: f.repoId,
-          title: "Inject",
+          description: "Inject",
           projectId: f.strangerProjectId,
         }),
       ).rejects.toThrow("Not authorized");
@@ -220,13 +234,13 @@ describe("tasks cannot cross into another tenant", () => {
     async () => {
       const f = await fixture();
       expect(
-        await f.stranger.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await f.stranger.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: f.strangerRepoId,
           taskIds: [f.taskId],
         }),
       ).toEqual([]);
       expect(
-        await f.owner.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await f.owner.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: f.repoId,
           taskIds: [f.taskId],
         }),
@@ -300,8 +314,6 @@ describe("live agent output follows the entity's read rule", () => {
     async () => {
       const f = await fixture();
       const streamIds = [
-        `task-run-${f.runId}`,
-        String(f.projectId),
         String(f.chatId),
         `pr-recap:${f.docId}`,
         String(f.docId),

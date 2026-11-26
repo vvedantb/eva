@@ -29,7 +29,6 @@ export {
   updateRunStatus,
   clearRunWorkflow,
   cancelRun,
-  handleCompletion,
 } from "./_automations/runs";
 
 export {

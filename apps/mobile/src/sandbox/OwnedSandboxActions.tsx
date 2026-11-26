@@ -69,7 +69,7 @@ function useOwnedSandbox(owner: Owner | null) {
         const { sessionId } = await ensureOwned({ owner });
         await startSandbox({ sessionId });
       } catch {
-        toast.error("Could not start the sandbox. Try again.");
+        toast.error("Couldn't start sandbox");
       }
       setWaking(false);
     },
@@ -160,11 +160,11 @@ function ResolveDialog({
  */
 export function useTaskGitActions({
   task,
-  runCount,
+  hasRuns,
   hasActiveRun,
 }: {
   task: Pick<Task, "_id" | "status" | "prUrl" | "projectId" | "repoId">;
-  runCount: number;
+  hasRuns: boolean;
   hasActiveRun: boolean;
 }) {
   const sandbox = useOwnedSandbox({ kind: "task", taskId: task._id });
@@ -176,7 +176,7 @@ export function useTaskGitActions({
   // A project task's PR is its project's: the project page creates it, as the web.
   const canCreatePr =
     task.projectId === undefined &&
-    taskCanCreatePr({ latestPrUrl: task.prUrl, runCount, hasActiveRun });
+    taskCanCreatePr({ latestPrUrl: task.prUrl, hasRuns, hasActiveRun });
   const canResolve =
     !simpleView &&
     taskCanResolveConflicts(
@@ -187,7 +187,7 @@ export function useTaskGitActions({
     <>
       <SandboxRows
         sandbox={sandbox}
-        canWake={taskCanStartSandbox(task.status, runCount > 0)}
+        canWake={taskCanStartSandbox(task.status, hasRuns)}
         agentActive={hasActiveRun}
         close={close}
       />

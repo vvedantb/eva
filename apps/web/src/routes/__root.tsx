@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+// Dev overlays are commented out for now; restore with the blocks below.
+// import { lazy, Suspense } from "react";
 import {
   createRootRouteWithContext,
   Outlet,
@@ -27,23 +28,23 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
-/** Lazy so the agentation package stays out of the production bundle. */
-const DevAgentation = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevAgentation").then((m) => ({
-        default: m.DevAgentation,
-      })),
-    )
-  : null;
-
-/** Lazy so @vvedantb/redline stays out of the production bundle. */
-const DevRedline = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevRedline").then((m) => ({
-        default: m.DevRedline,
-      })),
-    )
-  : null;
+// /** Lazy so the agentation package stays out of the production bundle. */
+// const DevAgentation = import.meta.env.DEV
+//   ? lazy(() =>
+//       import("@/lib/components/DevAgentation").then((m) => ({
+//         default: m.DevAgentation,
+//       })),
+//     )
+//   : null;
+//
+// /** Lazy so @vvedantb/redline stays out of the production bundle. */
+// const DevRedline = import.meta.env.DEV
+//   ? lazy(() =>
+//       import("@/lib/components/DevRedline").then((m) => ({
+//         default: m.DevRedline,
+//       })),
+//     )
+//   : null;
 
 function RootComponent() {
   useDocumentTitle();
@@ -53,9 +54,7 @@ function RootComponent() {
   // The anonymous landing is the one route that needs no Convex. Skipping the
   // provider there keeps marketing visitors from opening a WebSocket to the
   // production deployment (ClientProvider's presence/user bootstrapping and
-  // ChangelogDialogGate each subscribe immediately on mount). Every other
-  // public route (preview-auth) calls Convex hooks
-  // unconditionally, so they keep the provider even when signed out.
+  // ChangelogDialogGate each subscribe immediately on mount).
   const anonymousLanding = pathname === "/" && isSignedIn !== true;
 
   const app = (
@@ -76,6 +75,7 @@ function RootComponent() {
       <AppToaster />
       {/* No analytics from embedded documents: the host page already counts. */}
       {IS_EMBEDDED ? null : <Analytics />}
+      {/* Dev overlays, commented out for now.
       {DevAgentation ? (
         <Suspense fallback={null}>
           <DevAgentation />
@@ -85,13 +85,13 @@ function RootComponent() {
         <Suspense fallback={null}>
           <DevRedline />
         </Suspense>
-      ) : null}
+      ) : null} */}
     </>
   );
 
   // One provider above everything, including the layers outside the app shell:
   // the preview mini player, the What's New dialog and the routes without
-  // chrome (preview-auth) all render tooltips, and Radix throws
+  // chrome all render tooltips, and Radix throws
   // outright when a Tooltip has no Provider above it. Context only — no DOM,
   // so the anonymous landing pays nothing for it.
   return (

@@ -13,9 +13,11 @@ import {
 import {
   IconCamera,
   IconClick,
+  IconMessages,
   IconPencil,
   IconPlayerPause,
 } from "@tabler/icons-react";
+import { previewCommentsDrawerSpace } from "./PreviewCommentsDrawer";
 import { useIframeBox } from "./useIframeBox";
 import { usePreviewFreeze } from "./usePreviewFreeze";
 import { usePreviewScreenshot } from "./usePreviewScreenshot";
@@ -39,6 +41,7 @@ export function PreviewActionBar({
   hidden,
   selectElement,
   sketch,
+  comments,
 }: {
   iframeElement: HTMLIFrameElement | null;
   /** True while something else owns the preview (Sketch, mini-player). */
@@ -47,19 +50,24 @@ export function PreviewActionBar({
   selectElement?: PreviewToggle;
   /** Omit where no composer can take the sketch image. */
   sketch?: PreviewToggle;
+  /** The preview comments drawer; omitted with `selectElement`. */
+  comments?: PreviewToggle & { count: number };
 }) {
   const box = useIframeBox(iframeElement);
   const freeze = usePreviewFreeze(iframeElement);
   const screenshot = usePreviewScreenshot(iframeElement);
   // The iframe paints 0×0 while its pane is hidden.
   if (hidden || !box || box.width === 0 || box.height === 0) return null;
+  // Centred over the part of the page the open drawer leaves visible.
+  const visibleWidth =
+    box.width - (comments?.active ? previewCommentsDrawerSpace(box) : 0);
 
   return createPortal(
     <div
       data-testid="preview-action-bar"
       className="fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-lg"
       style={{
-        left: box.left + box.width / 2,
+        left: box.left + visibleWidth / 2,
         top: box.top + box.height - 12,
       }}
     >
@@ -69,6 +77,15 @@ export function PreviewActionBar({
           label="Select element"
           active={selectElement.active}
           onClick={selectElement.onToggle}
+        />
+      ) : null}
+      {comments ? (
+        <PreviewActionButton
+          icon={<IconMessages className="size-4" />}
+          label="Comments"
+          active={comments.active}
+          onClick={comments.onToggle}
+          badge={comments.count}
         />
       ) : null}
       <PreviewActionButton
@@ -108,6 +125,7 @@ function PreviewActionButton({
   active,
   disabled,
   onClick,
+  badge = 0,
 }: {
   icon: ReactNode;
   label: string;
@@ -115,6 +133,8 @@ function PreviewActionButton({
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  /** A count shown on the button's corner; hidden at 0. */
+  badge?: number;
 }) {
   return (
     <Tooltip>
@@ -127,10 +147,16 @@ function PreviewActionButton({
           disabled={disabled}
           onClick={onClick}
           className={cn(
+            "relative",
             active && "bg-secondary text-primary hover:text-primary",
           )}
         >
           {icon}
+          {badge > 0 ? (
+            <span className="pointer-events-none absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-2xs font-medium tabular-nums text-background">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          ) : null}
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">{label}</TooltipContent>

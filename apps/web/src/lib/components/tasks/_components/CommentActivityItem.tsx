@@ -46,6 +46,8 @@ interface CommentActivityItemProps {
   taskId: Id<"agentTasks">;
   users: Users | undefined;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
+  /** An archived task: no edit or delete. */
+  readOnly?: boolean;
 }
 
 /** Author name: quieter than a heading, so the comment body stays the emphasis. */
@@ -93,6 +95,7 @@ export function CommentActivityItem({
   taskId,
   users,
   onDeleteRequest,
+  readOnly = false,
 }: CommentActivityItemProps) {
   const currentUserId = useQuery(api.auth.me);
   const { repo, basePath } = useRepo();
@@ -119,7 +122,7 @@ export function CommentActivityItem({
   const isDeleted = isCommentDeleted(comment);
   const isAuthor =
     comment.authorId !== undefined && comment.authorId === currentUserId;
-  const canManage = isAuthor && !isDeleted;
+  const canManage = isAuthor && !isDeleted && !readOnly;
 
   const startEditing = () => {
     setEditText(mentionTokensToEditableText(comment.content));

@@ -24,6 +24,7 @@ import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import { useProjectTaskTabs } from "@/lib/components/projects/useProjectTaskTabs";
 import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
@@ -76,6 +77,42 @@ export function ProjectDetailClient({
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
+  // The rail tab a reply thread opened over: ✕ on Replies returns to it.
+  const [threadReturnTab, setThreadReturnTab] =
+    useState<ProjectSandboxTab>("tasks");
+
+  // A reply thread opens as the rail's Replies tab (`?thread=`), selected.
+  const openThread = (messageId: string) => {
+    if (!projectPathSegment) return;
+    if (sandboxTab !== "replies") setThreadReturnTab(sandboxTab);
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/replies`,
+      ),
+      search: (prev) => ({ ...prev, thread: messageId }),
+    });
+    setExpandRightSignal((n) => n + 1);
+  };
+
+  // ✕ drops the Replies tab and goes back to the tab before it.
+  const closeThread = () => {
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/${threadReturnTab}`,
+      ),
+      search: (prev) => ({ ...prev, thread: undefined }),
+      replace: true,
+    });
+  };
+
+  // Tasks open as chat tabs beside Eva (`?tasks=`, `?task=`).
+  const taskTabs = useProjectTaskTabs({
+    basePath,
+    projectPathSegment,
+    sandboxTab,
+    onShowPanel: () => setExpandRightSignal((n) => n + 1),
+  });
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
@@ -185,6 +222,9 @@ export function ProjectDetailClient({
             chatTurnOpen={chatTurnOpen}
             sandboxRailWidthPx={sandboxRailWidthPx}
             expandRightSignal={expandRightSignal}
+            onThreadOpen={openThread}
+            onCloseThread={closeThread}
+            taskTabs={taskTabs}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}

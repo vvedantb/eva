@@ -5,14 +5,9 @@ import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
-import {
-  MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-  requestCoordinatorWake,
-} from "../convex/_projects/coordinatorWake";
+import { requestCoordinatorWake } from "../convex/_projects/coordinatorWake";
 import { fileTaskReport } from "../convex/_projects/reports";
-import { RUN_WAITING_FOR_ANSWER } from "../convex/_taskWorkflow/helpers";
-import { acquireTurnLease, openTurn } from "../convex/_chat/turnStore";
-import { workflow as workflowManager } from "../convex/workflowManager";
+import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
 import { projectTaskNeedsYou } from "@eva/shared/projectStatus";
 import { ensureTaskChat } from "../convex/_sessions/ownedSession";
 import {
@@ -168,14 +163,25 @@ describe("a child task's ask", () => {
       const [answered] = await reports(f);
       expect(answered?.state).toBe("answered");
       expect(answered?.answeredBy).toBe(f.userId);
-      // The answer starts the task's next run with the answer in its prompt.
-      const run = await f.t.run((ctx) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", f.a))
-          .first(),
-      );
-      expect(run?.note).toContain("Use v2.");
+      // The answer is the task's next run: its chat message, with the answer
+      // in the agent's prompt, and no second copy of the person's row.
+      const { queued, userRows } = await f.t.run(async (ctx) => ({
+        queued: await ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
+          .collect(),
+        userRows: (
+          await ctx.db
+            .query("messages")
+            .withIndex("by_parent", (q) => q.eq("parentId", chatId))
+            .collect()
+        ).filter((row) => row.role === "user"),
+      }));
+      expect(queued.map((row) => [row.displayContent, row.taskRun])).toEqual([
+        ["Use v2.", { mode: "implementation" }],
+      ]);
+      expect(queued[0]?.content).toContain("The answer from a person:\nUse v2.");
+      expect(userRows).toEqual([]);
 
       // The coordinator's answer arrives late: not sent, no second run.
       const outcome = await f.t.mutation(
@@ -255,72 +261,32 @@ describe("a child task's ask", () => {
 
 describe("a run that ended on its ask", () => {
   test(
-    "finishes as a clean waiting outcome: no error, not failed, no failure wake-up; a stop then halts it as stopped",
+    "waits, not failed, with no failure wake-up; a stop then halts it as stopped",
     async () => {
       const f = await fixture();
-      const { runId, turnId, leaseGeneration } = await f.t.run(async (ctx) => {
-        const runId = await ctx.db.insert("agentRuns", {
-          taskId: f.a,
-          repoId: f.repoId,
-          status: "running",
-          logs: [],
-          startedAt: Date.now() - 1_000,
-        });
-        await ctx.db.patch(f.a, {
-          run: { state: "running", workflowId: "wf-ask", runId },
-        });
-        const turnId = await openTurn(ctx, {
-          entityId: runId,
-          streamingEntityId: `task-run-${runId}`,
+      // The task's run is a task-mode turn in its own chat; it asks, then its
+      // turn ends.
+      await f.t.run(async (ctx) => {
+        await ctx.db.patch(f.a, { status: "in_progress" });
+      });
+      const turn = await f.t.run(async (ctx) => {
+        const task = await ctx.db.get(f.a);
+        if (!task) throw new Error("task missing");
+        const { session, chat } = await ensureTaskChat(ctx, task);
+        const turnId = await openSessionChatTurn(ctx, {
+          chatId: chat._id,
+          sessionId: session._id,
+          streamingEntityId: String(chat._id),
           model: DEFAULT_AI_MODEL,
           repoId: f.repoId,
+          taskRun: { mode: "implementation" },
         });
-        const turn = await ctx.db.get(turnId);
-        if (!turn) throw new Error("turn missing");
-        await acquireTurnLease(ctx, turn, "running");
-        const leased = await ctx.db.get(turnId);
-        return { runId, turnId, leaseGeneration: leased?.leaseGeneration ?? 0 };
+        return await ctx.db.get(turnId);
       });
-      // The agent asks during the run, then stops without a commit: the
-      // commit gate reports a failure.
+      if (!turn) throw new Error("turn missing");
       await ask(f, f.a, "Which API version?");
-      const sent = vi
-        .spyOn(workflowManager, "sendEvent")
-        .mockImplementation(async () => "event-1");
-      try {
-        await f.asUser.mutation(api.taskWorkflow.handleCompletion, {
-          taskId: f.a,
-          runId,
-          success: false,
-          result: "I asked the coordinator.",
-          error:
-            "Agent finished without creating a new git commit. Edit the required files, run git add and git commit locally, then try again.",
-          activityLog: null,
-          turnId,
-          leaseGeneration,
-        });
-        expect(sent).toHaveBeenCalledTimes(1);
-        expect(sent.mock.calls[0]?.[1]).toMatchObject({
-          value: { success: true, error: null },
-        });
-      } finally {
-        sent.mockRestore();
-      }
-      // The workflow then completes the run as it does any success.
-      await f.t.mutation(internal.taskWorkflow.completeRun, {
-        runId,
-        taskId: f.a,
-        projectId: f.projectId,
-        success: true,
-        error: null,
-        prError: null,
-        prUrl: null,
-        activityLog: null,
-      });
-      const run = await f.t.run((ctx) => ctx.db.get(runId));
-      expect(run?.status).toBe("success");
-      expect(run?.error).toBeUndefined();
-      expect(run?.exitReason).toBe(RUN_WAITING_FOR_ANSWER);
+      await f.t.run((ctx) => closeTurn(ctx, turn, "done"));
+
       const waiting = await factsOf(f, f.a);
       if (!waiting) throw new Error("facts missing");
       expect(waiting.status).toBe("in_progress");
@@ -342,13 +308,10 @@ describe("a run that ended on its ask", () => {
       await f.t.mutation(internal.buildWorkflow.scheduleReadyTasks, {
         projectId: f.projectId,
       });
-      const runs = await f.t.run((ctx) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", f.a))
-          .collect(),
+      const restarted = await f.t.run((ctx) =>
+        ctx.db.query("queuedMessages").collect(),
       );
-      expect(runs).toHaveLength(1);
+      expect(restarted.filter((row) => row.taskRun !== undefined)).toEqual([]);
     },
     TIMEOUT_MS,
   );
@@ -385,12 +348,12 @@ describe("coordinator wake-ups", () => {
   );
 
   test(
-    "at the hourly cap the wake-up is held and the project needs a person; a person's message releases it without counting",
+    "there is no hourly cap: a wake-up after many automatic turns is still sent",
     async () => {
       const f = await fixture();
       await f.t.run(async (ctx) => {
         const now = Date.now();
-        for (let i = 0; i < MAX_COORDINATOR_AUTO_TURNS_PER_HOUR; i += 1) {
+        for (let i = 0; i < 20; i += 1) {
           await ctx.db.insert("projectCoordinatorWakes", {
             projectId: f.projectId,
             reason: "failed",
@@ -410,33 +373,8 @@ describe("coordinator wake-ups", () => {
       await f.t.mutation(internal._projects.coordinatorWakeDelivery.deliverCoordinatorWakes, {
         projectId: f.projectId,
       });
-      const state = await f.asUser.query(api.projects.getCoordinatorState, {
-        projectId: f.projectId,
-      });
-      expect(state).toEqual({
-        paused: true,
-        autoTurnsLastHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-        maxAutoTurnsPerHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-      });
-      const listed = await f.asUser.query(api.projects.listStatusesForRepo, {
-        repoId: f.repoId,
-      });
-      expect(listed[0]?.coordinatorPaused).toBe(true);
-
-      // A person writes in the coordinator chat.
-      const { chatId } = await f.asUser.mutation(api.sessions.ensureOwned, {
-        owner: { kind: "project", projectId: f.projectId },
-      });
-      await f.asUser.mutation(api._sessions.execution.enqueueMessage, {
-        chatId,
-        message: "Go on",
-        model: DEFAULT_AI_MODEL,
-      });
-      const after = await f.asUser.query(api.projects.getCoordinatorState, {
-        projectId: f.projectId,
-      });
-      expect(after.paused).toBe(false);
-      expect(after.autoTurnsLastHour).toBe(MAX_COORDINATOR_AUTO_TURNS_PER_HOUR);
+      const fresh = (await wakes(f)).find((row) => row.key === "ask:new");
+      expect(fresh?.sentAt).toBeDefined();
     },
     TIMEOUT_MS,
   );
@@ -455,6 +393,8 @@ describe("project tool rules", () => {
           "stop_agent",
           "update_project_summary",
           "retry_task",
+          "start_task",
+          "merge_task_into",
           "report_to_coordinator",
           "update_plan",
           "send_chat_message",
@@ -467,6 +407,8 @@ describe("project tool rules", () => {
       stop_agent: "allow",
       update_project_summary: "allow",
       retry_task: "allow",
+      start_task: "allow",
+      merge_task_into: "allow",
       report_to_coordinator: "hide",
       update_plan: "refuse",
       send_chat_message: "allow",
@@ -478,6 +420,8 @@ describe("project tool rules", () => {
       stop_agent: "hide",
       update_project_summary: "hide",
       retry_task: "hide",
+      start_task: "hide",
+      merge_task_into: "hide",
       report_to_coordinator: "allow",
       update_plan: "refuse",
       send_chat_message: "allow",
@@ -489,6 +433,8 @@ describe("project tool rules", () => {
       stop_agent: "allow",
       update_project_summary: "hide",
       retry_task: "hide",
+      start_task: "hide",
+      merge_task_into: "hide",
       report_to_coordinator: "hide",
       update_plan: "allow",
       send_chat_message: "allow",

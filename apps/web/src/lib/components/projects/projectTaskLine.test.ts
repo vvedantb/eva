@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
   projectStatusCountsLine,
+  projectTaskFacts,
   projectTaskPrLine,
+  projectTaskPromptAction,
   projectTaskPullRequests,
   projectTaskSummaryLine,
   type ProjectTaskView,
@@ -26,25 +28,11 @@ const task = (row: SummarizableProjectTaskRow & { locked?: boolean }) => row;
 const none = {
   notes: undefined,
   failed: false,
-  authorName: undefined,
   otherRepoLabel: undefined,
 };
 
 describe("projectTaskSummaryLine", () => {
-  it("names who added a Triage task", () => {
-    const row = task({ numId: 904, status: "todo" });
-    expect(
-      projectTaskSummaryLine(row, view("triage", "approve"), {
-        ...none,
-        authorName: "Ana",
-      }),
-    ).toBe("#904 · Added by Ana");
-    expect(
-      projectTaskSummaryLine({ status: "todo" }, view("triage", "approve"), none),
-    ).toBe("Needs approval");
-  });
-
-  it("says why a Blocked task needs you, with its PR or its question", () => {
+  it("says why a Needs you task needs you, with its PR or its question", () => {
     const row = task({
       numId: 905,
       status: "done",
@@ -88,6 +76,23 @@ describe("projectTaskSummaryLine", () => {
       projectTaskSummaryLine({ status: "cancelled" }, view("archived"), none),
     ).toBe("Cancelled");
   });
+
+  it("names a task the coordinator holds, and where it went", () => {
+    expect(
+      projectTaskSummaryLine(
+        task({ numId: 908, status: "todo" }),
+        { ...view("idle"), withCoordinator: true },
+        none,
+      ),
+    ).toBe("#908 · With Eva");
+    expect(
+      projectTaskSummaryLine(
+        task({ numId: 908, status: "cancelled", mergedIntoTaskId: "t4" }),
+        view("archived"),
+        { ...none, numIdOf: (id) => (id === "t4" ? 904 : undefined) },
+      ),
+    ).toBe("#908 · Added to #904");
+  });
 });
 
 describe("project task PRs and counts", () => {
@@ -110,15 +115,116 @@ describe("project task PRs and counts", () => {
     ).toBe("12 · PR");
   });
 
+  it("lists a multi-repo task's PRs one per repo, each with its repo", () => {
+    const prs = projectTaskPullRequests([
+      task({
+        numId: 4,
+        status: "code_review",
+        prUrl: "https://github.com/acme/web/pull/12",
+        prState: "open",
+        repoPrs: [
+          { prUrl: "https://github.com/acme/web/pull/12", prState: "merged", repoName: "web" },
+          { prUrl: "https://github.com/acme/api/pull/7", prState: "open", repoName: "api" },
+        ],
+      }),
+    ]);
+    expect(prs.map((row) => projectTaskPrLine(row))).toEqual([
+      "#12 · Merged · web · via #4",
+      "#7 · Open · api · via #4",
+    ]);
+  });
+
   it("counts the non-empty statuses in list order", () => {
     expect(
       projectStatusCountsLine({
-        triage: 3,
-        working: 0,
+        working: 3,
         blocked: 2,
-        idle: 1,
+        idle: 0,
         archived: 1,
       }),
-    ).toBe("3 triage · 2 blocked · 1 idle · 1 archived");
+    ).toBe("2 needs you · 3 working · 1 archived");
+  });
+});
+
+describe("projectTaskFacts", () => {
+  const repos = [
+    { _id: "r1", name: "web" },
+    { _id: "r2", name: "api" },
+    { _id: "r3", name: "docs", label: "Docs site" },
+  ];
+  const pr = (repoId: string, repoName: string, number: number) => ({
+    prUrl: `https://github.com/acme/${repoName}/pull/${number}`,
+    state: "open" as const,
+    repoId,
+    repoName,
+  });
+
+  it("shows the status, the phase and a bare PR number on one repo", () => {
+    const facts = projectTaskFacts(
+      {
+        _id: "t1",
+        status: "in_progress",
+        approvedAt: 1,
+        repoId: "r1",
+        phaseLabel: "Phase 2",
+      },
+      repos,
+      [pr("r1", "web", 12)],
+    );
+    expect(facts.text).toBe("Working · Phase 2");
+    expect(facts.prs.map((row) => row.label)).toEqual(["#12"]);
+  });
+
+  it("names each repo once on a multi-repo task", () => {
+    const facts = projectTaskFacts(
+      {
+        _id: "t1",
+        status: "code_review",
+        approvedAt: 1,
+        repoId: "r1",
+        linkedRepoIds: ["r2", "r3"],
+      },
+      repos,
+      [pr("r1", "web", 12), pr("r2", "api", 7)],
+    );
+    expect(facts.text).toBe("In review · Docs site");
+    expect(facts.prs.map((row) => row.label)).toEqual(["web #12", "api #7"]);
+  });
+
+  it("reads To do for a todo task and Archived once archived", () => {
+    expect(
+      projectTaskFacts({ _id: "t1", status: "todo" }, repos, []).text,
+    ).toBe("To do");
+    expect(
+      projectTaskFacts(
+        { _id: "t1", status: "todo", archivedAt: 5 },
+        repos,
+        [],
+      ).text,
+    ).toBe("Archived");
+  });
+});
+
+describe("projectTaskPromptAction", () => {
+  const open = { hasActiveRun: false, readOnly: false };
+  it("shows With Eva while handed, Start once approved, nothing else", () => {
+    expect(
+      projectTaskPromptAction(
+        { _id: "t1", status: "todo", approvedAt: 1, handedToCoordinatorAt: 1 },
+        open,
+      ),
+    ).toBe("with_eva");
+    expect(
+      projectTaskPromptAction({ _id: "t1", status: "todo", approvedAt: 1 }, open),
+    ).toBe("start");
+    expect(
+      projectTaskPromptAction({ _id: "t1", status: "todo" }, open),
+    ).toBeUndefined();
+    expect(
+      projectTaskPromptAction(
+        { _id: "t1", status: "todo", approvedAt: 1 },
+        { hasActiveRun: true, readOnly: false },
+      ),
+    ).toBeUndefined();
   });
 });

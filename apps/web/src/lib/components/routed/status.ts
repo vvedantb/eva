@@ -1,20 +1,37 @@
 import type { BadgeProps } from "@vvedantb/ui";
+import type { Doc } from "@eva/backend";
+import { ownerLabel } from "@eva/shared";
 
-export function statusLabel(status: string): string {
-  if (status === "waiting_human") return "Needs reply";
+type RoutedThread = Doc<"routedThreads">;
+type RoutedThreadStatus = RoutedThread["status"];
+
+const STATUS_LABELS: Record<RoutedThreadStatus, string> = {
+  open: "Open",
+  waiting_human: "Needs reply",
   // Everyone asked has answered and Eva has been woken with the replies.
   // Not "Waiting on Eva": that reads as a person called Eva.
-  if (status === "waiting_eva") return "Answered";
-  if (status === "resolved") return "Resolved";
-  if (status === "cancelled") return "Cancelled";
-  return "Open";
+  waiting_eva: "Answered",
+  resolved: "Resolved",
+  cancelled: "Cancelled",
+};
+
+const STATUS_BADGE_VARIANTS: Record<RoutedThreadStatus, BadgeProps["variant"]> =
+  {
+    open: "secondary",
+    waiting_human: "warning",
+    waiting_eva: "secondary",
+    resolved: "success",
+    cancelled: "outline",
+  };
+
+export function statusLabel(status: RoutedThreadStatus): string {
+  return STATUS_LABELS[status];
 }
 
-export function statusBadgeVariant(status: string): BadgeProps["variant"] {
-  if (status === "waiting_human") return "warning";
-  if (status === "resolved") return "success";
-  if (status === "cancelled") return "outline";
-  return "secondary";
+export function statusBadgeVariant(
+  status: RoutedThreadStatus,
+): BadgeProps["variant"] {
+  return STATUS_BADGE_VARIANTS[status];
 }
 
 /**
@@ -34,20 +51,9 @@ export function participantNames(
   return participants.map((participant) => participant.name).join(", ");
 }
 
-function sourceKindLabel(kind: string): string {
-  if (kind === "session") return "Session";
-  if (kind === "task") return "Task";
-  if (kind === "project") return "Project";
-  return "Chat";
-}
-
-/** "Session 42", or just "Session" when the chat has no number. */
-export function sourceLabel(thread: {
-  sourceKind: string;
-  sourceNumId?: number;
-}): string {
-  const kind = sourceKindLabel(thread.sourceKind);
-  return thread.sourceNumId === undefined
-    ? kind
-    : `${kind} ${thread.sourceNumId}`;
+/** "Session #42", or just "Session" when the chat has no number. */
+export function sourceLabel(
+  thread: Pick<RoutedThread, "sourceKind"> & { sourceNumId?: number },
+): string {
+  return ownerLabel(thread.sourceKind, thread.sourceNumId);
 }

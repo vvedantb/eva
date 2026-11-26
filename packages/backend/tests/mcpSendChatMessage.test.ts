@@ -67,14 +67,8 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    // A task's PR names the run that opened it.
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "success",
-      logs: [],
-    });
     await recordPullRequest(ctx, {
-      owner: { kind: "task", taskId, runId },
+      owner: { kind: "task", taskId },
       repoId,
       prUrl: TASK_PR_URL,
       state: "open",
@@ -308,18 +302,25 @@ describe("resolving the chat an MCP caller named", () => {
     ).toBeNull();
 
     await f.t.run(async (ctx) => {
-      const deletedAt = Date.now();
-      await ctx.db.patch(f.sessionId, { deletedAt });
-      await ctx.db.patch(f.taskId, { deletedAt });
-      await ctx.db.patch(f.projectId, { deletedAt });
+      const at = Date.now();
+      await ctx.db.patch(f.sessionId, { deletedAt: at });
+      await ctx.db.patch(f.taskId, { archivedAt: at });
+      await ctx.db.patch(f.projectId, { archivedAt: at });
     });
-    for (const id of [f.sessionId, f.taskId, f.projectId]) {
+    expect(
+      await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
+        userId: f.ownerUserId,
+        id: f.sessionId,
+      }),
+    ).toBeNull();
+    // An archived task or project still resolves, like an archived session.
+    for (const id of [f.taskId, f.projectId]) {
       expect(
         await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
           userId: f.ownerUserId,
           id,
         }),
-      ).toBeNull();
+      ).not.toBeNull();
     }
   });
 

@@ -71,3 +71,18 @@ export async function latestChatMessageId(
     .first();
   return latest?._id;
 }
+
+/**
+ * Where a row the agent just made (an artifact, a doc) shows as an inline card:
+ * the chat the token names and its newest turn. Null outside a live chat.
+ */
+export async function chatTurnAnchor(
+  db: DatabaseReader,
+  entityKind: ChatEntityKind,
+  entityId: string,
+): Promise<{ chatParentId: ChatParentId; messageId?: Id<"messages"> } | null> {
+  const chatParentId = await resolveChatParent(db, entityKind, entityId);
+  if (!chatParentId) return null;
+  const messageId = await latestChatMessageId(db, chatParentId);
+  return { chatParentId, ...(messageId ? { messageId } : {}) };
+}

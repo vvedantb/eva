@@ -110,7 +110,7 @@ Per harness:
 ## Publish, PRs and archive
 
 - Primary: unchanged. The turn workflow pushes the primary branch, then opens or updates its draft PR.
-- Linked: `internal.sandbox.pushLinkedRepoBranches` fetches each row's base, counts `origin/<base>..<branch>`, and pushes only when that is greater than 0. Missing clone directories and per-repo push failures are logged and skipped, so one repo cannot fail the whole publish. `internal.github.createDraftSessionRepoPr` opens one draft PR per row, idempotently, with a body that cross-links every sibling PR already known plus the Eva session URL, and records it as a `pullRequests` row. `sessionExecuteWorkflow` runs both after the primary's push.
+- Linked: `internal.sandbox.pushLinkedRepoBranches` fetches each row's base, counts `origin/<base>..<branch>`, and pushes only when that is greater than 0. Missing clone directories and per-repo push failures are logged and skipped, so one repo cannot fail the whole publish. `internal.github.createDraftSessionRepoPr` opens one draft PR per row, idempotently, with a body that cross-links every sibling PR already known plus the Eva session URL, and records it as a `pullRequests` row. `sessionExecuteWorkflow` runs both after the primary's push (a task's session too), and so does a task run (`taskExecutionWorkflow`).
 - Webhook (`githubWebhook.ts:handlePullRequestEvent`): every PR event updates its `pullRequests` row, then re-runs the session's archive reconcile.
 - Archive rule (`_sessions/prArchive.ts:shouldArchiveSession`): archive when **every** PR the session holds (primary, linked, and any side-branch PR the agent opened) is `merged` or `closed`. If no PR exists at all the session does not archive. Unarchive is the same rule inverted, so a reopened PR brings the session back.
 - Sandbox deletion and the 48h grace are unchanged — one sandbox per session.
@@ -159,7 +159,6 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 - **Composer:** `CodebasesPicker` — primary chip from the URL repo (non-removable) plus removable linked chips, an "Add codebase" popover deduped by `owner/name`, and a saved-groups section with save/rename/delete. Selection lives in the URL via nuqs (`linked`, `group`, `deps`), so it survives reloads and is shareable.
 - **Session header:** `SessionRepoBadges`, from `sessions.listRepos` — one row per repo (`kind: "primary" | "linked"`, path, branch, PR URL and state), primary first.
 - **Files panel:** root selector once a session has linked repos; the primary's root is stored as `""` in the URL.
-- **Changed files:** paths under `/tmp/workspace/<name>/` are attributed to that repo and grouped under a heading (`changedFilesPresentation.ts`).
 - **Sidebar:** a `+N` badge from `linkedRepoCount` on the primary's row, and the session also appears under each linked repo with a "via `<primary>`" hint linking back to the primary's URL (`linkedFrom`).
 - **Terminal / PTY:** cwd stays `/tmp/repo`.
 
@@ -168,7 +167,7 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 - `create_session` gains `linkedRepos?: string[]` (same `name` / `owner/name` grammar as `repoName`) and `group?: string` (saved group name). They are mutually exclusive, and a named group's saved primary must match `repoName` — the error names the primary to pass instead. Unknown or ambiguous group names are rejected with the caller's group list. The result includes the resolved `linkedRepos` (`repo`, `path`).
 - `list_repos` returns saved groups alongside repos, so a caller can discover a `group` name. Groups whose primary repo has been deleted are dropped.
 - `get_agent_state` and `list_entities` include a session's `linkedRepos` with `repo`, `path`, `branch`, `prUrl` and `prState`. Every PR a chat holds is also listed on its own (`pullRequests` / `prUrls`).
-- `create_task`, projects and automations stay single-repo.
+- A project coordinator's `create_task` / `create_tasks_batch` take `linkedRepoNames` (stored as `agentTasks.linkedRepoIds`): the task's own session gets the `sessionRepos` rows, and its runs and chat turns clone, push and open PRs as below. The task's `prState` combines every repo's PR (`@eva/shared` `combineRepoPrStates`). Plan: `internal/plans/implemented/project-multi-repo-tasks.md`. Quick tasks, `create_session` callers outside projects, and automations stay as they are.
 
 ## Key files
 
@@ -186,11 +185,11 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 | Launch env | `_sandbox_runtime/launch.ts`, `_sandbox_runtime/linkedReposEnv.ts` |
 | Agent runtime config | `callback-src/config.ts`, `callback-src/linkedRepos.ts`, `callback-src/providers/*` |
 | Prompt block | `convex/prompts/shared.ts` (`buildLinkedReposSection`) |
-| Publish (not yet wired) | `_sandbox_runtime/execution.ts` (`pushLinkedRepoBranches`), `_github/prFlow.ts` (`createDraftSessionRepoPr`) |
+| Publish | `_sessions/linkedRepoSteps.ts` (clone and publish steps for sessions and task runs), `_sandbox_runtime/execution.ts` (`pushLinkedRepoBranches`), `_github/prFlow.ts` (`createDraftSessionRepoPr`) |
 | PR state + archive | `githubWebhook.ts`, `_pullRequests/store.ts`, `_sessions/prArchive.ts` |
 | Checkpoints / revert | `callback-src/runtime/turnCheckpoint.ts`, `_sandbox_runtime/turnRevert.ts` |
 | Repo deletion cascade | `_migrations/deleteRepos.ts` |
 | Composer / header / files UI | `apps/web/src/routes/_repo/$owner/$repo/sessions/_components/CodebasesPicker.tsx`, `SessionRepoBadges.tsx`, `../FilesPanel.tsx` |
 | Manual harness test | `callback-src/tests/linkedReposHarness.manual.md` |
 
-Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`; `apps/web` — `changedFilesPresentation`.
+Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`.

@@ -1,0 +1,123 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Work goes in through Eva's chat</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1240px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:18px;max-width:1040px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:14px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.num{width:24px;height:24px;border-radius:12px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12.5px;margin-top:2px}
+.ui{display:flex;height:360px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#1c1d20}
+.left{flex:1.4;display:flex;flex-direction:column;min-width:0;border-right:1px solid #2e2f34}
+.tabs{display:flex;gap:3px;padding:9px 8px 6px;align-items:center}
+.tab{height:26px;border-radius:8px;padding:0 9px;display:flex;align-items:center;font-size:11.5px;font-weight:500;color:#8b8f96}
+.tab.on{background:#2a2b30;color:#e6e7e9}
+.plus{color:#8b8f96;padding:0 6px;font-size:14px;position:relative}
+.chat{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px;overflow:hidden}
+.me{align-self:flex-end;background:#2f2a4a;border-radius:12px;padding:7px 10px;max-width:80%}
+.eva{color:#e6e7e9;line-height:1.5}
+.card{border:1px solid #33353a;background:#232428;border-radius:10px;padding:7px 9px;display:flex;align-items:center;gap:8px;font-size:11.5px}
+.card .d{width:8px;height:8px;border-radius:4px;flex:none}
+.card .s{color:#8b8f96;margin-left:auto;font-size:10.5px}
+.comp{margin:8px;border-radius:12px;background:#26272b;padding:9px 11px;color:#6b6f76;font-size:11.5px;position:relative}
+.comp.focus{box-shadow:0 0 0 2px #7c5cf0;color:#c9cbcf}
+.pane{flex:1;background:#242529;display:flex;flex-direction:column;min-width:0}
+.ph{padding:9px 12px;border-bottom:1px solid #2e2f34;font-size:12.5px;font-weight:600}
+.pb{flex:1;padding:8px 10px;font-size:11.5px;display:flex;flex-direction:column;gap:3px}
+.gh{background:#2a2b30;border-radius:6px;padding:3px 8px;color:#a7aab0;font-size:11px;margin-top:5px}
+.row{display:flex;gap:7px;align-items:center;padding:5px 6px;border-radius:7px}
+.row .d{width:8px;height:8px;border-radius:4px;flex:none}
+.row .s{color:#8b8f96;font-size:10.5px;margin-left:auto}
+.gone{opacity:.35;text-decoration:line-through}
+.hit{outline:2px solid #f0b35a;outline-offset:2px;border-radius:8px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:10px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:2}
+.note{margin-top:10px;font-size:12px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.inbox{flex:1;padding:12px;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.ir{display:flex;gap:8px;align-items:center;padding:7px 8px;border-radius:8px;background:#232428}
+.ir .s{color:#8b8f96;font-size:10.5px}
+.btn{border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:600;margin-left:auto}
+.btn.pri{background:#e6e7e9;color:#18191c}.btn.ghost{color:#8b8f96}
+</style></head><body>
+<h1>Work goes in through Eva's chat (no Triage)</h1>
+<p class="lead">Like Amp: you tell Eva what you need in the project chat, and she starts the work or adds it to a task already on it. Nothing waits for an "Approve" click. The cost guard is who can post (team members) plus Eva grouping related asks into one task.</p>
+<div class="grid">
+
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">Click "+" (New task), or just type in Eva's chat.</div><div class="see">"+" no longer opens a task form: it switches to the Eva tab and puts the cursor in her message box.</div></div></div>
+  <div class="ui">
+    <div class="left">
+      <div class="tabs"><div class="tab on">Eva</div><div class="tab">#903 Order sum…</div><span class="plus hit">+<span class="tag" style="top:-14px;left:-4px">click</span></span></div>
+      <div class="chat"><div class="eva">#903 waits for your review; #904 is wiring the summary into checkout.</div></div>
+      <div class="comp focus">The promo box is hard to find on mobile. Also rename "Basket" to "Cart".|</div>
+    </div>
+    <div class="pane"><div class="ph">Tasks</div><div class="pb">
+      <div class="gh">Working 1</div><div class="row"><span class="d" style="background:#7c5cf0"></span>#904 Wire the summary<span class="s">Phase 1</span></div>
+      <div class="gh">Needs you 1</div><div class="row"><span class="d" style="background:#e0a800"></span>#903 New order summary<span class="s">review PR</span></div>
+    </div></div>
+  </div>
+  <div class="note">One way in for everyone: the chat (or @Eva in Slack later).</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">Eva sorts it and answers in a line or two.</div><div class="see">A new task card for the promo box (started), and the rename added to #904, which already edits checkout copy.</div></div></div>
+  <div class="ui">
+    <div class="left">
+      <div class="tabs"><div class="tab on">Eva</div><div class="tab">#903 Order sum…</div><span class="plus">+</span></div>
+      <div class="chat">
+        <div class="me">The promo box is hard to find on mobile. Also rename "Basket" to "Cart".</div>
+        <div class="eva">Started #908 for the promo box. Added the rename to #904.</div>
+        <div class="card"><span class="d" style="background:#7c5cf0"></span>#908 Move the promo box above the total<span class="s">Working</span></div>
+        <div class="card"><span class="d" style="background:#7c5cf0"></span>#904 Wire the summary · + rename Basket → Cart<span class="s">Working</span></div>
+      </div>
+      <div class="comp">Message Eva…</div>
+    </div>
+    <div class="pane"><div class="ph">Tasks</div><div class="pb">
+      <div class="gh">Working 2</div>
+      <div class="row"><span class="d" style="background:#7c5cf0"></span>#908 Promo box above total<span class="s">new</span></div>
+      <div class="row"><span class="d" style="background:#7c5cf0"></span>#904 Wire the summary<span class="s">Phase 1</span></div>
+      <div class="gh">Needs you 1</div><div class="row"><span class="d" style="background:#e0a800"></span>#903 New order summary<span class="s">review PR</span></div>
+    </div></div>
+  </div>
+  <div class="note"><b>New:</b> task cards in the chat (click opens the task tab), like Amp's live thread cards.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">The Tasks list has no Triage group.</div><div class="see">Groups: Needs you, Working, Idle, Done/Archived. No Approve / Reject buttons, no "Approve all".</div></div></div>
+  <div class="ui">
+    <div class="pane" style="flex:1">
+      <div class="ph">Tasks</div><div class="pb">
+        <div class="gh gone">Triage 5 · Approve all</div>
+        <div class="row gone"><span class="d" style="background:#7c5cf0"></span>The promo code box is hard to find<span class="s">Reject · Approve</span></div>
+        <div class="gh">Needs you 1</div><div class="row"><span class="d" style="background:#e0a800"></span>#903 New order summary<span class="s">review PR #9003</span></div>
+        <div class="gh">Working 2</div>
+        <div class="row"><span class="d" style="background:#7c5cf0"></span>#908 Promo box above total<span class="s">Phase 1</span></div>
+        <div class="row"><span class="d" style="background:#7c5cf0"></span>#904 Wire the summary<span class="s">Phase 1</span></div>
+        <div class="gh">Idle 1</div><div class="row"><span class="d" style="background:#6b6f76"></span>#905 Load-test checkout<span class="s">Phase 2</span></div>
+        <div class="gh">Archived 2</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Struck-through rows are what goes away. A task waiting for a later phase sits in <b>Idle</b>; Eva starts it when its turn comes.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">Inbox → Needs you has no "Triage" group either.</div><div class="see">You are asked only when Eva needs you: a question, a PR to review, a failed task.</div></div></div>
+  <div class="ui">
+    <div class="inbox">
+      <div style="color:#8b8f96;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em">Questions</div>
+      <div class="ir">#902 asks: should the cache key include the postcode?<span class="btn pri">Answer</span></div>
+      <div style="color:#8b8f96;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:6px">To review</div>
+      <div class="ir">#903 New order summary · PR #9003<span class="btn pri">Review</span></div>
+      <div style="color:#8b8f96;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:6px" class="gone">Triage</div>
+      <div class="ir gone">The promo code box is hard to find<span class="btn ghost">Reject</span><span class="btn pri" style="margin-left:6px">Approve</span></div>
+    </div>
+  </div>
+  <div class="note">Existing Triage items on deploy: handed to Eva once, so she groups or starts them (the v2 "approve hands to Eva" path, run for every item).</div>
+</div>
+
+</div>
+</body></html>

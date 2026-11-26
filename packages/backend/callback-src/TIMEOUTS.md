@@ -68,7 +68,6 @@ Quick tasks and automations use **both** the sandbox callback (this script) and,
 | Layer                        | Owner                       | Quick-task values                   | Purpose                          |
 | ---------------------------- | --------------------------- | ----------------------------------- | -------------------------------- |
 | Callback `MAX_TOTAL_RUNTIME` | sandbox script              | 3h (`TURN_MAX_RUNTIME_MS`)          | Hard turn lifetime cap           |
-| Daytona sandbox autostop     | Daytona                     | 90m (ephemeral + session)           | Sandbox inactivity stop          |
 | Convex `checkStaleRuns`      | `_taskWorkflow/watchdog.ts` | 5m probe / 25m unverified kill      | Heartbeat staleness (tasks only) |
 | `handleStaleRun`             | workflow                    | 3.5h (`TURN_BACKSTOP_MS`)           | Absolute backstop (tasks only)   |
 

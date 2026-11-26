@@ -29,6 +29,7 @@ import {
 } from "@vvedantb/ui";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import {
+  IconArchive,
   IconLayoutKanban,
   IconPlus,
   IconFilter,
@@ -48,18 +49,22 @@ import {
   searchAndSortProjects,
   projectFilterChips,
   toggleHiddenProjectPhase,
+  archiveCopy,
+  type ArchiveListMode,
+  type ProjectFilterKey,
 } from "@eva/shared";
 import type { ProjectStage } from "@eva/shared/projectStatus";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
-import { ProjectDeleteDialog } from "./_components/ProjectDeleteDialog";
+import { ProjectArchiveDialog } from "./_components/ProjectArchiveDialog";
 import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
 import { ProjectsBulkBar } from "./_components/ProjectsBulkBar";
-import { useProjectsSelection } from "./_components/useProjectsSelection";
-import { useProjectDelete } from "./_components/useProjectDelete";
-import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
+import { useListSelection } from "@/lib/components/quick-tasks/useListSelection";
+import { useProjectArchive } from "./_components/useProjectArchive";
+import { ListModeTabs } from "@/lib/components/ListModeTabs";
+import { ActiveFiltersBar } from "@/lib/components/ActiveFiltersBar";
 import { useProjectFilters, type ProjectView } from "./_utils";
 
 const VIEW_OPTIONS: {
@@ -88,16 +93,41 @@ function isProjectView(value: string): value is ProjectView {
 
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
-  const projects = useQuery(api.projects.list, { repoId: repo._id });
+  // Not persisted, as the Sessions sidebar: the page opens on Active.
+  const [listMode, setListMode] = useState<ArchiveListMode>("active");
+  const isArchivedList = listMode === "archived";
+  const liveProjects = useQuery(
+    api.projects.list,
+    isArchivedList ? "skip" : { repoId: repo._id },
+  );
+  const archivedProjects = useQuery(
+    api.projects.listArchived,
+    isArchivedList ? { repoId: repo._id } : "skip",
+  );
+  const projects = isArchivedList ? archivedProjects : liveProjects;
   // Each project's stage is derived from its child tasks, never stored.
-  const statuses = useProjectListStatuses(repo._id);
+  const statuses = useProjectListStatuses(repo._id, isArchivedList);
   const stageOf = (projectId: string): ProjectStage =>
     statuses?.get(projectId)?.stage ?? "todo";
   const [isCreating, setIsCreating] = useState(false);
   const [
-    { q, view, hiddenPhases, sortField, sortDir, timelineRange, timelineZoom },
+    {
+      q,
+      view: savedView,
+      hiddenPhases,
+      sortField,
+      sortDir,
+      timelineRange,
+      timelineZoom,
+    },
     setParams,
   ] = useProjectFilters();
+  // The Archived list has no Timeline: an archived project's dates are
+  // read-only, and the timeline drags them. It shows the list instead.
+  const view = isArchivedList && savedView === "timeline" ? "list" : savedView;
+  const viewOptions = isArchivedList
+    ? VIEW_OPTIONS.filter((opt) => opt.key !== "timeline")
+    : VIEW_OPTIONS;
   const searchQuery = q;
   // Derive the visible set from the persisted blocklist so new columns show
   // by default and "all visible" is independent of how many columns exist.
@@ -105,13 +135,13 @@ export function ProjectsClient() {
   const visiblePhases = new Set<ProjectStage>(
     PROJECT_STAGES.filter((c) => !hiddenPhaseSet.has(c)),
   );
-  const selection = useProjectsSelection(
+  const selection = useListSelection(
     (projects ?? []).map((project) => project._id),
   );
   const exitSelectMode = () => {
     selection.exit();
   };
-  const projectDelete = useProjectDelete(repo._id, exitSelectMode);
+  const projectArchive = useProjectArchive(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
 
   const filteredSorted = searchAndSortProjects(
@@ -153,13 +183,20 @@ export function ProjectsClient() {
     PROJECT_STAGES,
   );
 
-  const clearFilter = (key: string) => {
-    const chip = activeFilterLabels.find((filter) => filter.key === key);
-    if (chip) setParams(clearedProjectFilter(chip.key));
+  const clearFilter = (key: ProjectFilterKey) => {
+    setParams(clearedProjectFilter(key));
   };
 
   const toolbarContent = (
     <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
+      <ListModeTabs
+        mode={listMode}
+        onChange={(mode) => {
+          exitSelectMode();
+          setListMode(mode);
+        }}
+        className="w-40"
+      />
       <ToggleSearch
         value={searchQuery}
         onChange={(v) => setParams({ q: v ?? "" })}
@@ -177,7 +214,7 @@ export function ProjectsClient() {
           {/* Taller below `sm` so the icon-only triggers clear the tap floor;
               `hit-target` is no use inside the list's own overflow clip. */}
           <TabsList className="tabs-segmented h-8 max-sm:h-10">
-            {VIEW_OPTIONS.map((opt) => (
+            {viewOptions.map((opt) => (
               <Tooltip key={opt.key}>
                 <TooltipTrigger asChild>
                   <TabsTrigger
@@ -194,9 +231,15 @@ export function ProjectsClient() {
           </TabsList>
         </Tabs>
       )}
-      {/* The timeline has no rows to check, so selection is not offered there. */}
+      {/* The timeline has no rows to check, so selection is not offered there;
+          the Archived list has none, as quick tasks (row Unarchive only). */}
       <ProjectsSelectButton
-        visible={hasProjects && view !== "timeline" && !selection.isSelecting}
+        visible={
+          hasProjects &&
+          view !== "timeline" &&
+          !selection.isSelecting &&
+          !isArchivedList
+        }
         onClick={selection.enter}
       />
       {hasProjects && (
@@ -289,15 +332,17 @@ export function ProjectsClient() {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <Button
-        size="sm"
-        aria-label="New project"
-        className="motion-press hover:scale-[1.01] active:scale-[0.96]"
-        onClick={() => setIsCreating(true)}
-      >
-        <IconPlus size={16} aria-hidden />
-        <span className="hidden sm:inline">New Project</span>
-      </Button>
+      {isArchivedList ? null : (
+        <Button
+          size="sm"
+          aria-label="New project"
+          className="motion-press hover:scale-[1.01] active:scale-[0.96]"
+          onClick={() => setIsCreating(true)}
+        >
+          <IconPlus size={16} aria-hidden />
+          <span className="hidden sm:inline">New Project</span>
+        </Button>
+      )}
     </div>
   );
 
@@ -319,6 +364,15 @@ export function ProjectsClient() {
           )}
           {projects === undefined || statuses === undefined ? (
             <CenteredSpinner label="Loading projects" />
+          ) : projects.length === 0 && isArchivedList ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <EmptyState.Root>
+                <EmptyState.Icon icon={IconArchive} size={24} />
+                <EmptyState.Title>
+                  {archiveCopy("project").emptyArchived}
+                </EmptyState.Title>
+              </EmptyState.Root>
+            </div>
           ) : projects.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <EmptyState.Root>
@@ -372,7 +426,7 @@ export function ProjectsClient() {
                     owner={owner}
                     name={name}
                     basePath={basePath}
-                    onDelete={projectDelete.requestSingle}
+                    onArchive={projectArchive.requestSingle}
                     isSelecting={selection.isSelecting}
                     selectedIds={selection.selectedIds}
                     onToggleSelect={selection.toggle}
@@ -394,7 +448,7 @@ export function ProjectsClient() {
                   projectsByPhase={projectsByPhase}
                   visiblePhases={visiblePhases}
                   statuses={statuses}
-                  onDelete={projectDelete.requestSingle}
+                  onArchive={projectArchive.requestSingle}
                   isSelecting={selection.isSelecting}
                   selectedIds={selection.selectedIds}
                   onToggleSelect={selection.toggle}
@@ -402,7 +456,7 @@ export function ProjectsClient() {
               )}
             </TabsTransition>
           )}
-          {hasProjects && (
+          {hasProjects && !isArchivedList && (
             <ProjectsBulkBar
               isSelecting={selection.isSelecting}
               selectedCount={selection.selectedIds.size}
@@ -412,8 +466,8 @@ export function ProjectsClient() {
                 selection.selectAll(filteredSorted.map((p) => p._id))
               }
               onClearSelection={selection.clear}
-              onDelete={() =>
-                projectDelete.requestBulk([...selection.selectedIds])
+              onArchive={() =>
+                projectArchive.requestBulk([...selection.selectedIds])
               }
             />
           )}
@@ -423,11 +477,11 @@ export function ProjectsClient() {
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
       />
-      <ProjectDeleteDialog
-        target={projectDelete.target}
-        onClose={projectDelete.close}
-        onConfirm={projectDelete.confirm}
-        isDeleting={projectDelete.isDeleting}
+      <ProjectArchiveDialog
+        target={projectArchive.target}
+        onClose={projectArchive.close}
+        onConfirm={projectArchive.confirm}
+        isArchiving={projectArchive.isArchiving}
       />
     </>
   );

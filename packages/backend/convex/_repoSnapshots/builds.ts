@@ -8,7 +8,6 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   snapshotBuildStatusValidator,
-  sandboxProviderKindValidator,
   seededAppStatusValidator,
   snapshotBuildFields,
 } from "../validators";
@@ -16,13 +15,13 @@ import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
 import { findSiblingsOf } from "../_githubRepos/helpers";
+import { listSandboxOwnerRows } from "../_sandbox/owner";
 
-/** Full snapshot build doc as returned to the client (provider always resolved). */
+/** Full snapshot build doc as returned to the client. */
 const snapshotBuildReturnValidator = v.object({
   _id: v.id("snapshotBuilds"),
   _creationTime: v.number(),
   ...snapshotBuildFields,
-  provider: sandboxProviderKindValidator,
 });
 
 const STALE_BUILD_MS = 30 * 60 * 1000;
@@ -72,21 +71,6 @@ function sanitizeBuildForReturn(build: Doc<"snapshotBuilds">) {
   };
 }
 
-/** Persists the sandbox provider at workflow start (requires action to decrypt env). */
-export const setBuildProvider = internalMutation({
-  args: {
-    buildId: v.id("snapshotBuilds"),
-    provider: sandboxProviderKindValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const build = await ctx.db.get(args.buildId);
-    if (!build) return null;
-    await ctx.db.patch(args.buildId, { provider: args.provider });
-    return null;
-  },
-});
-
 /** Lists the most recent 20 snapshot builds for a given snapshot config. */
 export const listBuilds = authQuery({
   args: { repoSnapshotId: v.id("repoSnapshots") },
@@ -102,10 +86,7 @@ export const listBuilds = authQuery({
       )
       .order("desc")
       .take(20);
-    return builds.map((build) => ({
-      ...sanitizeBuildForReturn(build),
-      provider: build.provider ?? "vercel",
-    }));
+    return builds.map(sanitizeBuildForReturn);
   },
 });
 
@@ -121,10 +102,7 @@ export const getBuild = authQuery({
     const config = await ctx.db.get(build.repoSnapshotId);
     if (!config) return null;
     await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);
-    return {
-      ...sanitizeBuildForReturn(build),
-      provider: build.provider ?? "vercel",
-    };
+    return sanitizeBuildForReturn(build);
   },
 });
 
@@ -179,32 +157,26 @@ export const triggerScheduledBuild = internalMutation({
 });
 
 /**
- * Internal: all sandbox ids with a real product owner. Credential-helper rows
- * are intentionally excluded: they are implementation detail rows created for
- * every sandbox, including leaked seed-prep sandboxes.
+ * Internal: the subset of `sandboxIds` with a real product owner (a session,
+ * a doc or an automation run). Credential-helper rows are intentionally
+ * excluded: they are implementation detail rows created for every sandbox,
+ * including leaked seed-prep sandboxes.
  */
 export const listReferencedSandboxIds = internalQuery({
-  args: {},
+  args: { sandboxIds: v.array(v.string()) },
   returns: v.array(v.string()),
-  handler: async (ctx) => {
-    const ids: string[] = [];
-    const add = (sandboxId: string | undefined): void => {
-      if (sandboxId && !ids.includes(sandboxId)) ids.push(sandboxId);
-    };
-
-    const runs = await ctx.db.query("agentRuns").collect();
-    for (const run of runs) add(run.sandboxId);
-
-    const sessions = await ctx.db.query("sessions").collect();
-    for (const session of sessions) add(session.sandboxId);
-
-    const docs = await ctx.db.query("docs").collect();
-    for (const doc of docs) add(doc.sandboxId);
-
-    const automationRuns = await ctx.db.query("automationRuns").collect();
-    for (const run of automationRuns) add(run.sandboxId);
-
-    return ids;
+  handler: async (ctx, args) => {
+    const referenced: string[] = [];
+    for (const sandboxId of args.sandboxIds) {
+      const rows = await listSandboxOwnerRows(ctx.db, sandboxId);
+      if (
+        rows.sessions.length + rows.docs.length + rows.automationRuns.length >
+        0
+      ) {
+        referenced.push(sandboxId);
+      }
+    }
+    return referenced;
   },
 });
 
@@ -237,7 +209,6 @@ export const startBuild = authMutation({
         const now = Date.now();
         const id = await ctx.db.insert("repoSnapshots", {
           repoId: effectiveAppRepoId,
-          snapshotName: `snapshot-${effectiveAppRepoId}`,
           schedule: sharedConfig.schedule,
           enabled: sharedConfig.enabled ?? true,
           buildCommands: sharedConfig.buildCommands,
@@ -328,7 +299,6 @@ export const startBuildForRepo = internalMutation({
       const now = Date.now();
       repoSnapshotId = await ctx.db.insert("repoSnapshots", {
         repoId: args.repoId,
-        snapshotName: `snapshot-${args.repoId}`,
         schedule: shared.schedule,
         enabled: shared.enabled ?? true,
         buildCommands: shared.buildCommands,
@@ -409,7 +379,6 @@ export const completeBuild = internalMutation({
         status: "running",
         triggeredBy: "cron",
         kind: build.kind,
-        provider: build.provider,
         logs: `Retry ${retryCount}/${MAX_CRON_RETRIES} after failure: ${args.error ?? "unknown error"}\n`,
         startedAt: now,
         retryCount,

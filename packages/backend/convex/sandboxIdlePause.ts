@@ -24,6 +24,9 @@ import { listLiveSessionChats } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
 import { sessionOwner } from "./_sessions/owner";
+import { listSandboxOwnerRows } from "./_sandbox/owner";
+import { findLatestTurn } from "./_chat/turnStore";
+import { isTrackedWorkflowRunning } from "./workflowManager";
 import {
   getSandboxActivity,
   sandboxActivityRefArgs,
@@ -50,7 +53,6 @@ import {
  *
  * Gated by `appSettings.sandboxIdlePauseMode`:
  *   - `off`     — this module does nothing (default; identical to pre-feature).
- *   - `dry-run` — logs `[sandboxIdlePause] would-pause …` per candidate.
  *   - `on`      — logs `[sandboxIdlePause] pause …` and requests the stop.
  *
  * The daily `sandboxAutoStop` sweep is untouched and keeps running alongside.
@@ -414,18 +416,20 @@ export const inspectCandidate = internalQuery({
 });
 
 /**
- * What Eva wants for one Vercel sandbox, judged from every entity that points
- * at it:
- *   - `unknown`  — no session owns it (another
- *                  deployment, seed prep, arena): never touch it.
- *   - `wanted`   — an owner is active/starting, busy, or has a tab open.
- *   - `stopping` — an owner is mid-stop and nothing wants the VM.
- *   - `closed`   — every owner is stopped and idle, so a running VM is a leak.
+ * What Eva wants for one Vercel sandbox, judged from every row that points at
+ * it (`listSandboxOwnerRows`):
+ *   - `unknown`  — no row owns it (another deployment, seed prep, a one-shot
+ *                  agent that stores no sandbox id): never touch it.
+ *   - `wanted`   — a session is active/starting, busy, or has a tab open; or a
+ *                  doc or automation run still needs it (`oneShotWantsSandbox`).
+ *   - `stopping` — a session is mid-stop and nothing wants the VM.
+ *   - `closed`   — nothing wants it, so a running VM is a leak.
  *
  * The Vercel SDK resumes a stopped sandbox on any exec (lazy resume), so a
  * background job that runs a command after Stop silently wakes the VM while
- * the owner row still says `closed`. Idle pause only scans `active` rows, so
- * those VMs used to bill until someone stopped them by hand.
+ * the owner row still says `closed`. Idle pause only scans `active` sessions,
+ * so the leak sweep is what stops those VMs and every idle doc or automation
+ * VM.
  */
 export type SandboxOwnerState = "unknown" | "wanted" | "stopping" | "closed";
 
@@ -443,20 +447,17 @@ async function resolveSandboxOwnerState(
   | { state: "unknown" }
   | { state: Exclude<SandboxOwnerState, "unknown">; repoId: Id<"githubRepos"> }
 > {
-  const sessions = await ctx.db
-    .query("sessions")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .collect();
-  const owners = sessions.map((doc) => ({
-    repoId: doc.repoId,
-    inspect: () => inspectSession(ctx, doc._id),
-  }));
+  const { sessions, docs, automationRuns } = await listSandboxOwnerRows(
+    ctx.db,
+    sandboxId,
+  );
+  const oneShots = [...docs, ...automationRuns];
   // The repo resolves the Vercel credentials a stop needs.
-  const repoId = owners.find((owner) => owner.repoId)?.repoId;
+  const repoId = sessions[0]?.repoId ?? oneShots[0]?.repoId;
   if (!repoId) return { state: "unknown" };
   let stopping = false;
-  for (const owner of owners) {
-    const candidate = await owner.inspect();
+  for (const session of sessions) {
+    const candidate = await inspectSession(ctx, session._id);
     if (!candidate) continue;
     if (
       candidate.status === "active" ||
@@ -468,7 +469,35 @@ async function resolveSandboxOwnerState(
     }
     if (candidate.status === "stopping") stopping = true;
   }
+  if (oneShots.length > 0) {
+    const { afterAgentMs } = resolveIdleThresholds(
+      await ctx.db.query("appSettings").first(),
+    );
+    for (const owner of oneShots) {
+      if (await oneShotWantsSandbox(ctx, owner, afterAgentMs)) {
+        return { state: "wanted", repoId };
+      }
+    }
+  }
   return { state: stopping ? "stopping" : "closed", repoId };
+}
+
+/**
+ * A doc interview or an automation run has no status or tab, so it wants its
+ * VM while its workflow runs, while its agent turn is open, and for the same
+ * after-agent grace a session gets. The grace keeps a doc interview's VM warm
+ * while the user types the next answer. A crashed workflow's stale
+ * `activeWorkflowId` does not count, so it can not pin the VM forever.
+ */
+async function oneShotWantsSandbox(
+  ctx: QueryCtx,
+  owner: Doc<"docs"> | Doc<"automationRuns">,
+  afterAgentMs: number,
+): Promise<boolean> {
+  if (await isTrackedWorkflowRunning(ctx, owner.activeWorkflowId)) return true;
+  const turn = await findLatestTurn(ctx, owner._id);
+  if (turn === null) return false;
+  return turn.open || (turn.finishedAt ?? 0) + afterAgentMs > Date.now();
 }
 
 /** Internal: owner state for one sandbox. Background jobs check it before exec. */
@@ -577,21 +606,18 @@ export const run = internalAction({
         continue;
       }
       if (paused >= MAX_PAUSES_PER_RUN) continue;
-      const verb = thresholds.mode === "on" ? "pause" : "would-pause";
       console.log(
-        `[sandboxIdlePause] ${verb} kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
+        `[sandboxIdlePause] pause kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
       );
-      if (thresholds.mode === "on") {
-        const stopped = await ctx.runMutation(
-          internal.sandboxIdlePause.pause,
-          { ...ref, idleMinutes: decision.idleMinutes },
-        );
-        if (!stopped) continue;
-      }
+      const stopped = await ctx.runMutation(internal.sandboxIdlePause.pause, {
+        ...ref,
+        idleMinutes: decision.idleMinutes,
+      });
+      if (!stopped) continue;
       paused += 1;
     }
     console.log(
-      `[sandboxIdlePause] sweep mode=${thresholds.mode} active=${refs.length} busy=${busy} present=${present} ${thresholds.mode === "on" ? "paused" : "would-pause"}=${paused}`,
+      `[sandboxIdlePause] sweep mode=${thresholds.mode} active=${refs.length} busy=${busy} present=${present} paused=${paused}`,
     );
     return null;
   },

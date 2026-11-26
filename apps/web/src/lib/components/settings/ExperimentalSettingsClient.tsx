@@ -38,7 +38,7 @@ const FLAG_GROUPS: FlagGroup[] = [
         key: "disablePageMotion",
         title: "Disable page animations",
         description:
-          "Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer beam, and the sessions sidebar working indicator stay on.",
+          "Make every animation and transition instant. Spinners, pulses and shimmers stay on.",
       },
       {
         key: "sessionTabs",
@@ -57,6 +57,12 @@ const FLAG_GROUPS: FlagGroup[] = [
         title: "Claude-style activity steps",
         description:
           "Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for. Text the agent writes between tool runs shows in order, between the steps (new turns only).",
+      },
+      {
+        key: "workspaceTabs",
+        title: "Editor, Computer and Files tabs",
+        description:
+          "Show the code editor, the sandbox desktop and the file viewer in the sandbox panel.",
       },
       {
         key: "simpleView",

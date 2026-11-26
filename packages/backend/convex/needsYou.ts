@@ -1,3 +1,4 @@
+import { taskRunFailure } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { entityHref, repoBasePath } from "@eva/shared";
 import {
@@ -6,12 +7,12 @@ import {
   needsYouGroupForSession,
 } from "@eva/shared/needsYou";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
 import { authQuery, hasRepoAccess } from "./functions";
 import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import { loadProjectTaskRows } from "./_projects/taskTable";
-import { latestTaskRun } from "./_projects/runSettings";
 import { isSessionArchived } from "./_sessions/archive";
 
 /**
@@ -21,9 +22,11 @@ import { isSessionArchived } from "./_sessions/archive";
  * sessions show to the person who made them.
  *
  * - Questions: a project task's open ask the coordinator handed to a person,
- *   and any blocking agent question (`pendingQuestions`) on an open turn.
+ *   any blocking agent question (`pendingQuestions`) on an open turn, and an
+ *   unread notification that asks for the caller in a chat: a teammate's
+ *   `@`-mention, a routed question, an agent's `notify_user`
+ *   (`isNeedsYouNotification`; posting in that chat reads it).
  * - To review: an open (not draft) PR of a project task, quick task or session.
- * - Triage: a project task no one approved yet.
  * - Failed: a project task whose retries are spent, or a quick task whose
  *   last run failed.
  */
@@ -34,7 +37,6 @@ const needsYouRowValidator = v.object({
   group: v.union(
     v.literal("question"),
     v.literal("review"),
-    v.literal("triage"),
     v.literal("failed"),
   ),
   title: v.string(),
@@ -53,12 +55,23 @@ const needsYouRowValidator = v.object({
   href: v.optional(v.string()),
   /** The chat the phone opens (`chats.get` target). */
   chatTarget: v.optional(v.string()),
+  /** The reply thread in that chat the phone opens. */
+  threadRootId: v.optional(v.id("messages")),
+  /**
+   * The chat the row is about, as its owner's id (a task, project or
+   * standalone session): the Inbox keeps one row for each chat.
+   */
+  chatKey: v.string(),
+  /** The task's or session's number, for the Inbox's source line. */
+  numId: v.optional(v.number()),
+  /** The notification behind a row that asks for the caller; archiving it clears the row. */
+  notificationId: v.optional(v.id("notifications")),
   repoId: v.id("githubRepos"),
   /** When it started to wait, for the row's age and the order. */
   at: v.number(),
 });
 
-type NeedsYouRow = typeof needsYouRowValidator.type;
+export type NeedsYouRow = typeof needsYouRowValidator.type;
 
 /** Most quick tasks and sessions of one person one repo reads per kind. */
 const PER_KIND_LIMIT = 100;
@@ -67,18 +80,40 @@ export const list = authQuery({
   args: { repoId: v.optional(v.id("githubRepos")) },
   returns: v.array(needsYouRowValidator),
   handler: async (ctx, args) => {
-    const repos =
-      args.repoId === undefined
-        ? await gatherAccessibleRepos(ctx.db, ctx.userId, false)
-        : (await hasRepoAccess(ctx.db, args.repoId, ctx.userId))
-          ? [await ctx.db.get(args.repoId)].filter((repo) => repo !== null)
-          : [];
-    const perRepo = await Promise.all(
-      repos.map((repo) => repoRows(ctx.db, repo, ctx.userId)),
-    );
-    return perRepo.flat();
+    const repos = await inboxRepos(ctx.db, ctx.userId, args.repoId);
+    const { live, asks } = await collectNeedsYou(ctx.db, ctx.userId, repos);
+    return [...live, ...asks];
   },
 });
+
+/** The repos the Inbox reads: every repo the caller can open, or the one asked for. */
+export async function inboxRepos(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos"> | undefined,
+): Promise<Doc<"githubRepos">[]> {
+  if (repoId === undefined) return await gatherAccessibleRepos(db, userId, false);
+  if (!(await hasRepoAccess(db, repoId, userId))) return [];
+  const repo = await db.get(repoId);
+  return repo ? [repo] : [];
+}
+
+/**
+ * The Needs you rows, split by where they come from: `live` from the state of
+ * tasks, sessions and turns, `asks` from unread notifications that ask for
+ * the caller in a chat. The Inbox files the two in different groups.
+ */
+export async function collectNeedsYou(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repos: readonly Doc<"githubRepos">[],
+): Promise<{ live: NeedsYouRow[]; asks: NeedsYouRow[] }> {
+  const [perRepo, asks] = await Promise.all([
+    Promise.all(repos.map((repo) => repoRows(db, repo, userId))),
+    notificationRows(db, userId, new Set(repos.map((repo) => repo._id))),
+  ]);
+  return { live: perRepo.flat(), asks };
+}
 
 async function repoRows(
   db: DatabaseReader,
@@ -94,6 +129,92 @@ async function repoRows(
   return [...projects, ...quickTasks, ...sessions, ...questions];
 }
 
+/** Most unread notifications the notification rows look through. */
+const NOTIFICATION_SCAN_LIMIT = 100;
+
+/**
+ * The caller's unread notifications that ask for them in a chat, as
+ * Questions. A row leaves once the caller posts in that chat
+ * (`notifyChatMentions` reads it) or marks it Done in the Inbox.
+ */
+async function notificationRows(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoIds: ReadonlySet<Id<"githubRepos">>,
+): Promise<NeedsYouRow[]> {
+  const unread = (
+    await db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", userId).eq("read", false),
+      )
+      .order("desc")
+      .take(NOTIFICATION_SCAN_LIMIT)
+  ).filter(
+    (row) =>
+      isNeedsYouNotification(row) &&
+      row.archivedAt === undefined &&
+      row.repoId !== undefined &&
+      repoIds.has(row.repoId),
+  );
+  const rows = await Promise.all(
+    unread.map(async (row): Promise<NeedsYouRow | null> => {
+      const { chatTarget, repoId } = row;
+      if (chatTarget === undefined || repoId === undefined) return null;
+      const source = await chatSource(db, chatTarget);
+      if (!source) return null;
+      return {
+        key: `notification:${row._id}`,
+        group: "question",
+        title: row.title,
+        detail: row.message,
+        source: source.kind,
+        projectTitle: source.projectTitle,
+        projectId: source.projectId,
+        href: row.href,
+        chatTarget,
+        threadRootId: row.threadRootId,
+        chatKey: chatTarget,
+        notificationId: row._id,
+        repoId,
+        at: row.createdAt,
+      };
+    }),
+  );
+  return rows.filter((row) => row !== null);
+}
+
+/** Which kind of chat a notification's `chatTarget` names. */
+async function chatSource(
+  db: DatabaseReader,
+  chatTarget: string,
+): Promise<{
+  kind: NeedsYouRow["source"];
+  projectId?: Id<"projects">;
+  projectTitle?: string;
+} | null> {
+  const projectId = db.normalizeId("projects", chatTarget);
+  if (projectId) {
+    const project = await db.get(projectId);
+    return project
+      ? { kind: "project", projectId, projectTitle: project.title }
+      : null;
+  }
+  const taskId = db.normalizeId("agentTasks", chatTarget);
+  if (taskId) {
+    const task = await db.get(taskId);
+    if (!task) return null;
+    if (task.projectId === undefined) return { kind: "quick_task" };
+    const project = await db.get(task.projectId);
+    return {
+      kind: "project",
+      projectId: task.projectId,
+      projectTitle: project?.title,
+    };
+  }
+  return db.normalizeId("sessions", chatTarget) ? { kind: "session" } : null;
+}
+
 /** Each live project's child tasks that wait for a person. */
 async function projectRows(
   db: DatabaseReader,
@@ -102,8 +223,8 @@ async function projectRows(
 ): Promise<NeedsYouRow[]> {
   const projects = await db
     .query("projects")
-    .withIndex("by_repo_and_deleted", (q) =>
-      q.eq("repoId", repo._id).eq("deletedAt", undefined),
+    .withIndex("by_repo_and_archived", (q) =>
+      q.eq("repoId", repo._id).eq("archivedAt", undefined),
     )
     .collect();
   const base = repoBasePath(repo);
@@ -144,6 +265,8 @@ async function projectRows(
                 ? `${base}/projects/${project.numId}/${task.numId}/activity`
                 : undefined,
             chatTarget: String(task._id),
+            chatKey: String(task._id),
+            numId: task.numId,
             repoId: repo._id,
             at: task.updatedAt,
           },
@@ -163,11 +286,11 @@ async function quickTaskRows(
   const byStatus = (status: "code_review" | "business_review" | "todo") =>
     db
       .query("agentTasks")
-      .withIndex("by_repo_status_deleted_and_creator", (q) =>
+      .withIndex("by_repo_status_archived_and_creator", (q) =>
         q
           .eq("repoId", repo._id)
           .eq("status", status)
-          .eq("deletedAt", undefined)
+          .eq("archivedAt", undefined)
           .eq("createdBy", userId),
       )
       .order("desc")
@@ -180,25 +303,28 @@ async function quickTaskRows(
   const quick = (tasks: Doc<"agentTasks">[]) =>
     tasks.filter((task) => task.projectId === undefined);
   const todoTasks = quick(todo);
-  const latestRuns = await Promise.all(
-    todoTasks.map((task) => latestTaskRun(db, task._id)),
+  // A quick task runs as task-mode turns in its chat (`taskRunStatus.ts`).
+  const failures = await Promise.all(
+    todoTasks.map((task) => taskRunFailure(db, task)),
   );
   const candidates = [
     ...quick([...codeReview, ...businessReview]).map((task) => ({
       task,
       lastRunFailed: false,
+      runError: undefined,
       at: task.updatedAt,
     })),
     ...todoTasks.map((task, index) => {
-      const run = latestRuns[index];
+      const failure = failures[index] ?? null;
       return {
         task,
-        lastRunFailed: run?.status === "error",
-        at: run?.finishedAt ?? task.updatedAt,
+        lastRunFailed: failure !== null,
+        runError: failure?.error,
+        at: failure?.at ?? task.updatedAt,
       };
     }),
   ];
-  return candidates.flatMap(({ task, lastRunFailed, at }): NeedsYouRow[] => {
+  return candidates.flatMap(({ task, lastRunFailed, runError, at }): NeedsYouRow[] => {
     const group = needsYouGroupForQuickTask({
       status: task.status,
       prState: task.prState,
@@ -210,17 +336,20 @@ async function quickTaskRows(
         key: `${group}:${task._id}`,
         group,
         title: task.title,
+        // The source line already names "#N"; a failed run says why.
         detail:
           group === "review" && task.prUrl
             ? `PR ${prLabel(task.prUrl)}`
-            : task.numId !== undefined
-              ? `#${task.numId}`
+            : group === "failed"
+              ? runError
               : undefined,
         source: "quick_task",
         taskId: task._id,
         prUrl: group === "review" ? task.prUrl : undefined,
         href: entityHref("task", repo, task.numId),
         chatTarget: String(task._id),
+        chatKey: String(task._id),
+        numId: task.numId,
         repoId: repo._id,
         at,
       },
@@ -259,6 +388,8 @@ async function sessionRows(
         prUrl: session.prUrl,
         href: entityHref("session", repo, session.numId),
         chatTarget: String(session._id),
+        chatKey: String(session._id),
+        numId: session.numId,
         repoId: repo._id,
         at: session.updatedAt ?? session._creationTime,
       },
@@ -315,6 +446,8 @@ async function questionRows(
           ...common,
           title: session.title,
           source: "session",
+          chatKey: String(session._id),
+          numId: session.numId,
           href: entityHref("session", repo, session.numId),
         };
       }
@@ -327,6 +460,7 @@ async function questionRows(
           source: "project",
           projectTitle: project.title,
           projectId: project._id,
+          chatKey: String(project._id),
           href: entityHref("project", repo, project.numId),
         };
       }
@@ -339,6 +473,8 @@ async function questionRows(
           title: task.title,
           source: "quick_task",
           taskId: task._id,
+          chatKey: String(task._id),
+          numId: task.numId,
           href: entityHref("task", repo, task.numId),
         };
       }
@@ -351,6 +487,8 @@ async function questionRows(
         projectTitle: project.title,
         projectId: project._id,
         taskId: task._id,
+        chatKey: String(task._id),
+        numId: task.numId,
         href:
           project.numId !== undefined && task.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId}/activity`

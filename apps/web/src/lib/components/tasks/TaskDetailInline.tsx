@@ -5,35 +5,14 @@ import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import {
-  api,
-  taskScheduledAt,
-  type Id,
-  type SandboxOwner,
-} from "@eva/backend";
-import { cn } from "@eva/ui";
-import {
-  Badge,
-  Spinner,
-  TabsTransition,
-  useRequestConfirm,
-} from "@vvedantb/ui";
-import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import { IconClock } from "@tabler/icons-react";
-import dayjs from "@eva/shared/dates";
+import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
+import { Spinner, TabsTransition, useRequestConfirm } from "@vvedantb/ui";
 import { useTaskDetail } from "./useTaskDetail";
-import { TaskHeader } from "./_components/TaskHeader";
-import { TaskDescription } from "./_components/TaskDescription";
-import { TaskAttachments } from "./_components/TaskAttachments";
-import { ActivityTimeline } from "./_components/ActivityTimeline";
-import { TaskSubscribers } from "./_components/TaskSubscribers";
-import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
-import { StatusFieldsSection } from "./_components/StatusFieldsSection";
+import { TaskDetailsPane } from "./TaskDetailsPane";
+import { ProjectTaskPageRedirect } from "./ProjectTaskPageRedirect";
 import { TaskFooter } from "./_components/TaskFooter";
-import {
-  ResolveConfirmDialog,
-  RunDevServerConfirmDialog,
-} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
+import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { useTaskAgentActive } from "./taskAgentActivity";
@@ -65,7 +44,10 @@ import {
 import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 import { useRepo } from "@/lib/contexts/RepoContext";
 
 interface TaskDetailInlineProps {
@@ -82,8 +64,6 @@ export function TaskDetailInline({
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
   const { basePath } = useRepo();
-  /** Which detail pane is on screen below `md`; both show at `md` and up. */
-  const [showMobileProperties, setShowMobileProperties] = useState(false);
   const [fileViewerPath, setFileViewerPath] = useQueryState(
     "file",
     fileViewerPathParser,
@@ -91,48 +71,31 @@ export function TaskDetailInline({
   const { diffFile } = useDiffSearchParams();
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
   // it, so a reload lands back on Files / Review. A tab the user picks
   // afterwards overrides that for this mount.
   const [pickedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab | null>(null);
-  const urlSandboxTab: SandboxTab = simpleView
-    ? "preview"
-    : fileViewerPath
-      ? "files"
-      : diffFile
-        ? "review"
-        : "preview";
-  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,
   );
 
+  const detail = useTaskDetail(taskId, routing);
   const {
     isLoading,
     isNotFound,
     task,
     status,
-    comments,
-    taskActivity,
-    users,
-    creatorUser,
-    projects,
-    isOwner,
     hasActiveRun,
-    isProjectTask,
+    isArchived,
     hasRuns,
-    canEditTaskText: canEditText,
     latestPrUrl,
-    latestPrError,
-    latestDeployment,
-    baseBranch,
+    deploymentStatus,
     executionError,
     showResolveConfirm,
     setShowResolveConfirm,
-    showRunDevServerConfirm,
-    setShowRunDevServerConfirm,
     isStarting,
     handleStartExecution,
     handleResolveConflicts,
@@ -147,24 +110,29 @@ export function TaskDetailInline({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
-    handleRunDevServer,
-    isRunningDevServer,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
-    devServerCommandLabel,
     sandboxId,
     canCreatePr,
     isCreatingPr,
     handleCreatePr,
     taskSession,
-  } = useTaskDetail(taskId, routing);
+  } = detail;
   const { sandbox } = taskSession;
+  // A project task with a PR opens on Review, as in the project panel
+  // (`defaultProjectTaskTab`).
+  const urlSandboxTab: SandboxTab = simpleView
+    ? "preview"
+    : fileViewerPath && !isHiddenTab("files")
+      ? "files"
+      : diffFile ||
+          (routing?.mode === "project-task" && latestPrUrl !== undefined)
+        ? "review"
+        : "preview";
+  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   // A task chats in a session chat (a project task's own chat in the
   // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId;
-  const isAgentActive = useTaskAgentActive(chatParentId, task);
-  const scheduledAt = task ? taskScheduledAt(task) : undefined;
+  const isAgentActive = useTaskAgentActive(chatParentId);
   const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -178,7 +146,7 @@ export function TaskDetailInline({
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   // Must stay above early returns so hooks order is stable.
   const openFile = (path: string) => {
-    if (simpleView) return;
+    if (isHiddenTab("files")) return;
     if (routing?.mode === "quick-sandbox") {
       routing.quick.onOpenFile(path);
       return;
@@ -241,12 +209,28 @@ export function TaskDetailInline({
   }
 
   const isQuickTask = task.projectId === undefined;
+  // A project task is its chat in its project: the quick task page sends it
+  // to its project task page.
+  if (!isQuickTask && routing?.mode !== "project-task") {
+    return <ProjectTaskPageRedirect task={task} />;
+  }
   const isSandboxViewActive = showSandbox;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
   const activeSandboxTab: SandboxTab =
     routing?.mode === "quick-sandbox" ? routeSandboxTab : embeddedSandboxTab;
+
+  const detailsPane = (
+    <TaskDetailsPane
+      taskId={taskId}
+      task={task}
+      detail={detail}
+      allTags={allTags}
+    />
+  );
+  // A project task's page has no rail toggle: its panel stays open.
+  const isProjectTaskPage = routing?.mode === "project-task";
 
   // Always mount the sandbox panel when the task can have a sandbox so tabs
   // (Diffs, etc.) stay reachable while stopped — same as sessions. Panes
@@ -277,12 +261,14 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          sandbox.status === "closed" &&
-          sandboxId !== undefined &&
-          canStartSandbox &&
-          !hasActiveRun
-        }
+        autoWakeEligible={sandboxAutoWakeEligible({
+          status: sandbox.status,
+          sandboxId,
+          sandboxError: sandbox.sandboxError,
+          canStart: canStartSandbox,
+          isBusy: hasActiveRun,
+        })}
+        isArchived={isArchived}
         collapsed={collapsed}
         onToggle={onToggle}
         miniPlayer={
@@ -296,9 +282,9 @@ export function TaskDetailInline({
       />
     ) : (
       <SandboxEmptyRailFrame
-        collapsed={collapsed}
+        collapsed={isProjectTaskPage ? false : collapsed}
         onToggle={onToggle}
-        showToggle={routing?.mode !== "project-task"}
+        showToggle={!isProjectTaskPage}
       >
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
@@ -319,6 +305,7 @@ export function TaskDetailInline({
       // Remount per task: the open flag is read once at mount.
       key={taskId}
       storageKey="task-sandbox-panel"
+      chatPane="left"
       collapsedStorageKey={`task-sandbox-panel:${taskId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}
@@ -333,10 +320,12 @@ export function TaskDetailInline({
           taskId={taskId}
           isSandboxActive={isSandboxActive}
           isSandboxToggling={isSandboxStarting || isSandboxStopping}
+          isSandboxStopping={isSandboxStopping}
           sandboxStartupActivity={sandboxStartupActivity}
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          isArchived={isArchived}
           onSandboxToggle={
             canStartSandbox || isSandboxActive
               ? (action) => {
@@ -379,10 +368,10 @@ export function TaskDetailInline({
       ) : (
         layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
           <SandboxNotStartedRail
-            collapsed={rightPanelCollapsed}
+            collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
             onToggle={onToggleRightPanel}
             ownerLabel="task"
-            showToggle={routing?.mode !== "project-task"}
+            showToggle={!isProjectTaskPage}
             isPending={sandbox.sessionPending}
             onStart={
               canStartSandbox && !isSandboxStopping
@@ -394,118 +383,6 @@ export function TaskDetailInline({
         ))
       )}
     </SandboxSurfaceProviders>
-  );
-
-  const detailContent = (
-    <TaskReactionsProvider taskId={taskId}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Below `md` the two columns stack, which buried Status / Priority /
-            Labels / Project under the whole (unbounded) activity timeline — on a
-            phone the only way to change a task's status was to scroll past every
-            run and comment. One pane at a time instead, same model the split
-            primitives use, following ProjectTabs' CSS-gated shape so desktop
-            keeps rendering both columns with no JS involved.
-            Local state, not a URL tab: on desktop both panes are on screen at
-            once, so there is nothing here worth linking to. */}
-        <div className="shrink-0 md:hidden">
-          <MobilePaneSwitcher
-            labels={{ left: "Overview", right: "Properties" }}
-            showingRight={showMobileProperties}
-            onSelect={(pane) => setShowMobileProperties(pane === "right")}
-          />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar md:overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[14fr_6fr] md:grid-rows-1 md:overflow-hidden">
-            {/* Only one column is hidden at a time below `md`, and the scroller
-                above stays the single scroll owner for whichever is showing. */}
-            <div
-              className={cn(
-                "min-h-0 min-w-0 md:flex md:flex-1 md:flex-col md:overflow-hidden",
-                showMobileProperties && "max-md:hidden",
-              )}
-            >
-              <div className="flex min-h-0 min-w-0 flex-col overflow-x-hidden md:flex-1 md:overflow-y-auto md:scrollbar">
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="shrink-0 space-y-4 px-4 pt-4 md:px-6 md:pr-6 md:pt-5">
-                    <div>
-                      <TaskHeader
-                        taskNumber={task?.taskNumber}
-                        title={task?.title}
-                        canEditTaskText={canEditText}
-                        hasActiveRun={hasActiveRun}
-                        taskId={taskId}
-                      />
-                      {scheduledAt ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="gap-1 text-xs font-normal text-muted-foreground"
-                          >
-                            <IconClock size={11} />
-                            {status === "todo"
-                              ? "Scheduled for"
-                              : "Was scheduled for"}{" "}
-                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
-                          </Badge>
-                        </div>
-                      ) : null}
-                    </div>
-                    <TaskDescription
-                      description={task?.description}
-                      canEditTaskText={canEditText}
-                      hasActiveRun={hasActiveRun}
-                      taskId={taskId}
-                      inline={true}
-                    />
-
-                    <TaskAttachments taskId={taskId} />
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                      <div className="text-sm font-medium text-foreground">
-                        Activity
-                      </div>
-                      <TaskSubscribers taskId={taskId} users={users} />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col sm:mt-4">
-                    <ActivityTimeline
-                      taskId={taskId}
-                      createdAt={task.createdAt}
-                      creatorUser={creatorUser}
-                      comments={comments}
-                      taskActivity={taskActivity}
-                      users={users}
-                      isProjectTask={isProjectTask}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* `mt-6` is gone: it separated this from the overview when the two
-                stacked, and as its own pane it starts at the top instead. */}
-            <div
-              className={cn(
-                "flex min-w-0 shrink-0 flex-col overflow-x-hidden px-4 pb-4 max-md:pt-4 md:overflow-hidden md:px-0 md:pb-0 md:pl-8 md:pr-6 md:pt-5",
-                !showMobileProperties && "max-md:hidden",
-              )}
-            >
-              <StatusFieldsSection
-                taskId={taskId}
-                task={task}
-                status={status}
-                users={users}
-                projects={projects}
-                baseBranch={baseBranch}
-                latestDeployment={latestDeployment}
-                hasRuns={hasRuns}
-                isOwner={isOwner}
-                allTags={allTags}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </TaskReactionsProvider>
   );
 
   const actionsSlotElement = quickTaskHeaderActionsSlot?.actionsElement;
@@ -523,8 +400,7 @@ export function TaskDetailInline({
         hasActiveRun={hasActiveRun}
         hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
-        latestPrError={latestPrError}
-        latestDeployment={latestDeployment}
+        deploymentStatus={deploymentStatus}
         executionError={executionError}
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}
@@ -537,15 +413,6 @@ export function TaskDetailInline({
         onCreatePr={handleCreatePr}
         onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        onRunDevServer={() =>
-          requestConfirm(
-            () => setShowRunDevServerConfirm(true),
-            handleRunDevServer,
-          )
-        }
-        isRunningDevServer={isRunningDevServer}
-        onRunBackgroundCommands={handleRunBackgroundCommands}
-        isRunningBackgroundCommands={isRunningBackgroundCommands}
         onStartExecution={handleStartExecution}
         onResolveConfirm={() =>
           requestConfirm(
@@ -587,7 +454,7 @@ export function TaskDetailInline({
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
           panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          {isSandboxViewActive ? sandboxContent : detailContent}
+          {isSandboxViewActive ? sandboxContent : detailsPane}
         </TabsTransition>
       </div>
       <ResolveConfirmDialog
@@ -595,13 +462,6 @@ export function TaskDetailInline({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isStarting}
-      />
-      <RunDevServerConfirmDialog
-        open={showRunDevServerConfirm}
-        onOpenChange={setShowRunDevServerConfirm}
-        onConfirm={handleRunDevServer}
-        isLoading={isRunningDevServer}
-        devCommandLabel={devServerCommandLabel}
       />
     </>
   );

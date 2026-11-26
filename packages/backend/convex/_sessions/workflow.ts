@@ -3,8 +3,12 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
-import { workflow } from "../workflowManager";
+import { toWorkflowId, workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
+import {
+  prepareLinkedRepoSteps,
+  publishLinkedRepoSteps,
+} from "./linkedRepoSteps";
 import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -20,11 +24,10 @@ import {
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
-  recordCompletionLog,
-  sendCompletionEvent,
   clearStreamingActivity,
   extractFirstJsonValue,
 } from "../_taskWorkflow/helpers";
+import { recordCompletionLog } from "../_agentJobs/completion";
 import {
   drainSessionChatQueues,
   scheduleQueueDrainAfterBackgroundAgents,
@@ -48,7 +51,8 @@ import {
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { MutationCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
+import { notifyThreadAnswer } from "../_mentions/notifyChatMentions";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
@@ -78,6 +82,7 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
+import { insertTurnFollowUp } from "../_messages/replies";
 import { isStandaloneSession, sessionOwnerTaskId } from "./owner";
 
 // --- Completion event ---
@@ -185,29 +190,11 @@ export const sessionSandboxStartupWorkflow = workflow.define({
     }
     const sandboxId = session.sandboxId;
 
-    const linkedRepos = await step.runQuery(
-      internal.sessions.listLinkedReposInternal,
-      { sessionId: args.sessionId },
-    );
-
-    for (const linkedRepo of linkedRepos) {
-      try {
-        await step.runAction(internal.sandbox.prepareLinkedRepo, {
-          sessionId: args.sessionId,
-          sessionRepoId: linkedRepo._id,
-          sandboxId,
-          repoId: args.repoId,
-        });
-      } catch (error) {
-        // Keep provisioning the rest — one repo failing to clone must not
-        // strand every other linked repo uncloned too.
-        await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-          sessionId: args.sessionId,
-          content: `Failed to prepare linked repo ${linkedRepo.name}`,
-          errorDetail: errorMessage(error),
-        });
-      }
-    }
+    await prepareLinkedRepoSteps(step, {
+      sessionId: args.sessionId,
+      sandboxId,
+      repoId: args.repoId,
+    });
 
     await step.runMutation(internal.sessions.clearSandboxSetupPending, {
       sessionId: args.sessionId,
@@ -327,6 +314,15 @@ export const sessionExecuteWorkflow = workflow.define({
         sandboxId,
         branchName: data.branchName,
       });
+      // A sandbox made here skipped the startup workflow, which clones the
+      // linked repos (a task's first run can land here).
+      if ((data.linkedRepoCount ?? 0) > 0) {
+        await prepareLinkedRepoSteps(step, {
+          sessionId,
+          sandboxId,
+          repoId: data.repoId,
+        });
+      }
     }
 
     if (sandboxId === null) {
@@ -577,65 +573,30 @@ export const sessionExecuteWorkflow = workflow.define({
       }
     }
 
-    // Multi-repo sessions: one push + one draft PR per linked repo that has
-    // commits. Deliberately here and not in the callback's `persistTurnWork`
-    // (which pushes only WORK_DIR at turn end): PR creation needs the backend
-    // regardless, so keeping both halves of publishing in this workflow means
-    // one publish path to reason about and no `callback-src` rebuild. The
-    // trade-off is the callback's durability window — a linked repo's commits
-    // only reach origin once this step runs, whereas the primary's are pushed
-    // before completion is even posted.
+    // Multi-repo sessions and multi-repo tasks: one push + one draft PR per
+    // linked repo that has commits. Deliberately here and not in the
+    // callback's `persistTurnWork` (which pushes only WORK_DIR at turn end):
+    // PR creation needs the backend regardless, so keeping both halves of
+    // publishing in this workflow means one publish path to reason about and
+    // no `callback-src` rebuild. The trade-off is the callback's durability
+    // window — a linked repo's commits only reach origin once this step
+    // runs, whereas the primary's are pushed before completion is even posted.
     // Not gated on the primary's `pushSucceeded`: a primary that failed to
-    // publish must not strand a linked repo's commits in the sandbox.
+    // publish must not strand a linked repo's commits in the sandbox. A
+    // task's session publishes its linked repos too: the task owns its home
+    // repo's PR, and each linked repo's PR is the session's (by
+    // `sessionRepoId`), which the task's PR state reads.
     if (
       result.success &&
-      data.ownsPullRequests !== false &&
+      (data.ownsPullRequests !== false || data.ownerTaskId !== undefined) &&
       (data.linkedRepoCount ?? 0) > 0
     ) {
-      let linkedPushes: Array<{
-        sessionRepoId: Id<"sessionRepos">;
-        pushed: boolean;
-        published: boolean;
-      }> = [];
-      try {
-        linkedPushes = await step.runAction(
-          internal.sandbox.pushLinkedRepoBranches,
-          { sessionId, sandboxId, repoId: data.repoId },
-        );
-      } catch (error) {
-        const errorDetail =
-          errorMessage(error);
-        console.error(
-          `[sessionWorkflow] pushLinkedRepoBranches failed sessionId=${sessionId}: ${errorDetail}`,
-        );
-        await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-          chatId: args.chatId,
-          content: "Failed to publish linked repository branches",
-          errorDetail,
-        });
-      }
-      for (const linkedPush of linkedPushes) {
-        // Nothing new on the branch — no PR to open (and none to recover).
-        if (!linkedPush.pushed && !linkedPush.published) continue;
-        try {
-          // Idempotent: returns the existing prUrl when the row already has one.
-          await step.runAction(internal.github.createDraftSessionRepoPr, {
-            sessionRepoId: linkedPush.sessionRepoId,
-          });
-        } catch (error) {
-          // One repo's PR failing must not stop its siblings' PRs.
-          const errorDetail =
-            errorMessage(error);
-          console.error(
-            `[sessionWorkflow] createDraftSessionRepoPr failed sessionRepoId=${linkedPush.sessionRepoId}: ${errorDetail}`,
-          );
-          await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-            chatId: args.chatId,
-            content: "Failed to create draft PR for a linked repository",
-            errorDetail,
-          });
-        }
-      }
+      await publishLinkedRepoSteps(step, {
+        sessionId,
+        sandboxId,
+        repoId: data.repoId,
+        alert: { chatId: args.chatId },
+      });
     }
   },
 });
@@ -701,14 +662,19 @@ export const postSystemAlert = internalMutation({
     }
     const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
-    await ctx.db.insert("messages", {
-      parentId: chatId,
-      role: "assistant",
+    const alert = {
       content: args.content,
       timestamp: Date.now(),
       isSystemAlert: true,
       ...(args.errorDetail !== undefined && { errorDetail: args.errorDetail }),
-    });
+    };
+    // A turn-level alert follows its turn into a thread; a session-level one
+    // stays in Main.
+    if (args.chatId === undefined) {
+      await ctx.db.insert("messages", { parentId: chatId, role: "assistant", ...alert });
+    } else {
+      await insertTurnFollowUp(ctx, { parentId: chatId, role: "assistant", ...alert });
+    }
     await ctx.db.patch(chatId, { updatedAt: Date.now() });
     await ctx.db.patch(context.session._id, { updatedAt: Date.now() });
     return null;
@@ -951,6 +917,31 @@ export const clearSessionClosedStatus = internalMutation({
   },
 });
 
+/**
+ * A thread turn that answered: the person whose @Eva reply woke her hears
+ * about it (`thread_answer`), with her answer as the preview.
+ */
+async function notifyAnswerInThread(
+  ctx: MutationCtx,
+  turn: Doc<"turns">,
+  success: boolean,
+  context: { session: Doc<"sessions">; chat: Doc<"sessionChats"> },
+): Promise<void> {
+  if (!success || turn.replyTo === undefined || turn.askedBy === undefined) {
+    return;
+  }
+  const answer =
+    turn.placeholderMessageId === undefined
+      ? null
+      : await ctx.db.get(turn.placeholderMessageId);
+  await notifyThreadAnswer(ctx, {
+    askerId: turn.askedBy,
+    rootId: turn.replyTo,
+    content: answer?.content ?? "",
+    surface: { kind: "session", ...context },
+  });
+}
+
 /** Saves a chat turn's result, updating the last message and starting queued messages. */
 export const saveResult = internalMutation({
   args: {
@@ -1037,6 +1028,7 @@ export const saveResult = internalMutation({
         args.success ? "done" : "error",
         args.error ? { error: args.error } : {},
       );
+      await notifyAnswerInThread(ctx, turn, args.success, { session, chat });
     }
     await drainSessionChatQueues(ctx, session._id, chat._id);
     return null;
@@ -1461,7 +1453,8 @@ export const openSyntheticTurn = authMutation({
       throw new Error("Not authorized");
 
     const turnModel = normalizeAIModel(args.model ?? chat.lastModel);
-    const messageId = await ctx.db.insert("messages", {
+    // A continuation of a thread turn answers in the same thread.
+    const { messageId, replyTo } = await insertTurnFollowUp(ctx, {
       parentId: chat._id,
       role: "assistant",
       content: "",
@@ -1478,6 +1471,7 @@ export const openSyntheticTurn = authMutation({
       sessionId: session._id,
       streamingEntityId: sessionChatStreamingEntityId(chat._id),
       placeholderMessageId: messageId,
+      replyTo,
       prompt: "[synthetic continuation]",
       model: turnModel,
       sandboxId: session.sandboxId,
@@ -1680,16 +1674,20 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }
 
-    await sendCompletionEvent(ctx, sessionCompleteEvent, activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-      pendingQuestion: args.pendingQuestion,
-      beforeSha: args.beforeSha,
-      afterSha: args.afterSha,
-      beforeShas: args.beforeShas,
-      afterShas: args.afterShas,
+    await workflow.sendEvent(ctx, {
+      ...sessionCompleteEvent,
+      workflowId: toWorkflowId(activeWorkflowId),
+      value: {
+        success: args.success,
+        result: args.result,
+        error: args.error,
+        activityLog: args.activityLog,
+        pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
+      },
     });
 
     await recordCompletionLog(ctx, {

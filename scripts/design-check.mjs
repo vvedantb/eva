@@ -172,6 +172,13 @@ function addViolation(relPath, reason, lineNumber) {
 for (const file of SCAN_ROOTS.flatMap((root) => walk(root))) {
   const text = readFileSync(file, "utf8");
   const relPath = path.relative(ROOT, file).split(path.sep).join("/");
+  // Presentation decks are slide art drawn on a fixed 1280×720 stage, with each
+  // deck's own brand colours and type scale, not product UI.
+  if (
+    relPath.startsWith("apps/web/src/routes/_components/deck/") ||
+    relPath.startsWith("apps/web/src/routes/slides/")
+  )
+    continue;
   const lines = text.split(/\r?\n/);
 
   // Whole-file opt-out, must appear in the first 20 lines.

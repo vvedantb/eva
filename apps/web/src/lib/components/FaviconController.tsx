@@ -47,8 +47,8 @@ function badgeAccentColors(
  * keeps showing the plain PNG. Safari therefore sees neither the theme surface
  * nor the badge rather than breaking.
  *
- * Reads the same cached `countUnread` subscription as the sidebar rail badge,
- * so it inherits that query's optimistic updates and adds no extra server load.
+ * Reads the same cached `needsYou.list` subscription as the sidebar rail
+ * badge (what waits for you to act), so it adds no extra server load.
  * Mounted above the auth gate so signed-out pages still get a themed icon,
  * which is why the query is skipped until Convex reports an identity.
  * Renders nothing.
@@ -56,10 +56,10 @@ function badgeAccentColors(
 export function FaviconController() {
   const { appearance } = useThemeMode();
   const { isAuthenticated } = useConvexAuth();
-  const unreadCount = useQuery(
-    api.notifications.countUnread,
+  const needsYouCount = useQuery(
+    api.needsYou.list,
     isAuthenticated ? {} : "skip",
-  );
+  )?.length;
   const customTheme = useQuery(
     api.auth.getCustomTheme,
     isAuthenticated ? {} : "skip",
@@ -69,18 +69,18 @@ export function FaviconController() {
   useEffect(() => {
     // The tab title carries the same count as the badge ("(3) … | Eva"), so it
     // is published from here rather than from a second subscription.
-    setDocumentUnreadCount(unreadCount ?? 0);
+    setDocumentUnreadCount(needsYouCount ?? 0);
 
     const link = document.querySelector(
       'link[rel="icon"][type="image/svg+xml"]',
     );
     if (!(link instanceof HTMLLinkElement)) return;
 
-    const hasUnread = unreadCount !== undefined && unreadCount > 0;
+    const hasBadge = needsYouCount !== undefined && needsYouCount > 0;
     const { fill, fg } = badgeAccentColors(appearance, accentColor);
     link.href = evaMarkDataUri(
       appearance,
-      hasUnread ? formatBadgeLabel(unreadCount) : null,
+      hasBadge ? formatBadgeLabel(needsYouCount) : null,
       fill,
       fg,
     );
@@ -89,7 +89,7 @@ export function FaviconController() {
     return () => {
       link.href = PLAIN_ICON_HREF;
     };
-  }, [appearance, unreadCount, accentColor]);
+  }, [appearance, needsYouCount, accentColor]);
 
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');

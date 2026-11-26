@@ -11,12 +11,13 @@ import {
 
 /**
  * A Pull requests row: the PR icon in its state colour, the task title, and
- * "#9003 · Open · via #904". A click opens the PR in a new tab.
+ * "#9003 · Open · via #904" (with the repo for a multi-repo task's PR). A
+ * click opens the PR in a new tab.
  */
 export function ProjectTaskPrRow({
   task,
 }: {
-  task: ProjectTaskListRow & { prUrl: string };
+  task: ProjectTaskListRow & { prUrl: string; repoName?: string };
 }) {
   return (
     <ListRow

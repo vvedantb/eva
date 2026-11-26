@@ -23,7 +23,7 @@ import {
   type SandboxCommandTab,
 } from "@/lib/components/sandbox/sandboxPaletteCommands";
 import {
-  isSimpleViewHiddenSandboxTab,
+  useIsHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
@@ -140,21 +140,20 @@ export function SandboxTabBar({
   onToggle,
 }: SandboxTabBarProps) {
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   const isMobile = useMediaQuery("(max-width: 767px)");
   const { showLabels, setShowLabels } = useSandboxRailLabels();
   const tabs = enabledTabs
     ? allTabs.filter((tab) => enabledTabs.includes(tab.value))
     : allTabs.filter((tab) => tab.value !== "browser");
   const showDesktopItem =
-    !simpleView && (!enabledTabs || enabledTabs.includes("computer"));
+    !isHiddenTab("computer") &&
+    (!enabledTabs || enabledTabs.includes("computer"));
   const showEditorItem =
-    !simpleView && (!enabledTabs || enabledTabs.includes("editor"));
-  const resolvedTab =
-    simpleView && isSimpleViewHiddenSandboxTab(activeTab)
-      ? "preview"
-      : activeTab;
+    !isHiddenTab("editor") && (!enabledTabs || enabledTabs.includes("editor"));
+  const resolvedTab = isHiddenTab(activeTab) ? "preview" : activeTab;
 
-  const showFiles = showFilesTab && !simpleView;
+  const showFiles = showFilesTab && !isHiddenTab("files");
   const showAgents = showAgentsTab && !simpleView;
   const visibleCustomTabs = simpleView ? [] : (customTabs ?? []);
   const customTabSlugs = visibleCustomTabs.map((tab) =>

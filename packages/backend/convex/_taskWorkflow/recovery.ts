@@ -1,35 +1,11 @@
-import type { MutationCtx } from "../_generated/server";
-import { internal } from "../_generated/api";
-import { cancelTrackedWorkflow } from "../workflowManager";
-import type { Id } from "../_generated/dataModel";
-import type { TurnState } from "../validators";
-import { closeOpenTurn } from "../_chat/turnStore";
-import { clearTaskRunStreaming } from "./helpers";
-import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
-import { onProjectTasksChanged } from "../functions";
-
-const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
-const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
-
-/** Checks whether an error message indicates a sandbox infrastructure/network issue. */
 /**
- * Why a quick task run did not start or claim its sandbox: the task's
- * session chat holds it, or a start/stop is in flight. A user start is refused
- * with it; a scheduled or already-running run retries in
- * `TASK_CHAT_BUSY_RETRY_MS`.
+ * True for a transient sandbox/snapshot failure (network error or a 408/429/5xx
+ * status) that is worth retrying. Base-branch fetch failures and failed
+ * commands inside the sandbox are real errors, not transient ones.
  */
-export const TASK_CHAT_BUSY_ERROR =
-  "This sandbox is busy: Eva is replying in its chat, a run or build holds it, or it is starting or stopping. Try the run again in a moment.";
-
-/** How long a run held back by a busy task chat waits before trying again. */
-export const TASK_CHAT_BUSY_RETRY_MS = 60_000;
-
-export function isDaytonaNetworkIssue(errorMsg: string): boolean {
+export function isSandboxNetworkIssue(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();
-  if (
-    message.includes("failed to fetch latest base branch") ||
-    message.includes("daytona:fetchbasebranch")
-  ) {
+  if (message.includes("failed to fetch latest base branch")) {
     return false;
   }
   const networkMarkers = [
@@ -45,8 +21,8 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     "timed out",
     "aborted",
   ];
-  const daytonaMarkers = ["daytona", "daytonaerror", "sandbox", "snapshot"];
-  const daytonaStatusMarkers = [
+  const sandboxMarkers = ["sandbox", "snapshot"];
+  const transientStatusMarkers = [
     "status code 408",
     "status code 429",
     "status code 500",
@@ -55,10 +31,10 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     "status code 504",
   ];
 
-  const hasDaytonaMarker = daytonaMarkers.some((marker) =>
+  const hasSandboxMarker = sandboxMarkers.some((marker) =>
     message.includes(marker),
   );
-  if (!hasDaytonaMarker) {
+  if (!hasSandboxMarker) {
     return false;
   }
 
@@ -72,7 +48,7 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   const hasNetworkMarker = networkMarkers.some((marker) =>
     message.includes(marker),
   );
-  const hasDaytonaStatusMarker = daytonaStatusMarkers.some((marker) =>
+  const hasTransientStatusMarker = transientStatusMarkers.some((marker) =>
     message.includes(marker),
   );
 
@@ -82,183 +58,9 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     return true;
   }
 
-  return hasNetworkMarker || hasDaytonaStatusMarker;
-}
-
-/**
- * Watchdog stops that earn one auto-retry: the agent went silent, died, or
- * never started. A launch race once left quick task 284 with no agent at all;
- * the next run on a fresh launch succeeds. Finalisation stalls are left out —
- * that run's work already landed, and a rerun could duplicate it.
- */
-const RETRYABLE_WATCHDOG_EXIT_REASONS = new Set([
-  "watchdog_killed",
-  "watchdog_startup_stalled",
-  "watchdog_no_sandbox",
-]);
-
-export function isRetryableWatchdogExit(exitReason: string | undefined) {
-  return (
-    exitReason !== undefined && RETRYABLE_WATCHDOG_EXIT_REASONS.has(exitReason)
-  );
+  return hasNetworkMarker || hasTransientStatusMarker;
 }
 
 // Usage-limit text parsing lives in ./usageLimitReset (pure module shared with
-// the web app's recovery card); re-exported here so existing importers keep
-// working, and so the web never pulls this module's workflow imports.
+// the web app's recovery card); re-exported here for existing importers.
 export { isUsageLimitError, parseUsageLimitResetTime } from "./usageLimitReset";
-
-/** Calculates a randomized retry delay for quick task auto-retries. */
-export function buildQuickTaskRetryDelayMs(): number {
-  return (
-    QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS +
-    Math.floor(Math.random() * QUICK_TASK_AUTO_RETRY_JITTER_MS)
-  );
-}
-
-/** Cleans up a stale or failed run: cancels workflow, kills sandbox, marks run as error, and schedules retry. */
-export async function cleanUpStaleRun(
-  ctx: MutationCtx,
-  params: {
-    taskId: Id<"agentTasks">;
-    runId: Id<"agentRuns">;
-    sandboxId?: string;
-    repoId?: Id<"githubRepos">;
-    errorMessage: string;
-    exitReason: string;
-    /** The workflow the task tracks; cancelled, and the task's run state ended. */
-    workflowId?: string;
-    taskStatus: string;
-  },
-): Promise<void> {
-  await cancelTrackedWorkflow(ctx, params.workflowId);
-
-  if (params.sandboxId && params.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-      sandboxId: params.sandboxId,
-      repoId: params.repoId,
-    });
-    // Task sandboxes are persistent: stop (don't delete) so any uncommitted
-    // work or unpushed commits stay recoverable and the next run resumes the
-    // same filesystem. Diagnostics (dmesg OOM lines, done file, callback log
-    // tail) are captured onto the run first, while the sandbox is still
-    // running.
-    await ctx.scheduler.runAfter(
-      0,
-      internal.sandbox.captureDiagnosticsAndStopSandbox,
-      {
-        sandboxId: params.sandboxId,
-        repoId: params.repoId,
-        runId: params.runId,
-      },
-    );
-  }
-
-  await ctx.db.patch(params.runId, {
-    status: "error",
-    finalizingAt: undefined,
-    error: params.errorMessage,
-    finishedAt: Date.now(),
-    exitReason: params.exitReason,
-  });
-
-  // The run's sandbox is its session's (`attachTaskRunSandbox`), so the task
-  // row keeps no sandbox reference.
-  await ctx.db.patch(params.taskId, {
-    updatedAt: Date.now(),
-    ...(params.taskStatus === "in_progress" ? { status: "todo" as const } : {}),
-  });
-  // No runId fence: the workflow cancelled above is whichever the task tracks.
-  await finishTaskRun(ctx, params.taskId, undefined);
-
-  await ctx.scheduler.runAfter(
-    0,
-    internal.taskWorkflow.maybeScheduleQuickTaskRetry,
-    {
-      taskId: params.taskId,
-      runId: params.runId,
-      error: params.errorMessage,
-      delayMs: buildQuickTaskRetryDelayMs(),
-    },
-  );
-  // The task left `in_progress`: its project may start the next ones.
-  const task = await ctx.db.get(params.taskId);
-  if (task?.projectId !== undefined) {
-    await onProjectTasksChanged(ctx, task.projectId);
-  }
-
-  // Every stop path ends here: the old chain, the lease reconciler and the
-  // `TURN_BACKSTOP_MS` backstop. Closing the run's turn keeps the two stall systems from
-  // both acting on one run.
-  await closeOpenTurn(ctx, params.runId, "error", {
-    error: params.errorMessage,
-  });
-
-  await clearTaskRunStreaming(ctx, params.taskId, params.runId, {
-    snapshot: true,
-  });
-}
-
-/**
- * The stop text and `exitReason` for a run whose lease expired, by the turn's
- * phase. The texts are the ones the old `checkStaleRuns` chain wrote, so the
- * retry rule (`isDaytonaNetworkIssue`) and the UI see no change.
- */
-export function stalledRunStop(input: {
-  state: TurnState;
-  hasSandbox: boolean;
-  staleSeconds: number;
-}): { errorMessage: string; exitReason: string } {
-  switch (input.state) {
-    case "staged":
-    case "launching":
-      return input.hasSandbox
-        ? {
-            errorMessage: "Run killed by watchdog: sandbox startup stalled",
-            exitReason: "watchdog_startup_stalled",
-          }
-        : {
-            errorMessage: "Run killed by watchdog: sandbox was never attached",
-            exitReason: "watchdog_no_sandbox",
-          };
-    case "finalizing":
-      return {
-        errorMessage: `Run killed by watchdog: finalization stalled (no heartbeat for ${input.staleSeconds}s)`,
-        exitReason: "watchdog_finalizing_stalled",
-      };
-    default:
-      return {
-        errorMessage: `Run killed by watchdog: no heartbeat for ${input.staleSeconds}s`,
-        exitReason: "watchdog_killed",
-      };
-  }
-}
-
-/**
- * Stops a run the lease reconciler gave up on, through the same
- * `cleanUpStaleRun` path the old watchdog used (sandbox stop, run error,
- * one auto-retry). No-op once the run has ended.
- */
-export async function finalizeStalledRun(
-  ctx: MutationCtx,
-  runId: Id<"agentRuns">,
-  stop: { errorMessage: string; exitReason: string; sandboxId?: string },
-): Promise<void> {
-  const run = await ctx.db.get(runId);
-  if (!run || (run.status !== "queued" && run.status !== "running")) return;
-  const task = await ctx.db.get(run.taskId);
-  if (!task) return;
-  console.log(
-    `[watchdog][kill] runId=${runId} reason=${stop.exitReason} source=lease`,
-  );
-  await cleanUpStaleRun(ctx, {
-    taskId: run.taskId,
-    runId,
-    sandboxId: run.sandboxId ?? stop.sandboxId,
-    repoId: run.repoId,
-    errorMessage: stop.errorMessage,
-    exitReason: stop.exitReason,
-    workflowId: taskRunWorkflowId(task),
-    taskStatus: task.status,
-  });
-}

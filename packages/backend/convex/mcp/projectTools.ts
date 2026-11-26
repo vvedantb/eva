@@ -73,8 +73,9 @@ export async function siblingRowRefusal(
 
 /**
  * Tools that exist only inside a project (`projectToolAccess` hides each
- * from every other caller): the coordinator's summary and retry, and a child
- * task's report up to its coordinator.
+ * from every other caller): the coordinator's summary, retry, and its start
+ * and merge of tasks handed to it, and a child task's report up to its
+ * coordinator.
  */
 export function projectTools(
   credentials: McpCredentials,
@@ -134,7 +135,94 @@ export function projectTools(
             internal.buildWorkflow.retryFailedTaskAsCoordinator,
             { projectId: caller.projectId, taskId, note },
           );
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: taskId,
+          });
           return toolJsonResult({ taskId, status: "retry_started" });
+        }),
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "start_task",
+      description: `Start one task that was handed to you (coordinator only). It runs as its own task, with its own branch and PR. Use it for an item no open task covers; to add an item to an open task instead, use merge_task_into.`,
+      mutating: true,
+      input: { ...projectTaskRefArgs },
+      handler: async (ref) =>
+        guarded(async () => {
+          if (caller.role !== "coordinator") {
+            return toolErrorResult("Only the project coordinator starts handed tasks.");
+          }
+          const taskId = await resolveProjectTaskRef(ctx, caller, ref);
+          if (taskId === undefined) {
+            return toolErrorResult("Name the task with taskId or taskNumber.");
+          }
+          if (typeof taskId !== "string") return taskId;
+          await ctx.runMutation(internal.buildWorkflow.startTaskAsCoordinator, {
+            projectId: caller.projectId,
+            taskId,
+          });
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: taskId,
+          });
+          return toolJsonResult({ taskId, status: "started" });
+        }),
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "merge_task_into",
+      description: `Close one task that was handed to you by adding it to an open task of this project (coordinator only). First give the open task the item with send_chat_message, then call this: the item is cancelled and shows "Added to #N". The target must be open: not done, cancelled or merged.`,
+      mutating: true,
+      input: {
+        ...projectTaskRefArgs,
+        intoTaskId: z
+          .string()
+          .optional()
+          .describe("The open task's Convex id. Or name it with intoTaskNumber."),
+        intoTaskNumber: z
+          .number()
+          .int()
+          .optional()
+          .describe('The open task\'s number in this project (4 for "#4").'),
+      },
+      handler: async ({ intoTaskId, intoTaskNumber, ...ref }) =>
+        guarded(async () => {
+          if (caller.role !== "coordinator") {
+            return toolErrorResult("Only the project coordinator merges tasks.");
+          }
+          const taskId = await resolveProjectTaskRef(ctx, caller, ref);
+          if (taskId === undefined) {
+            return toolErrorResult("Name the item with taskId or taskNumber.");
+          }
+          if (typeof taskId !== "string") return taskId;
+          const into = await resolveProjectTaskRef(ctx, caller, {
+            taskId: intoTaskId,
+            taskNumber: intoTaskNumber,
+          });
+          if (into === undefined) {
+            return toolErrorResult(
+              "Name the open task with intoTaskId or intoTaskNumber.",
+            );
+          }
+          if (typeof into !== "string") return into;
+          const { intoTaskNumber: number } = await ctx.runMutation(
+            internal.buildWorkflow.mergeTaskIntoAsCoordinator,
+            { projectId: caller.projectId, taskId, intoTaskId: into },
+          );
+          await ctx.runMutation(internal._projects.chatTaskCards.linkTaskToTurn, {
+            projectId: caller.projectId,
+            taskId: into,
+          });
+          return toolJsonResult({
+            taskId,
+            intoTaskId: into,
+            status: number !== undefined ? `added_to_#${number}` : "merged",
+          });
         }),
     }),
   );

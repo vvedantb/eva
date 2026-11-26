@@ -12,14 +12,17 @@ import { TaskDetailInline } from "@/lib/components/tasks/TaskDetailInline";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectSummaryDocLink } from "./ProjectSummarySection";
+import { ProjectTaskFacts } from "./ProjectTaskFacts";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
- * One project task in place of the coordinator: a back link to the
- * coordinator's Tasks tab and a link to the project's summary doc, then the
- * task's own chat and sandbox (the quick task's sandbox view,
- * `TaskDetailInline` in `project-task` mode). No properties column. A task of another project, or one the reader cannot
- * open, is not found.
+ * One project task in place of the coordinator: a header (a back link to the
+ * coordinator's Tasks tab, the task's number and title over its status and
+ * PR line, `ProjectTaskFacts`, and a link to the project's summary doc), then
+ * the task's own chat and sandbox (the quick task's sandbox view,
+ * `TaskDetailInline` in `project-task` mode). A task that has never run
+ * shows its prompt in its chat. A task of another project, or one the reader
+ * cannot open, is not found.
  */
 export function ProjectTaskView({
   projectId,
@@ -72,11 +75,17 @@ export function ProjectTaskView({
         >
           <IconArrowLeft size={16} />
         </DynamicLink>
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <EntityNumLabel numId={task.taskNumber} projectNumId={projectNumId} />
-          <span className="truncate text-sm font-medium text-foreground">
-            {task.title}
-          </span>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <EntityNumLabel
+              numId={task.taskNumber}
+              projectNumId={projectNumId}
+            />
+            <span className="truncate text-sm font-medium text-foreground">
+              {task.title}
+            </span>
+          </div>
+          <ProjectTaskFacts task={task} />
         </div>
         {summaryDoc && documentsHref ? (
           <ProjectSummaryDocLink

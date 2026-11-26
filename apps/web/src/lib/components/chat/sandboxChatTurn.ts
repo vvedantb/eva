@@ -7,6 +7,7 @@ import type {
   ReasoningLevel,
 } from "@eva/backend";
 import { chatStreamingEntityId } from "@eva/shared";
+import type { PreviewAnnotation } from "@eva/shared/previewAnnotationDisplay";
 import {
   annotationSender,
   type AnnotationSubmit,
@@ -82,6 +83,8 @@ export interface SandboxTurnInput {
   message: string;
   /** Compact chat text when `message` is a rich prompt (preview annotations). */
   displayContent?: string;
+  /** Preview annotations: stored on the user row for the comments drawer. */
+  annotation?: PreviewAnnotation;
   attachmentStorageIds?: Id<"_storage">[];
   /** Sessions: the proposed plan this turn implements. Dropped when queued. */
   sourceProposedPlanId?: Id<"proposedPlans">;
@@ -106,6 +109,7 @@ export async function sendSandboxTurn(
     await ports.enqueue({
       message: input.message,
       displayContent: input.displayContent,
+      annotation: input.annotation,
       model,
       ...executionTraits,
       reasoningLevel,
@@ -121,6 +125,7 @@ export async function sendSandboxTurn(
   await Promise.all([
     ports.add({
       content: input.displayContent ?? input.message,
+      annotation: input.annotation,
       attachmentStorageIds: input.attachmentStorageIds,
       providerAccountId,
       model,
@@ -151,13 +156,15 @@ export function sandboxAnnotationSender(
   settings: SandboxTurnSettings,
   isExecuting: boolean,
 ): AnnotationSubmit {
-  const send = (mode: "queue" | "start") => (display: string, full: string) =>
-    sendSandboxTurn(
-      ports,
-      settings,
-      { message: full, displayContent: display },
-      mode,
-    );
+  const send =
+    (mode: "queue" | "start") =>
+    (display: string, full: string, annotation: PreviewAnnotation) =>
+      sendSandboxTurn(
+        ports,
+        settings,
+        { message: full, displayContent: display, annotation },
+        mode,
+      );
   return annotationSender({
     isExecuting,
     enqueue: send("queue"),
@@ -172,7 +179,7 @@ export function sandboxAnnotationSender(
  */
 export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
   parentId: Id<"sessionChats"> | undefined;
-  /** The chat's streaming row (not the first-run row). */
+  /** The chat's streaming row (a task's runs stream here too). */
   streamingEntityId: string | undefined;
   draftTarget: ChatDraftTarget | undefined;
 } {

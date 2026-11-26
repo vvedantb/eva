@@ -49,12 +49,12 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
   if (chatId) return null;
   const taskId = ctx.db.normalizeId("agentTasks", id);
   if (taskId) {
-    const doc = entityVisible(await ctx.db.get(taskId));
+    const doc = await ctx.db.get(taskId);
     return doc ? { kind: "task", doc } : null;
   }
   const projectId = ctx.db.normalizeId("projects", id);
   if (projectId) {
-    const doc = entityVisible(await ctx.db.get(projectId));
+    const doc = await ctx.db.get(projectId);
     return doc ? { kind: "project", doc } : null;
   }
   return null;
@@ -179,8 +179,10 @@ export const listPendingQuestionsForUser = internalQuery({
  * any, was already resolved and access-checked by the MCP tool; it is
  * re-normalised here so a bad id links nothing rather than throwing.
  *
- * Urgency follows the inbox's own semantics: `normal` rides the daily digest,
- * `low` stays in the inbox only (no digest, no toast or chime).
+ * Urgency is the modifier on the routing table
+ * (`@eva/shared/notificationRouting`): `normal` rides the daily digest, `low`
+ * stays in the inbox only (no digest, no toast or chime). With a chat it is a
+ * Needs you question.
  */
 export const notifyUserFromAgent = internalMutation({
   args: {
@@ -230,14 +232,13 @@ export const notifyUserFromAgent = internalMutation({
       }
     }
 
-    const notificationId = await createNotification(ctx, {
+    return await createNotification(ctx, {
       userId,
       type: "system",
       title: args.title,
       message: args.message,
+      urgency: args.urgency,
       ...link,
     });
-    await ctx.db.patch(notificationId, { urgency: args.urgency });
-    return notificationId;
   },
 });
