@@ -9,9 +9,8 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * A quick task's Run is a task-mode message in its own chat
- * (`_agentTasks/taskRunTurn.ts`): it moves the card to In Progress, writes no
- * `agentRuns` row, and its turn's end moves the card to Review or back to To
- * Do. A plain chat turn in the same chat never moves the card. Fake timers
+ * (`_agentTasks/taskRunTurn.ts`): it moves the card to In Progress, and its
+ * turn's end moves the card to Review or back to To Do. A plain chat turn in the same chat never moves the card. Fake timers
  * keep the chat workflow and sandbox steps queued.
  */
 
@@ -87,18 +86,16 @@ describe("a quick task's Run is a turn in its chat", () => {
   });
 
   test(
-    "Run asks its chat for a task-mode turn, and writes no agentRuns row",
+    "Run asks its chat for a task-mode turn",
     async () => {
       const { t, ids, asUser, status, facts } = await fixture();
       await asUser.mutation(api.agentTasks.startExecution, { id: ids.taskId });
 
       expect(await status()).toBe("in_progress");
       expect(await facts()).toMatchObject({ hasRuns: true, hasActiveRun: true });
-      const { queued, runs } = await t.run(async (ctx) => ({
-        queued: await ctx.db.query("queuedMessages").collect(),
-        runs: await ctx.db.query("agentRuns").collect(),
-      }));
-      expect(runs).toHaveLength(0);
+      const queued = await t.run((ctx) =>
+        ctx.db.query("queuedMessages").collect(),
+      );
       // The chat shows the task; the agent gets the implementation steps.
       expect(queued.map((row) => [row.displayContent, row.taskRun])).toEqual([
         [

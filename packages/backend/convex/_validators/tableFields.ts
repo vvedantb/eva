@@ -337,8 +337,9 @@ export const chatReadParentIdValidator = v.union(
 );
 
 /**
- * Every durable turn owner: the three chats, quick-task runs, and the rows the
- * one-shot agents work on (automation runs, docs, evaluation reports).
+ * Every durable turn owner: the chats (a task's run is a chat turn) and the
+ * rows the one-shot agents work on (automation runs, docs, evaluation
+ * reports).
  */
 // Task chat turns removed (moved to session chats in 1b/2); a project keeps
 // its interview lane turns. schema-narrowing-ok: clearLegacyOwnerChatFields
@@ -346,8 +347,7 @@ export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
   // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
-  // Old run turns, until `deleteRunTurns` has run; then this goes.
-  v.id("agentRuns"),
+  // Run turns removed with the run table. schema-narrowing-ok: deleteRunTurns
   v.id("automationRuns"),
   v.id("docs"),
   v.id("evaluationReports"),
@@ -749,15 +749,6 @@ export const agentTaskFields = {
    */
   phaseLabel: v.optional(v.string()),
   ...prSummaryFields,
-};
-
-/**
- * Empty since `removeAgentRuns`: task runs are chat turns. Kept only while old
- * run turns (`turns.entityId` = a run id) still exist; `deleteRunTurns`
- * removes them, then this table and its id in `turnEntityIdValidator` go.
- */
-export const agentRunFields = {
-  taskId: v.id("agentTasks"),
 };
 
 export const sessionFields = {
