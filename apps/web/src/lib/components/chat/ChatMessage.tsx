@@ -868,7 +868,11 @@ function AssistantTurnContent({
             onOpenFile={onOpenFile}
           />
           {agentSpawnRow}
-          <AssistantQuestionCards steps={streamingQuestionSteps} />
+          {/* The timeline places questions where they were asked; simple
+              view has no timeline, so they list here. */}
+          {simpleView ? (
+            <AssistantQuestionCards steps={streamingQuestionSteps} />
+          ) : null}
           {streamingContent && !streamingTextIsInline ? (
             <div data-assistant-cite-source={message._id}>
               <Markdown
@@ -893,12 +897,13 @@ function AssistantTurnContent({
               icon={EVA_ICON}
               startedAt={message.timestamp}
               finishedAt={message.finishedAt}
-              finalText={message.content}
               onOpenFile={onOpenFile}
             />
           )}
           {agentSpawnRow}
-          <AssistantQuestionCards steps={questionSteps} />
+          {bubble || simpleView ? (
+            <AssistantQuestionCards steps={questionSteps} />
+          ) : null}
           <AssistantTurnOutcome
             message={message}
             turnErrorTitle={turnErrorTitle}

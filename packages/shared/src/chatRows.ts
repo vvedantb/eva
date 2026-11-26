@@ -36,12 +36,39 @@ export function visibleChatMessages<M extends { isSystemAlert?: boolean; content
  * A still-active question is excluded: the composer dock shows it live, so a
  * card for it would be the same prompt twice.
  */
-export function collectQuestionSteps<S extends { type: string; status: string; questions?: readonly unknown[] }>(
-  steps: S[],
-): S[] {
-  return steps.filter(
-    (step) => step.type === "question" && step.status === "complete" && step.questions !== undefined && step.questions.length > 0,
-  );
+export function collectQuestionSteps<S extends QuestionStepLike>(steps: S[]): S[] {
+  return steps.filter(isAnsweredQuestionStep);
+}
+
+type QuestionStepLike = { type: string; status: string; questions?: readonly unknown[] };
+
+function isAnsweredQuestionStep(step: QuestionStepLike): boolean {
+  return step.type === "question" && step.status === "complete" && step.questions !== undefined && step.questions.length > 0;
+}
+
+/** A run of trace steps, then the answered question asked right after it (`null` on the last run). */
+export interface QuestionSplitChunk<S> {
+  steps: S[];
+  question: S | null;
+}
+
+/**
+ * Cuts a turn's steps at each answered question, so the question record sits
+ * where it was asked instead of under the whole trace. Always one chunk or more.
+ */
+export function splitStepsAtQuestions<S extends QuestionStepLike>(steps: S[]): QuestionSplitChunk<S>[] {
+  const chunks: QuestionSplitChunk<S>[] = [];
+  let run: S[] = [];
+  for (const step of steps) {
+    if (isAnsweredQuestionStep(step)) {
+      chunks.push({ steps: run, question: step });
+      run = [];
+    } else {
+      run.push(step);
+    }
+  }
+  chunks.push({ steps: run, question: null });
+  return chunks;
 }
 
 /**

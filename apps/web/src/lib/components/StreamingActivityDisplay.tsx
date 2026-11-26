@@ -13,10 +13,14 @@ import {
   AgentTraceIcon,
   AgentTraceLine,
   AgentTraceTitle,
+  Collapsible,
+  CollapsibleContent,
   Spinner,
   formatActivityElapsed,
   useActivityElapsedSeconds,
   RollingNumber,
+  type ActivityLayout,
+  type ActivityStep,
 } from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
@@ -24,6 +28,8 @@ import {
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
+import { splitStepsAtQuestions, type QuestionSplitChunk } from "@eva/shared";
+import { AssistantQuestionRecord } from "@/lib/components/chat/_components/AssistantQuestionCards";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
@@ -205,7 +211,7 @@ export function StreamingActivityDisplay({
   const steps = parseActivitySteps(activity);
 
   return (
-    <ActivityTasks
+    <ActivityTimeline
       steps={
         steps ?? [
           {
@@ -224,6 +230,124 @@ export function StreamingActivityDisplay({
       onOpenFile={onOpenFile}
       layout={layout}
     />
+  );
+}
+
+interface ActivityTimelineProps {
+  steps: ActivityStep[];
+  isStreaming?: boolean;
+  name?: string;
+  icon?: ReactNode;
+  startedAt?: number;
+  duration?: string;
+  onOpenFile?: (path: string) => void;
+  onRequestFullDetail?: () => void;
+  layout: ActivityLayout;
+}
+
+/**
+ * The step timeline with each answered question placed where the agent asked
+ * it, between the steps before and after, not under the whole trace.
+ */
+function ActivityTimeline(props: ActivityTimelineProps) {
+  const chunks = splitStepsAtQuestions(props.steps);
+  if (chunks.length === 1) return <ActivityTasks {...props} />;
+  if (!props.isStreaming && props.duration && props.layout === "folded") {
+    return (
+      <FoldedQuestionTimeline
+        {...props}
+        duration={props.duration}
+        chunks={chunks}
+      />
+    );
+  }
+  return <QuestionChunks {...props} chunks={chunks} />;
+}
+
+function QuestionChunks({
+  chunks,
+  isStreaming,
+  name,
+  icon,
+  startedAt,
+  onOpenFile,
+  onRequestFullDetail,
+  layout,
+}: Omit<ActivityTimelineProps, "steps" | "duration"> & {
+  chunks: QuestionSplitChunk<ActivityStep>[];
+}) {
+  return chunks.map((chunk, index) => {
+    // Only the last run is still live; earlier runs ended at their question.
+    const isLast = index === chunks.length - 1;
+    return (
+      <div key={chunk.question?.toolUseId ?? index}>
+        <ActivityTasks
+          steps={chunk.steps}
+          isStreaming={isLast ? isStreaming : false}
+          name={name}
+          icon={icon}
+          startedAt={startedAt}
+          onOpenFile={onOpenFile}
+          onRequestFullDetail={onRequestFullDetail}
+          layout={layout}
+        />
+        {chunk.question ? (
+          <AssistantQuestionRecord step={chunk.question} />
+        ) : null}
+      </div>
+    );
+  });
+}
+
+/**
+ * The settled "Worked for" fold, as `ActivityTasks` draws it, with the
+ * questions inside at their place. While closed the questions show under the
+ * one-line header, so the answers stay visible without opening the trace.
+ */
+function FoldedQuestionTimeline({
+  duration,
+  onRequestFullDetail,
+  ...props
+}: Omit<ActivityTimelineProps, "steps" | "duration"> & {
+  duration: string;
+  chunks: QuestionSplitChunk<ActivityStep>[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Collapsible
+        className="group text-sm"
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) onRequestFullDetail?.();
+        }}
+      >
+        <div className="border-b border-border pb-1.5">
+          <AgentTraceCollapsibleTrigger>
+            <AgentTraceLine>
+              <AgentTraceTitle>{`Worked for ${duration}`}</AgentTraceTitle>
+            </AgentTraceLine>
+          </AgentTraceCollapsibleTrigger>
+        </div>
+        <CollapsibleContent className="mt-2">
+          <QuestionChunks
+            {...props}
+            {...(onRequestFullDetail ? { onRequestFullDetail } : {})}
+          />
+        </CollapsibleContent>
+      </Collapsible>
+      {open
+        ? null
+        : props.chunks.map((chunk, index) =>
+            chunk.question ? (
+              <AssistantQuestionRecord
+                key={chunk.question.toolUseId ?? index}
+                step={chunk.question}
+              />
+            ) : null,
+          )}
+    </>
   );
 }
 
@@ -270,7 +394,6 @@ export function ActivityLogDisplay({
   icon,
   startedAt,
   finishedAt,
-  finalText,
   onOpenFile,
 }: {
   activityLog: string;
@@ -284,7 +407,6 @@ export function ActivityLogDisplay({
   icon?: ReactNode;
   startedAt?: number;
   finishedAt?: number;
-  finalText?: string;
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
@@ -301,12 +423,11 @@ export function ActivityLogDisplay({
 
   if (steps) {
     return (
-      <ActivityTasks
+      <ActivityTimeline
         steps={steps}
         name={name}
         icon={icon}
         duration={duration}
-        finalText={finalText}
         onOpenFile={onOpenFile}
         onRequestFullDetail={request}
         layout={layout}

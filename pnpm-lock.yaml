@@ -125,8 +125,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.63.0
-        version: 0.63.0(3bf7b62af384a264ffe8f99d7a11c9ad)
+        specifier: 0.64.0
+        version: 0.64.0(3bf7b62af384a264ffe8f99d7a11c9ad)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -562,8 +562,8 @@ importers:
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@7.0.1-rc)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
       '@vvedantb/ui':
-        specifier: ^0.63.0
-        version: 0.63.0(56b3adcde63b003abee464e0296bf9b7)
+        specifier: ^0.64.0
+        version: 0.64.0(56b3adcde63b003abee464e0296bf9b7)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -892,8 +892,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: 0.63.0
-        version: 0.63.0(56007529793abfc8b2c1fe1b736bfab5)
+        specifier: 0.64.0
+        version: 0.64.0(56007529793abfc8b2c1fe1b736bfab5)
       cronstrue:
         specifier: ^3.13.0
         version: 3.14.0
@@ -910,8 +910,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.63.0
-        version: 0.63.0(56007529793abfc8b2c1fe1b736bfab5)
+        specifier: 0.64.0
+        version: 0.64.0(56007529793abfc8b2c1fe1b736bfab5)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6687,8 +6687,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.63.0':
-    resolution: {integrity: sha512-dwiZpQJR3ma8d89GYGwzvN8S0nOUh/nMolMKI957ypyvGia54R7slSHcr0FstCPDwzhMQgJsUKkE4LXMLXqFZA==}
+  '@vvedantb/ui@0.64.0':
+    resolution: {integrity: sha512-rJDkBv0l/TYQIzNpzPY0rYmyNU6Xc+MQzHJixXD1/C+q2wBUU1qBVAXeKacyipBTowfI21W09UomNiVXo9oLlQ==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@json-render/core': '>=0.21.0'
@@ -16196,7 +16196,7 @@ snapshots:
       debug: 4.4.3
       invariant: 2.2.4
       metro: 0.84.6(bufferutil@4.1.0)
-      metro-config: 0.84.6(bufferutil@4.1.0)
+      metro-config: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-core: 0.84.6
       semver: 7.8.6
     optionalDependencies:
@@ -16212,7 +16212,7 @@ snapshots:
       debug: 4.4.3
       invariant: 2.2.4
       metro: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      metro-config: 0.84.6(bufferutil@4.1.0)
+      metro-config: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-core: 0.84.6
       semver: 7.8.6
     optionalDependencies:
@@ -16268,7 +16268,7 @@ snapshots:
     dependencies:
       '@react-native/js-polyfills': 0.86.3
       '@react-native/metro-babel-transformer': 0.86.3(@babel/core@7.29.7)
-      metro-config: 0.84.6(bufferutil@4.1.0)
+      metro-config: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
@@ -17873,7 +17873,7 @@ snapshots:
       quickjs-emscripten-core: 0.32.0
       zod: 4.6.7
 
-  '@vvedantb/ui@0.63.0(3bf7b62af384a264ffe8f99d7a11c9ad)':
+  '@vvedantb/ui@0.64.0(3bf7b62af384a264ffe8f99d7a11c9ad)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17933,7 +17933,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.63.0(56007529793abfc8b2c1fe1b736bfab5)':
+  '@vvedantb/ui@0.64.0(56007529793abfc8b2c1fe1b736bfab5)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17993,7 +17993,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.63.0(56b3adcde63b003abee464e0296bf9b7)':
+  '@vvedantb/ui@0.64.0(56b3adcde63b003abee464e0296bf9b7)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -20314,7 +20314,7 @@ snapshots:
     dependencies:
       ws: 7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
-  isows@1.0.7(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
+  isows@1.0.7(ws@8.21.0(bufferutil@4.1.0)):
     dependencies:
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
@@ -20998,12 +20998,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  metro-config@0.84.6(bufferutil@4.1.0):
+  metro-config@0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     dependencies:
       connect: 3.7.0
       flow-enums-runtime: 0.0.6
       jest-validate: 29.7.0
-      metro: 0.84.6(bufferutil@4.1.0)
+      metro: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-cache: 0.84.6
       metro-core: 0.84.6
       metro-runtime: 0.84.6
@@ -21282,7 +21282,7 @@ snapshots:
       metro-babel-transformer: 0.84.6
       metro-cache: 0.84.6
       metro-cache-key: 0.84.6
-      metro-config: 0.84.6(bufferutil@4.1.0)
+      metro-config: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-core: 0.84.6
       metro-file-map: 0.84.6
       metro-resolver: 0.84.6
@@ -21327,7 +21327,7 @@ snapshots:
       metro-babel-transformer: 0.84.6
       metro-cache: 0.84.6
       metro-cache-key: 0.84.6
-      metro-config: 0.84.6(bufferutil@4.1.0)
+      metro-config: 0.84.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       metro-core: 0.84.6
       metro-file-map: 0.84.6
       metro-resolver: 0.84.6
@@ -23860,7 +23860,7 @@ snapshots:
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
       abitype: 1.2.3(typescript@5.9.3)(zod@4.6.7)
-      isows: 1.0.7(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      isows: 1.0.7(ws@8.21.0(bufferutil@4.1.0))
       ox: 0.14.17(typescript@5.9.3)(zod@4.6.7)
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
@@ -23877,7 +23877,7 @@ snapshots:
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
       abitype: 1.2.3(typescript@7.0.1-rc)(zod@4.6.7)
-      isows: 1.0.7(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      isows: 1.0.7(ws@8.21.0(bufferutil@4.1.0))
       ox: 0.14.17(typescript@7.0.1-rc)(zod@4.6.7)
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
