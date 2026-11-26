@@ -1,3 +1,4 @@
+import { runStreamingEntityId } from "./runChatTurn";
 import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
@@ -94,6 +95,8 @@ export const getTaskData = internalQuery({
   },
   returns: v.object({
     prompt: v.string(),
+    /** The run's chat stream: its turn, runner and sandbox prep write here. */
+    streamingEntityId: v.string(),
     repoOwner: v.string(),
     repoName: v.string(),
     branchName: v.string(),
@@ -171,7 +174,11 @@ export const getTaskData = internalQuery({
       }
     }
     // The coordinator's retry note or the answer to the task's question.
-    const runNote = (await ctx.db.get(args.runId))?.note?.trim() ?? "";
+    const run = await ctx.db.get(args.runId);
+    const runNote = run?.note?.trim() ?? "";
+    // The run streams into its chat turn (`openRunChatTurn`).
+    const streamingEntityId = run && (await runStreamingEntityId(ctx.db, run));
+    if (!streamingEntityId) throw new Error("Task run has no chat turn");
 
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
@@ -300,6 +307,7 @@ export const getTaskData = internalQuery({
       prompt: [prompt, projectBlock, runNote]
         .filter((block) => block !== "")
         .join("\n\n"),
+      streamingEntityId,
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,

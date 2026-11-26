@@ -39,6 +39,7 @@ import {
   bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
+  findOpenRunTurnForChat,
   graceExpiredTurnLease,
   listOpenSessionTurns,
   openTurn,
@@ -83,7 +84,10 @@ async function readChatStatus(
 ): Promise<ChatTurnStatus | null> {
   const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
   if (legacyExecuting === null) return null;
-  const turn = await findOpenTurn(ctx, entityId);
+  const chatId = ctx.db.normalizeId("sessionChats", entityId);
+  const turn =
+    (await findOpenTurn(ctx, entityId)) ??
+    (chatId ? await findOpenRunTurnForChat(ctx, chatId) : null);
   if (!turn) return legacyExecuting ? { source: "legacy" } : null;
   return {
     source: "durable",

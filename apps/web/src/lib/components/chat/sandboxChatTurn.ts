@@ -179,7 +179,7 @@ export function sandboxAnnotationSender(
  */
 export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
   parentId: Id<"sessionChats"> | undefined;
-  /** The chat's streaming row (not the first-run row). */
+  /** The chat's streaming row (a task's runs stream here too). */
   streamingEntityId: string | undefined;
   draftTarget: ChatDraftTarget | undefined;
 } {

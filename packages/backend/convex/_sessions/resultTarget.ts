@@ -18,6 +18,7 @@ type AssistantReply = {
   isSyntheticTurn?: boolean;
   finishedAt?: number;
   errorType?: string;
+  runId?: string;
 };
 
 export const PUBLISH_FAILURE_MARKER =
@@ -139,11 +140,15 @@ export function assistantReplyContent(args: {
     : `Error: ${error}`;
 }
 
-/** An assistant bubble this turn owns — not an alert, not a synthetic turn. */
+/**
+ * An assistant bubble this turn owns — not an alert, not a synthetic turn,
+ * not a task run's reply (the run settles its own row by id).
+ */
 function isOwnReply(message: AssistantReply): boolean {
   return (
     message.role === "assistant" &&
     message.isSystemAlert !== true &&
-    message.isSyntheticTurn !== true
+    message.isSyntheticTurn !== true &&
+    message.runId === undefined
   );
 }

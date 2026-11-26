@@ -380,6 +380,7 @@ import type * as _taskWorkflow_publicMutations from "../_taskWorkflow/publicMuta
 import type * as _taskWorkflow_queries from "../_taskWorkflow/queries.js";
 import type * as _taskWorkflow_recovery from "../_taskWorkflow/recovery.js";
 import type * as _taskWorkflow_resolveBaseBranch from "../_taskWorkflow/resolveBaseBranch.js";
+import type * as _taskWorkflow_runChatTurn from "../_taskWorkflow/runChatTurn.js";
 import type * as _taskWorkflow_runLifecycle from "../_taskWorkflow/runLifecycle.js";
 import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
@@ -979,6 +980,7 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/queries": typeof _taskWorkflow_queries;
   "_taskWorkflow/recovery": typeof _taskWorkflow_recovery;
   "_taskWorkflow/resolveBaseBranch": typeof _taskWorkflow_resolveBaseBranch;
+  "_taskWorkflow/runChatTurn": typeof _taskWorkflow_runChatTurn;
   "_taskWorkflow/runLifecycle": typeof _taskWorkflow_runLifecycle;
   "_taskWorkflow/scheduling": typeof _taskWorkflow_scheduling;
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;

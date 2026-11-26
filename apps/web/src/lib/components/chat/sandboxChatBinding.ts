@@ -1,9 +1,7 @@
 "use client";
 
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
-import type { FunctionReturnType } from "convex/server";
 import {
-  type api,
   type AIModel,
   type Id,
   type ModelTraitsExecutionArgs,
@@ -12,7 +10,7 @@ import {
 import type { ModelAccount } from "@vvedantb/ui";
 import type { PreviewAnnotationTarget } from "@/lib/components/sandbox/annotationSend";
 import type { ChatModelPicker } from "./ChatComposer";
-import { isChatTurnExecuting, type ChatBodyMessage } from "./chatBodyUtils";
+import { isChatTurnExecuting } from "./chatBodyUtils";
 import type {
   ChatEntityRef,
   SandboxChatOwnerDoc,
@@ -24,8 +22,6 @@ import {
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
 import { useChatTurnStatus } from "./useChatTurnOpen";
-
-type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
 
 /**
  * Everything that differs between the chats on the shared sandbox panel: a
@@ -66,12 +62,6 @@ export interface SandboxChatBinding {
   ports: SandboxTurnPorts;
   /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
-  /** A quick task's first run, shown as the chat's opening turn. */
-  firstRun?: {
-    isInProgress: boolean;
-    streaming: StreamingRow | undefined;
-    turn: ChatBodyMessage[];
-  };
 }
 
 /** The settings the next turn runs on. */
@@ -88,17 +78,13 @@ export function sandboxTurnSettings(
 
 /**
  * The chat transcript and whether a turn owns it. Same rule as every chat
- * (`isChatTurnExecuting`); a running first run counts as a turn.
+ * (`isChatTurnExecuting`); a task's run is a turn in its chat.
  */
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
   const status = useChatTurnStatus(parentId);
   const messages = useChatTranscript(parentId ?? "skip");
-  const isExecuting = isChatTurnExecuting({
-    status,
-    messages,
-    isFirstRunInProgress: binding.firstRun?.isInProgress,
-  });
+  const isExecuting = isChatTurnExecuting({ status, messages });
   return { messages, isExecuting };
 }
 
