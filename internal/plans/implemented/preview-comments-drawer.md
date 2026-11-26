@@ -1,5 +1,7 @@
 # Preview comments drawer (v1)
 
+Status: v1 shipped in #1528 (backfill run on prod, then removed). v2 (resolve / reopen) shipped in #1539 and #1541. v3 onwards are still ideas.
+
 ## Context
 
 Preview annotations ("Select element") post into the chat, but you cannot see them from the preview. v1 adds a "Comments" button to the preview action bar. It opens a drawer over the preview that lists every annotation in the active chat, with the agent's reply and a "View in chat" link. A switch filters "On this page" / "All comments".

@@ -288,11 +288,13 @@ export function parseAnnotationInbound(
 /**
  * Drops the build-time hash CSS Modules / styled-components append to a class
  * (`Button_root__x7f2a` → `Button_root`), which is noise in a one-line chip.
+ * Next.js CSS Modules end the hash with `_` (`Overview-module__Ozj5PW_` →
+ * `Overview-module`), so trailing underscores belong to the hash too.
  * Underscore only — a hyphen rule would eat ordinary utility classes
  * (`items-center` → `items`).
  */
 function cleanClassName(cls: string): string {
-  return cls.replace(/_[a-zA-Z0-9]{5,}$/, "");
+  return cls.replace(/_+[a-zA-Z0-9]{5,}_*$/, "");
 }
 
 /** One-line identity of the annotated element, e.g. `<button.primary>`. */
