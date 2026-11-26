@@ -102,6 +102,26 @@ export function getNotificationAppearance(
   return { icon: ICONS[icon], label, ...TONE_CLASSES[tone] };
 }
 
+/** The type's icon in its colour: the trailing status column of an Inbox row. */
+export function NotificationStatusIcon({
+  notification,
+}: {
+  notification: Pick<Notification, "type" | "title" | "message">;
+}) {
+  const config = getNotificationAppearance(notification);
+  const Icon = config.icon;
+  return (
+    <span
+      role="img"
+      aria-label={config.label}
+      title={config.label}
+      className="flex size-4 shrink-0 items-center justify-center"
+    >
+      <Icon size={16} className={config.iconColor} />
+    </span>
+  );
+}
+
 export function NotificationIcon({
   notification,
   size = "sm",

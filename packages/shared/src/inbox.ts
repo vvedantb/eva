@@ -1,4 +1,8 @@
 import type { NeedsYouGroup } from "./needsYou";
+import { parseEvaEntityLink } from "./repoPath";
+import type { Doc, Id } from "@eva/backend";
+import { getNotificationAppearance } from "./notificationAppearance";
+import { splitNotificationTitle } from "./notificationTitle";
 
 /**
  * The Inbox: one list, one row for each chat, grouped by how urgent it is.
@@ -53,13 +57,15 @@ export type MergeableInboxRow = {
   group: InboxGroup;
   kind: InboxRowKind;
   at: number;
+  preview?: string;
 };
 
 /**
  * One row for each chat, in its most urgent group. When a chat has several
  * rows (a question and a PR, or new messages and a notification about it),
  * the most urgent group wins, a chat row beats an alert in the same group,
- * and the newest wins after that. Sorted by group, newest first.
+ * and the newest wins after that. The kept row takes the newest line and time
+ * of the rows it absorbed. Sorted by group, newest first.
  */
 export function mergeInboxRows<Row extends MergeableInboxRow>(
   rows: readonly Row[],
@@ -67,7 +73,18 @@ export function mergeInboxRows<Row extends MergeableInboxRow>(
   const byKey = new Map<string, Row>();
   for (const row of rows) {
     const kept = byKey.get(row.key);
-    if (!kept || ranksBefore(row, kept)) byKey.set(row.key, row);
+    if (!kept) {
+      byKey.set(row.key, row);
+      continue;
+    }
+    const [winner, other] = ranksBefore(row, kept) ? [row, kept] : [kept, row];
+    // The newest line about the chat shows on its row, whichever row won.
+    byKey.set(
+      row.key,
+      other.at > winner.at && other.preview !== undefined
+        ? { ...winner, at: other.at, preview: other.preview }
+        : winner,
+    );
   }
   return [...byKey.values()].sort(
     (a, b) => groupRank(a.group) - groupRank(b.group) || b.at - a.at,
@@ -162,4 +179,74 @@ export function inboxDoneTarget<ChatId, NotificationId>(row: {
     return { kind: "notification", notificationId: row.notificationId };
   }
   return undefined;
+}
+
+/** The chat an app link points at: a session, a task (quick or project), or a project's own chat. */
+export type InboxChatRef =
+  | { kind: "session"; numId: number }
+  | { kind: "task"; numId: number }
+  | { kind: "project"; numId: number };
+
+/**
+ * The chat a notification's link points at, so the Inbox folds it into that
+ * chat's row: `/…/sessions/N`, `/…/quick-tasks/N`, `/…/projects/P` (Eva's
+ * chat), and a project task as `/…/projects/P/T[/…]` or `/…/projects/P?task=T`.
+ * Undefined for any other link.
+ */
+export function inboxChatRefFromHref(href: string): InboxChatRef | undefined {
+  const link = parseEvaEntityLink(href, "");
+  if (!link) return undefined;
+  if (link.section === "sessions") return { kind: "session", numId: link.numId };
+  if (link.section === "quick-tasks") return { kind: "task", numId: link.numId };
+  if (link.section !== "projects") return undefined;
+  const [path = "", query = ""] = href.split("#")[0]?.split("?") ?? [];
+  const segments = path.split("/");
+  const after = segments[segments.indexOf("projects") + 2];
+  const taskText =
+    after !== undefined && /^\d+$/.test(after)
+      ? after
+      : new URLSearchParams(query).get("task") ?? undefined;
+  return taskText !== undefined && /^\d+$/.test(taskText)
+    ? { kind: "task", numId: Number(taskText) }
+    : { kind: "project", numId: link.numId };
+}
+
+/**
+ * A notification as a History row (the Inbox's whole feed, read and Done ones
+ * too), in the same shape as an Inbox row so both lists draw it the same way.
+ * Done shows only while it is not archived yet.
+ */
+export function inboxHistoryRow(n: Doc<"notifications">): {
+  key: string;
+  group: "new";
+  kind: "alert";
+  contextLabel: string;
+  title: string;
+  preview: string | undefined;
+  at: number;
+  unread: boolean;
+  notificationId: Id<"notifications"> | undefined;
+  href: string | undefined;
+  chatTarget: string | undefined;
+  threadRootId: Id<"messages"> | undefined;
+  repoId: Id<"githubRepos"> | undefined;
+  notice: { type: Doc<"notifications">["type"]; title: string; message: string | undefined };
+} {
+  const { subject, event } = splitNotificationTitle(n);
+  return {
+    key: `notification:${n._id}`,
+    group: "new",
+    kind: "alert",
+    contextLabel: getNotificationAppearance(n).label,
+    title: subject || n.title,
+    preview: n.message ? inboxPreview(n.message) : event,
+    at: n.createdAt,
+    unread: !n.read,
+    notificationId: n.archivedAt === undefined ? n._id : undefined,
+    href: n.href,
+    chatTarget: n.chatTarget,
+    threadRootId: n.threadRootId,
+    repoId: n.repoId,
+    notice: { type: n.type, title: n.title, message: n.message },
+  };
 }

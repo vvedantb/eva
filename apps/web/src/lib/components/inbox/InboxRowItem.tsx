@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Badge, ListRow, RelativeDateTime } from "@vvedantb/ui";
+import { cn } from "@eva/ui";
+import { Badge, RelativeDateTime } from "@vvedantb/ui";
+import { IconMessage } from "@tabler/icons-react";
 import { inboxNewCountLabel } from "@eva/shared/inbox";
 import { RepoLogo } from "@/lib/components/RepoLogo";
+import {
+  NotificationIcon,
+  NotificationStatusIcon,
+} from "@/lib/components/notifications/notification-config";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import type { InboxRow } from "@/lib/components/inbox/useInboxDone";
 
 /**
- * One Inbox row: the source line (repo logo, where it is from, the time), the
- * title, and one line of the latest message with its counts. A blue dot marks
- * unread. A click selects it, which shows it in the pane.
+ * One Inbox row, flat as the old notification feed: an unread dot, the repo
+ * logo, the title over one muted line (where it is from, then the latest
+ * message), and the time and a type icon on the right. The list draws the
+ * dividers; a selected row is a muted background. A click selects it, which
+ * shows it in the pane.
  */
 export function InboxRowItem({
   row,
@@ -23,7 +31,7 @@ export function InboxRowItem({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const rowRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
   // Arrow keys move the selection from the list's key handler, so the row has
   // no event of its own to scroll from; nearest-block is a no-op when visible.
   /* eslint-disable no-effect/no-event-handler -- scrolls the DOM row into view */
@@ -32,39 +40,33 @@ export function InboxRowItem({
   }, [selected]);
   /* eslint-enable no-effect/no-event-handler */
 
+  const detail = [row.contextLabel, row.preview].filter(Boolean).join(" · ");
   return (
-    <ListRow
+    // design-check-ignore-next-line — a full-width two-line row; Button would force control height and padding
+    <button
       ref={rowRef}
-      selected={selected}
       onClick={onSelect}
-      aria-label={row.title}
       aria-current={selected ? "true" : undefined}
-      contentClassName="flex flex-col gap-0.5 px-3 py-2"
+      className={cn(
+        "motion-press flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors active:scale-[0.99] focus-visible:outline-hidden",
+        selected ? "bg-muted" : "hover:bg-muted/40",
+      )}
     >
-      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="flex w-1.5 shrink-0 justify-center" aria-hidden>
-          {row.unread ? <span className="size-1.5 rounded-full bg-primary" /> : null}
-        </span>
-        {repo ? (
-          <RepoLogo
-            logoUrl={repo.logoUrl}
-            size={14}
-            fallback={
-              <span className="flex size-3.5 items-center justify-center rounded-full bg-muted text-3xs font-semibold">
-                {repoDisplayLabel(repo).charAt(0).toUpperCase()}
-              </span>
-            }
-          />
-        ) : null}
-        <span className="min-w-0 flex-1 truncate">{row.contextLabel}</span>
-        <RelativeDateTime at={row.at} className="shrink-0 tabular-nums" />
+      {/* Fixed-width dot slot so read and unread rows stay aligned. */}
+      <span className="flex w-1.5 shrink-0 justify-center" aria-hidden>
+        {row.unread ? <span className="size-1.5 rounded-full bg-primary" /> : null}
       </span>
-      <span className="truncate pl-3 text-sm font-medium text-foreground">
-        {row.title}
-      </span>
-      {row.preview || row.newCount !== undefined || row.action ? (
-        <span className="flex min-w-0 items-center gap-1.5 pl-3 text-xs text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">{row.preview}</span>
+      <InboxSourceAvatar repo={repo} notice={row.notice} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span
+            className={cn(
+              "truncate text-sm",
+              row.unread ? "font-medium text-foreground" : "font-normal text-muted-foreground",
+            )}
+          >
+            {row.title}
+          </span>
           {row.action === "answer" ? (
             <Badge variant="warning" className="h-4 shrink-0 px-1.5 text-3xs">
               Question
@@ -81,7 +83,53 @@ export function InboxRowItem({
             </Badge>
           ) : null}
         </span>
-      ) : null}
-    </ListRow>
+        {detail ? (
+          <span className="truncate text-xs leading-relaxed text-muted-foreground">
+            {detail}
+          </span>
+        ) : null}
+      </span>
+      <RelativeDateTime
+        at={row.at}
+        className="shrink-0 text-xs tabular-nums text-muted-foreground"
+      />
+      {row.notice ? (
+        <NotificationStatusIcon notification={row.notice} />
+      ) : (
+        <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden>
+          <IconMessage size={16} className="text-muted-foreground" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** The repo logo, as the old feed showed it; the type icon for a notification with no repo. */
+function InboxSourceAvatar({
+  repo,
+  notice,
+}: {
+  repo: RepoWithLogo | undefined;
+  notice: InboxRow["notice"];
+}) {
+  if (!repo) {
+    return notice ? (
+      <NotificationIcon notification={notice} size="sm" />
+    ) : (
+      <span className="size-7 shrink-0 rounded-full bg-muted" aria-hidden />
+    );
+  }
+  return (
+    <span className="size-7 shrink-0">
+      <RepoLogo
+        logoUrl={repo.logoUrl}
+        size={28}
+        fallback={
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+            {repoDisplayLabel(repo).charAt(0).toUpperCase()}
+          </span>
+        }
+      />
+    </span>
   );
 }

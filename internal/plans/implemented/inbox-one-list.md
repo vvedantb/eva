@@ -116,3 +116,11 @@ One PR, because the apps must not drift:
 - **No repo filter in the header.** A repo's Inbox (`/$owner/$repo/inbox`) is the filter.
 - **Removed** the notification functions only the Updates tab used (`get`, `markAsUnread`, `markAllAsRead`, `markManyAsRead`, `markManyAsUnread`, `list`'s `archived` arg) and `@eva/shared/notificationGroups`.
 - **New since you looked reads the newest 300 read rows per repo.** A chat whose read row is older than that does not show. Revisit if people miss rows.
+
+## Follow-up (26 November 2026, agreed with the user)
+
+- Flat rows in the old Updates style replace the cards (`ListRow` gave rounded tinted rows with an outline).
+- Notifications fold into their chat's row: keyed by `chatTarget`, else by their link (`inboxChatRefFromHref` in `@eva/shared/inbox`). A folded notification is a chat row (Done marks the chat Done; a Done chat hides notifications older than it).
+- Chat-only pane for any task, session or project link; a reply thread opens the whole page so its Replies tab shows.
+- History link at the bottom of the list: the full feed, read and Done ones too, in the same rows.
+- Project Tasks list: the open task is a muted background, no `ListRow` stripe.

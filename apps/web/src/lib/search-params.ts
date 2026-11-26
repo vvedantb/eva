@@ -14,6 +14,7 @@ import {
 import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import {
+  parseAsBoolean,
   parseAsString,
   parseAsStringLiteral,
   parseAsArrayOf,
@@ -403,6 +404,11 @@ export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 // The selected Inbox row (its `key`: a chat's owner id or `notification:<id>`),
 // kept in the URL so the selection survives reload and can be linked.
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
+
+// The Inbox's History (`?history=true`): the whole notification feed, read and Done ones too.
+export const inboxHistoryParser = parseAsBoolean
+  .withDefault(false)
+  .withOptions(searchOptions);
 
 // The comment a notification click-through is aimed at. Written by the backend
 // into the notification href (`?comment=<id>`), never by the UI, so it replaces

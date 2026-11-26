@@ -397,15 +397,20 @@ async function ownedNotifications(
  * filter, so a run of archived rows shortens it rather than paging past them.
  */
 export const list = authQuery({
-  args: {},
+  args: {
+    /** The Inbox's History: every notification, read and archived (Done) ones too. */
+    history: v.optional(v.boolean()),
+  },
   returns: v.array(notificationValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const recent = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
-    return recent.filter((n) => n.archivedAt === undefined);
+    return args.history === true
+      ? recent
+      : recent.filter((n) => n.archivedAt === undefined);
   },
 });
 

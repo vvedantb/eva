@@ -6,10 +6,14 @@ import { api, type Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
 import { IconInbox } from "@tabler/icons-react";
-import { inboxDoneTarget } from "@eva/shared/inbox";
+import {
+  inboxChatRefFromHref,
+  inboxDoneTarget,
+  inboxHistoryRow,
+} from "@eva/shared/inbox";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
 import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
-import { inboxSelectedParser } from "@/lib/search-params";
+import { inboxHistoryParser, inboxSelectedParser } from "@/lib/search-params";
 import { PageHeader } from "@/lib/components/PageHeader";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { InboxList } from "@/lib/components/inbox/InboxList";
@@ -40,7 +44,15 @@ export function InboxClient({
   const navigate = useNavigate();
   usePageTitleSync("Inbox");
   const listArgs = repoId === undefined ? {} : { repoId };
-  const rows = useQuery(api.inbox.list, listArgs);
+  const [history, setHistory] = useQueryState("history", inboxHistoryParser);
+  const inboxRows = useQuery(api.inbox.list, history ? "skip" : listArgs);
+  const feed = useQuery(api.notifications.list, history ? { history: true } : "skip");
+  // History: the whole feed, in the Inbox's rows (a repo's inbox keeps to that repo).
+  const rows: InboxRow[] | undefined = history
+    ? feed
+        ?.filter((n) => repoId === undefined || n.repoId === repoId)
+        .map(inboxHistoryRow)
+    : inboxRows;
   const repos = useQuery(api.githubRepos.list, {});
   const repoById = new Map<Id<"githubRepos">, RepoWithLogo>(
     (repos ?? []).map((repo) => [repo._id, repo]),
@@ -118,9 +130,14 @@ export function InboxClient({
             <PageHeader title="Inbox" />
             <InboxList
               rows={rows}
+              history={history}
               repoById={repoById}
               selectedKey={selected?.key ?? null}
               onSelect={select}
+              onHistoryChange={(next) => {
+                setSelectedKey(null);
+                void setHistory(next ? true : null);
+              }}
             />
           </div>
         )}
@@ -129,7 +146,7 @@ export function InboxClient({
             {selected?.href && isInternalAppHref(selected.href) ? (
               <InboxPagePreview
                 href={selected.href}
-                chatOnly={selected.kind === "chat"}
+                chatOnly={inboxShowsChatOnly(selected)}
                 frameRef={frameRef}
               />
             ) : selected ? (
@@ -170,6 +187,16 @@ export function InboxClient({
       />
     </div>
   );
+}
+
+/**
+ * The pane shows the chat alone for a chat row, or a notification whose link
+ * is a task, session or project chat. A reply thread opens the whole page,
+ * where its Replies tab sits beside the chat.
+ */
+function inboxShowsChatOnly(row: InboxRow): boolean {
+  if (row.threadRootId !== undefined || row.href?.includes("thread=")) return false;
+  return row.kind === "chat" || (row.href !== undefined && inboxChatRefFromHref(row.href) !== undefined);
 }
 
 type InboxKeyCommand =

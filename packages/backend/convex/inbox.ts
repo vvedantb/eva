@@ -1,9 +1,11 @@
 import { v } from "convex/values";
-import { entityHref, getNotificationAppearance } from "@eva/shared";
+import { entityHref } from "@eva/shared";
 import {
   INBOX_NEW_COUNT_CAP,
   inboxActionForNeedsYou,
+  inboxChatRefFromHref,
   inboxContextLabel,
+  inboxHistoryRow,
   inboxGroupForNeedsYou,
   inboxPreview,
   mergeInboxRows,
@@ -11,6 +13,7 @@ import {
 import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { notificationTypeValidator } from "./_validators/enums";
 import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { collectNeedsYou, inboxRepos, type NeedsYouRow } from "./needsYou";
@@ -69,6 +72,14 @@ const inboxRowValidator = v.object({
   chatTarget: v.optional(v.string()),
   threadRootId: v.optional(v.id("messages")),
   repoId: v.optional(v.id("githubRepos")),
+  /** The notification behind the row, for its type icon (`getNotificationAppearance`). */
+  notice: v.optional(
+    v.object({
+      type: notificationTypeValidator,
+      title: v.string(),
+      message: v.optional(v.string()),
+    }),
+  ),
 });
 
 type InboxRow = typeof inboxRowValidator.type;
@@ -218,9 +229,7 @@ async function newChatRows(
     waiting.map(async ({ repo, chat, row, activityAt }): Promise<InboxRow> => {
       const [latest, projectTitle] = await Promise.all([
         latestMessages(db, chat),
-        chat.kind === "task" && chat.doc.projectId !== undefined
-          ? db.get(chat.doc.projectId).then((project) => project?.title)
-          : undefined,
+        chatProjectTitle(db, chat),
       ]);
       const newCount = latest.filter((m) => m.timestamp > row.lastReadAt).length;
       return {
@@ -307,8 +316,10 @@ async function latestMessages(
 
 /**
  * Unread notifications that do not ask for the caller (a run that finished, a
- * deploy, an automation's result). One about a chat is keyed by that chat, so
- * it folds into the chat's row when it has one.
+ * PR merged, a deploy, an automation's result). One about a chat (its
+ * `chatTarget`, or its link: `inboxChatRefFromHref`) becomes that chat's row,
+ * so it folds into the chat's own row when it has one, Done on it is the
+ * chat's Done, and a Done chat hides the notifications from before it.
  */
 async function alertRows(
   db: DatabaseReader,
@@ -316,7 +327,7 @@ async function alertRows(
   repos: readonly Doc<"githubRepos">[],
   includeRepoless: boolean,
 ): Promise<InboxRow[]> {
-  const repoIds = new Set(repos.map((repo) => String(repo._id)));
+  const repoById = new Map(repos.map((repo) => [String(repo._id), repo]));
   const unread = (
     await db
       .query("notifications")
@@ -329,45 +340,108 @@ async function alertRows(
     (n) =>
       n.archivedAt === undefined &&
       !isNeedsYouNotification(n) &&
-      (n.repoId === undefined ? includeRepoless : repoIds.has(String(n.repoId))),
+      (n.repoId === undefined ? includeRepoless : repoById.has(String(n.repoId))),
   );
-  return await Promise.all(
-    unread.map(async (n): Promise<InboxRow> => {
-      const { subject, event } = splitNotificationTitle(n);
-      const chatKey =
-        n.chatTarget === undefined ? undefined : await chatKeyOf(db, n.chatTarget);
+  const rows = await Promise.all(
+    unread.map(async (n): Promise<InboxRow | null> => {
+      const repo = n.repoId === undefined ? undefined : repoById.get(String(n.repoId));
+      const chat = repo ? await notificationChat(db, repo, n) : null;
+      // About nothing the Inbox lists as a chat: a row of its own.
+      if (!repo || !chat) return inboxHistoryRow(n);
+      const { event } = splitNotificationTitle(n);
+      const [read, projectTitle] = await Promise.all([
+        getReadRow(db, userId, chat.doc._id),
+        chatProjectTitle(db, chat),
+      ]);
+      // Done on the chat after this notification: it is handled.
+      if ((read?.doneAt ?? 0) >= n.createdAt) return null;
+      const identity = chatIdentity(repo, chat, projectTitle);
       return {
-        key: chatKey ?? `notification:${n._id}`,
+        key: String(chat.doc._id),
         group: "new",
-        kind: "alert",
-        contextLabel: getNotificationAppearance(n).label,
-        title: subject || n.title,
-        preview: n.message ? inboxPreview(n.message) : event,
+        kind: "chat",
+        ...identity,
+        // The chat is the title, so the line says what happened to it.
+        preview: alertLine(event, n.message),
         at: n.createdAt,
         unread: true,
+        doneChatId: chat.doc._id,
         notificationId: n._id,
-        href: n.href,
-        chatTarget: n.chatTarget,
+        // A reply thread opens on its own page (the Replies tab), not the bare chat.
+        href: n.threadRootId !== undefined && n.href ? n.href : identity.href,
         threadRootId: n.threadRootId,
-        repoId: n.repoId,
+        repoId: repo._id,
+        notice: noticeOf(n),
       };
     }),
   );
+  return rows.filter((row) => row !== null);
 }
 
-/** A notification's chat as the Inbox keys it: the owner of a session chat or session. */
-async function chatKeyOf(
+function noticeOf(n: Doc<"notifications">): InboxRow["notice"] {
+  return { type: n.type, title: n.title, message: n.message };
+}
+
+/** "PR merged · moved to done", "New comment: can we also cache…". */
+function alertLine(event: string | undefined, message: string | undefined): string | undefined {
+  const text = message ? inboxPreview(message) : undefined;
+  if (event && text) return `${event}: ${text}`;
+  return event ?? text;
+}
+
+/** A task's project title, for the source line ("Checkout v2 · #902"). */
+async function chatProjectTitle(
+  db: DatabaseReader,
+  chat: InboxChat,
+): Promise<string | undefined> {
+  if (chat.kind !== "task" || chat.doc.projectId === undefined) return undefined;
+  return (await db.get(chat.doc.projectId))?.title;
+}
+
+/** The chat a notification is about: its `chatTarget`, else its link, in its repo. */
+async function notificationChat(
+  db: DatabaseReader,
+  repo: Doc<"githubRepos">,
+  n: Doc<"notifications">,
+): Promise<InboxChat | null> {
+  if (n.chatTarget !== undefined) return await chatOfTarget(db, n.chatTarget);
+  const ref = n.href ? inboxChatRefFromHref(n.href) : undefined;
+  if (!ref) return null;
+  const doc =
+    ref.kind === "task"
+      ? await db
+          .query("agentTasks")
+          .withIndex("by_repo_and_numId", (q) => q.eq("repoId", repo._id).eq("numId", ref.numId))
+          .first()
+      : ref.kind === "project"
+        ? await db
+            .query("projects")
+            .withIndex("by_repo_and_numId", (q) => q.eq("repoId", repo._id).eq("numId", ref.numId))
+            .first()
+        : await db
+            .query("sessions")
+            .withIndex("by_repo_and_numId", (q) => q.eq("repoId", repo._id).eq("numId", ref.numId))
+            .first();
+  return doc ? await loadInboxChat(db, doc._id) : null;
+}
+
+/** A `chatTarget` (a session chat, session, task or project id) as the chat the Inbox lists. */
+async function chatOfTarget(
   db: DatabaseReader,
   chatTarget: string,
-): Promise<string | undefined> {
+): Promise<InboxChat | null> {
   const chatId = db.normalizeId("sessionChats", chatTarget);
   const sessionId = chatId
     ? (await db.get(chatId))?.sessionId
     : db.normalizeId("sessions", chatTarget);
-  if (!sessionId) return chatTarget;
-  const session = await db.get(sessionId);
-  if (!session) return undefined;
-  return sessionOwnerEntityId(session) ?? String(session._id);
+  if (sessionId) {
+    const session = await db.get(sessionId);
+    if (!session) return null;
+    return await loadInboxChat(db, sessionOwnerEntityId(session) ?? session._id);
+  }
+  const ownerId =
+    db.normalizeId("agentTasks", chatTarget) ?? db.normalizeId("projects", chatTarget);
+  return ownerId ? await loadInboxChat(db, ownerId) : null;
 }
 
 /**

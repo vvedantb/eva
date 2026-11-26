@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { mergeInboxRows } from "@eva/shared/inbox";
+import { inboxChatRefFromHref, mergeInboxRows } from "@eva/shared/inbox";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -33,6 +33,24 @@ describe("mergeInboxRows", () => {
       ["note-d", "new", "alert"],
       ["task-b", "new", "chat"],
     ]);
+  });
+});
+
+describe("notifications fold into their chat's row", () => {
+  test("a link names its chat, and the chat row takes the newer notification's line", () => {
+    const base = "/vvedantb/eva/web";
+    expect(inboxChatRefFromHref(`${base}/quick-tasks/450`)).toEqual({ kind: "task", numId: 450 });
+    expect(inboxChatRefFromHref(`${base}/projects/7/902/activity`)).toEqual({ kind: "task", numId: 902 });
+    expect(inboxChatRefFromHref(`${base}/projects/7?tasks=906&task=906`)).toEqual({ kind: "task", numId: 906 });
+    expect(inboxChatRefFromHref(`${base}/projects/7/sandbox/replies?thread=x`)).toEqual({ kind: "project", numId: 7 });
+    expect(inboxChatRefFromHref("/vvedantb/eva/sessions/412")).toEqual({ kind: "session", numId: 412 });
+    expect(inboxChatRefFromHref(`${base}/docs/3`)).toBeUndefined();
+
+    const [row] = mergeInboxRows([
+      { key: "task-450", group: "new" as const, kind: "chat" as const, at: 1, preview: "Ran the tests" },
+      { key: "task-450", group: "new" as const, kind: "alert" as const, at: 5, preview: "PR merged · moved to done" },
+    ]);
+    expect(row).toMatchObject({ kind: "chat", at: 5, preview: "PR merged · moved to done" });
   });
 });
 
