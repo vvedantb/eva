@@ -9,7 +9,7 @@ import type { RoleUser } from "../validators";
  */
 export function buildAveInstructions(args: {
   now: Date;
-  user: { name: string | undefined; email: string | undefined; isAdmin: boolean };
+  user: { name: string | undefined; isAdmin: boolean };
   role: RoleUser | undefined;
   customInstructions: string | undefined;
 }): string {
@@ -19,7 +19,6 @@ export function buildAveInstructions(args: {
   );
   const userLines = [
     args.user.name === undefined ? null : `- Name: ${args.user.name}`,
-    args.user.email === undefined ? null : `- Email: ${args.user.email}`,
     args.user.isAdmin ? "- Eva admin" : null,
   ].filter((line) => line !== null);
   const userBlock =

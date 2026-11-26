@@ -3,7 +3,7 @@ import { buildAveInstructions } from "../convex/_ave/prompt";
 
 const instructions = buildAveInstructions({
   now: new Date("2026-09-26T00:00:00Z"),
-  user: { name: undefined, email: undefined, isAdmin: false },
+  user: { name: undefined, isAdmin: false },
   role: undefined,
   customInstructions: undefined,
 });
@@ -32,7 +32,7 @@ describe("Manager Ave instructions", () => {
     expect(
       buildAveInstructions({
         now: new Date(),
-        user: { name: undefined, email: undefined, isAdmin: false },
+        user: { name: undefined, isAdmin: false },
         role: undefined,
         customInstructions: "Always answer in French.",
       }),

@@ -85,7 +85,6 @@ export const claimRun = internalMutation({
             user.fullName ??
             ([user.firstName, user.lastName].filter(Boolean).join(" ") ||
               undefined),
-          email: user.email,
           isAdmin: user.isAdmin === true,
         },
         role: user.role,
