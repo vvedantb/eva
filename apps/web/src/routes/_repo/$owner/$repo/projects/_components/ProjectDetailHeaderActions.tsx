@@ -78,7 +78,7 @@ export function ProjectDetailHeaderActions({
         {isArchived ? <ArchivedLabel /> : null}
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
         {/* The controls share the chat header track. Tasks start through
-            Approve and the project scheduler, so there is no build button. */}
+            Eva and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
           <DropdownMenu>

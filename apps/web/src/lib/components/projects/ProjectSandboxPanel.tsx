@@ -111,6 +111,8 @@ interface ProjectSandboxPanelProps {
   openTaskIds: ReadonlySet<string>;
   /** Opens a task as a chat tab (a Tasks tab row). */
   onOpenTask: (taskNumId: number) => void;
+  /** The Tasks tab's "+": Eva's tab with her composer focused. */
+  onAskEva: () => void;
 }
 
 export function ProjectSandboxPanel({
@@ -138,6 +140,7 @@ export function ProjectSandboxPanel({
   selectedTaskLoading,
   openTaskIds,
   onOpenTask,
+  onAskEva,
 }: ProjectSandboxPanelProps) {
   // An open reply thread adds the Replies tab (projects v2, PR D).
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -178,15 +181,17 @@ export function ProjectSandboxPanel({
         (sandboxTab === "replies" && !threadId)
       ? "tasks"
       : sandboxTab;
-  const triageCount = taskStatus?.counts.triage ?? 0;
-  // Tasks leads the rail; its badge counts what waits in Triage.
+  const needsYouCount = taskStatus?.counts.blocked ?? 0;
+  // Tasks leads the rail; its badge counts its Needs you group.
   const tasksTab: SandboxTabDescriptor = {
     value: "tasks",
     label: "Tasks",
     icon: { kind: "component", Icon: IconChecklist },
-    count: triageCount > 0 ? triageCount : undefined,
+    count: needsYouCount > 0 ? needsYouCount : undefined,
     indicatorLabel:
-      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+      needsYouCount > 0
+        ? `${needsYouCount} ${needsYouCount === 1 ? "task needs" : "tasks need"} you`
+        : undefined,
   };
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
@@ -302,6 +307,7 @@ export function ProjectSandboxPanel({
               basePath={basePath}
               openTaskIds={openTaskIds}
               onOpenTask={onOpenTask}
+              onAskEva={onAskEva}
             />
           </KeepAlivePane>
           {selectedTask && projectPathSegment && isProjectTaskTab(activeTab) ? (

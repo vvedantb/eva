@@ -1,13 +1,11 @@
-import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { isUnapprovedTodoTask, projectTaskPrLine, type ProjectTaskView } from "@eva/shared/projectView";
+import { projectTaskPrLine, type ProjectTaskView } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react-native";
-import { Button, SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation } from "convex/react";
 import { useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Linking, Text, View } from "react-native";
 import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
 import type { ProjectTaskListRow } from "@/projects/useProjectStatus";
@@ -68,25 +66,19 @@ function FlatRow({
 /**
  * One flat row of a project's task list, as the web `ProjectTaskRow`: the
  * display status icon in its colour, the title, and `line`
- * (`projectTaskSummaryLine`), with the age at the end. A Triage row keeps
- * Reject and Approve visible beside it (the phone has no hover), unless the
- * project is archived (`readOnly`). A tap opens the task's chat; a long press opens
- * the task menu (`onLongPress`). A task in a
+ * (`projectTaskSummaryLine`), with the age at the end. A tap opens the
+ * task's chat; a long press opens the task menu (`onLongPress`). A task in a
  * repo the reader cannot open is a locked row with no link.
  */
 export function ProjectTaskRow({
   task,
   view,
   line,
-  projectId,
-  readOnly,
   onLongPress,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
   line: string;
-  projectId: Id<"projects">;
-  readOnly: boolean;
   onLongPress?: () => void;
 }) {
   const router = useRouter();
@@ -107,29 +99,21 @@ export function ProjectTaskRow({
       />
     );
   }
-  const canTriage = !readOnly && view.displayStatus === "triage" && isUnapprovedTodoTask(task);
   return (
-    <View className="flex-row items-center gap-1">
-      <View className="min-w-0 flex-1">
-        <FlatRow
-          icon={icon}
-          title={displayTitle(task.title)}
-          line={line}
-          trailing={
-            canTriage ? undefined : (
-              <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-                {timeAgo(task.updatedAt)}
-              </Text>
-            )
-          }
-          accessibilityLabel={displayTitle(task.title)}
-          // A project task is its chat.
-          onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
-          onLongPress={onLongPress}
-        />
-      </View>
-      {canTriage ? <TriageButtons projectId={projectId} taskId={task._id} /> : null}
-    </View>
+    <FlatRow
+      icon={icon}
+      title={displayTitle(task.title)}
+      line={line}
+      trailing={
+        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+          {timeAgo(task.updatedAt)}
+        </Text>
+      }
+      accessibilityLabel={displayTitle(task.title)}
+      // A project task is its chat.
+      onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
+      onLongPress={onLongPress}
+    />
   );
 }
 
@@ -144,41 +128,5 @@ export function ProjectTaskPrRow({ task }: { task: ProjectTaskListRow & { prUrl:
       accessibilityLabel={`Open the PR for ${displayTitle(task.title)}`}
       onPress={() => void Linking.openURL(task.prUrl)}
     />
-  );
-}
-
-/**
- * A Triage row's compact Reject (cancels the task) and Approve (lets the
- * scheduler start it), beside the row as the row is one button.
- */
-function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskId: Id<"agentTasks"> }) {
-  const updateStatus = useMutation(api.agentTasks.updateStatus);
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  const [busy, setBusy] = useState(false);
-  const run = <Result,>(action: Promise<Result>, error: string) => {
-    setBusy(true);
-    action.catch(() => toast.error(error)).finally(() => setBusy(false));
-  };
-  return (
-    <View className="flex-row items-center">
-      <Button
-        size="sm"
-        variant="ghost"
-        fullWidth={false}
-        disabled={busy}
-        onPress={() => run(updateStatus({ id: taskId, status: "cancelled" }), "Couldn't reject the task")}
-      >
-        Reject
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        fullWidth={false}
-        disabled={busy}
-        onPress={() => run(approveTasks({ projectId, taskIds: [taskId] }), "Couldn't approve the task")}
-      >
-        Approve
-      </Button>
-    </View>
   );
 }

@@ -4,12 +4,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 
 /**
  * Automatic coordinator turns (decision 16). The coordinator wakes by itself
- * only for: a child task's ask (at once), Triage items a person approved and
- * handed to it (at once), a failed task, and the end of an approved batch
- * (both batched in `BATCHED_WAKE_WINDOW_MS`). Nothing else
- * wakes it: finished tasks, merged PRs, plain reports, a person's message in a
- * child task and new Triage tasks wait for its next turn, where the task
- * table shows them.
+ * only for: a child task's ask (at once), tasks people added and that were
+ * handed to it (at once, reason `triage`), a failed task, and the end of an
+ * approved batch (both batched in `BATCHED_WAKE_WINDOW_MS`). Nothing else
+ * wakes it: finished tasks, merged PRs, plain reports and a person's message
+ * in a child task wait for its next turn, where the task table shows them.
  *
  * Each reason is one `projectCoordinatorWakes` row keyed by `key`, so asking
  * twice for the same wake-up is a no-op. A delivery folds every pending row
@@ -26,7 +25,7 @@ type WakeReason = Doc<"projectCoordinatorWakes">["reason"];
 
 /**
  * Asks for a coordinator turn for one reason. Idempotent by `key`: a second
- * request with the same key does nothing. An ask or a Triage handoff is
+ * request with the same key does nothing. An ask or a handoff is
  * delivered at once; a failure or a finished batch waits for the batch window.
  */
 export async function requestCoordinatorWake(

@@ -5,7 +5,6 @@ import {
   IconCircleCheck,
   IconCircleX,
   IconClock,
-  IconInbox,
   type IconProps,
 } from "@tabler/icons-react-native";
 import type { ComponentType } from "react";
@@ -45,20 +44,16 @@ export function projectStageAppearance(stage: ProjectStage, scheme: Scheme) {
 
 /**
  * A child task's display status, as the web `projectTaskDisplayStatusConfig`:
- * Triage in the code-review purple, Working as In Progress, Blocked as the
- * needs-you warning, Idle as To Do, Archived as Cancelled. The task list groups, a project's task counts and
+ * Working as In Progress, Needs you (`blocked`) as the warning, Idle as To
+ * Do, Archived as Cancelled. The task list groups, a project's task counts and
  * its progress bar.
  */
 export function taskDisplayStatusAppearance(status: ProjectTaskDisplayStatus, scheme: Scheme) {
-  if (status === "triage") {
-    const theme = EVA_THEME[scheme];
-    return { icon: IconInbox, text: theme.statusCodeReview, bar: theme.statusCodeReviewBar };
-  }
   if (status === "blocked") {
     const warning = EVA_THEME[scheme].warning;
     return { icon: IconAlertTriangle, text: warning, bar: warning };
   }
-  const column: Record<Exclude<ProjectTaskDisplayStatus, "triage" | "blocked">, "todo" | Tone> = {
+  const column: Record<Exclude<ProjectTaskDisplayStatus, "blocked">, "todo" | Tone> = {
     working: "in_progress",
     idle: "todo",
     archived: "cancelled",

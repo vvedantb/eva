@@ -124,7 +124,7 @@ export async function createCoordinatorTasks(
           phaseLabel: task.phaseLabel,
           linkedRepoIds: task.linkedRepoIds,
         },
-        { approved: true },
+        { start: true },
       ),
     );
   }

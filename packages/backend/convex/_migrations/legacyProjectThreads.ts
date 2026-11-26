@@ -32,7 +32,7 @@ import { syncProjectSessionBranch } from "../_sessions/ownedSession";
  * - Every case: the coordinator moves to a fresh project branch, off the old
  *   one (`branchVersion` + 1, `syncProjectSessionBranch` drops its VM).
  *
- * Draft and todo tasks stay in Triage for a person. Idempotent: a converted
+ * Draft and todo tasks stay as they are. Idempotent: a converted
  * project holds no project PR on its current branch, so a second run changes
  * nothing.
  *

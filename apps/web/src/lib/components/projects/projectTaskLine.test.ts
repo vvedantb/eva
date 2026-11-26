@@ -3,6 +3,7 @@ import {
   projectStatusCountsLine,
   projectTaskFacts,
   projectTaskPrLine,
+  projectTaskPromptAction,
   projectTaskPullRequests,
   projectTaskSummaryLine,
   type ProjectTaskView,
@@ -27,25 +28,11 @@ const task = (row: SummarizableProjectTaskRow & { locked?: boolean }) => row;
 const none = {
   notes: undefined,
   failed: false,
-  authorName: undefined,
   otherRepoLabel: undefined,
 };
 
 describe("projectTaskSummaryLine", () => {
-  it("names who added a Triage task", () => {
-    const row = task({ numId: 904, status: "todo" });
-    expect(
-      projectTaskSummaryLine(row, view("triage", "approve"), {
-        ...none,
-        authorName: "Ana",
-      }),
-    ).toBe("#904 · Added by Ana");
-    expect(
-      projectTaskSummaryLine({ status: "todo" }, view("triage", "approve"), none),
-    ).toBe("Needs approval");
-  });
-
-  it("says why a Blocked task needs you, with its PR or its question", () => {
+  it("says why a Needs you task needs you, with its PR or its question", () => {
     const row = task({
       numId: 905,
       status: "done",
@@ -90,7 +77,7 @@ describe("projectTaskSummaryLine", () => {
     ).toBe("Cancelled");
   });
 
-  it("names an approved Triage item the coordinator holds, and where it went", () => {
+  it("names a task the coordinator holds, and where it went", () => {
     expect(
       projectTaskSummaryLine(
         task({ numId: 908, status: "todo" }),
@@ -150,13 +137,12 @@ describe("project task PRs and counts", () => {
   it("counts the non-empty statuses in list order", () => {
     expect(
       projectStatusCountsLine({
-        triage: 3,
-        working: 0,
+        working: 3,
         blocked: 2,
-        idle: 1,
+        idle: 0,
         archived: 1,
       }),
-    ).toBe("3 triage · 2 blocked · 1 idle · 1 archived");
+    ).toBe("2 needs you · 3 working · 1 archived");
   });
 });
 
@@ -205,10 +191,10 @@ describe("projectTaskFacts", () => {
     expect(facts.prs.map((row) => row.label)).toEqual(["web #12", "api #7"]);
   });
 
-  it("reads Triage for an unapproved task and Archived once archived", () => {
+  it("reads To do for a todo task and Archived once archived", () => {
     expect(
       projectTaskFacts({ _id: "t1", status: "todo" }, repos, []).text,
-    ).toBe("Triage");
+    ).toBe("To do");
     expect(
       projectTaskFacts(
         { _id: "t1", status: "todo", archivedAt: 5 },
@@ -216,5 +202,29 @@ describe("projectTaskFacts", () => {
         [],
       ).text,
     ).toBe("Archived");
+  });
+});
+
+describe("projectTaskPromptAction", () => {
+  const open = { hasActiveRun: false, readOnly: false };
+  it("shows With Eva while handed, Start once approved, nothing else", () => {
+    expect(
+      projectTaskPromptAction(
+        { _id: "t1", status: "todo", approvedAt: 1, handedToCoordinatorAt: 1 },
+        open,
+      ),
+    ).toBe("with_eva");
+    expect(
+      projectTaskPromptAction({ _id: "t1", status: "todo", approvedAt: 1 }, open),
+    ).toBe("start");
+    expect(
+      projectTaskPromptAction({ _id: "t1", status: "todo" }, open),
+    ).toBeUndefined();
+    expect(
+      projectTaskPromptAction(
+        { _id: "t1", status: "todo", approvedAt: 1 },
+        { hasActiveRun: true, readOnly: false },
+      ),
+    ).toBeUndefined();
   });
 });

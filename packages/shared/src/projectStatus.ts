@@ -18,12 +18,12 @@ export interface ProjectTaskFacts extends TaskStageFacts {
   id: string;
   taskNumber?: number;
   /**
-   * The task may run (`agentTasks.approvedAt`): the coordinator's tasks are
-   * approved at creation; feedback waits for a person.
+   * The task may run (`agentTasks.approvedAt`): every project task is
+   * approved at creation (people's asks are handed to the coordinator).
    */
   approved: boolean;
   /**
-   * A person's Triage approval handed the task to the coordinator
+   * The task was handed to the coordinator
    * (`agentTasks.handedToCoordinatorAt`) and it has not started: only the
    * coordinator starts it (or adds it to an open task), never the scheduler.
    */
@@ -68,7 +68,6 @@ export type NeedsYouReason =
   | "failed"
   | "stopped"
   | "pr_closed"
-  | "approve"
   | "review"
   | "question";
 
@@ -120,9 +119,7 @@ export function projectTaskNeedsYou(
   }
   if (task.halted === "cancelled") return "stopped";
   if (task.prState === "closed") return "pr_closed";
-  if (task.status === "todo" || task.status === "draft") {
-    return task.approved ? undefined : "approve";
-  }
+  if (task.status === "todo" || task.status === "draft") return undefined;
   // Review needs the task's own open PR. A task from before the coordinator
   // can sit in review with no PR (its work went into the project's PR):
   // there is nothing for a person to review there.
@@ -140,34 +137,32 @@ export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean 
 }
 
 /**
- * How a project's child task shows in its task list, by who must act: a
- * person must approve or reject it (`triage`), the agent (`working`), a
- * person or the coordinator (`blocked`), nobody yet (`idle`: approved,
- * waiting for a free slot), or no one any more (`archived`).
+ * How a project's child task shows in its task list, by who must act: the
+ * agent (`working`), a person or the coordinator (`blocked`, shown as "Needs
+ * you"), nobody yet (`idle`: waiting for a free slot or with the
+ * coordinator), or no one any more (`archived`).
  * The project itself keeps its stages (`projectStatus`), and counts its
  * tasks by these statuses.
  */
 export type ProjectTaskDisplayStatus =
-  | "triage"
   | "working"
   | "blocked"
   | "idle"
   | "archived";
 
 /**
- * A child task's display status. Archived: launched or cancelled. Triage: a
- * todo or draft task nobody approved yet (feedback, or a task a person
- * added without approving it). Blocked: waits for a person (`projectTaskNeedsYou`), for its
- * coordinator (an open ask, or a first failure it may retry), is halted, or
- * is in review. Working: in progress. Idle: an approved todo task nothing
- * holds back.
+ * A child task's display status. Archived: launched or cancelled. Blocked
+ * (shown as "Needs you"):
+ * waits for a person (`projectTaskNeedsYou`), for its coordinator (an open
+ * ask, or a first failure it may retry), is halted, or is in review.
+ * Working: in progress. Idle: a todo task nothing holds back, or one handed
+ * to the coordinator that it has not placed yet.
  */
 export function projectTaskDisplayStatus(
   task: ProjectTaskFacts,
 ): ProjectTaskDisplayStatus {
   const stage = projectTaskStage(task);
   if (stage === "launched" || stage === "cancelled") return "archived";
-  if (stage === "todo" && !task.approved) return "triage";
   if (
     stage === "in_review" ||
     task.halted !== undefined ||
@@ -196,7 +191,6 @@ export function projectStatus(
   tasks: readonly ProjectTaskFacts[],
 ): ProjectStatus {
   const counts: Record<ProjectTaskDisplayStatus, number> = {
-    triage: 0,
     working: 0,
     blocked: 0,
     idle: 0,
@@ -224,8 +218,8 @@ export function projectStatus(
 
 /**
  * The tasks the scheduler starts now, in `taskNumber` order: every approved
- * `todo` task with no run pending and not halted, except the ones a Triage
- * approval handed to the coordinator (it starts those itself). No cap on how many run at
+ * `todo` task with no run pending and not halted, except the ones handed to
+ * the coordinator (it starts those itself). No cap on how many run at
  * once (add one only when usage shows a need). Nothing starts while the
  * project's account is at its usage limit.
  */

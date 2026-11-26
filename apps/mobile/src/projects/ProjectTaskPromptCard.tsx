@@ -1,24 +1,24 @@
 import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { projectTaskPromptAction } from "@eva/shared/projectView";
+import { projectTaskPromptAction, WITH_COORDINATOR_LABEL } from "@eva/shared/projectView";
 import { canEditTaskText, taskTextLockReason } from "@eva/shared/taskDetail";
 import { Button } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { useTaskReactions } from "@/quickTasks/TaskActivity";
 import { TaskDescription, TaskTitle } from "@/quickTasks/TaskText";
-import { useScheme } from "@/ui/theme";
+import { useScheme, XS_TRACKING } from "@/ui/theme";
 import type { ProjectTaskRow } from "./ProjectTaskFacts";
 
 /**
  * The web `ProjectTaskPromptCard`: a project task's chat before its first run
  * (`showsProjectTaskPrompt`) shows its title, prompt and attachments, which
- * edit in place while the web allows it (`canEditTaskText`), then Approve in
- * Triage or Start once approved (`projectTaskPromptAction`).
+ * edit in place while the web allows it (`canEditTaskText`), then Start, or a
+ * quiet "With Eva" while the coordinator places it (`projectTaskPromptAction`).
  */
 export function ProjectTaskPromptCard({
   task,
@@ -37,7 +37,6 @@ export function ProjectTaskPromptCard({
   const attachments = useQuery(api.agentTasks.listAttachments, { taskId: task._id });
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
   const updateTask = useMutation(api.agentTasks.update);
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [busy, setBusy] = useState(false);
   const hasActiveRun = runs?.some((run) => run.status === "queued" || run.status === "running") ?? false;
@@ -50,7 +49,6 @@ export function ProjectTaskPromptCard({
     setBusy(true);
     write.catch(() => toast.error(failure)).finally(() => setBusy(false));
   };
-  const { projectId } = task;
   return (
     <View className="gap-3 rounded-2xl p-3" style={{ backgroundColor: theme.muted }}>
       <TaskTitle
@@ -72,16 +70,10 @@ export function ProjectTaskPromptCard({
           attachments={attachments.flatMap((entry) => (entry.url ? [{ url: entry.url, contentType: entry.contentType }] : []))}
         />
       ) : null}
-      {action === "approve" && projectId !== undefined ? (
-        <Button
-          size="sm"
-          fullWidth={false}
-          loading={busy}
-          disabled={busy}
-          onPress={() => act(approveTasks({ projectId, taskIds: [task._id] }), "Couldn't approve the task")}
-        >
-          Approve
-        </Button>
+      {action === "with_eva" ? (
+        <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground, letterSpacing: XS_TRACKING }}>
+          {WITH_COORDINATOR_LABEL}
+        </Text>
       ) : action === "start" ? (
         <Button
           size="sm"

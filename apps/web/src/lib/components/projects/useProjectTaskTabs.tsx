@@ -17,6 +17,7 @@ import {
   projectTaskTabsParser,
 } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { requestComposerFocus } from "@/lib/components/chat/composerFocusRequest";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import {
   isProjectTaskTab,
@@ -78,6 +79,11 @@ export interface ProjectTaskTabs {
   close: (numId: number) => void;
   /** Shows one of the selected task's panel tabs. */
   showTab: (tab: ProjectTaskTab) => void;
+  /**
+   * The project's "+" (New task): Eva's tab with her composer focused. Work
+   * goes in through her chat; she starts it or adds it to an open task.
+   */
+  askEva: () => void;
 }
 
 /**
@@ -112,7 +118,7 @@ export function useProjectTaskTabs({
     PROJECT_DEFAULT_SANDBOX_TAB,
   );
 
-  const go = (
+  const go = async (
     list: ReadonlyArray<number>,
     next: number | null,
     replace = false,
@@ -122,7 +128,7 @@ export function useProjectTaskTabs({
       setCoordinatorTab(sandboxTab);
     }
     const tab = next === null ? coordinatorTab : PROJECT_DEFAULT_SANDBOX_TAB;
-    void navigate({
+    await navigate({
       to: toInternalRepoHref(
         `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
       ),
@@ -136,13 +142,21 @@ export function useProjectTaskTabs({
   };
 
   const open = (numId: number) => {
-    go(projectTaskTabList([...numIds, numId], numId), numId);
+    void go(projectTaskTabList([...numIds, numId], numId), numId);
     onShowPanel();
   };
 
   const select = (numId: number | null) => {
     if (numId === selected) return;
-    go(numIds, numId);
+    void go(numIds, numId);
+  };
+
+  const askEva = () => {
+    if (selected === null) {
+      requestComposerFocus();
+      return;
+    }
+    void go(numIds, null).then(requestComposerFocus);
   };
 
   const close = (numId: number) => {
@@ -152,7 +166,7 @@ export function useProjectTaskTabs({
       return;
     }
     const index = numIds.indexOf(numId);
-    go(rest, index > 0 ? numIds[index - 1] : null, true);
+    void go(rest, index > 0 ? numIds[index - 1] : null, true);
   };
 
   const showTab = (tab: ProjectTaskTab) => {
@@ -166,7 +180,7 @@ export function useProjectTaskTabs({
     onShowPanel();
   };
 
-  return { numIds, selected, open, select, close, showTab };
+  return { numIds, selected, open, select, close, showTab, askEva };
 }
 
 /** One task tab: its row and whether the task works now. */

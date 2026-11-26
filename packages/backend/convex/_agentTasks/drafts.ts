@@ -27,6 +27,7 @@ import {
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary } from "./runSummary";
 import { startTaskExecution } from "./execution";
+import { handTasksToCoordinator } from "../_projects/scheduler";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { titleFromPrompt } from "@eva/shared";
 
@@ -140,7 +141,8 @@ export const saveDraft = authMutation({
 /**
  * Promotes a draft task to "todo" from the form's prompt, as
  * `createQuickTask`: the title comes from the prompt, and `run` ("Save and
- * Run") approves a project task or starts any other task now.
+ * Run") approves a project task or starts any other task now. A saved
+ * project task goes to the project's coordinator.
  */
 export const activateDraft = authMutation({
   args: {
@@ -227,13 +229,16 @@ export const activateDraft = authMutation({
         ),
       });
     }
-    // An approved project task may start: the scheduler picks it up.
+    // A project task that runs may start: the scheduler picks it up. Else
+    // it goes to the project's coordinator at once.
     if (task.projectId && approved) {
       await ctx.scheduler.runAfter(
         0,
         internal.buildWorkflow.scheduleReadyTasks,
         { projectId: task.projectId },
       );
+    } else if (task.projectId) {
+      await handTasksToCoordinator(ctx, task.projectId, [task._id]);
     }
     if (task.projectId) {
       await onProjectTasksChanged(ctx, task.projectId);

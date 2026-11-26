@@ -27,7 +27,6 @@ import { isSessionArchived } from "./_sessions/archive";
  *   `@`-mention, a routed question, an agent's `notify_user`
  *   (`isNeedsYouNotification`; posting in that chat reads it).
  * - To review: an open (not draft) PR of a project task, quick task or session.
- * - Triage: a project task no one approved yet.
  * - Failed: a project task whose retries are spent, or a quick task whose
  *   last run failed.
  */
@@ -38,7 +37,6 @@ const needsYouRowValidator = v.object({
   group: v.union(
     v.literal("question"),
     v.literal("review"),
-    v.literal("triage"),
     v.literal("failed"),
   ),
   title: v.string(),
