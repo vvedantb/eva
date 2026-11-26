@@ -288,8 +288,9 @@
   }
 }
 
-/* Composer wash: Eva's brand purple and blue as soft blobs. Each
- * blob drifts on its own path, so they move against each other. Transform
+/* Composer aurora: Eva's brand purple and blue plus a teal, as soft blobs.
+ * Each blob drifts on its own path and pace (`--eva-blob-duration`), so they
+ * move against each other. Transform
  * only, so it stays on the compositor. "Disable page animations" stops it. */
 @utility eva-blob {
   position: absolute;
@@ -300,7 +301,7 @@
     color-mix(in oklab, var(--eva-blob-tone) 22%, transparent),
     transparent
   );
-  animation: var(--eva-blob-path) 7s ease-in-out infinite alternate;
+  animation: var(--eva-blob-path) var(--eva-blob-duration, 7s) ease-in-out infinite alternate;
   will-change: transform;
 }
 
@@ -325,6 +326,18 @@
   }
   to {
     transform: translate3d(12%, 20%, 0) scale(1.05);
+  }
+}
+
+@keyframes eva-blob-c {
+  from {
+    transform: translate3d(-20%, 0, 0) scale(0.95);
+  }
+  50% {
+    transform: translate3d(15%, 12%, 0) scale(1.2);
+  }
+  to {
+    transform: translate3d(5%, -10%, 0) scale(1);
   }
 }
 

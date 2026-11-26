@@ -159,6 +159,7 @@ export function NewSessionComposer() {
       >
         <div className="eva-blob -top-[25%] -right-[15%] [--eva-blob-path:eva-blob-a] [--eva-blob-tone:var(--eva-brand-blue)]" />
         <div className="eva-blob top-[5%] -left-[20%] [--eva-blob-path:eva-blob-b] [--eva-blob-tone:var(--eva-brand-purple)]" />
+        <div className="eva-blob -top-[30%] left-[20%] [--eva-blob-duration:9s] [--eva-blob-path:eva-blob-c] [--eva-blob-tone:var(--chart-5)]" />
       </div>
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />
