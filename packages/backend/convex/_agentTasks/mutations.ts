@@ -1,4 +1,5 @@
 import { ConvexError, v, type ObjectType } from "convex/values";
+import { reconcileTaskCloseTimes } from "./closeTimes";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -154,6 +155,7 @@ export const updateStatus = authMutation({
       previousStatus,
       args.status,
     );
+    await reconcileTaskCloseTimes(ctx, args.id);
 
     // Sync the task's GitHub PR state (a quick task's or a project child
     // task's: each owns its PR).
@@ -315,6 +317,7 @@ export const unarchive = authMutation({
       archivedAt: undefined,
       updatedAt: Date.now(),
     });
+    await reconcileTaskCloseTimes(ctx, args.id);
     if (!isTerminalTaskStatus(task.status)) {
       await reviveOwnedSession(ctx, { kind: "task", taskId: task._id });
     }

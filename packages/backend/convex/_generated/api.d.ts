@@ -13,6 +13,7 @@ import type * as _agentJobs_owner from "../_agentJobs/owner.js";
 import type * as _agentJobs_runOneShotAgent from "../_agentJobs/runOneShotAgent.js";
 import type * as _agentJobs_slot from "../_agentJobs/slot.js";
 import type * as _agentJobs_staleDoc from "../_agentJobs/staleDoc.js";
+import type * as _agentTasks_closeTimes from "../_agentTasks/closeTimes.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -219,6 +220,7 @@ import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthro
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
 import type * as _projects_batches from "../_projects/batches.js";
 import type * as _projects_chatTaskCards from "../_projects/chatTaskCards.js";
+import type * as _projects_progress from "../_projects/progress.js";
 import type * as _projects_conflicts from "../_projects/conflicts.js";
 import type * as _projects_coordinatorWake from "../_projects/coordinatorWake.js";
 import type * as _projects_coordinatorWakeDelivery from "../_projects/coordinatorWakeDelivery.js";
@@ -612,6 +614,7 @@ declare const fullApi: ApiFromModules<{
   "_agentJobs/runOneShotAgent": typeof _agentJobs_runOneShotAgent;
   "_agentJobs/slot": typeof _agentJobs_slot;
   "_agentJobs/staleDoc": typeof _agentJobs_staleDoc;
+  "_agentTasks/closeTimes": typeof _agentTasks_closeTimes;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -818,6 +821,7 @@ declare const fullApi: ApiFromModules<{
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
   "_projects/batches": typeof _projects_batches;
   "_projects/chatTaskCards": typeof _projects_chatTaskCards;
+  "_projects/progress": typeof _projects_progress;
   "_projects/conflicts": typeof _projects_conflicts;
   "_projects/coordinatorWake": typeof _projects_coordinatorWake;
   "_projects/coordinatorWakeDelivery": typeof _projects_coordinatorWakeDelivery;

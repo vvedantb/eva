@@ -22,6 +22,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
+import { ProjectProgressChart } from "@/projects/ProjectProgressChart";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
@@ -137,6 +138,7 @@ export function ProjectOverview({
           <ProjectProgress status={status} />
         </View>
       ) : null}
+      <ProjectProgressChart projectId={project._id} />
       {summaryDoc ? (
         <View className="mt-3 gap-2 rounded-xl p-4" style={{ backgroundColor: theme.card }}>
           <View className="flex-row items-center justify-between gap-3">

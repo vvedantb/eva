@@ -13,6 +13,7 @@
     "./artifactBridge": "./src/artifactBridge.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
     "./agentGoal": "./src/agentGoal.ts",
+    "./projectProgress": "./src/projectProgress.ts",
     "./appHref": "./src/appHref.ts",
     "./spotlight": "./src/spotlight.ts",
     "./appTabSlug": "./src/appTabSlug.ts",

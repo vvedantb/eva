@@ -23,12 +23,19 @@ Scope (decided 25 November 2026): how people and Eva talk in the coordinator cha
 
 ## v3
 
-- **Schedules that the agent sets itself.** The coordinator sets its own recurring checks from plain language, for example for monitoring after a launch.
-- **Separate models for the coordinator and its tasks.** One model setting for the coordinator and one for the child tasks it starts.
-- **Filters and labels on the Tasks list** (added 25 November 2026). Filter chips above the list: Added by, Repo, Phase (data that exists today) and Label. The coordinator tags each task with labels (copy, ui, checkout...) when it creates or groups it; people can add labels too. Idea from Vercel Board threads. Outside agents (Board's CLI claims) are out: projects stay Eva only.
+- **One model for Eva and her tasks** (built 26 November 2026, #1571 and #1572; replaces "Separate models for the coordinator and its tasks"). Eva and every task run on the model picked in Eva's chat composer; the chat is the only place a model is stored.
+- **Progress chart** (built 26 November 2026). The Project page shows the last 30 days: tasks shipped (PR merged or marked Done) and archived without shipping as bars per day, and the tasks open at each day's end as a line. Click a day to list its tasks. Built on `agentTasks.shippedAt` / `closedAt`. Reference: the 30-day chart in Amp Spaces (Amp docs, "Spaces").
 - **Adopt a session into a project** (moved from v1 on 19 November 2026; moved to v3 on 25 November 2026). Includes "promote a session to a new project" from session 422. Also (added 25 November 2026): select several quick tasks or sessions and group them into a new project. Each one becomes a thread (a child task) with its chat, branch and PR kept; the new coordinator chat starts empty and reads the threads from its task table. Quick tasks are the easy case (a task already owns its session); sessions carry the blockers below. Known blockers: `sessions.owner` is written once; the branch name and the PR are tied to the session id; sessions in a group or with linked repos.
-- **Goal with a progress chart.** A project has a stated goal. A chart shows launched, in progress and todo work over time. Reference: the goal and 30-day chart in Amp Spaces (Amp docs, "Spaces", read 19 November 2026). (moved from v2 on 25 November 2026)
 - **Multi-repo, the rest.** v1 lets each child task target any repo the acting user can access. Left for v3: one task that edits several repos in one sandbox; the coordinator reading extra repos in its own sandbox; adopting sessions that are in a group or have linked repos; detecting that a merged change is deployed. (moved from v2 on 25 November 2026)
+
+## v4
+
+Moved out of v3 on 26 November 2026: not needed yet.
+
+- **Project goal.** An optional `projects.goal` (one line, set in the New Project form, editable on the Project page). Eva reads it every turn, keeps tasks pointed at it, and says when an ask is outside it (offer a quick task or widen the goal); a `set_project_goal` tool changes it only when a person asks. The goal then leaves the summary document. Reference: the Space Goal in Amp Spaces.
+- **Schedules that the agent sets itself.** The coordinator sets its own recurring checks from plain language, for example for monitoring after a launch. Automations already run on a schedule; Eva needs a tool to create and stop them for her project.
+- **Filters and labels on the Tasks list** (added 25 November 2026). Filter chips above the list: Added by, Repo, Phase and Label. The coordinator tags each task when it creates or groups it; people can add labels too. Reuse what quick tasks have: `tags`, model-suggested tags, `@eva/shared/quickTaskFilters`, "Filtered by" chips, `LabelsField`. Open questions: labels on every row, labelling old tasks, one label set per repo.
+- **Eva picks a model for each task.** The project lists the models Eva may use (for example a fast one and a strong one); she picks one when she starts a task, says which on its card, and you can change it in the task's chat; a task that fails on the fast model retries on the strong one. Record which model ran each task and whether it shipped first, so the choice has data.
 
 ## Candidates, not agreed
 

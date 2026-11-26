@@ -64,6 +64,7 @@ export function ProjectDetailMainContent({
             title={project.title}
             description={project.description}
             readOnly={project.archivedAt !== undefined}
+            projectHref={projectHref}
             documentsHref={
               projectSegment
                 ? `${projectHref}/sandbox/documents`

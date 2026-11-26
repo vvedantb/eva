@@ -1,4 +1,5 @@
 import { hasActiveTaskRun } from "./_agentTasks/taskRunStatus";
+import { reconcileTaskCloseTimes } from "./_agentTasks/closeTimes";
 import {
   customCtx,
   customMutation,
@@ -348,6 +349,7 @@ export async function archiveAgentTask(
   if (!task || isEntityArchived(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
   await ctx.db.patch(taskId, { archivedAt: Date.now() });
+  await reconcileTaskCloseTimes(ctx, taskId);
 }
 
 const getUserIdFromIdentityRef = makeFunctionReference<
