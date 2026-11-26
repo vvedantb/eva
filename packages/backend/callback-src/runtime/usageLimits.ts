@@ -395,7 +395,7 @@ export async function captureClaudeUsage(
 export function captureClaudeUsageLimitError(error: string | undefined): void {
   if (!error) return;
   const message = error.toLowerCase();
-  // Mirrors `isUsageLimitError` in convex/_taskWorkflow/usageLimitReset.ts —
+  // Mirrors `isUsageLimitError` in convex/_queues/usageLimitReset.ts —
   // the callback bundle cannot import from convex/, so keep the two in sync.
   if (
     !message.includes("out of extra usage") &&

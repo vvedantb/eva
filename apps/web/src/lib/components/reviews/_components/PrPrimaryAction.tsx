@@ -292,7 +292,7 @@ function ReopenAction({
 function RevertAction({ overview }: { overview: PrOverview }) {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
-  const createSession = useConvexMutation(api.sessions.create);
+  const createSession = useConvexMutation(api.chats.start);
   const [starting, setStarting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
@@ -305,7 +305,12 @@ function RevertAction({ overview }: { overview: PrOverview }) {
     // the whole file out of the React Compiler.
     const request = revertSessionRequest(overview);
     try {
-      const { numId } = await createSession({ repoId, ...request });
+      const { numId } = await createSession({
+        repoId,
+        title: request.title,
+        prompt: request.message,
+        baseBranch: request.baseBranch,
+      });
       await navigate({
         to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
       });

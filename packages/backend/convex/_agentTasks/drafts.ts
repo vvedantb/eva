@@ -20,7 +20,7 @@ import {
   buildTaskNotificationMessage,
   runTraitFields,
 } from "./helpers";
-import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { resolveNewTaskBaseBranch } from "../_agentTasks/resolveBaseBranch";
 import { createTaskRunSummary } from "./runSummary";
 import { seedNewTaskChat } from "./taskChatSeed";
 import { startTaskExecution } from "./execution";

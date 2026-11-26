@@ -1,17 +1,15 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
 import {
   sessionChatAdapter,
   trackSessionChatWorkflow,
 } from "./_chat/surfaceAdapters";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 
-// Re-exported so importers keep resolving these names from
-// "./workflowWatchdog"; the implementations live in
-// _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts. One-shot agent
-// jobs have their own backstop (`agentJobs.handleStale`).
-export { RUN_TIMEOUT_MS, trackSessionChatWorkflow };
+// Re-exported so importers keep resolving this name from
+// "./workflowWatchdog"; the implementation lives in _chat/surfaceAdapters.ts.
+// One-shot agent jobs have their own backstop (`agentJobs.handleStale`).
+export { trackSessionChatWorkflow };
 
 /** Cancels a stale session chat workflow and starts the next queued message. */
 export const handleStaleSessionChat = internalMutation({

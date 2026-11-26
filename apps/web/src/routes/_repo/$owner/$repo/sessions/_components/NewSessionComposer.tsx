@@ -43,7 +43,7 @@ export function NewSessionComposer() {
   const { user } = useUser();
   const { repo, basePath } = useRepo();
   const firstName = user?.firstName?.trim();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Set by "Stack a new session" on a pull request: start from its head branch.
   const [stack] = useQueryStates({
@@ -116,7 +116,7 @@ export function NewSessionComposer() {
     try {
       const { numId } = await createSession({
         repoId: repo._id,
-        message: content,
+        prompt: content,
         model,
         baseBranch,
         ...executionTraits,

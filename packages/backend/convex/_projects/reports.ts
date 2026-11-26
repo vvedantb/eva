@@ -19,7 +19,6 @@ import { requestCoordinatorWake } from "./coordinatorWake";
 import { taskLabel } from "./scheduler";
 import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
 import { hasActiveTaskRun } from "../_agentTasks/taskRunStatus";
-import { dropComposerUserRow } from "../_queues/helpers";
 import { chatMessageRoute, mentionsEva } from "@eva/shared";
 import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
 
@@ -223,8 +222,8 @@ export type PersonChatRoute = "answered" | "posted" | "continue";
  * open ask, the message is the answer: the ask closes and the task's next run
  * starts with it. In a coordinator's chat, a message for teammates only stays
  * a quiet comment (`chatMessageRoute`); any other message wakes Eva.
- * `userRow`: what the chat shows for the message, when the caller has not
- * stored it (`chats.send`); absent when the caller already stored it.
+ * `userRow`: what the chat shows for the message when it is stored here (a
+ * quiet comment).
  */
 export async function routePersonChatMessage(
   ctx: MutationCtx,
@@ -232,7 +231,7 @@ export async function routePersonChatMessage(
     context: SessionChatContext;
     userId: Id<"users">;
     message: string;
-    userRow?: Pick<
+    userRow: Pick<
       Doc<"messages">,
       "content" | "attachmentStorageIds" | "annotation"
     >;
@@ -241,7 +240,6 @@ export async function routePersonChatMessage(
   const { chat, session } = params.context;
   const owner = sessionOwner(session);
   const insertUserRow = async () => {
-    if (!params.userRow) return;
     await ctx.db.insert("messages", {
       parentId: chat._id,
       role: "user",
@@ -270,12 +268,9 @@ export async function routePersonChatMessage(
   if (!task?.projectId) return "continue";
   const ask = await findOpenAsk(ctx.db, task._id);
   if (!ask || !(await canResumeAskingTask(ctx, task))) return "continue";
+  // The answer is the run's own chat message: the queue writes its row when
+  // the run starts.
   await answerOpenAsk(ctx, task._id, params.userId);
-  // The answer is the run's own chat message: the composer's stored row goes,
-  // as for any queued send, and the queue writes it back when the run starts.
-  if (!params.userRow) {
-    await dropComposerUserRow(ctx, chat._id, params.message);
-  }
   await resumeWithAnswer(ctx, task, {
     userId: params.userId,
     answer: params.message,

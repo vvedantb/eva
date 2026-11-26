@@ -36,7 +36,7 @@ export function PrRemedyButton({
 }) {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const [starting, setStarting] = useState(false);
 
   const start = async () => {
@@ -45,7 +45,7 @@ export function PrRemedyButton({
       const { numId } = await createSession({
         repoId,
         title: remedy.sessionTitle,
-        message: remedy.prompt,
+        prompt: remedy.prompt,
         baseBranch: headRef,
       });
       await navigate({

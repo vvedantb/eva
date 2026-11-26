@@ -36,7 +36,8 @@ export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  /** Set when `entityId` is a session; a one-shot agent's token has none. */
+  entityKind?: "session";
   /**
    * The session chat a session daemon runs in. Chat content (panels, HTML,
    * preview tool calls, env var cards) lands here; `entityId` is the session.

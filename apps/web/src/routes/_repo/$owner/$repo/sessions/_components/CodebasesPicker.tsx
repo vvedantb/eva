@@ -45,7 +45,7 @@ import {
 /**
  * Shared URL-backed selection for the new-session "linked codebases" picker.
  * Read by both {@link CodebasesPicker} (to render) and `NewSessionComposer`
- * (to build the `sessions.create` args), so both stay in sync through nuqs
+ * (to build the `chats.start` args), so both stay in sync through nuqs
  * without prop drilling.
  */
 export function useCodebasesSelection() {

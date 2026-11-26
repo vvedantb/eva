@@ -12,7 +12,7 @@ import {
   normalizeAIModel,
   usesChatDaemon,
 } from "../validators";
-import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
 import { agentJobOwner, type AgentJobOwner } from "../_agentJobs/owner";
@@ -259,7 +259,7 @@ export async function trackSessionChatWorkflow(
   ctx: MutationCtx,
   chatId: Id<"sessionChats">,
   workflowId: WorkflowId,
-  timeoutMs: number = RUN_TIMEOUT_MS,
+  timeoutMs: number = TURN_BACKSTOP_MS,
 ): Promise<void> {
   await ctx.scheduler.runAfter(
     timeoutMs,

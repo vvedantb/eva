@@ -4,7 +4,7 @@ import {
   buildImplementationSteps,
   buildSummarySection,
   detectUiImplementationTask,
-} from "../convex/_taskWorkflow/uiImplementationPrompt";
+} from "../convex/_agentTasks/uiImplementationPrompt";
 
 describe("isUiImplementationTask", () => {
   it("detects UI keywords in title", () => {

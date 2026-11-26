@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, mock, test, vi } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
@@ -89,9 +89,14 @@ async function fixture() {
     return { users, projectId };
   });
   const as = (name: Name) => t.withIdentity({ subject: `clerk|${name}` });
-  const { chatId } = await as("Ana").mutation(api.sessions.ensureOwned, {
-    owner: { kind: "project", projectId: ids.projectId },
-  });
+  const { sessionId, chatId } = await as("Ana").mutation(
+    api.sessions.ensureOwned,
+    { owner: { kind: "project", projectId: ids.projectId } },
+  );
+  // Eva is awake, so a message for her starts a turn at once.
+  await t.run((ctx) =>
+    ctx.db.patch(sessionId, { status: "active", sandboxId: "sbx-test" }),
+  );
   return { t, as, chatId, ...ids };
 }
 
@@ -99,17 +104,14 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 const mention = (f: Fixture, name: Name) => `@[${name}](${f.users[name]})`;
 
-/** MCP's direct send (`orchestratorDelivery`): the user row first, then the turn. */
-async function send(f: Fixture, name: Name, message: string) {
-  await f.as(name).mutation(api.sessions.addMessage, {
-    chatId: f.chatId,
-    role: "user",
-    content: message,
-  });
-  return f.as(name).mutation(api._sessions.execution.startExecute, {
+/** A person's send on the shared send path; returns what became of it. */
+function send(f: Fixture, name: Name, message: string) {
+  return f.t.mutation(internal._sessions.execution.sendFromMcp, {
+    clerkUserId: `clerk|${name}`,
     chatId: f.chatId,
     message,
     model: DEFAULT_AI_MODEL,
+    sentViaOrchestrator: false,
   });
 }
 

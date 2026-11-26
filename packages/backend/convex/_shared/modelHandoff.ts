@@ -237,9 +237,9 @@ export function detectModelHandoffFromMessages(
 
 /**
  * Detection against stored history. Requires the turn's user row to already be
- * inserted, which every caller guarantees: the MCP path awaits addMessage
- * before startExecute, and the queue dequeue (every app send, `chats.send`)
- * inserts the user row in the same mutation.
+ * inserted, which every caller guarantees: the queue dequeue (every send,
+ * from the apps' `chats.send` and from MCP) inserts the user row in the same
+ * mutation.
  */
 export async function detectModelHandoff(
   ctx: QueryCtx,

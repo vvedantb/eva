@@ -486,7 +486,7 @@ export const logViewParser = parseAsStringLiteral(logViews)
 
 // New-session "linked codebases" picker (multi-repo sessions). Comma-separated
 // repo ids resolved against `githubRepos.list` by the picker — stale/unknown
-// ids are dropped rather than passed into `sessions.create` unbranded. Saved
+// ids are dropped rather than passed into `chats.start` unbranded. Saved
 // codebase groups whose primary is a DIFFERENT repo deep-link here with these
 // same keys prefilled (see CodebasesPicker.tsx).
 export const linkedRepoIdsParser = parseAsArrayOf(parseAsString)

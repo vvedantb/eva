@@ -1,4 +1,4 @@
-import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import type { TurnState } from "../validators";
 
 export type TerminalTurnState = "done" | "error" | "cancelled";
@@ -12,7 +12,7 @@ export const TURN_FINALIZING_LEASE_MS = 10 * 60 * 1000;
  * the agent process alive (or the probe itself is unreachable) before the turn
  * is finalised anyway. A frozen-but-alive daemon — a VM swapping hard under
  * parallel sub agents — used to lose its turn the moment its 2-minute lease
- * lapsed. The absolute `RUN_TIMEOUT_MS` cap still applies via
+ * lapsed. The absolute `TURN_BACKSTOP_MS` cap still applies via
  * `turnLeaseExpiry`, so grace can never extend a turn past it.
  */
 export const TURN_SILENT_ALIVE_GRACE_MS = 10 * 60 * 1000;
@@ -115,7 +115,7 @@ export function turnLeaseExpiry(input: {
 }): number {
   return Math.min(
     input.now + turnLeaseDurationMs(input.state),
-    input.turnStartedAt + RUN_TIMEOUT_MS,
+    input.turnStartedAt + TURN_BACKSTOP_MS,
   );
 }
 
@@ -123,7 +123,7 @@ export function turnExceededAbsoluteLimit(
   turnStartedAt: number,
   now: number,
 ): boolean {
-  return now >= turnStartedAt + RUN_TIMEOUT_MS;
+  return now >= turnStartedAt + TURN_BACKSTOP_MS;
 }
 
 /** Heartbeat row is missing or older than the running-turn lease. */

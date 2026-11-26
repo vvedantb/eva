@@ -155,10 +155,9 @@ describe("a child task's ask", () => {
         return (await ensureTaskChat(ctx, task)).chat._id;
       });
       // Rule 4: a person answers in the task chat.
-      await f.asUser.mutation(api._sessions.execution.enqueueMessage, {
-        chatId,
+      await f.asUser.mutation(api.chats.send, {
+        target: chatId,
         message: "Use v2.",
-        model: DEFAULT_AI_MODEL,
       });
       const [answered] = await reports(f);
       expect(answered?.state).toBe("answered");
@@ -494,12 +493,10 @@ describe("project tool rules", () => {
         owner: { kind: "task", taskId: f.a },
       });
       const resolve = (args: {
-        entityKind?: "session" | "task" | "project";
         entityId?: string;
         chatId?: string;
       }) => f.t.query(internal.mcp.projectQueries.resolveCallerOwner, args);
       const coordinatorOwner = await resolve({
-        entityKind: "session",
         entityId: projectChat.sessionId,
         chatId: projectChat.chatId,
       });
@@ -508,7 +505,6 @@ describe("project tool rules", () => {
         projectId: f.projectId,
       });
       const childOwner = await resolve({
-        entityKind: "session",
         entityId: taskChat.sessionId,
         chatId: taskChat.chatId,
       });
@@ -517,12 +513,12 @@ describe("project tool rules", () => {
         projectId: f.projectId,
         taskId: f.a,
       });
-      // A task run's token names the task itself.
-      const runOwner = await resolve({ entityKind: "task", entityId: f.b });
-      expect(projectCallerOf(runOwner ?? undefined)).toEqual({
+      // A token with no chat resolves through its session.
+      const sessionOwner = await resolve({ entityId: taskChat.sessionId });
+      expect(projectCallerOf(sessionOwner ?? undefined)).toEqual({
         role: "child",
         projectId: f.projectId,
-        taskId: f.b,
+        taskId: f.a,
       });
     },
     TIMEOUT_MS,

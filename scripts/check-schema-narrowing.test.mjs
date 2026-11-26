@@ -1,7 +1,11 @@
 // node --test scripts/check-schema-narrowing.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyzeSchemaNarrowing } from "./check-schema-narrowing.mjs";
+import {
+  analyzeSchemaNarrowing,
+  historicMigrationExports,
+  unresolvedMigrations,
+} from "./check-schema-narrowing.mjs";
 
 const TABLE_FIELDS = "packages/backend/convex/_validators/tableFields.ts";
 const SCHEMA = "packages/backend/convex/schema.ts";
@@ -266,4 +270,45 @@ test("a quoted field key is recognised", () => {
   });
   assert.equal(result.ok, false);
   assert.equal(result.removals[0].name, "legacy.flag");
+});
+
+test("a marker that names its field still needs a real migration", () => {
+  // The #1574 gap: the comment keeps the field name in the file, so the
+  // removal is hidden and only the migration name proves the drain.
+  const result = analyzeSchemaNarrowing({
+    diff: diffFor(
+      TABLE_FIELDS,
+      [
+        "@@ -374,2 +372,1 @@",
+        "-  turnLifecycleVersion: v.optional(v.literal(2)),",
+        "+  // turnLifecycleVersion removed. schema-narrowing-ok: clearTurnLifecycle",
+      ].join("\n"),
+    ),
+    newContent:
+      "export const sessionFields = {\n  // turnLifecycleVersion removed. schema-narrowing-ok: clearTurnLifecycle\n};",
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "missing-migration");
+  assert.deepEqual(result.removals, []);
+  assert.deepEqual(result.missingMigrations, ["clearTurnLifecycle"]);
+});
+
+test("an existing marker outside the diff is checked too", () => {
+  const result = analyzeSchemaNarrowing({
+    diff: "",
+    newContent: "// schema-narrowing-ok: neverWritten\nexport const a = {};",
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missingMigrations, ["neverWritten"]);
+});
+
+test("git history resolves a one-off migration deleted after it ran", () => {
+  // clearLegacyFields lived in convex/_migrations/ and was deleted (#1574).
+  const names = ["clearLegacyFields", "zzzNeverAMigration"];
+  assert.deepEqual(
+    unresolvedMigrations(names, historicMigrationExports(names)),
+    ["zzzNeverAMigration"],
+  );
 });

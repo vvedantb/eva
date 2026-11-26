@@ -67,13 +67,13 @@ function AskInChat({
 function AskInNewSession(props: RecapAskAgentButtonProps) {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
 
   const start = async () => {
     const { numId } = await createSession({
       repoId,
       title: `PR #${props.prNumber}: ${props.step.title}`,
-      message: stepPrompt(props),
+      prompt: stepPrompt(props),
       ...(props.workBranch !== null ? { baseBranch: props.workBranch } : {}),
     });
     await navigate({

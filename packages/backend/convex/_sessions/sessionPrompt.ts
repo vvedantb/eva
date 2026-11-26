@@ -203,8 +203,8 @@ async function ownerPromptContext(
 /**
  * Builds the agent prompt for a chat turn (doc `@` mentions resolved, custom
  * instructions + system prompt folded in). Shared single source of truth so
- * both the workflow's `getSessionData` query and the daemon-pull `startExecute`
- * mutation produce byte-identical prompts — the daemon must run exactly what
+ * both the workflow's `getSessionData` query and the daemon-pull staging in the queue
+ * dequeue produce byte-identical prompts — the daemon must run exactly what
  * the workflow would have handed it, never a second variant. Takes
  * already-fetched session/chat/repo/user docs so it works from either a query
  * or a mutation context (MutationCtx satisfies QueryCtx for the read-only

@@ -8,7 +8,7 @@ import { findWorkChat } from "../_sessions/ownerState";
 import { closeTaskReports, findOpenAsk } from "../_projects/reports";
 import { queueTaskRunMessage } from "../_sessions/execution";
 import { taskBranchName } from "../_git/branchNames";
-import { buildTaskRunPrompt } from "../_taskWorkflow/queries";
+import { buildTaskRunPrompt } from "../_agentTasks/workflowQueries";
 import { evaChatSettings, takesEvaSettings } from "../_projects/projectAccount";
 import { setTaskLastRunStartedAt } from "./runSummary";
 import { hasActiveTaskRun } from "./taskRunStatus";

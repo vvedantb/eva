@@ -6,7 +6,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { getInstallationOctokit } from "../githubAuth";
-import { buildEvaTaskUrl } from "../_taskWorkflow/urls";
+import { buildEvaTaskUrl } from "../_env/webAppUrl";
 import {
   ciPassedValidator,
   describeRepoEvent,

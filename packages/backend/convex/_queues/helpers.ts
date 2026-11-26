@@ -40,7 +40,7 @@ import {
   findUsageLimitHold,
   isHeldByUsageLimit,
   type UsageLimitHold,
-} from "../_taskWorkflow/usageLimitReset";
+} from "../_queues/usageLimitReset";
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
@@ -290,37 +290,6 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 }
 
 /**
- * Drops the user row MCP stored (`addMessage`) for a send that
- * `startExecute` queued instead of starting: the dequeue inserts its own row,
- * so keeping it would show the prompt twice. MCP picks send or queue from its
- * own read, so a burst of sends can all reach `startExecute`
- * before it sees the first turn. Their rows interleave with that turn's
- * placeholder, so this takes the newest matching user row since the last
- * finished reply, not just the newest row. Returns the row's attachments.
- */
-export async function dropComposerUserRow(
-  ctx: MutationCtx,
-  parentId: ChatQueueId,
-  content: string,
-): Promise<Id<"_storage">[] | undefined> {
-  const recent = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
-    .order("desc")
-    .take(20);
-  for (const message of recent) {
-    if (message.role === "assistant" && message.finishedAt !== undefined) {
-      return undefined;
-    }
-    if (message.role === "user" && message.content === content) {
-      await ctx.db.delete(message._id);
-      return message.attachmentStorageIds;
-    }
-  }
-  return undefined;
-}
-
-/**
  * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
  * usage on the credential `next` would run on. A message moved to another
  * provider or another account is not held — that is how switching either one
@@ -506,7 +475,7 @@ async function startNextQueuedChatMessage<
   // Wipe any stale streaming row before the new turn's placeholder appears —
   // a leftover row (old warm daemon, one-shot provider, crashed turn) would
   // render the finished turn's reply/activity under the new placeholder (see
-  // startExecute in _sessions/execution.ts). Every dequeue does this, because
+  // stageAndStartChatTurn in _sessions/execution.ts). Every dequeue does this, because
   // not every caller clears first: _sessions/sandbox.ts drains queued turns
   // straight after a resume, with no clear of its own.
   await clearStreamingActivity(ctx, config.streamingEntityId(id));

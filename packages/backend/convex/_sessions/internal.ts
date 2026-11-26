@@ -156,9 +156,9 @@ export const detachForeignMergedPr = internalMutation({
   },
 });
 
-// Soft UX lock for agent-driven browsing moved to
-// `internal.mcp.browserLock.setAgentBrowsingAt` (generalized to
-// sessions/tasks/projects); MCP browser_lock / browser_unlock call that now.
+// Soft UX lock for agent-driven browsing lives in
+// `internal.mcp.browserLock.setAgentBrowsingAt`; MCP browser_lock /
+// browser_unlock call it.
 
 /**
  * Applies an LLM-generated session title only while the placeholder remains.

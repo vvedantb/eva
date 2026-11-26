@@ -90,7 +90,7 @@ export const handleCompletion = authMutation({
   },
 });
 
-/** The `RUN_TIMEOUT_MS` backstop `startAgentJob` schedules for every job. */
+/** The `TURN_BACKSTOP_MS` backstop `startAgentJob` schedules for every job. */
 export const handleStale = internalMutation({
   args: {
     ownerId: agentJobOwnerIdValidator,

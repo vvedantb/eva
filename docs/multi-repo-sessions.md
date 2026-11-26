@@ -43,7 +43,7 @@ Group visibility: `teamId` is copied from the primary repo at create time, so te
 
 ## Startup sequence and the `sandboxSetupPending` gate
 
-`sessions.create` validates the selection (same pure rules as a saved group), inserts one `sessionRepos` row per linked repo — branch `eva/session-<id>` in every repo, base = each repo's `defaultBaseBranch` — sets `linkedRepoCount`, and starts `sessionSandboxStartupWorkflow` with `hasLinkedRepos`.
+`chats.start` validates the selection (same pure rules as a saved group), inserts one `sessionRepos` row per linked repo — branch `eva/session-<id>` in every repo, base = each repo's `defaultBaseBranch` — sets `linkedRepoCount`, and starts `sessionSandboxStartupWorkflow` with `hasLinkedRepos`.
 
 The workflow (`_sessions/workflow.ts`):
 

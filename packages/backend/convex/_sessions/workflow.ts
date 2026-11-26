@@ -23,7 +23,7 @@ import {
   daemonClaimResultValidator,
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { extractFirstJsonValue } from "../_shared/llmJson";
+import { parseFirstJsonValue } from "../_shared/llmJson";
 import { recordCompletionLog } from "../_agentJobs/completion";
 import {
   drainSessionChatQueues,
@@ -115,9 +115,7 @@ function parseDesignResult(
   text: string | null,
 ): z.infer<typeof designResultSchema> | null {
   if (!text) return null;
-  const raw = extractFirstJsonValue(text);
-  const parsed = designResultSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+  return parseFirstJsonValue(text, designResultSchema) ?? null;
 }
 
 /** Finalizes and clears an open synthetic-turn placeholder on chat hygiene paths. */
@@ -231,8 +229,8 @@ export const sessionExecuteWorkflow = workflow.define({
     });
     const sessionId = data.sessionId;
 
-    // Daemon-pull dispatch: the prompt is NOT pushed from here. `startExecute`
-    // has already staged it in `session.pendingTurn` and scheduled a daemon to
+    // Daemon-pull dispatch: the prompt is NOT pushed from here. The queue
+    // dequeue has already staged it in `session.pendingTurn` and scheduled a daemon to
     // claim it; the warm daemon pulls it via `claimPendingTurn` in ~one poll,
     // which is why we no longer probe/handoff/launch WITH a prompt here (doing
     // so would double-execute the turn). This workflow's remaining job is to
@@ -344,7 +342,7 @@ export const sessionExecuteWorkflow = workflow.define({
       sessionId,
     });
 
-    // A cancel can race with startExecute and wipe pendingTurn while a daemon
+    // A cancel can race with a send staging the turn and wipe pendingTurn while a daemon
     // workflow waits, so restage it before ensuring the warm process.
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.sessionWorkflow.ensurePendingTurn, {
@@ -731,7 +729,7 @@ export const clearStuckWorkingState = internalMutation({
 
 /**
  * Inserts an empty assistant message into the session for streaming updates.
- * Idempotent: the daemon-pull `startExecute` already inserts this placeholder
+ * Idempotent: the daemon-pull staging already inserts this placeholder
  * before starting the workflow, so if the last message is already an empty
  * assistant placeholder we skip, avoiding a duplicate.
  */
@@ -744,7 +742,7 @@ export const addAssistantPlaceholder = internalMutation({
     const chat = await ctx.db.get(args.chatId);
     if (!chat) throw new Error("Chat not found");
 
-    // Ignore system alerts (e.g. draft-PR failures) sitting on top — startExecute
+    // Ignore system alerts (e.g. draft-PR failures) sitting on top — the staging
     // may already have staged an empty placeholder underneath them.
     await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.chatId,
@@ -797,7 +795,7 @@ export const getSessionData = internalQuery({
       ctx.db.get(args.userId),
       // Input images attached to the triggering user message. Used to re-stage
       // pendingTurn on the queued/cancel-race path (immediate sends stage them
-      // directly in startExecute).
+      // directly when they stage the turn).
       ctx.db
         .query("messages")
         .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
@@ -1037,7 +1035,7 @@ export const saveResult = internalMutation({
 
 /**
  * Daemon-pull turn claim. The warm sandbox daemon polls this every ~50ms; when
- * `startExecute` has staged a prompt in `chat.pendingTurn`, this atomically
+ * a send has staged a prompt in `chat.pendingTurn`, this atomically
  * hands it over and clears the field so the same prompt is never claimed twice
  * (which would double-execute the turn). Returns `{ prompt: null }` when nothing
  * is pending. Also doubles as the interrupt-cancel channel: `cancelRequested`
@@ -1270,7 +1268,7 @@ export const requestStopBackgroundAgent = authMutation({
 });
 
 /**
- * Re-stages `pendingTurn` when a cancel raced with startExecute and wiped the
+ * Re-stages `pendingTurn` when a cancel raced with a send staging the turn and wiped the
  * prompt while the workflow is still waiting on sessionComplete. No-op when a
  * turn is already pending or the latest assistant message already finished.
  */

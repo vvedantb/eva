@@ -10,7 +10,7 @@ import {
 } from "../_validators/aiModels";
 import { aiModelValidator } from "../validators";
 import { PR_RECAP_COMMENT_MARKER, buildPrRecapCommentBody } from "./prComments";
-import { buildEvaReviewUrl } from "../_taskWorkflow/urls";
+import { buildEvaReviewUrl } from "../_env/webAppUrl";
 import type { ChangedFile } from "./mergeRisk";
 import { MAX_DIFF_BYTES } from "./prDiff";
 

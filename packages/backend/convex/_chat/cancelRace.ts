@@ -15,7 +15,7 @@ import {
 const CANCELLED_BY_USER = "Cancelled by the user";
 
 /**
- * Cancel vs concurrent startExecute: a newer staged prompt or a different
+ * Cancel vs a concurrent send staging a turn: a newer staged prompt or a different
  * tracked workflow must not be treated as the cancel's own turn.
  */
 export function detectCancelSupersession(input: {
@@ -72,7 +72,7 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
   clearsWorkflow: boolean;
   clearsPendingTurn: boolean;
 } | null> {
-  // Snapshot what this cancel owns. A concurrent startExecute may stage a
+  // Snapshot what this cancel owns. A concurrent send may stage a
   // newer pendingTurn / workflow while we run — must not clear those or mark
   // the newer assistant placeholder as cancelled.
   const workflowIdToCancel = await p.activeWorkflowId(p.entity);

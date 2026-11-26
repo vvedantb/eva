@@ -1,17 +1,16 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { findOpenTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
 /**
- * MCP's direct send picks send or queue from its own read, so a burst of
- * sends can all reach `startExecute` before it sees the first turn. Each one
- * used to start, so two turns ran at once. A send that lands behind a running
- * turn must queue instead, and its stored user row must go (the dequeue
- * inserts its own).
+ * MCP's send once picked send or queue from its own read, so a burst of sends
+ * could all start before any saw the first turn, and two turns ran at once.
+ * Now the server decides (`sendSessionChatMessage`): a send that lands behind
+ * a running turn queues, and stores no user row of its own.
  */
 
 const TIMEOUT_MS = 30_000;
@@ -109,72 +108,29 @@ describe("a send that lands behind a running turn", () => {
     async () => {
       const f = await baseFixture();
       const chatId = await busySessionChat(f, [
-        { role: "user", content: BURST_MESSAGE },
-      ]);
-
-      const outcome = await f.asUser.mutation(
-        api._sessions.execution.startExecute,
-        { chatId, message: BURST_MESSAGE, model: "claude:sonnet" },
-      );
-
-      expect(outcome).toBe("queued");
-      expect(await chatState(f.t, chatId)).toEqual({
-        queued: [BURST_MESSAGE],
-        userRows: [],
-      });
-      const turn = await f.t.run((ctx) => findOpenTurn(ctx, chatId));
-      expect(turn?.workflowId).toBe("wf-first-send");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "drops its row even when the first turn's placeholder is newer",
-    async () => {
-      // Both composer rows land, then the first send's turn inserts its
-      // placeholder, so the burst row is no longer the chat's newest row.
-      const f = await baseFixture();
-      const chatId = await busySessionChat(f, [
         { role: "user", content: "fix the header" },
-        { role: "user", content: BURST_MESSAGE },
         { role: "assistant", content: "" },
       ]);
 
-      await f.asUser.mutation(api._sessions.execution.startExecute, {
-        chatId,
-        message: BURST_MESSAGE,
-        model: "claude:sonnet",
-      });
+      const outcome = await f.t.mutation(
+        internal._sessions.execution.sendFromMcp,
+        {
+          clerkUserId: CLERK_ID,
+          chatId,
+          message: BURST_MESSAGE,
+          model: "claude:sonnet",
+          sentViaOrchestrator: true,
+        },
+      );
 
+      // Queued, with no user row yet: the dequeue writes it when it starts.
+      expect(outcome).toBe("queued");
       expect(await chatState(f.t, chatId)).toEqual({
         queued: [BURST_MESSAGE],
         userRows: ["fix the header"],
       });
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "keeps the same prompt from an earlier, finished turn",
-    async () => {
-      const f = await baseFixture();
-      const chatId = await busySessionChat(f, [
-        { role: "user", content: BURST_MESSAGE },
-        { role: "assistant", content: "Renamed.", finished: true },
-        { role: "user", content: "fix the header" },
-        { role: "assistant", content: "" },
-      ]);
-
-      await f.asUser.mutation(api._sessions.execution.startExecute, {
-        chatId,
-        message: BURST_MESSAGE,
-        model: "claude:sonnet",
-      });
-
-      expect(await chatState(f.t, chatId)).toEqual({
-        queued: [BURST_MESSAGE],
-        userRows: [BURST_MESSAGE, "fix the header"],
-      });
+      const turn = await f.t.run((ctx) => findOpenTurn(ctx, chatId));
+      expect(turn?.workflowId).toBe("wf-first-send");
     },
     TIMEOUT_MS,
   );

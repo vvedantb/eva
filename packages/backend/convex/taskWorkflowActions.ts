@@ -29,19 +29,19 @@ import {
   upsertRelatedPrsBlock,
   type SiblingPr,
 } from "./prBody";
-import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
+import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_env/webAppUrl";
 import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
   isTerminalDeploymentStatus,
   resolveStableDeploymentUrl,
   type DeploymentStatus,
-} from "./_taskWorkflow/deploymentHelpers";
+} from "./_deployment/deploymentHelpers";
 import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 import { errorMessage } from "@vvedantb/server";
 
 // Re-export URL builders for backwards compatibility
-export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
+export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_env/webAppUrl";
 
 function buildTaskPullRequestBody(params: {
   repoOwner: string;
