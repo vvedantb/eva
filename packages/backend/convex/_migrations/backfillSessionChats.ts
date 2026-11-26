@@ -26,8 +26,7 @@ const MAX_PAGES_PER_SESSION = 10_000;
 
 /**
  * Gives every existing session a Main chat and moves its transcript onto it,
- * closes pre-chat "session" turns that nothing can renew any more, and
- * empties the legacy `sessionDaemonStates` mirror.
+ * and closes pre-chat "session" turns that nothing can renew any more.
  *
  * Sessions run one at a time, in `_creationTime` order. Each session runs as
  * a chain of `backfillSessionStep` mutations that move a bounded page each,
@@ -36,8 +35,7 @@ const MAX_PAGES_PER_SESSION = 10_000;
  * the start: a migrated session costs a few indexed reads.
  *
  * Run once: `npx convex run _migrations/backfillSessionChats:backfillSessionChats`
- * Then drop `sessionDaemonStates` and the `sessions` members of the message
- * and turn validators.
+ * Then drop the `sessions` members of the message and turn validators.
  */
 export const backfillSessionChats = internalAction({
   args: { cursor: v.optional(v.number()) },
@@ -146,13 +144,6 @@ export const backfillSessionStep = internalMutation({
       await closeTurn(ctx, turn, "error", {
         error: "Closed by the session chats migration",
       });
-    }
-    const daemonState = await ctx.db
-      .query("sessionDaemonStates")
-      .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-      .collect();
-    for (const row of daemonState) {
-      await ctx.db.delete(row._id);
     }
     return true;
   },

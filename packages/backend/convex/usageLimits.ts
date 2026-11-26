@@ -12,7 +12,6 @@ import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
 import { listSelectableAccountsFor } from "./_userProviderAccounts/listing";
 import {
   findUsageLimitRow,
-  listLegacyUsageLimitRows,
   parseUsageLimitRowKey,
   presentReading,
   usageLimitRowIdentity,
@@ -166,12 +165,6 @@ export const report = authMutation({
       return null;
     }
     const existing = await findUsageLimitRow(ctx.db, key);
-    // Self-cleaning: the rows this key used to have one of per repo are dead
-    // weight the moment a credential-keyed row exists, and this is the only
-    // writer that knows the key is current.
-    for (const legacy of await listLegacyUsageLimitRows(ctx.db, key)) {
-      await ctx.db.delete(legacy._id);
-    }
     const reading = { ...observed, ...usageLimitRowIdentity(key) };
     if (existing) {
       if (isAuthoritativeReading(reading.completeness, snapshotComplete)) {

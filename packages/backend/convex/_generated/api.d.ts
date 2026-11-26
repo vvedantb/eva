@@ -193,6 +193,7 @@ import type * as _migrations_backfillNumIds from "../_migrations/backfillNumIds.
 import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/backfillQueuedMessageOrder.js";
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
+import type * as _migrations_clearLegacyFields from "../_migrations/clearLegacyFields.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_handTriageToEva from "../_migrations/handTriageToEva.js";
@@ -573,7 +574,6 @@ import type * as taskActivity from "../taskActivity.js";
 import type * as taskActivityCoalesce from "../taskActivityCoalesce.js";
 import type * as taskComments from "../taskComments.js";
 import type * as taskReactions from "../taskReactions.js";
-import type * as taskSandboxEvents from "../taskSandboxEvents.js";
 import type * as taskSubscribers from "../taskSubscribers.js";
 import type * as taskWorkflow from "../taskWorkflow.js";
 import type * as taskWorkflowActions from "../taskWorkflowActions.js";
@@ -790,6 +790,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillQueuedMessageOrder": typeof _migrations_backfillQueuedMessageOrder;
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
+  "_migrations/clearLegacyFields": typeof _migrations_clearLegacyFields;
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/handTriageToEva": typeof _migrations_handTriageToEva;
@@ -1170,7 +1171,6 @@ declare const fullApi: ApiFromModules<{
   taskActivityCoalesce: typeof taskActivityCoalesce;
   taskComments: typeof taskComments;
   taskReactions: typeof taskReactions;
-  taskSandboxEvents: typeof taskSandboxEvents;
   taskSubscribers: typeof taskSubscribers;
   taskWorkflow: typeof taskWorkflow;
   taskWorkflowActions: typeof taskWorkflowActions;

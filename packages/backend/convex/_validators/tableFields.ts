@@ -126,11 +126,7 @@ export const userFields = {
   experimentalFlags: v.optional(experimentalFlagsValidator),
   /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  /**
-   * @deprecated Pre-rebuild Manager Ave session pointer. Nothing reads or writes
-   * it; `retireOrchestratorSessions` clears it, then the field is dropped. Ave
-   * lives in `aveThreads` now.
-   */
+  /** @deprecated Pre-rebuild Manager Ave session pointer; cleared by clearLegacyFields. */
   orchestratorSessionId: v.optional(v.id("sessions")),
   /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
   grokBotWebhookUrl: v.optional(v.string()),
@@ -423,7 +419,7 @@ export const pendingTurnFields = {
 
 export const pendingTurnValidator = v.optional(v.object(pendingTurnFields));
 
-/** Small daemon-poll row kept separate from heavyweight session documents. */
+/** @deprecated Pre-chat daemon-poll mirror; rows deleted by clearLegacyFields. */
 export const sessionDaemonStateFields = {
   sessionId: v.id("sessions"),
   repoId: v.id("githubRepos"),
@@ -464,8 +460,9 @@ export const chatDaemonEntityFields = {
   // When the user last pressed Stop. Messages queued before it stay queued
   // until the user presses Steer (see `nextRunnableQueuedMessage`).
   queueHeldAt: v.optional(v.number()),
-  // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
-  // for project and task chat daemons.
+  // Level-triggered: the usage chip asks the live Claude daemon to report plan
+  // windows. claimPendingTurn returns it without clearing; the refresh action
+  // clears it when it stops waiting.
   usageRefreshRequestedAt: v.optional(v.number()),
   // Self-expiring fence set by prewarm around a daemon kill. See
   // `_chat/daemonClaimPause.ts`: while it is in the future claimPendingTurn
@@ -648,6 +645,7 @@ export const taskRunValidator = v.union(
     at: v.number(),
     jobId: v.id("_scheduled_functions"),
   }),
+  /** @deprecated Behaves like `scheduled`; cleared by clearLegacyFields. */
   v.object({
     state: v.literal("retry_pending"),
     at: v.number(),
@@ -718,7 +716,7 @@ export const agentTaskFields = {
   lastTurnFinishedAt: v.optional(v.number()),
   /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
   lastPersonMessageAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
@@ -871,9 +869,9 @@ export const sessionFields = {
   // background heal so it never relaunches daemons the lifecycle is about to
   // launch itself (double launch orphaned children and truncated logs).
   sandboxServicesPending: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild Manager Ave flag; cleared by migration, then dropped. */
+  /** @deprecated Pre-rebuild Manager Ave flag; cleared by clearLegacyFields. */
   isOrchestrator: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this session for completion notifications. Set
   // implicitly when Ave touches this session (send/create) or via watch_agent;
@@ -1227,7 +1225,7 @@ export const projectFields = {
   lastTurnFinishedAt: v.optional(v.number()),
   /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
   lastPersonMessageAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
@@ -1582,7 +1580,7 @@ export const queuedMessageFields = {
   interactionMode: v.optional(interactionModeValidator),
   // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by migration. */
+  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by clearLegacyFields. */
   orchestratorNotification: v.optional(v.boolean()),
   // Same idea for a message the orchestrator sent to a BUSY child: without it
   // the "via orchestrator" badge was lost on exactly the messages that had to
@@ -1600,6 +1598,7 @@ export const queuedMessageFields = {
   taskRun: v.optional(taskRunMarkerValidator),
 };
 
+/** @deprecated Never written; rows deleted by clearLegacyFields. */
 export const taskSandboxEventFields = {
   taskId: v.id("agentTasks"),
   event: taskSandboxEventValidator,
@@ -1739,10 +1738,9 @@ export const appSettingsFields = {
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
   /**
-   * Settings of the earlier idle-stop sweep (2026-10-05), kept so rows saved
-   * before the sweeps were unified keep their behaviour. Read only as a
-   * fallback when `sandboxIdlePauseMode` is unset (`resolveIdleThresholds`);
-   * never written any more.
+   * @deprecated Settings of the earlier idle-stop sweep (2026-10-05). Nothing
+   * reads them; cleared by clearLegacyFields, which copies them into the
+   * `sandboxIdlePause*` fields first.
    */
   sandboxIdleStopEnabled: v.optional(v.boolean()),
   sandboxIdleStopMinutes: v.optional(v.number()),
@@ -2130,11 +2128,8 @@ export const backgroundProcessFields = {
  */
 export const agentUsageLimitFields = {
   /**
-   * Legacy. Readings used to be keyed per repo, and the rows written then still
-   * name the repo they were reported on; new rows never set it. Nothing reads
-   * them — plan headroom is a fact about the credential, so a per-repo row was
-   * the same number filed under the wrong key — and they age out of the 24h
-   * freshness window on their own, so `report` just deletes any it walks past.
+   * @deprecated Readings used to be keyed per repo; new rows never set it.
+   * clearLegacyFields deletes the rows that still carry it.
    */
   repoId: v.optional(v.id("githubRepos")),
   provider: usageLimitProviderValidator,
@@ -2507,5 +2502,6 @@ export const routedMessageFields = {
   context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  /** @deprecated Never written; cleared by clearLegacyFields. */
   mirroredMessageId: v.optional(v.id("messages")),
 };

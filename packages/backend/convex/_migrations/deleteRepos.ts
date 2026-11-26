@@ -136,14 +136,6 @@ export const deleteRepoStep = internalMutation({
           .withIndex("by_repo", (q) => q.eq("repoId", repoId))
           .collect();
         for (const session of sessions) {
-          const daemonState = await ctx.db
-            .query("sessionDaemonStates")
-            .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-            .unique();
-          if (daemonState) {
-            await ctx.db.delete(daemonState._id);
-            deleted++;
-          }
           // Chat rows hang off each chat id; pre-chat sessions keep theirs on
           // the session id.
           const chats = await listSessionChats(ctx.db, session._id);

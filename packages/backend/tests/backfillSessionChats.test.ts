@@ -50,11 +50,6 @@ async function fixture() {
         userId,
         createdAt: 1,
       });
-      await ctx.db.insert("sessionDaemonStates", {
-        sessionId,
-        repoId,
-        userId,
-      });
       return sessionId;
     };
     const lightSessionId = await insertSession("Light", 2);
@@ -84,16 +79,11 @@ async function fixture() {
         .query("queuedMessages")
         .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId))
         .collect();
-      const daemonStates = await ctx.db
-        .query("sessionDaemonStates")
-        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-        .collect();
       return {
         chats: chats.length,
         legacyMessages: legacyMessages.length,
         chatMessages: chatMessages.length,
         legacyQueued: legacyQueued.length,
-        daemonStates: daemonStates.length,
       };
     });
 
@@ -118,7 +108,6 @@ describe("backfillSessionChats", () => {
       expect(state.chats).toBe(1);
       expect(state.chatMessages).toBeGreaterThan(0);
       expect(state.legacyMessages).toBeGreaterThan(0);
-      expect(state.daemonStates).toBe(1);
     },
     TIMEOUT_MS,
   );
@@ -143,7 +132,6 @@ describe("backfillSessionChats", () => {
           legacyMessages: 0,
           chatMessages: messages,
           legacyQueued: 0,
-          daemonStates: 0,
         });
       }
 
