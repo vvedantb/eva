@@ -13,7 +13,6 @@ import {
 import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
-import { deleteDraftRow } from "./_agentTasks/drafts";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
 
 /**
@@ -347,44 +346,4 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-]);
-
-/**
- * Tasks and projects are archived, never deleted: copies `deletedAt` to
- * `archivedAt` and clears it. A deleted project's tasks were detached into
- * quick tasks then and stay quick tasks. A deleted draft is deleted: drafts
- * are never archived.
- *
- *   npx convex run --prod dataMigrations:archiveDeletedEntities
- */
-export const archiveDeletedAgentTasks = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (ctx, task) => {
-    if (task.deletedAt === undefined) return;
-    if (task.status === "draft") {
-      await deleteDraftRow(ctx, task._id);
-      return;
-    }
-    return {
-      archivedAt: task.archivedAt ?? task.deletedAt,
-      deletedAt: undefined,
-    };
-  },
-});
-
-export const archiveDeletedProjects = dataMigrations.define({
-  table: "projects",
-  migrateOne: (_ctx, project) => {
-    if (project.deletedAt === undefined) return;
-    return {
-      archivedAt: project.archivedAt ?? project.deletedAt,
-      deletedAt: undefined,
-    };
-  },
-});
-
-/** `npx convex run --prod dataMigrations:archiveDeletedEntities` */
-export const archiveDeletedEntities = dataMigrations.runner([
-  internal.dataMigrations.archiveDeletedAgentTasks,
-  internal.dataMigrations.archiveDeletedProjects,
 ]);

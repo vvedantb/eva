@@ -109,8 +109,6 @@ const schema = defineSchema({
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
-    // Legacy: copied to archivedAt by archiveDeletedEntities; drop after it runs.
-    .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_repo_and_archived", ["repoId", "archivedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
@@ -119,15 +117,6 @@ const schema = defineSchema({
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_status", ["repoId", "status"])
-    // Legacy: copied to archivedAt by archiveDeletedEntities; drop after it runs.
-    .index("by_repo_status_and_deleted", ["repoId", "status", "deletedAt"])
-    // Legacy: copied to archivedAt by archiveDeletedEntities; drop after it runs.
-    .index("by_repo_status_deleted_and_creator", [
-      "repoId",
-      "status",
-      "deletedAt",
-      "createdBy",
-    ])
     .index("by_repo_status_and_archived", ["repoId", "status", "archivedAt"])
     .index("by_repo_status_archived_and_creator", [
       "repoId",
