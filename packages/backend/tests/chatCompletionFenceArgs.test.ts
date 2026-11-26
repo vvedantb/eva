@@ -51,60 +51,6 @@ async function createFixture() {
   return { t, ...ids };
 }
 
-/**
- * A quick-task run's completion carries its lease. A superseded lease is
- * dropped before the run is marked finalizing, so an old callback cannot end
- * a newer run's turn.
- */
-test(
-  "a run completion from a superseded lease is ignored",
-  async () => {
-    const f = await createFixture();
-    const taskId = f.taskId;
-    const { runId, turnId } = await f.t.run(async (ctx) => {
-      await ctx.db.patch(taskId, {
-        run: { state: "running", workflowId: "run-workflow" },
-      });
-      const runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId: f.repoId,
-        status: "running",
-        logs: [],
-        startedAt: Date.now(),
-      });
-      const turnId = await openTurn(ctx, {
-        entityId: runId,
-        streamingEntityId: `task-run-${runId}`,
-        model: MODEL,
-        repoId: f.repoId,
-      });
-      const turn = await ctx.db.get(turnId);
-      if (turn) await acquireTurnLease(ctx, turn, "running");
-      return { runId, turnId };
-    });
-
-    await expect(
-      f.t
-        .withIdentity({ subject: CLERK_ID })
-        .mutation(api.taskWorkflow.handleCompletion, {
-          taskId,
-          runId,
-          ...reply,
-          turnId,
-          leaseGeneration: 0,
-        }),
-    ).resolves.toBeNull();
-
-    const after = await f.t.run(async (ctx) => ({
-      run: await ctx.db.get(runId),
-      turn: await ctx.db.get(turnId),
-    }));
-    expect(after.run?.finalizingAt).toBeUndefined();
-    expect(after.turn?.state).toBe("running");
-  },
-  TIMEOUT_MS,
-);
-
 /** One-shot agents open their turn already leased and close it on completion. */
 test(
   "a one-shot agent turn opens leased and closes on a current completion",

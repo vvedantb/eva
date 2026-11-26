@@ -221,13 +221,13 @@ export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
 ) => R;
 
 /**
- * A turn owner that is not a chat: a quick-task run or a one-shot agent. It
+ * A turn owner that is not a chat: a one-shot agent (a task's run is a chat
+ * turn). It
  * has no placeholder, queue or synthetic turn, so it does not fit
  * `ChatSurfaceAdapter`. `interview` works on a chat row and is told apart from
  * its chat turns by the turn's lane.
  */
 export type AgentTurnOwner =
-  | { kind: "run"; id: Id<"agentRuns"> }
   | { kind: "automation"; id: Id<"automationRuns"> }
   | { kind: "doc"; id: Id<"docs"> }
   | { kind: "evaluation"; id: Id<"evaluationReports"> }
@@ -253,8 +253,6 @@ function laneFreeAgentOwner(
   db: DatabaseReader,
   entityId: string,
 ): AgentTurnOwner | null {
-  const runId = db.normalizeId("agentRuns", entityId);
-  if (runId) return { kind: "run", id: runId };
   const automationRunId = db.normalizeId("automationRuns", entityId);
   if (automationRunId) return { kind: "automation", id: automationRunId };
   const docId = db.normalizeId("docs", entityId);

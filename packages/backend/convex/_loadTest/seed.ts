@@ -29,7 +29,6 @@ export const SEED_UNITS = {
   docs: 10,
   automations: 3,
   focalMessages: 40,
-  focalRuns: 10,
   focalTaskTimeline: 10,
   focalDocComments: 10,
   focalSessionPrs: 5,
@@ -49,7 +48,6 @@ const DOCS_PER_UNIT: Record<SeedChunkKind, number> = {
   // One document, but about 13 KB with its activity log: 4 keeps a chunk of
   // 250 messages near 3 MiB, under the 16 MiB a mutation may write.
   focalMessages: 4,
-  focalRuns: 1,
   focalTaskTimeline: 2,
   focalDocComments: 1,
   focalSessionPrs: 1,
@@ -59,7 +57,7 @@ const DOCS_PER_UNIT: Record<SeedChunkKind, number> = {
 
 const SEED_KINDS: ReadonlyArray<SeedChunkKind> = [
   "teammates", "shellRepos", "sessions", "projects", "quickTasks", "docs",
-  "automations", "focalMessages", "focalRuns", "focalTaskTimeline",
+  "automations", "focalMessages", "focalTaskTimeline",
   "focalDocComments", "focalSessionPrs", "focalAutomationRuns", "routedThreads",
 ];
 
@@ -72,7 +70,6 @@ export const seedChunkKindValidator = v.union(
   v.literal("docs"),
   v.literal("automations"),
   v.literal("focalMessages"),
-  v.literal("focalRuns"),
   v.literal("focalTaskTimeline"),
   v.literal("focalDocComments"),
   v.literal("focalSessionPrs"),
@@ -395,16 +392,6 @@ async function insertTaskWithChildren(
     lastRunStartedAt: createdAt + DAY,
   });
   if (status !== "draft") {
-    for (let r = 0; r < 2; r++) {
-      await db.insert("agentRuns", {
-        taskId,
-        status: r === 0 && i % 4 === 0 ? "error" : "success",
-        logs: [
-          { timestamp: createdAt, level: "info", message: filler(i + r, 200) },
-        ],
-        startedAt: createdAt + r * 3600_000,
-      });
-    }
     await db.insert("chatReads", {
       userId,
       parentId: taskId,
@@ -661,17 +648,6 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
             ),
           }
         : {}),
-    });
-  },
-
-  focalRuns: async (db, refs, i, total) => {
-    await db.insert("agentRuns", {
-      taskId: refs.taskId,
-      status: "success",
-      logs: [
-        { timestamp: ago(refs.now, i, total), level: "info", message: filler(i, 300) },
-      ],
-      startedAt: ago(refs.now, i, total),
     });
   },
 

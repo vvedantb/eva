@@ -1,8 +1,8 @@
 import type { Id } from "../_generated/dataModel";
 
 /**
- * Streaming-row ids of the agents that are not chats (a task run streams
- * into its chat, `_taskWorkflow/runChatTurn.ts`). A durable turn stores its
+ * Streaming-row ids of the agents that are not chats (a task run is a chat
+ * turn, `_agentTasks/taskRunTurn.ts`). A durable turn stores its
  * own `streamingEntityId`; these prefixes let the old heartbeat gate map a row
  * back to its turn owner. Doc interview, test generation, evaluation and
  * project interview stream under the bare row id.

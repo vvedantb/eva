@@ -504,17 +504,12 @@ describe("a stale session chat turn torn down by the backstop", () => {
         rawInput: "pick",
         updatedAt: now,
       });
-      const runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        status: "running",
-        logs: [],
-      });
       const visit = {
         chat: (adapter: { kind: string }) => adapter.kind,
         agent: (owner: { kind: string }) => owner.kind,
       };
       return [
-        ...[f.chatId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
+        ...[f.chatId, taskId, projectId, "not-an-id"].map((entityId) =>
           turnAdapterForEntity(ctx.db, { entityId }, visit),
         ),
         turnAdapterForEntity(
@@ -535,7 +530,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
       "sessionChat",
       null,
       null,
-      "run",
       null,
       "interview",
       null,
@@ -543,96 +537,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
   });
 });
 
-/**
- * Quick-task runs own a durable turn: the lease fences their heartbeats, and
- * the reconciler stops a stalled run through `cleanUpStaleRun`.
- */
-describe("quick-task run as a turn owner", () => {
-  async function createRunTurnFixture() {
-    const t = convexTest(schema, modules);
-    const ids = await t.run(async (ctx) => {
-      const userId = await ctx.db.insert("users", {});
-      const repoId = await ctx.db.insert("githubRepos", {
-        owner: "eva",
-        name: "run-turn-test",
-        installationId: 1,
-      });
-      const now = Date.now();
-      const taskId = await ctx.db.insert("agentTasks", {
-        repoId,
-        title: "Run turn",
-        status: "in_progress",
-        createdAt: now,
-        updatedAt: now,
-        createdBy: userId,
-      });
-      const runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId,
-        status: "running",
-        logs: [],
-        startedAt: Date.now(),
-      });
-      const turnId = await openTurn(ctx, {
-        entityId: runId,
-        streamingEntityId: String(runId),
-        model: "claude:sonnet",
-        repoId,
-      });
-      const turn = await ctx.db.get(turnId);
-      if (turn) await acquireTurnLease(ctx, turn, "running");
-      return { taskId, runId, turnId };
-    });
-    return { t, ...ids };
-  }
-
-  test("a run turn renews and fences like any other turn", async () => {
-    const { t, runId, turnId } = await createRunTurnFixture();
-    const verdicts = await t.run(async (ctx) => ({
-      current: await renewTurnLease(ctx, {
-        turnId,
-        leaseGeneration: 1,
-        streamingEntityId: String(runId),
-      }),
-      old: await renewTurnLease(ctx, { turnId, leaseGeneration: 0 }),
-    }));
-    expect(verdicts.current.status).toBe("renewed");
-    expect(verdicts.old).toEqual({ status: "terminal", reason: "superseded" });
-  });
-
-  test("an expired run turn stops the run with the old watchdog text", async () => {
-    vi.useFakeTimers();
-    try {
-      const { t, runId, turnId, taskId } = await createRunTurnFixture();
-      await t.run(async (ctx) => {
-        await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
-      });
-      await t.mutation(internal.turns.finalizeExpired, {
-        turnId,
-        cause: "process_dead",
-      });
-      const after = await t.run(async (ctx) => ({
-        turn: await ctx.db.get(turnId),
-        run: await ctx.db.get(runId),
-        task: await ctx.db.get(taskId),
-      }));
-      expect(after.turn?.open).toBe(false);
-      expect(after.turn?.state).toBe("error");
-      expect(after.run?.status).toBe("error");
-      expect(after.run?.exitReason).toBe("watchdog_killed");
-      expect(after.run?.error).toMatch(/^Run killed by watchdog: no heartbeat/);
-      expect(after.task?.status).toBe("todo");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
-/**
- * Before parallel chats a session's chat turn was keyed by the session id. No
- * surface owns that id any more, so the watchdog must still close the turn, or
- * it stays open forever and fills `listExpired`'s batch.
- */
 describe("expired turns with no owning surface", () => {
   test("a lane-less turn keyed by a session id is closed", async () => {
     vi.useFakeTimers();

@@ -24,7 +24,6 @@ import {
   tearDownStaleEvaluationWorkflow,
 } from "./workflowWatchdog";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
-import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
 import {
@@ -39,7 +38,6 @@ import {
   bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
-  findOpenRunTurnForChat,
   graceExpiredTurnLease,
   listOpenSessionTurns,
   openTurn,
@@ -84,10 +82,7 @@ async function readChatStatus(
 ): Promise<ChatTurnStatus | null> {
   const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
   if (legacyExecuting === null) return null;
-  const chatId = ctx.db.normalizeId("sessionChats", entityId);
-  const turn =
-    (await findOpenTurn(ctx, entityId)) ??
-    (chatId ? await findOpenRunTurnForChat(ctx, chatId) : null);
+  const turn = await findOpenTurn(ctx, entityId);
   if (!turn) return legacyExecuting ? { source: "legacy" } : null;
   return {
     source: "durable",
@@ -490,16 +485,6 @@ async function finalizeExpiredAgentTurn(
   );
   const workflowId = turn.workflowId;
   switch (owner.kind) {
-    case "run":
-      await finalizeStalledRun(ctx, owner.id, {
-        ...stalledRunStop({
-          state: turn.state,
-          hasSandbox: turn.sandboxId !== undefined,
-          staleSeconds,
-        }),
-        sandboxId: turn.sandboxId,
-      });
-      break;
     case "automation":
       if (workflowId !== undefined) {
         await tearDownStaleAutomationRun(

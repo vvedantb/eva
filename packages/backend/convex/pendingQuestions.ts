@@ -126,8 +126,6 @@ async function repoIdForQuestionEntity(
   if (taskId) return (await db.get(taskId))?.repoId;
   const projectId = db.normalizeId("projects", entityId);
   if (projectId) return (await db.get(projectId))?.repoId;
-  const runId = db.normalizeId("agentRuns", entityId);
-  if (runId) return (await db.get(runId))?.repoId;
   const docId = db.normalizeId("docs", entityId);
   if (docId) return (await db.get(docId))?.repoId;
   const automationRunId = db.normalizeId("automationRuns", entityId);

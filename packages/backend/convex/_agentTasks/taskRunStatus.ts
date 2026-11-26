@@ -9,15 +9,11 @@ import { findMainChat } from "../_sessionChats/helpers";
  * and project tasks alike: what the card, the inbox, the scheduler and the
  * Run button read, and the status change when a turn opens or ends. Reads,
  * plus those patches and scheduler calls, so `closeTurn` can call it.
- *
- * A task that ran before runs became chat turns has no task-mode turn yet;
- * its outcome is read off its newest `agentRuns` row instead
- * (`lastTaskRunOutcome`), so a failed old run still halts it.
  */
 
-/** How a task's latest run ended, from a turn or (old tasks) a run row. */
+/** How a task's latest run (its newest closed task-mode turn) ended. */
 export type TaskRunOutcome = {
-  /** Stable id for wake-up keys: the turn's, or the old run's. */
+  /** Stable id for wake-up keys: the turn's. */
   id: string;
   state: "done" | "error" | "cancelled";
   startedAt: number;
@@ -85,39 +81,18 @@ async function turnOutcome(
 
 /**
  * How the task's latest run ended, or null before its first. Its newest
- * closed task-mode turn; for a task with none yet, its newest settled run.
+ * closed task-mode turn.
  */
 export async function lastTaskRunOutcome(
   db: DatabaseReader,
   task: Doc<"agentTasks">,
 ): Promise<TaskRunOutcome | null> {
   const session = await findWorkSession(db, { kind: "task", task });
-  if (session) {
-    for await (const turn of closedReplyTurns(db, session._id)) {
-      if (turn.taskRun !== undefined) return await turnOutcome(db, turn);
-    }
+  if (!session) return null;
+  for await (const turn of closedReplyTurns(db, session._id)) {
+    if (turn.taskRun !== undefined) return await turnOutcome(db, turn);
   }
-  const run = await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", task._id))
-    .order("desc")
-    .first();
-  if (!run || run.status === "queued" || run.status === "running") return null;
-  const startedAt = run.startedAt ?? run._creationTime;
-  return {
-    id: String(run._id),
-    state:
-      run.status === "success"
-        ? "done"
-        : run.status === "cancelled"
-          ? "cancelled"
-          : "error",
-    startedAt,
-    finishedAt: run.finishedAt ?? startedAt,
-    error: run.error,
-    usageLimited: run.errorType === "rate_limit",
-    limitResetAt: run.limitResetAt,
-  };
+  return null;
 }
 
 /**
@@ -162,26 +137,6 @@ export async function listFinishedTaskRuns(
     });
   }
   return runs.reverse();
-}
-
-/** Whether the task has ever had a task-mode turn (else it is read off old runs). */
-export async function hasTaskRunTurn(
-  db: DatabaseReader,
-  task: Doc<"agentTasks">,
-): Promise<boolean> {
-  const session = await findWorkSession(db, { kind: "task", task });
-  if (!session) return false;
-  for (const open of [true, false]) {
-    const turns = db
-      .query("turns")
-      .withIndex("by_session_open", (q) =>
-        q.eq("sessionId", session._id).eq("open", open),
-      );
-    for await (const turn of turns) {
-      if (turn.taskRun !== undefined) return true;
-    }
-  }
-  return false;
 }
 
 /** The task's open or queued task-mode run, if any. */

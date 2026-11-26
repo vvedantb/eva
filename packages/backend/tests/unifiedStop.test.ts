@@ -59,16 +59,6 @@ async function fixture() {
       updatedAt: 0,
       createdBy: userId,
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      repoId,
-      status: "running",
-      logs: [],
-      startedAt: Date.now(),
-    });
-    await ctx.db.patch(taskId, {
-      run: { state: "running", workflowId: "wf_task_run", runId },
-    });
     // A quick task that has never needed a session.
     const quickTaskId = await ctx.db.insert("agentTasks", {
       title: "Bump deps",
@@ -84,7 +74,6 @@ async function fixture() {
       projectId,
       sessionId,
       taskId,
-      runId,
       quickTaskId,
     };
   });
@@ -108,10 +97,12 @@ describe("stopWorkSandbox", () => {
           status: "active",
           sandboxId: "sbx_task",
         });
+        // Its run is a task-mode turn in its own chat.
         await ctx.db.insert("turns", {
-          entityId: f.runId,
+          entityId: taskSessionId,
           sessionId: taskSessionId,
-          streamingEntityId: String(f.runId),
+          streamingEntityId: String(taskSessionId),
+          taskRun: { mode: "implementation" },
           state: "running",
           open: true,
           turnStartedAt: Date.now(),

@@ -104,7 +104,7 @@ export function QuickTasksListView({
   const startExecution = useMutation(api.agentTasks.startExecution);
 
   const taskIds = externalTasks.map((t) => t._id);
-  const errorTaskIds = useQuery(api.agentRuns.getTaskIdsWithLatestRunError, {
+  const errorTaskIds = useQuery(api.agentTasks.getTaskIdsWithFailedRun, {
     repoId,
     taskIds,
   });

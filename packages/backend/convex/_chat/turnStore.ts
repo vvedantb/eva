@@ -86,27 +86,6 @@ export async function findOpenTurn(
 }
 
 /**
- * The open task run streaming into a chat (`_taskWorkflow/runChatTurn.ts`).
- * A run's turn is keyed on the run, so the chat's own lookup misses it; it is
- * filed under the chat's session with the chat as its stream.
- */
-export async function findOpenRunTurnForChat(
-  ctx: QueryCtx,
-  chatId: Id<"sessionChats">,
-): Promise<Doc<"turns"> | null> {
-  const chat = await ctx.db.get(chatId);
-  if (!chat) return null;
-  const turns = await listOpenSessionTurns(ctx, chat.sessionId);
-  return (
-    turns.find(
-      (turn) =>
-        turn.streamingEntityId === String(chatId) &&
-        ctx.db.normalizeId("agentRuns", turn.entityId) !== null,
-    ) ?? null
-  );
-}
-
-/**
  * The entity's latest no-lane turn: the open one, else the last closed one.
  * Follow-up rows (alerts, retries, continuations) read it to find their thread.
  */
@@ -487,39 +466,20 @@ export async function closeTurn(
   if (current.taskRun !== undefined) {
     await onTaskRunTurnClosed(ctx, current, state);
   }
-  // The unread clock read by `chatReads.ts`: chat turns, and task runs,
-  // which reply in the chat they stream into. One-shot lanes (summary,
-  // interview) are not replies. `stampChatActivity` stamps the chat, its
-  // session and the session's task or project, and skips a chat that lease
-  // sweeps found hard-deleted.
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  // The unread clock read by `chatReads.ts`: chat turns, a task's runs
+  // included. One-shot lanes (summary, interview) are not replies.
+  // `stampChatActivity` stamps the chat, its session and the session's task
+  // or project, and skips a chat that lease sweeps found hard-deleted.
   const chatParentId =
-    turn.lane === undefined
-      ? chatParentIdOf(
-          ctx.db,
-          runId ? turn.streamingEntityId : turn.entityId,
-        )
-      : null;
+    turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
   if (chatParentId) {
     await stampChatActivity(ctx, chatParentId, {
       lastTurnFinishedAt: finishedAt,
     });
   }
-  const session =
-    turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
-  if (session && runId) {
-    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
-    // offer them their queued messages now. Scheduled, since the queue
-    // module imports this one.
-    await ctx.scheduler.runAfter(
-      0,
-      internal._queues.helpers.drainQueueQuietly,
-      { parentId: session._id },
-    );
-  }
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished": a chat turn or a run counts for the
-  // session that holds the sandbox.
+  // sweep learns "the agent finished": any turn counts for the session that
+  // holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
     turn.sessionId ?? turn.entityId,

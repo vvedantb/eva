@@ -8,7 +8,6 @@ import {
   assertTaskNotArchived,
   authMutation,
   hasTaskAccess,
-  hasActiveRun,
 } from "../functions";
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
@@ -38,10 +37,6 @@ export async function startTaskExecution(
   const repo = await ctx.db.get(task.repoId);
   if (!repo) {
     throw new Error("Repository not found");
-  }
-  // A project run started before runs became chat turns may still be going.
-  if (await hasActiveRun(ctx.db, taskId)) {
-    throw new Error("Task already has an active execution");
   }
   // A pending schedule is replaced by this run.
   await cancelTaskRunSchedule(ctx, taskId);
@@ -84,10 +79,7 @@ export const scheduleExecution = authMutation({
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
-    const running =
-      (await hasActiveTaskRun(ctx.db, task)) ||
-      (await hasActiveRun(ctx.db, args.id));
-    if (running) {
+    if (await hasActiveTaskRun(ctx.db, task)) {
       throw new Error("Task already has an active execution");
     }
     if (args.scheduledAt <= Date.now()) {

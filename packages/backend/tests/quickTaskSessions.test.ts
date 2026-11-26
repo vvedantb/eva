@@ -1,10 +1,9 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { api, internal } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
-import { openTurn } from "../convex/_chat/turnStore";
-import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
+import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -129,81 +128,6 @@ describe("quick tasks on sessions", () => {
   );
 
   test(
-    "a task run moves its session through the sandbox lifecycle, never running a VM behind a closed row",
-    async () => {
-      const f = await fixture();
-      const { sessionId } = await f.asUser.mutation(api.sessions.ensureOwned, {
-        owner: { kind: "task", taskId: f.taskId },
-      });
-      const status = async () =>
-        (await f.t.run((ctx) => ctx.db.get(sessionId)))?.status;
-      const newRun = () =>
-        f.t.run((ctx) =>
-          ctx.db.insert("agentRuns", {
-            taskId: f.taskId,
-            status: "running",
-            logs: [],
-          }),
-        );
-
-      // Cancelled between claim and attach: the claimed start fails at once
-      // instead of sitting in `starting`.
-      const cancelledRunId = await newRun();
-      await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
-        sessionId,
-        runId: cancelledRunId,
-      });
-      expect(await status()).toBe("starting");
-      await f.t.run(async (ctx) => {
-        const run = await ctx.db.get(cancelledRunId);
-        if (!run) throw new Error("run missing");
-        await abandonTaskRunSandbox(ctx, sessionId, run);
-      });
-      expect(await status()).toBe("closed");
-
-      const claim = await f.t.mutation(
-        internal.sessions.claimSandboxForTaskRun,
-        { sessionId, runId: await newRun() },
-      );
-      if (!claim) throw new Error("claim refused");
-      expect(claim.wasActive).toBe(false);
-      expect(await status()).toBe("starting");
-      // A start in flight refuses a second claim: no unrecorded VM.
-      expect(
-        await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
-          sessionId,
-          runId: await newRun(),
-        }),
-      ).toBeNull();
-
-      // A stale attempt cannot attach.
-      expect(
-        await f.t.mutation(internal.sessions.attachTaskRunSandbox, {
-          sessionId,
-          sandboxId: "sbx-run",
-          attempt: claim.attempt - 1,
-        }),
-      ).toBe(false);
-      expect(
-        await f.t.mutation(internal.sessions.attachTaskRunSandbox, {
-          sessionId,
-          sandboxId: "sbx-run",
-          attempt: claim.attempt,
-        }),
-      ).toBe(true);
-      expect(await status()).toBe("active");
-
-      await f.t.mutation(internal.sessions.finishTaskRunSandboxMutation, {
-        sessionId,
-        sandboxId: "sbx-run",
-        keepActive: claim.wasActive,
-      });
-      expect(await status()).toBe("stopping");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "a chat message sent while the task's run is open queues behind the run",
     async () => {
       const f = await fixture();
@@ -211,20 +135,17 @@ describe("quick tasks on sessions", () => {
         api.sessions.ensureOwned,
         { owner: { kind: "task", taskId: f.taskId } },
       );
-      await f.t.run(async (ctx) => {
-        const runId = await ctx.db.insert("agentRuns", {
-          taskId: f.taskId,
-          status: "running",
-          logs: [],
-        });
-        await openTurn(ctx, {
-          entityId: runId,
+      // The task's run is a task-mode turn in its chat.
+      await f.t.run((ctx) =>
+        openSessionChatTurn(ctx, {
+          chatId,
           sessionId,
           streamingEntityId: String(chatId),
           model: DEFAULT_AI_MODEL,
           repoId: f.repoId,
-        });
-      });
+          taskRun: { mode: "implementation" },
+        }),
+      );
 
       const delivered = await f.asUser.mutation(
         api.sessionWorkflow.startExecute,

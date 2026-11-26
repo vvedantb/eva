@@ -8,7 +8,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   authQuery,
   getProjectWithAccess,
-  hasActiveRun,
   listProjectTasksForUser,
   normalizeIdOrThrow,
 } from "../functions";
@@ -82,19 +81,6 @@ export async function askFiledDuring(
     .withIndex("by_task_and_state", (q) => q.eq("taskId", taskId))
     .collect();
   return rows.some((row) => row.kind === "ask" && row.createdAt >= since);
-}
-
-/**
- * True when the task's run ended on an ask it filed during that run: the
- * open ask is newer than the run's start. An older open ask (a person
- * restarted the task without answering) does not count.
- */
-export async function runEndedOnAsk(
-  db: DatabaseReader,
-  run: Pick<Doc<"agentRuns">, "taskId" | "startedAt">,
-): Promise<boolean> {
-  const ask = await findOpenAsk(db, run.taskId);
-  return ask !== null && ask.createdAt >= (run.startedAt ?? 0);
 }
 
 /**
@@ -190,8 +176,6 @@ async function canResumeAskingTask(
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
   if (isEntityArchived(task) || task.status === "cancelled") return false;
-  // A run started before runs became chat turns may still be going.
-  if (await hasActiveRun(ctx.db, task._id)) return false;
   return !(await hasActiveTaskRun(ctx.db, task));
 }
 

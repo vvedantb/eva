@@ -91,7 +91,6 @@ export function TaskDetailInline({
     isArchived,
     hasRuns,
     latestPrUrl,
-    latestPrError,
     deploymentStatus,
     executionError,
     showResolveConfirm,
@@ -132,7 +131,7 @@ export function TaskDetailInline({
   // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId;
-  const isAgentActive = useTaskAgentActive(chatParentId, task);
+  const isAgentActive = useTaskAgentActive(chatParentId);
   const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -397,7 +396,6 @@ export function TaskDetailInline({
         hasActiveRun={hasActiveRun}
         hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
-        latestPrError={latestPrError}
         deploymentStatus={deploymentStatus}
         executionError={executionError}
         isStarting={isStarting}

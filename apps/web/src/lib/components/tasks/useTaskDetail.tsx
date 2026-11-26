@@ -114,7 +114,6 @@ function deriveRunSummary({
     status,
     canEditTaskText: !isArchived && canEditTaskText(status, hasActiveRun),
     latestPrUrl,
-    latestPrError: runFacts?.latestPrError,
     deploymentStatus: runFacts?.deploymentStatus,
     canCreatePr: taskCanCreatePr({ latestPrUrl, hasRuns, hasActiveRun }),
     showTabsColumn: status !== "todo" || hasTabContent,

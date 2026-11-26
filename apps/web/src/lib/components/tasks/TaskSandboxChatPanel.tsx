@@ -39,8 +39,8 @@ export function TaskSandboxChatPanel({
 /**
  * The task side of the sandbox chat: the Main chat of the task's own
  * session, whose sticky model, traits and account drive the composer. Every
- * run of the task is a turn in this chat (the server writes its prompt and
- * reply, `_taskWorkflow/runChatTurn.ts`).
+ * run of the task is a task-mode turn in this chat
+ * (`_agentTasks/taskRunTurn.ts`).
  */
 export function useTaskChatBinding(
   taskId: Id<"agentTasks">,

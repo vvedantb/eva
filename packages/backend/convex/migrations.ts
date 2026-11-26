@@ -3,13 +3,11 @@
  * For new table-wide backfills prefer `@convex-dev/migrations` via
  * `dataMigrations.ts` (batched, resumable, dry-run / cancel / status).
  */
-export { cleanupStaleRuns } from "./_migrations/cleanup";
 export {
   deleteRepoStep,
   deleteNonEvalucomRepos,
   deleteEvalucomRepos,
 } from "./_migrations/deleteRepos";
-export { backfillDeploymentUrlScheme } from "./_migrations/deploymentUrl";
 export { migrateRepoSkillsToGithubMetadata } from "./_migrations/repoSkills";
 export { backfillLogProjectIds } from "./_migrations/logProjectIds";
 export { removeSnapshotWarmupFields } from "./_migrations/removeSnapshotWarmupFields";
