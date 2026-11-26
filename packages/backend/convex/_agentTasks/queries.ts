@@ -233,24 +233,9 @@ async function enrichTasksWithLastRun(
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       // The same session the task page reads (`liveTaskSandboxStatuses`).
       const row = { ...task, sandboxStatus: taskSandboxStatus(task) };
-      if (summary) {
-        return {
-          ...row,
-          lastRunStartedAt: summary.lastRunStartedAt,
-          isExecuting,
-          hasUnread,
-          isAwaitingAnswer,
-        };
-      }
-      // Migration-safe fallback for tasks whose summary row is not backfilled.
-      const latestRun = await db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .order("desc")
-        .first();
       return {
         ...row,
-        lastRunStartedAt: latestRun?.startedAt,
+        lastRunStartedAt: summary?.lastRunStartedAt,
         isExecuting,
         hasUnread,
         isAwaitingAnswer,

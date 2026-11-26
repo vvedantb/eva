@@ -11,7 +11,6 @@ import {
   buildSessionBranchName,
 } from "./_git/branchNames";
 import { recordPullRequest } from "./_pullRequests/store";
-import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
@@ -59,30 +58,6 @@ export const dataMigrations = new Migrations<DataModel, typeof schema>(
 
 /** Generic runner: `npx convex run dataMigrations:run '{fn:"dataMigrations:…"}'`. */
 export const run = dataMigrations.runner();
-
-/** Backfills compact task latest-run rows so list queries stop reading run logs. */
-export const backfillAgentTaskRunSummaries = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (ctx, task) => {
-    if (!task.repoId) return;
-    const existing = await ctx.db
-      .query("agentTaskRunSummaries")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .unique();
-    if (existing) return;
-
-    const latestRun = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .order("desc")
-      .first();
-    await ctx.db.insert("agentTaskRunSummaries", {
-      taskId: task._id,
-      repoId: task.repoId,
-      lastRunStartedAt: latestRun?.startedAt,
-    });
-  },
-});
 
 /** Moves large SKILL.md bodies out of rows read by repoSkills.listByRepo. */
 export const splitRepoSkillContent = dataMigrations.define({
@@ -202,7 +177,6 @@ export const backfillPullRequests = dataMigrations.runner([
   internal.dataMigrations.backfillSessionPullRequests,
   internal.dataMigrations.backfillSessionRepoPullRequests,
   internal.dataMigrations.backfillProjectPullRequests,
-  internal.dataMigrations.backfillRunPullRequests,
 ]);
 
 async function scheduleGitHubRefresh(
@@ -286,35 +260,6 @@ export const backfillProjectPullRequests = dataMigrations.define({
       title: project.title,
     });
     if (row) await scheduleGitHubRefresh(ctx, row.prUrl);
-  },
-});
-
-/** Runs are visited oldest first, so a task's newest PR ends up primary. */
-export const backfillRunPullRequests = dataMigrations.define({
-  table: "agentRuns",
-  migrateOne: async (ctx, run) => {
-    if (run.prUrl === undefined) return;
-    const task = await ctx.db.get(run.taskId);
-    if (task) {
-      // The state is a guess the GitHub refresh replaces: the task's status
-      // for its PR, terminal for the PRs earlier runs left behind.
-      const state =
-        task.status === "done"
-          ? "merged"
-          : task.status === "cancelled"
-            ? "closed"
-            : task.status === "code_review"
-              ? "open"
-              : "draft";
-      await recordRunPullRequest(ctx, {
-        runId: run._id,
-        taskId: task._id,
-        prUrl: run.prUrl,
-        state,
-      });
-      await scheduleGitHubRefresh(ctx, run.prUrl);
-    }
-    return { prUrl: undefined };
   },
 });
 

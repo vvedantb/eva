@@ -62,8 +62,8 @@ const QUESTION_ANSWERING_ENTITY_FIELDS = new Set([
  * regardless (see `providers/claudeSdk.ts`) — it is what grants MCP tools, which
  * `bypassPermissions` does not. Do not fold the two concerns back together.
  *
- * Never on a run (`RUN_ID`). A run is autonomous — a quick task's first
- * execution, an automation, a batch — so a blocking question would wait for an
+ * Never on a run (`RUN_ID`). A run is autonomous — an automation, a batch —
+ * so a blocking question would wait for an
  * answer nobody is there to give, and the pause suspends the turn watchdog, so
  * the turn would hang until someone stopped the sandbox. Runs must pick a
  * sensible default and report the choice instead (see the prompt's

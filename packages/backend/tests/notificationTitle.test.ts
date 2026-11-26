@@ -6,8 +6,7 @@ import { splitNotificationTitle } from "@eva/shared/notificationTitle";
  * change to one of those strings should break this file rather than quietly
  * push the boilerplate back onto line one of the inbox row.
  *
- * Sources: `githubWebhook.ts` (PR merged/closed), `_agentRuns/mutations.ts` and
- * `_taskWorkflow/runLifecycle.ts` (run outcomes), `_agentTasks/mutations.ts`
+ * Sources: `githubWebhook.ts` (PR merged/closed), `_agentTasks/mutations.ts`
  * (assignment, completion, status moves), `taskComments.ts` / `docComments.ts`
  * (comments, mentions, replies).
  */

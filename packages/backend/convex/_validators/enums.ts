@@ -296,7 +296,6 @@ export const runModeValidator = v.union(
   v.literal("resolve_conflicts"),
 );
 
-export const activityLogTypeValidator = v.literal("run");
 
 export const webhookEventStatusValidator = v.union(
   v.literal("pending"),

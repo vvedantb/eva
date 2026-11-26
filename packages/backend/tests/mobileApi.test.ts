@@ -21,7 +21,7 @@ import {
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
-import { openTurn } from "../convex/_chat/turnStore";
+import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { hasActiveTaskRun } from "../convex/_agentTasks/taskRunStatus";
 import { modules } from "./_helpers/convexModules";
 
@@ -256,16 +256,17 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
-      await t.run(async (ctx) => {
-        const runId = await ctx.db.insert("agentRuns", { taskId: ids.taskId, status: "running", logs: [] });
-        await openTurn(ctx, {
-          entityId: runId,
+      // The task's run is a task-mode turn in its chat.
+      await t.run((ctx) =>
+        openSessionChatTurn(ctx, {
+          chatId,
           sessionId,
           streamingEntityId: String(chatId),
           model: DEFAULT_AI_MODEL,
           repoId: ids.repoId,
-        });
-      });
+          taskRun: { mode: "implementation" },
+        }),
+      );
       await asUser.mutation(api.chats.send, { target: ids.taskId, message: "next" });
       const queued = await t.run((ctx) =>
         ctx.db

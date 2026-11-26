@@ -98,15 +98,7 @@ async function fixture() {
     });
     await subscribe(quick, ada);
 
-    const run = (taskId: Id<"agentTasks">) =>
-      ctx.db.insert("agentRuns", {
-        taskId,
-        status: "success" as const,
-        logs: [],
-      });
     // The project's PR was opened by the task that ran first, not by all three.
-    const shippedRun = await run(shipped);
-    const quickRun = await run(quick);
     await ctx.db.insert("pullRequests", {
       repoId,
       prUrl: PROJECT_PR,
@@ -119,7 +111,6 @@ async function fixture() {
         kind: "project",
         projectId,
         taskId: shipped,
-        runId: shippedRun,
       },
       createdAt: now,
       updatedAt: now,
@@ -132,7 +123,7 @@ async function fixture() {
       state: "open",
       primary: true,
       origin: "eva",
-      owner: { kind: "task", taskId: quick, runId: quickRun },
+      owner: { kind: "task", taskId: quick },
       createdAt: now,
       updatedAt: now,
     });

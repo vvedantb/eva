@@ -6,7 +6,6 @@ import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
 import { ownedSessionBusy } from "../convex/_sessions/ownedSession";
-import { taskWorkSessionBusy } from "../convex/_taskWorkflow/startRun";
 import { sessionAccountHolder } from "../convex/_projects/runSettings";
 import {
   buildProjectBranchName,
@@ -153,8 +152,8 @@ describe("projects on sessions", () => {
         });
       });
       const busy = await f.t.run(async (ctx) => [
-        await taskWorkSessionBusy(ctx.db, { _id: f.taskId }),
-        await taskWorkSessionBusy(ctx.db, { _id: other }),
+        await ownedSessionBusy(ctx.db, { kind: "task", taskId: f.taskId }),
+        await ownedSessionBusy(ctx.db, { kind: "task", taskId: other }),
         await ownedSessionBusy(ctx.db, {
           kind: "project",
           projectId: f.projectId,

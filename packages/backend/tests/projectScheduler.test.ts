@@ -528,13 +528,10 @@ describe("archiving project work", () => {
       await expect(check(running)).rejects.toThrow("has started");
       await expect(check(inReview)).rejects.toThrow("has started");
 
-      // A todo task with a run pending has started too.
-      await f.t.run((ctx) =>
-        ctx.db.patch(running, {
-          status: "todo",
-          run: { state: "running", workflowId: "wf-1" },
-        }),
-      );
+      // A todo task with a run pending (queued in its chat) has started too.
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
+      await f.asUser.mutation(api.agentTasks.startExecution, { id: running });
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
       await expect(check(running)).rejects.toThrow("has started");
     },
     TIMEOUT_MS,

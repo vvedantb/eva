@@ -20,7 +20,7 @@ function useFailedTaskIds(
   rows: ReadonlyArray<ProjectTaskListRow> | undefined,
 ): ReadonlySet<string> | undefined {
   const taskIds = (rows ?? []).filter((row) => row.locked !== true).map((row) => row._id);
-  const failed = useQuery(api.agentRuns.getTaskIdsWithLatestRunError, rows === undefined ? "skip" : { repoId, taskIds });
+  const failed = useQuery(api.agentTasks.getTaskIdsWithFailedRun, rows === undefined ? "skip" : { repoId, taskIds });
   return failed === undefined ? undefined : new Set<string>(failed);
 }
 

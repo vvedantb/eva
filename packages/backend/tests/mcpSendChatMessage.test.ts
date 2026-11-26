@@ -67,14 +67,8 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    // A task's PR names the run that opened it.
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "success",
-      logs: [],
-    });
     await recordPullRequest(ctx, {
-      owner: { kind: "task", taskId, runId },
+      owner: { kind: "task", taskId },
       repoId,
       prUrl: TASK_PR_URL,
       state: "open",

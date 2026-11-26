@@ -5649,18 +5649,6 @@ async function attachChatMediaIfAny(uploaded, target2) {
   if (target2.turnId) mediaArgs.turnId = target2.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
-async function attachRunMediaIfAny(uploaded) {
-  if (uploaded.length === 0) return;
-  await callConvexWithRetry(
-    "mutation",
-    "agentRuns:attachMedia",
-    {
-      id: RUN_ID ?? "",
-      mediaStorageIds: uploaded.map((item) => item.storageId)
-    },
-    3
-  );
-}
 var REDACTED_COMPLETION_FIELDS = [
   "result",
   "error",
@@ -5676,7 +5664,6 @@ async function sendTurnCompletion(mutation, args) {
   await callConvexWithRetry("mutation", mutation, args);
 }
 async function deliverCompletionWithMedia(completionArgs) {
-  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) {
@@ -5754,11 +5741,7 @@ async function uploadAndAttachSandboxMedia(target2) {
     }
   }
   try {
-    if (RUN_ID) {
-      await attachRunMediaIfAny(uploaded);
-    } else {
-      await attachChatMediaIfAny(uploaded, target2);
-    }
+    await attachChatMediaIfAny(uploaded, target2);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }

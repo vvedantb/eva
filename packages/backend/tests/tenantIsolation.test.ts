@@ -99,12 +99,27 @@ async function fixture() {
       updatedAt: now,
       createdBy: strangerId,
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "error",
-      logs: [],
-      startedAt: now,
+    // The task's last run failed: a failed task-mode turn in its own chat.
+    const taskSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "task", taskId },
       repoId,
+      userId: ownerId,
+      title: "Task",
+      status: "closed",
+    });
+    await ctx.db.insert("turns", {
+      entityId: taskSessionId,
+      sessionId: taskSessionId,
+      streamingEntityId: String(taskSessionId),
+      state: "error",
+      open: false,
+      turnStartedAt: now,
+      finishedAt: now,
+      leaseExpiresAt: now,
+      leaseGeneration: 1,
+      model: "claude:opus",
+      repoId,
+      taskRun: { mode: "implementation" },
     });
     const sessionId = await ctx.db.insert("sessions", {
       owner: { kind: "standalone" },
@@ -137,7 +152,6 @@ async function fixture() {
       taskId,
       draftId,
       strangerTaskId,
-      runId,
       chatId,
       docId,
     };
@@ -220,13 +234,13 @@ describe("tasks cannot cross into another tenant", () => {
     async () => {
       const f = await fixture();
       expect(
-        await f.stranger.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await f.stranger.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: f.strangerRepoId,
           taskIds: [f.taskId],
         }),
       ).toEqual([]);
       expect(
-        await f.owner.query(api.agentRuns.getTaskIdsWithLatestRunError, {
+        await f.owner.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: f.repoId,
           taskIds: [f.taskId],
         }),

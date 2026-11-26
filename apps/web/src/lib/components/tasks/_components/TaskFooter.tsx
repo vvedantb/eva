@@ -47,7 +47,6 @@ interface TaskFooterProps {
   hasActiveRun: boolean;
   hasRuns: boolean;
   latestPrUrl: string | undefined;
-  latestPrError: string | undefined;
   deploymentStatus: TaskDeploymentStatus;
   executionError: string | null;
   isStarting: boolean;
@@ -121,17 +120,15 @@ function TaskFooterError({
   motionKey,
   className,
   executionError,
-  latestPrError,
 }: {
   visible: boolean;
   motionKey: string;
   className: string;
   executionError: string | null;
-  latestPrError: string | undefined;
 }) {
   return (
     <AnimatePresence initial={false}>
-      {visible && (executionError || latestPrError) ? (
+      {visible && executionError ? (
         <m.p
           key={motionKey}
           className={className}
@@ -140,7 +137,7 @@ function TaskFooterError({
           exit={{ opacity: 0 }}
           transition={tokenTransition.fast}
         >
-          {executionError ?? latestPrError}
+          {executionError}
         </m.p>
       ) : null}
     </AnimatePresence>
@@ -156,7 +153,6 @@ export function TaskFooter({
   hasActiveRun,
   hasRuns,
   latestPrUrl,
-  latestPrError,
   deploymentStatus,
   executionError,
   isStarting,
@@ -221,7 +217,6 @@ export function TaskFooter({
         motionKey="footer-error"
         className="text-xs text-destructive text-right"
         executionError={executionError}
-        latestPrError={latestPrError}
       />
       <div className={layout.row}>
         <TaskFooterError
@@ -229,7 +224,6 @@ export function TaskFooter({
           motionKey="header-error"
           className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
           executionError={executionError}
-          latestPrError={latestPrError}
         />
         <AnimatePresence initial={false} mode="popLayout">
           {showRunButton ? (

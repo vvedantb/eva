@@ -128,7 +128,7 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   // The user's own drafts (private to them), at the top of To Do; never in Archived.
   const drafts = useQuery(api.agentTasks.listDrafts, archived ? "skip" : { repoId: repo._id });
   const errorTaskIds = useQuery(
-    api.agentRuns.getTaskIdsWithLatestRunError,
+    api.agentTasks.getTaskIdsWithFailedRun,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
   const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });

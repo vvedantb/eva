@@ -8,8 +8,6 @@
  * @module
  */
 
-import type * as _agentRuns_mutations from "../_agentRuns/mutations.js";
-import type * as _agentRuns_queries from "../_agentRuns/queries.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -195,15 +193,13 @@ import type * as _migrations_backfillNumIds from "../_migrations/backfillNumIds.
 import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/backfillQueuedMessageOrder.js";
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
-import type * as _migrations_cleanup from "../_migrations/cleanup.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
-import type * as _migrations_deploymentUrl from "../_migrations/deploymentUrl.js";
+import type * as _migrations_deleteRunTurns from "../_migrations/deleteRunTurns.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_handTriageToEva from "../_migrations/handTriageToEva.js";
 import type * as _migrations_legacyProjectThreads from "../_migrations/legacyProjectThreads.js";
 import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js";
 import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
-import type * as _migrations_removeAgentRuns from "../_migrations/removeAgentRuns.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
@@ -383,20 +379,15 @@ import type * as _taskWorkflow_deploymentHelpers from "../_taskWorkflow/deployme
 import type * as _taskWorkflow_events from "../_taskWorkflow/events.js";
 import type * as _taskWorkflow_helpers from "../_taskWorkflow/helpers.js";
 import type * as _taskWorkflow_prompts from "../_taskWorkflow/prompts.js";
-import type * as _taskWorkflow_publicMutations from "../_taskWorkflow/publicMutations.js";
 import type * as _taskWorkflow_queries from "../_taskWorkflow/queries.js";
 import type * as _taskWorkflow_recovery from "../_taskWorkflow/recovery.js";
 import type * as _taskWorkflow_resolveBaseBranch from "../_taskWorkflow/resolveBaseBranch.js";
-import type * as _taskWorkflow_runChatTurn from "../_taskWorkflow/runChatTurn.js";
-import type * as _taskWorkflow_runLifecycle from "../_taskWorkflow/runLifecycle.js";
 import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
-import type * as _taskWorkflow_startRun from "../_taskWorkflow/startRun.js";
+import type * as _taskWorkflow_taskPr from "../_taskWorkflow/taskPr.js";
 import type * as _taskWorkflow_uiImplementationPrompt from "../_taskWorkflow/uiImplementationPrompt.js";
 import type * as _taskWorkflow_urls from "../_taskWorkflow/urls.js";
 import type * as _taskWorkflow_usageLimitReset from "../_taskWorkflow/usageLimitReset.js";
-import type * as _taskWorkflow_watchdog from "../_taskWorkflow/watchdog.js";
-import type * as _taskWorkflow_workflowDefinition from "../_taskWorkflow/workflowDefinition.js";
 import type * as _usageLimits_claudeUsage from "../_usageLimits/claudeUsage.js";
 import type * as _usageLimits_rows from "../_usageLimits/rows.js";
 import type * as _userProviderAccounts_credentialSource from "../_userProviderAccounts/credentialSource.js";
@@ -413,7 +404,6 @@ import type * as _validators_projectTasks from "../_validators/projectTasks.js";
 import type * as _validators_shapes from "../_validators/shapes.js";
 import type * as _validators_shortcuts from "../_validators/shortcuts.js";
 import type * as _validators_tableFields from "../_validators/tableFields.js";
-import type * as agentRuns from "../agentRuns.js";
 import type * as agentTasks from "../agentTasks.js";
 import type * as analytics from "../analytics.js";
 import type * as annotations from "../annotations.js";
@@ -615,8 +605,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "_agentRuns/mutations": typeof _agentRuns_mutations;
-  "_agentRuns/queries": typeof _agentRuns_queries;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -802,15 +790,13 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillQueuedMessageOrder": typeof _migrations_backfillQueuedMessageOrder;
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
-  "_migrations/cleanup": typeof _migrations_cleanup;
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
-  "_migrations/deploymentUrl": typeof _migrations_deploymentUrl;
+  "_migrations/deleteRunTurns": typeof _migrations_deleteRunTurns;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/handTriageToEva": typeof _migrations_handTriageToEva;
   "_migrations/legacyProjectThreads": typeof _migrations_legacyProjectThreads;
   "_migrations/logProjectIds": typeof _migrations_logProjectIds;
   "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
-  "_migrations/removeAgentRuns": typeof _migrations_removeAgentRuns;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
@@ -990,20 +976,15 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/events": typeof _taskWorkflow_events;
   "_taskWorkflow/helpers": typeof _taskWorkflow_helpers;
   "_taskWorkflow/prompts": typeof _taskWorkflow_prompts;
-  "_taskWorkflow/publicMutations": typeof _taskWorkflow_publicMutations;
   "_taskWorkflow/queries": typeof _taskWorkflow_queries;
   "_taskWorkflow/recovery": typeof _taskWorkflow_recovery;
   "_taskWorkflow/resolveBaseBranch": typeof _taskWorkflow_resolveBaseBranch;
-  "_taskWorkflow/runChatTurn": typeof _taskWorkflow_runChatTurn;
-  "_taskWorkflow/runLifecycle": typeof _taskWorkflow_runLifecycle;
   "_taskWorkflow/scheduling": typeof _taskWorkflow_scheduling;
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;
-  "_taskWorkflow/startRun": typeof _taskWorkflow_startRun;
+  "_taskWorkflow/taskPr": typeof _taskWorkflow_taskPr;
   "_taskWorkflow/uiImplementationPrompt": typeof _taskWorkflow_uiImplementationPrompt;
   "_taskWorkflow/urls": typeof _taskWorkflow_urls;
   "_taskWorkflow/usageLimitReset": typeof _taskWorkflow_usageLimitReset;
-  "_taskWorkflow/watchdog": typeof _taskWorkflow_watchdog;
-  "_taskWorkflow/workflowDefinition": typeof _taskWorkflow_workflowDefinition;
   "_usageLimits/claudeUsage": typeof _usageLimits_claudeUsage;
   "_usageLimits/rows": typeof _usageLimits_rows;
   "_userProviderAccounts/credentialSource": typeof _userProviderAccounts_credentialSource;
@@ -1020,7 +1001,6 @@ declare const fullApi: ApiFromModules<{
   "_validators/shapes": typeof _validators_shapes;
   "_validators/shortcuts": typeof _validators_shortcuts;
   "_validators/tableFields": typeof _validators_tableFields;
-  agentRuns: typeof agentRuns;
   agentTasks: typeof agentTasks;
   analytics: typeof analytics;
   annotations: typeof annotations;

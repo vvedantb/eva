@@ -1115,7 +1115,6 @@ export const createOrResumeSandbox = internalAction({
     repoName: v.string(),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
   returns: v.object({
@@ -1153,18 +1152,6 @@ export const createOrResumeSandbox = internalAction({
     let deleteSandboxOnFailure = false;
     let attempt = 1;
     const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
     while (true) {
       try {
         if (args.ephemeral) {
@@ -1177,7 +1164,7 @@ export const createOrResumeSandbox = internalAction({
             sandboxEnvVars,
             EPHEMERAL_LIFECYCLE,
             snapshotName,
-            attachRunSandbox,
+            undefined,
             emitProgress,
             { mode: "none" },
           );
@@ -1201,13 +1188,6 @@ export const createOrResumeSandbox = internalAction({
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = prepared.isNew;
           resumeFellBack = prepared.resumeFellBack;
-        }
-
-        if (!args.ephemeral && args.attachRunId && sandbox) {
-          await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-            runId: args.attachRunId,
-            sandboxId: sandbox.id,
-          });
         }
 
         break;

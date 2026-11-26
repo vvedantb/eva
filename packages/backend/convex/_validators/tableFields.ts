@@ -57,7 +57,6 @@ import {
   evalIssueValidator,
   arenaScenarioResultValidator,
   experimentalFlagsValidator,
-  logEntryValidator,
   repoShaValidator,
   sandboxGitSyncValidator,
   scopeCheckValidator,
@@ -347,6 +346,7 @@ export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
   // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
+  // Old run turns, until `deleteRunTurns` has run; then this goes.
   v.id("agentRuns"),
   v.id("automationRuns"),
   v.id("docs"),
@@ -499,13 +499,11 @@ export const prOwnerValidator = v.union(
   v.object({
     kind: v.literal("task"),
     taskId: v.id("agentTasks"),
-    runId: v.optional(v.id("agentRuns")),
   }),
   v.object({
     kind: v.literal("project"),
     projectId: v.id("projects"),
     taskId: v.optional(v.id("agentTasks")),
-    runId: v.optional(v.id("agentRuns")),
   }),
 );
 
@@ -654,12 +652,7 @@ export const taskRunValidator = v.union(
     at: v.number(),
     jobId: v.id("_scheduled_functions"),
   }),
-  v.object({
-    state: v.literal("running"),
-    workflowId: v.string(),
-    /** Absent only on rows migrated from the legacy `activeWorkflowId`. */
-    runId: v.optional(v.id("agentRuns")),
-  }),
+  // `running` went with run rows. schema-narrowing-ok: removeAgentRuns
 );
 
 export const agentTaskFields = {
@@ -758,62 +751,13 @@ export const agentTaskFields = {
   ...prSummaryFields,
 };
 
+/**
+ * Empty since `removeAgentRuns`: task runs are chat turns. Kept only while old
+ * run turns (`turns.entityId` = a run id) still exist; `deleteRunTurns`
+ * removes them, then this table and its id in `turnEntityIdValidator` go.
+ */
 export const agentRunFields = {
   taskId: v.id("agentTasks"),
-  status: runStatusValidator,
-  logs: v.array(logEntryValidator),
-  startedAt: v.optional(v.number()),
-  finishedAt: v.optional(v.number()),
-  finalizingAt: v.optional(v.number()),
-  resultSummary: v.optional(v.string()),
-  /**
-   * Text this run's prompt carries from whoever started it: the
-   * coordinator's note on a retry, or the answer to the task's question
-   * (`_projects/scheduler.ts` `startProjectTask`).
-   */
-  note: v.optional(v.string()),
-  /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
-  prUrl: v.optional(v.string()),
-  error: v.optional(v.string()),
-  prError: v.optional(v.string()),
-  errorType: v.optional(errorTypeValidator),
-  limitResetAt: v.optional(v.number()),
-  exitReason: v.optional(v.string()),
-  sandboxId: v.optional(v.string()),
-  repoId: v.optional(v.id("githubRepos")),
-  deploymentStatus: v.optional(deploymentStatusValidator),
-  deploymentUrl: v.optional(v.string()),
-  mode: v.optional(runModeValidator),
-  // Who started this run (button click or "Make changes" submit). Absent on
-  // runs created before this field existed.
-  triggeredBy: v.optional(v.id("users")),
-  // The change-request comment that started this run, set only for "Make
-  // changes" runs. Lets the timeline link a run to its comment explicitly
-  // rather than guessing by timestamp.
-  triggeringCommentId: v.optional(v.id("taskComments")),
-  // Snapshot of which credential powered this run ("Team" or the account
-  // label). Stored at insert so history stays readable if the account is
-  // renamed or deleted later.
-  credentialSourceLabel: v.optional(v.string()),
-  // Snapshot of the model used for this run. Absent on runs created before
-  // this field existed.
-  model: v.optional(aiModelValidator),
-  // Screenshots and recordings the agent left in the sandbox deliverable
-  // folders, uploaded before the run completes. Copied onto the run's reply
-  // row (`replyMessageId`) when the run settles (`settleRunChatTurn`).
-  mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  /**
-   * The run's assistant row in its task's Main chat: an empty bubble the run
-   * streams into, settled with its reply on every terminal path
-   * (`_taskWorkflow/runChatTurn.ts`).
-   */
-  replyMessageId: v.optional(v.id("messages")),
-  /**
-   * The start attempt a quick task run's claim took on its session
-   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
-   * fail exactly that start. Absent when the run reused an active session.
-   */
-  sessionStartAttempt: v.optional(v.number()),
 };
 
 export const sessionFields = {
@@ -1520,10 +1464,7 @@ export const messageFields = {
   // Convex-side guard only — synthetic continuations are rendered like normal
   // turns; the UI does not read this flag.
   isSyntheticTurn: v.optional(v.boolean()),
-  // The task run that wrote this row: its prompt (user) or its reply
-  // (assistant). Chat-turn helpers that pick rows by recency skip these.
-  // Project tasks only; a quick task's run is a chat turn (`taskRun`).
-  runId: v.optional(v.id("agentRuns")),
+  // `runId` went with run rows. schema-narrowing-ok: removeAgentRuns
   // User rows: this message ran the task (`taskRunMarkerValidator`).
   taskRun: v.optional(taskRunMarkerValidator),
   // Snapshot of which credential powered this chat turn ("Team" or the

@@ -359,47 +359,6 @@ export const captureStalledTurnDiagnostics = internalAction({
   },
 });
 
-/**
- * Captures post-mortem diagnostics from a sandbox whose run was killed by the
- * watchdog, persists them on the run, then stops (not deletes) the sandbox.
- * Quick-task sandboxes are persistent — the paused filesystem keeps any
- * uncommitted work and unpushed commits recoverable, and the next run resumes
- * it. Capture is best-effort — the stop proceeds regardless.
- */
-export const captureDiagnosticsAndStopSandbox = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    runId: v.id("agentRuns"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    try {
-      const trimmed = await readKillDiagnostics(
-        ctx,
-        args.repoId,
-        args.sandboxId,
-      );
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
-      );
-      await ctx.runMutation(internal.taskWorkflow.appendRunLog, {
-        runId: args.runId,
-        message: `Sandbox diagnostics captured before stop:\n${trimmed}`,
-      });
-    } catch (error) {
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorMessage(error)}`,
-      );
-    }
-    await ctx.runAction(internal.sandbox.stopSandbox, {
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-    });
-    return null;
-  },
-});
-
 /** Deletes a sandbox, silently ignoring already-deleted sandboxes. */
 export const deleteSandbox = internalAction({
   args: { sandboxId: v.string(), repoId: v.id("githubRepos") },

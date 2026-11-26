@@ -4,7 +4,6 @@ export {
   killSandboxProcess,
   stopSandbox,
   deleteSandbox,
-  captureDiagnosticsAndStopSandbox,
   archiveSandbox,
   verifySandboxLiveness,
   captureStalledTurnDiagnostics,
