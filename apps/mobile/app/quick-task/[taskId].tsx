@@ -26,7 +26,6 @@ import {
   IconChecklist,
   IconCalendarClock,
   IconClock,
-  IconFileText,
   IconFolder,
   IconMessage,
   IconPlayerPlay,
@@ -95,6 +94,7 @@ import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 import { ArchivedBar } from "@/ui/ArchivedBar";
+import { ProjectTaskDetails } from "@/quickTasks/ProjectTaskDetails";
 
 /** A quick-task row (`getAllTasks`) or a project task row (`listByProject`): one validator, the wider inferred type. */
 type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
@@ -106,7 +106,8 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * One quick task, as the web task page (`TaskDetailInline`) on a phone, in one
  * column: the number and title, the description, the attachments, the web
  * Properties pane (Status, Priority, Code Reviewer, Labels, Project, each a
- * sheet that writes at once), then Activity (subscribers, the timeline, and
+ * sheet that writes at once; a project task shows its read-only facts and its
+ * Model instead, `ProjectTaskDetails`), then Activity (subscribers, the timeline, and
  * each comment's menu: reactions, Reply, Edit, Copy text, Delete) and the
  * comment box, which also replies and edits. The header
  * "…" is the row's long-press menu. The bottom bar opens the task chat (with
@@ -318,15 +319,24 @@ function TaskOverview({
           </View>
         ) : null}
 
-        <TaskProperties
-          task={task}
-          users={users}
-          projects={projects}
-          taskProject={project ?? undefined}
-          allTags={allTags}
-          update={update}
-          readOnly={readOnly}
-        />
+        {task.projectId ? (
+          <ProjectTaskDetails
+            task={task}
+            currentUserId={currentUserId ?? undefined}
+            hasRuns={(runs?.length ?? 0) > 0}
+            readOnly={readOnly}
+            update={update}
+          />
+        ) : (
+          <TaskProperties
+            task={task}
+            users={users}
+            projects={projects}
+            allTags={allTags}
+            update={update}
+            readOnly={readOnly}
+          />
+        )}
 
         <FieldGroup title="Activity">
           <TaskSubscribers taskId={task._id} users={users} />
@@ -394,9 +404,9 @@ type UpdateTask = (
 ) => void;
 
 /**
- * The web Properties pane (`StatusFieldsSection`): a row per field; a tap
- * opens its sheet, and a pick writes at once. Read-only (archived), the rows
- * only show their values.
+ * A quick task's web Properties pane (`StatusFieldsSection`): a row per
+ * field; a tap opens its sheet, and a pick writes at once. Read-only
+ * (archived), the rows only show their values.
  */
 function TaskProperties({
   task,
@@ -405,13 +415,10 @@ function TaskProperties({
   allTags,
   update,
   readOnly,
-  taskProject,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
-  /** The task's own project (`projects.get`): it names an archived project, which the live list leaves out. */
-  taskProject: FunctionReturnType<typeof api.projects.get> | undefined;
   allTags: string[];
   update: UpdateTask;
   readOnly: boolean;
@@ -425,7 +432,7 @@ function TaskProperties({
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
   const project = task.projectId
-    ? (taskProject ?? projects?.find((entry) => entry._id === task.projectId))
+    ? projects?.find((entry) => entry._id === task.projectId)
     : undefined;
   const status =
     task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
@@ -477,7 +484,6 @@ function TaskProperties({
           color={project ? undefined : muted}
           onPress={openField("project")}
         />
-        {task.projectId ? <ProjectSummaryRow projectId={task.projectId} /> : null}
       </FieldGroup>
       <FooterSheet
         open={field === "status"}
@@ -531,22 +537,6 @@ function TaskProperties({
         }
       />
     </>
-  );
-}
-
-/** A project task's link to its project's summary document, once the coordinator wrote one. */
-function ProjectSummaryRow({ projectId }: { projectId: Id<"projects"> }) {
-  const router = useRouter();
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
-  if (!summaryDoc) return null;
-  return (
-    <FieldRow
-      label="Project summary"
-      icon={<IconFileText size={16} color={muted} />}
-      value={summaryDoc.title}
-      onPress={() => router.push({ pathname: "/doc/[docId]", params: { docId: summaryDoc._id, repo: summaryDoc.repoId } })}
-    />
   );
 }
 

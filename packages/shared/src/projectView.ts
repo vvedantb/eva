@@ -1,5 +1,6 @@
 import type { Doc } from "@eva/backend";
-import { prStateLabel } from "./prState";
+import { prStateLabel, type PrState } from "./prState";
+import { repoDisplayLabel } from "./repoTile";
 import { prNumberFromGithubUrl } from "./prReview";
 import { ARCHIVE_LIST_MODE_LABELS } from "./archive";
 import {
@@ -392,6 +393,74 @@ export function projectTaskPullRequests<
     }
     return row.prUrl !== undefined ? [{ ...row, prUrl: row.prUrl }] : [];
   });
+}
+
+/** What `projectTaskFacts` reads of a project task (its `agentTasks` row). */
+export interface FactsProjectTaskRow extends ProjectTaskRow {
+  repoId?: string;
+  linkedRepoIds?: readonly string[];
+  phaseLabel?: string;
+  archivedAt?: number;
+}
+
+/**
+ * A project task's Details facts, for web and phone: the plain text
+ * "Working · Phase 2 · docs", then its PR links. The text is the display
+ * status (as the Tasks list groups it), the phase, and on a multi-repo task
+ * each repo without a PR. A PR link names its repo on a multi-repo task, so
+ * each repo shows once. A `listByProject` row carries the server's facts; a
+ * bare task row reads as never failed.
+ */
+export function projectTaskFacts<
+  Pr extends { prUrl: string; state: PrState; repoId: string; repoName: string },
+>(
+  row: FactsProjectTaskRow,
+  repos: ReadonlyArray<{
+    _id: string;
+    name: string;
+    label?: string;
+    rootDirectory?: string;
+  }>,
+  prs: readonly Pr[],
+): {
+  text: string;
+  /** Each PR with its link label: "#12", or "api #12" on a multi-repo task. */
+  prs: Array<Pr & { label: string }>;
+} {
+  const status: ProjectTaskDisplayStatus =
+    row.archivedAt !== undefined
+      ? "archived"
+      : projectTaskView(row, false).displayStatus;
+  const linked = row.linkedRepoIds ?? [];
+  const multiRepo = linked.length > 0;
+  const repoLabel = (repoId: string) => {
+    const repo = repos.find((entry) => entry._id === repoId);
+    return repo ? repoDisplayLabel(repo) : undefined;
+  };
+  const prRepoIds = new Set(prs.map((pr) => pr.repoId));
+  const reposWithoutPr = multiRepo
+    ? [row.repoId, ...linked].flatMap((repoId) =>
+        repoId === undefined || prRepoIds.has(repoId) ? [] : [repoLabel(repoId)],
+      )
+    : [];
+  return {
+    text: [
+      PROJECT_TASK_DISPLAY_STATUS_LABELS[status],
+      row.phaseLabel,
+      ...reposWithoutPr,
+    ]
+      .filter((part) => part !== undefined && part !== "")
+      .join(" · "),
+    prs: prs.map((pr) => ({
+      ...pr,
+      label: [
+        multiRepo ? (repoLabel(pr.repoId) ?? pr.repoName) : undefined,
+        prShortLabel(pr.prUrl),
+      ]
+        .filter((part) => part !== undefined && part !== "")
+        .join(" "),
+    })),
+  };
 }
 
 /**
