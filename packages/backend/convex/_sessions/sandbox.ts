@@ -410,7 +410,8 @@ export const requestStopSandbox = internalMutation({
  *
  * `active` at claim time (the reviewer has it open) is reused as is and stays
  * `active` after the run, as `keepTaskSandboxActiveAfterRun` did for the task
- * sandbox; idle pause then stops it through the normal stop path. A row mid
+ * sandbox; idle pause then stops it through the normal stop path. A chat with
+ * a queued follow-up also keeps it `active`, so the follow-up sends at once. A row mid
  * start or stop is not claimed: the run then works on a VM of its own, which
  * no row records and which it stops itself.
  */
@@ -514,9 +515,27 @@ export async function finishTaskRunSandbox(
     return;
   }
   if (options.keepActive || session.status !== "active") return;
+  // A follow-up queued behind the run sends on this VM when the run's turn
+  // closes (`closeTurn` drains). A stop now would park it until the stop
+  // settles and then boot the VM again. Idle pause stops it later.
+  if (await sessionHasQueuedMessage(ctx.db, sessionId)) return;
   await requestSessionSandboxStop(ctx, sessionId, {
     stopReason: { kind: "task" },
   });
+}
+
+async function sessionHasQueuedMessage(
+  db: DatabaseReader,
+  sessionId: Id<"sessions">,
+): Promise<boolean> {
+  for (const chat of await listLiveSessionChats(db, sessionId)) {
+    const queued = await db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", chat._id))
+      .first();
+    if (queued) return true;
+  }
+  return false;
 }
 
 /**
