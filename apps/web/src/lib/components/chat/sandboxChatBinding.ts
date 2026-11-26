@@ -10,7 +10,7 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import type { ModelAccount } from "@vvedantb/ui";
-import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import type { PreviewAnnotationTarget } from "@/lib/components/sandbox/annotationSend";
 import type { ChatModelPicker } from "./ChatComposer";
 import { isChatTurnExecuting, type ChatBodyMessage } from "./chatBodyUtils";
 import type {
@@ -108,11 +108,14 @@ export function useSandboxChatTranscript(binding: SandboxChatBinding) {
  */
 export function useSandboxAnnotationSend(
   binding: SandboxChatBinding,
-): AnnotationSubmit {
+): PreviewAnnotationTarget {
   const { isExecuting } = useSandboxChatTranscript(binding);
-  return sandboxAnnotationSender(
-    binding.ports,
-    sandboxTurnSettings(binding),
-    isExecuting,
-  );
+  return {
+    submit: sandboxAnnotationSender(
+      binding.ports,
+      sandboxTurnSettings(binding),
+      isExecuting,
+    ),
+    chatId: binding.entity?.chatId,
+  };
 }

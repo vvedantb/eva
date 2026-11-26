@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { mentionsEva } from "@eva/shared";
 import { internal } from "../_generated/api";
 import {
@@ -16,6 +16,7 @@ import {
   aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
+  previewAnnotationValidator,
   reasoningLevelValidator,
   usesChatDaemon,
 } from "../validators";
@@ -258,6 +259,8 @@ async function enqueueChatMessage(
     userId: Id<"users">;
     content: string;
     displayContent?: string;
+    /** Preview "Select element" sends; copied to the user row on start. */
+    annotation?: Infer<typeof previewAnnotationValidator>;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
     /** A thread reply for Eva: her answer joins this root's thread. */
@@ -281,6 +284,7 @@ async function enqueueChatMessage(
     parentId: chat._id,
     content: params.content,
     displayContent: params.displayContent,
+    annotation: params.annotation,
     createdAt: now,
     order: now,
     userId: params.userId,
@@ -707,6 +711,8 @@ export const enqueueMessage = authMutation({
     message: v.string(),
     /** Compact chat-display text when `message` is a rich agent prompt. */
     displayContent: v.optional(v.string()),
+    /** Preview "Select element" sends: where the annotation points. */
+    annotation: v.optional(previewAnnotationValidator),
     ...turnSettingsArgs,
     /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
@@ -727,6 +733,7 @@ export const enqueueMessage = authMutation({
       chatId,
       message,
       displayContent: omittedDisplay,
+      annotation,
       sentViaOrchestrator,
       ...settings
     } = args;
@@ -738,6 +745,7 @@ export const enqueueMessage = authMutation({
       userId: ctx.userId,
       content,
       displayContent: displayContent || undefined,
+      annotation,
       settings,
       sentViaOrchestrator,
     });
@@ -838,6 +846,7 @@ export async function sendSessionChatMessage(
     userId: Id<"users">;
     content: string;
     displayContent?: string;
+    annotation?: Infer<typeof previewAnnotationValidator>;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
   },

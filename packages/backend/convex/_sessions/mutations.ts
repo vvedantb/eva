@@ -13,6 +13,7 @@ import { allocateNumId } from "../numId";
 import {
   aiModelValidator,
   getAIModelProvider,
+  previewAnnotationValidator,
   reasoningLevelValidator,
   roleValidator,
 } from "../validators";
@@ -315,6 +316,8 @@ export const addMessage = authMutation({
     reasoningLevel: v.optional(reasoningLevelValidator),
     /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
+    /** Preview "Select element" sends: where the annotation points. */
+    annotation: v.optional(previewAnnotationValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -350,6 +353,7 @@ export const addMessage = authMutation({
             model: args.model,
             reasoningLevel: args.reasoningLevel,
             sentViaOrchestrator: args.sentViaOrchestrator,
+            annotation: args.annotation,
           }
         : {}),
     });

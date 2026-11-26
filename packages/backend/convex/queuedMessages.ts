@@ -81,7 +81,12 @@ export const update = authMutation({
     }
 
     // Editing a queued annotation degrades it to a plain message.
-    await ctx.db.patch(args.id, { content, displayContent: undefined });
+    await ctx.db.patch(args.id, {
+      content,
+      displayContent: undefined,
+      // The edit replaces the prompt that carried the element context.
+      annotation: undefined,
+    });
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });
     return null;
   },

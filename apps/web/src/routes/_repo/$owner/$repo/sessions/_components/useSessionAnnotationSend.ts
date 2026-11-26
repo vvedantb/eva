@@ -9,7 +9,7 @@ import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 import { sandboxAnnotationSender } from "@/lib/components/chat/sandboxChatTurn";
-import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import type { PreviewAnnotationTarget } from "@/lib/components/sandbox/annotationSend";
 import { useSessionTurnPorts } from "./useSessionTurnPorts";
 
 /**
@@ -21,7 +21,7 @@ export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
   chatId: Id<"sessionChats">,
   isRouteActive = true,
-): AnnotationSubmit {
+): PreviewAnnotationTarget {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // Model + traits + account are owned by Convex.
@@ -53,14 +53,17 @@ export function useSessionAnnotationSend(
     status: turnStatus,
     messages,
   });
-  return sandboxAnnotationSender(
-    ports,
-    {
-      model,
-      effortLevel: displayTraits.effortLevel,
-      executionTraits,
-      providerAccountId: resolveAccountId(providerAccountId),
-    },
-    isExecuting,
-  );
+  return {
+    submit: sandboxAnnotationSender(
+      ports,
+      {
+        model,
+        effortLevel: displayTraits.effortLevel,
+        executionTraits,
+        providerAccountId: resolveAccountId(providerAccountId),
+      },
+      isExecuting,
+    ),
+    chatId,
+  };
 }

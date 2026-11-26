@@ -5,9 +5,11 @@ import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
 import { useWebPreview } from "@vvedantb/ui";
 import {
+  annotationRef,
   buildAnnotationDisplay,
   buildAnnotationPrompt,
 } from "../_utils/-previewAnnotation";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import { AnnotationCommentCard } from "./AnnotationCommentCard";
 import { useAnnotationBridge } from "./useAnnotationBridge";
 
@@ -25,7 +27,7 @@ export function PreviewAnnotationLayer({
 }: {
   mode: boolean;
   onModeChange: (active: boolean) => void;
-  onSubmit: (display: string, full: string) => Promise<void>;
+  onSubmit: AnnotationSubmit;
 }) {
   const { iframeRef } = useWebPreview();
   const layerRef = useRef<HTMLDivElement | null>(null);
@@ -123,7 +125,11 @@ export function PreviewAnnotationLayer({
                       pending.context,
                     );
                     setIsSubmitting(true);
-                    void onSubmit(display, full)
+                    void onSubmit(
+                      display,
+                      full,
+                      annotationRef(pending.context),
+                    )
                       .then(() => {
                         clearPending();
                         onModeChange(false);

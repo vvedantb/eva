@@ -655,6 +655,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
+      annotation: next.annotation,
       attachmentStorageIds: next.attachmentStorageIds,
       ...(await resolveMessageCredential(
         ctx.db,
