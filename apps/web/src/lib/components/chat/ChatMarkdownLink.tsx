@@ -26,11 +26,11 @@ import {
   type Icon as TablerIcon,
 } from "@tabler/icons-react";
 import { statusMeta } from "@/lib/components/reviews/_components/prOverviewMeta";
+import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
 import {
-  PrAvatar,
-  PrDiffStat,
-} from "@/lib/components/reviews/_components/prReviewParts";
-import { relativeTime } from "@/lib/components/artifacts/_format";
+  LINK_CARD_META_CHIP_CLASS,
+  LinkPreviewCard,
+} from "@/lib/components/mentions/LinkPreviewCard";
 import { DataMentionHoverCardBody } from "@/lib/components/mentions";
 import { MentionContentPreview } from "@/lib/components/mentions/MentionContentPreview";
 
@@ -143,25 +143,24 @@ function PullRequestCardBody({ link }: { link: GithubItemLink }) {
   const data = card.data;
   const status = statusMeta(data.status, data.draft);
   return (
-    <GithubCard
-      status={status}
+    <LinkPreviewCard
+      pill={githubPill(status)}
       reference={ref}
-      updatedAt={data.updatedAt}
+      updatedAt={Date.parse(data.updatedAt)}
       title={data.title}
-      authorLogin={data.authorLogin}
-      authorAvatarUrl={data.authorAvatarUrl}
+      author={{ name: data.authorLogin, avatarUrl: data.authorAvatarUrl }}
     >
       <PrDiffStat
         additions={data.additions}
         deletions={data.deletions}
-        className={META_CHIP_CLASS}
+        className={LINK_CARD_META_CHIP_CLASS}
       />
-      <span className={META_CHIP_CLASS}>
+      <span className={LINK_CARD_META_CHIP_CLASS}>
         {data.changedFiles === 1
           ? "1 file"
           : `${data.changedFiles.toLocaleString()} files`}
       </span>
-    </GithubCard>
+    </LinkPreviewCard>
   );
 }
 
@@ -180,19 +179,18 @@ function IssueCardBody({ link }: { link: GithubItemLink }) {
   }
   const data = card.data;
   return (
-    <GithubCard
-      status={ISSUE_STATUS[data.status]}
+    <LinkPreviewCard
+      pill={githubPill(ISSUE_STATUS[data.status])}
       reference={ref}
-      updatedAt={data.updatedAt}
+      updatedAt={Date.parse(data.updatedAt)}
       title={data.title}
-      authorLogin={data.authorLogin}
-      authorAvatarUrl={data.authorAvatarUrl}
+      author={{ name: data.authorLogin, avatarUrl: data.authorAvatarUrl }}
     >
-      <span className={`${META_CHIP_CLASS} flex items-center gap-1`}>
+      <span className={`${LINK_CARD_META_CHIP_CLASS} flex items-center gap-1`}>
         <IconMessageCircle size={12} />
         {data.comments.toLocaleString()}
       </span>
-    </GithubCard>
+    </LinkPreviewCard>
   );
 }
 
@@ -218,7 +216,18 @@ const ISSUE_STATUS: Record<
   },
 };
 
-const META_CHIP_CLASS = "rounded-control bg-muted/60 px-1.5 py-0.5";
+function githubPill(status: {
+  label: string;
+  className: string;
+  icon: TablerIcon;
+}) {
+  const StatusIcon = status.icon;
+  return {
+    label: status.label,
+    className: status.className,
+    icon: <StatusIcon size={12} />,
+  };
+}
 
 function GithubCardFallback({
   reference,
@@ -245,52 +254,6 @@ function GithubCardFallback({
           ? `Could not load this ${noun}.`
           : "No access to this repository in Eva."}
       </p>
-    </div>
-  );
-}
-
-function GithubCard({
-  status,
-  reference,
-  updatedAt,
-  title,
-  authorLogin,
-  authorAvatarUrl,
-  children,
-}: {
-  status: { label: string; className: string; icon: TablerIcon };
-  reference: string;
-  updatedAt: string;
-  title: string;
-  authorLogin: string | null;
-  authorAvatarUrl: string | null;
-  children: ReactNode;
-}) {
-  const StatusIcon = status.icon;
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-medium ${status.className}`}
-        >
-          <StatusIcon size={12} />
-          {status.label}
-        </span>
-        <span className="min-w-0 truncate">{reference}</span>
-        <span className="ml-auto shrink-0">
-          {relativeTime(Date.parse(updatedAt))}
-        </span>
-      </div>
-      <p className="line-clamp-3 text-sm font-medium leading-snug text-foreground">
-        {title}
-      </p>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <PrAvatar login={authorLogin} avatarUrl={authorAvatarUrl} />
-        <span className="min-w-0 truncate">{authorLogin ?? "Unknown"}</span>
-        <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {children}
-        </span>
-      </div>
     </div>
   );
 }

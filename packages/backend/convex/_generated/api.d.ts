@@ -583,6 +583,7 @@ import type * as teamMembers from "../teamMembers.js";
 import type * as teams from "../teams.js";
 import type * as testGenWorkflow from "../testGenWorkflow.js";
 import type * as textGen from "../textGen.js";
+import type * as tmpProofCleanup from "../tmpProofCleanup.js";
 import type * as today from "../today.js";
 import type * as transcription from "../transcription.js";
 import type * as turns from "../turns.js";
@@ -1179,6 +1180,7 @@ declare const fullApi: ApiFromModules<{
   teams: typeof teams;
   testGenWorkflow: typeof testGenWorkflow;
   textGen: typeof textGen;
+  tmpProofCleanup: typeof tmpProofCleanup;
   today: typeof today;
   transcription: typeof transcription;
   turns: typeof turns;
