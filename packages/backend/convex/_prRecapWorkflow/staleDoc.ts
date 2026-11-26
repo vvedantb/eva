@@ -1,12 +1,12 @@
 import type { Doc } from "../_generated/dataModel";
 
-/** Doc fields handleStaleDoc reads when unwinding a timed-out doc workflow. */
+/** Doc fields read when unwinding a timed-out or stalled doc job (`tearDownStaleAgentJob`). */
 type StaleDocFields = Pick<
   Doc<"docs">,
   "testGenStatus" | "prRecapStatus" | "interviewHistory"
 >;
 
-/** Patch handleStaleDoc applies after cancelling a stale doc workflow. */
+/** Patch applied after a stale doc job is stopped. */
 type StaleDocPatch = {
   activeWorkflowId: undefined;
   testGenStatus?: "error";

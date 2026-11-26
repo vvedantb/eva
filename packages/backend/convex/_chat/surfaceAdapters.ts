@@ -15,6 +15,7 @@ import {
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import { agentJobOwner, type AgentJobOwner } from "../_agentJobs/owner";
 import { markAllRunningExited } from "../backgroundProcesses";
 import type { TurnLane } from "../validators";
 import {
@@ -221,33 +222,17 @@ export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
 ) => R;
 
 /**
- * A turn owner that is not a chat: a one-shot agent (a task's run is a chat
- * turn). It has no placeholder, queue or synthetic turn, so it does not fit
- * `ChatSurfaceAdapter`.
+ * A turn owner that is not a chat: a one-shot agent job (a task's run is a
+ * chat turn). It has no placeholder, queue or synthetic turn, so it does not
+ * fit `ChatSurfaceAdapter`.
  */
-export type AgentTurnOwner =
-  | { kind: "automation"; id: Id<"automationRuns"> }
-  | { kind: "doc"; id: Id<"docs"> }
-  | { kind: "evaluation"; id: Id<"evaluationReports"> };
+export type AgentTurnOwner = AgentJobOwner;
 
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
   chat: ChatAdapterVisitor<R>;
   agent: (owner: AgentTurnOwner) => R;
 };
-
-function laneFreeAgentOwner(
-  db: DatabaseReader,
-  entityId: string,
-): AgentTurnOwner | null {
-  const automationRunId = db.normalizeId("automationRuns", entityId);
-  if (automationRunId) return { kind: "automation", id: automationRunId };
-  const docId = db.normalizeId("docs", entityId);
-  if (docId) return { kind: "doc", id: docId };
-  const reportId = db.normalizeId("evaluationReports", entityId);
-  if (reportId) return { kind: "evaluation", id: reportId };
-  return null;
-}
 
 /**
  * Picks the adapter for a durable turn by its `entityId` table and lane, then
@@ -264,7 +249,7 @@ export function turnAdapterForEntity<R>(
   if (turn.lane !== undefined) return null;
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
   if (chatId) return visit.chat(sessionChatAdapter, chatId);
-  const owner = laneFreeAgentOwner(db, turn.entityId);
+  const owner = agentJobOwner(db, turn.entityId);
   return owner ? visit.agent(owner) : null;
 }
 

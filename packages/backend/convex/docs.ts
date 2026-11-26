@@ -44,7 +44,7 @@ import {
 import { prosemirrorSync } from "./prosemirrorSync";
 import { markdownToDocJson } from "./_docEditor/markdown";
 import { workflow } from "./workflowManager";
-import { trackDocWorkflow } from "./workflowWatchdog";
+import { startAgentJob } from "./_agentJobs/slot";
 import {
   findAllSiblingRepoIds,
   findSiblingRepos,
@@ -950,10 +950,9 @@ export const startPrRecap = internalMutation({
     // The model and traits are recorded by the ready write (`recapRunPatch`),
     // not here: a run that fails must not relabel the recap still on show.
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.prRecapWorkflow.prRecapWorkflow,
-      {
+    // A recap already running on this doc keeps its slot: this start throws.
+    const workflowId = await startAgentJob(ctx, docId, () =>
+      workflow.start(ctx, internal.prRecapWorkflow.prRecapWorkflow, {
         docId,
         repoId: workflowRepo._id,
         installationId: args.installationId,
@@ -969,12 +968,10 @@ export const startPrRecap = internalMutation({
         thinkingEnabled: args.thinkingEnabled,
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
-      },
+      }),
     );
 
-    await trackDocWorkflow(ctx, docId, workflowId);
-
-    return { docId, workflowId: String(workflowId) };
+    return { docId, workflowId };
   },
 });
 

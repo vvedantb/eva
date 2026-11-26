@@ -1,24 +1,9 @@
 import { v } from "convex/values";
-import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
-import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
-import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation, hasRepoAccess } from "./functions";
-import {
-  workflowCompleteValidator,
-  aiModelValidator,
-  modelTraitsExecutionFields,
-  completionCallbackArgs,
-  turnLeaseFenceArgs,
-} from "./validators";
-import {
-  clearStreamingActivity,
-  recordCompletionLog,
-  sendCompletionEvent,
-} from "./_taskWorkflow/helpers";
-import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { aiModelValidator, modelTraitsExecutionFields } from "./validators";
+import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 import {
   buildPrRecapPrompt,
   parsePrRecapOutput,
@@ -36,11 +21,6 @@ import {
   resolveSandboxRepoId,
 } from "./_githubRepos/helpers";
 import { prRecapStreamingEntityId } from "./_chat/agentStreamIds";
-
-const prRecapCompleteEvent = defineEvent({
-  name: "prRecapComplete",
-  validator: workflowCompleteValidator,
-});
 
 const MIN_DIFF_LINES = 3;
 
@@ -122,102 +102,68 @@ export const prRecapWorkflow = workflow.define({
 
     // Sandbox credentials (esp. VERCEL_PROJECT_ID) live on app rows, not the
     // codebase root that startRecap passes as args.repoId.
-    const sandboxRepoId = repoData.sandboxRepoId;
-
-    let sandboxId: string | undefined;
-    try {
-      try {
-        ({ sandboxId } = await prepareSandboxSteps(step, {
-          installationId: args.installationId,
-          repoOwner: repoData.repoOwner,
-          repoName: repoData.repoName,
-          repoId: sandboxRepoId,
-          ephemeral: true,
-          streamingEntityId: prRecapStreamingEntityId(args.docId),
-          baseBranch: repoData.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-          createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
-          // Recap agents only read the diff in-repo; no convex import / dev daemons.
-          skipStartupCommands: true,
-        }));
-
-        await launchAgentStep(
-          step,
-          {
-            sandboxId,
-            entityId: String(args.docId),
-            streamingEntityId: prRecapStreamingEntityId(args.docId),
-            prompt,
-            userId: args.userId,
-            completionMutation: "prRecapWorkflow:handleCompletion",
-            entityIdField: "docId",
-            model: args.model,
-            ...buildTraitsExecutionPayload(args.model, {
-              effortLevel: args.reasoningLevel,
-              thinkingEnabled: args.thinkingEnabled,
-              use1mContext: args.use1mContext,
-              fastMode: args.fastMode,
-            }),
-            allowedTools: "",
-            repoId: sandboxRepoId,
-          },
-          {
-            entityId: args.docId,
-          },
-        );
-
-        const result = await step.awaitEvent(prRecapCompleteEvent);
-
-        if (result.success && result.result) {
-          const parsed = parsePrRecapOutput(result.result, diff.filePaths);
-          if (!parsed.ok) {
-            await finalize({
-              kind: "error",
-              message: INCOMPLETE_PR_RECAP_ERROR,
-            });
-            return;
-          }
+    await runOneShotAgent(step, {
+      ownerId: args.docId,
+      userId: args.userId,
+      installationId: args.installationId,
+      repo: {
+        id: repoData.sandboxRepoId,
+        owner: repoData.repoOwner,
+        name: repoData.repoName,
+      },
+      sandbox: {
+        kind: "ephemeral",
+        baseBranch: repoData.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
+        createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
+        // Recap agents only read the diff in-repo; no convex import / dev daemons.
+        skipStartupCommands: true,
+      },
+      streamingEntityId: prRecapStreamingEntityId(args.docId),
+      agent: {
+        model: args.model,
+        ...buildTraitsExecutionPayload(args.model, {
+          effortLevel: args.reasoningLevel,
+          thinkingEnabled: args.thinkingEnabled,
+          use1mContext: args.use1mContext,
+          fastMode: args.fastMode,
+        }),
+        allowedTools: "",
+      },
+      prompt,
+      onResult: async (result) => {
+        if (!result.success || !result.result) {
           await finalize({
-            kind: "ready",
-            content: parsed.markdown,
-            walkthrough: parsed.walkthrough,
+            kind: "error",
+            message: result.error ?? "Recap generation failed",
           });
-          if (
-            args.consumeAgentCommentIds &&
-            args.consumeAgentCommentIds.length > 0
-          ) {
-            await step.runMutation(
-              internal.docComments.resolveRecapAgentComments,
-              {
-                docId: args.docId,
-                commentIds: args.consumeAgentCommentIds,
-                resolvedBy: args.userId,
-              },
-            );
-          }
           return;
         }
-
-        await finalize({
-          kind: "error",
-          message: result.error ?? "Recap generation failed",
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Recap generation failed";
-        await finalize({ kind: "error", message });
-      }
-    } finally {
-      if (sandboxId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
-            sandboxId,
-            repoId: sandboxRepoId,
-          });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup PR recap sandbox:", cleanupError);
+        const parsed = parsePrRecapOutput(result.result, diff.filePaths);
+        if (!parsed.ok) {
+          await finalize({ kind: "error", message: INCOMPLETE_PR_RECAP_ERROR });
+          return;
         }
-      }
-    }
+        await finalize({
+          kind: "ready",
+          content: parsed.markdown,
+          walkthrough: parsed.walkthrough,
+        });
+        if (
+          args.consumeAgentCommentIds &&
+          args.consumeAgentCommentIds.length > 0
+        ) {
+          await step.runMutation(
+            internal.docComments.resolveRecapAgentComments,
+            {
+              docId: args.docId,
+              commentIds: args.consumeAgentCommentIds,
+              resolvedBy: args.userId,
+            },
+          );
+        }
+      },
+      onError: (message) => finalize({ kind: "error", message }),
+    });
   },
 });
 
@@ -249,50 +195,5 @@ export const getRepoData = internalQuery({
       linkRootDirectory: linkRepo?.rootDirectory,
       sandboxRepoId,
     };
-  },
-});
-
-/** Receives sandbox completion callback and forwards the event to the active recap workflow. */
-export const handleCompletion = authMutation({
-  args: {
-    docId: v.id("docs"),
-    ...completionCallbackArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !doc.activeWorkflowId) return null;
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) return null;
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.docId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await clearStreamingActivity(ctx, prRecapStreamingEntityId(args.docId));
-
-    await sendCompletionEvent(ctx, prRecapCompleteEvent, doc.activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-    });
-
-    await recordCompletionLog(ctx, {
-      entityType: "doc",
-      entityId: String(args.docId),
-      entityTitle: doc.title,
-      repoId: doc.repoId,
-      rawResultEvent: args.rawResultEvent,
-    });
-
-    return null;
   },
 });

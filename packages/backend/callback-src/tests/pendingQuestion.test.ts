@@ -231,8 +231,8 @@ describe("the canUseTool gate grants MCP on every surface", () => {
 
   test("a surface with no answering UI lets AskUserQuestion through instead of blocking", async () => {
     // Would hang on postQuestion/pollForAnswer if it tried to block here —
-    // nothing on a doc chat can answer it.
-    const canUseTool = await gateFor("docId");
+    // nothing on a one-shot agent can answer it.
+    const canUseTool = await gateFor("entityId");
     const result = await canUseTool(
       "AskUserQuestion",
       { questions: [] },

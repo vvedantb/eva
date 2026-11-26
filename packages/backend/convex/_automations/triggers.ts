@@ -14,6 +14,7 @@ import {
   EVENT_RUN_RETRY_MS,
 } from "../_automationEvents/events";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
+import { startAgentJob } from "../_agentJobs/slot";
 
 /**
  * True when the automation already has an agent run executing. An event run
@@ -70,30 +71,28 @@ async function startAutomationRun(
 
   const branchName = buildAutomationRunBranchName(automation._id, runId);
 
-  const workflowId = await workflow.start(
-    ctx,
-    internal.automationWorkflow.automationExecutionWorkflow,
-    {
-      runId,
-      automationId: automation._id,
-      repoId: automation.repoId,
-      installationId: repo.installationId,
-      branchName,
-      description,
-      title: automation.title,
-      model: normalizeAIModel(
-        automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-      ),
-      rootDirectory: repo.rootDirectory ?? "",
-      userId: automation.createdBy,
-      readOnly: automation.readOnly === true,
-      actionsEnabled: automation.actionsEnabled === true,
-    },
+  await startAgentJob(ctx, runId, () =>
+    workflow.start(
+      ctx,
+      internal.automationWorkflow.automationExecutionWorkflow,
+      {
+        runId,
+        automationId: automation._id,
+        repoId: automation.repoId,
+        installationId: repo.installationId,
+        branchName,
+        description,
+        title: automation.title,
+        model: normalizeAIModel(
+          automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+        ),
+        rootDirectory: repo.rootDirectory ?? "",
+        userId: automation.createdBy,
+        readOnly: automation.readOnly === true,
+        actionsEnabled: automation.actionsEnabled === true,
+      },
+    ),
   );
-
-  await ctx.db.patch(runId, {
-    activeWorkflowId: String(workflowId),
-  });
 }
 
 /** Called by the cron scheduler to trigger an automation run if eligible. */

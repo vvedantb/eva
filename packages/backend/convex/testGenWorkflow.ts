@@ -1,36 +1,14 @@
 import { v } from "convex/values";
-import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
-import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { defineEvent } from "@convex-dev/workflow";
-import {
-  workflow,
-  cancelTrackedWorkflow,
-  isTrackedWorkflowRunning,
-} from "./workflowManager";
-import { authMutation, hasRepoAccess } from "./functions";
+import { workflow } from "./workflowManager";
+import { authMutation } from "./functions";
 import { getDocWithAccess } from "./_docs/access";
-import {
-  completionCallbackArgs,
-  turnLeaseFenceArgs,
-  workflowCompleteValidator,
-} from "./validators";
-import { trackDocWorkflow } from "./workflowWatchdog";
-import {
-  clearStreamingActivity,
-  recordCompletionLog,
-  sendCompletionEvent,
-} from "./_taskWorkflow/helpers";
 import { buildPrBody } from "./prBody";
 import { buildTestGenBranchName } from "./_git/branchNames";
-import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { errorMessage } from "@vvedantb/server";
-
-const testGenCompleteEvent = defineEvent({
-  name: "testGenComplete",
-  validator: workflowCompleteValidator,
-});
+import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
+import { startAgentJob, stopAgentJob } from "./_agentJobs/slot";
 
 /** Replaces double quotes with single quotes in a commit title for shell safety. */
 function sanitizeCommitTitle(title: string): string {
@@ -76,58 +54,44 @@ export const testGenWorkflow = workflow.define({
     installationId: v.number(),
   },
   handler: async (step, args): Promise<void> => {
-    // Step 1: Fetch doc data, check if already completed
     const docData = await step.runQuery(internal.testGenWorkflow.getDocData, {
       docId: args.docId,
     });
 
     if (docData.alreadyCompleted) return;
 
-    // Step 2: Set status to running
     await step.runMutation(internal.testGenWorkflow.setRunning, {
       docId: args.docId,
     });
 
-    // Declared outside the try so the finally can tear the sandbox down even
-    // when prepare itself throws part-way through.
-    let sandboxId: string | undefined;
-    try {
-      ({ sandboxId } = await prepareSandboxSteps(step, {
-        installationId: args.installationId,
-        repoOwner: docData.repoOwner,
-        repoName: docData.repoName,
-        ephemeral: true,
-        branchName: docData.branchName,
-        repoId: docData.repoId,
-        streamingEntityId: args.docId,
-      }));
+    const saveResult = async (success: boolean, testPrUrl?: string) => {
+      await step.runMutation(internal.testGenWorkflow.saveResult, {
+        docId: args.docId,
+        success,
+        testPrUrl,
+      });
+    };
 
-      await launchAgentStep(
-        step,
-        {
-          sandboxId,
-          entityId: args.docId,
-          prompt: docData.prompt,
-          userId: args.userId,
-          completionMutation: "testGenWorkflow:handleCompletion",
-          entityIdField: "docId",
-          model: "sonnet",
-          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-          repoId: docData.repoId,
-        },
-        {
-          entityId: args.docId,
-        },
-      );
-
-      // Step 4: Wait for callback
-      const result = await step.awaitEvent(testGenCompleteEvent);
-
-      let workflowSuccess = result.success;
-      let workflowError = result.error;
-      let prUrl: string | null = null;
-
-      if (result.success) {
+    await runOneShotAgent(step, {
+      ownerId: args.docId,
+      userId: args.userId,
+      installationId: args.installationId,
+      repo: {
+        id: docData.repoId,
+        owner: docData.repoOwner,
+        name: docData.repoName,
+      },
+      sandbox: { kind: "ephemeral", branchName: docData.branchName },
+      agent: {
+        model: "sonnet",
+        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+      },
+      prompt: docData.prompt,
+      onResult: async (result, sandboxId) => {
+        if (!result.success) {
+          await saveResult(false);
+          return;
+        }
         try {
           const pushResult = await step.runAction(
             internal.sandbox.pushSandboxBranch,
@@ -140,65 +104,39 @@ export const testGenWorkflow = workflow.define({
               branchName: docData.branchName,
             },
           );
-
-          if (pushResult.pushed) {
-            prUrl = await step.runAction(
-              internal.taskWorkflowActions.createPullRequest,
-              {
-                installationId: args.installationId,
-                repoOwner: docData.repoOwner,
-                repoName: docData.repoName,
-                branchName: docData.branchName,
-                title: `Add tests for ${docData.docTitle}`,
-                body: buildPrBody([
-                  {
-                    heading: "Summary",
-                    content: `Auto-generated tests for the **${docData.docTitle}** document.`,
-                  },
-                ]),
-                labels: ["tests", "eva"],
-              },
-            );
-          } else {
-            // No commits pushed → the agent wrote no tests; fail cleanly
-            // instead of letting a PR attempt 404 against a missing branch.
-            workflowSuccess = false;
-            workflowError =
-              "Test generation completed without committing any code changes";
+          // No commits pushed → the agent wrote no tests; fail cleanly
+          // instead of letting a PR attempt 404 against a missing branch.
+          if (!pushResult.pushed) {
+            await saveResult(false);
+            return;
           }
+          const prUrl = await step.runAction(
+            internal.taskWorkflowActions.createPullRequest,
+            {
+              installationId: args.installationId,
+              repoOwner: docData.repoOwner,
+              repoName: docData.repoName,
+              branchName: docData.branchName,
+              title: `Add tests for ${docData.docTitle}`,
+              body: buildPrBody([
+                {
+                  heading: "Summary",
+                  content: `Auto-generated tests for the **${docData.docTitle}** document.`,
+                },
+              ]),
+              labels: ["tests", "eva"],
+            },
+          );
+          await saveResult(true, prUrl ?? undefined);
         } catch (error) {
-          workflowSuccess = false;
-          workflowError = `Test generation completed locally, but Eva could not publish the branch or create a PR. ${errorMessage(error)}`;
+          console.error(
+            `[testGen] could not publish the branch or create a PR: ${errorMessage(error)}`,
+          );
+          await saveResult(false);
         }
-      }
-
-      await step.runMutation(internal.testGenWorkflow.saveResult, {
-        docId: args.docId,
-        success: workflowSuccess,
-        result: result.result,
-        error: workflowError,
-      });
-
-      if (workflowSuccess && prUrl) {
-        await step.runMutation(internal.testGenWorkflow.savePrUrl, {
-          docId: args.docId,
-          testPrUrl: prUrl,
-        });
-      }
-    } finally {
-      // The sandbox is ephemeral: nothing references it once the run is saved,
-      // so it has to be deleted here or it idles until the provider reaps it.
-      if (sandboxId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
-            sandboxId,
-            repoId: docData.repoId,
-          });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup test-gen sandbox:", cleanupError);
-        }
-      }
-    }
+      },
+      onError: () => saveResult(false),
+    });
   },
 });
 
@@ -290,96 +228,25 @@ export const setRunning = internalMutation({
   },
 });
 
-/** Saves the test generation result, marking the doc as completed or errored. */
+/** Saves the test generation outcome and frees the doc's slot. */
 export const saveResult = internalMutation({
   args: {
     docId: v.id("docs"),
     success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
+    testPrUrl: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.docId));
-
     const doc = await ctx.db.get(args.docId);
     if (!doc) return null;
 
-    if (!args.success) {
-      await ctx.db.patch(args.docId, {
-        testGenStatus: "error",
-        activeWorkflowId: undefined,
-      });
-      return null;
-    }
-
     await ctx.db.patch(args.docId, {
-      testGenStatus: "completed",
+      testGenStatus: args.success ? "completed" : "error",
       activeWorkflowId: undefined,
+      ...(args.testPrUrl !== undefined
+        ? { testPrUrl: args.testPrUrl, updatedAt: Date.now() }
+        : {}),
     });
-
-    return null;
-  },
-});
-
-/** Stores the created PR URL on the doc after successful test generation. */
-export const savePrUrl = internalMutation({
-  args: {
-    docId: v.id("docs"),
-    testPrUrl: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.docId, {
-      testPrUrl: args.testPrUrl,
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
-/**
- * Called by the sandbox via Convex HTTP API (authenticated with Clerk JWT).
- */
-export const handleCompletion = authMutation({
-  args: {
-    docId: v.id("docs"),
-    ...completionCallbackArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !doc.activeWorkflowId) return null;
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
-      throw new Error("Not authorized");
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.docId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(ctx, testGenCompleteEvent, doc.activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-    });
-
-    await recordCompletionLog(ctx, {
-      entityType: "testGen",
-      entityId: String(args.docId),
-      entityTitle: `Test Gen: ${doc.title}`,
-      repoId: doc.repoId,
-      rawResultEvent: args.rawResultEvent,
-    });
-
     return null;
   },
 });
@@ -396,9 +263,12 @@ export const cancelTestGen = authMutation({
     // The doc has one workflow slot shared with the interview, generate and
     // PR recap flows. Only cancel it when test generation is what holds it.
     if (doc.testGenStatus !== "running") return null;
-    await cancelTrackedWorkflow(ctx, doc.activeWorkflowId);
-
-    await clearStreamingActivity(ctx, String(args.docId));
+    await stopAgentJob(
+      ctx,
+      { kind: "doc", id: args.docId },
+      doc.activeWorkflowId,
+      { state: "cancelled" },
+    );
 
     await ctx.db.patch(args.docId, {
       testGenStatus: undefined,
@@ -420,26 +290,16 @@ export const startTestGen = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
-    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
-      throw new Error(
-        "Another document task is still running. Wait for it to finish.",
-      );
-    }
-
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.testGenWorkflow.testGenWorkflow,
-      {
+    await startAgentJob(ctx, args.docId, () =>
+      workflow.start(ctx, internal.testGenWorkflow.testGenWorkflow, {
         docId: args.docId,
         userId: ctx.userId,
         installationId: repo.installationId,
-      },
+      }),
     );
-
-    await trackDocWorkflow(ctx, args.docId, workflowId);
 
     return null;
   },

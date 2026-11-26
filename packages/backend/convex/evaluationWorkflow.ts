@@ -1,47 +1,17 @@
 import { v } from "convex/values";
-import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
-import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { EVA_BRANCH_PREFIX } from "./_git/branchNames";
 import { authMutation, hasRepoAccess } from "./functions";
-import {
-  completionCallbackArgs,
-  turnLeaseFenceArgs,
-  workflowCompleteValidator,
-} from "./validators";
-import { trackEvaluationWorkflow } from "./workflowWatchdog";
-import {
-  clearStreamingActivity,
-  llmJson,
-  recordCompletionLog,
-  sendCompletionEvent,
-} from "./_taskWorkflow/helpers";
+import { llmJson } from "./_taskWorkflow/helpers";
 import { buildPrBody } from "./prBody";
-import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { buildRootDirectoryInstruction } from "./prompts";
 import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
-
-/** Agent-turn completion for a report. Shared by code reviews and browser runs. */
-export const evalCompleteEvent = defineEvent({
-  name: "evalComplete",
-  validator: workflowCompleteValidator,
-});
-
-const fixCompleteEvent = defineEvent({
-  name: "fixComplete",
-  validator: v.object({
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-  }),
-});
+import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
+import { startAgentJob } from "./_agentJobs/slot";
 
 // --- Workflow definition ---
 
@@ -55,82 +25,41 @@ export const evaluationWorkflow = workflow.define({
     branchName: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
-    // Both live outside the try so the finally can tear the sandbox down even
-    // when prepare throws part-way through.
-    let sandboxId: string | undefined;
-    let sandboxRepoId: Id<"githubRepos"> | undefined;
-    try {
-      await step.runMutation(internal.evaluationWorkflow.setRunning, {
-        reportId: args.reportId,
-      });
+    await step.runMutation(internal.evaluationWorkflow.setRunning, {
+      reportId: args.reportId,
+    });
+    const docData = await step.runQuery(
+      internal.evaluationWorkflow.getDocData,
+      { docId: args.docId },
+    );
 
-      const docData = await step.runQuery(
-        internal.evaluationWorkflow.getDocData,
-        { docId: args.docId },
-      );
-      sandboxRepoId = docData.repoId;
-
-      const streamingEntityId = String(args.reportId);
-
-      ({ sandboxId } = await prepareSandboxSteps(step, {
-        installationId: args.installationId,
-        repoOwner: docData.repoOwner,
-        repoName: docData.repoName,
-        ephemeral: true,
-        repoId: docData.repoId,
-        streamingEntityId,
-        baseBranch: args.branchName,
-      }));
-
-      await launchAgentStep(
-        step,
-        {
-          sandboxId,
-          entityId: String(args.reportId),
-          prompt: docData.prompt,
-          userId: args.userId,
-          completionMutation: "evaluationWorkflow:handleCompletion",
-          entityIdField: "reportId",
-          model: "sonnet",
-          allowedTools: "Read,Glob,Grep",
-          repoId: docData.repoId,
-        },
-        {
-          entityId: args.reportId,
-        },
-      );
-
-      const result = await step.awaitEvent(evalCompleteEvent);
-
-      await step.runMutation(internal.evaluationWorkflow.saveResult, {
-        reportId: args.reportId,
-        success: result.success,
-        result: result.result,
-        error: result.error,
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Evaluation workflow failed";
-      await step.runMutation(internal.evaluationWorkflow.saveWorkflowFailure, {
-        reportId: args.reportId,
-        error: errorMessage,
-      });
-      throw error;
-    } finally {
-      // The sandbox is ephemeral: nothing references it once the report is
-      // saved, so it has to be deleted here or it idles until the provider
-      // reaps it. Best-effort — a failed delete must not fail the workflow.
-      if (sandboxId && sandboxRepoId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
-            sandboxId,
-            repoId: sandboxRepoId,
-          });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup evaluation sandbox:", cleanupError);
-        }
-      }
-    }
+    await runOneShotAgent(step, {
+      ownerId: args.reportId,
+      userId: args.userId,
+      installationId: args.installationId,
+      repo: {
+        id: docData.repoId,
+        owner: docData.repoOwner,
+        name: docData.repoName,
+      },
+      sandbox: { kind: "ephemeral", baseBranch: args.branchName },
+      agent: { model: "sonnet", allowedTools: "Read,Glob,Grep" },
+      prompt: docData.prompt,
+      onResult: async (result) => {
+        await step.runMutation(internal.evaluationWorkflow.saveResult, {
+          reportId: args.reportId,
+          success: result.success,
+          result: result.result,
+          error: result.error,
+        });
+      },
+      onError: async (error) => {
+        await step.runMutation(
+          internal.evaluationWorkflow.saveWorkflowFailure,
+          { reportId: args.reportId, error },
+        );
+      },
+    });
   },
 });
 
@@ -150,55 +79,46 @@ export const fixWorkflow = workflow.define({
     fixBranchName: v.string(),
   },
   handler: async (step, args): Promise<void> => {
-    // Both live outside the try so the finally can tear the sandbox down even
-    // when prepare throws part-way through.
-    let fixSandboxId: string | undefined;
-    let sandboxRepoId: Id<"githubRepos"> | undefined;
-    try {
-      const fixData = await step.runQuery(
-        internal.evaluationWorkflow.getFixData,
-        { reportId: args.reportId, docId: args.docId },
-      );
-      sandboxRepoId = fixData.repoId;
+    const fixData = await step.runQuery(
+      internal.evaluationWorkflow.getFixData,
+      { reportId: args.reportId, docId: args.docId },
+    );
+    const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+    const saveFixError = async (error: string) => {
+      await step.runMutation(internal.evaluationWorkflow.saveFixError, {
+        reportId: args.reportId,
+        error,
+      });
+    };
 
-      const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-
-      ({ sandboxId: fixSandboxId } = await prepareSandboxSteps(step, {
-        installationId: args.installationId,
-        repoOwner: fixData.repoOwner,
-        repoName: fixData.repoName,
-        ephemeral: true,
-        repoId: fixData.repoId,
-        streamingEntityId: String(args.reportId),
+    await runOneShotAgent(step, {
+      ownerId: args.reportId,
+      userId: args.userId,
+      installationId: args.installationId,
+      repo: {
+        id: fixData.repoId,
+        owner: fixData.repoOwner,
+        name: fixData.repoName,
+      },
+      sandbox: {
+        kind: "ephemeral",
         baseBranch,
         branchName: args.fixBranchName,
-      }));
-
-      await launchAgentStep(
-        step,
-        {
-          sandboxId: fixSandboxId,
-          entityId: String(args.reportId),
-          prompt: fixData.prompt,
-          userId: args.userId,
-          completionMutation: "evaluationWorkflow:handleFixCompletion",
-          entityIdField: "reportId",
-          model: "sonnet",
-          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-          repoId: fixData.repoId,
-        },
-        {
-          entityId: args.reportId,
-        },
-      );
-
-      const fixResult = await step.awaitEvent(fixCompleteEvent);
-
-      if (fixResult.success) {
+      },
+      agent: {
+        model: "sonnet",
+        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+      },
+      prompt: fixData.prompt,
+      onResult: async (result, sandboxId) => {
+        if (!result.success) {
+          await saveFixError(result.error ?? "Fix workflow failed");
+          return;
+        }
         const pushResult = await step.runAction(
           internal.sandbox.pushSandboxBranch,
           {
-            sandboxId: fixSandboxId,
+            sandboxId,
             installationId: args.installationId,
             repoOwner: fixData.repoOwner,
             repoName: fixData.repoName,
@@ -206,17 +126,14 @@ export const fixWorkflow = workflow.define({
             branchName: args.fixBranchName,
           },
         );
-
         // No commits pushed → the fix agent changed nothing; a PR attempt
         // would only 404 against a branch origin never received.
         if (!pushResult.pushed) {
-          await step.runMutation(internal.evaluationWorkflow.saveFixError, {
-            reportId: args.reportId,
-            error: "Fix agent completed without committing any code changes",
-          });
+          await saveFixError(
+            "Fix agent completed without committing any code changes",
+          );
           return;
         }
-
         const prUrl = await step.runAction(
           internal.taskWorkflowActions.createPullRequest,
           {
@@ -235,40 +152,13 @@ export const fixWorkflow = workflow.define({
             labels: ["eva", "eval-fix"],
           },
         );
-
         await step.runMutation(internal.evaluationWorkflow.saveFixResult, {
           reportId: args.reportId,
           prUrl,
         });
-      } else {
-        await step.runMutation(internal.evaluationWorkflow.saveFixError, {
-          reportId: args.reportId,
-          error: fixResult.error ?? "Fix workflow failed",
-        });
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Fix workflow failed";
-      await step.runMutation(internal.evaluationWorkflow.saveWorkflowFailure, {
-        reportId: args.reportId,
-        error: errorMessage,
-      });
-      throw error;
-    } finally {
-      // The sandbox is ephemeral: the branch is already pushed by this point, so
-      // nothing references the VM. Delete it or it idles until the provider
-      // reaps it. Best-effort — a failed delete must not fail the workflow.
-      if (fixSandboxId && sandboxRepoId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
-            sandboxId: fixSandboxId,
-            repoId: sandboxRepoId,
-          });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup eval-fix sandbox:", cleanupError);
-        }
-      }
-    }
+      },
+      onError: saveFixError,
+    });
   },
 });
 
@@ -383,8 +273,6 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.reportId));
-
     const report = await ctx.db.get(args.reportId);
     if (!report) return null;
 
@@ -431,8 +319,6 @@ export const saveWorkflowFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.reportId));
-
     const report = await ctx.db.get(args.reportId);
     if (!report) return null;
     if (report.status === "completed") {
@@ -456,52 +342,6 @@ export const saveWorkflowFailure = internalMutation({
       updatedAt: Date.now(),
     });
     await scheduleArenaCheckCompletion(ctx, report);
-    return null;
-  },
-});
-
-/**
- * Called by the sandbox via Convex HTTP API (authenticated with Clerk JWT).
- */
-export const handleCompletion = authMutation({
-  args: {
-    reportId: v.id("evaluationReports"),
-    ...completionCallbackArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const report = await ctx.db.get(args.reportId);
-    if (!report || !report.activeWorkflowId) return null;
-    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId)))
-      throw new Error("Not authorized");
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.reportId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(ctx, evalCompleteEvent, report.activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-    });
-
-    await recordCompletionLog(ctx, {
-      entityType: "evaluation",
-      entityId: String(args.reportId),
-      entityTitle: "Evaluation Report",
-      repoId: report.repoId,
-      rawResultEvent: args.rawResultEvent,
-    });
-
     return null;
   },
 });
@@ -582,8 +422,6 @@ export const saveFixResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.reportId));
-
     await ctx.db.patch(args.reportId, {
       fixStatus: "fix_completed",
       prUrl: args.prUrl ?? undefined,
@@ -602,8 +440,6 @@ export const saveFixError = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.reportId));
-
     await ctx.db.patch(args.reportId, {
       fixStatus: "fix_error",
       activeWorkflowId: undefined,
@@ -613,49 +449,6 @@ export const saveFixError = internalMutation({
   },
 });
 
-/** Receives sandbox fix completion callback and forwards the event to the active workflow. */
-export const handleFixCompletion = authMutation({
-  args: {
-    reportId: v.id("evaluationReports"),
-    ...completionCallbackArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const report = await ctx.db.get(args.reportId);
-    if (!report || !report.activeWorkflowId) return null;
-    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId)))
-      throw new Error("Not authorized");
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.reportId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(ctx, fixCompleteEvent, report.activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-    });
-
-    await recordCompletionLog(ctx, {
-      entityType: "evaluation",
-      entityId: String(args.reportId),
-      entityTitle: "Evaluation Fix",
-      repoId: report.repoId,
-      rawResultEvent: args.rawResultEvent,
-    });
-
-    return null;
-  },
-});
 
 /**
  * Public mutation to start an evaluation workflow from the frontend. Idempotent
@@ -707,19 +500,15 @@ export const startEvaluation = authMutation({
       updatedAt: now,
     });
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.evaluationWorkflow.evaluationWorkflow,
-      {
+    await startAgentJob(ctx, reportId, () =>
+      workflow.start(ctx, internal.evaluationWorkflow.evaluationWorkflow, {
         reportId,
         docId: args.docId,
         userId: ctx.userId,
         installationId: repo.installationId,
         branchName: args.branchName,
-      },
+      }),
     );
-
-    await trackEvaluationWorkflow(ctx, reportId, workflowId);
 
     return reportId;
   },
@@ -766,20 +555,16 @@ export const startFix = authMutation({
       updatedAt: Date.now(),
     });
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.evaluationWorkflow.fixWorkflow,
-      {
+    await startAgentJob(ctx, args.reportId, () =>
+      workflow.start(ctx, internal.evaluationWorkflow.fixWorkflow, {
         reportId: args.reportId,
         docId: report.docId,
         userId: ctx.userId,
         installationId: repo.installationId,
         baseBranch: report.branchName,
         fixBranchName,
-      },
+      }),
     );
-
-    await trackEvaluationWorkflow(ctx, args.reportId, workflowId);
 
     return null;
   },

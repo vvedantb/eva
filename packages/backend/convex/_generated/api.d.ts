@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as _agentJobs_completion from "../_agentJobs/completion.js";
+import type * as _agentJobs_owner from "../_agentJobs/owner.js";
+import type * as _agentJobs_runOneShotAgent from "../_agentJobs/runOneShotAgent.js";
+import type * as _agentJobs_slot from "../_agentJobs/slot.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -272,7 +276,6 @@ import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
 import type * as _sandbox_vercelRegion from "../_sandbox/vercelRegion.js";
 import type * as _sandbox_vercelSnapshotOptions from "../_sandbox/vercelSnapshotOptions.js";
-import type * as _sandbox_runtime_agentLaunchStep from "../_sandbox_runtime/agentLaunchStep.js";
 import type * as _sandbox_runtime_attachments from "../_sandbox_runtime/attachments.js";
 import type * as _sandbox_runtime_backgroundProcesses from "../_sandbox_runtime/backgroundProcesses.js";
 import type * as _sandbox_runtime_bulkSnapshotRetention from "../_sandbox_runtime/bulkSnapshotRetention.js";
@@ -376,7 +379,6 @@ import type * as _systemSkills_evaResolveConflicts from "../_systemSkills/evaRes
 import type * as _systemSkills_evaSetup from "../_systemSkills/evaSetup.js";
 import type * as _systemSkills_registry from "../_systemSkills/registry.js";
 import type * as _taskWorkflow_deploymentHelpers from "../_taskWorkflow/deploymentHelpers.js";
-import type * as _taskWorkflow_events from "../_taskWorkflow/events.js";
 import type * as _taskWorkflow_helpers from "../_taskWorkflow/helpers.js";
 import type * as _taskWorkflow_prompts from "../_taskWorkflow/prompts.js";
 import type * as _taskWorkflow_queries from "../_taskWorkflow/queries.js";
@@ -404,6 +406,7 @@ import type * as _validators_projectTasks from "../_validators/projectTasks.js";
 import type * as _validators_shapes from "../_validators/shapes.js";
 import type * as _validators_shortcuts from "../_validators/shortcuts.js";
 import type * as _validators_tableFields from "../_validators/tableFields.js";
+import type * as agentJobs from "../agentJobs.js";
 import type * as agentTasks from "../agentTasks.js";
 import type * as analytics from "../analytics.js";
 import type * as annotations from "../annotations.js";
@@ -605,6 +608,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "_agentJobs/completion": typeof _agentJobs_completion;
+  "_agentJobs/owner": typeof _agentJobs_owner;
+  "_agentJobs/runOneShotAgent": typeof _agentJobs_runOneShotAgent;
+  "_agentJobs/slot": typeof _agentJobs_slot;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -869,7 +876,6 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
   "_sandbox/vercelRegion": typeof _sandbox_vercelRegion;
   "_sandbox/vercelSnapshotOptions": typeof _sandbox_vercelSnapshotOptions;
-  "_sandbox_runtime/agentLaunchStep": typeof _sandbox_runtime_agentLaunchStep;
   "_sandbox_runtime/attachments": typeof _sandbox_runtime_attachments;
   "_sandbox_runtime/backgroundProcesses": typeof _sandbox_runtime_backgroundProcesses;
   "_sandbox_runtime/bulkSnapshotRetention": typeof _sandbox_runtime_bulkSnapshotRetention;
@@ -973,7 +979,6 @@ declare const fullApi: ApiFromModules<{
   "_systemSkills/evaSetup": typeof _systemSkills_evaSetup;
   "_systemSkills/registry": typeof _systemSkills_registry;
   "_taskWorkflow/deploymentHelpers": typeof _taskWorkflow_deploymentHelpers;
-  "_taskWorkflow/events": typeof _taskWorkflow_events;
   "_taskWorkflow/helpers": typeof _taskWorkflow_helpers;
   "_taskWorkflow/prompts": typeof _taskWorkflow_prompts;
   "_taskWorkflow/queries": typeof _taskWorkflow_queries;
@@ -1001,6 +1006,7 @@ declare const fullApi: ApiFromModules<{
   "_validators/shapes": typeof _validators_shapes;
   "_validators/shortcuts": typeof _validators_shortcuts;
   "_validators/tableFields": typeof _validators_tableFields;
+  agentJobs: typeof agentJobs;
   agentTasks: typeof agentTasks;
   analytics: typeof analytics;
   annotations: typeof annotations;

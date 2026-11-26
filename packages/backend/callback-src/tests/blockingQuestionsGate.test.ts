@@ -48,9 +48,7 @@ describe("BLOCKING_QUESTIONS_ENABLED", () => {
   });
 
   test("is off for surfaces with no answering UI", async () => {
-    expect(await gateWith({ entityIdField: "docId" })).toBe(false);
-    expect(await gateWith({ entityIdField: "reportId" })).toBe(false);
-    expect(await gateWith({ entityIdField: "automationRunId" })).toBe(false);
+    expect(await gateWith({ entityIdField: "entityId" })).toBe(false);
     expect(await gateWith({})).toBe(false);
   });
 });

@@ -95,8 +95,8 @@ test(
       }),
       turn: await ctx.db.get(lease.turnId),
     }));
-    expect(settled.stale).toBe(false);
-    expect(settled.current).toBe(true);
+    expect(settled.stale).toBeNull();
+    expect(settled.current?.workflowId).toBe("recap-workflow");
     expect(settled.turn?.state).toBe("done");
   },
   TIMEOUT_MS,

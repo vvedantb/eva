@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
-import { workflow } from "../workflowManager";
+import { toWorkflowId, workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
 import {
   prepareLinkedRepoSteps,
@@ -24,11 +24,10 @@ import {
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
-  recordCompletionLog,
-  sendCompletionEvent,
   clearStreamingActivity,
   extractFirstJsonValue,
 } from "../_taskWorkflow/helpers";
+import { recordCompletionLog } from "../_agentJobs/completion";
 import {
   drainSessionChatQueues,
   scheduleQueueDrainAfterBackgroundAgents,
@@ -1675,16 +1674,20 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }
 
-    await sendCompletionEvent(ctx, sessionCompleteEvent, activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-      pendingQuestion: args.pendingQuestion,
-      beforeSha: args.beforeSha,
-      afterSha: args.afterSha,
-      beforeShas: args.beforeShas,
-      afterShas: args.afterShas,
+    await workflow.sendEvent(ctx, {
+      ...sessionCompleteEvent,
+      workflowId: toWorkflowId(activeWorkflowId),
+      value: {
+        success: args.success,
+        result: args.result,
+        error: args.error,
+        activityLog: args.activityLog,
+        pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
+      },
     });
 
     await recordCompletionLog(ctx, {
