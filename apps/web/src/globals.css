@@ -16,6 +16,9 @@
  * `text-muted-foreground` stay on the package's grey text. */
 @theme inline {
   --color-muted: var(--surface-secondary);
+  --color-mention: var(--mention);
+  --color-mention-foreground: var(--mention-foreground);
+  --color-mention-self: var(--mention-self);
   --text-color-muted: var(--muted);
 }
 
@@ -419,6 +422,12 @@
      * for a chromatic accent. The package's `--accent` is the brand colour. */
     --accent-soft: var(--surface-secondary);
     --accent-soft-foreground: var(--foreground);
+    /* @mention chips: a fixed blue, readable on any bubble whatever the
+     * accent (a neutral accent-soft matched a teammate bubble's grey).
+     * `--mention-self` marks a mention of the reader. Phone: EVA_THEME. */
+    --mention: rgb(37 99 235 / 0.12);
+    --mention-foreground: rgb(29 78 216);
+    --mention-self: rgb(37 99 235 / 0.22);
     --chart-1: var(--accent);
     --scrollbar-base: var(--muted);
     --chart-2: rgb(56 189 248);
@@ -504,6 +513,9 @@
   }
 
   .dark {
+    --mention: rgb(96 165 250 / 0.18);
+    --mention-foreground: rgb(147 197 253);
+    --mention-self: rgb(96 165 250 / 0.3);
     --cat-1: rgb(138 165 214);
     --cat-2: rgb(170 152 214);
     --cat-3: rgb(120 176 172);

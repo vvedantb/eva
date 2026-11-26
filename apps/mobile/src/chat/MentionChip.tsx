@@ -1,3 +1,5 @@
+import { useQuery } from "convex/react";
+import { api } from "@eva/backend";
 import { mentionTokensToChipLinks, parseMentionChipHref, type MentionChipKind } from "@eva/shared";
 import { parseCitationSegments } from "@eva/shared/assistantCitation";
 import { EVA_THEME } from "@eva/shared/evaTheme";
@@ -8,10 +10,10 @@ import { QuoteCard } from "@/chat/Quotes";
 import type { ComposerPick } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
-/** The web `MENTION_CHIP_CLASS`: `bg-accent text-accent-foreground`, `text-xs font-medium`, `rounded-full`. */
+/** The web `MENTION_CHIP_CLASS`: the fixed mention blue, `text-xs font-medium`, `rounded-full`. */
 function useChipColors() {
   const theme = EVA_THEME[useScheme()];
-  return { background: theme.accent, foreground: theme.accentForeground };
+  return { background: theme.mention, self: theme.mentionSelf, foreground: theme.mentionForeground };
 }
 
 const CHIP_TEXT = { fontSize: 12, lineHeight: 16, fontWeight: "500" } as const;
@@ -55,6 +57,7 @@ export function UserMessageText({ content }: { content: string }) {
 /** Markdown with `@` and `/` tokens as chips (a sent message, a recap). */
 export function MessageMarkdown({ content }: { content: string }) {
   const colors = useChipColors();
+  const currentUserId = useQuery(api.auth.me, {});
   return (
     <Markdown
       leading="normal"
@@ -64,7 +67,13 @@ export function MessageMarkdown({ content }: { content: string }) {
         return (
           <Text
             className="font-instrument-sans-medium"
-            style={{ ...CHIP_TEXT, color: colors.foreground, backgroundColor: colors.background, borderRadius: 999 }}
+            style={{
+              ...CHIP_TEXT,
+              color: colors.foreground,
+              // A mention of the reader is a stronger fill, as the web.
+              backgroundColor: chip.kind === "at" && chip.id === currentUserId ? colors.self : colors.background,
+              borderRadius: 999,
+            }}
           >
             {`\u00A0${chipText(chip.kind, text)}\u00A0`}
           </Text>

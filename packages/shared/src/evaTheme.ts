@@ -13,6 +13,11 @@ const light = {
   mutedForeground: "#646567",
   accent: "#f4f4f5",
   accentForeground: "#18181b",
+  // @mention chips: a fixed blue, readable on any bubble and accent
+  // (globals.css `--mention*`). `mentionSelf` marks a mention of the reader.
+  mention: "#2563eb1f",
+  mentionForeground: "#1d4ed8",
+  mentionSelf: "#2563eb38",
   destructive: "#ff373c",
   destructiveForeground: "#fcfcfc",
   success: "#15c964",
@@ -56,6 +61,9 @@ const dark = {
   mutedForeground: "#9fa0a2",
   accent: "#141414",
   accentForeground: "#f4f4f5",
+  mention: "#60a5fa2e",
+  mentionForeground: "#93c5fd",
+  mentionSelf: "#60a5fa4d",
   destructive: "#db3b3e",
   destructiveForeground: "#fcfcfc",
   success: "#15c964",
