@@ -663,7 +663,12 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   const taskArgs = {
-    title: z.string().describe("Short task title"),
+    title: z
+      .string()
+      .optional()
+      .describe(
+        "Short task title. If omitted, the task is titled from its description.",
+      ),
     description: z
       .string()
       .describe(
@@ -706,7 +711,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   };
 
   type TaskInput = {
-    title: string;
+    title?: string;
     description: string;
     repoName?: string;
     baseBranch?: string;
@@ -760,7 +765,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     projectId: string,
     userId: string,
     tasks: Array<{
-      title: string;
+      title?: string;
       description?: string;
       repoId?: string;
       phaseLabel?: string;
@@ -800,27 +805,19 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     // behind them fall back to `repo.defaultModel`, and that per-repo choice
     // (provider, cost, plan limits) is the one the MCP surface must not
     // override. Per-turn sends (orchestratorSendMessage) keep their override.
-    const taskId = await mcpCallAsUser(
-      ctx,
-      clerkUserId,
+    // A project task from an agent outside the coordinator waits in Triage
+    // for a person's approval (`createAgentTask`).
+    const taskId = await ctx.runMutation(
+      internal._agentTasks.mutations.createAgentTask,
       {
-        type: "mutation",
-        path: "_agentTasks/mutations:createQuickTask",
-        args: {
-          repoId: repo.id,
-          title: input.title,
-          description: input.description,
-          ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
-          ...(input.projectId ? { projectId: input.projectId } : {}),
-          ...(input.projectId && input.phaseLabel
-            ? { phaseLabel: input.phaseLabel }
-            : {}),
-          // A project task from an agent outside the coordinator waits in
-          // Triage for a person's approval.
-          approved: false,
-        },
+        userId,
+        repoId: repo.id,
+        title: input.title,
+        description: input.description,
+        baseBranch: input.baseBranch || undefined,
+        projectId: input.projectId,
+        phaseLabel: input.projectId ? input.phaseLabel : undefined,
       },
-      z.string(),
     );
 
     await watchTaskAsAve(taskId);
@@ -916,11 +913,18 @@ In a project coordinator chat the batch joins this project (do not pass projectT
         tasks: z
           .array(
             z.object({
-              title: z.string().describe("Short task title"),
+              title: z
+                .string()
+                .optional()
+                .describe(
+                  "Short task title. If omitted, the task is titled from its description.",
+                ),
               description: z
                 .string()
                 .optional()
-                .describe("Full prompt/instructions for the task"),
+                .describe(
+                  "Full prompt/instructions for the task. Required when title is omitted.",
+                ),
               repoName: z
                 .string()
                 .optional()
@@ -999,7 +1003,7 @@ In a project coordinator chat the batch joins this project (do not pass projectT
             args: {
               repoId: repo.id,
               tasks: input.tasks.map((t) => ({
-                title: t.title,
+                ...(t.title ? { title: t.title } : {}),
                 ...(t.description ? { description: t.description } : {}),
               })),
               ...(input.projectTitle

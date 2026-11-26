@@ -1,4 +1,6 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { startTaskRun } from "../_taskWorkflow/startRun";
 import { aiModelValidator, runModeValidator } from "../validators";
 import {
@@ -10,6 +12,68 @@ import {
 } from "../functions";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
+
+/**
+ * Starts a task now: a run and its workflow. The one start for `startExecution`
+ * and "Save and Run" on a new task (`createQuickTask`, `activateDraft`).
+ */
+export async function startTaskExecution(
+  ctx: MutationCtx & { userId: Id<"users"> },
+  taskId: Id<"agentTasks">,
+  options: {
+    mode?: Infer<typeof runModeValidator>;
+    triggeringCommentId?: Id<"taskComments">;
+  } = {},
+) {
+  const task = await ctx.db.get(taskId);
+  if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+    throw new Error("Task not found");
+  await assertTaskNotArchived(ctx.db, task);
+  if (task.status === "draft") {
+    throw new Error("Cannot execute a draft task");
+  }
+  if (!task.repoId) {
+    throw new Error("Task has no associated repository");
+  }
+  const repo = await ctx.db.get(task.repoId);
+  if (!repo) {
+    throw new Error("Repository not found");
+  }
+  // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
+  if (await hasActiveRun(ctx.db, taskId)) {
+    throw new Error("Task already has an active execution");
+  }
+
+  const firstOnBranch = await isFirstTaskOnBranch(ctx.db, taskId);
+  const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
+
+  const runId = await startTaskRun(ctx, {
+    task,
+    repo,
+    userId: ctx.userId,
+    baseBranch,
+    isFirstTaskOnBranch: firstOnBranch,
+    mode: options.mode,
+    triggeredBy: ctx.userId,
+    // Explicit comment (quick-task "Make changes") wins; otherwise consume any
+    // comment parked on the task by an earlier change request.
+    triggeringCommentId:
+      options.triggeringCommentId ?? task.pendingChangeRequestCommentId,
+    clearPendingChangeRequest: true,
+    rollbackStatus: "todo",
+  });
+
+  return {
+    runId,
+    taskId,
+    repoId: task.repoId,
+    installationId: repo.installationId,
+    projectId: task.projectId,
+    baseBranch,
+    isFirstTaskOnBranch: firstOnBranch,
+    model: task.model ?? repo.defaultModel,
+  };
+}
 
 /** Starts task execution by creating a run and launching the workflow. */
 export const startExecution = authMutation({
@@ -29,56 +93,11 @@ export const startExecution = authMutation({
     isFirstTaskOnBranch: v.boolean(),
     model: v.optional(aiModelValidator),
   }),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.id);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
-      throw new Error("Task not found");
-    await assertTaskNotArchived(ctx.db, task);
-    if (task.status === "draft") {
-      throw new Error("Cannot execute a draft task");
-    }
-    if (!task.repoId) {
-      throw new Error("Task has no associated repository");
-    }
-    const repo = await ctx.db.get(task.repoId);
-    if (!repo) {
-      throw new Error("Repository not found");
-    }
-    // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
-    if (await hasActiveRun(ctx.db, args.id)) {
-      throw new Error("Task already has an active execution");
-    }
-
-    const firstOnBranch = await isFirstTaskOnBranch(ctx.db, args.id);
-    const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
-
-    const runId = await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: ctx.userId,
-      baseBranch,
-      isFirstTaskOnBranch: firstOnBranch,
+  handler: async (ctx, args) =>
+    await startTaskExecution(ctx, args.id, {
       mode: args.mode,
-      triggeredBy: ctx.userId,
-      // Explicit comment (quick-task "Make changes") wins; otherwise consume any
-      // comment parked on the task by an earlier change request.
-      triggeringCommentId:
-        args.triggeringCommentId ?? task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
-    });
-
-    return {
-      runId,
-      taskId: args.id,
-      repoId: task.repoId,
-      installationId: repo.installationId,
-      projectId: task.projectId,
-      baseBranch,
-      isFirstTaskOnBranch: firstOnBranch,
-      model: task.model ?? repo.defaultModel,
-    };
-  },
+      triggeringCommentId: args.triggeringCommentId,
+    }),
 });
 
 /** Schedules a task for future execution at a specified time. */

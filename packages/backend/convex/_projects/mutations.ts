@@ -1,6 +1,9 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
+import { tokenizedToDisplayText } from "@eva/shared";
+import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
+import { sendOwnerChatMessage } from "../_sessions/execution";
 import {
   priorityValidator,
   aiModelValidator,
@@ -28,34 +31,34 @@ import {
 } from "../_userProviderAccounts/defaults";
 
 /**
- * Creates a new project. It plans in its coordinator chat (decision 1): no
- * interview, no spec, no project branch. `rawInput` becomes the description:
- * the project context every coordinator and child task turn carries
- * (`projectBriefBlock`), so the person need not repeat it. The client opens
- * the coordinator chat;
- * nothing is sent for them. `skipPlanning` stays accepted for older clients
- * and is ignored: every project starts the same way, and nothing starts the
- * old interview for it.
+ * Creates a new project from one prompt. It plans in its coordinator chat
+ * (decision 1): no interview, no spec, no project branch. `rawInput` (the
+ * prompt, with mention tokens) becomes the description as display text: the
+ * project context every coordinator and child task turn carries
+ * (`projectBriefBlock`). The title is the prompt's first line until a
+ * generated one replaces it (`_shared/ownerTitle.ts`). With `run` ("Save and
+ * Run") the prompt is also the first message in the coordinator chat; without
+ * it nothing is sent. The client opens the project either way.
  */
 export const create = authMutation({
   args: {
     repoId: v.id("githubRepos"),
-    title: v.string(),
     rawInput: v.string(),
     baseBranch: v.optional(v.string()),
     priority: v.optional(priorityValidator),
-    /** Ignored; kept for older clients. */
-    skipPlanning: v.optional(v.boolean()),
     model: v.optional(aiModelValidator),
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
+    run: v.optional(v.boolean()),
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    const prompt = args.rawInput.trim();
+    const { title } = initialTitle(undefined, prompt);
     const numId = await allocateNumId(ctx.db, args.repoId, "projects");
     const repo = await ctx.db.get(args.repoId);
     const model = args.model ?? repo?.defaultModel;
@@ -67,13 +70,12 @@ export const create = authMutation({
             args.providerAccountId,
             ctx.userId,
           );
-    const description = args.rawInput.trim();
-    return await ctx.db.insert("projects", {
+    const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
       userId: ctx.userId,
-      title: args.title,
-      rawInput: args.rawInput,
-      ...(description ? { description } : {}),
+      title,
+      rawInput: prompt,
+      description: tokenizedToDisplayText(prompt),
       baseBranch: args.baseBranch,
       projectStartDate: Date.now(),
       priority: args.priority,
@@ -81,6 +83,17 @@ export const create = authMutation({
       model,
       providerAccountId,
     });
+    await scheduleGeneratedTitle(ctx, { kind: "project", projectId }, prompt, title);
+    if (args.run) {
+      const project = await ctx.db.get(projectId);
+      if (!project) throw new Error("Project not found");
+      await sendOwnerChatMessage(ctx, {
+        entity: { kind: "project", project },
+        userId: ctx.userId,
+        content: prompt,
+      });
+    }
+    return projectId;
   },
 });
 

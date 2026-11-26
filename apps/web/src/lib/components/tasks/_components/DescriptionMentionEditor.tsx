@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { cn } from "@eva/ui";
+import { useMediaQuery } from "@vvedantb/ui";
 import {
   MentionEditor,
   type MentionEditorHandle,
@@ -50,6 +51,12 @@ interface DescriptionMentionEditorProps {
    * attachment so the editor skips inline insert.
    */
   onLargeTextPaste?: (text: string) => boolean;
+  /**
+   * Enter submits, as the session composer: Shift+Enter is a newline, an open
+   * @ or / picker takes Enter first, and a phone keyboard's Return stays a
+   * newline. Omitted, Enter is always a newline.
+   */
+  onEnterSubmit?: () => void;
 }
 
 export const DescriptionMentionEditor = forwardRef<
@@ -70,9 +77,12 @@ export const DescriptionMentionEditor = forwardRef<
     completionContext,
     onImageFiles,
     onLargeTextPaste,
+    onEnterSubmit,
   },
   ref,
 ) {
+  // Soft keyboard, not viewport (as `MentionTextarea`).
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
   const { repo, basePath } = useRepo();
   const flags = useQuery(api.auth.getExperimentalFlags);
   const { suggestion, dismiss } = useInlineSuggestion(
@@ -109,6 +119,14 @@ export const DescriptionMentionEditor = forwardRef<
       disabled={disabled}
       onImageFiles={onImageFiles}
       onLargeTextPaste={onLargeTextPaste}
+      onEnterSubmit={
+        onEnterSubmit && !isCoarsePointer
+          ? (e) => {
+              // Mod+Enter is the dialog's own submit shortcut; one press, one submit.
+              if (!e.metaKey && !e.ctrlKey) onEnterSubmit();
+            }
+          : undefined
+      }
       suggestion={suggestion}
       onAcceptSuggestion={
         suggestion ? () => onValueChange(value + suggestion) : undefined

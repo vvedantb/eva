@@ -125,6 +125,7 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export { titleFromPrompt } from "./promptTitle";
 export {
   composerTraitFields,
   hasComposerTraitUpdate,
@@ -179,7 +180,11 @@ export {
   sessionMenuActions,
   type SessionMenuAction,
 } from "./sessionMenu";
-export { draftCountAfterRemove, draftsAfterRemove } from "./draftVisibility";
+export {
+  draftCountAfterRemove,
+  draftPrompt,
+  draftsAfterRemove,
+} from "./draftVisibility";
 export {
   ARCHIVE_LABEL,
   ARCHIVE_LIST_MODES,

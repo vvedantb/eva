@@ -34,11 +34,11 @@ async function fixture() {
   const asUser = t.withIdentity({ subject: CLERK_ID });
   const keptId = await asUser.mutation(api.agentTasks.saveDraft, {
     repoId,
-    title: "Kept draft",
+    description: "Kept draft",
   });
   const removedId = await asUser.mutation(api.agentTasks.saveDraft, {
     repoId,
-    title: "Removed draft",
+    description: "Removed draft",
   });
   return { t, asUser, repoId, keptId, removedId };
 }

@@ -245,8 +245,7 @@ describe("who starts project tasks", () => {
       const triageId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: f.repoId,
         projectId: f.projectId,
-        title: "The button is hard to find",
-        approved: false,
+        description: "The button is hard to find",
       });
       await schedule(f);
       const triaged = await taskDoc(f, triageId);
@@ -597,8 +596,7 @@ describe("approved Triage goes to the coordinator", () => {
     f.asUser.mutation(api.agentTasks.createQuickTask, {
       repoId: f.repoId,
       projectId: f.projectId,
-      title,
-      approved: false,
+      description: title,
     });
 
   const wakes = (f: Fixture) =>
