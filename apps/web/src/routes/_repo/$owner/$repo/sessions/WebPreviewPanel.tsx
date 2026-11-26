@@ -126,10 +126,11 @@ export function WebPreviewPanel({
   const [annotationMode, setAnnotationMode] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   // One subscription per chat: every pane of it shares the cached result.
+  // Skipped while the sandbox is asleep: the toolbar is not on screen then.
   const comments =
     useQuery(
       api.previewComments.list,
-      annotation?.chatId ? { chatId: annotation.chatId } : "skip",
+      isActive && annotation?.chatId ? { chatId: annotation.chatId } : "skip",
     ) ?? [];
   const [linkedMessageId, setLinkedMessageId] = useQueryState(
     MESSAGE_LINK_PARAM,
@@ -459,7 +460,9 @@ export function WebPreviewPanel({
               onSubmit={annotation.submit}
             />
           ) : null}
-          {annotation && commentsOpen && !sketchMode ? (
+          {/* The floating mini-player takes the iframe; the drawer stays
+              behind with the pane instead of covering the small player. */}
+          {annotation && commentsOpen && !sketchMode && !isFloating ? (
             <PreviewCommentsDrawer
               iframeElement={iframeElement}
               comments={comments}

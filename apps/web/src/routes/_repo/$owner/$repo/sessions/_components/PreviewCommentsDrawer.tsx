@@ -111,8 +111,13 @@ function DrawerPanel({
         width,
         height: box.height,
       }}
+      // Only while focus is in the drawer: keys typed into the preview go to
+      // the iframe's own document.
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
         <span className="text-sm font-medium">Comments</span>
         <Button
           size="icon-sm"
@@ -124,7 +129,7 @@ function DrawerPanel({
           <IconX size={14} aria-hidden />
         </Button>
       </div>
-      <div className="flex items-center gap-1 border-b border-border px-3 py-1.5 max-sm:gap-2.5">
+      <div className="flex items-center gap-1 px-3 py-1.5 max-sm:gap-2.5">
         <CommentFilterTab
           active={scope === "page"}
           onSelect={() => setScope("page")}
