@@ -302,6 +302,12 @@ export const ChatMessage = memo(function ChatMessage({
         onReply={onReply ? () => onReply(message._id) : undefined}
         copyText={copyPlain}
         menuItems={rowActions.filter((action) => action.key !== "reply")}
+        time={
+          // Eva's reply: when it finished and how long it took, as the footer row.
+          message.role === "assistant" && message.finishedAt
+            ? `${formatClockTime(message.finishedAt)} · ${formatDuration(message.timestamp, message.finishedAt)}`
+            : formatClockTime(message.timestamp)
+        }
         rating={
           message.role === "assistant" && canRate
             ? {
@@ -607,7 +613,7 @@ function UserTurnBubble({
     </div>
   );
   return toolbar ? (
-    <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+    <BubbleWithToolbar toolbar={toolbar} className={COORDINATOR_BUBBLE_MAX_WIDTH}>
       {bubble}
     </BubbleWithToolbar>
   ) : (
@@ -615,22 +621,24 @@ function UserTurnBubble({
   );
 }
 
+/** How wide a coordinator chat bubble may grow (Eva, you and teammates). */
+const COORDINATOR_BUBBLE_MAX_WIDTH = "max-w-[70%]";
+
 /**
  * The coordinator chat's bubble frame: the floating toolbar sits on its
- * top-right corner, and the clock time is the bubble's tooltip (the footer
- * row that showed it is gone there).
+ * top-right corner and carries the time (the footer row is gone there).
  */
 function BubbleWithToolbar({
   toolbar,
-  timestamp,
+  className = "max-w-full",
   children,
 }: {
   toolbar: ReactNode;
-  timestamp: number;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="relative min-w-0 max-w-full" title={formatClockTime(timestamp)}>
+    <div className={cn("relative min-w-0", className)}>
       {children}
       {toolbar}
     </div>
@@ -935,12 +943,14 @@ function AssistantTurnContent({
   );
 
   return bubble ? (
-    <div className="flex min-w-0 max-w-[85%] items-end gap-2">
+    <div
+      className={cn("flex min-w-0 items-end gap-2", COORDINATOR_BUBBLE_MAX_WIDTH)}
+    >
       <div className="size-4 shrink-0">
         {joinsNext ? null : <EvaIcon size={16} disc={false} />}
       </div>
       {toolbar ? (
-        <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+        <BubbleWithToolbar toolbar={toolbar}>
           {content}
         </BubbleWithToolbar>
       ) : (

@@ -55,7 +55,7 @@ export function TeammateBubble({
 /** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with her mark. */
 export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
   return (
-    <SideBubble avatar={<EvaMark size={16} />} joinsNext={joinsNext} className="max-w-[85%]">
+    <SideBubble avatar={<EvaMark size={16} />} joinsNext={joinsNext} className="max-w-[70%]">
       {children}
     </SideBubble>
   );

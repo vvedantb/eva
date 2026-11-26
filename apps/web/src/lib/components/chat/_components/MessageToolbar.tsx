@@ -24,18 +24,21 @@ const BUTTON_CLASS = "hit-target text-muted-foreground hover:text-foreground";
  * the bubble, so it takes no space. On Eva's finished replies: 👍 👎 (the
  * footer's `TurnFeedbackActions`, with its comment box), then Reply, Copy, and
  * the rest (Copy link; a ⋯ menu once there are two or more, as fork and
- * checkpoints elsewhere). Stays up while its comment
+ * checkpoints elsewhere), then the time (and how long Eva took). Stays up while its comment
  * box or menu is open.
  */
 export function MessageToolbar({
   onReply,
   copyText,
   menuItems,
+  time,
   rating,
 }: {
   onReply?: () => void;
   copyText?: string;
   menuItems: ChatMessageActionItem[];
+  /** "10:17 PM", or "10:17 PM · 2m" on Eva's finished replies. */
+  time: string;
   /** Eva's finished turns: the rating buttons and their saved state. */
   rating?: {
     messageId: string;
@@ -47,7 +50,6 @@ export function MessageToolbar({
   // the ⋯ menu only appears when there are two or more.
   const hasMenu = menuItems.length > 1;
   const directItems = hasMenu ? [] : menuItems;
-  if (!rating && !onReply && !copyText && menuItems.length === 0) return null;
   return (
     <div
       className={cn(
@@ -131,6 +133,9 @@ export function MessageToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      <span className="px-1.5 text-2xs tabular-nums text-muted-foreground">
+        {time}
+      </span>
     </div>
   );
 }

@@ -1017,8 +1017,12 @@ function ChatBodyInner({
     return (
       <div
         key={message._id}
-        // A run of one sender's bubbles sits 4px apart, not 12.
-        className={cn("flex flex-col gap-3", joinsPrevious && "-mt-2")}
+        // A run of one sender's bubbles sits 4px apart, not 12 (20 in the
+        // coordinator chat, whose hover toolbar sits on a bubble's top edge).
+        className={cn(
+          "flex flex-col gap-3",
+          joinsPrevious && (assistantBubbles ? "-mt-4" : "-mt-2"),
+        )}
       >
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
@@ -1099,7 +1103,10 @@ function ChatBodyInner({
         resize={streamingTargetId ? "smooth" : "instant"}
       >
         <ConversationContent
-          className="gap-3 p-3 max-w-3xl mx-auto w-full"
+          className={cn(
+            "p-3 max-w-3xl mx-auto w-full",
+            assistantBubbles ? "gap-5" : "gap-3",
+          )}
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
           // reader's place itself, and two corrections would add up.
           // Until the backlog commits, the content is only the last turn: the
