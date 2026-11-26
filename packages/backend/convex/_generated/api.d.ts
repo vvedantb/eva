@@ -190,6 +190,7 @@ import type * as _migrations_backfillEvaPrRecapOrigin from "../_migrations/backf
 import type * as _migrations_backfillExperimentalFlags from "../_migrations/backfillExperimentalFlags.js";
 import type * as _migrations_backfillNumIds from "../_migrations/backfillNumIds.js";
 import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/backfillQueuedMessageOrder.js";
+import type * as _migrations_backfillRunChatTurns from "../_migrations/backfillRunChatTurns.js";
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
 import type * as _migrations_cleanup from "../_migrations/cleanup.js";
@@ -792,6 +793,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillExperimentalFlags": typeof _migrations_backfillExperimentalFlags;
   "_migrations/backfillNumIds": typeof _migrations_backfillNumIds;
   "_migrations/backfillQueuedMessageOrder": typeof _migrations_backfillQueuedMessageOrder;
+  "_migrations/backfillRunChatTurns": typeof _migrations_backfillRunChatTurns;
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
   "_migrations/cleanup": typeof _migrations_cleanup;
