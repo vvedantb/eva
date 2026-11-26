@@ -44,7 +44,9 @@ interface DeckCardProps {
  * never drift from the deck itself.
  */
 export function DeckCard({ deck, index }: DeckCardProps) {
-  const stage = useStageScale();
+  // Destructured: reading `scale` off the object passed as a ref would make the
+  // React Compiler treat it as a ref read during render.
+  const { scale: stageScale, measure: measureStage } = useStageScale();
 
   function stopCardClick(event: MouseEvent<HTMLAnchorElement>) {
     event.stopPropagation();
@@ -87,7 +89,7 @@ export function DeckCard({ deck, index }: DeckCardProps) {
       />
 
       <div
-        ref={stage.measure}
+        ref={measureStage}
         aria-hidden
         className="pointer-events-none relative aspect-video overflow-hidden rounded-[12px] border border-white/10 bg-zinc-950"
       >
@@ -95,7 +97,7 @@ export function DeckCard({ deck, index }: DeckCardProps) {
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
-            transform: `scale(${stage.scale})`,
+            transform: `scale(${stageScale})`,
             transformOrigin: "top left",
           }}
           className="absolute top-0 left-0"

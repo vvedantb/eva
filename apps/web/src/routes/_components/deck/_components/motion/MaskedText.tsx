@@ -159,13 +159,21 @@ export function MaskedText({
     );
   }
 
-  let index = 0;
+  // Each word's place in reading order, counted outside the render callback
+  // (the React Compiler cannot compile a counter mutated inside a lambda).
+  const units = splitWords(children);
+  const order: number[] = [];
+  let count = 0;
+  for (const unit of units) {
+    order.push(count);
+    if (unit.kind === "word" || unit.kind === "node") count += 1;
+  }
   return (
     <span className={className}>
-      {splitWords(children).map((unit, key) => {
+      {units.map((unit, key) => {
         if (unit.kind === "space") return " ";
         if (unit.kind === "break") return <br key={key} />;
-        const delayAt = at(index++);
+        const delayAt = at(order[key] ?? 0);
         return (
           <Mask
             key={key}

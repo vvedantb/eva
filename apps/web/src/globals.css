@@ -1930,6 +1930,7 @@ html[data-page-hidden] .ave-face *,
   --deck-brand-a: #ffd75e;
   --deck-brand-b: #f2a516;
   --deck-brand-c: #c27406;
+}
 /* ───────────────────────────────────────────────────────────────────
  * No zoom on focus. iOS Safari zooms the page when a field under 16px gets
  * focus, and does not zoom back out. The composer (`text-sm`) and about

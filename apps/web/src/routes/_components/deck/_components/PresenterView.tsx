@@ -52,7 +52,9 @@ export function PresenterView({
   const nav = useDeckNavigation(slides, slide, onNavigate, (next, step) =>
     postDeckMessage({ deck: basePath, slide: next, step }),
   );
-  const stage = useStageScale();
+  // Destructured: reading `scale` off the object passed as a ref would make the
+  // React Compiler treat it as a ref read during render.
+  const { scale: stageScale, measure: measureStage } = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
 
   // Next and back move whole slides, each starting from its first step: the
@@ -88,14 +90,14 @@ export function PresenterView({
     >
       <div className="flex w-[58%] min-w-0 flex-col gap-5 p-6">
         <div
-          ref={stage.measure}
+          ref={measureStage}
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         >
           <div
             style={{
               width: DESIGN_W,
               height: DESIGN_H,
-              transform: `scale(${stage.scale})`,
+              transform: `scale(${stageScale})`,
               transformOrigin: "center",
               // Same viewing distance as the stage, so a camera shot reads
               // identically in the preview. The rounded clip below keeps this

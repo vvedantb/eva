@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useLocalStorage } from "usehooks-ts";
+import { z } from "zod";
 import { api } from "@eva/backend";
 
 /**
@@ -12,12 +14,20 @@ import { api } from "@eva/backend";
  * slide and a status, nothing else.
  */
 
-/** Survives a reload, so refreshing the host window keeps the host role. */
-const hostStorageKey = (code: string) => `eva:presentation-host:${code}`;
+/**
+ * Session code → host key, for every deck this browser is presenting. Survives
+ * a reload, so refreshing the host window keeps the host role.
+ */
+const HOST_KEYS_STORAGE = "eva:deck-host-keys";
+const hostKeysSchema = z.record(z.string(), z.string());
 
-interface HostRecord {
-  code: string;
-  hostKey: string;
+function parseHostKeys(raw: string): Record<string, string> {
+  try {
+    const parsed = hostKeysSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
 }
 
 export type LiveShareState = "none" | "loading" | "live" | "ended" | "notfound";
@@ -37,12 +47,6 @@ export interface LiveShare {
   stopSharing: () => Promise<void>;
   /** Drops `?session=` without ending the session. */
   leave: () => void;
-  /**
-   * Call from a ref callback once the deck is mounted. Re-reads the stored host
-   * key for the current code, so a reload restores the host role without ever
-   * touching `localStorage` during render.
-   */
-  restoreHost: () => void;
 }
 
 interface UseLiveShareArgs {
@@ -59,7 +63,12 @@ export function useLiveShare({
   sessionCode,
   updateSearch,
 }: UseLiveShareArgs): LiveShare {
-  const [host, setHost] = useState<HostRecord | null>(null);
+  const [hostKeys, setHostKeys] = useLocalStorage<Record<string, string>>(
+    HOST_KEYS_STORAGE,
+    {},
+    { deserializer: parseHostKeys },
+  );
+  const hostKey = sessionCode ? hostKeys[sessionCode] : undefined;
   const [isStarting, setIsStarting] = useState(false);
 
   const session = useQuery(
@@ -81,7 +90,7 @@ export function useLiveShare({
 
   // A code nobody can find is not a session at all, so the deck falls back to
   // local control rather than stranding the viewer on slide 1.
-  const hosting = host !== null && host.code === sessionCode;
+  const hosting = hostKey !== undefined;
   const isHost = hosting && sessionState !== "notfound";
   const isFollower =
     sessionCode !== undefined && !hosting && sessionState !== "notfound";
@@ -90,23 +99,13 @@ export function useLiveShare({
       ? session.slide
       : slide;
 
-  function restoreHost() {
-    if (!sessionCode) {
-      if (host !== null) setHost(null);
-      return;
-    }
-    if (host !== null && host.code === sessionCode) return;
-    const stored = window.localStorage.getItem(hostStorageKey(sessionCode));
-    setHost(stored === null ? null : { code: sessionCode, hostKey: stored });
-  }
-
   function onNavigate(target: number) {
     if (isFollower) return;
     updateSearch({ slide: target });
-    if (!isHost || host === null) return;
+    if (!isHost || !sessionCode || hostKey === undefined) return;
     void setSlide({
-      code: host.code,
-      hostKey: host.hostKey,
+      code: sessionCode,
+      hostKey,
       slide: target,
     }).catch(() => undefined);
   }
@@ -115,29 +114,26 @@ export function useLiveShare({
     setIsStarting(true);
     try {
       const created = await createSession({ slide });
-      window.localStorage.setItem(
-        hostStorageKey(created.code),
-        created.hostKey,
-      );
-      setHost({ code: created.code, hostKey: created.hostKey });
+      setHostKeys((keys) => ({ ...keys, [created.code]: created.hostKey }));
       updateSearch({ session: created.code });
-    } finally {
+    } catch (error) {
       setIsStarting(false);
+      throw error;
     }
+    setIsStarting(false);
   }
 
   async function stopSharing() {
-    if (host === null) return;
-    await endSession({ code: host.code, hostKey: host.hostKey }).catch(
-      () => undefined,
+    if (!sessionCode || hostKey === undefined) return;
+    const code = sessionCode;
+    await endSession({ code, hostKey }).catch(() => undefined);
+    setHostKeys((keys) =>
+      Object.fromEntries(Object.entries(keys).filter(([key]) => key !== code)),
     );
-    window.localStorage.removeItem(hostStorageKey(host.code));
-    setHost(null);
     updateSearch({ session: undefined });
   }
 
   function leave() {
-    setHost(null);
     updateSearch({ session: undefined });
   }
 
@@ -152,6 +148,5 @@ export function useLiveShare({
     startSharing,
     stopSharing,
     leave,
-    restoreHost,
   };
 }

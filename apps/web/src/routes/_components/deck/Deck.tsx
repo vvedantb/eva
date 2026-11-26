@@ -120,7 +120,9 @@ export function Deck({
     share.onNavigate,
     (next, step) => postDeckMessage({ deck: basePath, slide: next, step }),
   );
-  const stage = useStageScale();
+  // Destructured: reading `scale` off the object passed as a ref would make the
+  // React Compiler treat it as a ref read during render.
+  const { scale: stageScale, measure: measureStage } = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
   // Builds play on their own unless the presenter turns it off (A).
@@ -229,12 +231,10 @@ export function Deck({
       autoFocus
       // The deck owns the keys, so it has to hold focus from the first paint —
       // `autoFocus` alone does not land on a non-form host element. The same
-      // callback attaches the presenter-window sync and restores the host role
-      // after a reload, keeping `localStorage` out of render.
+      // callback attaches the presenter-window sync.
       ref={(el) => {
         if (!el) return;
         el.focus();
-        share.restoreHost();
         return syncRef(el);
       }}
       onKeyDown={handleKeyDown}
@@ -260,7 +260,7 @@ export function Deck({
         className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden"
         onClick={handleStageClick}
         role="presentation"
-        ref={stage.measure}
+        ref={measureStage}
       >
         {/* The canvas owns both the fit-to-pane scale and the viewing distance,
             so the slide layers directly inside it can move in depth. Nothing
@@ -269,7 +269,7 @@ export function Deck({
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
-            transform: `scale(${stage.scale})`,
+            transform: `scale(${stageScale})`,
             transformOrigin: "center",
             perspective: STAGE_PERSPECTIVE,
             perspectiveOrigin: "50% 50%",

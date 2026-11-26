@@ -3,7 +3,7 @@ import {
   IconBrush,
   IconBulb,
   IconHammer,
-  IconSeeding,
+  IconPlant,
   IconShieldCheck,
   IconTrendingUp,
 } from "@tabler/icons-react";
@@ -181,7 +181,7 @@ export function Slide13Developer() {
             ease: EASE.expo,
           })}
         >
-          <IconSeeding
+          <IconPlant
             size={28}
             stroke={1.6}
             className="shrink-0 text-[#3B7DD8]"
