@@ -249,23 +249,22 @@
   @apply eva-gradient;
 }
 
-/* Eva's brand wash: accent from the top, chart tones at the sides.
- * `--eva-gradient-strength` scales every tone (default 1). */
+/* Eva's brand wash: accent from the top, chart tones at the sides. */
 @utility eva-gradient {
   background-image:
     radial-gradient(
       ellipse 70% 50% at 50% -8%,
-      color-mix(in oklab, var(--accent) calc(16% * var(--eva-gradient-strength, 1)), transparent),
+      color-mix(in oklab, var(--accent) 16%, transparent),
       transparent 62%
     ),
     radial-gradient(
       ellipse 40% 40% at 88% 18%,
-      color-mix(in oklab, var(--chart-2) calc(8% * var(--eva-gradient-strength, 1)), transparent),
+      color-mix(in oklab, var(--chart-2) 8%, transparent),
       transparent 60%
     ),
     radial-gradient(
       ellipse 40% 40% at 10% 30%,
-      color-mix(in oklab, var(--chart-3) calc(7% * var(--eva-gradient-strength, 1)), transparent),
+      color-mix(in oklab, var(--chart-3) 7%, transparent),
       transparent 60%
     );
 
@@ -273,39 +272,59 @@
     background-image:
       radial-gradient(
         ellipse 70% 50% at 50% -8%,
-        color-mix(in oklab, var(--accent) calc(12% * var(--eva-gradient-strength, 1)), transparent),
+        color-mix(in oklab, var(--accent) 12%, transparent),
         transparent 62%
       ),
       radial-gradient(
         ellipse 40% 40% at 88% 18%,
-        color-mix(in oklab, var(--chart-2) calc(6% * var(--eva-gradient-strength, 1)), transparent),
+        color-mix(in oklab, var(--chart-2) 6%, transparent),
         transparent 60%
       ),
       radial-gradient(
         ellipse 40% 40% at 10% 30%,
-        color-mix(in oklab, var(--chart-3) calc(5% * var(--eva-gradient-strength, 1)), transparent),
+        color-mix(in oklab, var(--chart-3) 5%, transparent),
         transparent 60%
       );
   }
 }
 
-/* Slow drift for an `eva-gradient` layer. Transform only, so it stays on the
- * compositor. Travel stays under (scale - 1) / 2, so no layer edge shows.
- * "Disable page animations" stops it. */
-@utility eva-gradient-drift {
-  animation: eva-gradient-drift 14s ease-in-out infinite alternate;
+/* Composer wash: Eva's chart tones (no accent glow) as soft blobs. Each
+ * blob drifts on its own path, so they move against each other. Transform
+ * only, so it stays on the compositor. "Disable page animations" stops it. */
+@utility eva-blob {
+  position: absolute;
+  width: 60%;
+  aspect-ratio: 1;
+  background-image: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--eva-blob-tone) 22%, transparent),
+    transparent
+  );
+  animation: var(--eva-blob-path) 14s ease-in-out infinite alternate;
   will-change: transform;
 }
 
-@keyframes eva-gradient-drift {
+@keyframes eva-blob-a {
   from {
-    transform: translate3d(-8%, -5%, 0) scale(1.2);
+    transform: translate3d(0, 0, 0) scale(1);
   }
   50% {
-    transform: translate3d(8%, 4%, 0) scale(1.25);
+    transform: translate3d(-22%, 18%, 0) scale(1.15);
   }
   to {
-    transform: translate3d(-3%, 8%, 0) scale(1.2);
+    transform: translate3d(-8%, 30%, 0) scale(0.9);
+  }
+}
+
+@keyframes eva-blob-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(25%, -15%, 0) scale(0.9);
+  }
+  to {
+    transform: translate3d(12%, 20%, 0) scale(1.05);
   }
 }
 
@@ -822,7 +841,7 @@
   /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel,
-   * composer gradient drift.
+   * composer gradient blobs.
    * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
    * (loading UI), `.beam*` (composer beam), LoadingState WAAPI
    * (sessions sidebar Drive loader).
@@ -838,7 +857,7 @@
   html[data-page-motion="off"] .t-collapsible-content,
   html[data-page-motion="off"] .t-anchor-flash,
   html[data-page-motion="off"] [data-tab-pane],
-  html[data-page-motion="off"] .eva-gradient-drift {
+  html[data-page-motion="off"] .eva-blob {
     animation: none !important;
   }
 

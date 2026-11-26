@@ -151,13 +151,14 @@ export function NewSessionComposer() {
 
   return (
     <div className="relative isolate flex h-full items-center justify-center p-4 sm:p-6">
-      {/* Own clip box: the drift scales past the edges, and the content
+      {/* Own clip box: the blobs drift past the edges, and the content
           must keep its normal overflow. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="eva-gradient eva-gradient-drift absolute inset-0 [--eva-gradient-strength:2]" />
+        <div className="eva-blob -top-[25%] -right-[15%] [--eva-blob-path:eva-blob-a] [--eva-blob-tone:var(--chart-2)]" />
+        <div className="eva-blob top-[5%] -left-[20%] [--eva-blob-path:eva-blob-b] [--eva-blob-tone:var(--chart-3)]" />
       </div>
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />
