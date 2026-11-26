@@ -142,13 +142,7 @@ var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
-var QUESTION_ANSWERING_ENTITY_FIELDS = /* @__PURE__ */ new Set([
-  "sessionId",
-  "chatId",
-  "taskId",
-  "projectId"
-]);
-var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD !== void 0 && QUESTION_ANSWERING_ENTITY_FIELDS.has(ENTITY_ID_FIELD);
+var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD === "chatId";
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
@@ -1076,9 +1070,6 @@ import { readdirSync as readdirSync3 } from "fs";
 import { homedir } from "os";
 
 // callback-src/providers/daemonPaths.ts
-var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
-var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
-var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
 function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
   const field = entityIdField ?? "sessionId";
   const id = entityId ?? "";
@@ -1087,13 +1078,6 @@ function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_I
     pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
     entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
     opts: \`/tmp/eva-daemon.\${suffix}.opts\`
-  };
-}
-function resolveLegacySessionDaemonPaths() {
-  return {
-    pid: LEGACY_DAEMON_PID,
-    entity: LEGACY_DAEMON_ENTITY,
-    opts: LEGACY_DAEMON_OPTS
   };
 }
 
@@ -2233,16 +2217,8 @@ function resetTurnCheckpoint() {
   turnStartSha = "";
   turnStartShas = [];
 }
-var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
-  "sessionId",
-  "chatId",
-  "taskId",
-  "projectId"
-]);
 function appendTurnCheckpoint(args) {
-  if (ENTITY_ID_FIELD === void 0 || !CHECKPOINTED_ENTITY_ID_FIELDS.has(ENTITY_ID_FIELD)) {
-    return;
-  }
+  if (ENTITY_ID_FIELD !== "chatId") return;
   if (RUN_ID || turnStartSha === "") return;
   if (!readCurrentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();
@@ -2647,7 +2623,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && ENTITY_ID_FIELD === "chatId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -4514,10 +4490,7 @@ var POLL_INTERVAL_MS = 15e3;
 var DEBOUNCE_MS = 300;
 function resolveBranchTarget(field, id) {
   if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
   if (field === "chatId") return { kind: "sessionChat", chatId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
   return null;
 }
 function formatBranch(abbrevRef, shortSha) {
@@ -5186,13 +5159,7 @@ function claimDaemonPidfileBoot(params) {
 function cleanOwnedDaemonMarkers(params) {
   const currentPid = params.currentPid ?? process.pid;
   if (readPidFromFile(params.paths.pid) !== currentPid) return;
-  const legacy = params.includeLegacySessionPaths ? resolveLegacySessionDaemonPaths() : null;
-  const targets = [
-    params.paths.pid,
-    params.paths.entity,
-    params.paths.opts,
-    ...legacy ? [legacy.pid, legacy.entity, legacy.opts] : []
-  ];
+  const targets = [params.paths.pid, params.paths.entity, params.paths.opts];
   for (const path3 of targets) {
     try {
       unlinkSync(path3);
@@ -5201,10 +5168,7 @@ function cleanOwnedDaemonMarkers(params) {
   }
 }
 function cleanOwnedMarkers(paths2) {
-  cleanOwnedDaemonMarkers({
-    paths: paths2,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
+  cleanOwnedDaemonMarkers({ paths: paths2 });
 }
 function startDaemonDepositionFence(params) {
   let deposedLogged = false;
@@ -6139,7 +6103,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // connecting" instead of reporting its tools missing.
     CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};

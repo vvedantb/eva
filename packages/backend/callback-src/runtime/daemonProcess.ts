@@ -5,10 +5,7 @@ import {
   ENTITY_ID,
   ENTITY_ID_FIELD,
 } from "../config.js";
-import {
-  resolveLegacySessionDaemonPaths,
-  type DaemonPaths,
-} from "../providers/daemonPaths.js";
+import type { DaemonPaths } from "../providers/daemonPaths.js";
 import { refreshDaemonGithubTokenFromEnv } from "../providers/githubToken.js";
 import type { JsonValue } from "../types.js";
 import { log } from "../utils.js";
@@ -189,19 +186,10 @@ export function claimDaemonPidfileBoot(params: {
 export function cleanOwnedDaemonMarkers(params: {
   paths: DaemonPaths;
   currentPid?: number;
-  includeLegacySessionPaths: boolean;
 }): void {
   const currentPid = params.currentPid ?? process.pid;
   if (readPidFromFile(params.paths.pid) !== currentPid) return;
-  const legacy = params.includeLegacySessionPaths
-    ? resolveLegacySessionDaemonPaths()
-    : null;
-  const targets = [
-    params.paths.pid,
-    params.paths.entity,
-    params.paths.opts,
-    ...(legacy ? [legacy.pid, legacy.entity, legacy.opts] : []),
-  ];
+  const targets = [params.paths.pid, params.paths.entity, params.paths.opts];
   for (const path of targets) {
     try {
       unlinkSync(path);
@@ -211,15 +199,9 @@ export function cleanOwnedDaemonMarkers(params: {
   }
 }
 
-/**
- * {@link cleanOwnedDaemonMarkers} for this daemon. Session-scoped daemons also
- * clean the legacy session paths.
- */
+/** {@link cleanOwnedDaemonMarkers} for this daemon. */
 export function cleanOwnedMarkers(paths: DaemonPaths): void {
-  cleanOwnedDaemonMarkers({
-    paths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
-  });
+  cleanOwnedDaemonMarkers({ paths });
 }
 
 /** Periodic pidfile fence. Callers own the idle-exit action (process.exit vs stop). */

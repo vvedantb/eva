@@ -69,8 +69,8 @@ export async function listOpenSessionTurns(
 }
 
 /**
- * The entity's open turn in one lane. Chat turns, runs and most one-shot
- * agents have no lane; a summary or interview turn on a chat row has one.
+ * The entity's open turn in one lane. Every turn opened now has no lane; a
+ * legacy row may still carry one (the retired summary and interview turns).
  */
 export async function findOpenTurn(
   ctx: QueryCtx,
@@ -129,21 +129,20 @@ type OpenTurnFields = {
   repoId: Id<"githubRepos">;
 };
 
-/** Opens a durable turn and supersedes any turn the entity still has open in that lane. */
+/** Opens a durable turn and supersedes any turn the entity still has open. */
 export async function openTurn(
   ctx: MutationCtx,
   params: OpenTurnFields & {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     /**
      * The session the turn holds: a chat's session, or the session whose
-     * sandbox a run or a project interview works on.
+     * sandbox a one-shot agent works on.
      */
     sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenTurn(ctx, params.entityId, params.lane);
+  const previous = await findOpenTurn(ctx, params.entityId);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
@@ -151,7 +150,6 @@ export async function openTurn(
   }
   return await ctx.db.insert("turns", {
     entityId: params.entityId,
-    lane: params.lane,
     sessionId: params.sessionId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
@@ -397,13 +395,12 @@ export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenTurn(ctx, params.entityId, params.lane);
+  const current = await findOpenTurn(ctx, params.entityId);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -467,7 +464,7 @@ export async function closeTurn(
     await onTaskRunTurnClosed(ctx, current, state);
   }
   // The unread clock read by `chatReads.ts`: chat turns, a task's runs
-  // included. One-shot lanes (summary, interview) are not replies.
+  // included. A legacy lane turn (summary, interview) is not a reply.
   // `stampChatActivity` stamps the chat, its session and the session's task
   // or project, and skips a chat that lease sweeps found hard-deleted.
   const chatParentId =
@@ -491,9 +488,9 @@ export async function closeOpenTurn(
   ctx: MutationCtx,
   entityId: TurnEntityId,
   state: TerminalTurnState,
-  patch: { error?: string; lane?: TurnLane } = {},
+  patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenTurn(ctx, entityId, patch.lane);
+  const turn = await findOpenTurn(ctx, entityId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
@@ -520,7 +517,6 @@ export async function settleAgentTurnCompletion(
   ctx: MutationCtx,
   params: {
     entityId: TurnEntityId;
-    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     success: boolean;

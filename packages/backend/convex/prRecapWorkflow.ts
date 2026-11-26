@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, hasRepoAccess } from "./functions";
 import {
   workflowCompleteValidator,
   aiModelValidator,
@@ -263,6 +263,7 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) return null;
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.docId,

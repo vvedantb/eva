@@ -524,16 +524,10 @@ describe("a stale session chat turn torn down by the backstop", () => {
         ),
       ];
     });
-    // A task or project id is no chat: their chats are session chats. An
-    // interview turn lives on the project's session, never on the project.
-    expect(kinds).toEqual([
-      "sessionChat",
-      null,
-      null,
-      null,
-      "interview",
-      null,
-    ]);
+    // A task or project id is no chat: their chats are session chats. A
+    // legacy lane turn (the retired interview) has no owner: the reconciler
+    // closes it.
+    expect(kinds).toEqual(["sessionChat", null, null, null, null, null]);
   });
 });
 
@@ -568,11 +562,11 @@ describe("expired turns with no owning surface", () => {
 });
 
 /**
- * A one-shot agent on a chat row (the project interview) has a
- * lane, so its turn never reads as, or is superseded by, the chat's turn.
+ * A legacy lane turn (the retired project interview) on a session row never
+ * reads as, or is superseded by, the chat's turn.
  */
 describe("lane turns stay apart from chat turns", () => {
-  test("an interview turn is not the session's chat turn", async () => {
+  test("a legacy interview turn is not the session's chat turn", async () => {
     const { t, sessionId, chatId } = await createSessionFixture();
     const result = await t.run(async (ctx) => {
       const session = await ctx.db.get(sessionId);
@@ -580,11 +574,11 @@ describe("lane turns stay apart from chat turns", () => {
       const chatTurn = await findOpenTurn(ctx, chatId);
       const laneTurnId = await openTurn(ctx, {
         entityId: sessionId,
-        lane: "interview",
         streamingEntityId: String(sessionId),
         model: "claude:sonnet",
         repoId: session.repoId,
       });
+      await ctx.db.patch(laneTurnId, { lane: "interview" });
       return {
         chatTurnId: chatTurn?._id,
         chatTurnAfter: (await findOpenTurn(ctx, chatId))?._id,

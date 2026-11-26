@@ -13,8 +13,8 @@ import { schedulePush } from "./push";
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
  * `post`s the question, the UI `getActive`s the unanswered one and writes the
  * user's choice via `answer`, and the sandbox `claimAnswer`s it to resume the
- * turn. `entityId` is the generic session/project/task id, matching how
- * `streaming.ts` keys its state, so this is not tied to any one entity type.
+ * turn. `entityId` is the chat id, matching how `streaming.ts` keys a chat
+ * turn's state.
  *
  * Auth: the sandbox (CONVEX_TOKEN, the launching user) posts and claims, the
  * signed-in user reads and answers — each checked against the repo behind
@@ -110,9 +110,10 @@ export const clearForEntity = internalMutation({
 });
 
 /**
- * The repo behind a question's `entityId`: a session chat, session, quick
- * task, project, run, doc or automation run. Undefined for ids of any other
- * shape, which no UI reads.
+ * The repo behind a question's `entityId`. Only a chat turn posts a question
+ * (`BLOCKING_QUESTIONS_ENABLED` in the callback), so this is a session chat;
+ * a session id is a pre-chat session's transcript, which a chat view may
+ * still read with. Undefined for ids of any other shape, which no UI reads.
  */
 async function repoIdForQuestionEntity(
   db: GenericDatabaseReader<DataModel>,
@@ -122,14 +123,6 @@ async function repoIdForQuestionEntity(
   if (chatId) return (await db.get(chatId))?.repoId;
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) return (await db.get(sessionId))?.repoId;
-  const taskId = db.normalizeId("agentTasks", entityId);
-  if (taskId) return (await db.get(taskId))?.repoId;
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return (await db.get(projectId))?.repoId;
-  const docId = db.normalizeId("docs", entityId);
-  if (docId) return (await db.get(docId))?.repoId;
-  const automationRunId = db.normalizeId("automationRuns", entityId);
-  if (automationRunId) return (await db.get(automationRunId))?.repoId;
   return undefined;
 }
 

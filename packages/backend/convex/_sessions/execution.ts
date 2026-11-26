@@ -940,7 +940,7 @@ export async function sendStickyChatMessage(
 }
 
 /** A turn on the chat's sticky model, traits and account. */
-function stickyTurnSettings(
+export function stickyTurnSettings(
   chat: Doc<"sessionChats">,
   model: Doc<"turns">["model"],
   attachmentStorageIds?: Id<"_storage">[],
@@ -1019,10 +1019,11 @@ export async function sendOwnerChatMessage(
 }
 
 /**
- * Queues a message Eva sends by itself (a project coordinator's wake-up) on
- * a session chat and drains the queue: it runs at once on an idle chat, after
- * the running turn otherwise, and a sleeping sandbox wakes for it. No user
- * activity and no mentions: no person typed it. The caller checks the target.
+ * Queues a message Eva sends by itself (a project coordinator's wake-up, a
+ * routed reply) on a session chat and drains the queue: it runs at once on an
+ * idle chat, after the running turn otherwise, and a sleeping sandbox wakes
+ * for it. No user activity and no mentions: no person typed it into this
+ * chat. The caller checks the target.
  */
 export async function queueSystemChatMessage(
   ctx: MutationCtx,
@@ -1030,10 +1031,16 @@ export async function queueSystemChatMessage(
     context: SessionChatContext;
     userId: Id<"users">;
     content: string;
+    displayContent?: string;
     settings: TurnSettings;
+    /** Shows the "via MCP" badge. Defaults to true. */
+    sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
-  await enqueueChatMessage(ctx, { ...params, sentViaOrchestrator: true });
+  await enqueueChatMessage(ctx, {
+    ...params,
+    sentViaOrchestrator: params.sentViaOrchestrator ?? true,
+  });
   await drainChatQueueQuietly(ctx, params.context.chat._id);
 }
 

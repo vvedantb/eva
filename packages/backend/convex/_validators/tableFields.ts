@@ -354,15 +354,16 @@ export const turnEntityIdValidator = v.union(
 );
 
 /**
- * A one-shot agent that works on a row which also owns chat turns. The lane
- * keeps its turn apart from the chat's: chat turns leave it unset.
+ * Legacy: the retired project interview's turn on a session row, kept apart
+ * from the chat's turns. No writer any more; old rows may still hold it, and
+ * readers skip any turn that has a lane.
  */
 // Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
 export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
-/** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
+/** Durable ownership record for one agent turn: a chat turn (a task's run included) or a one-shot agent. */
 /**
  * A chat turn that runs its task (Run, Resolve Conflicts, a scheduled or
  * auto-started run) rather than answering a message: it moves the task's
@@ -1481,7 +1482,8 @@ export const messageFields = {
   // Turn checkpoint (assistant rows on session, quick-task and project chat):
   // sandbox git HEAD when the turn started and after persistTurnWork
   // committed/pushed at turn end. Equal shas mean the turn changed no code.
-  // Absent on turns from pre-checkpoint callback bundles and on task runs.
+  // Absent on turns from pre-checkpoint callback bundles and on automation
+  // runs (`RUN_ID`). A task run is a chat turn, so it checkpoints too.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
   // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
@@ -1492,7 +1494,7 @@ export const messageFields = {
   afterShas: v.optional(v.array(repoShaValidator)),
   // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
   // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
-  // three chat surfaces; task runs never checkpoint and so never carry one.
+  // chat turns; automation runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
   // Reply threads (coordinator chat): a reply carries its root message's id.
   // Replies stay in the chat's rows (same `parentId`) so turns, recaps and

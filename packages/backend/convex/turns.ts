@@ -52,7 +52,6 @@ import {
 import {
   chatTurnEntityIdValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
@@ -287,8 +286,7 @@ export const markLaunching = internalMutation({
 export const openAgentTurnLease = internalMutation({
   args: {
     entityId: turnEntityIdValidator,
-    lane: v.optional(turnLaneValidator),
-    /** The session whose sandbox the agent holds (a project interview's). */
+    /** The session whose sandbox the agent holds. */
     sessionId: v.optional(v.id("sessions")),
     streamingEntityId: v.string(),
     model: v.optional(v.string()),
@@ -300,7 +298,6 @@ export const openAgentTurnLease = internalMutation({
   handler: async (ctx, args) => {
     const turnId = await openTurn(ctx, {
       entityId: args.entityId,
-      lane: args.lane,
       sessionId: args.sessionId,
       streamingEntityId: args.streamingEntityId,
       model: normalizeAIModel(args.model),
@@ -505,9 +502,6 @@ async function finalizeExpiredAgentTurn(
       if (workflowId !== undefined) {
         await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
       }
-      break;
-    case "interview":
-      // The project interview is gone; a leftover turn only closes.
       break;
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);

@@ -14,7 +14,6 @@ import {
   normalizeAIModel,
   reasoningLevelValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   usesChatDaemon,
 } from "../validators";
 import {
@@ -2266,8 +2265,8 @@ export const launchOnExistingSandbox = internalAction({
 });
 
 /**
- * Launches a one-shot agent (automation, PR recap, summary, doc or project
- * interview, evaluation, test generation) under its own durable turn: opens
+ * Launches a one-shot agent (automation, PR recap, doc interview, evaluation,
+ * test generation) under its own durable turn: opens
  * the turn already leased, then launches with the lease so the callback
  * heartbeats and completes fenced. A launch that throws closes the turn, so
  * the reconciler never tears down a workflow that handled the failure itself.
@@ -2276,18 +2275,16 @@ export const launchAgentTurn = internalAction({
   args: {
     ...launchArgs,
     turnEntityId: turnEntityIdValidator,
-    turnLane: v.optional(turnLaneValidator),
     turnSessionId: v.optional(v.id("sessions")),
     workflowId: v.string(),
   },
   returns: v.null(),
   handler: async (
     ctx,
-    { turnEntityId, turnLane, turnSessionId, workflowId, ...launch },
+    { turnEntityId, turnSessionId, workflowId, ...launch },
   ) => {
     const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
       entityId: turnEntityId,
-      lane: turnLane,
       sessionId: turnSessionId,
       streamingEntityId: launch.streamingEntityId ?? launch.entityId,
       model: launch.model,

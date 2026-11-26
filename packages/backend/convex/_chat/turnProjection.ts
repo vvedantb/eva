@@ -1,6 +1,5 @@
 import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
   sessionOwnerEntityId,
@@ -75,7 +74,7 @@ async function awaitingAnswerIdsOf(
   );
 }
 
-/** Open chat turns in one repo. A lane turn (summary, interview) is a one-shot agent, not a chat turn. */
+/** Open chat turns in one repo. A legacy lane turn (summary, interview) is not a chat turn. */
 async function openChatTurnsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -201,17 +200,16 @@ export function sessionIsExecuting(
 }
 
 /**
- * The workflow that runs an entity's open turn in one lane. Undefined when
- * the entity is idle or its open turn is synthetic (daemon-minted, no
- * workflow). Session chats and the session summary keep no workflow slot of
- * their own: cancel, completion and the stall backstop read it here.
+ * The workflow that runs an entity's open turn. Undefined when the entity is
+ * idle or its open turn is synthetic (daemon-minted, no workflow). Session
+ * chats keep no workflow slot of their own: cancel, completion and the stall
+ * backstop read it here.
  */
 export async function openTurnWorkflowId(
   ctx: QueryCtx,
   entityId: TurnEntityId,
-  lane?: TurnLane,
 ): Promise<string | undefined> {
-  return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
+  return (await findOpenTurn(ctx, entityId))?.workflowId;
 }
 
 /** A task is busy while its chat has a turn open: a run is a chat turn. */

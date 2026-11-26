@@ -743,31 +743,18 @@ export async function signAndLaunchScript(
           chatId: entityId,
         })
       : null;
-  const launchSession =
-    launchChat?.session ??
-    (entityIdField === "sessionId"
-      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
-      : null);
+  const launchSession = launchChat?.session ?? null;
 
   // Every launch path (prewarm daemon, launch on an existing sandbox,
   // relaunch/heal) comes through here, so resolving the linked clones once
   // means the agent is told about the same workspace on all of them. Absent entirely for single-repo sessions.
   // Annotated locally so this `runQuery` cannot feed a generated-api type
   // cycle back into `_generated/api.d.ts`.
-  // A task run launches by task id: its clones live on the task's session.
-  const workspaceSession =
-    launchSession ??
-    (entityIdField === "taskId"
-      ? await ctx.runQuery(internal.sessions.getForEntityInternal, {
-          entityKind: "task",
-          entityId,
-        })
-      : null);
   let linkedRepos: LinkedRepoEnvRow[] = [];
-  if (workspaceSession && (workspaceSession.linkedRepoCount ?? 0) > 0) {
+  if (launchSession && (launchSession.linkedRepoCount ?? 0) > 0) {
     const linkedRows: LinkedRepoEnvRow[] = await ctx.runQuery(
       internal.sessions.listLinkedReposInternal,
-      { sessionId: workspaceSession._id },
+      { sessionId: launchSession._id },
     );
     linkedRepos = linkedRows;
   }
@@ -785,17 +772,9 @@ export async function signAndLaunchScript(
       // tool keeps resolving; the chat rides along as its own claim.
       entityId: launchSession ? String(launchSession._id) : entityId,
       ...(launchChat ? { chatId: entityId } : {}),
-      // A project launch (the old interview) runs on the coordinator's VM too.
       readOnlyGit:
-        entityIdField === "projectId" ||
-        (launchSession !== null && isReadOnlySandboxOwner(launchSession.owner)),
-      ...(launchSession
-        ? { entityKind: "session" as const }
-        : entityIdField === "taskId"
-          ? { entityKind: "task" as const }
-          : entityIdField === "projectId"
-            ? { entityKind: "project" as const }
-            : {}),
+        launchSession !== null && isReadOnlySandboxOwner(launchSession.owner),
+      ...(launchSession ? { entityKind: "session" as const } : {}),
     },
   );
   console.log(

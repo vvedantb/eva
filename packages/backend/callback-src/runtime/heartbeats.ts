@@ -364,7 +364,7 @@ function enforceTurnLease(): boolean {
     // The server already finalised this turn (stalled, cancelled or timed out),
     // so nothing downstream will publish what the agent wrote: this daemon holds
     // the only copy of those edits. persistTurnWork is synchronous, bounded by
-    // its own git timeouts, best-effort, and skips task runs itself.
+    // its own git timeouts, best-effort, and skips automation runs itself.
     // "superseded" is excluded on purpose: a rival daemon owns the same
     // worktree, and a commit from the loser could race the winner's work.
     log(

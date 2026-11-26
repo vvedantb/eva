@@ -136,14 +136,13 @@ type StreamOwner =
   | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
   | { kind: "doc"; docId: Id<"docs"> }
   | { kind: "report"; reportId: Id<"evaluationReports"> }
-  | { kind: "automationRun"; runId: Id<"automationRuns"> }
-  | { kind: "project"; projectId: Id<"projects"> };
+  | { kind: "automationRun"; runId: Id<"automationRuns"> };
 
 /**
  * Maps every streaming entity id the app reads to its owner: the prefixed
  * ids (`_chat/agentStreamIds.ts`, sandbox startup rows)
  * and the bare row ids of session chats, sessions, docs (interview, test
- * gen), evaluation reports and projects (interview). Unknown ids map to null.
+ * gen) and evaluation reports. Unknown ids map to null.
  */
 function parseStreamOwner(
   db: QueryCtx["db"],
@@ -175,8 +174,6 @@ function parseStreamOwner(
   if (docId) return { kind: "doc", docId };
   const reportId = db.normalizeId("evaluationReports", entityId);
   if (reportId) return { kind: "report", reportId };
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return { kind: "project", projectId };
   return null;
 }
 
@@ -204,12 +201,6 @@ async function canReadStream(
     case "automationRun": {
       const run = await db.get(owner.runId);
       return run !== null && (await hasRepoAccess(db, run.repoId, userId));
-    }
-    case "project": {
-      const project = await db.get(owner.projectId);
-      return (
-        project !== null && (await hasRepoAccess(db, project.repoId, userId))
-      );
     }
   }
 }

@@ -19,7 +19,7 @@ import {
  * in a generated shell string, so they are pinned here.
  */
 describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
-  const cmd = buildKillEntityDaemonCmd("sessionId", "sess123");
+  const cmd = buildKillEntityDaemonCmd("chatId", "chat123");
 
   test("walks the tree by parent pid, never by command line", () => {
     expect(cmd).toContain('pgrep -P "$1"');
@@ -34,24 +34,16 @@ describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
     expect(cmd).toContain("TERM");
     expect(cmd).toContain("KILL");
     expect(cmd).toContain('kill -0 "$pid"');
-    // 15 polls x 0.2s == ~3s per pidfile, and at most two pidfiles are reaped,
-    // which has to fit inside the callers' 10s exec timeout.
+    // 15 polls x 0.2s == ~3s for the one pidfile, which has to fit inside the
+    // callers' 10s exec timeout.
     expect(cmd).toContain("seq 1 15");
     expect(cmd).toContain("sleep 0.2");
   });
 
-  test("reaps the scoped and legacy pidfiles and removes their markers", () => {
-    const scoped = entityDaemonPaths("sessionId", "sess123");
+  test("reaps the entity's pidfile and removes its markers", () => {
+    const scoped = entityDaemonPaths("chatId", "chat123");
     expect(cmd).toContain(`reap ${JSON.stringify(scoped.pid)}`);
     expect(cmd).toContain(`rm -f ${JSON.stringify(scoped.pid)}`);
-    expect(cmd).toContain('reap "/tmp/eva-daemon.pid"');
-    expect(cmd).toContain('rm -f "/tmp/eva-daemon.pid"');
-  });
-
-  test("only sessionId entities carry the legacy markers", () => {
-    expect(buildKillEntityDaemonCmd("agentTaskId", "t1")).not.toContain(
-      "/tmp/eva-daemon.pid",
-    );
   });
 
   test("ends with `true` so a missing daemon is not an exec failure", () => {
@@ -130,8 +122,8 @@ const bashDescribe = hasShellTools() ? describe : describe.skip;
  */
 bashDescribe("the generated command kills a real process tree", () => {
   test("the daemon and its child are both dead once the command returns", async () => {
-    // A non-sessionId field so the run never touches the legacy
-    // /tmp/eva-daemon.pid of a daemon that may be live on this machine.
+    // A test-only field and a random id so the run never touches the pidfile
+    // of a daemon that may be live on this machine.
     const entityId = randomUUID();
     const paths = entityDaemonPaths("testEntityId", entityId);
     const dir = mkdtempSync(join(tmpdir(), "eva-kill-tree-"));
