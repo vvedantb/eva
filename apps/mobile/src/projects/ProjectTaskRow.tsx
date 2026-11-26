@@ -70,7 +70,7 @@ function FlatRow({
  * display status icon in its colour, the title, and `line`
  * (`projectTaskSummaryLine`), with the age at the end. A Triage row keeps
  * Reject and Approve visible beside it (the phone has no hover), unless the
- * project is archived (`readOnly`). A tap opens the task; a long press opens
+ * project is archived (`readOnly`). A tap opens the task's chat; a long press opens
  * the task menu (`onLongPress`). A task in a
  * repo the reader cannot open is a locked row with no link.
  */
@@ -123,7 +123,8 @@ export function ProjectTaskRow({
             )
           }
           accessibilityLabel={displayTitle(task.title)}
-          onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId, numId: task.numId } })}
+          // A project task is its chat.
+          onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
           onLongPress={onLongPress}
         />
       </View>

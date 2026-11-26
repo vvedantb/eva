@@ -212,18 +212,16 @@ function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
 }
 
 /**
- * A task's model and its account, the one Properties row a project task's
- * Details also shows. Hidden in simple view. Locked once the task ran, once
- * it is done or cancelled, and while it is archived.
+ * A task's model and its account. Hidden in simple view. Locked once the
+ * task ran, once it is done or cancelled, and while it is archived.
  */
-export function TaskModelRow({
+function TaskModelRow({
   taskId,
   task,
   status,
   hasRuns,
   isOwner,
   readOnly,
-  title,
 }: {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
@@ -231,8 +229,6 @@ export function TaskModelRow({
   hasRuns: boolean;
   isOwner: boolean;
   readOnly: boolean;
-  /** Set to show the row as its own titled section, outside Properties. */
-  title?: string;
 }) {
   const simpleView = useSimpleView();
   const updateTask = useTaskUpdate(task);
@@ -245,7 +241,7 @@ export function TaskModelRow({
     useTaskOwnerProviderAccounts(taskId);
   if (simpleView) return null;
   const modelLockReason = taskModelLockReason({ status, hasRuns, readOnly });
-  const field = (
+  return (
     <ModelField
       taskId={taskId}
       task={task}
@@ -257,10 +253,5 @@ export function TaskModelRow({
       isOwner={isOwner}
       updateTask={updateTask}
     />
-  );
-  return title === undefined ? (
-    field
-  ) : (
-    <FieldsSection title={title}>{field}</FieldsSection>
   );
 }

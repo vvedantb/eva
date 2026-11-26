@@ -27,6 +27,7 @@ import {
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
 import { useQueryState } from "nuqs";
+import type { ReactNode } from "react";
 import { replyThreadParser } from "@/lib/search-params";
 import { ThreadTurnStatus } from "@/lib/components/chat/replies/ThreadTurnStatus";
 import { useChatQueueGate } from "./useChatQueueGate";
@@ -68,6 +69,7 @@ export function SandboxChatPanel({
   assistantBubbles = false,
   replyThreads = false,
   onThreadOpen,
+  emptyState,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
@@ -82,6 +84,8 @@ export function SandboxChatPanel({
    * it, opening only sets `?thread=`.
    */
   onThreadOpen?: (messageId: string) => void;
+  /** In place of the empty chat (`ChatBody` `emptyState`). */
+  emptyState?: ReactNode;
 }) {
   const { repo, basePath } = useRepo();
   const [, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -218,7 +222,8 @@ export function SandboxChatPanel({
           conversationId={parentId ?? `${ownerLabel}-chat`}
           chatParentId={parentId}
           messages={chatMessages}
-          isLoadingMessages={messages === undefined}
+          // No chat yet (the first send or run creates it): nothing loads.
+          isLoadingMessages={parentId !== undefined && messages === undefined}
           hasOlderHistory={history.hasOlder}
           onLoadOlderHistory={history.loadOlder}
           onReachHistory={history.reach}
@@ -245,6 +250,7 @@ export function SandboxChatPanel({
               ? SANDBOX_CHAT_COPY.activeDescription
               : SANDBOX_CHAT_COPY.asleepDescription
           }
+          emptyState={emptyState}
           disabledReason={composer.disabledReason}
           onStartSandbox={startSandboxHandler(
             isSandboxActive,

@@ -5,7 +5,8 @@ import { Spinner } from "@vvedantb/ui";
 import { TaskSandboxChatPanel } from "@/lib/components/tasks/TaskSandboxChatPanel";
 import { useTaskDetail } from "@/lib/components/tasks/useTaskDetail";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import { PROJECT_TASK_ROUTING, useProjectTaskExpand } from "./ProjectTaskPane";
+import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailControls";
+import { useProjectTaskExpand } from "./ProjectTaskPane";
 
 /**
  * The selected task tab's own chat, in the project's chat column. An

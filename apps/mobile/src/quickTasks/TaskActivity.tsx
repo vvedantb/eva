@@ -87,7 +87,6 @@ export function TaskActivity({
   creator,
   users,
   reactionsFor,
-  isProjectTask,
   currentUserId,
   onReply,
   onEdit,
@@ -95,7 +94,6 @@ export function TaskActivity({
   readOnly,
 }: {
   taskId: Id<"agentTasks">;
-  isProjectTask: boolean;
   createdAt: number;
   creator: User | undefined;
   users: User[] | undefined;
@@ -226,7 +224,6 @@ export function TaskActivity({
                 item={item}
                 creator={creator}
                 users={users}
-                isProjectTask={isProjectTask}
               />
             ))}
           </View>
@@ -241,9 +238,7 @@ function RailRow({
   item,
   creator,
   users,
-  isProjectTask,
 }: {
-  isProjectTask: boolean;
   item: Exclude<TaskTimelineItem, { kind: "comment" }>;
   creator: User | undefined;
   users: User[] | undefined;
@@ -271,7 +266,7 @@ function RailRow({
         <Text style={strong}>
           {creator ? getUserDisplayName(creator) : "Someone"}
         </Text>
-        {isProjectTask ? " created the task" : " created the quick task"}
+        {" created the quick task"}
       </>
     );
   } else {

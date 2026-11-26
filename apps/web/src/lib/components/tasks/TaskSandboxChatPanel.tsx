@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
@@ -9,14 +10,30 @@ import {
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { ProjectTaskPromptCard } from "@/lib/components/projects/ProjectTaskPromptCard";
 import { useTaskSession } from "./useTaskSession";
 
+/**
+ * A task's sandbox chat. A project task in To Do with an empty chat shows its
+ * prompt card there (`ProjectTaskPromptCard`).
+ */
 export function TaskSandboxChatPanel({
   taskId,
   ...panel
 }: SandboxChatPanelProps & { taskId: Id<"agentTasks"> }) {
   const binding = useTaskChatBinding(taskId);
-  return <SandboxChatPanel binding={binding} {...panel} />;
+  const task = useQuery(api.agentTasks.get, { id: taskId });
+  return (
+    <SandboxChatPanel
+      binding={binding}
+      emptyState={
+        task && showsProjectTaskPrompt(task) ? (
+          <ProjectTaskPromptCard taskId={taskId} />
+        ) : undefined
+      }
+      {...panel}
+    />
+  );
 }
 
 /**

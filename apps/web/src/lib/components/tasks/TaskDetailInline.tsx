@@ -8,12 +8,8 @@ import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { Spinner, TabsTransition, useRequestConfirm } from "@vvedantb/ui";
 import { useTaskDetail } from "./useTaskDetail";
-import {
-  TASK_DETAILS_TAB,
-  TaskDetailsPane,
-  type TaskDetailsTab,
-} from "./TaskDetailsPane";
-import { TaskDetailsRailFrame } from "./TaskDetailsRailFrame";
+import { TaskDetailsPane } from "./TaskDetailsPane";
+import { ProjectTaskPageRedirect } from "./ProjectTaskPageRedirect";
 import { TaskFooter } from "./_components/TaskFooter";
 import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
@@ -58,18 +54,12 @@ interface TaskDetailInlineProps {
   taskId: Id<"agentTasks">;
   allTags?: string[];
   routing?: UseTaskDetailRouting;
-  /**
-   * `project-task` only: open the right pane on Details (a task that has
-   * never run). A `?file=` / `?diffFile=` in the URL still wins.
-   */
-  openOnDetails?: boolean;
 }
 
 export function TaskDetailInline({
   taskId,
   allTags = [],
   routing,
-  openOnDetails = false,
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
   const { basePath } = useRepo();
@@ -83,26 +73,9 @@ export function TaskDetailInline({
   const isHiddenTab = useIsHiddenSandboxTab();
   // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
   // it, so a reload lands back on Files / Review. A tab the user picks
-  // afterwards overrides that for this mount. A project task that has never
-  // run starts on Details.
-  const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<
-    SandboxTab | TaskDetailsTab | null
-  >(
-    routing?.mode === "project-task" &&
-      openOnDetails &&
-      !fileViewerPath &&
-      !diffFile
-      ? TASK_DETAILS_TAB.value
-      : null,
-  );
-  const urlSandboxTab: SandboxTab = simpleView
-    ? "preview"
-    : fileViewerPath && !isHiddenTab("files")
-      ? "files"
-      : diffFile
-        ? "review"
-        : "preview";
-  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
+  // afterwards overrides that for this mount.
+  const [pickedSandboxTab, setEmbeddedSandboxTab] =
+    useState<SandboxTab | null>(null);
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,
@@ -144,6 +117,17 @@ export function TaskDetailInline({
     taskSession,
   } = detail;
   const { sandbox } = taskSession;
+  // A project task with a PR opens on Review, as in the project panel
+  // (`defaultProjectTaskTab`).
+  const urlSandboxTab: SandboxTab = simpleView
+    ? "preview"
+    : fileViewerPath && !isHiddenTab("files")
+      ? "files"
+      : diffFile ||
+          (routing?.mode === "project-task" && latestPrUrl !== undefined)
+        ? "review"
+        : "preview";
+  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   // A task chats in a session chat (a project task's own chat in the
   // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
@@ -189,7 +173,7 @@ export function TaskDetailInline({
   };
 
   // Must stay above early returns — same hooks-order constraint as openFile.
-  const handleSandboxTabChange = (tab: SandboxTab | TaskDetailsTab) => {
+  const handleSandboxTabChange = (tab: SandboxTab) => {
     if (routing?.mode === "quick-sandbox") {
       if (tab === "prd" || !isTaskRouteSandboxTab(tab)) {
         routing.quick.onSandboxTabChange("preview");
@@ -225,11 +209,16 @@ export function TaskDetailInline({
   }
 
   const isQuickTask = task.projectId === undefined;
+  // A project task is its chat in its project: the quick task page sends it
+  // to its project task page.
+  if (!isQuickTask && routing?.mode !== "project-task") {
+    return <ProjectTaskPageRedirect task={task} />;
+  }
   const isSandboxViewActive = showSandbox;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
-  const activeSandboxTab: SandboxTab | TaskDetailsTab =
+  const activeSandboxTab: SandboxTab =
     routing?.mode === "quick-sandbox" ? routeSandboxTab : embeddedSandboxTab;
 
   const detailsPane = (
@@ -240,31 +229,8 @@ export function TaskDetailInline({
       allTags={allTags}
     />
   );
-  // A project task's right pane leads with Details. Before its sandbox
-  // exists, Details sits beside the "no sandbox yet" state on a small rail.
+  // A project task's page has no rail toggle: its panel stays open.
   const isProjectTaskPage = routing?.mode === "project-task";
-  const withDetailsRail = (
-    emptyState: ReactNode,
-    collapsed: boolean,
-    onToggle: () => void,
-  ) =>
-    isProjectTaskPage ? (
-      <TaskDetailsRailFrame
-        activeTab={
-          activeSandboxTab === TASK_DETAILS_TAB.value
-            ? TASK_DETAILS_TAB.value
-            : "preview"
-        }
-        onTabChange={handleSandboxTabChange}
-        collapsed={collapsed}
-        onToggle={onToggle}
-        details={detailsPane}
-      >
-        {emptyState}
-      </TaskDetailsRailFrame>
-    ) : (
-      emptyState
-    );
 
   // Always mount the sandbox panel when the task can have a sandbox so tabs
   // (Diffs, etc.) stay reachable while stopped — same as sessions. Panes
@@ -303,7 +269,6 @@ export function TaskDetailInline({
         }
         collapsed={collapsed}
         onToggle={onToggle}
-        details={isProjectTaskPage ? detailsPane : undefined}
         miniPlayer={
           isQuickTask && task.numId !== undefined
             ? {
@@ -314,22 +279,18 @@ export function TaskDetailInline({
         }
       />
     ) : (
-      withDetailsRail(
-        <SandboxEmptyRailFrame
-          collapsed={isProjectTaskPage ? false : collapsed}
-          onToggle={onToggle}
-          showToggle={!isProjectTaskPage}
-        >
-          <div className="flex flex-col items-center gap-3 text-center">
-            <p className="text-sm text-muted-foreground">
-              No sandbox for this task yet — it becomes available once the task
-              has run
-            </p>
-          </div>
-        </SandboxEmptyRailFrame>,
-        collapsed,
-        onToggle,
-      )
+      <SandboxEmptyRailFrame
+        collapsed={isProjectTaskPage ? false : collapsed}
+        onToggle={onToggle}
+        showToggle={!isProjectTaskPage}
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">
+            No sandbox for this task yet — it becomes available once the task
+            has run
+          </p>
+        </div>
+      </SandboxEmptyRailFrame>
     );
 
   const layout = (
@@ -401,25 +362,21 @@ export function TaskDetailInline({
           }
         </SandboxWorkspace>
       ) : (
-        layout(({ rightPanelCollapsed, onToggleRightPanel }) =>
-          withDetailsRail(
-            <SandboxNotStartedRail
-              collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
-              onToggle={onToggleRightPanel}
-              ownerLabel="task"
-              showToggle={!isProjectTaskPage}
-              isPending={sandbox.sessionPending}
-              onStart={
-                canStartSandbox && !isSandboxStopping
-                  ? () => void handleStartSandbox()
-                  : undefined
-              }
-              isStarting={isSandboxStarting}
-            />,
-            rightPanelCollapsed,
-            onToggleRightPanel,
-          ),
-        )
+        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
+          <SandboxNotStartedRail
+            collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
+            onToggle={onToggleRightPanel}
+            ownerLabel="task"
+            showToggle={!isProjectTaskPage}
+            isPending={sandbox.sessionPending}
+            onStart={
+              canStartSandbox && !isSandboxStopping
+                ? () => void handleStartSandbox()
+                : undefined
+            }
+            isStarting={isSandboxStarting}
+          />
+        ))
       )}
     </SandboxSurfaceProviders>
   );

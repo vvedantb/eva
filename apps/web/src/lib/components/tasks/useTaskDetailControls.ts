@@ -41,6 +41,11 @@ export type UseTaskDetailRouting =
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-task" };
 
+/** A project task's own chat and sandbox, as on its full page. */
+export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
+  mode: "project-task",
+};
+
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
 /** Detail tab: URL-owned when routed, local state otherwise. */

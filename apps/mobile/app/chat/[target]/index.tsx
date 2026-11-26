@@ -33,6 +33,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
@@ -113,6 +114,8 @@ import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
+import { ProjectTaskFacts, useProjectTaskRow } from "@/projects/ProjectTaskFacts";
+import { ProjectTaskPromptCard } from "@/projects/ProjectTaskPromptCard";
 
 /** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
@@ -122,7 +125,9 @@ type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestion
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
- * One chat (session, quick task or project): the transcript with the web
+ * One chat (session, quick task, project task or project; a project task's
+ * chat is the task, with its status and PR line under the title and, before
+ * its first run, its prompt card in place of the empty chat): the transcript with the web
  * message actions (a teammate's turn on the left with their avatar and first
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
@@ -212,6 +217,8 @@ export default function ChatScreen() {
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
   const requestRecap = useMutation(api.chatRecaps.requestFull);
+  // A project task's chat is the task: its status and PR line under the title, and its prompt before its first run.
+  const projectTask = useProjectTaskRow(chat?.task?.id);
 
   if (chat === undefined || chat === null) {
     return (
@@ -410,6 +417,7 @@ export default function ChatScreen() {
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
+        subtitle={projectTask ? <ProjectTaskFacts task={projectTask} /> : undefined}
         sessionMenu={
           sessionTarget
             ? {
@@ -455,10 +463,17 @@ export default function ChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            messages === undefined ? (
+            // A task or project that has not chatted yet has no chat to load (`parentId`).
+            messages === undefined && parentId !== undefined ? (
               <CenteredSpinner label="Loading messages" />
-            ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+            ) : (messages?.length ?? 0) === 0 ? (
+              projectTask && showsProjectTaskPrompt(projectTask) ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <ProjectTaskPromptCard task={projectTask} repoId={chat.repoId} readOnly={chat.archived !== undefined} />
+                </View>
+              ) : (
+                <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+              )
             ) : null
           }
           ListHeaderComponent={

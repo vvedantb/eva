@@ -232,6 +232,11 @@ interface ChatBodyProps {
    */
   emptyStateDescription?: string;
   /**
+   * Shown in place of the empty state (title, description, wake button): a
+   * project task's prompt before its first run.
+   */
+  emptyState?: React.ReactNode;
+  /**
    * Why the composer will not send, shown when the user presses Enter on a
    * disabled composer instead of swallowing the keystroke.
    */
@@ -358,6 +363,7 @@ function ChatBodyInner({
   placeholder,
   emptyStateTitle,
   emptyStateDescription = "",
+  emptyState,
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
   modelPicker,
@@ -1138,6 +1144,8 @@ function ChatBodyInner({
               </div>
             ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
+            ) : emptyState ? (
+              emptyState
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}

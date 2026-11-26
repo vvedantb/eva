@@ -1,17 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import {
-  IconClock,
-  IconInfoCircle,
-  IconInfoCircleFilled,
-} from "@tabler/icons-react";
+import { IconClock } from "@tabler/icons-react";
 import { taskScheduledAt, type Doc, type Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { Badge } from "@vvedantb/ui";
 import dayjs from "@eva/shared/dates";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { TaskHeader } from "./_components/TaskHeader";
 import { TaskRepoBadges } from "./_components/TaskRepoBadges";
 import { TaskDescription } from "./_components/TaskDescription";
@@ -19,28 +14,8 @@ import { TaskAttachments } from "./_components/TaskAttachments";
 import { ActivityTimeline } from "./_components/ActivityTimeline";
 import { TaskSubscribers } from "./_components/TaskSubscribers";
 import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
-import {
-  StatusFieldsSection,
-  TaskModelRow,
-} from "./_components/StatusFieldsSection";
-import { ProjectTaskFacts } from "./_components/ProjectTaskFacts";
+import { StatusFieldsSection } from "./_components/StatusFieldsSection";
 import type { useTaskDetail } from "./useTaskDetail";
-
-/**
- * A project task's Details tab, on its full page rail and in the project
- * panel: the same id on both, so the panel's `ProjectTaskTab` is this value.
- */
-export const TASK_DETAILS_TAB = {
-  value: "task-details",
-  label: "Details",
-  icon: {
-    kind: "component",
-    Icon: IconInfoCircle,
-    ActiveIcon: IconInfoCircleFilled,
-  },
-} as const satisfies SandboxTabDescriptor;
-
-export type TaskDetailsTab = (typeof TASK_DETAILS_TAB)["value"];
 
 /** What the pane reads from `useTaskDetail`; the caller owns the queries. */
 type TaskDetailsData = Pick<
@@ -53,7 +28,6 @@ type TaskDetailsData = Pick<
   | "projects"
   | "isOwner"
   | "hasActiveRun"
-  | "isProjectTask"
   | "isArchived"
   | "hasRuns"
   | "canEditTaskText"
@@ -62,29 +36,22 @@ type TaskDetailsData = Pick<
 >;
 
 /**
- * A task's overview: title, prompt, attachments and activity with comments.
- * A quick task has its status and properties beside it; below `@2xl` one
- * column shows at a time (Overview / Properties). A project task is one
- * column: its read-only facts and its model sit under the prompt. An
- * archived task is read-only.
+ * A quick task's overview: title, prompt, attachments and activity with
+ * comments, and its status and properties beside it; below `@2xl` one column
+ * shows at a time (Overview / Properties). An archived task is read-only. A
+ * project task has none of this: it is its chat.
  */
 export function TaskDetailsPane({
   taskId,
   task,
   detail,
   allTags,
-  showHeader = true,
 }: {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks">;
   detail: TaskDetailsData;
   /** Tag suggestions (the quick task page's); none elsewhere. */
   allTags?: string[];
-  /**
-   * The number and editable title. Off in the project side panel, whose own
-   * header already names the task; Expand opens the full page to rename it.
-   */
-  showHeader?: boolean;
 }) {
   /** Which detail pane is on screen below `@2xl`; both show at `@2xl` and up. */
   const [showMobileProperties, setShowMobileProperties] = useState(false);
@@ -97,7 +64,6 @@ export function TaskDetailsPane({
     projects,
     isOwner,
     hasActiveRun,
-    isProjectTask,
     isArchived,
     hasRuns,
     canEditTaskText: canEditText,
@@ -106,22 +72,19 @@ export function TaskDetailsPane({
   } = detail;
   const scheduledAt = taskScheduledAt(task);
 
-  /** Title, prompt and activity; a project task adds its facts and model. */
+  /** Title, prompt and activity. */
   const overview = (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-4 px-4 pt-4 @2xl:px-6 @2xl:pr-6 @2xl:pt-5">
         <div>
-          {showHeader ? (
-            <TaskHeader
-              taskNumber={task.taskNumber}
-              title={task.title}
-              canEditTaskText={canEditText}
-              hasActiveRun={hasActiveRun}
-              taskId={taskId}
-            />
-          ) : null}
-          {/* A project task names its repos and PRs in its facts line. */}
-          {isProjectTask ? null : <TaskRepoBadges task={task} />}
+          <TaskHeader
+            taskNumber={task.taskNumber}
+            title={task.title}
+            canEditTaskText={canEditText}
+            hasActiveRun={hasActiveRun}
+            taskId={taskId}
+          />
+          <TaskRepoBadges task={task} />
           {scheduledAt ? (
             <div className="mt-2 flex items-center gap-2">
               <Badge
@@ -145,24 +108,6 @@ export function TaskDetailsPane({
 
         <TaskAttachments taskId={taskId} readOnly={isArchived} />
 
-        {isProjectTask ? (
-          <>
-            <ProjectTaskFacts task={task} />
-            {/* `-mx-2` lines the field row's own inset up with the prompt. */}
-            <div className="-mx-2">
-              <TaskModelRow
-                taskId={taskId}
-                task={task}
-                status={status}
-                hasRuns={hasRuns}
-                isOwner={isOwner}
-                readOnly={isArchived}
-                title="Model"
-              />
-            </div>
-          </>
-        ) : null}
-
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
           <div className="text-sm font-medium text-foreground">Activity</div>
           <TaskSubscribers taskId={taskId} users={users} />
@@ -176,24 +121,11 @@ export function TaskDetailsPane({
           comments={comments}
           taskActivity={taskActivity}
           users={users}
-          isProjectTask={isProjectTask}
           readOnly={isArchived}
         />
       </div>
     </div>
   );
-
-  // A project task's status, phase, repos and PRs are read-only facts: one
-  // column, no Properties.
-  if (isProjectTask) {
-    return (
-      <TaskReactionsProvider taskId={taskId}>
-        <div className="@container flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar">
-          {overview}
-        </div>
-      </TaskReactionsProvider>
-    );
-  }
 
   return (
     <TaskReactionsProvider taskId={taskId}>
