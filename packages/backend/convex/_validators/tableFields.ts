@@ -1430,10 +1430,23 @@ export const logFields = {
  * chat's annotations without reading the chat text. `selector` is unset on
  * rows the backfill recovered from that text.
  */
-export const previewAnnotationValidator = v.object({
+const previewAnnotationFields = {
   pagePath: v.string(),
   element: v.string(),
   selector: v.optional(v.string()),
+};
+
+/** What a send carries (and its queued row): no resolve state yet. */
+export const previewAnnotationValidator = v.object(previewAnnotationFields);
+
+/**
+ * The user row's annotation: the send's fields plus resolve state, written
+ * only by `previewComments.setResolved`. Both unset while the comment is open.
+ */
+export const storedPreviewAnnotationValidator = v.object({
+  ...previewAnnotationFields,
+  resolvedAt: v.optional(v.number()),
+  resolvedBy: v.optional(v.id("users")),
 });
 
 export const messageFields = {
@@ -1449,7 +1462,7 @@ export const messageFields = {
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
   /** User rows sent from the preview's "Select element" tool. */
-  annotation: v.optional(previewAnnotationValidator),
+  annotation: v.optional(storedPreviewAnnotationValidator),
   isSystemAlert: v.optional(v.boolean()),
   // System alerts that did not fail the session (it keeps running) render
   // amber. Unset alerts with `errorDetail` render as errors.
