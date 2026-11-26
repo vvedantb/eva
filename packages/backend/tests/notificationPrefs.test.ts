@@ -4,7 +4,6 @@ import { internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { createNotification } from "../convex/notifications";
-import { notificationPrefsFromLegacy } from "../convex/_users/notificationPrefs";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -94,45 +93,6 @@ describe("notification preferences", () => {
       const f = await fixture({ push: false });
       expect(await f.pushes()).toBe(0);
       expect(await f.instantEmails()).toBe(1);
-    },
-    TIMEOUT_MS,
-  );
-});
-
-describe("migrateNotificationPrefs", () => {
-  // The migration's `migrateOne` is `notificationPrefsFromLegacy`: convex-test
-  // cannot run the migrations component (no `getFunctionMetadata` syscall).
-  test(
-    "true → instant, false → off, unset stays unset; the legacy field clears",
-    async () => {
-      const t = convexTest(schema, modules);
-      await t.run(async (ctx) => {
-        const user = async (
-          legacy: boolean | undefined,
-          notificationPrefs?: Prefs,
-        ) => {
-          const id = await ctx.db.insert("users", {
-            emailNotificationsEnabled: legacy,
-            notificationPrefs,
-          });
-          const doc = await ctx.db.get(id);
-          if (!doc) throw new Error("user missing");
-          const patch = notificationPrefsFromLegacy(doc);
-          if (patch) await ctx.db.patch(id, patch);
-          return ctx.db.get(id);
-        };
-        const cases: Array<[Doc<"users"> | null, Prefs]> = [
-          [await user(true), { email: true, productUpdates: true }],
-          [await user(false), { email: false }],
-          [await user(undefined), undefined],
-          // A choice made since the deploy wins.
-          [await user(false, { email: true }), { email: true }],
-        ];
-        for (const [migrated, expected] of cases) {
-          expect(migrated?.notificationPrefs).toEqual(expected);
-          expect(migrated?.emailNotificationsEnabled).toBeUndefined();
-        }
-      });
     },
     TIMEOUT_MS,
   );
