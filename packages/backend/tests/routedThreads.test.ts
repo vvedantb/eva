@@ -69,9 +69,8 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       title: "Empty states",
       status: "active",
       numId: 9,
-      lastModel: "claude:sonnet",
     });
-    // Every session holds a Main chat; its transcript and queue key on it.
+    // Every session holds a Main chat; its transcript, queue and model key on it.
     const mainChatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
@@ -79,6 +78,7 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       title: "Main",
       number: 1,
       isMain: true,
+      lastModel: "claude:sonnet",
     });
     return {
       ownerUserId,

@@ -683,18 +683,7 @@ export const agentTaskFields = {
   updatedAt: v.number(),
   createdBy: v.id("users"),
   assignedTo: v.optional(v.id("users")),
-  model: v.optional(aiModelValidator),
-  // The user provider account whose credentials run this task (overriding the
-  // team credential). Absent = use the shared team credential. Resolved at
-  // launch in `signAndLaunchScript`.
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
-  // Model traits for this task's runs (the sandbox chat keeps its own sticky
-  // `last*` copies below). Absent = the model's own default. Turned into
-  // AI_* env vars in `getTaskData` -> `launchOnExistingSandbox`.
-  reasoningLevel: v.optional(reasoningLevelValidator),
-  thinkingEnabled: v.optional(v.boolean()),
-  use1mContext: v.optional(v.boolean()),
-  fastMode: v.optional(v.boolean()),
+  // model, providerAccountId and run traits live on the task's chat. schema-narrowing-ok: moveModelToChats
   baseBranch: v.optional(v.string()),
   /**
    * The task's own branch when it is not `eva/task-<id>` (`taskBranchName`).
@@ -817,29 +806,8 @@ export const sessionFields = {
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
   lastInteractionMode: v.optional(interactionModeValidator),
   // `activeWorkflowId` / `turnLifecycleVersion` removed. schema-narrowing-ok: clearSessionWorkflowSlots
-  // The user provider account chosen for this session's runs (overriding the
-  // team credential). Session-scoped so the page-open daemon prewarm — which
-  // has no per-message context — still injects the right account. Absent = team
-  // credential. Set by startExecute from the composer's picker.
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
-  // The AI provider the session started on, taken from the model chosen at
-  // creation. Not a lock — the composer can move a session onto any visible
-  // model, including another provider's. Read as the fallback "previous
-  // provider" when a turn's predecessor carries no model stamp, so unstamped
-  // history is not replayed to the provider that already holds it (see
-  // `_shared/modelHandoff.ts`). Absent on older sessions.
-  provider: v.optional(aiProviderValidator),
-  // Last model the user sent on this session. Page-open prewarm uses this so
-  // the warm daemon matches the composer's picker instead of defaulting to sonnet.
-  lastModel: v.optional(aiModelValidator),
-  // Sticky composer effort for this session (mirrors lastModel). Without this,
-  // effort only lived in localStorage and reloads fell back to the model
-  // default (Claude → high), silently undoing a Medium pick.
-  lastReasoningLevel: v.optional(reasoningLevelValidator),
-  // Sticky thinking / 1M context / Fast toggles (same contract as lastReasoningLevel).
-  lastThinkingEnabled: v.optional(v.boolean()),
-  lastUse1mContext: v.optional(v.boolean()),
-  lastFastMode: v.optional(v.boolean()),
+  // Composer picks (provider, providerAccountId, lastModel, last* traits) live
+  // on the session's chats. schema-narrowing-ok: moveModelToChats
   // Sticky Preview URL path for this session (e.g. "/dashboard"). Device
   // viewport stays tab-local; port reuses `devPort` below.
   previewPath: v.optional(v.string()),
@@ -1217,10 +1185,7 @@ export const projectFields = {
   updatedAt: v.optional(v.number()),
   // codeReviewer removed. schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
-  model: v.optional(aiModelValidator),
-  // Whose credential this project's model preference is tied to (null/absent =
-  // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  // model and providerAccountId live on Eva's chat. schema-narrowing-ok: moveModelToChats
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
   /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */

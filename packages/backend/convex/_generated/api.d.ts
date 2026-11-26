@@ -202,7 +202,6 @@ import type * as _migrations_clearLegacyFields from "../_migrations/clearLegacyF
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_handTriageToEva from "../_migrations/handTriageToEva.js";
-import type * as _migrations_moveModelToChats from "../_migrations/moveModelToChats.js";
 import type * as _migrations_legacyProjectThreads from "../_migrations/legacyProjectThreads.js";
 import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js";
 import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
@@ -804,7 +803,6 @@ declare const fullApi: ApiFromModules<{
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/handTriageToEva": typeof _migrations_handTriageToEva;
-  "_migrations/moveModelToChats": typeof _migrations_moveModelToChats;
   "_migrations/legacyProjectThreads": typeof _migrations_legacyProjectThreads;
   "_migrations/logProjectIds": typeof _migrations_logProjectIds;
   "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
