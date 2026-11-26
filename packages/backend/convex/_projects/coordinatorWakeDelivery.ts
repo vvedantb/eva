@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { normalizeAIModel } from "../validators";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived } from "../numId";
 import { ensureOwnerChat } from "../_sessions/ownedSession";
 import { queueSystemChatMessage } from "../_sessions/execution";
 import { undeliveredWakes } from "./coordinatorWake";
@@ -37,7 +37,7 @@ export async function deliverPendingCoordinatorWakes(
   if (pending.length === 0) return "none";
   const project = await ctx.db.get(projectId);
   const now = Date.now();
-  if (!project || isEntityDeleted(project)) {
+  if (!project || isEntityArchived(project)) {
     for (const row of pending) await ctx.db.patch(row._id, { sentAt: now });
     return "none";
   }

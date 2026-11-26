@@ -2,7 +2,7 @@ import { v, type Infer } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived, isEntityDeleted } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
 import { prWatchValidator } from "../validators";
 import { isLivePrState } from "@eva/shared";
@@ -281,14 +281,14 @@ async function wakeTarget(
   }
   if (owner.kind === "task") {
     const task = await ctx.db.get(owner.taskId);
-    if (!task || isEntityDeleted(task)) return null;
+    if (!task || isEntityArchived(task)) return null;
     const clerkUserId = await clerkIdOf(task.createdBy);
     return clerkUserId === null
       ? null
       : { kind: "task", id: task._id, clerkUserId };
   }
   const project = await ctx.db.get(owner.projectId);
-  if (!project || isEntityDeleted(project)) return null;
+  if (!project || isEntityArchived(project)) return null;
   const clerkUserId = await clerkIdOf(project.userId);
   return clerkUserId === null
     ? null

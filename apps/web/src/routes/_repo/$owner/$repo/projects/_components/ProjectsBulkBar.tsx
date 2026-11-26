@@ -1,5 +1,5 @@
 import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
-import { IconTrash } from "@tabler/icons-react";
+import { IconArchive } from "@tabler/icons-react";
 
 interface ProjectsBulkBarProps {
   isSelecting: boolean;
@@ -8,14 +8,14 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  /** Runs the delete flow, which owns its own confirm and Alt-to-skip. */
-  onDelete: () => void;
+  /** Runs the archive flow, which owns its own confirm and Alt-to-skip. */
+  onArchive: () => void;
 }
 
 /**
  * The projects board's selection bar. Same shell as quick tasks; the one
- * action projects have is delete (a project's stage is derived from its
- * tasks, so there is no phase to set).
+ * action projects have is archive (a project's stage is derived from its
+ * tasks, so there is no phase to set). The Archived list has no select mode.
  */
 export function ProjectsBulkBar({
   isSelecting,
@@ -24,16 +24,15 @@ export function ProjectsBulkBar({
   onExitSelect,
   onSelectAll,
   onClearSelection,
-  onDelete,
+  onArchive,
 }: ProjectsBulkBarProps) {
-  const deleteAction: BulkBarAction = {
-    key: "delete",
-    label: "Delete All",
-    shortLabel: "Delete",
-    icon: IconTrash,
-    destructive: true,
+  const archiveAction: BulkBarAction = {
+    key: "archive",
+    label: "Archive All",
+    shortLabel: "Archive",
+    icon: IconArchive,
     showSkipHint: true,
-    onClick: onDelete,
+    onClick: onArchive,
   };
 
   return (
@@ -46,7 +45,7 @@ export function ProjectsBulkBar({
       onSelectAll={onSelectAll}
       onClearSelection={onClearSelection}
       primaryActions={[]}
-      destructiveAction={deleteAction}
+      destructiveAction={archiveAction}
     />
   );
 }

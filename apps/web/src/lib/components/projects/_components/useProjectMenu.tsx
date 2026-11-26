@@ -14,6 +14,8 @@ import {
   Textarea,
 } from "@vvedantb/ui";
 import { useUpdateProject } from "@/lib/components/projects/useUpdateProject";
+import { useProjectUnarchive } from "@/lib/components/projects/useProjectUnarchive";
+import { useRepo } from "@/lib/contexts/RepoContext";
 import type { ProjectCardMenuItemsProps } from "./ProjectCardMenuItems";
 
 type ProjectMenuArgs = Omit<
@@ -23,6 +25,7 @@ type ProjectMenuArgs = Omit<
   | "currentUserId"
   | "onLeadChange"
   | "onEdit"
+  | "onUnarchive"
 > & {
   description?: string;
 };
@@ -35,6 +38,8 @@ type ProjectMenuArgs = Omit<
 export function useProjectMenu({ description, ...args }: ProjectMenuArgs) {
   const { projectId, title } = args;
   const updateProject = useUpdateProject(projectId);
+  const { repoId } = useRepo();
+  const unarchive = useProjectUnarchive(repoId);
   const currentUserId = useQuery(api.auth.me);
   const users = useQuery(api.users.listAll);
   const [editOpen, setEditOpen] = useState(false);
@@ -55,6 +60,9 @@ export function useProjectMenu({ description, ...args }: ProjectMenuArgs) {
         currentUserId === value ? currentUserId : matchedUser?._id;
       if (!leadId) return;
       void updateProject({ id: projectId, projectLead: leadId });
+    },
+    onUnarchive: () => {
+      void unarchive([projectId]);
     },
     onEdit: () => {
       setEditTitle(title);

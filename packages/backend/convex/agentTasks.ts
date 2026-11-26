@@ -4,6 +4,7 @@ export {
   getByNumId,
   countSandboxTasks,
   getAllTasks,
+  listArchived,
   getStatusesByIds,
   listAttachments,
   listOpenTaskTitles,
@@ -12,8 +13,8 @@ export {
 export {
   update,
   updateStatus,
-  remove,
-  restore,
+  archive,
+  unarchive,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,
@@ -32,6 +33,7 @@ export {
   countDrafts,
   saveDraft,
   activateDraft,
+  deleteDraft,
 } from "./_agentTasks/drafts";
 
 export {

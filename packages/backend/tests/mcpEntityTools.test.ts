@@ -254,13 +254,13 @@ describe("list_entities returns what the caller can already open", () => {
     expect(truncated).toBe(true);
   });
 
-  test("soft-deleted rows are not listed", async () => {
+  test("deleted sessions and archived tasks and projects are not listed", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      const deletedAt = Date.now();
-      await ctx.db.patch(f.sessionId, { deletedAt });
-      await ctx.db.patch(f.taskId, { deletedAt });
-      await ctx.db.patch(f.projectId, { deletedAt });
+      const at = Date.now();
+      await ctx.db.patch(f.sessionId, { deletedAt: at });
+      await ctx.db.patch(f.taskId, { archivedAt: at });
+      await ctx.db.patch(f.projectId, { archivedAt: at });
     });
 
     const ids = (await listFor(f)).entities.map((entity) => entity.id);

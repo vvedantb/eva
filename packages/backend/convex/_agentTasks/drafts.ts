@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { aiModelValidator } from "../validators";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
@@ -28,9 +28,9 @@ import {
 import { createTaskRunSummary } from "./runSummary";
 
 /**
- * The user's drafts in a repo. `deletedAt` is in the range so a soft-deleted
- * draft does not linger in the quick-task modal (or the Drafts page) after
- * Remove; `createdBy` is in the range so other users' drafts are never read.
+ * The user's drafts in a repo. A draft is never archived (`deleteDraft`
+ * deletes it), so `archivedAt` is only the index prefix; `createdBy` is in the
+ * range so other users' drafts are never read.
  */
 function myLiveDrafts(
   db: QueryCtx["db"],
@@ -39,11 +39,11 @@ function myLiveDrafts(
 ) {
   return db
     .query("agentTasks")
-    .withIndex("by_repo_status_deleted_and_creator", (q) =>
+    .withIndex("by_repo_status_archived_and_creator", (q) =>
       q
         .eq("repoId", repoId)
         .eq("status", "draft")
-        .eq("deletedAt", undefined)
+        .eq("archivedAt", undefined)
         .eq("createdBy", userId),
     )
     .collect();
@@ -223,6 +223,45 @@ export const activateDraft = authMutation({
     if (task.projectId) {
       await onProjectTasksChanged(ctx, task.projectId);
     }
+    return null;
+  },
+});
+
+/**
+ * Deletes a draft row with the run summary and subscription `saveDraft` made.
+ * A draft is unsent text: it is deleted, never archived.
+ */
+export async function deleteDraftRow(
+  ctx: MutationCtx,
+  draftId: Id<"agentTasks">,
+): Promise<void> {
+  const runSummaries = await ctx.db
+    .query("agentTaskRunSummaries")
+    .withIndex("by_task", (q) => q.eq("taskId", draftId))
+    .collect();
+  const subscribers = await ctx.db
+    .query("taskSubscribers")
+    .withIndex("by_task", (q) => q.eq("taskId", draftId))
+    .collect();
+  for (const row of [...runSummaries, ...subscribers]) {
+    await ctx.db.delete(row._id);
+  }
+  await ctx.db.delete(draftId);
+}
+
+/** Deletes one of the user's drafts. */
+export const deleteDraft = authMutation({
+  args: { id: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const draft = await ctx.db.get(args.id);
+    if (
+      !draft ||
+      draft.createdBy !== ctx.userId ||
+      draft.status !== "draft"
+    )
+      throw new Error("Draft not found");
+    await deleteDraftRow(ctx, args.id);
     return null;
   },
 });

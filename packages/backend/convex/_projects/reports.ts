@@ -13,7 +13,7 @@ import {
   normalizeIdOrThrow,
 } from "../functions";
 import { projectTaskReportFields } from "../validators";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived } from "../numId";
 import { sessionOwner, findOwnedSession } from "../_sessions/owner";
 import { ensureTaskChat } from "../_sessions/ownedSession";
 import type { SessionChatContext } from "../_sessionChats/helpers";
@@ -173,7 +173,7 @@ async function canResumeAskingTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
-  if (isEntityDeleted(task) || task.status === "cancelled") return false;
+  if (isEntityArchived(task) || task.status === "cancelled") return false;
   if (await hasActiveRun(ctx.db, task._id)) return false;
   return !(await taskWorkSessionBusy(ctx.db, task));
 }
@@ -332,7 +332,7 @@ export const fileReportFromTask = internalMutation({
     const task = await ctx.db.get(
       normalizeIdOrThrow(ctx.db, "agentTasks", args.taskId, "Task"),
     );
-    if (!task || isEntityDeleted(task)) throw new Error("Task not found");
+    if (!task || isEntityArchived(task)) throw new Error("Task not found");
     return await fileTaskReport(ctx, {
       task,
       kind: args.kind,

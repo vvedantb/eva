@@ -1,5 +1,13 @@
 # Changelog
 
+## Archive replaces delete for quick tasks and projects
+
+Date: 2026-11-26
+
+Quick tasks and projects are never deleted now: Archive hides them, and an Active / Archived switch on the Quick tasks and Projects lists (web and phone, the sessions sidebar control) shows them with Unarchive. `agentTasks.remove`/`restore` and `projects.remove` are now `archive`/`unarchive`, plus `listArchived`; the MCP tools are `archive_task` and `unarchive_task` (no confirm flag, it is undoable). Archiving a project keeps its tasks in it, retires the coordinator session and stops the scheduler; it is still refused while a task runs. Unarchive brings both back. Archived items leave lists, counts, Needs you, search, mentions and the fleet list (with an archived project's tasks), but their pages still open read-only with an "Archived" state. Tasks and projects read `archivedAt` (new indexes); `deletedAt` stays on them until a later PR drops it. After deploy run `npx convex run --prod dataMigrations:archiveDeletedEntities`.
+
+Read-only is enforced: the server refuses edits to an archived task, a task of an archived project, or an archived project (`assertTaskNotArchived` / `assertProjectNotArchived`: status, fields, dates, attachments, runs and schedules, approve, assign to project) with "Unarchive the task first" / "Unarchive the project first". Web disables the task Properties, files, project fields, context and dates, hides Triage Reject / Approve, Approve all and the row menu of an archived project, and the Archived projects list has no Timeline view. Phone matches: read-only task and project fields, no Reject / Approve, and the chat composer says "This task (project) is archived and read-only". A project task archived on its own shows under its project's Archived group (`listByProject` with `archived`) with Unarchive in its menu, and its phone page opens. Drafts are deleted, not archived: `agentTasks.deleteDraft` deletes the row ("Delete draft?" again), `archive` refuses a draft, and the migration deletes old soft-deleted drafts. The Archived projects list lost select mode and "Unarchive All", as quick tasks (row Unarchive stays).
+
 ## Coordinator chat: toolbar sits above the bubble
 
 Date: 2026-11-26

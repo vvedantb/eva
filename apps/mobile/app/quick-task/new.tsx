@@ -6,7 +6,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
-import { TASK_TAGS, visibleDrafts, type Priority } from "@eva/shared";
+import { TASK_TAGS, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { Attachment, Attachments } from "@vvedantb/native-ui/ai";
@@ -67,7 +67,7 @@ export default function NewQuickTaskScreen() {
     repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.find((candidate) => candidate._id === lastRepoId) ?? repos?.[0];
   // The linked draft, once the repo's drafts are in; a removed one opens a blank form.
   const linkedDrafts = useQuery(api.agentTasks.listDrafts, params.draftId && first ? { repoId: first._id } : "skip");
-  const initialDraft = linkedDrafts === undefined ? undefined : visibleDrafts(linkedDrafts).find((draft) => draft._id === params.draftId);
+  const initialDraft = linkedDrafts?.find((draft) => draft._id === params.draftId);
   if (repos === undefined || (params.draftId && first && linkedDrafts === undefined)) {
     return <Screen onBack={leave}><CenteredSpinner label="Loading repos" /></Screen>;
   }
@@ -114,9 +114,7 @@ function NewQuickTaskForm({
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const draftRows = useQuery(api.agentTasks.listDrafts, repoArgs);
-  // `remove` is a soft delete: a removed draft stays on disk until the list drops it.
-  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
+  const drafts = useQuery(api.agentTasks.listDrafts, repoArgs);
   const navigation = useNavigation();
 
   const [title, setTitle] = useState(initialDraft?.title ?? "");

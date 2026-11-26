@@ -146,7 +146,7 @@ describe("public functions refuse callers without repo access", () => {
         }),
       ).rejects.toThrow("Not authorized");
       await expect(
-        f.stranger.mutation(api.projects.remove, { id: f.projectId }),
+        f.stranger.mutation(api.projects.archive, { id: f.projectId }),
       ).rejects.toThrow("Not authorized");
     },
     TIMEOUT_MS,

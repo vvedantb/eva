@@ -19,8 +19,9 @@ import { useProjectTaskStatus } from "./useProjectStatus";
  * The coordinator rail's Tasks tab: the title with "+" (a new task, to Triage
  * unless "Start now"), a thin progress bar
  * and the counts as one muted line, then the tasks grouped Triage, Working,
- * Blocked, Idle, Archived, and their Pull requests. A row opens the task in
- * place of the coordinator.
+ * Blocked, Idle, Archived (with the tasks archived on their own), and their
+ * Pull requests. A row opens the task in place of the coordinator. An
+ * archived project's list is read-only.
  */
 export function ProjectTasksPanel({
   projectId,
@@ -39,12 +40,21 @@ export function ProjectTasksPanel({
     projectId,
     repoId,
   );
+  const archivedTasks = useQuery(api.agentTasks.listByProject, {
+    projectId,
+    archived: true,
+  });
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId });
+  // An archived project is read-only: no new tasks.
+  const isArchived =
+    useQuery(api.projects.get, { id: projectId })?.archivedAt !== undefined;
   const projectSegment = entityPathSegment({ numId: projectNumId });
 
   const openTask = (taskId: Id<"agentTasks">) => {
-    const task = tasks?.find((row) => row._id === taskId);
+    const task = [...(tasks ?? []), ...(archivedTasks ?? [])].find(
+      (row) => row._id === taskId,
+    );
     const taskSegment = task ? entityPathSegment(task) : null;
     if (!projectSegment || !taskSegment) return;
     void navigate({
@@ -64,14 +74,16 @@ export function ProjectTasksPanel({
       <div className="flex shrink-0 flex-col gap-2 px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-medium text-foreground">Tasks</h2>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="New task"
-            onClick={() => setCreateTaskOpen(true)}
-          >
-            <IconPlus size={14} />
-          </Button>
+          {isArchived ? null : (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="New task"
+              onClick={() => setCreateTaskOpen(true)}
+            >
+              <IconPlus size={14} />
+            </Button>
+          )}
         </div>
         <ProjectProgressBar status={status} className="h-1" />
         {status ? (
@@ -84,6 +96,8 @@ export function ProjectTasksPanel({
         <ProjectTaskListPanel
           projectId={projectId}
           tasks={tasks ?? []}
+          archivedTasks={archivedTasks ?? []}
+          readOnly={isArchived}
           failedTaskIds={failedTaskIds}
           onSelectTask={openTask}
           homeRepoId={repoId}

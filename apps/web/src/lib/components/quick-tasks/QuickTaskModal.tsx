@@ -86,7 +86,6 @@ import {
   draftCountAfterRemove,
   draftsAfterRemove,
   toRunTraitArgs,
-  visibleDrafts,
 } from "@eva/shared";
 import {
   catchMutationError,
@@ -138,7 +137,7 @@ function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
 
 /** The repo's saved drafts, and a delete that drops them optimistically. */
 function useQuickTaskDrafts(repoId: Repo["_id"]) {
-  const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
+  const removeDraft = useMutation(api.agentTasks.deleteDraft).withOptimisticUpdate(
     (localStore, args) => {
       const draftArgs = { repoId };
       patchLoadedQuery(
@@ -155,10 +154,7 @@ function useQuickTaskDrafts(repoId: Repo["_id"]) {
       );
     },
   );
-  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId });
-  // `remove` only sets `deletedAt`; until listDrafts is deployed with that
-  // index range, the query still returns the row and the trash looks broken.
-  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
+  const drafts = useQuery(api.agentTasks.listDrafts, { repoId });
   return { removeDraft, drafts };
 }
 

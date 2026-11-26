@@ -122,6 +122,7 @@ export function TaskDetailInline({
     isOwner,
     hasActiveRun,
     isProjectTask,
+    isArchived,
     hasRuns,
     canEditTaskText: canEditText,
     latestPrUrl,
@@ -337,6 +338,7 @@ export function TaskDetailInline({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          isArchived={isArchived}
           onSandboxToggle={
             canStartSandbox || isSandboxActive
               ? (action) => {
@@ -458,7 +460,7 @@ export function TaskDetailInline({
                       inline={true}
                     />
 
-                    <TaskAttachments taskId={taskId} />
+                    <TaskAttachments taskId={taskId} readOnly={isArchived} />
 
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                       <div className="text-sm font-medium text-foreground">
@@ -500,6 +502,7 @@ export function TaskDetailInline({
                 hasRuns={hasRuns}
                 isOwner={isOwner}
                 allTags={allTags}
+                readOnly={isArchived}
               />
             </div>
           </div>

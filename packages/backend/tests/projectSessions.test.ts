@@ -166,7 +166,7 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a project's coordinator session stays open through edits; only a delete retires it",
+    "a project's coordinator session stays open through edits; archive retires it, unarchive revives it",
     async () => {
       const f = await fixture();
       const { sessionId } = await ensureProjectSession(f);
@@ -176,9 +176,12 @@ describe("projects on sessions", () => {
       });
       const after = await f.t.run((ctx) => ctx.db.get(sessionId));
       expect(after?.archive).toBeUndefined();
-      await f.asUser.mutation(api.projects.remove, { id: f.projectId });
-      const removed = await f.t.run((ctx) => ctx.db.get(sessionId));
-      expect(removed?.archive).toBeDefined();
+      await f.asUser.mutation(api.projects.archive, { id: f.projectId });
+      const archived = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(archived?.archive).toBeDefined();
+      await f.asUser.mutation(api.projects.unarchive, { id: f.projectId });
+      const revived = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(revived?.archive).toBeUndefined();
     },
     TIMEOUT_MS,
   );

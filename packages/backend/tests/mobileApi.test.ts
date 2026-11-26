@@ -18,7 +18,6 @@ import {
   groupByTaskStatus,
   runAllPlan,
   startAll,
-  visibleDrafts,
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
@@ -666,7 +665,7 @@ describe("mobile api", () => {
       });
       // Left again after an edit: the same draft, not a second one.
       await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, title: "Half an idea, v2" });
-      const drafts = visibleDrafts(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId }));
+      const drafts = await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId });
       expect(drafts.map((draft) => draft.title)).toEqual(["Half an idea, v2"]);
       // Drafts are not on the list.
       const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
@@ -829,7 +828,7 @@ describe("mobile api", () => {
       await expect(
         asUser.mutation(api.projects.create, { repoId: strangerRepoId, title: "Nope", rawInput: "Nope", skipPlanning: true }),
       ).rejects.toThrow();
-      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_deleted", (q) => q.eq("repoId", strangerRepoId).eq("deletedAt", undefined)).collect())).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_archived", (q) => q.eq("repoId", strangerRepoId).eq("archivedAt", undefined)).collect())).toEqual([]);
     },
     TIMEOUT_MS,
   );

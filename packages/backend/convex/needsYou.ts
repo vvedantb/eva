@@ -189,8 +189,8 @@ async function projectRows(
 ): Promise<NeedsYouRow[]> {
   const projects = await db
     .query("projects")
-    .withIndex("by_repo_and_deleted", (q) =>
-      q.eq("repoId", repo._id).eq("deletedAt", undefined),
+    .withIndex("by_repo_and_archived", (q) =>
+      q.eq("repoId", repo._id).eq("archivedAt", undefined),
     )
     .collect();
   const base = repoBasePath(repo);
@@ -250,11 +250,11 @@ async function quickTaskRows(
   const byStatus = (status: "code_review" | "business_review" | "todo") =>
     db
       .query("agentTasks")
-      .withIndex("by_repo_status_deleted_and_creator", (q) =>
+      .withIndex("by_repo_status_archived_and_creator", (q) =>
         q
           .eq("repoId", repo._id)
           .eq("status", status)
-          .eq("deletedAt", undefined)
+          .eq("archivedAt", undefined)
           .eq("createdBy", userId),
       )
       .order("desc")

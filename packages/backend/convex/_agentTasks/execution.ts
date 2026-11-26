@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { startTaskRun } from "../_taskWorkflow/startRun";
 import { aiModelValidator, runModeValidator } from "../validators";
 import {
+  assertTaskNotArchived,
   authMutation,
   hasTaskAccess,
   hasActiveRun,
@@ -32,6 +33,7 @@ export const startExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     if (task.status === "draft") {
       throw new Error("Cannot execute a draft task");
     }
@@ -90,6 +92,7 @@ export const scheduleExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
@@ -143,6 +146,7 @@ export const updateScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     if (args.scheduledAt <= Date.now()) {
       throw new Error("Scheduled time must be in the future");
     }

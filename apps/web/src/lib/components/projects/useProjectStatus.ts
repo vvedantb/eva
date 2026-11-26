@@ -55,8 +55,12 @@ export function useProjectTaskStatus(
  */
 export function useProjectListStatuses(
   repoId: Id<"githubRepos">,
+  archived = false,
 ): ReadonlyMap<string, ProjectListStatus> | undefined {
-  const rows = useQuery(api.projects.listStatusesForRepo, { repoId });
+  const rows = useQuery(
+    api.projects.listStatusesForRepo,
+    archived ? { repoId, archived } : { repoId },
+  );
   if (rows === undefined) return undefined;
   return new Map(rows.map((row) => [String(row.projectId), row]));
 }

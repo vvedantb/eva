@@ -32,6 +32,7 @@ import {
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
+import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type RunDoc = NonNullable<
@@ -116,6 +117,7 @@ function getShowRunButton({
 }): boolean {
   return (
     !task?.projectId &&
+    task?.archivedAt === undefined &&
     ((status === "todo" && !hasRuns) ||
       (status === "in_progress" && !hasActiveRun))
   );
@@ -265,6 +267,9 @@ export function TaskFooter({
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
         <div className={layout.actions}>
+          {isHeader && task?.archivedAt !== undefined ? (
+            <ArchivedLabel />
+          ) : null}
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}

@@ -68,6 +68,8 @@ export function ProjectDetailSandboxContent({
     handleStartSandbox,
     handleStopSandbox,
   } = sandbox;
+  // An archived project opens read-only: no wake, no composer.
+  const isArchived = project.archivedAt !== undefined;
 
   // Always mount the sandbox panel so tabs stay reachable while stopped —
   // same as sessions. Panes self-gate.
@@ -93,11 +95,14 @@ export function ProjectDetailSandboxContent({
       panes={panes}
       terminalPanel={terminalPanel}
       sandboxTab={sandboxTab}
-      onStartSandbox={isSandboxStopping ? undefined : handleStartSandbox}
+      onStartSandbox={
+        isSandboxStopping || isArchived ? undefined : handleStartSandbox
+      }
       isSandboxStarting={isSandboxStarting}
       autoWakeEligible={
         sandbox.sandbox.status === "closed" &&
         projectSandboxId !== undefined &&
+        !isArchived &&
         // Still loading counts as busy: never wake under a live turn.
         chatTurnOpen === false
       }
@@ -132,6 +137,7 @@ export function ProjectDetailSandboxContent({
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
           onThreadOpen={onThreadOpen}
+          isArchived={isArchived}
           onSandboxToggle={(action) => {
             if (action === "start") void handleStartSandbox();
             else void handleStopSandbox();

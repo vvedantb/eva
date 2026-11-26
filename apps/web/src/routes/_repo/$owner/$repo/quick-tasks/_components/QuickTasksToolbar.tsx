@@ -59,7 +59,9 @@ import {
   type QuickTaskSortDir,
   type QuickTaskSortField,
   type QuickTaskTimeRange,
+  type ArchiveListMode,
 } from "@eva/shared";
+import { ListModeTabs } from "@/lib/components/ListModeTabs";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
@@ -78,6 +80,9 @@ const isTimeRange = (v: string): v is QuickTaskTimeRange =>
   QUICK_TASK_TIME_RANGES.some((range) => range === v);
 
 interface QuickTasksToolbarProps {
+  /** Active or Archived tasks; the Archived list has no Select or New Task. */
+  listMode: ArchiveListMode;
+  onListModeChange: (mode: ArchiveListMode) => void;
   view: QuickTaskView;
   onViewChange: (v: QuickTaskView) => void;
   searchQuery: string;
@@ -94,6 +99,8 @@ interface QuickTasksToolbarProps {
 }
 
 export function QuickTasksToolbar({
+  listMode,
+  onListModeChange,
   view,
   onViewChange,
   searchQuery,
@@ -159,8 +166,15 @@ export function QuickTasksToolbar({
     setParams(clearedQuickTaskFilters());
   };
 
+  const isArchivedList = listMode === "archived";
+
   return (
     <div className="flex max-sm:min-w-0 max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
+      <ListModeTabs
+        mode={listMode}
+        onChange={onListModeChange}
+        className="w-40"
+      />
       <ToggleSearch
         value={searchQuery}
         onChange={onSearchChange}
@@ -204,7 +218,7 @@ export function QuickTasksToolbar({
         </Tabs>
       )}
       <AnimatePresence initial={false} mode="popLayout">
-        {hasQuickTasks && !isSelecting ? (
+        {hasQuickTasks && !isSelecting && !isArchivedList ? (
           <m.div
             key="quick-task-select-action"
             initial={{ opacity: 0, y: -6 }}
@@ -422,14 +436,16 @@ export function QuickTasksToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <Button
-        size="sm"
-        className="motion-press hover:scale-[1.01] active:scale-[0.96]"
-        onClick={onCreateTask}
-      >
-        <IconPlus size={16} />
-        <span className="max-sm:sr-only">New Task</span>
-      </Button>
+      {isArchivedList ? null : (
+        <Button
+          size="sm"
+          className="motion-press hover:scale-[1.01] active:scale-[0.96]"
+          onClick={onCreateTask}
+        >
+          <IconPlus size={16} />
+          <span className="max-sm:sr-only">New Task</span>
+        </Button>
+      )}
     </div>
   );
 }

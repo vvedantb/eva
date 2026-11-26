@@ -16,7 +16,11 @@ import {
   isTaskVisibleTo,
   listProjectTasksForUser,
 } from "../functions";
-import { entityVisible, filterActiveEntities } from "../numId";
+import {
+  archivedProjectIds,
+  filterLiveTasks,
+  filterUnarchived,
+} from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { sessionStatusValidator } from "../_validators/enums";
 import { resolveStorageEntries } from "../_chat/storageUrls";
@@ -240,17 +244,23 @@ async function enrichTasksWithLastRun(
 /**
  * Lists all tasks for a project in `taskNumber` order, enriched with latest
  * run time. A task in a repo the caller cannot access is a locked row
- * (`lockedTaskRow`).
+ * (`lockedTaskRow`). With `archived`, only the tasks archived on their own
+ * (the task list's Archived group); they never count in the project's status.
  */
 export const listByProject = authQuery({
-  args: { projectId: v.id("projects") },
+  args: { projectId: v.id("projects"), archived: v.optional(v.boolean()) },
   returns: v.array(agentTaskWithLastRunValidator),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       return [];
     const [listed, factsById] = await Promise.all([
-      listProjectTasksForUser(ctx.db, args.projectId, ctx.userId),
+      listProjectTasksForUser(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+        args.archived === true,
+      ),
       loadProjectTaskFacts(ctx.db, project),
     ]);
     const withFacts = (
@@ -278,14 +288,17 @@ export const listByProject = authQuery({
   },
 });
 
-/** Retrieves a single task by ID, returning null if not found or unauthorized. */
+/**
+ * Retrieves a single task by ID, returning null if not found or unauthorized.
+ * An archived task still returns (`archivedAt` set): its page opens read-only.
+ */
 export const get = authQuery({
   args: { id: v.id("agentTasks") },
   returns: v.union(agentTaskValidator, v.null()),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
-    return entityVisible(task);
+    return task;
   },
 });
 
@@ -319,7 +332,7 @@ export const listAttachments = authQuery({
   },
 });
 
-/** Resolves a task by per-repo numeric id (URL segment). */
+/** Resolves a task by per-repo numeric id (URL segment), archived ones too. */
 export const getByNumId = authQuery({
   args: {
     repoId: v.id("githubRepos"),
@@ -334,8 +347,8 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
-    if (task && !isTaskVisibleTo(task, ctx.userId)) return null;
-    return entityVisible(task);
+    if (!task || !isTaskVisibleTo(task, ctx.userId)) return null;
+    return task;
   },
 });
 
@@ -353,19 +366,25 @@ async function activeTasksForUser(
   userId: Id<"users">,
 ): Promise<Array<Doc<"agentTasks">>> {
   const repos = await gatherAccessibleRepos(ctx.db, userId, true);
-  const taskArrays = await Promise.all(
-    repos.flatMap((repo) =>
-      [...ACTIVE_TASK_STATUSES].map((status) =>
-        ctx.db
-          .query("agentTasks")
-          .withIndex("by_repo_and_status", (q) =>
-            q.eq("repoId", repo._id).eq("status", status),
-          )
-          .collect(),
+  const [taskArrays, archivedPerRepo] = await Promise.all([
+    Promise.all(
+      repos.flatMap((repo) =>
+        [...ACTIVE_TASK_STATUSES].map((status) =>
+          ctx.db
+            .query("agentTasks")
+            .withIndex("by_repo_and_status", (q) =>
+              q.eq("repoId", repo._id).eq("status", status),
+            )
+            .collect(),
+        ),
       ),
     ),
+    Promise.all(repos.map((repo) => archivedProjectIds(ctx.db, repo._id))),
+  ]);
+  const archivedProjects = new Set(
+    archivedPerRepo.flatMap((ids) => [...ids]),
   );
-  return filterActiveEntities(taskArrays.flat()).sort(
+  return filterLiveTasks(taskArrays.flat(), archivedProjects).sort(
     (a, b) => b.updatedAt - a.updatedAt,
   );
 }
@@ -394,7 +413,7 @@ export const countSandboxTasks = authQuery({
           return id ? ctx.db.get(id) : null;
         }),
     );
-    return filterActiveEntities(
+    return filterUnarchived(
       liveSessionTasks.filter((task) => task !== null),
     ).filter(
       (task) => !task.projectId && ACTIVE_TASK_STATUSES.has(task.status),
@@ -451,33 +470,54 @@ export const getActiveTasksSlim = authQuery({
 });
 
 /**
- * The repo's quick tasks: every non-draft task outside a project, enriched
- * with latest run time, sorted by creation date. A project task lives only in
- * its project (`listByProject`), even when it targets this repo.
+ * A repo's non-draft quick tasks (outside a project), live or archived. A
+ * project task lives only in its project (`listByProject`), even when it
+ * targets this repo; it archives with its project.
+ */
+async function listQuickTasksByArchive(
+  ctx: QueryCtx,
+  repoId: Id<"githubRepos">,
+  archived: boolean,
+): Promise<Array<Doc<"agentTasks">>> {
+  const taskArrays = await Promise.all(
+    NON_DRAFT_TASK_STATUSES.map((status) =>
+      ctx.db
+        .query("agentTasks")
+        .withIndex("by_repo_status_and_archived", (q) => {
+          const inStatus = q.eq("repoId", repoId).eq("status", status);
+          return archived
+            ? inStatus.gte("archivedAt", 0)
+            : inStatus.eq("archivedAt", undefined);
+        })
+        .collect(),
+    ),
+  );
+  return taskArrays.flat().filter((task) => task.projectId === undefined);
+}
+
+/**
+ * The repo's live quick tasks, enriched with latest run time, sorted by
+ * creation date (`listQuickTasksByArchive`).
  */
 export const getAllTasks = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(agentTaskWithLastRunValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const tasks = await listQuickTasksByArchive(ctx, args.repoId, false);
+    tasks.sort((a, b) => a.createdAt - b.createdAt);
+    return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
+  },
+});
 
-    const taskArrays = await Promise.all(
-      NON_DRAFT_TASK_STATUSES.map((status) =>
-        ctx.db
-          .query("agentTasks")
-          .withIndex("by_repo_status_and_deleted", (q) =>
-            q
-              .eq("repoId", args.repoId)
-              .eq("status", status)
-              .eq("deletedAt", undefined),
-          )
-          .collect(),
-      ),
-    );
-    const tasks = taskArrays
-      .flat()
-      .filter((task) => task.projectId === undefined)
-      .sort((a, b) => a.createdAt - b.createdAt);
+/** The repo's archived quick tasks, most recently archived first. */
+export const listArchived = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(agentTaskWithLastRunValidator),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const tasks = await listQuickTasksByArchive(ctx, args.repoId, true);
+    tasks.sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
     return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
   },
 });
@@ -537,11 +577,11 @@ export const listOpenTaskTitles = internalQuery({
       OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
-          .withIndex("by_repo_status_and_deleted", (q) =>
+          .withIndex("by_repo_status_and_archived", (q) =>
             q
               .eq("repoId", args.repoId)
               .eq("status", status)
-              .eq("deletedAt", undefined),
+              .eq("archivedAt", undefined),
           )
           .order("desc")
           .take(OPEN_TASK_TITLE_LIMIT),

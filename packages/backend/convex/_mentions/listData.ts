@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
-import { entityVisible } from "../numId";
+import { archivedProjectIds, entityVisible, filterLiveTasks } from "../numId";
 import { standaloneOnly } from "../_sessions/owner";
 import { findRepoByPath } from "../_githubRepos/helpers";
 import { OPEN_TASK_STATUSES } from "../validators";
@@ -118,8 +118,8 @@ export const listData = authQuery({
 
     const projects = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_deleted", (q) =>
-        q.eq("repoId", args.repoId).eq("deletedAt", undefined),
+      .withIndex("by_repo_and_archived", (q) =>
+        q.eq("repoId", args.repoId).eq("archivedAt", undefined),
       )
       .order("desc")
       .take(MENTION_LIST_CAP);
@@ -136,20 +136,21 @@ export const listData = authQuery({
     }
 
     // Open work only — done tasks rarely need @-mention and dominate large repos.
-    const taskArrays = await Promise.all(
-      OPEN_TASK_STATUSES.map((status) =>
+    const [archivedProjects, ...taskArrays] = await Promise.all([
+      archivedProjectIds(ctx.db, args.repoId),
+      ...OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
-          .withIndex("by_repo_status_and_deleted", (q) =>
+          .withIndex("by_repo_status_and_archived", (q) =>
             q
               .eq("repoId", args.repoId)
               .eq("status", status)
-              .eq("deletedAt", undefined),
+              .eq("archivedAt", undefined),
           )
           .take(MENTION_LIST_CAP),
       ),
-    );
-    for (const task of taskArrays.flat()) {
+    ]);
+    for (const task of filterLiveTasks(taskArrays.flat(), archivedProjects)) {
       const description = task.description?.trim();
       items.push({
         kind: "quickTask",
@@ -212,8 +213,8 @@ export const getEntity = authQuery({
 
     const projectId = ctx.db.normalizeId("projects", args.id);
     if (projectId) {
-      const project = await ctx.db.get(projectId);
-      const visible = entityVisible(project);
+      // An archived project still resolves: its chip opens it read-only.
+      const visible = await ctx.db.get(projectId);
       if (visible && visible.repoId === args.repoId) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
@@ -230,8 +231,8 @@ export const getEntity = authQuery({
 
     const taskId = ctx.db.normalizeId("agentTasks", args.id);
     if (taskId) {
-      const task = await ctx.db.get(taskId);
-      const visible = entityVisible(task);
+      // An archived task still resolves: its chip opens it read-only.
+      const visible = await ctx.db.get(taskId);
       if (
         visible &&
         visible.repoId === args.repoId &&

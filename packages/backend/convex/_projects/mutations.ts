@@ -6,9 +6,11 @@ import {
   aiModelValidator,
 } from "../validators";
 import {
+  assertProjectNotArchived,
   authMutation,
   hasRepoAccess,
   getProjectWithAccess,
+  onProjectTasksChanged,
   taskRunPending,
 } from "../functions";
 import { listProjectTasks, taskLabel } from "./scheduler";
@@ -108,6 +110,7 @@ export const update = authMutation({
       args.id,
       ctx.userId,
     );
+    assertProjectNotArchived(project);
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
     const {
@@ -194,38 +197,39 @@ export const update = authMutation({
 });
 
 /**
- * Soft-deletes a project (row retained; hidden from lists and direct URLs).
- * Refused while a child task runs. Its child tasks stay as quick tasks, with
- * their sessions, branches and PRs: they leave the project and lose what
- * only a project task has (number, phase label, approval, coordinator
- * retries).
+ * Archives a project as one unit: its tasks stay in it, the coordinator
+ * session retires and the scheduler skips it. Hidden from lists; its page
+ * still opens read-only. Refused while one of its tasks runs.
  */
-export const remove = authMutation({
+export const archive = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const tasks = await listProjectTasks(ctx.db, args.id);
-    for (const task of tasks) {
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    if (project.archivedAt !== undefined) return null;
+    for (const task of await listProjectTasks(ctx.db, args.id)) {
       if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
         throw new ConvexError(
-          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then delete the project.`,
+          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then archive the project.`,
         );
       }
     }
-    const now = Date.now();
-    for (const task of tasks) {
-      await ctx.db.patch(task._id, {
-        projectId: undefined,
-        taskNumber: undefined,
-        phaseLabel: undefined,
-        approvedAt: undefined,
-        coordinatorRetries: undefined,
-        updatedAt: now,
-      });
-    }
-    await ctx.db.patch(args.id, { deletedAt: now });
+    await ctx.db.patch(args.id, { archivedAt: Date.now() });
     await syncProjectSession(ctx, args.id);
+    return null;
+  },
+});
+
+/** Brings an archived project back with its tasks and coordinator session. */
+export const unarchive = authMutation({
+  args: { id: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    if (project.archivedAt === undefined) return null;
+    await ctx.db.patch(args.id, { archivedAt: undefined });
+    await syncProjectSession(ctx, args.id);
+    await onProjectTasksChanged(ctx, args.id);
     return null;
   },
 });

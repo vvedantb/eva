@@ -1,8 +1,15 @@
 import { api, type Id } from "@eva/backend";
-import { entityHref, readableServerError } from "@eva/shared";
-import { projectDeleteNote } from "@eva/shared/projectView";
+import { ARCHIVE_LABEL, UNARCHIVE_LABEL, archiveCopy, entityHref, readableServerError } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
+import {
+  IconArchive,
+  IconArchiveOff,
+  IconClipboard,
+  IconCopy,
+  IconGitBranch,
+  IconLink,
+  IconUserPlus,
+} from "@tabler/icons-react-native";
 import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -23,6 +30,7 @@ export interface ProjectMenuTarget {
   numId?: number;
   projectLead?: Id<"users">;
   branchName?: string;
+  archivedAt?: number;
 }
 
 type Page = "root" | "lead" | "copy";
@@ -31,17 +39,17 @@ type Page = "root" | "lead" | "copy";
  * The web project menu (`ProjectCardMenuItems`) on the phone: a long press
  * on a row, or the project header "…", opens it as a bottom sheet
  * (`openSheet`), with a page per web submenu: Project Lead and Copy
- * (Title, Link, Branch name), then Delete. Delete asks first, with the web
- * `ProjectDeleteDialog`, and has no Undo, as the web (nothing restores a
- * deleted project); `onDeleted` runs after. A refusal (a child task runs)
- * toasts its reason.
+ * (Title, Link, Branch name), then Archive. Archive asks first, with the web
+ * `ProjectArchiveDialog`, then offers Undo in its toast; `onArchived` runs
+ * after. A refusal (a child task runs) toasts its reason. An archived project
+ * offers only Copy and Unarchive.
  * The rest act at once. Writes are the web mutations. Render `dialogs` once.
  * Not here from the web menu: Edit details, Open in new tab and the PR submenus.
  */
 export function useProjectActions({
   repo,
   users,
-  onDeleted,
+  onArchived,
   extraRows,
 }: {
   /** Rows that lead the menu (the project page's sandbox and git actions); given the menu's `close`. */
@@ -49,16 +57,18 @@ export function useProjectActions({
   /** The repo's path fields, for Copy link. */
   repo: { owner: string; name: string; rootDirectory?: string };
   users: User[] | undefined;
-  onDeleted?: () => void;
+  onArchived?: () => void;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const [target, setTarget] = useState<ProjectMenuTarget | null>(null);
   const [page, setPage] = useState<Page>("root");
-  const [deleteTarget, setDeleteTarget] = useState<ProjectMenuTarget | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<ProjectMenuTarget | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const updateProject = useMutation(api.projects.update);
-  const deleteProject = useMutation(api.projects.remove);
+  const archiveProject = useMutation(api.projects.archive);
+  const unarchiveProject = useMutation(api.projects.unarchive);
+  const archiveText = archiveCopy("project");
 
   const close = () => {
     setTarget(null);
@@ -75,9 +85,46 @@ export function useProjectActions({
     });
   };
 
+  const unarchive = (projectId: Id<"projects">) => {
+    unarchiveProject({ id: projectId }).then(
+      () => toast.success(archiveText.unarchived, { id: "project-unarchive" }),
+      () => toast.error(archiveText.unarchiveFailed, { id: "project-unarchive" }),
+    );
+  };
+  // The session archive toast's shape: what happened, and Undo.
+  const archive = (projectId: Id<"projects">) => {
+    archiveProject({ id: projectId }).then(
+      () => {
+        toast.success(archiveText.archived, {
+          id: "project-archive",
+          action: { label: "Undo", onPress: () => unarchive(projectId) },
+        });
+        onArchived?.();
+      },
+      // It refuses while a child task runs: say why.
+      (error: Error) => toast.error(readableServerError(error, archiveText.archiveFailed), { id: "project-archive" }),
+    );
+  };
+
   const body = (project: ProjectMenuTarget) => {
     switch (page) {
       case "root":
+        if (project.archivedAt !== undefined) {
+          return (
+            <>
+              <SubmenuRow icon={IconCopy} title="Copy" onPress={() => setPage("copy")} />
+              <MenuDivider />
+              <SheetRow
+                icon={IconArchiveOff}
+                title={UNARCHIVE_LABEL}
+                onPress={() => {
+                  close();
+                  unarchive(project._id);
+                }}
+              />
+            </>
+          );
+        }
         return (
           <>
             {extraRows?.(close)}
@@ -86,12 +133,11 @@ export function useProjectActions({
             <SubmenuRow icon={IconCopy} title="Copy" onPress={() => setPage("copy")} />
             <MenuDivider />
             <SheetRow
-              icon={IconTrash}
-              title="Delete"
-              danger
+              icon={IconArchive}
+              title={ARCHIVE_LABEL}
               onPress={() => {
                 close();
-                setDeleteTarget(project);
+                setArchiveTarget(project);
               }}
             />
           </>
@@ -155,38 +201,21 @@ export function useProjectActions({
       >
         {target ? body(target) : null}
       </MenuSheet>
-      {/* The web `ProjectDeleteDialog` (one project). */}
+      {/* The web `ProjectArchiveDialog` (one project). */}
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={archiveTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) setArchiveTarget(null);
         }}
-        title="Delete Project"
+        title={archiveText.confirmTitle}
         description={
-          // The web body: the question, the warning (its tinted box is plain warning text here), then the note.
-          <>
-            Are you sure you want to delete{" "}
-            <Text className="font-instrument-sans-semibold" style={{ fontWeight: "600", color: theme.foreground }}>
-              {deleteTarget?.title}
-            </Text>
-            ?
-            <Text style={{ color: theme.warning }}>
-              {`\n\n${projectDeleteNote(1)}`}
-            </Text>
-            {"\n\nThis action cannot be undone."}
-          </>
+          <Text className="font-instrument-sans-semibold" style={{ fontWeight: "600", color: theme.foreground }}>
+            {archiveTarget?.title}
+          </Text>
         }
-        confirmLabel="Delete Project"
-        variant="destructive"
+        confirmLabel={ARCHIVE_LABEL}
         onConfirm={() => {
-          if (!deleteTarget) return;
-          deleteProject({ id: deleteTarget._id })
-            .then(() => {
-              toast.success("Project deleted");
-              onDeleted?.();
-            })
-            // It refuses while a child task runs: say why.
-            .catch((error: Error) => toast.error(readableServerError(error, "Couldn't delete project")));
+          if (archiveTarget) archive(archiveTarget._id);
         }}
       />
     </>
@@ -198,6 +227,8 @@ export function useProjectActions({
       setPage("root");
       setTarget(project);
     },
+    /** Unarchive, with its toast: the archived page's `ArchivedBar`. */
+    unarchive,
     dialogs,
   };
 }
