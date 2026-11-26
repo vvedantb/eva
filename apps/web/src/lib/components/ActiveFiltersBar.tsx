@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconX } from "@tabler/icons-react";
-import { tokenTransition } from "@vvedantb/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 export interface ActiveFilterChip<K extends string> {
@@ -37,11 +37,12 @@ export function ActiveFiltersBar<K extends string>({
           Filtered by
         </span>
         {filters.map((f) => (
-          <button
+          <Button
             key={f.key}
-            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => onClearFilter(f.key)}
-            className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+            className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-control bg-muted/60 px-2 py-0.5 h-auto font-normal text-xs text-muted-foreground hover:bg-muted transition-colors"
           >
             {/* The name reads "Remove filter <label>". Not an `aria-label`:
                 that would copy a person's name out of its `data-pii` span. */}
@@ -52,16 +53,17 @@ export function ActiveFiltersBar<K extends string>({
               aria-hidden="true"
               className="max-sm:shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
             />
-          </button>
+          </Button>
         ))}
         {filters.length > 1 && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClearAll}
-            className="ml-1 max-sm:flex max-sm:min-h-10 max-sm:items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="ml-1 h-auto px-1 py-0.5 font-normal max-sm:flex max-sm:min-h-10 max-sm:items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Clear all
-          </button>
+          </Button>
         )}
       </m.div>
     </AnimatePresence>
