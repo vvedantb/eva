@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
+    "./chatTranscript": "./src/chatTranscript.ts",
     "./assistantCitation": "./src/assistantCitation.ts",
     "./automations": "./src/automations.ts",
     "./backgroundAgents": "./src/backgroundAgents.ts",
