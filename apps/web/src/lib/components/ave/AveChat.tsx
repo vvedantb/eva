@@ -4,6 +4,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
+import { AVE_SURFACE_ATTR } from "@/lib/components/ave/pageSelection";
 import { useMarkAveRead } from "@/lib/components/ave/aveUnread";
 import {
   RoutedQuestionDock,
@@ -57,7 +58,7 @@ function AveChatBody({
   useMarkAveRead(visible);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div {...AVE_SURFACE_ATTR} className="flex min-h-0 flex-1 flex-col">
       <ChatBody
         conversationId={chat.conversationId}
         messages={chat.messages}
