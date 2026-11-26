@@ -52,9 +52,13 @@ export function useOwnedChatBinding({
   const { model, chat } = chatModel;
   // No chat row yet: show what the backend will seed it with.
   const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
-  const providerAccountId = chat
-    ? (chat.providerAccountId ?? null)
-    : (chatSeed?.providerAccountId ?? null);
+  // Undefined while an existing chat loads, so it is not shown as Team.
+  const providerAccountId =
+    chat === undefined && typeof chatSource === "string"
+      ? undefined
+      : chat
+        ? (chat.providerAccountId ?? null)
+        : (chatSeed?.providerAccountId ?? null);
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
   return {
@@ -64,6 +68,7 @@ export function useOwnedChatBinding({
         ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
         : undefined,
     ownerLabel,
+    active: true,
     doc: title === undefined
       ? undefined
       : {
@@ -81,8 +86,8 @@ export function useOwnedChatBinding({
     executionTraits: buildTraitsExecutionPayload(model, traits),
     onTraitsChange: chatModel.setTraits,
     providerAccountId,
-    persistAccount: chatModel.persistProviderAccountId,
-    prewarm: chatModel.prewarm,
+    switchProviderAccount: chatModel.setProviderAccountId,
+    isSwitchingAccount: chatModel.isSwitchingAccount,
     ports,
     // Stopping the chat also stops a task run streaming into it. Before the
     // chat exists only `stopTarget` (a task) can have something running.

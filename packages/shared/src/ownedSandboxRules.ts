@@ -1,3 +1,4 @@
+import type { SandboxStatus } from "./sandboxStatus";
 import type { TaskStatus } from "./taskMeta";
 
 // When a task's sandbox and git actions are offered, web and phone: the task
@@ -44,4 +45,36 @@ export function taskCanCreatePr({
   hasActiveRun: boolean;
 }): boolean {
   return !latestPrUrl && hasRuns && !hasActiveRun;
+}
+
+/**
+ * Whether a host may auto-wake its sandbox (web Preview; the setting and a
+ * visible tab still gate it). Session, quick task, project and project task
+ * share this rule: the sandbox is closed with one to resume, its last start
+ * did not fail (a retry stays manual), the host would allow a Start (not
+ * read-only), and nothing owns it. `isBusy` undefined is still loading, which
+ * counts as busy: never wake under a live run or turn.
+ */
+export function sandboxAutoWakeEligible({
+  status,
+  sandboxId,
+  sandboxError,
+  canStart,
+  isBusy,
+}: {
+  status: SandboxStatus | undefined;
+  sandboxId: string | undefined;
+  /** The last start's failure; set and non-empty means it failed. */
+  sandboxError: string | undefined;
+  canStart: boolean;
+  /** A run or turn owns the sandbox; undefined while that loads. */
+  isBusy: boolean | undefined;
+}): boolean {
+  return (
+    status === "closed" &&
+    sandboxId !== undefined &&
+    (sandboxError ?? "") === "" &&
+    canStart &&
+    isBusy === false
+  );
 }

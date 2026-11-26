@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Doc } from "@eva/backend";
+import { api, type Doc, type SandboxOwner } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** Same union for sessions, quick tasks and projects. */
 type SandboxStatus = Doc<"sessions">["status"];
@@ -9,26 +12,70 @@ type SandboxStatus = Doc<"sessions">["status"];
 type SandboxAction = "start" | "stop";
 
 /**
- * Start / stop flags of one sandbox owner. A flag is on from the click (the
- * mutation is in flight) until the server status leaves `starting` /
- * `stopping`, so the button reacts at once and never flickers back between
- * the mutation and the status patch.
+ * Start / stop of one sandbox, the same for a session, a quick task, a
+ * project task and a project. Each host only says how to start and stop.
+ *
+ * A flag is on from the click (the mutation is in flight) until the server
+ * status leaves `starting` / `stopping`, so the button reacts at once and
+ * never flickers back between the mutation and the status patch. A failure
+ * is one toast, with the same copy everywhere.
  */
-export function useSandboxLifecycle(status: SandboxStatus | undefined) {
+export function useSandboxControls({
+  status,
+  owner,
+  active = true,
+  start,
+  stop,
+  onStarted,
+}: {
+  status: SandboxStatus | undefined;
+  /** Keys the startup steps; undefined before the owner's session exists. */
+  owner: SandboxOwner | undefined;
+  /** False in a hidden cached session shell: skip the startup stream. */
+  active?: boolean;
+  start: () => Promise<unknown>;
+  stop: () => Promise<unknown>;
+  /** After a start that did not fail (a quick task opens its sandbox view). */
+  onStarted?: () => void;
+}) {
   const [pending, setPending] = useState<SandboxAction | null>(null);
+  const startupStreaming = useQuery(
+    api.streaming.get,
+    active && status === "starting" && owner
+      ? { entityId: sandboxStartupEntityId(owner) }
+      : "skip",
+  );
 
-  /** Runs `request` with `action` pending. `request` owns its error toast. */
+  /** Runs `request` with `action` pending; the toast is the error report. */
   const run = async (action: SandboxAction, request: () => Promise<void>) => {
     setPending(action);
     // `.finally`, not a `try`/`finally` statement: React Compiler bails on
     // the whole file for a `try` without a `catch`.
-    await request().finally(() => setPending(null));
+    await request()
+      .catch(() => undefined)
+      .finally(() => setPending(null));
   };
 
+  const handleStartSandbox = () =>
+    run("start", async () => {
+      await catchMutationError(start(), "Couldn't start sandbox", "sandbox-start");
+      onStarted?.();
+    });
+  const handleStopSandbox = () =>
+    run("stop", async () => {
+      await catchMutationError(stop(), "Couldn't stop sandbox", "sandbox-stop");
+    });
+
   return {
-    isStarting: pending === "start" || status === "starting",
-    isStopping: pending === "stop" || status === "stopping",
-    run,
+    isSandboxActive: status === "active",
+    isSandboxStarting: pending === "start" || status === "starting",
+    isSandboxStopping: pending === "stop" || status === "stopping",
+    /** Startup steps while the sandbox wakes; undefined otherwise. */
+    sandboxStartupActivity: startupStreaming?.currentActivity,
+    handleStartSandbox,
+    handleStopSandbox,
+    handleSandboxToggle: (action: SandboxAction) =>
+      action === "start" ? handleStartSandbox() : handleStopSandbox(),
   };
 }
 

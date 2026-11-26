@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { type Id, type SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { IconArrowsDiagonal } from "@tabler/icons-react";
 import {
   Button,
@@ -18,10 +18,8 @@ import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailContro
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { useSandboxPanes } from "@/lib/components/sandbox/useSandboxPanes";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
+import { useSandboxRail } from "@/lib/components/sandbox/useSandboxRail";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
-import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
-import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { ProjectTaskTab } from "./projectSandboxTabs";
@@ -152,12 +150,13 @@ export function ProjectTaskPane({
                     : undefined
                 }
                 isSandboxStarting={isSandboxStarting}
-                autoWakeEligible={
-                  sandbox.status === "closed" &&
-                  sandbox.sandboxId !== undefined &&
-                  canStartSandbox &&
-                  !hasActiveRun
-                }
+                autoWakeEligible={sandboxAutoWakeEligible({
+                  status: sandbox.status,
+                  sandboxId: sandbox.sandboxId,
+                  sandboxError: sandbox.sandboxError,
+                  canStart: canStartSandbox,
+                  isBusy: hasActiveRun,
+                })}
                 onScreen={!collapsed}
               />
             ) : null}
@@ -206,46 +205,33 @@ function ProjectTaskSandboxPanes({
     terminalPanes: sandbox.terminalPanes,
   });
   const chatBinding = useTaskChatBinding(taskId);
-  const annotationTarget = useSandboxAnnotationSend(chatBinding);
-  const chatKeys = sandboxChatKeys(chatBinding.entity);
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
-  const preview = useSandboxPreview({
+  const rail = useSandboxRail({
     owner,
     sandboxId: sandbox.sandboxId,
     isActive,
     repoId,
     devPort: sandbox.devPort,
+    devCommand: sandbox.devCommand,
+    binding: chatBinding,
   });
 
   return (
     <div className="h-full overflow-hidden">
-      <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
+      <ReviewChatTargetProvider value={rail.reviewTarget}>
         <SandboxPaneSlots
+          {...rail.paneSlots}
           activeTab={paneTab}
           panes={panes}
-          preview={preview}
-          owner={owner}
-          sandboxId={sandbox.sandboxId}
-          isActive={isActive}
-          repoId={repoId}
           cacheKey={String(taskId)}
-          devCommand={sandbox.devCommand}
           prUrl={prUrl}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
-          onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          // Backend starts the app in the Console tmux session after startup.
-          runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
-          annotation={annotationTarget}
           // Only the pane on screen holds the presence beacon or auto-wakes.
           presenceEnabled={onScreen}
           onScreen={onScreen}
           // The project task's full page has no mini-player either.
           miniPlayer={undefined}
-          viewState={viewState}
         />
       </ReviewChatTargetProvider>
     </div>

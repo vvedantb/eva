@@ -51,11 +51,6 @@ export function useChatModel(
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<void>;
   isSwitchingAccount: boolean;
-  /** The raw account write and daemon warm-up, for a caller's own handoff. */
-  persistProviderAccountId: (
-    providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => Promise<null>;
-  prewarm: () => Promise<null>;
 } {
   const chat = useHeldQuery(
     api.sessionChats.get,
@@ -137,7 +132,5 @@ export function useChatModel(
       chat === undefined ? undefined : (chat?.providerAccountId ?? null),
     setProviderAccountId: switchProviderAccount,
     isSwitchingAccount,
-    persistProviderAccountId,
-    prewarm,
   };
 }

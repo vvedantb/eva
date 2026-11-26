@@ -1,92 +1,61 @@
-import { api, normalizeAIModel, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { toast } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useChatModel } from "@/lib/hooks/useChatModel";
-import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
-import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   buildPlanImplementationPrompt,
   buildPlanImplementationThreadTitle,
 } from "@eva/shared/proposedPlan";
 import type { ProposedPlanRow } from "@eva/shared/proposedPlan";
+import {
+  newSessionSettings,
+  type SandboxChatBinding,
+} from "@/lib/components/chat/sandboxChatBinding";
 import type { ChatTurnSendOptions } from "@/lib/components/chat/useChatSend";
 
-export function useSessionPlanImplementation({
-  sessionId,
-  chatId,
-  handleSend,
-  isRouteActive = true,
-}: {
-  sessionId: Id<"sessions">;
-  /** The chat tab whose model and account a new session inherits. */
-  chatId: Id<"sessionChats">;
-  handleSend: (
-    content: string,
-    attachmentStorageIds?: Id<"_storage">[],
-    options?: ChatTurnSendOptions,
-  ) => void | Promise<void>;
-  isRouteActive?: boolean;
-}) {
+/** Puts the implementation prompt in the chat: a send, or a seeded draft. */
+type PlanSend = (
+  content: string,
+  attachmentStorageIds?: undefined,
+  options?: ChatTurnSendOptions,
+) => void | Promise<void>;
+
+/**
+ * Implements a proposed plan in this chat, or in a new session that inherits
+ * the chat's model, traits and account (`binding`).
+ */
+export function useSessionPlanImplementation(binding: SandboxChatBinding) {
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
-  const defaultModel = normalizeAIModel(repo.defaultModel);
-  const { resolveId: resolveAccountId } = useSessionOwnerProviderAccounts(
-    sessionId,
-    isRouteActive,
-  );
-  const {
-    model,
-    traits,
-    providerAccountId: stickyProviderAccountId,
-  } = useChatModel(chatId, defaultModel, isRouteActive);
-  const { displayTraits, executionTraits, providerAccountId } =
-    useSessionSettings({
-      defaultModel,
-      model,
-      traits,
-      providerAccountId: stickyProviderAccountId,
-    });
   const createSession = useMutation(api.sessions.create);
   const markPlanImplemented = useMutation(api.proposedPlans.markImplemented);
   const updatePlanContent = useMutation(api.sessions.updatePlanContent);
 
-  const implementPlan = (plan: ProposedPlanRow) => {
-    void handleSend(
-      buildPlanImplementationPrompt(plan.planMarkdown),
-      undefined,
-      {
-        sourceProposedPlanId: plan._id,
-      },
-    );
+  const implementPlan = (plan: ProposedPlanRow, send: PlanSend) => {
+    void send(buildPlanImplementationPrompt(plan.planMarkdown), undefined, {
+      sourceProposedPlanId: plan._id,
+    });
   };
 
-  const implementPlanContent = (markdown: string) => {
-    void handleSend(buildPlanImplementationPrompt(markdown));
+  const implementPlanContent = (markdown: string, send: PlanSend) => {
+    void send(buildPlanImplementationPrompt(markdown));
   };
 
   const implementInNewSession = async (
     planMarkdown: string,
     plan?: ProposedPlanRow,
   ) => {
-    // Resolved above the `try` so the block holds no expression-level control
+    // Built above the `try` so the block holds no expression-level control
     // flow — React Compiler bails on the whole file otherwise.
-    const resolvedProviderAccountId =
-      resolveAccountId(providerAccountId) ?? null;
+    const settings = newSessionSettings(binding);
     try {
       const { sessionId: nextSessionId, numId } = await createSession({
         repoId: repo._id,
         title: buildPlanImplementationThreadTitle(planMarkdown),
         message: buildPlanImplementationPrompt(planMarkdown),
-        model,
-        ...executionTraits,
-        reasoningLevel: displayTraits.effortLevel,
-        thinkingEnabled: displayTraits.thinkingEnabled,
-        use1mContext: displayTraits.use1mContext,
-        fastMode: displayTraits.fastMode,
-        providerAccountId: resolvedProviderAccountId,
+        ...settings,
       });
       await updatePlanContent({
         id: nextSessionId,
