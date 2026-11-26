@@ -157,6 +157,7 @@ export {
   threadTurnStatusText,
 } from "./replyThreads";
 export {
+  EVA_SENDER_NAME,
   findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,

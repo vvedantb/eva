@@ -3,6 +3,7 @@ import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findNewMessageIds, useChatReadState, useChatRecap } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
+  EVA_SENDER_NAME,
   buildPrecedingUserTurns,
   chatStreamingEntityId,
   collectForkPrefix,
@@ -508,10 +509,14 @@ export default function ChatScreen() {
                 joinsPrevious={bubbleGroups.joinsPrevious.has(message._id)}
                 joinsNext={bubbleGroups.joinsNext.has(message._id)}
                 senderName={
-                  // One name over a run of a teammate's bubbles.
-                  fromTeammate && message.userId && !bubbleGroups.joinsPrevious.has(message._id)
-                    ? teammateNames.get(message.userId)
-                    : undefined
+                  // One name over a run of one sender's bubbles: a teammate's first name, or "Eva" over her coordinator replies.
+                  bubbleGroups.joinsPrevious.has(message._id)
+                    ? undefined
+                    : chat.project !== undefined && message.role === "assistant"
+                      ? EVA_SENDER_NAME
+                      : fromTeammate && message.userId
+                        ? teammateNames.get(message.userId)
+                        : undefined
                 }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}

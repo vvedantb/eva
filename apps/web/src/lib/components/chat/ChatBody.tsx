@@ -44,6 +44,7 @@ import {
 } from "@/lib/components/chat/threadFind";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
 import {
+  EVA_SENDER_NAME,
   canForkMessage,
   collectForkPrefix,
   forkThreadTitle,
@@ -1010,11 +1011,15 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const joinsPrevious = bubbleGroups.joinsPrevious.has(message._id);
     const joinsNext = bubbleGroups.joinsNext.has(message._id);
-    // One name over a run of a teammate's bubbles.
-    const senderFirstName =
-      isOtherUser && message.userId && !joinsPrevious
-        ? firstNames.get(message.userId)
-        : undefined;
+    // One name over a run of one sender's bubbles: a teammate's first name,
+    // or "Eva" over her replies in the coordinator chat.
+    const senderFirstName = joinsPrevious
+      ? undefined
+      : assistantBubbles && message.role === "assistant"
+        ? EVA_SENDER_NAME
+        : isOtherUser && message.userId
+          ? firstNames.get(message.userId)
+          : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 
     return (
