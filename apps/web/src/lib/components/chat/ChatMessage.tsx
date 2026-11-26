@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   Markdown,
+  IconEva,
 } from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
@@ -375,6 +376,7 @@ export const ChatMessage = memo(function ChatMessage({
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
                 joinsNext={joinsNext}
+                senderName={senderFirstName}
                 turnModel={turnModel}
                 turnReasoningLevel={turnReasoningLevel}
                 turnCredentialSourceLabel={turnCredentialSourceLabel}
@@ -647,6 +649,8 @@ function BubbleWithToolbar({
 
 interface AssistantTurnProps {
   message: ChatBodyMessage;
+  /** "Eva" over the first bubble of a run of her replies (the coordinator chat). */
+  senderName?: string;
   turnState: ReturnType<typeof getAssistantTurnState>;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
@@ -684,6 +688,7 @@ function AssistantTurn({
   showScopeCheck,
   bubble,
   joinsNext,
+  senderName,
   turnModel,
   turnReasoningLevel,
   turnCredentialSourceLabel,
@@ -725,6 +730,7 @@ function AssistantTurn({
       <AssistantTurnContent
         bubble={bubble}
         joinsNext={joinsNext}
+        senderName={senderName}
         toolbar={toolbar}
         message={message}
         turnState={turnState}
@@ -818,6 +824,7 @@ function AssistantTurnContent({
   panelTabs,
   bubble,
   joinsNext,
+  senderName,
   toolbar,
 }: Omit<
   AssistantTurnProps,
@@ -944,18 +951,28 @@ function AssistantTurnContent({
 
   return bubble ? (
     <div
-      className={cn("flex min-w-0 items-end gap-2", COORDINATOR_BUBBLE_MAX_WIDTH)}
-    >
-      <div className="size-4 shrink-0">
-        {joinsNext ? null : <EvaIcon size={16} disc={false} />}
-      </div>
-      {toolbar ? (
-        <BubbleWithToolbar toolbar={toolbar}>
-          {content}
-        </BubbleWithToolbar>
-      ) : (
-        content
+      className={cn(
+        "flex min-w-0 flex-col items-start gap-0.5",
+        COORDINATOR_BUBBLE_MAX_WIDTH,
       )}
+    >
+      {senderName ? (
+        // As a teammate's name: avatar (16) + gap (8) + bubble px-3 (12).
+        <span className="pl-9 text-2xs font-medium text-muted-foreground">
+          {senderName}
+        </span>
+      ) : null}
+      <div className="flex min-w-0 max-w-full items-end gap-2">
+        {/* The rail's Eva mark. */}
+        <div className="size-4 shrink-0 text-foreground">
+          {joinsNext ? null : <IconEva size={16} />}
+        </div>
+        {toolbar ? (
+          <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
+        ) : (
+          content
+        )}
+      </div>
     </div>
   ) : (
     content

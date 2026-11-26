@@ -1,8 +1,8 @@
+import { IconEva } from "@vvedantb/native-ui/brand";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { MessageContent } from "@vvedantb/native-ui/ai";
 import type { ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
-import { EvaMark } from "@/ui/EvaMark";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 
@@ -52,10 +52,11 @@ export function TeammateBubble({
   );
 }
 
-/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with her mark. */
+/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with the rail's `IconEva`. */
 export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
   return (
-    <SideBubble avatar={<EvaMark size={16} />} joinsNext={joinsNext} className="max-w-[70%]">
+    // The tab bar's Eva mark, in the text colour.
+    <SideBubble avatar={<IconEva size={16} />} joinsNext={joinsNext} className="max-w-[70%]">
       {children}
     </SideBubble>
   );
