@@ -51,9 +51,9 @@ export function useInboxDone(listArgs: InboxListArgs) {
     const target = inboxDoneTarget(row);
     if (!target) return;
     if (target.kind === "chat") {
-      const { chatId } = target;
+      const { chatId, notificationId } = target;
       const done = catchMutationError(
-        markDone({ chatId }),
+        markDone({ chatId, notificationId }),
         "Couldn't mark as done",
         "inbox-done",
       );
@@ -61,9 +61,9 @@ export function useInboxDone(listArgs: InboxListArgs) {
         action: {
           label: "Undo",
           onClick: () =>
-            void done.then(({ previousDoneAt }) =>
+            void done.then((undo) =>
               catchMutationError(
-                undoDone({ chatId, previousDoneAt }),
+                undoDone({ chatId, ...undo }),
                 "Couldn't undo",
                 "inbox-undo",
               ),

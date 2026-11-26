@@ -8,7 +8,8 @@ import { modules } from "./_helpers/convexModules";
 /**
  * The Inbox: the shared rule that keeps one row for each chat in its most
  * urgent group, and `inbox.list` over real rows (who "took part" in a chat,
- * and Done hiding a chat until something newer happens in it).
+ * Done hiding a chat until something newer happens in it, and Done reading
+ * the notification a row holds).
  */
 
 const CLERK_ID = "clerk|inbox";
@@ -128,6 +129,26 @@ describe("inbox.list", () => {
         ctx.db.patch(ids.taskId, { lastTurnFinishedAt: Date.now() + 1_000 }),
       );
       expect((await listed()).map(([title]) => title)).toContain("Fix login test");
+
+      // Done on a row that holds a notification reads it; Undo makes it unread again.
+      const notificationId = await t.run((ctx) =>
+        ctx.db.insert("notifications", {
+          userId: ids.userId,
+          type: "task_complete",
+          title: "Quick task completed: Fix login test",
+          read: false,
+          createdAt: Date.now(),
+          chatTarget: String(ids.taskId),
+        }),
+      );
+      const isRead = () => t.run(async (ctx) => (await ctx.db.get(notificationId))?.read);
+      const undo = await asUser.mutation(api.inbox.markDone, {
+        chatId: ids.taskId,
+        notificationId,
+      });
+      expect(await isRead()).toBe(true);
+      await asUser.mutation(api.inbox.undoDone, { chatId: ids.taskId, ...undo });
+      expect(await isRead()).toBe(false);
     },
     TIMEOUT_MS,
   );

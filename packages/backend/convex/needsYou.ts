@@ -1,4 +1,4 @@
-import { taskRunFailedAt } from "./_agentTasks/taskRunStatus";
+import { taskRunFailure } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { entityHref, repoBasePath } from "@eva/shared";
 import {
@@ -304,25 +304,27 @@ async function quickTaskRows(
     tasks.filter((task) => task.projectId === undefined);
   const todoTasks = quick(todo);
   // A quick task runs as task-mode turns in its chat (`taskRunStatus.ts`).
-  const failedAts = await Promise.all(
-    todoTasks.map((task) => taskRunFailedAt(db, task)),
+  const failures = await Promise.all(
+    todoTasks.map((task) => taskRunFailure(db, task)),
   );
   const candidates = [
     ...quick([...codeReview, ...businessReview]).map((task) => ({
       task,
       lastRunFailed: false,
+      runError: undefined,
       at: task.updatedAt,
     })),
     ...todoTasks.map((task, index) => {
-      const failedAt = failedAts[index] ?? null;
+      const failure = failures[index] ?? null;
       return {
         task,
-        lastRunFailed: failedAt !== null,
-        at: failedAt ?? task.updatedAt,
+        lastRunFailed: failure !== null,
+        runError: failure?.error,
+        at: failure?.at ?? task.updatedAt,
       };
     }),
   ];
-  return candidates.flatMap(({ task, lastRunFailed, at }): NeedsYouRow[] => {
+  return candidates.flatMap(({ task, lastRunFailed, runError, at }): NeedsYouRow[] => {
     const group = needsYouGroupForQuickTask({
       status: task.status,
       prState: task.prState,
@@ -334,9 +336,13 @@ async function quickTaskRows(
         key: `${group}:${task._id}`,
         group,
         title: task.title,
-        // The source line already names "#N".
+        // The source line already names "#N"; a failed run says why.
         detail:
-          group === "review" && task.prUrl ? `PR ${prLabel(task.prUrl)}` : undefined,
+          group === "review" && task.prUrl
+            ? `PR ${prLabel(task.prUrl)}`
+            : group === "failed"
+              ? runError
+              : undefined,
         source: "quick_task",
         taskId: task._id,
         prUrl: group === "review" ? task.prUrl : undefined,

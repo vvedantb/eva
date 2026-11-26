@@ -53,13 +53,13 @@ export default function InboxScreen() {
     const target = inboxDoneTarget(row);
     if (!target) return;
     if (target.kind === "chat") {
-      const { chatId } = target;
-      const marked = markDone({ chatId });
+      const { chatId, notificationId } = target;
+      const marked = markDone({ chatId, notificationId });
       marked.catch(() => toast.error("Couldn't mark as done", { id: "inbox-done" }));
       toast.success("Done", {
         action: {
           label: "Undo",
-          onPress: () => void marked.then(({ previousDoneAt }) => undoDone({ chatId, previousDoneAt })),
+          onPress: () => void marked.then((undo) => undoDone({ chatId, ...undo })),
         },
       });
       await marked;

@@ -167,14 +167,17 @@ export function inboxContextLabel(row: {
  * once someone acts on them.
  */
 export type InboxDoneTarget<ChatId, NotificationId> =
-  | { kind: "chat"; chatId: ChatId }
+  /** A chat; `notificationId` is a notification folded into its row, read on Done. */
+  | { kind: "chat"; chatId: ChatId; notificationId?: NotificationId }
   | { kind: "notification"; notificationId: NotificationId };
 
 export function inboxDoneTarget<ChatId, NotificationId>(row: {
   doneChatId?: ChatId;
   notificationId?: NotificationId;
 }): InboxDoneTarget<ChatId, NotificationId> | undefined {
-  if (row.doneChatId !== undefined) return { kind: "chat", chatId: row.doneChatId };
+  if (row.doneChatId !== undefined) {
+    return { kind: "chat", chatId: row.doneChatId, notificationId: row.notificationId };
+  }
   if (row.notificationId !== undefined) {
     return { kind: "notification", notificationId: row.notificationId };
   }
