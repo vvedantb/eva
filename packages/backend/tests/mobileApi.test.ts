@@ -829,7 +829,7 @@ describe("mobile api", () => {
       await expect(
         asUser.mutation(api.projects.create, { repoId: strangerRepoId, title: "Nope", rawInput: "Nope", skipPlanning: true }),
       ).rejects.toThrow();
-      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_deleted", (q) => q.eq("repoId", strangerRepoId).eq("deletedAt", undefined)).collect())).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_archived", (q) => q.eq("repoId", strangerRepoId).eq("archivedAt", undefined)).collect())).toEqual([]);
     },
     TIMEOUT_MS,
   );

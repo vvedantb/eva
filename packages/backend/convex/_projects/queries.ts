@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
-import { entityVisible, filterActiveEntities } from "../numId";
+import { filterUnarchived } from "../numId";
 import {
   taskProgressValidator,
   taskProgressFields,
@@ -23,44 +23,68 @@ import {
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
 
-/** A repo's projects that are not soft-deleted, in creation order. */
-function liveProjectsForRepo(
+/**
+ * A repo's live or archived projects: live in creation order, archived most
+ * recently archived first.
+ */
+function projectsForRepo(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
+  archived = false,
 ) {
-  return db
-    .query("projects")
-    .withIndex("by_repo_and_deleted", (q) =>
-      q.eq("repoId", repoId).eq("deletedAt", undefined),
-    )
-    .collect();
+  const query = db.query("projects").withIndex("by_repo_and_archived", (q) =>
+    archived
+      ? q.eq("repoId", repoId).gte("archivedAt", 0)
+      : q.eq("repoId", repoId).eq("archivedAt", undefined),
+  );
+  return archived ? query.order("desc").collect() : query.collect();
 }
 
-/** Lists all projects for a repo. */
+/** List rows for `list` and `listArchived`, which differ only in `archived`. */
+async function toProjectListItems(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+  archived: boolean,
+) {
+  const [projects, awaitingAnswerIds] = await Promise.all([
+    projectsForRepo(db, repoId, archived),
+    awaitingAnswerEntityIdsForRepo(db, repoId),
+  ]);
+  const hasUnread = await unreadLookupForList(
+    db,
+    userId,
+    repoId,
+    projects.length,
+  );
+  return await Promise.all(
+    projects.map(async (project) => ({
+      ...project,
+      // A project's sandbox lives on its session; the row shows that.
+      sandboxStatus: await projectSandboxStatus(db, project),
+      hasUnread: await hasUnread(project),
+      isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
+    })),
+  );
+}
+
+/** Lists the live projects of a repo. */
 export const list = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [projects, awaitingAnswerIds] = await Promise.all([
-      liveProjectsForRepo(ctx.db, args.repoId),
-      awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
-    ]);
-    const hasUnread = await unreadLookupForList(
-      ctx.db,
-      ctx.userId,
-      args.repoId,
-      projects.length,
-    );
-    return await Promise.all(
-      projects.map(async (project) => ({
-        ...project,
-        // A project's sandbox lives on its session; the row shows that.
-        sandboxStatus: await projectSandboxStatus(ctx.db, project),
-        hasUnread: await hasUnread(project),
-        isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
-      })),
-    );
+    return toProjectListItems(ctx.db, ctx.userId, args.repoId, false);
+  },
+});
+
+/** Lists the archived projects of a repo, most recently archived first. */
+export const listArchived = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(projectListItemValidator),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    return toProjectListItems(ctx.db, ctx.userId, args.repoId, true);
   },
 });
 
@@ -74,14 +98,14 @@ const displayStatusCountsValidator = v.object({
 });
 
 /**
- * Every live project of a repo with its derived status, in one call for the
- * projects list (`projectStatus` over each project's task facts): its stage,
+ * Every live (or, with `archived`, archived) project of a repo with its
+ * derived status, in one call for the projects list (`projectStatus` over each project's task facts): its stage,
  * task counts by display status, how many tasks need a person, and whether its
  * coordinator's automatic turns are paused at the hourly cap (that needs a
  * person too). Tasks in repos the caller cannot open still count.
  */
 export const listStatusesForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
+  args: { repoId: v.id("githubRepos"), archived: v.optional(v.boolean()) },
   returns: v.array(
     v.object({
       projectId: v.id("projects"),
@@ -96,7 +120,7 @@ export const listStatusesForRepo = authQuery({
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
+    const projects = await projectsForRepo(ctx.db, args.repoId, args.archived);
     return await Promise.all(
       projects.map(async (project) => {
         const facts = await loadProjectTaskFacts(ctx.db, project);
@@ -112,7 +136,7 @@ export const listStatusesForRepo = authQuery({
   },
 });
 
-/** Retrieves a project by ID. */
+/** Retrieves a project by ID, archived ones too (its page opens read-only). */
 export const get = authQuery({
   args: { id: v.id("projects") },
   returns: v.union(projectValidator, v.null()),
@@ -122,13 +146,11 @@ export const get = authQuery({
       return null;
     }
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) return null;
-    const visible = entityVisible(project);
-    if (!visible) return null;
-    return visible;
+    return project;
   },
 });
 
-/** Resolves a project by per-repo numeric id (URL segment). */
+/** Resolves a project by per-repo numeric id (URL segment), archived ones too. */
 export const getByNumId = authQuery({
   args: {
     repoId: v.id("githubRepos"),
@@ -143,9 +165,7 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
-    const visible = entityVisible(project);
-    if (!visible) return null;
-    return visible;
+    return project;
   },
 });
 
@@ -157,7 +177,7 @@ export const getTaskCount = authQuery({
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       return 0;
-    const tasks = filterActiveEntities(
+    const tasks = filterUnarchived(
       await ctx.db
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -201,7 +221,7 @@ export const getProjectPrCreationData = internalQuery({
 
     const branchName = resolveProjectBranchName(args.projectId, project);
 
-    const tasks = filterActiveEntities(
+    const tasks = filterUnarchived(
       await ctx.db
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -263,7 +283,7 @@ export const getTaskProgress = authQuery({
     ) {
       return computeTaskProgress([]);
     }
-    const tasks = filterActiveEntities(
+    const tasks = filterUnarchived(
       await ctx.db
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -277,16 +297,16 @@ export const getTaskProgress = authQuery({
  *  query, so the timeline can render per-project progress without issuing one
  *  request per row. */
 export const listTaskProgress = authQuery({
-  args: { repoId: v.id("githubRepos") },
+  args: { repoId: v.id("githubRepos"), archived: v.optional(v.boolean()) },
   returns: v.array(
     v.object({ projectId: v.id("projects"), ...taskProgressFields }),
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
+    const projects = await projectsForRepo(ctx.db, args.repoId, args.archived);
     return await Promise.all(
       projects.map(async (project) => {
-        const tasks = filterActiveEntities(
+        const tasks = filterUnarchived(
           await ctx.db
             .query("agentTasks")
             .withIndex("by_project", (q) => q.eq("projectId", project._id))

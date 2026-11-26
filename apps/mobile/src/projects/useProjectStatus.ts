@@ -38,8 +38,11 @@ export function useProjectTaskStatus(projectId: Id<"projects">, repoId: Id<"gith
  * subscription for the whole list (`listStatusesForRepo`). Undefined while
  * it loads, so rows never jump between sections while the list fills in.
  */
-export function useProjectListStatuses(repoId: Id<"githubRepos">): ReadonlyMap<string, ProjectListStatus> | undefined {
-  const rows = useQuery(api.projects.listStatusesForRepo, { repoId });
+export function useProjectListStatuses(
+  repoId: Id<"githubRepos">,
+  archived = false,
+): ReadonlyMap<string, ProjectListStatus> | undefined {
+  const rows = useQuery(api.projects.listStatusesForRepo, { repoId, archived });
   if (rows === undefined) return undefined;
   return new Map(rows.map((row) => [String(row.projectId), row]));
 }

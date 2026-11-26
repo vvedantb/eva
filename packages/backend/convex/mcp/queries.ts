@@ -5,7 +5,12 @@ import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import type { ProjectStage } from "@eva/shared/projectStatus";
 import { derivedProjectStage } from "../_projects/taskTable";
-import { entityVisible, filterActiveEntities } from "../numId";
+import {
+  archivedProjectIds,
+  filterActiveEntities,
+  filterLiveTasks,
+  isEntityDeleted,
+} from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
 import {
   findOwnedSession,
@@ -321,7 +326,10 @@ export const resolveChatTargetForUser = internalQuery({
     if (!userId) return null;
 
     const hit = await findChatTargetByRef(ctx, args);
-    if (!hit || !entityVisible(hit.doc)) return null;
+    // An archived task or project resolves, like an archived session.
+    if (!hit || (hit.kind === "session" && isEntityDeleted(hit.doc))) {
+      return null;
+    }
 
     const repoId = await targetRepoId(ctx, hit);
     if (!repoId) return null;
@@ -496,19 +504,22 @@ async function scanTasks(
   status: string | undefined,
   take: number,
 ): Promise<Doc<"agentTasks">[]> {
+  // A task of an archived project is archived with it.
+  const archivedProjects = await archivedProjectIds(ctx.db, repoId);
   if (status !== undefined) {
     const narrowed = asTaskStatus(status);
     if (narrowed === undefined) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("agentTasks")
-      .withIndex("by_repo_status_and_deleted", (q) =>
+      .withIndex("by_repo_status_and_archived", (q) =>
         q
           .eq("repoId", repoId)
           .eq("status", narrowed)
-          .eq("deletedAt", undefined),
+          .eq("archivedAt", undefined),
       )
       .order("desc")
       .take(take);
+    return filterLiveTasks(rows, archivedProjects);
   }
   // Tasks are the one surface with an updatedAt index, which is also the order
   // the merged page is sorted by.
@@ -517,7 +528,7 @@ async function scanTasks(
     .withIndex("by_repo_and_updatedAt", (q) => q.eq("repoId", repoId))
     .order("desc")
     .take(take);
-  return filterActiveEntities(rows);
+  return filterLiveTasks(rows, archivedProjects);
 }
 
 async function scanProjects(
@@ -532,8 +543,8 @@ async function scanProjects(
     if (narrowed === undefined) return [];
     const rows = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_deleted", (q) =>
-        q.eq("repoId", repoId).eq("deletedAt", undefined),
+      .withIndex("by_repo_and_archived", (q) =>
+        q.eq("repoId", repoId).eq("archivedAt", undefined),
       )
       .order("desc")
       .collect();
@@ -544,8 +555,8 @@ async function scanProjects(
   }
   return ctx.db
     .query("projects")
-    .withIndex("by_repo_and_deleted", (q) =>
-      q.eq("repoId", repoId).eq("deletedAt", undefined),
+    .withIndex("by_repo_and_archived", (q) =>
+      q.eq("repoId", repoId).eq("archivedAt", undefined),
     )
     .order("desc")
     .take(take);

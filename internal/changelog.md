@@ -13,6 +13,11 @@ Date: 2026-11-25
 The "Changed files" card under an agent reply is gone on web and phone, everywhere: the PR, Diffs tab and Review pane already show what changed. Removed with it: web and phone `ChangedFilesCard`, `useChangedFilesExpansion` (its localStorage state), `findLastAssistantMessageId`, the `showChangedFiles` / `isLatestAssistantTurn` / `onOpenDiff` props, and the shared `collectChangedFiles` and its grouping helpers. The path helpers stay, renamed `@eva/shared` `sandboxFilePath.ts`. The phone diff screen stays (the hold menu and the branch row open it).
 
 In the coordinator chat (Eva's bubbles, main chat and reply threads, web and phone) a finished reply shows its text only, with no "Worked for" fold of steps.
+## Archive replaces delete for quick tasks and projects
+
+Date: 2026-11-25
+
+Quick tasks and projects are never deleted now: Archive hides them, and an Active / Archived switch on the Quick tasks and Projects lists (web and phone, the sessions sidebar control) shows them with Unarchive. `agentTasks.remove`/`restore` and `projects.remove` are now `archive`/`unarchive`, plus `listArchived`; the MCP tools are `archive_task` and `unarchive_task` (no confirm flag, it is undoable). Archiving a project keeps its tasks in it, retires the coordinator session and stops the scheduler; it is still refused while a task runs. Unarchive brings both back. Archived items leave lists, counts, Needs you, search, mentions and the fleet list (with an archived project's tasks), but their pages still open read-only with an "Archived" state. Tasks and projects read `archivedAt` (new indexes); `deletedAt` stays on them until a later PR drops it. After deploy run `npx convex run --prod dataMigrations:archiveDeletedEntities`.
 
 ## Session follow-ups send only the guard rails
 

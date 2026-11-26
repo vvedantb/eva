@@ -612,6 +612,8 @@ export const taskRunValidator = v.union(
 
 export const agentTaskFields = {
   ...entityNumIdFields,
+  /** Archived: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
   // User-attached input files (paperclip / paste in the quick task composer),
@@ -1181,6 +1183,8 @@ export const teamFields = {
 
 export const projectFields = {
   ...entityNumIdFields,
+  /** Archived with its tasks: hidden from lists, still opens by URL; `unarchive` clears it. */
+  archivedAt: v.optional(v.number()),
   /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
   /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */

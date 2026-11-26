@@ -49,12 +49,12 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
   if (chatId) return null;
   const taskId = ctx.db.normalizeId("agentTasks", id);
   if (taskId) {
-    const doc = entityVisible(await ctx.db.get(taskId));
+    const doc = await ctx.db.get(taskId);
     return doc ? { kind: "task", doc } : null;
   }
   const projectId = ctx.db.normalizeId("projects", id);
   if (projectId) {
-    const doc = entityVisible(await ctx.db.get(projectId));
+    const doc = await ctx.db.get(projectId);
     return doc ? { kind: "project", doc } : null;
   }
   return null;

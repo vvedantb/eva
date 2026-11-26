@@ -194,6 +194,9 @@ export async function resolveMobileChat(
     const repoId = task?.repoId ?? project?.repoId;
     const repo = repoId ? await db.get(repoId) : null;
     if (!task || !repo) return null;
+    // An archived task, or a task of an archived project, opens read-only.
+    const taskLive =
+      task.archivedAt === undefined && project?.archivedAt === undefined;
     const base = repoBasePath(repo);
     const taskWebPath =
       project?.numId !== undefined
@@ -219,7 +222,7 @@ export async function resolveMobileChat(
           repoId: repo._id,
           parentId: chat._id,
           target: chat._id,
-          canReply: task.deletedAt === undefined && chat.archived !== true,
+          canReply: taskLive && chat.archived !== true,
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: task.createdBy,
@@ -246,7 +249,7 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         target: task._id,
-        canReply: task.deletedAt === undefined,
+        canReply: taskLive,
         // What the first send's chat starts on.
         model: seed.model,
         providerAccountId: seed.providerAccountId,
@@ -285,7 +288,7 @@ export async function resolveMobileChat(
           repoId: repo._id,
           parentId: chat._id,
           target: chat._id,
-          canReply: project.deletedAt === undefined && chat.archived !== true,
+          canReply: project.archivedAt === undefined && chat.archived !== true,
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: project.userId,
@@ -310,7 +313,7 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         target: project._id,
-        canReply: project.deletedAt === undefined,
+        canReply: project.archivedAt === undefined,
         // What the first send's chat starts on.
         model: seed.model,
         providerAccountId: seed.providerAccountId,

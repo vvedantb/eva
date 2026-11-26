@@ -153,7 +153,7 @@ async function fixture() {
 
 describe("a draft is private to its creator", () => {
   test(
-    "a teammate cannot read or list it, and a project delete still detaches it",
+    "a teammate cannot read or list it, and a project archive keeps it in the project",
     async () => {
       const f = await fixture();
       expect(await f.mate.query(api.agentTasks.get, { id: f.draftId })).toBeNull();
@@ -169,10 +169,10 @@ describe("a draft is private to its creator", () => {
       });
       expect(ownerList.map((task) => task._id)).toEqual([f.taskId, f.draftId]);
 
-      await f.mate.mutation(api.projects.remove, { id: f.projectId });
+      await f.mate.mutation(api.projects.archive, { id: f.projectId });
       const draft = await f.t.run((ctx) => ctx.db.get(f.draftId));
-      expect(draft?.projectId).toBeUndefined();
-      expect(draft?.deletedAt).toBeUndefined();
+      expect(draft?.projectId).toBe(f.projectId);
+      expect(draft?.archivedAt).toBeUndefined();
     },
     TIMEOUT_MS,
   );

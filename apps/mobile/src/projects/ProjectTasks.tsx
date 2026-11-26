@@ -48,7 +48,8 @@ const PULL_REQUESTS = "pull_requests";
  * Pull requests. Rows are flat (`ProjectTaskRow`, `ProjectTaskPrRow`).
  * Triage carries "Approve all" (every todo task nobody approved yet). The
  * first group carries "+" (a new task, to Triage unless "Start now"), or the
- * empty state does when there are no tasks.
+ * empty state does when there are no tasks. An archived project's list is
+ * read-only: no "+", no "Approve all", no row menu.
  */
 export function ProjectTasks({
   project,
@@ -97,6 +98,7 @@ export function ProjectTasks({
       />
     );
   }
+  const live = project.archivedAt === undefined;
   const openNewTask = () =>
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
@@ -169,7 +171,7 @@ export function ProjectTasks({
               open={section.open}
               onToggle={() => toggle(section.key)}
               trailing={
-                section.first || section.key === "triage" ? (
+                live && (section.first || section.key === "triage") ? (
                   <View className="mr-1 flex-row items-center gap-1">
                     {section.key === "triage" && toApprove.length > 0 ? (
                       <Button size="sm" variant="ghost" fullWidth={false} loading={approving} disabled={approving} onPress={approveAll}>
@@ -202,7 +204,7 @@ export function ProjectTasks({
               view={item.view}
               line={lineFor(item.row, item.view)}
               projectId={project._id}
-              onLongPress={() => actions.openSheet(item.row)}
+              onLongPress={live ? () => actions.openSheet(item.row) : undefined}
             />
           )
         }
@@ -211,14 +213,16 @@ export function ProjectTasks({
             icon={IconLayoutList}
             title="No tasks"
             action={
-              <Button
-                size="sm"
-                fullWidth={false}
-                leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
-                onPress={openNewTask}
-              >
-                New task
-              </Button>
+              live ? (
+                <Button
+                  size="sm"
+                  fullWidth={false}
+                  leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
+                  onPress={openNewTask}
+                >
+                  New task
+                </Button>
+              ) : undefined
             }
           />
         }

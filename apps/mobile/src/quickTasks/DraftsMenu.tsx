@@ -1,8 +1,8 @@
 import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconFileText, IconTrash } from "@tabler/icons-react-native";
+import { ARCHIVE_LABEL } from "@eva/shared";
+import { IconArchive, IconFileText } from "@tabler/icons-react-native";
 import { Button } from "@vvedantb/native-ui/primitives";
-import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -21,37 +21,36 @@ export function quickTaskDraftRoute(draft: Pick<QuickTaskDraft, "_id" | "repoId"
 /**
  * The web quick-task `DraftsMenu`: "Drafts (N)", shown while the repo has
  * saved drafts, opens "Saved Drafts" as a bottom sheet, newest first. A row
- * loads its draft into the form and closes the sheet; its trash asks "Delete
- * draft?" in place of the row, as the web, then `agentTasks.remove` (a soft
- * delete). `onDeleted` lets the form forget a draft it had loaded.
+ * loads its draft into the form and closes the sheet; its archive button asks
+ * "Archive draft?" in place of the row, as the web, then `agentTasks.archive`.
+ * `onArchived` lets the form forget a draft it had loaded.
  */
 export function DraftsMenu({
   drafts,
   onLoad,
-  onDeleted,
+  onArchived,
 }: {
   drafts: QuickTaskDraft[] | undefined;
   onLoad: (draft: QuickTaskDraft) => void;
-  onDeleted: (draftId: Id<"agentTasks">) => void;
+  onArchived: (draftId: Id<"agentTasks">) => void;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
-  const danger = EVA_THEME[scheme].destructive;
   const [open, setOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<Id<"agentTasks"> | null>(null);
-  const removeDraft = useMutation(api.agentTasks.remove);
+  const archiveDraft = useMutation(api.agentTasks.archive);
   if (!drafts || drafts.length === 0) return null;
 
-  const remove = async (draftId: Id<"agentTasks">) => {
+  const archive = async (draftId: Id<"agentTasks">) => {
     try {
-      await removeDraft({ id: draftId });
+      await archiveDraft({ id: draftId });
     } catch {
-      toast.error("Couldn't delete draft", { id: "draft-delete" });
+      toast.error("Couldn't archive draft", { id: "draft-archive" });
       return;
     }
-    toast.success("Draft deleted", { id: "draft-delete" });
+    toast.success("Draft archived", { id: "draft-archive" });
     setConfirmId(null);
-    onDeleted(draftId);
+    onArchived(draftId);
   };
 
   return (
@@ -81,17 +80,17 @@ export function DraftsMenu({
               <View
                 key={draft._id}
                 className="min-h-14 flex-row items-center justify-between gap-2 rounded-lg px-4"
-                style={{ backgroundColor: withAlpha(danger, 0.05) }}
+                style={{ backgroundColor: theme.muted }}
               >
-                <Text numberOfLines={1} className="font-instrument-sans min-w-0 shrink text-sm" style={{ color: danger }}>
-                  Delete draft?
+                <Text numberOfLines={1} className="font-instrument-sans min-w-0 shrink text-sm" style={{ color: theme.foreground }}>
+                  Archive draft?
                 </Text>
                 <View className="flex-row gap-1">
                   <Button variant="ghost" size="sm" fullWidth={false} onPress={() => setConfirmId(null)}>
                     Cancel
                   </Button>
-                  <Button variant="destructive" size="sm" fullWidth={false} onPress={() => void remove(draft._id)}>
-                    Delete
+                  <Button size="sm" fullWidth={false} onPress={() => void archive(draft._id)}>
+                    {ARCHIVE_LABEL}
                   </Button>
                 </View>
               </View>
@@ -118,11 +117,11 @@ export function DraftsMenu({
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Delete draft ${name}`}
+                accessibilityLabel={`Archive draft ${name}`}
                 onPress={() => setConfirmId(draft._id)}
                 className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
               >
-                <IconTrash size={16} color={theme.mutedForeground} />
+                <IconArchive size={16} color={theme.mutedForeground} />
               </Pressable>
             </View>
           );

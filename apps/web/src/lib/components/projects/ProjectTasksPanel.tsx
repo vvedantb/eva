@@ -41,6 +41,9 @@ export function ProjectTasksPanel({
   );
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId });
+  // An archived project is read-only: no new tasks.
+  const isArchived =
+    useQuery(api.projects.get, { id: projectId })?.archivedAt !== undefined;
   const projectSegment = entityPathSegment({ numId: projectNumId });
 
   const openTask = (taskId: Id<"agentTasks">) => {
@@ -64,14 +67,16 @@ export function ProjectTasksPanel({
       <div className="flex shrink-0 flex-col gap-2 px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-medium text-foreground">Tasks</h2>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="New task"
-            onClick={() => setCreateTaskOpen(true)}
-          >
-            <IconPlus size={14} />
-          </Button>
+          {isArchived ? null : (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="New task"
+              onClick={() => setCreateTaskOpen(true)}
+            >
+              <IconPlus size={14} />
+            </Button>
+          )}
         </div>
         <ProjectProgressBar status={status} className="h-1" />
         {status ? (

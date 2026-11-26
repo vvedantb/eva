@@ -33,6 +33,8 @@ interface QuickTasksListSplitProps {
   detailTab?: TaskDetailTab;
   sandboxTab?: TaskRouteSandboxTab;
   navSurface: "detail" | "sandbox";
+  /** The Archived list: no drafts, no Run All, Unarchive in row menus. */
+  archived?: boolean;
 }
 
 /**
@@ -72,6 +74,7 @@ export function QuickTasksListSplit({
   detailTab,
   sandboxTab,
   navSurface,
+  archived = false,
 }: QuickTasksListSplitProps) {
   const { basePath } = useRepo();
   const { expandRightSignal, collapseRightSignal, nudge } =
@@ -99,6 +102,7 @@ export function QuickTasksListSplit({
                 onToggleSelect={onToggleSelect}
                 selectedTaskId={selectedTaskId}
                 onOpenTask={nudge}
+                archived={archived}
               />
             </div>
           )}

@@ -48,7 +48,7 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  *
  * Drafts are the web's: leaving with a title or description saves one
  * (`agentTasks.saveDraft`, as the dialog's close), and "Drafts (N)" beside
- * Create lists the repo's saved drafts, from any device, to load or delete.
+ * Create lists the repo's saved drafts, from any device, to load or archive.
  * Create on a loaded draft promotes it (`agentTasks.activateDraft`). A
  * link with `draftId` (a Drafts card) opens with that draft loaded, as the
  * web Drafts page opens the dialog with `?draft=`.
@@ -115,7 +115,7 @@ function NewQuickTaskForm({
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
   const draftRows = useQuery(api.agentTasks.listDrafts, repoArgs);
-  // `remove` is a soft delete: a removed draft stays on disk until the list drops it.
+  // `archive` keeps the row: an archived draft stays on disk until the list drops it.
   const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
   const navigation = useNavigation();
 
@@ -315,7 +315,7 @@ function NewQuickTaskForm({
           <DraftsMenu
             drafts={drafts}
             onLoad={loadDraft}
-            onDeleted={(draftId) => {
+            onArchived={(draftId) => {
               if (draftId === activeDraftId) resetForm();
             }}
           />

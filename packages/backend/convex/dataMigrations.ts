@@ -347,3 +347,38 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * Tasks and projects are archived, never deleted: copies `deletedAt` to
+ * `archivedAt` and clears it. A deleted project's tasks were detached into
+ * quick tasks then and stay quick tasks.
+ *
+ *   npx convex run --prod dataMigrations:archiveDeletedEntities
+ */
+export const archiveDeletedAgentTasks = dataMigrations.define({
+  table: "agentTasks",
+  migrateOne: (_ctx, task) => {
+    if (task.deletedAt === undefined) return;
+    return {
+      archivedAt: task.archivedAt ?? task.deletedAt,
+      deletedAt: undefined,
+    };
+  },
+});
+
+export const archiveDeletedProjects = dataMigrations.define({
+  table: "projects",
+  migrateOne: (_ctx, project) => {
+    if (project.deletedAt === undefined) return;
+    return {
+      archivedAt: project.archivedAt ?? project.deletedAt,
+      deletedAt: undefined,
+    };
+  },
+});
+
+/** `npx convex run --prod dataMigrations:archiveDeletedEntities` */
+export const archiveDeletedEntities = dataMigrations.runner([
+  internal.dataMigrations.archiveDeletedAgentTasks,
+  internal.dataMigrations.archiveDeletedProjects,
+]);

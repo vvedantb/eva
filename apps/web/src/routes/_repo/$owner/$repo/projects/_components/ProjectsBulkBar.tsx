@@ -1,5 +1,5 @@
 import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
-import { IconTrash } from "@tabler/icons-react";
+import { IconArchive, IconArchiveOff } from "@tabler/icons-react";
 
 interface ProjectsBulkBarProps {
   isSelecting: boolean;
@@ -8,14 +8,17 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  /** Runs the delete flow, which owns its own confirm and Alt-to-skip. */
-  onDelete: () => void;
+  /** The Archived list: the one action is Unarchive. */
+  archived: boolean;
+  /** Runs the archive flow, which owns its own confirm and Alt-to-skip. */
+  onArchive: () => void;
+  onUnarchive: () => void;
 }
 
 /**
  * The projects board's selection bar. Same shell as quick tasks; the one
- * action projects have is delete (a project's stage is derived from its
- * tasks, so there is no phase to set).
+ * action projects have is archive, or unarchive in the Archived list (a
+ * project's stage is derived from its tasks, so there is no phase to set).
  */
 export function ProjectsBulkBar({
   isSelecting,
@@ -24,17 +27,26 @@ export function ProjectsBulkBar({
   onExitSelect,
   onSelectAll,
   onClearSelection,
-  onDelete,
+  archived,
+  onArchive,
+  onUnarchive,
 }: ProjectsBulkBarProps) {
-  const deleteAction: BulkBarAction = {
-    key: "delete",
-    label: "Delete All",
-    shortLabel: "Delete",
-    icon: IconTrash,
-    destructive: true,
-    showSkipHint: true,
-    onClick: onDelete,
-  };
+  const action: BulkBarAction = archived
+    ? {
+        key: "unarchive",
+        label: "Unarchive All",
+        shortLabel: "Unarchive",
+        icon: IconArchiveOff,
+        onClick: onUnarchive,
+      }
+    : {
+        key: "archive",
+        label: "Archive All",
+        shortLabel: "Archive",
+        icon: IconArchive,
+        showSkipHint: true,
+        onClick: onArchive,
+      };
 
   return (
     <BulkActionBar
@@ -46,7 +58,7 @@ export function ProjectsBulkBar({
       onSelectAll={onSelectAll}
       onClearSelection={onClearSelection}
       primaryActions={[]}
-      destructiveAction={deleteAction}
+      destructiveAction={action}
     />
   );
 }

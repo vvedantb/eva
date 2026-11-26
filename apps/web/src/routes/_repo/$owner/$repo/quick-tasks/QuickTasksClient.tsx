@@ -29,7 +29,7 @@ import { QuickTasksListSplit } from "./_components/QuickTasksListSplit";
 import { QuickTaskDetailShell } from "./_components/QuickTaskDetailShell";
 import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent";
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
-import { IconChecklist, IconPlus } from "@tabler/icons-react";
+import { IconArchive, IconChecklist, IconPlus } from "@tabler/icons-react";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import {
@@ -50,13 +50,15 @@ import {
   clearedQuickTaskFilter,
   clearedQuickTaskFilters,
   quickTaskFilterChips,
+  archiveCopy,
+  type ArchiveListMode,
   type QuickTaskFilterKey,
 } from "@eva/shared";
 import {
   rangeBetween,
   type SelectionToggleOptions,
 } from "@/lib/components/quick-tasks/selectionRange";
-import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
+import { useTaskArchive } from "@/lib/components/quick-tasks/_components/ArchiveTaskDialog";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
@@ -74,7 +76,18 @@ export function QuickTasksClient() {
     taskResolve.status === "ready"
       ? (taskResolve.convexId ?? undefined)
       : undefined;
-  const tasks = useQuery(api.agentTasks.getAllTasks, { repoId: repo._id });
+  // Not persisted, as the Sessions sidebar: the page opens on Active.
+  const [listMode, setListMode] = useState<ArchiveListMode>("active");
+  const isArchivedList = listMode === "archived";
+  const liveTasks = useQuery(
+    api.agentTasks.getAllTasks,
+    isArchivedList ? "skip" : { repoId: repo._id },
+  );
+  const archivedTasks = useQuery(
+    api.agentTasks.listArchived,
+    isArchivedList ? { repoId: repo._id } : "skip",
+  );
+  const tasks = isArchivedList ? archivedTasks : liveTasks;
   const { draft: draftParam } = useSearch({
     from: "/_repo/$owner/$repo/quick-tasks",
   });
@@ -93,7 +106,7 @@ export function QuickTasksClient() {
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
-  const deleteSelected = useBulkDeleteTasks();
+  const { archive: archiveTasks } = useTaskArchive();
   const runSelected = useBulkRunTasks();
   const [filters, setParams] = useQuickTaskFilters();
   const { q, view, user } = filters;
@@ -117,8 +130,11 @@ export function QuickTasksClient() {
 
   const quickTasks = useFilteredQuickTasks(tasks);
   // The user's drafts sit in To Do, so they alone keep the board on screen.
-  const todoDrafts = useQuickTaskTodoDrafts(repo._id);
-  const hasAnyTasks = (tasks ?? []).length > 0 || (drafts ?? []).length > 0;
+  // The Archived list shows no drafts.
+  const liveTodoDrafts = useQuickTaskTodoDrafts(repo._id);
+  const todoDrafts = isArchivedList ? [] : liveTodoDrafts;
+  const hasAnyTasks =
+    (tasks ?? []).length > 0 || (!isArchivedList && (drafts ?? []).length > 0);
   const hasQuickTasks = quickTasks.length > 0 || todoDrafts.length > 0;
 
   const taskIdSet = (() => {
@@ -183,8 +199,10 @@ export function QuickTasksClient() {
     setActiveBulkAction(null);
   };
 
-  const skipBulkDelete = () => {
-    void deleteSelected(selectedIds).then(exitSelectMode);
+  const skipBulkArchive = () => {
+    void archiveTasks([...selectedIds]).then((archived) => {
+      if (archived) exitSelectMode();
+    });
   };
 
   const skipBulkRun = () => {
@@ -258,7 +276,7 @@ export function QuickTasksClient() {
   };
 
   // If the drafts list has loaded and the param points to a non-existent draft
-  // (deleted or stale link), clean up the URL.
+  // (archived or stale link), clean up the URL.
   useEffect(() => {
     if (
       drafts !== undefined &&
@@ -341,6 +359,11 @@ export function QuickTasksClient() {
         childPadding={false}
         headerRight={
           <QuickTasksToolbar
+            listMode={listMode}
+            onListModeChange={(mode) => {
+              exitSelectMode();
+              setListMode(mode);
+            }}
             view={view}
             onViewChange={(v: "kanban" | "list") => {
               setParams({ view: v });
@@ -397,31 +420,40 @@ export function QuickTasksClient() {
                 exit={{ opacity: 0, y: 8 }}
                 transition={tokenTransition.base}
               >
-                <EmptyState.Root enter={!hasAnyTasks}>
-                  <EmptyState.Icon icon={IconChecklist} size={24} />
-                  <EmptyState.Title>
-                    {hasAnyTasks ? "No matching quick tasks" : "No quick tasks"}
-                  </EmptyState.Title>
-                  <EmptyState.Description>
-                    {hasAnyTasks
-                      ? "Try clearing filters to see all tasks."
-                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."}
-                  </EmptyState.Description>
-                  <EmptyState.Actions>
-                    <Button
-                      size="sm"
-                      onClick={
-                        hasAnyTasks
-                          ? clearAllFilters
-                          : () => setIsCreating(true)
-                      }
-                      className="mt-6"
-                    >
-                      <IconPlus size={16} />
-                      {hasAnyTasks ? "Clear filters" : "Create Quick Task"}
-                    </Button>
-                  </EmptyState.Actions>
-                </EmptyState.Root>
+                {isArchivedList && !hasAnyTasks ? (
+                  <EmptyState.Root enter>
+                    <EmptyState.Icon icon={IconArchive} size={24} />
+                    <EmptyState.Title>
+                      {archiveCopy("task").emptyArchived}
+                    </EmptyState.Title>
+                  </EmptyState.Root>
+                ) : (
+                  <EmptyState.Root enter={!hasAnyTasks}>
+                    <EmptyState.Icon icon={IconChecklist} size={24} />
+                    <EmptyState.Title>
+                      {hasAnyTasks ? "No matching quick tasks" : "No quick tasks"}
+                    </EmptyState.Title>
+                    <EmptyState.Description>
+                      {hasAnyTasks
+                        ? "Try clearing filters to see all tasks."
+                        : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."}
+                    </EmptyState.Description>
+                    <EmptyState.Actions>
+                      <Button
+                        size="sm"
+                        onClick={
+                          hasAnyTasks
+                            ? clearAllFilters
+                            : () => setIsCreating(true)
+                        }
+                        className="mt-6"
+                      >
+                        <IconPlus size={16} />
+                        {hasAnyTasks ? "Clear filters" : "Create Quick Task"}
+                      </Button>
+                    </EmptyState.Actions>
+                  </EmptyState.Root>
+                )}
               </m.div>
             ) : (
               <m.div
@@ -444,6 +476,7 @@ export function QuickTasksClient() {
                       isSelecting={isSelecting}
                       selectedIds={selectedIds}
                       onToggleSelect={toggleSelect}
+                      archived={isArchivedList}
                     />
                   ) : (
                     <QuickTasksListSplit
@@ -462,13 +495,14 @@ export function QuickTasksClient() {
                           : undefined
                       }
                       navSurface={routeState?.surface ?? "detail"}
+                      archived={isArchivedList}
                     />
                   )}
                 </TabsTransition>
               </m.div>
             )}
           </AnimatePresence>
-          {hasQuickTasks && (
+          {hasQuickTasks && !isArchivedList && (
             <QuickTasksBulkBar
               isSelecting={isSelecting}
               selectedCount={selectedIds.size}
@@ -484,7 +518,7 @@ export function QuickTasksClient() {
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
               onSkipConfirm={{
-                delete: skipBulkDelete,
+                archive: skipBulkArchive,
                 run: skipBulkRun,
               }}
             />

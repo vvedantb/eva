@@ -122,6 +122,7 @@ export function TaskDetailInline({
     isOwner,
     hasActiveRun,
     isProjectTask,
+    isArchived,
     hasRuns,
     canEditTaskText: canEditText,
     latestPrUrl,
@@ -337,6 +338,7 @@ export function TaskDetailInline({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          isArchived={isArchived}
           onSandboxToggle={
             canStartSandbox || isSandboxActive
               ? (action) => {

@@ -6,15 +6,15 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * Reported bug: "Delete draft in the quick task modal doesn't work" (fix
- * 613e5d8cc). `remove` only stamps `deletedAt` and keeps the row, but
- * listDrafts/countDrafts ranged over the status-only index, so the deleted
- * draft came straight back on the next subscription push and the trash button
- * looked dead. Both now range over an index with `deletedAt` in it.
+ * 613e5d8cc). Removing a draft (now `archive`) only stamps a field and keeps
+ * the row, but listDrafts/countDrafts ranged over the status-only index, so
+ * the draft came straight back on the next subscription push and the button
+ * looked dead. Both now range over an index with `archivedAt` in it.
  *
  * These run the real mutation against the real queries, because the property
  * that broke is behavioural: the row must leave the list while staying on
  * disk. A source-level check of the index name would not catch a future
- * `remove` that stops stamping `deletedAt`.
+ * `archive` that stops stamping `archivedAt`.
  */
 
 
@@ -46,7 +46,7 @@ async function fixture() {
   return { t, asUser, repoId, keptId, removedId };
 }
 
-describe("removing a quick-task draft", () => {
+describe("archiving a quick-task draft", () => {
   test(
     "drops it from the modal list and the badge count",
     async () => {
@@ -56,7 +56,7 @@ describe("removing a quick-task draft", () => {
       });
       expect(before).toBe(2);
 
-      await f.asUser.mutation(api.agentTasks.remove, { id: f.removedId });
+      await f.asUser.mutation(api.agentTasks.archive, { id: f.removedId });
 
       const drafts = await f.asUser.query(api.agentTasks.listDrafts, {
         repoId: f.repoId,
@@ -72,15 +72,15 @@ describe("removing a quick-task draft", () => {
   );
 
   test(
-    "keeps the row as a soft delete rather than dropping it",
+    "keeps the row, archived, rather than dropping it",
     async () => {
       const f = await fixture();
-      await f.asUser.mutation(api.agentTasks.remove, { id: f.removedId });
+      await f.asUser.mutation(api.agentTasks.archive, { id: f.removedId });
 
       // The row surviving is why the queries have to filter: a hard delete
       // would hide this regression and lose the draft for good.
       const removed = await f.t.run((ctx) => ctx.db.get(f.removedId));
-      expect(removed?.deletedAt).toBeTypeOf("number");
+      expect(removed?.archivedAt).toBeTypeOf("number");
       expect(removed?.status).toBe("draft");
     },
     TIMEOUT_MS,

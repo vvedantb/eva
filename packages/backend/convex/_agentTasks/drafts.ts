@@ -28,9 +28,9 @@ import {
 import { createTaskRunSummary } from "./runSummary";
 
 /**
- * The user's drafts in a repo. `deletedAt` is in the range so a soft-deleted
- * draft does not linger in the quick-task modal (or the Drafts page) after
- * Remove; `createdBy` is in the range so other users' drafts are never read.
+ * The user's drafts in a repo. `archivedAt` is in the range so an archived
+ * draft does not linger in the quick-task modal (or the Drafts page);
+ * `createdBy` is in the range so other users' drafts are never read.
  */
 function myLiveDrafts(
   db: QueryCtx["db"],
@@ -39,11 +39,11 @@ function myLiveDrafts(
 ) {
   return db
     .query("agentTasks")
-    .withIndex("by_repo_status_deleted_and_creator", (q) =>
+    .withIndex("by_repo_status_archived_and_creator", (q) =>
       q
         .eq("repoId", repoId)
         .eq("status", "draft")
-        .eq("deletedAt", undefined)
+        .eq("archivedAt", undefined)
         .eq("createdBy", userId),
     )
     .collect();

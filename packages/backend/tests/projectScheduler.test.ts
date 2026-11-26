@@ -499,9 +499,9 @@ describe("the project's rows across repos", () => {
   );
 });
 
-describe("deleting project work", () => {
+describe("archiving project work", () => {
   test(
-    "the coordinator may delete only a task that has not started",
+    "the coordinator may archive only a task that has not started",
     async () => {
       const f = await fixture(3);
       const [notStarted, running, inReview] = f.tasks;
@@ -510,7 +510,7 @@ describe("deleting project work", () => {
         await ctx.db.patch(inReview, { status: "code_review" });
       });
       const check = (taskId: Id<"agentTasks">) =>
-        f.t.query(internal.mcp.projectQueries.assertCoordinatorMayDeleteTask, {
+        f.t.query(internal.mcp.projectQueries.assertCoordinatorMayArchiveTask, {
           projectId: f.projectId,
           taskId,
         });
@@ -531,26 +531,38 @@ describe("deleting project work", () => {
   );
 
   test(
-    "a project delete is refused while a task runs; otherwise its tasks stay as quick tasks",
+    "a project archive is refused while a task runs; otherwise its tasks stay in it",
     async () => {
       const f = await fixture(2);
       await schedule(f);
       await expect(
-        f.asUser.mutation(api.projects.remove, { id: f.projectId }),
+        f.asUser.mutation(api.projects.archive, { id: f.projectId }),
       ).rejects.toThrow("is running");
-      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.deletedAt).toBeUndefined();
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeUndefined();
 
       await finishTask(f, f.tasks[0], "open");
       await finishTask(f, f.tasks[1], "merged");
-      await f.asUser.mutation(api.projects.remove, { id: f.projectId });
-      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.deletedAt).toBeDefined();
-      for (const id of f.tasks) {
+      const before = await Promise.all(f.tasks.map((id) => taskDoc(f, id)));
+      await f.asUser.mutation(api.projects.archive, { id: f.projectId });
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeDefined();
+      expect(
+        (await f.asUser.query(api.projects.list, { repoId: f.repoId })).map((p) => p._id),
+      ).not.toContain(f.projectId);
+      expect(
+        (await f.asUser.query(api.projects.listArchived, { repoId: f.repoId })).map((p) => p._id),
+      ).toEqual([f.projectId]);
+      for (const [index, id] of f.tasks.entries()) {
         const task = await taskDoc(f, id);
-        expect(task.projectId).toBeUndefined();
-        expect(task.taskNumber).toBeUndefined();
-        expect(task.approvedAt).toBeUndefined();
-        expect(task.deletedAt).toBeUndefined();
+        expect(task.projectId).toBe(f.projectId);
+        expect(task.taskNumber).toBe(before[index]?.taskNumber);
+        expect(task.archivedAt).toBeUndefined();
       }
+      // Unarchive brings the project back with the same tasks.
+      await f.asUser.mutation(api.projects.unarchive, { id: f.projectId });
+      expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeUndefined();
+      expect(
+        (await f.asUser.query(api.agentTasks.listByProject, { projectId: f.projectId })).map((t) => t._id),
+      ).toEqual(f.tasks);
       // Their sessions stay theirs.
       const owners = await f.t.run(async (ctx) =>
         (await ctx.db.query("sessions").collect()).map((s) => s.owner),

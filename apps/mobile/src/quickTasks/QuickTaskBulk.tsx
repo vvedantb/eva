@@ -1,11 +1,11 @@
 import { api, type Id } from "@eva/backend";
-import type { DisplayTaskStatus } from "@eva/shared";
+import { ARCHIVE_LABEL, archiveCopy, type DisplayTaskStatus } from "@eva/shared";
 import {
+  IconArchive,
   IconFolders,
   IconPlayerPlay,
   IconRefresh,
   IconTags,
-  IconTrash,
   IconUser,
   IconUserCheck,
 } from "@tabler/icons-react-native";
@@ -20,7 +20,7 @@ import { ProjectSheet, ReviewerSheet, TagsSheet, TaskStatusRows } from "@/quickT
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
-type Sheet = "status" | "assign" | "labels" | "project" | "run" | "delete";
+type Sheet = "status" | "assign" | "labels" | "project" | "run" | "archive";
 
 const plural = (count: number) => `${count} task${count === 1 ? "" : "s"}`;
 
@@ -28,8 +28,8 @@ const plural = (count: number) => `${count} task${count === 1 ? "" : "s"}`;
  * The web Quick Tasks bulk bar (`QuickTasksBulkBar` and its modals) on the
  * phone: once tasks are selected, the bar takes the tab bar's place with
  * Status, Assign and Run, then in More: Assign to Me, Add Labels, Move to
- * project and Delete (the web keeps Delete on the bar; at 390 it does not fit). Each runs the web's per-task writes; Run and
- * Delete ask first, as the web, and Delete offers Undo (`restore`), as the
+ * project and Archive (the web keeps Archive on the bar; at 390 it does not fit). Each runs the web's per-task writes; Run and
+ * Archive ask first, as the web, and Archive offers Undo (`unarchive`), as the
  * web toast. Status, Assign and the project close the bar once applied; Add
  * Labels adds the picked tags to each task when its sheet closes.
  */
@@ -63,8 +63,8 @@ export function QuickTaskBulkBar({
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const assignToProject = useMutation(api.agentTasks.assignToProject);
-  const removeTask = useMutation(api.agentTasks.remove);
-  const restoreTask = useMutation(api.agentTasks.restore);
+  const archiveTask = useMutation(api.agentTasks.archive);
+  const unarchiveTask = useMutation(api.agentTasks.unarchive);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [pickedTags, setPickedTags] = useState<string[]>([]);
   const ids = [...selected];
@@ -96,24 +96,26 @@ export function QuickTaskBulkBar({
     else toast.error(`Started ${started} of ${plural(count)}`);
   };
 
-  const remove = () => {
+  const copy = archiveCopy("task", count);
+  const archive = () => {
     setSheet(null);
     onExitSelect();
-    Promise.all(ids.map((id) => removeTask({ id })))
+    Promise.all(ids.map((id) => archiveTask({ id })))
       .then(() =>
-        // A soft delete: Undo restores each row (the sandbox and a scheduled run do not come back, as the web says).
-        toast.success(`${plural(count)} deleted`, {
+        // Undo unarchives each row (a cancelled scheduled run does not come back).
+        toast.success(copy.archived, {
+          id: "tasks-bulk-archive",
           action: {
             label: "Undo",
             onPress: () => {
-              Promise.all(ids.map((id) => restoreTask({ id })))
-                .then(() => toast.success(`${plural(count)} restored`))
-                .catch(() => toast.error("Couldn't restore tasks"));
+              Promise.all(ids.map((id) => unarchiveTask({ id })))
+                .then(() => toast.success(copy.unarchived, { id: "tasks-bulk-unarchive" }))
+                .catch(() => toast.error(copy.unarchiveFailed, { id: "tasks-bulk-unarchive" }));
             },
           },
         }),
       )
-      .catch(() => toast.error("Couldn't delete tasks"));
+      .catch(() => toast.error(copy.archiveFailed, { id: "tasks-bulk-archive" }));
   };
 
   const addLabels = () => {
@@ -161,7 +163,7 @@ export function QuickTaskBulkBar({
           { key: "labels", label: "Add Labels", icon: IconTags, disabled: count === 0, onClick: () => setSheet("labels") },
           { key: "project", label: "Move to project", icon: IconFolders, disabled: count === 0, onClick: () => setSheet("project") },
           // In More, not on the bar: with "Select all" and More, a fifth control does not fit at 390.
-          { key: "delete", label: "Delete All", icon: IconTrash, destructive: true, disabled: count === 0, onClick: () => setSheet("delete") },
+          { key: "archive", label: ARCHIVE_LABEL, icon: IconArchive, disabled: count === 0, onClick: () => setSheet("archive") },
         ]}
       />
 
@@ -216,13 +218,11 @@ export function QuickTaskBulkBar({
         onConfirm={() => void run()}
       />
       <ConfirmDialog
-        open={sheet === "delete"}
-        onOpenChange={(open) => setSheet(open ? "delete" : null)}
-        title={`Delete ${plural(count)}?`}
-        description={`The selected ${count === 1 ? "task" : "tasks"} will be removed from every list. Undo is offered once, in the message that follows; the sandbox and any scheduled run are gone either way.`}
-        confirmLabel={`Delete ${plural(count)}`}
-        variant="destructive"
-        onConfirm={remove}
+        open={sheet === "archive"}
+        onOpenChange={(open) => setSheet(open ? "archive" : null)}
+        title={copy.confirmTitle}
+        confirmLabel={ARCHIVE_LABEL}
+        onConfirm={archive}
       />
     </>
   );

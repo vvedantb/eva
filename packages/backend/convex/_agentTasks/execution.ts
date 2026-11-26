@@ -35,6 +35,9 @@ export const startExecution = authMutation({
     if (task.status === "draft") {
       throw new Error("Cannot execute a draft task");
     }
+    if (task.archivedAt !== undefined) {
+      throw new Error("Unarchive the task to run it");
+    }
     if (!task.repoId) {
       throw new Error("Task has no associated repository");
     }
@@ -92,6 +95,9 @@ export const scheduleExecution = authMutation({
       throw new Error("Task not found");
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
+    }
+    if (task.archivedAt !== undefined) {
+      throw new Error("Unarchive the task to run it");
     }
     const existingRuns = await ctx.db
       .query("agentRuns")

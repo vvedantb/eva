@@ -76,14 +76,6 @@ export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
 /** An approved Triage item the coordinator has not placed yet. */
 export const WITH_COORDINATOR_LABEL = "With Eva";
 
-/**
- * The delete confirm's note: `projects.remove` keeps a project's child tasks
- * as quick tasks (it refuses while one runs, and says so).
- */
-export function projectDeleteNote(count: number): string {
-  return `${count === 1 ? "Its" : "Their"} tasks stay as quick tasks.`;
-}
-
 /** The fields of an `agentTasks.listByProject` row the status rules read. */
 export interface ProjectTaskRow {
   _id: string;

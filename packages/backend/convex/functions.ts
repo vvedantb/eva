@@ -25,7 +25,7 @@ import type {
   Id,
   TableNames,
 } from "./_generated/dataModel";
-import { isEntityDeleted } from "./numId";
+import { isEntityArchived } from "./numId";
 import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { findLivePullRequestOnBranch } from "./_pullRequests/store";
@@ -187,7 +187,7 @@ export async function listProjectTasksForUser(
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect()
-  ).filter((task) => !isEntityDeleted(task) && isTaskVisibleTo(task, userId));
+  ).filter((task) => !isEntityArchived(task) && isTaskVisibleTo(task, userId));
   return Promise.all(
     tasks.map(async (task) => ({
       task,
@@ -377,53 +377,18 @@ export async function isFirstTaskOnBranch(
   );
 }
 
-/** Deletes a task and all its related data (runs, activity, scheduled functions). */
-export async function deleteTaskRelatedData(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-): Promise<void> {
-  // A task's sandbox is its session's: the delete path retires that session.
-  await cancelTaskRunSchedule(ctx, taskId);
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const run of runs) {
-    await ctx.db.delete(run._id);
-  }
-  const activityEvents = await ctx.db
-    .query("taskActivity")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const event of activityEvents) {
-    await ctx.db.delete(event._id);
-  }
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.delete(taskId);
-}
-
-/** Soft-deletes a task: cancels schedules, but keeps the row. */
-export async function softDeleteAgentTask(
+/**
+ * Archives a task: cancels its scheduled run and hides it from lists. The row
+ * and its runs stay; `unarchive` brings it back. The caller retires its session.
+ */
+export async function archiveAgentTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || isEntityDeleted(task)) return;
+  if (!task || isEntityArchived(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
-  const runSummary = await ctx.db
-    .query("agentTaskRunSummaries")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .unique();
-  if (runSummary) {
-    await ctx.db.delete(runSummary._id);
-  }
-  await ctx.db.patch(taskId, { deletedAt: Date.now() });
+  await ctx.db.patch(taskId, { archivedAt: Date.now() });
 }
 
 const getUserIdFromIdentityRef = makeFunctionReference<

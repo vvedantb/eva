@@ -108,6 +108,8 @@ interface QuickTaskCardProps {
   hasUnread?: boolean;
   /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
   isAwaitingAnswer?: boolean;
+  /** In the Archived list: the menu offers Unarchive. */
+  archived?: boolean;
 }
 
 export function QuickTaskCard({
@@ -139,6 +141,7 @@ export function QuickTaskCard({
   isAgentActive = false,
   hasUnread = false,
   isAwaitingAnswer = false,
+  archived = false,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -164,6 +167,7 @@ export function QuickTaskCard({
     users,
     currentUserId,
     projects,
+    archived,
   });
 
   // One cached subscription per repo, shared by every card on the page.

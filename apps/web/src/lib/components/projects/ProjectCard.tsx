@@ -74,7 +74,9 @@ interface ProjectCardProps {
    * navigation (e.g. while a dialog is open).
    */
   onClick?: (event: MouseEvent<HTMLElement>) => void;
-  onDelete: () => void;
+  /** In the Archived list: the menu offers Unarchive. */
+  archived?: boolean;
+  onArchive: () => void;
 }
 
 export function ProjectCard({
@@ -98,7 +100,8 @@ export function ProjectCard({
   onToggleSelect,
   href,
   onClick,
-  onDelete,
+  archived,
+  onArchive,
 }: ProjectCardProps) {
   const simpleView = useSimpleView();
   const { menuProps, dialogs, isEditOpen } = useProjectMenu({
@@ -109,7 +112,8 @@ export function ProjectCard({
     href,
     showOpenInNewTab: true,
     branchName,
-    onDelete,
+    archived,
+    onArchive,
   });
   const memberIds = [
     ...new Set(

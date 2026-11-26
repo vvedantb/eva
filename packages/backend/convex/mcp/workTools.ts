@@ -11,7 +11,6 @@ import {
   type EntityTarget,
 } from "./entityRef";
 import {
-  confirmedDeleteArg,
   guarded,
   mcpCallAsUser,
   mcpGetContext,
@@ -103,7 +102,7 @@ export function workTools(
   }
 
   const taskInput = { taskId: taskIdArg, ...entityRefArgs };
-  // update_task and delete_task also take a task's number in the caller's
+  // update_task and archive_task also take a task's number in the caller's
   // project (`projectTaskRefArgs`), so a coordinator names "#3" directly.
   const projectTaskInput = {
     ...entityRefArgs,
@@ -294,13 +293,10 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
 
   tools.push(
     defineTool({
-      name: "delete_task",
-      description: `Delete a task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first. In a project coordinator chat, name the task by taskNumber; only this project's tasks that have not started.
-
-Deleting also cancels its scheduled run, drops its run summary and queues its sandbox for deletion. restore_task brings the task row back, but none of those.`,
+      name: "archive_task",
+      description: `Archive a task: it leaves the lists, its sandbox stops and its scheduled run is cancelled. Its page still opens, and unarchive_task brings it back. In a project coordinator chat, name the task by taskNumber; only this project's tasks that have not started.`,
       mutating: true,
-      input: { ...projectTaskInput, confirmed: confirmedDeleteArg },
-      // `confirmed` rides along in `ref`; the schema already required it.
+      input: projectTaskInput,
       handler: async (ref) => {
         const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
@@ -308,37 +304,31 @@ Deleting also cancels its scheduled run, drops its run summary and queues its sa
         if (caller?.role === "coordinator") {
           const refused = await guarded(async () => {
             await ctx.runQuery(
-              internal.mcp.projectQueries.assertCoordinatorMayDeleteTask,
+              internal.mcp.projectQueries.assertCoordinatorMayArchiveTask,
               { projectId: caller.projectId, taskId: target.targetId },
             );
             return null;
           });
           if (refused !== null) return refused;
         }
-        await runMutation("agentTasks:remove", { id: target.targetId });
-        return toolJsonResult({
-          ...entitySummary(target),
-          deleted: true,
-          note: `Restore with restore_task and taskId "${target.targetId}".`,
-        });
+        await runMutation("agentTasks:archive", { id: target.targetId });
+        return toolJsonResult({ ...entitySummary(target), archived: true });
       },
     }),
   );
 
   tools.push(
     defineTool({
-      name: "restore_task",
-      description: `Undo delete_task: put a soft-deleted quick task back in its lists. Its scheduled run, run summary and sandbox do not come back. Needs the task's Convex id, since a deleted task no longer resolves by number or PR link. A task that is not deleted is left as it is.`,
+      name: "unarchive_task",
+      description: `Undo archive_task: put an archived task back in its lists. Its cancelled scheduled run does not come back. A task that is not archived is left as it is.`,
       mutating: true,
-      input: {
-        taskId: z
-          .string()
-          .describe("The deleted task's Convex id, as delete_task returned."),
-      },
-      handler: async ({ taskId }) => {
-        await mcpGetContext(ctx, clerkUserId);
-        await runMutation("agentTasks:restore", { id: taskId });
-        return toolJsonResult({ kind: "task", id: taskId, restored: true });
+      input: taskInput,
+      handler: async ({ taskId, ...ref }) => {
+        const resolved = await resolveKind("task", taskId, ref);
+        if ("content" in resolved) return resolved;
+        const { target } = resolved;
+        await runMutation("agentTasks:unarchive", { id: target.targetId });
+        return toolJsonResult({ ...entitySummary(target), archived: false });
       },
     }),
   );

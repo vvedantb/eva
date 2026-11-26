@@ -84,7 +84,7 @@ export function ProjectTaskRow({
   view: ProjectTaskView;
   line: string;
   projectId: Id<"projects">;
-  onLongPress: () => void;
+  onLongPress?: () => void;
 }) {
   const router = useRouter();
   const scheme = useScheme();

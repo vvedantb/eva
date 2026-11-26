@@ -46,6 +46,8 @@ export interface SandboxChatPanelProps {
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
+  /** The task or project is archived: the chat is read-only (no composer). */
+  isArchived?: boolean;
 }
 
 /**
@@ -62,6 +64,7 @@ export function SandboxChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
+  isArchived = false,
   assistantBubbles = false,
   replyThreads = false,
   onThreadOpen,
@@ -239,6 +242,7 @@ export function SandboxChatPanel({
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}
           isInputDisabled={composer.isInputDisabled}
+          isArchived={isArchived}
           placeholder={composer.placeholder}
           emptyStateTitle={
             isSandboxActive

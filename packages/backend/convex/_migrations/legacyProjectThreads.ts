@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { isLivePrState } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import { allocateNumId, isEntityDeleted } from "../numId";
+import { allocateNumId, isEntityArchived } from "../numId";
 import { maxTaskNumberOf } from "../_agentTasks/updateTask";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
 import { ensureSubscribed } from "../taskSubscribers";
@@ -70,7 +70,7 @@ export const convertLegacyProjectThreads = internalMutation({
   handler: async (ctx, args) => {
     const dryRun = args.dryRun === true;
     const projects = (await ctx.db.query("projects").collect()).filter(
-      (project) => !isEntityDeleted(project),
+      (project) => !isEntityArchived(project),
     );
     const results: ProjectResult[] = [];
     for (const project of projects) {
@@ -122,7 +122,7 @@ async function convertProject(
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", project._id))
       .collect()
-  ).filter((task) => !isEntityDeleted(task));
+  ).filter((task) => !isEntityArchived(task));
   const reviewTasks = tasks.filter(
     (task) => REVIEW_STATUSES.has(task.status) && task.prUrl === undefined,
   );

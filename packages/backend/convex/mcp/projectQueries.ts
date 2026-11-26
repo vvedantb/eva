@@ -10,7 +10,7 @@ import {
 import { chatEntityKindValidator } from "../validators";
 import { sessionOwner } from "../_sessions/owner";
 import { loadSessionChat } from "../_sessionChats/helpers";
-import { isEntityDeleted } from "../numId";
+import { isEntityArchived } from "../numId";
 import { listProjectTasks } from "../_projects/scheduler";
 import { loadProjectTaskRows } from "../_projects/taskTable";
 import { projectTaskRowValidator } from "../_validators/projectTasks";
@@ -167,20 +167,20 @@ export const rowSourceScope = internalQuery({
 });
 
 /**
- * The task of the coordinator's project it may change or delete: one that
+ * The task of the coordinator's project it may change or archive: one that
  * has not started (still todo or draft, no run pending). Throws otherwise.
- * The one rule for `update_task` and `delete_task` in a coordinator chat.
+ * The one rule for `update_task` and `archive_task` in a coordinator chat.
  */
 async function notStartedProjectTask(
   db: DatabaseReader,
   projectId: string,
   taskId: string,
-  action: "change" | "delete",
+  action: "change" | "archive",
 ): Promise<Doc<"agentTasks">> {
   const task = await db.get(
     normalizeIdOrThrow(db, "agentTasks", taskId, "Task"),
   );
-  if (!task || isEntityDeleted(task) || String(task.projectId) !== projectId) {
+  if (!task || isEntityArchived(task) || String(task.projectId) !== projectId) {
     throw new Error("That task is not part of this project.");
   }
   const started =
@@ -223,14 +223,14 @@ export const editTaskAsCoordinator = internalMutation({
 });
 
 /**
- * Throws unless the coordinator may delete this task of its project: only a
+ * Throws unless the coordinator may archive this task of its project: only a
  * task that has not started (`notStartedProjectTask`).
  */
-export const assertCoordinatorMayDeleteTask = internalQuery({
+export const assertCoordinatorMayArchiveTask = internalQuery({
   args: { projectId: v.string(), taskId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await notStartedProjectTask(ctx.db, args.projectId, args.taskId, "delete");
+    await notStartedProjectTask(ctx.db, args.projectId, args.taskId, "archive");
     return null;
   },
 });

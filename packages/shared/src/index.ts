@@ -180,10 +180,20 @@ export {
   type SessionMenuAction,
 } from "./sessionMenu";
 export {
-  draftCountAfterRemove,
-  draftsAfterRemove,
+  draftCountAfterArchive,
+  draftsAfterArchive,
   visibleDrafts,
 } from "./draftVisibility";
+export {
+  ARCHIVE_LABEL,
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
+  UNARCHIVE_LABEL,
+  archiveCopy,
+  isArchiveListMode,
+  type ArchivableKind,
+  type ArchiveListMode,
+} from "./archive";
 export {
   chatSourceKindLabel,
   chatSourceLabel,

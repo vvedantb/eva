@@ -1,6 +1,9 @@
 import { api } from "@eva/backend";
 import {
+  ARCHIVE_LIST_MODES,
+  ARCHIVE_LIST_MODE_LABELS,
   PROJECT_LIST_DEFAULTS,
+  archiveCopy,
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
   clearedProjectFilter,
@@ -8,6 +11,7 @@ import {
   projectFilterChips,
   searchAndSortProjects,
   toggleHiddenProjectPhase,
+  type ArchiveListMode,
   type ProjectListFilters,
 } from "@eva/shared";
 import type { ProjectStage } from "@eva/shared/projectStatus";
@@ -32,6 +36,7 @@ import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { persistedIdSet } from "@/storage/persistedStore";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
+import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
@@ -66,7 +71,8 @@ export function useProjectRepo() {
  * Done; icon, label, count; `listStatusesForRepo`), each with its
  * project cards or "No projects". Sections with projects start open, as the
  * web. A long press on a card opens the web project menu as a sheet
- * (`useProjectActions`). A `SectionList`, as a repo's projects have no cap.
+ * (`useProjectActions`). An Active / Archived switch, as the sessions list,
+ * shows the archived projects (`projects.listArchived`) instead. A `SectionList`, as a repo's projects have no cap.
  * Not here from the web: the kanban and timeline views, select mode and its
  * bulk bar.
  */
@@ -87,12 +93,34 @@ export function ProjectsSection() {
   );
 }
 
+/** The list query for each mode, as the sessions list. */
+const PROJECT_LIST_QUERIES = {
+  active: api.projects.list,
+  archived: api.projects.listArchived,
+};
+
+const MODE_OPTIONS = ARCHIVE_LIST_MODES.map((value) => ({ value, label: ARCHIVE_LIST_MODE_LABELS[value] }));
+
 function ProjectList({ repo }: { repo: Repo }) {
+  // Not persisted: the list opens on Active each time, as the sessions list.
+  const [mode, setMode] = useState<ArchiveListMode>("active");
+  return (
+    <View className="flex-1">
+      <View className="px-4 pb-2">
+        <SegmentedTabs value={mode} options={MODE_OPTIONS} onChange={setMode} />
+      </View>
+      {/* Keyed on the mode: its search, filters and open sections start fresh. */}
+      <ProjectModeList key={mode} repo={repo} mode={mode} />
+    </View>
+  );
+}
+
+function ProjectModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }) {
   const { openNew } = useProjectRepo();
   const scheme = useScheme();
-  const projects = useQuery(api.projects.list, { repoId: repo._id });
+  const projects = useQuery(PROJECT_LIST_QUERIES[mode], { repoId: repo._id });
   // Each project's stage is derived from its child tasks, never stored.
-  const statuses = useProjectListStatuses(repo._id);
+  const statuses = useProjectListStatuses(repo._id, mode === "archived");
   const stageOf = (projectId: string): ProjectStage => statuses?.get(projectId)?.stage ?? "todo";
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<StageListFilters>(STAGE_LIST_DEFAULTS);
@@ -109,6 +137,9 @@ function ProjectList({ repo }: { repo: Repo }) {
     filters,
   );
 
+  if (projects.length === 0 && mode === "archived") {
+    return <EmptyState icon={IconLayoutKanban} title={archiveCopy("project").emptyArchived} />;
+  }
   if (projects.length === 0) {
     return (
       <EmptyState

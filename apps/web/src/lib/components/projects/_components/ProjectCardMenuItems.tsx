@@ -21,13 +21,14 @@ import {
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
+  IconArchive,
+  IconArchiveOff,
   IconClipboard,
   IconCopy,
   IconExternalLink,
   IconGitBranch,
   IconLink,
   IconPencil,
-  IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
@@ -38,7 +39,8 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 /**
  * The project menu body, shared by the card's right-click menu, the card's
  * kebab (touch has nothing to right-click) and the project header "…" menu.
- * Groups: project properties, open and copy, PRs and plan, then Delete.
+ * Groups: project properties, open and copy, PRs and plan, then Archive. An
+ * archived project is read-only: no properties, and Unarchive for Archive.
  * See `TaskCardMenuItems` for the original of this pattern.
  */
 export interface ProjectCardMenuItemsProps {
@@ -57,7 +59,10 @@ export interface ProjectCardMenuItemsProps {
   leading?: ReactNode;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  /** An archived project: read-only, so the menu offers Unarchive and no edits. */
+  archived?: boolean;
+  onArchive: () => void;
+  onUnarchive: () => void;
 }
 
 export function ProjectCardMenuItems({
@@ -73,7 +78,9 @@ export function ProjectCardMenuItems({
   leading,
   onLeadChange,
   onEdit,
-  onDelete,
+  archived = false,
+  onArchive,
+  onUnarchive,
 }: ProjectCardMenuItemsProps) {
   const prs = useOwnerPullRequests({ kind: "project", projectId });
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
@@ -100,36 +107,40 @@ export function ProjectCardMenuItems({
           <MenuSeparator />
         </>
       ) : null}
-      <Sub>
-        <SubTrigger>
-          <IconUserPlus size={iconSize} />
-          Project Lead
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={projectLead ?? "none"}
-            onValueChange={onLeadChange}
-          >
-            {currentUserId ? (
-              <>
-                <RadioItem value={currentUserId}>Set myself as lead</RadioItem>
-                <MenuSeparator />
-              </>
-            ) : null}
-            <RadioItem value="none">No lead</RadioItem>
-            {(users ?? []).map((user) => (
-              <RadioItem data-pii key={user._id} value={user._id}>
-                {user.fullName ?? user.firstName ?? "Unknown"}
-              </RadioItem>
-            ))}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-      <Item onSelect={onEdit}>
-        <IconPencil size={iconSize} />
-        Edit details
-      </Item>
-      <MenuSeparator />
+      {archived ? null : (
+        <>
+          <Sub>
+            <SubTrigger>
+              <IconUserPlus size={iconSize} />
+              Project Lead
+            </SubTrigger>
+            <SubContent>
+              <RadioGroup
+                value={projectLead ?? "none"}
+                onValueChange={onLeadChange}
+              >
+                {currentUserId ? (
+                  <>
+                    <RadioItem value={currentUserId}>Set myself as lead</RadioItem>
+                    <MenuSeparator />
+                  </>
+                ) : null}
+                <RadioItem value="none">No lead</RadioItem>
+                {(users ?? []).map((user) => (
+                  <RadioItem data-pii key={user._id} value={user._id}>
+                    {user.fullName ?? user.firstName ?? "Unknown"}
+                  </RadioItem>
+                ))}
+              </RadioGroup>
+            </SubContent>
+          </Sub>
+          <Item onSelect={onEdit}>
+            <IconPencil size={iconSize} />
+            Edit details
+          </Item>
+          <MenuSeparator />
+        </>
+      )}
       {showOpenInNewTab && href ? (
         <Item
           onSelect={() => {
@@ -187,15 +198,18 @@ export function ProjectCardMenuItems({
         </>
       ) : null}
       <MenuSeparator />
-      <Item
-        className="text-destructive focus:text-destructive"
-        onSelect={onDelete}
-        title={skipConfirmTitle("Delete")}
-      >
-        <IconTrash size={iconSize} />
-        Delete
-        <ConfirmSkipHint />
-      </Item>
+      {archived ? (
+        <Item onSelect={onUnarchive}>
+          <IconArchiveOff size={iconSize} />
+          Unarchive
+        </Item>
+      ) : (
+        <Item onSelect={onArchive} title={skipConfirmTitle("Archive")}>
+          <IconArchive size={iconSize} />
+          Archive
+          <ConfirmSkipHint />
+        </Item>
+      )}
     </>
   );
 }

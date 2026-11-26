@@ -47,9 +47,9 @@ import { taskRunSettings } from "../_projects/runSettings";
  * session runs the sandbox and the chat.
  *
  *   owner created ──first need──▶ ensureWorkSession (one session, never two)
- *   task done / cancelled / deleted,
- *   project deleted ──▶ retireOwnedSession (stop + archive)
- *   reopened / restored ──▶ reviveOwnedSession (unarchive)
+ *   task done / cancelled / archived,
+ *   project archived ──▶ retireOwnedSession (stop + archive)
+ *   reopened / unarchived ──▶ reviveOwnedSession (unarchive)
  */
 
 /** A task's or project's session and its Main chat. */
@@ -101,7 +101,7 @@ export async function ensureWorkSession(
  * archived comes back live on use: a project has no closed state (decision
  * 19). `ensureWorkSession` and every chat send call it, until the
  * `convertProjects` migration revives the rest. Idempotent; leaves other
- * sessions and a deleted project's session as they are.
+ * sessions and an archived project's session as they are.
  */
 export async function reviveCoordinatorSession(
   ctx: MutationCtx,
@@ -110,7 +110,7 @@ export async function reviveCoordinatorSession(
   const projectId = sessionOwnerProjectId(session);
   if (projectId === undefined || !isSessionArchived(session)) return session;
   const project = await ctx.db.get(projectId);
-  if (!project || project.deletedAt !== undefined) return session;
+  if (!project || project.archivedAt !== undefined) return session;
   await unarchiveSession(ctx, session._id, { touch: false });
   return { ...session, archive: undefined };
 }
@@ -454,8 +454,8 @@ export async function liveOwnedSessionStatuses(
 }
 
 /**
- * The owner left the board (a task done/cancelled/deleted, a project
- * deleted): stop its sandbox, archive its session and
+ * The owner left the board (a task done/cancelled/archived, a project
+ * archived): stop its sandbox, archive its session and
  * start the 48h sandbox delete grace.
  */
 export async function retireOwnedSession(
@@ -503,7 +503,7 @@ export function taskMoveDetachesSession(
 }
 
 /**
- * The owner came back (reopened or restored): its session is live again.
+ * The owner came back (reopened or unarchived): its session is live again.
  * Clearing the archive also cancels the pending sandbox delete.
  */
 export async function reviveOwnedSession(
@@ -523,7 +523,7 @@ export function isTerminalTaskStatus(status: Doc<"agentTasks">["status"]) {
 /**
  * The one lifecycle mapping: an owner entering a terminal state retires its
  * session, one leaving it revives it. A task: done/cancelled. A project:
- * deleted.
+ * archived.
  */
 async function syncOwnedSessionWithTerminal(
   ctx: MutationCtx,
@@ -551,9 +551,9 @@ export async function syncOwnedSessionWithTaskStatus(
 }
 
 /**
- * Project delete → its session. Reads the project's current state rather
+ * Project archive → its session. Reads the project's current state rather
  * than a transition, so it is safe to call after any write and to run late
- * (`syncProjectSessionLifecycle`): a deleted project's session is retired,
+ * (`syncProjectSessionLifecycle`): an archived project's session is retired,
  * any other is live. The stored phase plays no part: a project has no closed
  * state (decision 19), so its coordinator chat stays reachable when every
  * task is done, and a session an old phase-based close archived revives.
@@ -567,7 +567,7 @@ export async function syncProjectSession(
     findOwnedSession(ctx.db, { kind: "project", projectId }),
   ]);
   if (!project || !session) return;
-  const retired = project.deletedAt !== undefined;
+  const retired = project.archivedAt !== undefined;
   await syncOwnedSessionWithTerminal(
     ctx,
     { kind: "project", projectId },
