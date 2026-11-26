@@ -1,6 +1,6 @@
 import { WorkflowManager, type WorkflowId } from "@convex-dev/workflow";
 import { components } from "./_generated/api";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 /** Shared workflow manager instance with retry and parallelism configuration. */
 export const workflow = new WorkflowManager(components.workflow, {
@@ -37,7 +37,7 @@ export function toWorkflowId(workflowId: string): WorkflowId {
  * never locks the user out until the `RUN_TIMEOUT_MS` watchdog runs.
  */
 export async function isTrackedWorkflowRunning(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   workflowId: string | undefined,
 ): Promise<boolean> {
   if (!workflowId) return false;

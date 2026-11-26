@@ -384,7 +384,8 @@ const schema = defineSchema({
     .index("by_source_project", ["sourceProjectId"])
     .index("by_chat_parent", ["chatParentId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
-    .index("by_repo_and_numId", ["repoId", "numId"]),
+    .index("by_repo_and_numId", ["repoId", "numId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   chatLogEntries: defineTable(chatLogEntryFields)
     .index("by_source_session", ["sourceSessionId"])
@@ -534,7 +535,8 @@ const schema = defineSchema({
     .index("by_automation_and_status", ["automationId", "status"])
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
-    .index("by_repo", ["repoId"]),
+    .index("by_repo", ["repoId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   changelogVotes: defineTable(changelogVoteFields).index(
     "by_run_and_user_and_item",

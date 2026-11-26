@@ -346,6 +346,60 @@ describe("sandbox owner state (leak sweep)", () => {
   );
 
   test(
+    "a doc interview VM is wanted only through its agent grace",
+    async () => {
+      const { t, repoId } = await fixture();
+      await setMode(t, "on");
+      const now = Date.now();
+      const docId = await t.run(async (ctx) => {
+        const docId = await ctx.db.insert("docs", {
+          repoId,
+          title: "Spec",
+          content: "",
+          sandboxId: "sbx-doc",
+          createdAt: now - 3 * HOUR,
+          updatedAt: now - 3 * HOUR,
+        });
+        await ctx.db.insert("turns", {
+          entityId: docId,
+          streamingEntityId: String(docId),
+          state: "done",
+          open: false,
+          turnStartedAt: now - 2 * 60_000,
+          finishedAt: now - 60_000,
+          leaseExpiresAt: now,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId,
+        });
+        return docId;
+      });
+      const state = () =>
+        t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
+          sandboxId: "sbx-doc",
+        });
+
+      // The user is typing the next answer: inside the 5-minute grace.
+      expect(await state()).toBe("wanted");
+
+      await t.run(async (ctx) => {
+        for (const turn of await ctx.db.query("turns").collect()) {
+          await ctx.db.patch(turn._id, { finishedAt: now - HOUR });
+        }
+        // A crashed workflow's stale slot must not pin the VM.
+        await ctx.db.patch(docId, { activeWorkflowId: "stale-workflow" });
+      });
+      expect(await state()).toBe("closed");
+      expect(
+        await t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
+          sandboxIds: ["sbx-doc"],
+        }),
+      ).toEqual([{ sandboxId: "sbx-doc", repoId }]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a shared VM is a leak only once every owner is closed",
     async () => {
       const { t, sessionId, taskSessionId } = await fixture();
