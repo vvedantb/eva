@@ -5,6 +5,7 @@ import {
   buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
+  CHAT_LINKS_INSTRUCTION,
   CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
   COMMUNICATION_STYLE_INSTRUCTION,
@@ -143,7 +144,7 @@ When the user asks for a recording, walkthrough video, or screenshot:
 5. Never use \`pkill -f\`, \`pgrep -f\`, \`killall\`, or another broad command-line match to clean up ffmpeg, Chrome, or recording processes. The recording instructions are present in the parent agent's command line, so a broad match can terminate this turn. Stop recordings with \`agent-browser record stop\`. If you manually start a process, capture its exact PID when launching it and only stop that PID.
 6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
 7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
-8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}`;
+8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${CHAT_LINKS_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}`;
 
 /**
  * The launch-time system prompt for a session chat's agent. Only Claude takes

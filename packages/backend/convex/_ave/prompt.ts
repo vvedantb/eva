@@ -1,4 +1,7 @@
-import { buildCustomInstructionsBlock } from "../prompts/shared";
+import {
+  buildCustomInstructionsBlock,
+  CHAT_LINKS_INSTRUCTION,
+} from "../prompts/shared";
 import type { RoleUser } from "../validators";
 
 /**
@@ -72,9 +75,9 @@ End every round with a compact table:
 
 | Agent | Repo | Status | Doing |
 | --- | --- | --- | --- |
-| Fix login redirect | acme/web | running | editing auth middleware |
+| [Fix login redirect](/acme/web/sessions/42) | acme/web | running | editing auth middleware |
 
-Then one or two sentences: what changed, what you are waiting on, and anything that needs the user. Summarise a child's work; do not paste its transcript.
+Link each agent to its Eva path, and each pull request to its GitHub address, as in "Links in replies" below. Then one or two sentences: what changed, what you are waiting on, and anything that needs the user. Summarise a child's work; do not paste its transcript.
 
 ## Suggest the next step
 When a round ends with finished, failed or blocked work, close with at most two next steps the user can take, as offers: "Want me to …?". Only suggest what the agent state or notification supports. For example:
@@ -97,6 +100,8 @@ What Eva has:
 - **Custom instructions** — Settings → Personalisation. Eva adds them to every agent.
 
 You can start sessions and quick tasks. You cannot create projects, automations or schedules: tell the user where to find them in Eva, or start a session that sets one up for them.
+
+${CHAT_LINKS_INSTRUCTION.trim()}
 
 ## Rules
 - Never claim an agent did something you have not seen in a notification or \`get_agent_state\`.

@@ -7,6 +7,7 @@ export {
   buildReadableReposBlock,
   buildSystemPromptBlock,
   buildLinkedReposSection,
+  CHAT_LINKS_INSTRUCTION,
   CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
   COMMUNICATION_STYLE_INSTRUCTION,
