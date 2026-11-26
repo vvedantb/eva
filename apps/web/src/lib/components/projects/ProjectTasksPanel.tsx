@@ -20,7 +20,8 @@ import { useProjectTaskStatus } from "./useProjectStatus";
  * unless "Start now"), a thin progress bar
  * and the counts as one muted line, then the tasks grouped Triage, Working,
  * Blocked, Idle, Archived (with the tasks archived on their own), and their
- * Pull requests. A row opens the task in place of the coordinator. An
+ * Pull requests. A row opens the task in the panel beside the coordinator
+ * (`onOpenTask`), else its full page; the open task's row is marked. An
  * archived project's list is read-only.
  */
 export function ProjectTasksPanel({
@@ -28,11 +29,17 @@ export function ProjectTasksPanel({
   projectNumId,
   repoId,
   basePath,
+  openTaskId,
+  onOpenTask,
 }: {
   projectId: Id<"projects">;
   projectNumId: number | undefined;
   repoId: Id<"githubRepos">;
   basePath: string;
+  /** The task open in the panel (`?task=`); its row is marked. */
+  openTaskId?: Id<"agentTasks">;
+  /** Opens a task in the panel; without it a row opens the full page. */
+  onOpenTask?: (taskNumId: number) => void;
 }) {
   const navigate = useNavigate();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -55,6 +62,10 @@ export function ProjectTasksPanel({
     const task = [...(tasks ?? []), ...(archivedTasks ?? [])].find(
       (row) => row._id === taskId,
     );
+    if (onOpenTask && task?.numId !== undefined) {
+      onOpenTask(task.numId);
+      return;
+    }
     const taskSegment = task ? entityPathSegment(task) : null;
     if (!projectSegment || !taskSegment) return;
     void navigate({
@@ -100,6 +111,7 @@ export function ProjectTasksPanel({
           readOnly={isArchived}
           failedTaskIds={failedTaskIds}
           onSelectTask={openTask}
+          openTaskId={openTaskId}
           homeRepoId={repoId}
         />
       </div>

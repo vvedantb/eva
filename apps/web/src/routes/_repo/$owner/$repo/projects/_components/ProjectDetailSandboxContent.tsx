@@ -36,6 +36,10 @@ interface ProjectDetailSandboxContentProps {
   onThreadOpen: (messageId: string) => void;
   /** ✕ on the Replies tab: back to the tab before it. */
   onCloseThread: () => void;
+  /** Opens a task in the rail (`?task=`), on its Chat tab. */
+  onOpenTask: (taskNumId: number) => void;
+  /** ✕ on the open task: back to Tasks. */
+  onCloseTask: () => void;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -54,6 +58,8 @@ export function ProjectDetailSandboxContent({
   expandRightSignal,
   onThreadOpen,
   onCloseThread,
+  onOpenTask,
+  onCloseTask,
   openFile,
   openDiffs,
   openAgentsTab,
@@ -109,6 +115,8 @@ export function ProjectDetailSandboxContent({
       collapsed={collapsed}
       onToggle={onToggle}
       onCloseThread={onCloseThread}
+      onOpenTask={onOpenTask}
+      onCloseTask={onCloseTask}
     />
   );
 
