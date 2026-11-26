@@ -341,7 +341,7 @@ export function projectTaskSummaryLine(
     otherRepoLabel: string | undefined;
     /** The task number of a task, by id: names a merged item's target. */
     numIdOf?: (taskId: string) => number | undefined;
-    /** The task is open in the project's side panel (web). */
+    /** The task is open as a chat tab beside Eva (web). */
     open?: boolean;
   },
 ): string {

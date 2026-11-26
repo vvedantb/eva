@@ -23,10 +23,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
-import type {
-  ProjectSandboxTab,
-  ProjectTaskTab,
-} from "@/lib/components/projects/projectSandboxTabs";
+import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import { useProjectTaskTabs } from "@/lib/components/projects/useProjectTaskTabs";
 import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
@@ -108,30 +106,13 @@ export function ProjectDetailClient({
     });
   };
 
-  // A task opens in the rail (`?task=`), beside the coordinator's chat, on
-  // `tab` (`defaultProjectTaskTab`: Details until it has run, then Chat).
-  const openTask = (taskNumId: number, tab: ProjectTaskTab) => {
-    if (!projectPathSegment) return;
-    void navigate({
-      to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
-      ),
-      search: (prev) => ({ ...prev, task: taskNumId }),
-    });
-    setExpandRightSignal((n) => n + 1);
-  };
-
-  // ✕ on the task drops its tabs and returns to Tasks.
-  const closeTask = () => {
-    if (!projectPathSegment) return;
-    void navigate({
-      to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/sandbox/tasks`,
-      ),
-      search: (prev) => ({ ...prev, task: undefined }),
-      replace: true,
-    });
-  };
+  // Tasks open as chat tabs beside Eva (`?tasks=`, `?task=`).
+  const taskTabs = useProjectTaskTabs({
+    basePath,
+    projectPathSegment,
+    sandboxTab,
+    onShowPanel: () => setExpandRightSignal((n) => n + 1),
+  });
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
@@ -243,8 +224,7 @@ export function ProjectDetailClient({
             expandRightSignal={expandRightSignal}
             onThreadOpen={openThread}
             onCloseThread={closeThread}
-            onOpenTask={openTask}
-            onCloseTask={closeTask}
+            taskTabs={taskTabs}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}
