@@ -1,7 +1,7 @@
 # v2.5 — Notifications for chats, threads and comments
 
 **Date:** 26 November 2026
-**Status:** DRAFT. Open questions at the end.
+**Status:** TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
 **Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
 
 ## Today (inventory, origin/main, 26 November 2026)
@@ -65,9 +65,11 @@ One rule for every event: **who** gets it (participants), **how urgent** it is, 
 
 Each PR ships on web and phone together.
 
-## Open questions
+## Decisions (user, 26 November 2026)
 
-1. Teammate messages with no mention: unread dot only (as in the table), or also a quiet Updates row?
-2. Thread participation: automatic (anyone who posts, is mentioned, or authored the root) with an Unfollow, or only people who press Follow?
-3. Email defaults: keep email off until a person turns it on, or default to "instant for mentions and direct replies, digest for the rest"?
-4. Order: A → B → C → D, or C (delivery fixes) first because it is mostly bug fixes?
+| # | Decision |
+|---|---|
+| 1 | A teammate's message without a mention (quiet comments included): unread dot and NEW divider only; no Inbox row, toast, push or email. |
+| 2 | Thread participants are automatic (root author, repliers, people mentioned in it, the person Eva answers), each with Unfollow. |
+| 3 | Email default for people who never changed the setting: instant for mentions, direct replies, assignments and Eva's questions; daily digest for the rest. A person who turned email off stays off. |
+| 4 | Order: C (delivery fixes) → A (threads) → B (chat unread) → D (preferences and phone badge). |
