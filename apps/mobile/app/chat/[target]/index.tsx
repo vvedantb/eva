@@ -974,7 +974,7 @@ function ChatMessageRow({
   // "N replies" in the footer line, always shown (the web footer's thread control).
   const threadControl =
     onOpenThread && (message.replyCount ?? 0) > 0 ? (
-      <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+      <ThreadSummary rootId={message._id} replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
     ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>

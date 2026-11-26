@@ -382,6 +382,8 @@ export const turnFields = {
    * Its retries, alerts and continuations join the same thread.
    */
   replyTo: v.optional(v.id("messages")),
+  /** A thread turn: the person whose @Eva reply woke her; her answer notifies them. */
+  askedBy: v.optional(v.id("users")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
@@ -1679,6 +1681,18 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
+// One row per (person, reply thread): who takes part and hears about replies
+// (plan `notifications-v2-5.md`, part A). Created automatically for the
+// root's author, repliers, people mentioned in the thread and the person Eva
+// answers. `following: false` is an Unfollow and stays: joining again does
+// not undo it. `lastReadAt` drives the thread's "N new" and "New" line.
+export const threadParticipantFields = {
+  rootId: v.id("messages"),
+  userId: v.id("users"),
+  following: v.boolean(),
+  lastReadAt: v.optional(v.number()),
+};
+
 // One row per (user, chat): when the user last saw it. "Read" is per user, so
 // it cannot live on the shared chat doc. `repoId` lets a list query load one
 // user's rows for one repo in a single indexed read.
@@ -2405,6 +2419,9 @@ export const notificationFields = {
   // The chat this notification is about (session, quick task or project id),
   // so the mobile inbox can open it without parsing `href`.
   chatTarget: v.optional(v.string()),
+  // The reply thread it is about: the phone opens that thread, opening it
+  // reads the notification, and posting in it answers its mentions.
+  threadRootId: v.optional(v.id("messages")),
 };
 
 export const repoEnvVarFields = {

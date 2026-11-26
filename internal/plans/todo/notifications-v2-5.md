@@ -1,7 +1,7 @@
 # v2.5 — Notifications for chats, threads and comments
 
 **Date:** 26 November 2026
-**Status:** C built (26 November 2026). A, B, D TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
+**Status:** C built (26 November 2026). A built (26 November 2026; mock `notifications-v2-5-threads-mock.html`). B, D TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
 **Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
 
 ## Today (inventory, origin/main, 26 November 2026)
@@ -35,7 +35,7 @@ One rule for every event: **who** gets it (participants), **how urgent** it is, 
 |---|---|---|---|---|---|
 | @mention of you (chat, thread, comment) | you | Needs you | yes | yes | instant (per your setting) |
 | Reply in a thread you're in | thread participants | Updates | yes | yes | digest |
-| Eva answered your thread question | the asker | Updates | yes | yes | digest |
+| Eva answered your thread question | the asker | Needs you | yes | yes | digest |
 | Teammate message in a chat you're in (no mention) | chat participants | — (unread dot only) | no | no | no |
 | Comment on a task you follow | followers | Updates | yes | no | digest |
 | Reply to your comment | comment author | Updates | yes | yes | instant |
@@ -86,3 +86,15 @@ Each PR ships on web and phone together.
 - Needs you: an agent `notify_user` row is a `system` row with a `chatTarget`; an automation's email draft has none, so it stays out. Posting in a chat clears every Needs you row for that chat, not only mentions.
 - Doc comments have no edit mutation, so only task comment edits notify new mentions.
 - Dead types: prod still held `routine_complete` (2), `run_completed` (1166) and `run_failed` (7) rows. Convex refuses a deploy whose schema rejects stored rows, so those three stay in the validator as legacy until `dataMigrations:deleteDeadNotifications` has run; a follow-up drops them. `export_ready` and `rate_limit` had no rows and are removed. `scripts/check-schema-narrowing.mjs` does not watch `_validators/enums.ts`, where the union lives, so it would not have caught this.
+
+### A — Threads (26 November 2026)
+
+- Eva's answer to your thread question is in Needs you (Questions), as the approved mock shows, not Updates as the table first said. The table above is updated.
+- Thread replies have their own type, `thread_reply` (digest email), because `comment_reply` (reply to your comment) keeps the instant email. Eva's answer is `thread_answer`.
+- Per-thread read state lives on the participant row (`threadParticipants.lastReadAt`), not in a separate `threadReads` table.
+- A turn records who asked (`turns.askedBy`, thread turns only). Reading the thread's last @Eva reply cannot work: two @Eva replies can wait in the queue, and the first answer would go to the second asker.
+- "Read up to" is the newest reply's creation time, not the clock: two rows written in the same millisecond still order.
+- Eva's answer notifies only the asker, also after they unfollow (they asked her). Other followers do not get a notification for it, but it counts in their "N new".
+- "N new" shows only for followers. Opening a thread you are not in does not make you a participant; Follow does (read up to the newest reply).
+- The "New" line in a thread reuses the chat's NEW divider, so it uses the accent colour like the chat, not a fixed blue. The "N new" pill uses the mention blue (`--mention`, `EVA_THEME.mention`).
+- Existing threads: `dataMigrations:backfillThreadParticipants` makes root authors, repliers and the people they mention followers, read up to the migration.

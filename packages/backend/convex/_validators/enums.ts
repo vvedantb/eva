@@ -206,6 +206,11 @@ export const notificationTypeValidator = v.union(
   v.literal("session_archived"),
   // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
+  // A person replied in a reply thread you follow (task comment replies stay
+  // `comment_reply`: they route differently).
+  v.literal("thread_reply"),
+  // Eva answered the question you asked her in a reply thread.
+  v.literal("thread_answer"),
   // routine_complete, run_completed and run_failed removed: no code created
   // them. schema-narrowing-ok: deleteDeadNotifications
 );
