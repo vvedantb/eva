@@ -30,11 +30,8 @@ import {
 import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
-import {
-  assertProviderAccountUsableBy,
-  resolveDefaultProviderAccountId,
-} from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
+import { seedNewTaskChat } from "./taskChatSeed";
 import { cancelTaskRunSchedule } from "./runState";
 import {
   detachOwnedSession,
@@ -392,15 +389,6 @@ export async function createTodoTask(
     taskNumber = maxTaskNumberOf(existingTasks) + 1;
   }
   const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
-  const model = args.model ?? repo.defaultModel;
-  const providerAccountId =
-    args.providerAccountId === undefined
-      ? await resolveDefaultProviderAccountId(ctx.db, ctx.userId, model)
-      : await assertProviderAccountUsableBy(
-          ctx.db,
-          args.providerAccountId,
-          ctx.userId,
-        );
   const taskId = await ctx.db.insert("agentTasks", {
     title,
     description: args.description,
@@ -413,12 +401,6 @@ export async function createTodoTask(
     updatedAt: now,
     createdBy: ctx.userId,
     baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
-    model,
-    providerAccountId,
-    reasoningLevel: args.reasoningLevel ?? repo.defaultReasoningLevel,
-    thinkingEnabled: args.thinkingEnabled ?? repo.defaultThinkingEnabled,
-    use1mContext: args.use1mContext ?? repo.defaultUse1mContext,
-    fastMode: args.fastMode ?? repo.defaultFastMode,
     projectId: args.projectId,
     taskNumber,
     tags: normalizeTaskTags(args.tags),
@@ -432,6 +414,7 @@ export async function createTodoTask(
     numId,
   });
   await createTaskRunSummary(ctx, taskId, args.repoId);
+  await seedNewTaskChat(ctx, taskId, repo, args);
   await ensureSubscribed(ctx, taskId, ctx.userId);
   if (generate) {
     await scheduleGeneratedTitle(
@@ -571,11 +554,6 @@ export const createQuickTasksBatch = authMutation({
         updatedAt: now,
         createdBy: ctx.userId,
         baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-        model: repo.defaultModel,
-        reasoningLevel: repo.defaultReasoningLevel,
-        thinkingEnabled: repo.defaultThinkingEnabled,
-        use1mContext: repo.defaultUse1mContext,
-        fastMode: repo.defaultFastMode,
         numId,
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
@@ -663,7 +641,6 @@ export const createTasksBatch = authMutation({
     const now = Date.now();
     const baseBranch =
       args.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const model = args.model ?? repo.defaultModel;
 
     const taskIds: Id<"agentTasks">[] = [];
     for (let i = 0; i < args.tasks.length; i++) {
@@ -680,14 +657,13 @@ export const createTasksBatch = authMutation({
         updatedAt: now,
         createdBy: ctx.userId,
         baseBranch,
-        model,
-        reasoningLevel: repo.defaultReasoningLevel,
-        thinkingEnabled: repo.defaultThinkingEnabled,
-        use1mContext: repo.defaultUse1mContext,
-        fastMode: repo.defaultFastMode,
         numId,
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
+      // Without a pick the chat starts on the repo's defaults when first needed.
+      if (args.model !== undefined) {
+        await seedNewTaskChat(ctx, taskId, repo, { model: args.model });
+      }
       await ensureSubscribed(ctx, taskId, ctx.userId);
       if (generate) {
         await scheduleGeneratedTitle(

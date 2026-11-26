@@ -1,4 +1,5 @@
 import { api, type Id } from "@eva/backend";
+import { useTaskChatModel } from "@/quickTasks/useTaskChatModel";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { projectTaskPromptAction, WITH_COORDINATOR_LABEL } from "@eva/shared/projectView";
 import { canEditTaskText, taskTextLockReason } from "@eva/shared/taskDetail";
@@ -36,6 +37,7 @@ export function ProjectTaskPromptCard({
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
   const attachments = useQuery(api.agentTasks.listAttachments, { taskId: task._id });
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
+  const taskModel = useTaskChatModel(task._id);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [busy, setBusy] = useState(false);
@@ -60,7 +62,7 @@ export function ProjectTaskPromptCard({
       <TaskDescription
         description={task.description}
         repoId={repoId}
-        model={task.model}
+        model={taskModel}
         editable={editable}
         reactions={reactionsFor("description", task._id)}
         onSave={(description) => update({ description }, "Couldn't save the description")}

@@ -18,7 +18,10 @@ import {
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
 import { isSessionArchived } from "../_sessions/archive";
-import { assertStandaloneSession } from "../_sessions/owner";
+import {
+  assertStandaloneSession,
+  sessionOwnerProjectId,
+} from "../_sessions/owner";
 import {
   createSessionChat,
   ensureMainChat,
@@ -29,7 +32,7 @@ import {
 } from "./helpers";
 import { deleteQueuedMessages } from "./purge";
 import { findOpenTurn } from "../_chat/turnStore";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
@@ -204,6 +207,24 @@ export async function setSessionChatModel(
     chat.providerAccountId,
   );
   await ctx.db.patch(chat._id, { lastModel: model, providerAccountId });
+  await onChatAccountChanged(ctx, { chat, session }, providerAccountId);
+}
+
+/**
+ * Eva's chat holds her project's account: a new one there lifts a task's
+ * usage-limit hold, so the project's scheduler goes on.
+ */
+async function onChatAccountChanged(
+  ctx: MutationCtx,
+  { chat, session }: SessionChatContext,
+  providerAccountId: Id<"userProviderAccounts"> | undefined,
+): Promise<void> {
+  const projectId = sessionOwnerProjectId(session);
+  if (!chat.isMain || projectId === undefined) return;
+  if (providerAccountId === chat.providerAccountId) return;
+  await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
+    projectId,
+  });
 }
 
 /**
@@ -222,11 +243,12 @@ export const setProviderAccountId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatWithAccess(
+    const context = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
+    const { chat, session } = context;
     const providerAccountId = await assertProviderAccountUsableBy(
       ctx.db,
       args.providerAccountId,
@@ -237,6 +259,7 @@ export const setProviderAccountId = authMutation({
       ),
     );
     await ctx.db.patch(chat._id, { providerAccountId });
+    await onChatAccountChanged(ctx, context, providerAccountId);
     return null;
   },
 });

@@ -18,6 +18,8 @@ import {
   syncOwnedSessionWithTaskStatus,
 } from "../_sessions/ownedSession";
 import { requestCoordinatorWake } from "./coordinatorWake";
+import { evaChatSettings } from "./projectAccount";
+import { findWorkChat } from "../_sessions/ownerState";
 import { askFiledDuring, findOpenAsk } from "./reports";
 
 /**
@@ -49,7 +51,7 @@ export async function listProjectTasks(
 
 /** What every task's facts read of its project, loaded once. */
 export interface ProjectFactsContext {
-  project: Pick<Doc<"projects">, "_id" | "providerAccountId">;
+  project: Doc<"projects">;
   now: number;
   /** When the coordinator last finished a turn while it is idle now; undefined while it is busy or never ran. */
   coordinatorIdleSince?: number;
@@ -58,7 +60,7 @@ export interface ProjectFactsContext {
 /** Loads the project half of the facts (`ProjectFactsContext`). */
 export async function loadProjectFactsContext(
   db: DatabaseReader,
-  project: Pick<Doc<"projects">, "_id" | "providerAccountId">,
+  project: Doc<"projects">,
   now: number,
 ): Promise<ProjectFactsContext> {
   const owner: OwnedSessionOwner = { kind: "project", projectId: project._id };
@@ -96,6 +98,19 @@ function openAskHolder(
  * closed was stopped while it waited (`closeTaskReports`): it is halted as
  * stopped, so nothing restarts it.
  */
+/** Whether a task's chat already runs on the account Eva's chat runs on. */
+async function runsOnEvaAccount(
+  db: DatabaseReader,
+  project: Doc<"projects">,
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  const [eva, own] = await Promise.all([
+    evaChatSettings(db, project),
+    findWorkChat(db, { kind: "task", task }),
+  ]);
+  return own?.chat.providerAccountId === eva?.providerAccountId;
+}
+
 export async function projectTaskFacts(
   db: DatabaseReader,
   context: ProjectFactsContext,
@@ -110,11 +125,11 @@ export async function projectTaskFacts(
   // `task.run` also covers a run started before runs became chat turns.
   const runPending = task.run !== undefined || active;
   // The usage limit holds while its reset is ahead and the task would run
-  // on the same account again (it copies the project's at its next start).
+  // on the same account again (it takes Eva's at its next start).
   const usageLimited =
     latest?.usageLimited === true &&
     (latest.limitResetAt === undefined || latest.limitResetAt > now) &&
-    task.providerAccountId === project.providerAccountId;
+    (await runsOnEvaAccount(db, project, task));
   const halted =
     runPending || latest === null || latest.usageLimited || ask !== null
       ? undefined

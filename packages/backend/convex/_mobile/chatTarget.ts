@@ -180,7 +180,7 @@ export async function resolveMobileChat(
         parentId: chat._id,
         target: chat._id,
         canReply: chat.archived !== true && !isSessionArchived(session) && session.deletedAt === undefined,
-        model: chat.lastModel ?? session.lastModel,
+        model: chat.lastModel,
         providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
         sandboxActive,

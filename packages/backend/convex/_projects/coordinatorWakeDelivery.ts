@@ -47,12 +47,10 @@ export async function deliverPendingCoordinatorWakes(
     context,
     userId: project.userId,
     content: coordinatorWakeMessage(pending),
+    // A wake runs on Eva's chat picks, as a turn you start there does.
     settings: {
-      // Decision 20: the coordinator runs on the project's model and account.
-      model: normalizeAIModel(
-        project.model ?? context.chat.lastModel ?? repo?.defaultModel,
-      ),
-      providerAccountId: project.providerAccountId,
+      model: normalizeAIModel(context.chat.lastModel ?? repo?.defaultModel),
+      providerAccountId: context.chat.providerAccountId,
     },
   });
   for (const row of pending) await ctx.db.patch(row._id, { sentAt: now });

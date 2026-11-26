@@ -37,7 +37,6 @@ export {
 export {
   carriedAccountForProvider,
   defaultAccountForProvider,
-  projectPickerAccounts,
   toPickerAccounts,
   type PickerAccount,
 } from "./providerAccounts";

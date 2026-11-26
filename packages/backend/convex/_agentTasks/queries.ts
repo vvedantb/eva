@@ -6,7 +6,6 @@ import { internalQuery } from "../_generated/server";
 import {
   NON_DRAFT_TASK_STATUSES,
   OPEN_TASK_STATUSES,
-  aiModelValidator,
   prStateValidator,
   taskStatusValidator,
 } from "../validators";
@@ -459,7 +458,6 @@ const orchestratorTaskValidator = v.object({
   title: v.string(),
   status: taskStatusValidator,
   updatedAt: v.number(),
-  model: v.optional(aiModelValidator),
   /** Main run or chat turn: one sandbox-busy status (`taskIsExecuting`). */
   isExecuting: v.boolean(),
 });
@@ -485,7 +483,6 @@ export const getActiveTasksSlim = authQuery({
       title: task.title,
       status: task.status,
       updatedAt: task.updatedAt,
-      model: task.model,
       isExecuting: taskIsExecuting(task, openChatEntityIds),
     }));
   },

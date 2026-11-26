@@ -9,6 +9,9 @@ import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
+import { chatSeedFields, ensureWorkSession } from "../_sessions/ownedSession";
+import { normalizeAIModel } from "../validators";
+import { storedComposerTraits } from "../_shared/composerTraits";
 
 /**
  * Inserts a `todo` quick task on the automation's repo, as the automation's
@@ -36,10 +39,22 @@ export async function insertAutomationTask(
     updatedAt: now,
     createdBy: userId,
     baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-    model: automation.model ?? repo.defaultModel,
     numId,
   });
   await createTaskRunSummary(ctx, taskId, automation.repoId);
+  // The automation's model goes on the task's chat; without one the chat
+  // starts on the repo's defaults when first needed.
+  const task = automation.model !== undefined ? await ctx.db.get(taskId) : null;
+  if (task && automation.model !== undefined) {
+    await ensureWorkSession(
+      ctx,
+      { kind: "task", task },
+      chatSeedFields({
+        model: normalizeAIModel(automation.model),
+        traits: storedComposerTraits(null),
+      }),
+    );
+  }
   await ensureSubscribed(ctx, taskId, userId);
   await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
     taskId,

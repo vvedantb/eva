@@ -9,7 +9,7 @@ import { patchLoadedQuery } from "@vvedantb/server";
  * `projects.update` with an optimistic patch of `projects.get`, so field edits
  * land instantly wherever a project is shown.
  *
- * Nullable args (priority, leads, model, provider account) mean "clear" on the
+ * Nullable args (priority, leads) mean "clear" on the
  * wire but `undefined` in the document, so they cannot ride the plain spread —
  * each is mapped back to `undefined` here.
  */
@@ -20,8 +20,6 @@ export function useUpdateProject(projectId: Id<"projects">) {
         id: _id,
         priority,
         projectLead,
-        model,
-        providerAccountId,
         ...safeFields
       } = args;
       patchLoadedQuery(
@@ -37,10 +35,6 @@ export function useUpdateProject(projectId: Id<"projects">) {
               : {}),
             ...(projectLead !== undefined
               ? { projectLead: projectLead ?? undefined }
-              : {}),
-            ...(model !== undefined ? { model: model ?? undefined } : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
               : {}),
           },
       );

@@ -15,6 +15,11 @@ import { MAX_THREAD_REPLIES } from "./_messages/replies";
 import { joinThread } from "./_messages/threadParticipants";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
 import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
+import {
+  moveProjectModelToChat,
+  moveSessionModelToChat,
+  moveTaskModelToChat,
+} from "./_migrations/moveModelToChats";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -289,3 +294,38 @@ export const handTriageToEva = dataMigrations.define({
     await handProjectTriageToEva(ctx, project);
   },
 });
+
+/**
+ * One model per chat: tasks, projects and sessions move their stored model,
+ * traits and account onto their chat, then clear them
+ * (`_migrations/moveModelToChats.ts`). Idempotent. Run once after the deploy,
+ * before the schema drops the fields:
+ *
+ *   npx convex run dataMigrations:moveModelToChats --prod
+ */
+export const moveTaskModelsToChats = dataMigrations.define({
+  table: "agentTasks",
+  migrateOne: async (ctx, task) => {
+    await moveTaskModelToChat(ctx, task);
+  },
+});
+
+export const moveProjectModelsToChats = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    await moveProjectModelToChat(ctx, project);
+  },
+});
+
+export const moveSessionModelsToChats = dataMigrations.define({
+  table: "sessions",
+  migrateOne: async (ctx, session) => {
+    await moveSessionModelToChat(ctx, session);
+  },
+});
+
+export const moveModelToChats = dataMigrations.runner([
+  internal.dataMigrations.moveTaskModelsToChats,
+  internal.dataMigrations.moveProjectModelsToChats,
+  internal.dataMigrations.moveSessionModelsToChats,
+]);

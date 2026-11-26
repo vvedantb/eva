@@ -719,7 +719,6 @@ const sessionListItemSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number().optional(),
-  lastModel: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -732,7 +731,6 @@ const agentTaskSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number(),
-  model: z.string().optional(),
   projectId: z.string().optional(),
 });
 
@@ -744,7 +742,6 @@ const agentTaskListItemSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number(),
-  model: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -755,7 +752,6 @@ const projectDocSchema = z.object({
   numId: z.number().optional(),
   title: z.string(),
   updatedAt: z.number().optional(),
-  model: z.string().optional(),
 });
 
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
@@ -795,7 +791,6 @@ const sessionDocSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number().optional(),
-  lastModel: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
   linkedRepoCount: z.number().optional(),
@@ -910,7 +905,6 @@ export const orchestratorListAgents = internalAction({
           title: item.title,
           status: item.status,
           isExecuting: item.isExecuting,
-          model: item.lastModel,
           updatedAt: item.updatedAt ?? item._creationTime,
         });
       }
@@ -928,7 +922,6 @@ export const orchestratorListAgents = internalAction({
         title: task.title,
         status: task.status,
         isExecuting: task.isExecuting,
-        model: task.model,
         updatedAt: task.updatedAt,
       });
     }
@@ -1141,7 +1134,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: ownChat?.lastModel ?? session.lastModel,
+        model: ownChat?.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,

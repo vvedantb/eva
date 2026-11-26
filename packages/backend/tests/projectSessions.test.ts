@@ -5,8 +5,8 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
-import { ownedSessionBusy } from "../convex/_sessions/ownedSession";
-import { sessionAccountHolder } from "../convex/_projects/runSettings";
+import { ensureWorkSession, ownedSessionBusy } from "../convex/_sessions/ownedSession";
+import { sessionAccountHolder } from "../convex/_projects/projectAccount";
 import {
   buildProjectBranchName,
   buildTaskBranchName,
@@ -199,7 +199,7 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a person chatting in a child task runs on the project's account, unlocked as the project owner (decision 20)",
+    "a person chatting in a child task runs on Eva's account, unlocked as the project owner",
     async () => {
       const f = await fixture();
       const { creatorId, accountId } = await f.t.run(async (ctx) => {
@@ -216,14 +216,18 @@ describe("projects on sessions", () => {
           createdAt: now,
           updatedAt: now,
         });
-        await ctx.db.patch(f.projectId, {
-          model: DEFAULT_AI_MODEL,
-          providerAccountId: accountId,
-        });
+        // The project's account is the one Eva's chat runs on.
+        const project = await ctx.db.get(f.projectId);
+        if (!project) throw new Error("project missing");
+        await ensureWorkSession(
+          ctx,
+          { kind: "project", project },
+          { lastModel: DEFAULT_AI_MODEL, providerAccountId: accountId },
+        );
         await ctx.db.patch(f.taskId, { createdBy: creatorId });
         return { creatorId, accountId };
       });
-      // The task chat starts on the project's account before the task ever ran.
+      // The task chat starts on Eva's account before the task ever ran.
       const { sessionId, chatId } = await f.asUser.mutation(
         api.sessions.ensureOwned,
         { owner: { kind: "task", taskId: f.taskId } },

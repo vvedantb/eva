@@ -134,7 +134,6 @@ describe("createForkedSession", () => {
         forkSourceSandboxId: "sbx_source",
         planContent: "# Seed plan",
         lastInteractionMode: "plan",
-        lastModel: "claude:sonnet",
       });
       expect(fork?.branchName).not.toBe("eva/session-source");
       expect(queued).toEqual([]);

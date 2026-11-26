@@ -6,13 +6,13 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
 import { findMainChat } from "../_sessionChats/helpers";
 import {
+  aiModelValidator,
   deploymentStatusValidator,
+  normalizeAIModel,
   entityNumIdFields,
   softDeleteFields,
   prStateValidator,
   sessionStatusValidator,
-  aiModelValidator,
-  reasoningLevelValidator,
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import { isSessionArchived, listRepoSessionsByArchive } from "./archive";
@@ -72,11 +72,6 @@ const sessionListItemValidator = v.object({
   status: sessionStatusValidator,
   archived: v.boolean(),
   createdBy: v.optional(v.id("users")),
-  lastModel: v.optional(aiModelValidator),
-  lastReasoningLevel: v.optional(reasoningLevelValidator),
-  lastThinkingEnabled: v.optional(v.boolean()),
-  lastUse1mContext: v.optional(v.boolean()),
-  lastFastMode: v.optional(v.boolean()),
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   /**
@@ -144,11 +139,6 @@ function toSessionListItem(
     status: session.status,
     archived: isSessionArchived(session),
     createdBy: session.createdBy,
-    lastModel: session.lastModel,
-    lastReasoningLevel: session.lastReasoningLevel,
-    lastThinkingEnabled: session.lastThinkingEnabled,
-    lastUse1mContext: session.lastUse1mContext,
-    lastFastMode: session.lastFastMode,
     deploymentStatus: session.deploymentStatus,
     deploymentUrl: session.deploymentUrl,
     isExecuting: sessionIsExecuting(session, openSessionIds),
@@ -537,8 +527,8 @@ const ownedSessionRefValidator = v.object({
  * panels. `session` is null until the session exists; `chatId` absent until
  * the chat exists. `ensureOwned`
  * creates both. `chatSeed` is what the chat starts on (`chatSeedSettings`):
- * clients show it until the chat has its own picks. Null when the owner is
- * gone or not visible.
+ * clients show it until the chat has its own picks; `model` is the one it runs
+ * on now. Null when the owner is gone or not visible.
  */
 export const getOwnedWithSeed = authQuery({
   args: { owner: ownedSessionOwnerValidator },
@@ -546,15 +536,23 @@ export const getOwnedWithSeed = authQuery({
     v.object({
       session: v.union(ownedSessionRefValidator, v.null()),
       chatSeed: chatSeedValidator,
+      /** The model the owner runs on now: its chat's pick, else the seed's. */
+      model: aiModelValidator,
     }),
     v.null(),
   ),
   handler: async (ctx, args) => {
     const read = await readOwned(ctx.db, ctx.userId, args.owner);
     if (!read) return null;
+    const chatId = read.session?.chatId;
+    const [chatSeed, chat] = await Promise.all([
+      chatSeedSettings(ctx.db, read.entity),
+      chatId !== undefined ? ctx.db.get(chatId) : null,
+    ]);
     return {
       session: read.session,
-      chatSeed: await chatSeedSettings(ctx.db, read.entity),
+      chatSeed,
+      model: normalizeAIModel(chat?.lastModel ?? chatSeed.model),
     };
   },
 });

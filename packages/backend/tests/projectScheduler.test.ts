@@ -13,6 +13,7 @@ import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 import { modules } from "./_helpers/convexModules";
 import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
 import { ensureWorkSession } from "../convex/_sessions/ownedSession";
+import { findWorkChat } from "../convex/_sessions/ownerState";
 import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
 /**
@@ -205,7 +206,7 @@ describe("project scheduler", () => {
   );
 
   test(
-    "a task run copies the project's model and account at its start",
+    "a task's chat starts on Eva's model and account",
     async () => {
       const f = await fixture(1);
       const accountId = await f.t.run(async (ctx) => {
@@ -217,18 +218,23 @@ describe("project scheduler", () => {
           createdAt: 0,
           updatedAt: 0,
         });
-        await ctx.db.patch(f.projectId, {
-          model: "claude:opus",
-          providerAccountId: accountId,
-        });
-        await ctx.db.patch(f.tasks[0], { model: "claude:sonnet" });
+        const project = await ctx.db.get(f.projectId);
+        if (!project) throw new Error("no project");
+        await ensureWorkSession(
+          ctx,
+          { kind: "project", project },
+          { lastModel: "claude:opus", providerAccountId: accountId },
+        );
         return accountId;
       });
       await schedule(f);
       const task = await taskDoc(f, f.tasks[0]);
       expect(task.status).toBe("in_progress");
-      expect(task.model).toBe("claude:opus");
-      expect(task.providerAccountId).toBe(accountId);
+      const chat = await f.t.run(
+        async (ctx) => (await findWorkChat(ctx.db, { kind: "task", task }))?.chat,
+      );
+      expect(chat?.lastModel).toBe("claude:opus");
+      expect(chat?.providerAccountId).toBe(accountId);
     },
     TIMEOUT_MS,
   );

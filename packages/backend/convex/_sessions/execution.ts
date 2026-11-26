@@ -45,7 +45,7 @@ import {
   reviveCoordinatorSession,
   type OwnerEntity,
 } from "./ownedSession";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   notifyChatMentions,

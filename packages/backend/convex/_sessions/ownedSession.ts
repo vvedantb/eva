@@ -20,6 +20,7 @@ import {
 } from "../_git/branchNames";
 import {
   ensureMainChat,
+  findMainChat,
   type ChatSettingsSource,
 } from "../_sessionChats/helpers";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -39,7 +40,7 @@ import { requestSessionSandboxStop } from "./sandbox";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
-import { taskRunSettings } from "../_projects/runSettings";
+import { evaChatSettings } from "../_projects/projectAccount";
 
 /**
  * The hidden session behind a task (`owner: { kind: "task" }`, a quick task
@@ -87,14 +88,25 @@ export async function loadOwnerEntity(
 export async function ensureWorkSession(
   ctx: MutationCtx,
   target: OwnerEntity,
+  /** The new Main chat's picks; absent: `chatSeedSettings`. Ignored when the chat exists. */
+  seed?: ChatSettingsSource,
 ): Promise<OwnedSessionContext> {
   const found = await findWorkSession(ctx.db, target);
   const existing = found && (await reviveCoordinatorSession(ctx, found));
+  const settings = async () =>
+    seed ?? chatSeedFields(await chatSeedSettings(ctx.db, target));
   if (existing) {
-    return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
+    const mainChat = await findMainChat(ctx.db, existing._id);
+    return {
+      session: existing,
+      mainChat: mainChat ?? (await ensureMainChat(ctx, existing, await settings())),
+    };
   }
   const session = await insertWorkSession(ctx, target);
-  return { session, mainChat: await ensureMainChat(ctx, session) };
+  return {
+    session,
+    mainChat: await ensureMainChat(ctx, session, await settings()),
+  };
 }
 
 /**
@@ -139,8 +151,6 @@ export async function insertWorkSession(
     numId: await allocateNumId(ctx.db, seed.repoId, "sessions"),
     branchName: seed.branchName,
     baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
-    // Its Main chat copies these (`insertMainChat`).
-    ...chatSeedFields(await chatSeedSettings(ctx.db, target)),
     updatedAt: Date.now(),
   });
   // A multi-repo task's repos, cloned beside its own exactly as a multi-repo
@@ -218,51 +228,47 @@ export type ChatSeed = typeof chatSeedValidator.type;
 
 /**
  * The model, traits and provider account an owner's new chat starts on: the
- * one rule. `ensureOwnerChat` writes it into the chat it creates; `getOwnedWithSeed`
- * and the mobile chat target return it, so clients show it before the chat
- * exists (and for a chat with no sticky `lastModel`). From then on the chat
- * keeps its own sticky picks, apart from the owner's run settings.
+ * one rule. `ensureWorkSession` writes it into the chat it creates;
+ * `getOwnedWithSeed` and the mobile chat target return it, so clients show it
+ * before the chat exists. From then on the chat keeps its own picks.
  *
- * Model and account: the owner's run settings — a project's own, a task's
- * `taskRunSettings` (a project task takes its project's until its first run,
- * decision 20) — with the model falling back to the project's, then the repo
- * default, then `DEFAULT_AI_MODEL`. Traits: the model's defaults.
+ * A project child task starts on Eva's chat (its project's coordinator chat);
+ * anything else, and a child task before Eva's chat exists, on the repo's
+ * defaults, then `DEFAULT_AI_MODEL`.
  */
 export async function chatSeedSettings(
   db: DatabaseReader,
   entity: OwnerEntity,
 ): Promise<ChatSeed> {
-  const run =
-    entity.kind === "task"
-      ? await taskRunSettings(db, entity.task)
-      : entity.project;
+  if (entity.kind === "task" && entity.task.projectId !== undefined) {
+    const project = await db.get(entity.task.projectId);
+    const eva = project ? await evaChatSettings(db, project) : null;
+    if (eva?.lastModel !== undefined) {
+      return {
+        model: normalizeAIModel(eva.lastModel),
+        traits: storedComposerTraits(eva),
+        ...(eva.providerAccountId !== undefined
+          ? { providerAccountId: eva.providerAccountId }
+          : {}),
+      };
+    }
+  }
+  const repoId =
+    entity.kind === "task" ? entity.task.repoId : entity.project.repoId;
+  const repo = repoId !== undefined ? await db.get(repoId) : null;
   return {
-    model: normalizeAIModel(run.model ?? (await ownerFallbackModel(db, entity))),
-    traits: storedComposerTraits(null),
-    ...(run.providerAccountId !== undefined
-      ? { providerAccountId: run.providerAccountId }
-      : {}),
+    model: normalizeAIModel(repo?.defaultModel),
+    traits: {
+      effortLevel: repo?.defaultReasoningLevel,
+      thinkingEnabled: repo?.defaultThinkingEnabled,
+      use1mContext: repo?.defaultUse1mContext,
+      fastMode: repo?.defaultFastMode,
+    },
   };
 }
 
-/** A project task's project model, else the owner's repo default. */
-async function ownerFallbackModel(
-  db: DatabaseReader,
-  entity: OwnerEntity,
-): Promise<Doc<"githubRepos">["defaultModel"]> {
-  if (entity.kind === "project") {
-    return (await db.get(entity.project.repoId))?.defaultModel;
-  }
-  const { task } = entity;
-  const project =
-    task.projectId !== undefined ? await db.get(task.projectId) : null;
-  if (project?.model !== undefined) return project.model;
-  const repoId = task.repoId ?? project?.repoId;
-  return repoId !== undefined ? (await db.get(repoId))?.defaultModel : undefined;
-}
-
-/** A seed as the chat (or session) columns it is written to. */
-function chatSeedFields(seed: ChatSeed): ChatSettingsSource {
+/** A seed as the chat columns it is written to. */
+export function chatSeedFields(seed: ChatSeed): ChatSettingsSource {
   return {
     lastModel: seed.model,
     provider: getAIModelProvider(seed.model),

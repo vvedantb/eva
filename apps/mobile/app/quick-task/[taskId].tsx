@@ -3,8 +3,10 @@ import {
   getAIModelProvider,
   normalizeAIModel,
   taskScheduledAt,
+  type AIModel,
   type Id,
 } from "@eva/backend";
+import { useTaskChatModel } from "@/quickTasks/useTaskChatModel";
 import {
   PRIORITY_LABELS,
   TASK_STATUS_LABELS,
@@ -202,6 +204,7 @@ function TaskOverview({
   });
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
+  const taskModel = useTaskChatModel(task._id);
 
   const editable = !readOnly && runFacts !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
@@ -283,7 +286,7 @@ function TaskOverview({
           <TaskDescription
             description={task.description}
             repoId={repo._id}
-            model={task.model}
+            model={taskModel}
             editable={editable}
             reactions={reactionsFor("description", task._id)}
             onSave={(description) =>
@@ -343,7 +346,7 @@ function TaskOverview({
               currentUserId={currentUserId}
               taskId={task._id}
               repoId={repo._id}
-              model={task.model}
+              model={taskModel}
               users={users}
               mode={commentMode}
               onModeChange={changeCommentMode}
@@ -537,7 +540,7 @@ function CommentComposer({
   currentUserId: Id<"users">;
   taskId: Id<"agentTasks">;
   repoId: Id<"githubRepos">;
-  model: QuickTask["model"];
+  model: AIModel | undefined;
   users: User[] | undefined;
   mode: CommentMode;
   onModeChange: (mode: CommentMode) => void;

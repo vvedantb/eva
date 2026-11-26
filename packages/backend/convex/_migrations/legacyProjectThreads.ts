@@ -184,7 +184,6 @@ async function createEarlierWorkThread(
   },
 ): Promise<Id<"agentTasks">> {
   const { project, tasks, reviewTasks, pr, oldBranch, now } = params;
-  const repo = await ctx.db.get(project.repoId);
   const prNumber = extractPrNumber(pr.prUrl);
   const folded = reviewTasks
     .map(
@@ -206,7 +205,6 @@ async function createEarlierWorkThread(
     updatedAt: now,
     createdBy: project.userId,
     baseBranch: project.baseBranch,
-    model: project.model ?? repo?.defaultModel,
     projectId: project._id,
     taskNumber: maxTaskNumberOf(tasks) + 1,
     approvedAt: now,

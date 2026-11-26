@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactMutation } from "convex/react";
-import type { api, Doc, Id, normalizeAIModel } from "@eva/backend";
+import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   Select,
@@ -25,7 +25,7 @@ import {
   IconInfoCircle,
   IconBrandVercelFilled,
 } from "@tabler/icons-react";
-import { getUserInitials, storedRunTraits, toRunTraitArgs } from "@eva/shared";
+import { getUserInitials } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import {
@@ -40,7 +40,6 @@ import {
   type Priority,
 } from "@/lib/components/priority/priorityMeta";
 import { BranchSelect } from "@/lib/components/BranchSelect";
-import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import {
   FIELD_ROW_CLASS,
   FIELD_TEXT_CLASS,
@@ -54,10 +53,6 @@ import {
   NO_PRIORITY_VALUE,
   UNASSIGNED_VALUE,
 } from "./task-detail-constants";
-import type {
-  useAvailableAiModels,
-  useTaskOwnerProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
 
 /** The task branch's latest deployment (`agentTasks.getRunFacts`). */
 export type TaskDeploymentStatus = NonNullable<
@@ -65,7 +60,6 @@ export type TaskDeploymentStatus = NonNullable<
 >["deploymentStatus"];
 type Users = FunctionReturnType<typeof api.users.listAll> | undefined;
 type ProjectOptions = FunctionReturnType<typeof api.projects.list>;
-type TaskDoc = Doc<"agentTasks"> | undefined;
 type UpdateTask = ReactMutation<typeof api.agentTasks.update>;
 type UpdateStatus = ReactMutation<typeof api.agentTasks.updateStatus>;
 
@@ -274,72 +268,6 @@ export function ReviewerSelectField({
         </SelectGroup>
       </SelectContent>
     </Select>
-  );
-}
-
-export function ModelField({
-  taskId,
-  task,
-  currentModel,
-  modelOptions,
-  accounts,
-  resolveAccountId,
-  modelLockReason,
-  isOwner,
-  updateTask,
-}: {
-  taskId: Id<"agentTasks">;
-  task: TaskDoc;
-  currentModel: ReturnType<typeof normalizeAIModel>;
-  modelOptions: ReturnType<typeof useAvailableAiModels>["options"];
-  accounts: ReturnType<typeof useTaskOwnerProviderAccounts>["options"];
-  resolveAccountId: ReturnType<
-    typeof useTaskOwnerProviderAccounts
-  >["resolveId"];
-  modelLockReason: string | undefined;
-  isOwner: boolean;
-  updateTask: UpdateTask;
-}) {
-  return (
-    <div className={FIELD_ROW_CLASS}>
-      <ModelSelectWithTraits
-        value={currentModel}
-        options={modelOptions}
-        onValueChange={() => undefined}
-        accounts={accounts}
-        accountId={task?.providerAccountId ?? null}
-        onSelectionChange={(nextModel, nextAccountId) => {
-          if (modelLockReason) return;
-          if (isOwner) {
-            updateTask({
-              id: taskId,
-              model: nextModel,
-              providerAccountId: resolveAccountId(nextAccountId) ?? null,
-            });
-            return;
-          }
-          updateTask({ id: taskId, model: nextModel });
-        }}
-        canSelectTeamWhilePersonal={isOwner}
-        disabled={modelLockReason !== undefined}
-        traits={storedRunTraits(task)}
-        onTraitsChange={(partial) =>
-          updateTask({ id: taskId, ...toRunTraitArgs(partial) })
-        }
-        className={`px-0 ${FIELD_TEXT_CLASS}`}
-      />
-      {modelLockReason ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <IconInfoCircle
-              size={12}
-              className="cursor-help text-muted-foreground"
-            />
-          </TooltipTrigger>
-          <TooltipContent>{modelLockReason}</TooltipContent>
-        </Tooltip>
-      ) : null}
-    </div>
   );
 }
 

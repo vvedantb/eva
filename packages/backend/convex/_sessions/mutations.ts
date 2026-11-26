@@ -21,7 +21,7 @@ import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 import {
   assertProviderAccountUsableBy,
   resolveDefaultProviderAccountId,
@@ -191,17 +191,6 @@ export async function createSession(
     ...(args.stackOnPrNumber !== undefined
       ? { stackOnPrNumber: args.stackOnPrNumber }
       : {}),
-    providerAccountId,
-    // The provider the session started on. Informational only — the composer
-    // may move the session onto another provider later.
-    provider: getAIModelProvider(model),
-    lastModel: model,
-    ...composerTraitFields({
-      reasoningLevel,
-      thinkingEnabled,
-      use1mContext,
-      fastMode,
-    }),
     ...(sessionGroupId ? { sessionGroupId } : {}),
     ...(fork
       ? {
@@ -215,9 +204,21 @@ export async function createSession(
   await ctx.db.patch(sessionId, { branchName });
   const created = await ctx.db.get(sessionId);
   if (!created) throw new Error("Session was not created");
-  // The Main chat is the session's own transcript; the first message queues
-  // on it, and `ensureMainChat` carries the session's composer picks over.
-  const mainChat = await ensureMainChat(ctx, created);
+  // The Main chat is the session's own transcript and holds its composer
+  // picks; the first message queues on it.
+  const mainChat = await ensureMainChat(ctx, created, {
+    providerAccountId,
+    // The provider the chat started on. Informational only — the composer
+    // may move the chat onto another provider later.
+    provider: getAIModelProvider(model),
+    lastModel: model,
+    ...composerTraitFields({
+      reasoningLevel,
+      thinkingEnabled,
+      use1mContext,
+      fastMode,
+    }),
+  });
 
   // Every linked repo is checked out on the SAME branch name as the primary,
   // off its own default base.

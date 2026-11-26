@@ -1,4 +1,4 @@
-import { getAIModelProvider, normalizeAIModel, type Doc, type Id } from "@eva/backend";
+import { getAIModelProvider, normalizeAIModel, type AIModel, type Id } from "@eva/backend";
 import { mentionTokensToEditableText } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { ReactionGroup } from "@eva/shared/taskDetail";
@@ -100,7 +100,8 @@ export function TaskDescription({
 }: {
   description: string | undefined;
   repoId: Id<"githubRepos">;
-  model: Doc<"agentTasks">["model"];
+  /** The task chat's model (`useTaskChatModel`); its provider scopes the @-mentions. */
+  model: AIModel | undefined;
   editable: boolean;
   reactions: { groups: ReactionGroup[]; toggle: (emoji: string) => void };
   onSave: (description: string) => void;
