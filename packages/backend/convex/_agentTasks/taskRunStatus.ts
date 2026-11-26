@@ -95,20 +95,24 @@ export async function lastTaskRunOutcome(
   return null;
 }
 
+/** The task's last run failed: when, and the turn's error if it kept one. */
+export type TaskRunFailure = { at: number; error?: string };
+
 /**
- * When the task's last run failed, if that is still its latest outcome: the
+ * The task's last run failure, if that is still its latest outcome: the
  * newest finished reply turn is a failed task-mode turn and none is open. A
- * later chat reply or run clears it.
+ * later chat reply or run clears it. The error is the turn's own, so no
+ * extra read for its reply.
  */
-export async function taskRunFailedAt(
+export async function taskRunFailure(
   db: DatabaseReader,
   task: Doc<"agentTasks">,
-): Promise<number | null> {
+): Promise<TaskRunFailure | null> {
   const session = await findWorkSession(db, { kind: "task", task });
   if (!session || (await hasOpenReplyTurn(db, session._id))) return null;
   for await (const turn of closedReplyTurns(db, session._id)) {
     if (turn.taskRun === undefined || turn.state !== "error") return null;
-    return turn.finishedAt ?? turn.turnStartedAt;
+    return { at: turn.finishedAt ?? turn.turnStartedAt, error: turn.error };
   }
   return null;
 }

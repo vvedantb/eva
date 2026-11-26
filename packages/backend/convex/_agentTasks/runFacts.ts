@@ -9,7 +9,7 @@ import {
 import { deploymentStatusValidator } from "../validators";
 import { findWorkSession } from "../_sessions/owner";
 import { taskHasRun } from "./runSummary";
-import { hasActiveTaskRun, taskRunFailedAt } from "./taskRunStatus";
+import { hasActiveTaskRun, taskRunFailure } from "./taskRunStatus";
 
 /**
  * What the task page, card menu and phone need to know about a task's runs:
@@ -46,7 +46,7 @@ export const getRunFacts = authQuery({
 
 /**
  * The tasks, of those named, whose last run failed and that is still their
- * latest outcome (`taskRunFailedAt`): the failed badge on task lists and
+ * latest outcome (`taskRunFailure`): the failed badge on task lists and
  * project panels. A task of `repoId` needs only the draft check; any other
  * task the full access check.
  */
@@ -67,7 +67,7 @@ export const getTaskIdsWithFailedRun = authQuery({
             ? isTaskVisibleTo(task, ctx.userId)
             : await hasTaskAccess(ctx.db, task, ctx.userId);
         if (!visible) return null;
-        return (await taskRunFailedAt(ctx.db, task)) !== null ? taskId : null;
+        return (await taskRunFailure(ctx.db, task)) !== null ? taskId : null;
       }),
     );
     return failed.filter((id): id is Id<"agentTasks"> => id !== null);

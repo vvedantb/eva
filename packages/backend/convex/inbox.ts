@@ -118,7 +118,7 @@ function needsYouInboxRow(row: NeedsYouRow, fromNotification: boolean): InboxRow
     kind: "chat",
     contextLabel: inboxContextLabel(row),
     title: row.title,
-    preview: row.detail,
+    preview: row.detail ? inboxPreview(row.detail) : undefined,
     at: row.at,
     unread: fromNotification,
     action: inboxActionForNeedsYou(row),
@@ -156,11 +156,12 @@ async function loadInboxChat(
   const sessionId = db.normalizeId("sessions", parentId);
   if (sessionId) {
     const doc = await db.get(sessionId);
-    // A task's or project's session is listed through its owner.
-    return doc &&
-      doc.owner.kind === "standalone" &&
-      doc.deletedAt === undefined &&
-      !isSessionArchived(doc)
+    if (!doc) return null;
+    // A task's or project's session is listed through its owner, so a link to
+    // it ("/sessions/N") folds into the owner's row.
+    const ownerId = sessionOwnerEntityId(doc);
+    if (ownerId !== undefined) return await loadInboxChat(db, ownerId);
+    return doc.deletedAt === undefined && !isSessionArchived(doc)
       ? { kind: "session", doc }
       : null;
   }
@@ -215,7 +216,9 @@ async function newChatRows(
       );
       return owned.flatMap((row, index) => {
         const chat = chats[index];
-        if (!chat || !tookPart(userId, chat, row)) return [];
+        // An owned session's row maps to its owner, which has its own read row.
+        if (!chat || chat.doc._id !== row.parentId) return [];
+        if (!tookPart(userId, chat, row)) return [];
         const activityAt = lastChatActivityAt(chat.doc);
         if (!isNewSinceLooked(row, activityAt)) return [];
         return [{ repo, chat, row, activityAt: activityAt ?? 0 }];
@@ -434,11 +437,7 @@ async function chatOfTarget(
   const sessionId = chatId
     ? (await db.get(chatId))?.sessionId
     : db.normalizeId("sessions", chatTarget);
-  if (sessionId) {
-    const session = await db.get(sessionId);
-    if (!session) return null;
-    return await loadInboxChat(db, sessionOwnerEntityId(session) ?? session._id);
-  }
+  if (sessionId) return await loadInboxChat(db, sessionId);
   const ownerId =
     db.normalizeId("agentTasks", chatTarget) ?? db.normalizeId("projects", chatTarget);
   return ownerId ? await loadInboxChat(db, ownerId) : null;
@@ -446,47 +445,72 @@ async function chatOfTarget(
 
 /**
  * Done: the chat leaves New since you looked until something newer happens
- * in it. It does not move the read time, so Undo brings the row back as it was.
+ * in it. It does not move the read time, so Undo brings the row back as it
+ * was. A notification the row holds (`notificationId`) is marked read too, so
+ * History does not keep it unread; Undo marks it unread again.
  */
 export const markDone = authMutation({
-  args: { chatId: inboxChatIdValidator },
-  /** The Done time it replaced, for Undo. */
-  returns: v.object({ previousDoneAt: v.optional(v.number()) }),
+  args: {
+    chatId: inboxChatIdValidator,
+    notificationId: v.optional(v.id("notifications")),
+  },
+  /** What Undo puts back: the Done time it replaced, and the notification it read. */
+  returns: v.object({
+    previousDoneAt: v.optional(v.number()),
+    readNotificationId: v.optional(v.id("notifications")),
+  }),
   handler: async (ctx, args) => {
-    const [entity, row] = await Promise.all([
+    const [entity, row, notification] = await Promise.all([
       ctx.db.get(args.chatId),
       getReadRow(ctx.db, ctx.userId, args.chatId),
+      args.notificationId === undefined ? null : ctx.db.get(args.notificationId),
     ]);
     const repoId = entity?.repoId;
     if (repoId === undefined || !(await hasRepoAccess(ctx.db, repoId, ctx.userId))) {
       throw new Error("Not found");
     }
     const now = Date.now();
-    if (!row) {
-      await ctx.db.insert("chatReads", {
-        userId: ctx.userId,
-        parentId: args.chatId,
-        repoId,
-        lastReadAt: now,
-        doneAt: now,
-      });
-      return {};
-    }
-    await ctx.db.patch(row._id, { doneAt: now });
-    return { previousDoneAt: row.doneAt };
+    const readNotificationId =
+      notification && notification.userId === ctx.userId && !notification.read
+        ? notification._id
+        : undefined;
+    await Promise.all([
+      readNotificationId === undefined
+        ? null
+        : ctx.db.patch(readNotificationId, { read: true }),
+      row
+        ? ctx.db.patch(row._id, { doneAt: now })
+        : ctx.db.insert("chatReads", {
+            userId: ctx.userId,
+            parentId: args.chatId,
+            repoId,
+            lastReadAt: now,
+            doneAt: now,
+          }),
+    ]);
+    return { previousDoneAt: row?.doneAt, readNotificationId };
   },
 });
 
-/** Undo Done: puts back the Done time `markDone` replaced. */
+/** Undo Done: puts back the Done time `markDone` replaced, and the notification it read. */
 export const undoDone = authMutation({
   args: {
     chatId: inboxChatIdValidator,
     previousDoneAt: v.optional(v.number()),
+    readNotificationId: v.optional(v.id("notifications")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const row = await getReadRow(ctx.db, ctx.userId, args.chatId);
-    if (row) await ctx.db.patch(row._id, { doneAt: args.previousDoneAt });
+    const [row, notification] = await Promise.all([
+      getReadRow(ctx.db, ctx.userId, args.chatId),
+      args.readNotificationId === undefined ? null : ctx.db.get(args.readNotificationId),
+    ]);
+    await Promise.all([
+      row ? ctx.db.patch(row._id, { doneAt: args.previousDoneAt }) : null,
+      notification && notification.userId === ctx.userId
+        ? ctx.db.patch(notification._id, { read: false })
+        : null,
+    ]);
     return null;
   },
 });
