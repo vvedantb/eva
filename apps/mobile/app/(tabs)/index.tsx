@@ -73,7 +73,15 @@ export default function InboxScreen() {
   };
 
   const historyToggle = (
-    <View className="items-start px-2 py-2">
+    // Sticky footer: under the list, above the tab bar, so it stays put on scroll.
+    <View
+      className="items-start px-2 pt-2"
+      style={{
+        paddingBottom: tabBarReserve(largerText, insets.bottom),
+        borderTopWidth: 1,
+        borderColor: EVA_THEME[scheme].border,
+      }}
+    >
       <Button
         size="sm"
         variant="ghost"
@@ -104,7 +112,6 @@ export default function InboxScreen() {
       ) : rows.length === 0 ? (
         <View className="flex-1">
           <EmptyState icon={IconInbox} title={history ? "No notifications yet" : "Nothing new since you looked"} />
-          {historyToggle}
         </View>
       ) : (
         <SectionList
@@ -132,12 +139,11 @@ export default function InboxScreen() {
               onDone={done}
             />
           )}
-          ListFooterComponent={historyToggle}
           // A scroll closes a row swiped open.
           onScrollBeginDrag={closeSwipeRows}
-          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
+      {rows === undefined ? null : historyToggle}
     </TabScreen>
   );
 }
