@@ -22,7 +22,7 @@ export const REPO_EVENT_LABELS: Record<RepoEventKind, string> = {
   issue_labeled: "an issue gets a label",
   pr_opened: "a PR is opened",
   pr_merged: "a PR is merged",
-  pr_updated: "a commit is pushed to a PR",
+  pr_updated: "a PR is opened or updated",
   production_alert: "an Axiom monitor alerts",
 };
 
