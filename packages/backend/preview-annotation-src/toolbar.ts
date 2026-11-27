@@ -143,6 +143,7 @@ const LIGHT_THEME: ToolbarTheme = {
   badgeBg: "oklch(0.2103 0 0)",
   badgeText: "oklch(0.9702 0 0)",
   disc: "oklch(0.98 0 0)",
+  destructive: "oklch(0.6532 0.2335 25.74)",
 };
 const DARK_THEME: ToolbarTheme = {
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -159,6 +160,7 @@ const DARK_THEME: ToolbarTheme = {
   badgeBg: "rgb(250, 250, 250)",
   badgeText: "rgb(34, 35, 37)",
   disc: "rgb(48, 49, 52)",
+  destructive: "oklch(0.594 0.1973 24.63)",
 };
 
 /** Sizes mirror the old bar: `p-1` pill, `size-8` buttons, `size-4` icons. */
@@ -174,6 +176,7 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 button[hidden], .tools[hidden], .notice[hidden], .badge[hidden], .tip[hidden] { display: none; }
 .handle, .handle:hover { cursor: grab; touch-action: none; background: none; }
 .handle:active { cursor: grabbing; }
+.handle svg.icon { color: var(--destructive); }
 .tools { display: flex; align-items: center; gap: 2px; }
 svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 svg.mark { width: 32px; height: 32px; }
@@ -482,6 +485,7 @@ export function mountToolbar(
       "--badge-bg": theme.badgeBg,
       "--badge-text": theme.badgeText,
       "--disc": theme.disc,
+      "--destructive": theme.destructive,
     };
     for (const [name, value] of Object.entries(vars)) {
       host.style.setProperty(name, value);

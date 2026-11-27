@@ -1599,6 +1599,7 @@ function evaPreviewAnnotationScript(): void {
       badgeBg: read("badgeBg"),
       badgeText: read("badgeText"),
       disc: read("disc"),
+      destructive: read("destructive"),
     };
     return Object.values(theme).some((entry) => entry === "") ? null : theme;
   }

@@ -68,4 +68,6 @@ export interface PreviewToolbarTheme {
   badgeText: string;
   /** `bg-card`, the disc behind the Eva mark. */
   disc: string;
+  /** `text-destructive`, the close X. */
+  destructive: string;
 }

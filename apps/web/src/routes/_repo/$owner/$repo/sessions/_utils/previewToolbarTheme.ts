@@ -27,7 +27,8 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
   const active = probe("bg-secondary text-primary");
   const badge = probe("bg-foreground text-background");
   const disc = probe("bg-card");
-  const probes = [surface, tip, idle, hover, active, badge, disc];
+  const destructive = probe("text-destructive");
+  const probes = [surface, tip, idle, hover, active, badge, disc, destructive];
   document.body.append(...probes);
   try {
     const surfaceStyle = getComputedStyle(surface);
@@ -49,6 +50,7 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
       badgeBg: badgeStyle.backgroundColor,
       badgeText: badgeStyle.color,
       disc: getComputedStyle(disc).backgroundColor,
+      destructive: getComputedStyle(destructive).color,
     };
   } finally {
     for (const element of probes) element.remove();
