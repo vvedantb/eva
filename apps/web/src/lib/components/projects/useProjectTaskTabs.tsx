@@ -237,3 +237,5 @@ export function useProjectTaskTabRows(
     selectedLoading: tabs.selected !== null && loading,
   };
 }
+
+export type ProjectTaskTabRows = ReturnType<typeof useProjectTaskTabRows>;

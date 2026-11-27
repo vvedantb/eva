@@ -20,12 +20,21 @@ import { useProjectMenu } from "@/lib/components/projects/_components/useProject
 import { useRecapChat } from "@/lib/components/chat/useRecapChat";
 import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
+import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import { useTaskDetail } from "@/lib/components/tasks/useTaskDetail";
+import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailControls";
 import { ProjectArchiveDialog } from "./ProjectArchiveDialog";
 import { useProjectArchive } from "./useProjectArchive";
 import type {
   ProjectDetailProject,
   ProjectSandboxState,
 } from "./projectDetailHelpers";
+
+/** The chat the coordinator view shows: Eva's, an open task tab's, or a task tab still loading. */
+export type ProjectShownChat =
+  | { kind: "eva" }
+  | { kind: "task"; taskId: Id<"agentTasks"> }
+  | { kind: "loading" };
 
 interface ProjectDetailHeaderActionsProps {
   projectId: Id<"projects">;
@@ -35,6 +44,8 @@ interface ProjectDetailHeaderActionsProps {
   /** The project's main chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
+  /** The start/stop control acts on this chat's sandbox. */
+  shownChat: ProjectShownChat;
 }
 
 export function ProjectDetailHeaderActions({
@@ -44,6 +55,7 @@ export function ProjectDetailHeaderActions({
   sandbox,
   chatId,
   chatTurnOpen,
+  shownChat,
 }: ProjectDetailHeaderActionsProps) {
   const {
     isSandboxActive,
@@ -113,10 +125,16 @@ export function ProjectDetailHeaderActions({
             isArchiving={projectArchive.isArchiving}
           />
           {/* One control for both directions — see `SandboxStartStopButton`.
-            Inert while a chat turn is in flight. This is the
-            only wake/sleep control. The coordinator is read-only: no
+            Inert while a chat turn is in flight. This is the only
+            wake/sleep control, and it follows the shown chat tab: a project
+            task runs on its own sandbox. The coordinator is read-only: no
             Commit & push. */}
-          {isArchived ? null : (
+          {isArchived || shownChat.kind === "loading" ? null : shownChat.kind === "task" ? (
+            <ProjectTaskSandboxButton
+              key={shownChat.taskId}
+              taskId={shownChat.taskId}
+            />
+          ) : (
             <SandboxStartStopButton
               isActive={isSandboxActive}
               isToggling={isSandboxStarting || isSandboxStopping}
@@ -130,5 +148,36 @@ export function ProjectDetailHeaderActions({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Start/stop for an open task tab's own sandbox (its session, not the
+ * project's). Same rule as the task's chat: stop while active, start when
+ * the task may start one.
+ */
+function ProjectTaskSandboxButton({ taskId }: { taskId: Id<"agentTasks"> }) {
+  const {
+    isLoading,
+    canStartSandbox,
+    isSandboxActive,
+    isSandboxStarting,
+    isSandboxStopping,
+    taskSession,
+    handleStartSandbox,
+    handleStopSandbox,
+  } = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
+  const turnOpen = useChatTurnOpen(taskSession.owned?.chatId);
+  if (isLoading || !(canStartSandbox || isSandboxActive)) return null;
+  return (
+    <SandboxStartStopButton
+      isActive={isSandboxActive}
+      isToggling={isSandboxStarting || isSandboxStopping}
+      onToggle={(action) => {
+        if (action === "start") void handleStartSandbox();
+        else void handleStopSandbox();
+      }}
+      isAssistantResponding={turnOpen === true}
+    />
   );
 }

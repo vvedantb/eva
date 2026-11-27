@@ -9,9 +9,9 @@ import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
 import { ProjectChatTabs } from "@/lib/components/projects/ProjectChatTabs";
 import { ProjectTaskChat } from "@/lib/components/projects/ProjectTaskChat";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
-import {
-  useProjectTaskTabRows,
-  type ProjectTaskTabs,
+import type {
+  ProjectTaskTabRows,
+  ProjectTaskTabs,
 } from "@/lib/components/projects/useProjectTaskTabs";
 import { entityPathSegment } from "@/lib/numId";
 import {
@@ -46,6 +46,8 @@ interface ProjectDetailSandboxContentProps {
   onCloseThread: () => void;
   /** The chat tabs: Eva, then the open tasks (`useProjectTaskTabs`). */
   taskTabs: ProjectTaskTabs;
+  /** The open task tabs' rows (`useProjectTaskTabRows`). */
+  taskTabRows: ProjectTaskTabRows;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -65,6 +67,7 @@ export function ProjectDetailSandboxContent({
   onThreadOpen,
   onCloseThread,
   taskTabs,
+  taskTabRows,
   openFile,
   openDiffs,
   openAgentsTab,
@@ -82,11 +85,7 @@ export function ProjectDetailSandboxContent({
   // An archived project opens read-only: no wake, no composer.
   const isArchived = project.archivedAt !== undefined;
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
-  const { rows, selectedRow, selectedLoading } = useProjectTaskTabRows(
-    projectId,
-    repoId,
-    taskTabs,
-  );
+  const { rows, selectedRow, selectedLoading } = taskTabRows;
   // Eva's tab is selected unless a task tab is (or its row still loads).
   const onEva = selectedRow === undefined && !selectedLoading;
 
