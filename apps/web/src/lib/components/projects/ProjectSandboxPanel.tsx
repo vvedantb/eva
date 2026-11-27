@@ -3,8 +3,10 @@
 import type { Id, SandboxOwner } from "@eva/backend";
 import { IconChecklist, IconMessages } from "@tabler/icons-react";
 import { useQueryState } from "nuqs";
+import { ReplyThreadList } from "@/lib/components/chat/replies/ReplyThreadList";
 import { ReplyThreadView } from "@/lib/components/chat/replies/ReplyThreadView";
-import { replyThreadParser } from "@/lib/search-params";
+import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
+import { messageLinkParser, replyThreadParser } from "@/lib/search-params";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -53,7 +55,7 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "files",
 ]);
 
-/** The rail tab of an open reply thread; same descriptor shape as Tasks. */
+/** The rail tab of the reply threads; same descriptor shape as Tasks. */
 const REPLIES_TAB: SandboxTabDescriptor = {
   value: "replies",
   label: "Replies",
@@ -85,7 +87,7 @@ interface ProjectSandboxPanelProps {
   onToggle?: () => void;
   /** Mini-player title; Expand returns to this project's Preview tab. */
   title: string;
-  /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
+  /** ✕ on an open thread: back to the Replies list. */
   onCloseThread: () => void;
   /**
    * The selected chat tab's task (`?task=`): the panel shows its tabs only.
@@ -130,8 +132,14 @@ export function ProjectSandboxPanel({
   onOpenTask,
   onAskEva,
 }: ProjectSandboxPanelProps) {
-  // An open reply thread adds the Replies tab (projects v2, PR D).
+  // The Replies tab always shows: the thread list, or the open `?thread=`.
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
+  // ↑ and ↓ in a thread also point the chat at that message (`?message=`),
+  // which scrolls it into view.
+  const [, setLinkedMessage] = useQueryState(
+    MESSAGE_LINK_PARAM,
+    messageLinkParser,
+  );
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
@@ -160,17 +168,14 @@ export function ProjectSandboxPanel({
   // The coordinator only reads code and delegates: no dev server, no edits,
   // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
-  // Replies without an open thread (an old link) lands on Tasks too, as
-  // does a task tab on Eva's tab.
+  // A task tab on Eva's tab lands on Tasks too.
   const activeTab: ProjectSandboxTab = taskSelected
     ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
       ? sandboxTab
       : selectedTask
         ? defaultProjectTaskTab(selectedTask)
         : "tasks"
-    : COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
-        isProjectTaskTab(sandboxTab) ||
-        (sandboxTab === "replies" && !threadId)
+    : COORDINATOR_HIDDEN_TABS.has(sandboxTab) || isProjectTaskTab(sandboxTab)
       ? "tasks"
       : sandboxTab;
   const needsYouCount = taskStatus?.counts.blocked ?? 0;
@@ -256,9 +261,7 @@ export function ProjectSandboxPanel({
                 ? projectTaskRailTabs(taskTabs)
                 : taskSelected
                   ? [tasksTab]
-                  : threadId
-                  ? [tasksTab, REPLIES_TAB]
-                  : [tasksTab]
+                  : [tasksTab, REPLIES_TAB]
             }
             showArtifactsTab={!taskSelected}
             showDocumentsTab={!taskSelected}
@@ -302,16 +305,26 @@ export function ProjectSandboxPanel({
             active={activeTab === "replies"}
             className="flex h-full min-h-0 flex-col overflow-hidden"
           >
-            {threadId && chatKeys.parentId ? (
-              <ReplyThreadView
-                rootId={threadId}
-                chatParentId={chatKeys.parentId}
-                repo={{ id: repoId, basePath }}
-                model={chatBinding.model}
-                isOpen={activeTab === "replies"}
-                onOpen={(rootId) => void setThreadId(rootId)}
-                onClose={onCloseThread}
-              />
+            {chatKeys.parentId ? (
+              threadId ? (
+                <ReplyThreadView
+                  rootId={threadId}
+                  chatParentId={chatKeys.parentId}
+                  repo={{ id: repoId, basePath }}
+                  model={chatBinding.model}
+                  isOpen={activeTab === "replies"}
+                  onOpen={(rootId) => {
+                    void setThreadId(rootId);
+                    void setLinkedMessage(rootId);
+                  }}
+                  onClose={onCloseThread}
+                />
+              ) : (
+                <ReplyThreadList
+                  chatParentId={chatKeys.parentId}
+                  onOpen={(rootId) => void setThreadId(rootId)}
+                />
+              )
             ) : null}
           </KeepAlivePane>
           {/* The coordinator has no Files tab. */}
