@@ -1062,16 +1062,10 @@ export const getPreviewUrl = action({
       throw new Error("Not authenticated");
     }
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    // A Preview/custom-tab open is a human interaction for the idle-pause
-    // sweep. Readiness polls repeat every 3s, but the touch is throttled
-    // server-side so the steady state is read-only.
-    if (args.checkReady || args.navigationSync) {
-      await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-        sandboxId: args.sandboxId,
-        source: "preview-tab",
-        clerkUserId: identity.subject,
-      });
-    }
+    // Not an interaction for idle pause: every sandbox rail resolves this URL
+    // on mount, on start and every 3s until ready, even with Preview hidden
+    // and nobody at the screen. Real use is the presence beacon (tab on
+    // screen and in use) and the proxy's input ping (`preview-page`).
     return await buildPreviewUrl(ctx, args, identity.subject);
   },
 });

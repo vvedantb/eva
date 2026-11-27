@@ -1664,7 +1664,7 @@ export const sandboxActivitySourceValidator = v.union(
   v.literal("start"),
   /** An Eva sandbox tab was on screen at sweep time. */
   v.literal("viewing"),
-  /** Eva's Preview / custom tab loaded or polled the preview URL. */
+  /** Legacy: old rows only. Preview URL polls no longer count as use. */
   v.literal("preview-tab"),
   /** The preview page was on screen, or a non-browser client hit the proxy. */
   v.literal("preview-page"),
