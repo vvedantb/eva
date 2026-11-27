@@ -17,7 +17,6 @@ export function deriveLogUsage(rawResultEvent: string | undefined): LogUsage {
   if (!parsed) return {};
   return {
     costUsd: parsed.costUsd,
-    // "-" is the parser's no-model sentinel; leave the column unset instead.
     model: parsed.model === "-" ? undefined : parsed.model,
     provider: parsed.provider || undefined,
     inputTokens: parsed.inputTokens,

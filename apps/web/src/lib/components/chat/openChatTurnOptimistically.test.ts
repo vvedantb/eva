@@ -9,7 +9,6 @@ const CHAT_ID = z.custom<Id<"sessionChats">>().parse("chat_1");
 
 type ChatStatus = FunctionReturnType<typeof api.turns.getChatStatus> | undefined;
 
-/** One-entry store: `getChatStatus` for one chat, recording every write. */
 function fakeStore(initial: ChatStatus) {
   const writes: ChatStatus[] = [];
   let value = initial;

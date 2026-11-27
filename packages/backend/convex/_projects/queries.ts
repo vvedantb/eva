@@ -23,10 +23,6 @@ import {
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
 
-/**
- * A repo's live or archived projects: live in creation order, archived most
- * recently archived first.
- */
 function projectsForRepo(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -40,7 +36,6 @@ function projectsForRepo(
   return archived ? query.order("desc").collect() : query.collect();
 }
 
-/** List rows for `list` and `listArchived`, which differ only in `archived`. */
 async function toProjectListItems(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,
@@ -60,7 +55,6 @@ async function toProjectListItems(
   return await Promise.all(
     projects.map(async (project) => ({
       ...project,
-      // A project's sandbox lives on its session; the row shows that.
       sandboxStatus: await projectSandboxStatus(db, project),
       hasUnread: await hasUnread(project),
       isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
@@ -88,7 +82,6 @@ export const listArchived = authQuery({
   },
 });
 
-/** A project's tasks by display status (`projectTaskDisplayStatus`). */
 const displayStatusCountsValidator = v.object({
   triage: v.number(),
   working: v.number(),
@@ -247,8 +240,6 @@ export const getProjectPrCreationData = internalQuery({
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",
-      // Only a live PR on the current branch counts: a merged one belongs to
-      // an earlier branch version, and the next cycle needs its own PR.
       existingPrUrl:
         (await findLivePullRequestOnBranch(ctx.db, project.repoId, branchName))
           ?.prUrl ?? null,
@@ -257,8 +248,6 @@ export const getProjectPrCreationData = internalQuery({
   },
 });
 
-/** Reduces a project's tasks into a status-count breakdown. Shared by the
- *  single-project and batched progress queries so the shape stays in sync. */
 function computeTaskProgress(tasks: Doc<"agentTasks">[]) {
   return {
     total: tasks.length,

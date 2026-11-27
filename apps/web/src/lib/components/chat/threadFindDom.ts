@@ -15,10 +15,6 @@ const ACTIVE_HIGHLIGHT_NAME = "eva-thread-find-active";
 export const THREAD_FIND_HIGHLIGHT_CSS = `::highlight(${HIGHLIGHT_NAME}){background-color:color-mix(in oklab, var(--accent) 30%, transparent);}
 ::highlight(${ACTIVE_HIGHLIGHT_NAME}){background-color:color-mix(in oklab, var(--accent) 65%, transparent);color:var(--accent-foreground);}`;
 
-/**
- * Null on browsers without the CSS Custom Highlight API (Firefox < 140 at time
- * of writing). Counting and scroll-to still work there; only the paint is lost.
- */
 function highlightRegistry(): HighlightRegistry | null {
   if (typeof CSS === "undefined") return null;
   if (!("highlights" in CSS)) return null;
@@ -99,8 +95,6 @@ export function paintThreadFindHighlights(
   const ranges = collectThreadFindRanges(root, needle);
   if (ranges.length === 0) return;
   const safe = Math.min(Math.max(activeIndex, 0), ranges.length - 1);
-  // Two registrations, not one: the active match needs its own rule, and a
-  // range in both highlights would paint with the later registration's colour.
   const rest = ranges.filter((_, index) => index !== safe);
   const active = ranges[safe];
   if (rest.length > 0) registry.set(HIGHLIGHT_NAME, new Highlight(...rest));

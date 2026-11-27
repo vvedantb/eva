@@ -25,7 +25,6 @@ const dataMentionItemValidator = v.object({
   label: v.string(),
   badge: v.string(),
   description: v.optional(v.string()),
-  /** Full doc body — only set for document entities in getEntity. */
   content: v.optional(v.string()),
   numId: v.optional(v.number()),
 });
@@ -81,8 +80,6 @@ export const listData = authQuery({
       .order("desc")
       .take(MENTION_LIST_CAP);
     for (const doc of docs) {
-      // Prefer stored description — avoid pulling the whole body into the
-      // picker payload even though the document read already paid for it.
       const description = doc.description?.trim()
         ? previewOneLine(doc.description)
         : undefined;
@@ -96,8 +93,6 @@ export const listData = authQuery({
       });
     }
 
-    // Include archived sessions — soft-deleted only are excluded below. A
-    // task's session is not mentionable: mention the task.
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_repo_and_deleted", (q) =>
@@ -135,7 +130,6 @@ export const listData = authQuery({
       });
     }
 
-    // Open work only — done tasks rarely need @-mention and dominate large repos.
     const [archivedProjects, ...taskArrays] = await Promise.all([
       archivedProjectIds(ctx.db, args.repoId),
       ...OPEN_TASK_STATUSES.map((status) =>
@@ -213,7 +207,6 @@ export const getEntity = authQuery({
 
     const projectId = ctx.db.normalizeId("projects", args.id);
     if (projectId) {
-      // An archived project still resolves: its chip opens it read-only.
       const visible = await ctx.db.get(projectId);
       if (visible && visible.repoId === args.repoId) {
         const description = visible.description?.trim();
@@ -231,7 +224,6 @@ export const getEntity = authQuery({
 
     const taskId = ctx.db.normalizeId("agentTasks", args.id);
     if (taskId) {
-      // An archived task still resolves: its chip opens it read-only.
       const visible = await ctx.db.get(taskId);
       if (
         visible &&
@@ -257,7 +249,6 @@ export const getEntity = authQuery({
 
 type EntitySection = "sessions" | "quick-tasks" | "projects" | "docs";
 
-/** The row a section's `<numId>` names inside one repo. */
 function findByNumId(
   db: QueryCtx["db"],
   section: EntitySection,

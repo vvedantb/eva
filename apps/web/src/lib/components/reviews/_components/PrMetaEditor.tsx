@@ -17,12 +17,8 @@ import {
 } from "@vvedantb/ui";
 import { IconCheck, IconPencil } from "@tabler/icons-react";
 
-export interface PrMetaOption {
-  /** Sent to GitHub — a login, or a label name. */
-  value: string;
-  label: string;
-  /** An avatar or a colour swatch, rendered before the label. */
-  adornment?: React.ReactNode;
+export interface PrMetaOption {  value: string;
+  label: string;  adornment?: React.ReactNode;
 }
 
 /**
@@ -48,18 +44,10 @@ export function PrMetaEditor({
   onOpen,
   onToggle,
   emptyMessage,
-}: {
-  /** Names the field in the trigger's label and the search placeholder. */
-  title: string;
+}: {  title: string;
   selected: readonly string[];
-  options: readonly PrMetaOption[];
-  /** True while the candidate list is still being fetched. */
-  loading: boolean;
-  saving: boolean;
-  /** Called when the popover opens, so candidates are fetched on demand. */
-  onOpen: () => void;
-  /** Given the whole next set, because that is what GitHub takes. */
-  onToggle: (next: string[]) => void;
+  options: readonly PrMetaOption[];  loading: boolean;
+  saving: boolean;  onOpen: () => void;  onToggle: (next: string[]) => void;
   emptyMessage: string;
 }) {
   const [open, setOpen] = useState(false);

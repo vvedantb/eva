@@ -363,10 +363,6 @@ describe("chatNeedsOtherUserDirectory", () => {
   });
 });
 
-/**
- * The failed-turn notice states the error itself, so the stamp the harness
- * writes in front of the text would be said twice.
- */
 describe("stripErrorPrefix", () => {
   test("drops the harness stamp", () => {
     expect(
@@ -387,13 +383,6 @@ describe("stripErrorPrefix", () => {
   });
 });
 
-/**
- * Reported bug: "Usage limit reached wrong provider name" (fix 64e95e7e). The
- * notice was hard-coded to "Claude usage limit reached", so a chat running on
- * Cursor or Codex blamed a provider it never used — and the recovery it
- * suggests (switch account, wait for the reset) is per provider, so the user
- * was sent to the wrong account list.
- */
 describe("turnErrorTitle", () => {
   const rateLimited = (turnModel?: string, messageModel?: string) =>
     turnErrorTitle({
@@ -412,15 +401,12 @@ describe("turnErrorTitle", () => {
   });
 
   test("falls back to the assistant row's own stamp", () => {
-    // Retry paths render a failure with no user turn above it to read.
     expect(rateLimited(undefined, "cursor:composer-2.5")).toBe(
       "Cursor usage limit reached",
     );
   });
 
   test("the turn's stamp wins over the row's", () => {
-    // The row is stamped when the reply lands; the turn's stamp is what the
-    // run was actually sent on, so it is the one that ran out.
     expect(rateLimited("cursor:composer-2.5", "claude:opus")).toBe(
       "Cursor usage limit reached",
     );
@@ -431,8 +417,6 @@ describe("turnErrorTitle", () => {
   });
 
   test("every other failure is still framed as one", () => {
-    // Only "rate_limit" used to get a notice, so any other failed turn
-    // rendered as markdown and read like Eva answering "Error: …".
     expect(
       turnErrorTitle({
         errorType: "generic",
@@ -453,12 +437,6 @@ describe("turnErrorTitle", () => {
   });
 });
 
-/**
- * A send that throws no longer writes an `Error:` turn into the transcript; it
- * raises a toast with "Restore draft" instead, and this is the toast's body.
- * The three send paths (session, task, project) all read it, so a Convex
- * envelope leaking through would be shown to the user in all three.
- */
 describe("readableSendError", () => {
   test("keeps only the thrown message from a Convex server error", () => {
     expect(
@@ -479,11 +457,6 @@ describe("readableSendError", () => {
   });
 });
 
-/**
- * The transcript card is a record of an answered question. A question still on
- * screen in the composer dock must not also render as a card, and a legacy
- * step written before the options were persisted has nothing to show.
- */
 describe("collectQuestionSteps", () => {
   const questions: ActivityStep["questions"] = [
     {

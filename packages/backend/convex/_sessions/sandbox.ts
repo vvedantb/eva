@@ -57,7 +57,6 @@ import {
   previewSandboxNotAllowedError,
 } from "../_agentTasks/previewGate";
 
-/** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
 
 /**
@@ -99,13 +98,6 @@ export const startSandbox = authMutation({
   },
 });
 
-/**
- * Why an owned session may not boot a sandbox yet, or null. A todo task that
- * never ran has no branch to preview (its first run boots the sandbox); a
- * task with a VM already may resume it. A project's coordinator always may:
- * a project has no closed state (decision 19), so its chat stays reachable
- * whatever its tasks' status.
- */
 async function previewBlockedError(
   db: DatabaseReader,
   session: Doc<"sessions">,
@@ -146,13 +138,9 @@ export async function requestSessionSandboxStart(
   await ctx.db.patch(session._id, {
     status: "starting",
     sandboxStartAttempt: startAttempt,
-    // A new attempt owns the outcome: drop the previous failure so the dot
-    // leaves "Couldn't wake up" the moment Try again is pressed.
     sandboxError: undefined,
     updatedAt: Date.now(),
   });
-  // Seed startup streaming immediately so the UI shows a real step instead of
-  // the random "Eva is inferring…" spinner while the workflow schedules.
   await seedSandboxStartupActivity(
     ctx.db,
     sandboxStartupEntityId({ kind: "session", sessionId: session._id }),
@@ -174,13 +162,6 @@ export async function requestSessionSandboxStart(
     startAttempt,
   };
   await scheduleStuckStartExpiry(ctx, session._id, startAttempt);
-  // Vercel: schedule the start action directly. Workflow step scheduling was
-  // measured at ~6s before the first action ran.
-  // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
-  // arms `sandboxSetupPending` for them and only the workflow's
-  // `prepareLinkedRepo` steps clear it again, so a direct schedule would
-  // leave the gate armed forever (and re-clone nothing when a failed resume
-  // falls back to a fresh sandbox).
   if (reusableSandboxId && !startArgs.hasLinkedRepos) {
     await ctx.scheduler.runAfter(
       0,
@@ -220,8 +201,6 @@ export const forcePushBranch = authMutation({
     if (session.status !== "active" || !session.sandboxId) {
       throw new Error("Start the sandbox before force-pushing");
     }
-    // Access is the session's; the linked row must still belong to it, or a
-    // session id the caller can reach would rewrite an unrelated branch.
     let linkedRepo: Doc<"sessionRepos"> | null = null;
     if (args.sessionRepoId !== undefined) {
       linkedRepo = await ctx.db.get(args.sessionRepoId);
@@ -233,8 +212,6 @@ export const forcePushBranch = authMutation({
     if (!branchName) {
       throw new Error("Session has no branch to publish");
     }
-    // Only eva-owned session branches may ever be rewritten on GitHub; a base
-    // branch must never be reachable through this path.
     if (!isEvaOwnedBranch(branchName)) {
       throw new Error(
         `Refusing to force-push non-session branch ${branchName}`,
@@ -245,8 +222,6 @@ export const forcePushBranch = authMutation({
     await ctx.scheduler.runAfter(0, internal.sandbox.performForcePushBranch, {
       sessionId: args.sessionId,
       sandboxId: session.sandboxId,
-      // The sandbox (and therefore its provider credentials) always belongs to
-      // the primary repo, linked clones included.
       repoId: session.repoId,
       repoOwner: repo.owner,
       repoName: repo.name,

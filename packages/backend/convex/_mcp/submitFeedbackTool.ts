@@ -1,10 +1,3 @@
-/**
- * The `submit_feedback` MCP tool: the agent records how a turn landed with
- * the user — clear frustration or clear praise — so it shows on the global
- * Feedback page and as a card under the current reply. Storage is injected as
- * `run`, which keeps the Convex types out of this module (see `renderHtmlTool`).
- */
-
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";

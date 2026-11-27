@@ -12,13 +12,9 @@ export type ResolvedTheme = "light" | "dark";
 
 export interface ThemeModeContextValue {
   theme: ThemeMode;
-  /** DOM appearance after resolving System. */
   appearance: ThemeAppearance;
-  /** light/dark for libraries; Neutral → dark. */
   resolvedTheme: ResolvedTheme;
-  /** Saves the preference (to Convex when signed in). */
   setTheme: (theme: ThemeMode) => void;
-  /** Pins a theme for the current page without saving it; `null` releases it. */
   setPreviewTheme: (theme: ThemeMode | null) => void;
 }
 

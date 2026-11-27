@@ -19,7 +19,6 @@ import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
-// Aliased: this module's public action is also called writeSandboxFile.
 import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
 import { errorMessage } from "@vvedantb/server";
 
@@ -48,9 +47,7 @@ export const toggleCodeServer = action({
     console.log(
       `[code-server] ${args.action} requested for sandbox ${args.sandboxId}`,
     );
-    // getSandboxHandle also validates the repo's Vercel credentials.
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Listen internally so the auth proxy can own the exposed port.
     const listenPort = VERCEL_EDITOR_INTERNAL_PORT;
     const bindAddr = "127.0.0.1";
 
@@ -68,16 +65,12 @@ export const toggleCodeServer = action({
           };
         }
       } catch {
-        // Not running, proceed to start
       }
 
       console.log(
         `[code-server] Starting code-server on port ${listenPort}...`,
       );
       try {
-        // Multi-repo sessions create `/tmp/workspace` (linked clones plus a
-        // symlink to the primary); open that so every repo is in the editor
-        // tree. Single-repo sandboxes never have it and keep opening the repo.
         const hasWorkspaceRoot =
           (
             await execHandle(
@@ -87,7 +80,6 @@ export const toggleCodeServer = action({
             )
           ).trim() === "yes";
         const openDir = hasWorkspaceRoot ? WORKSPACE_ROOT : workspaceDirShell();
-        // Native detached exec — `… &` inside sync runCommand zombies on Vercel.
         await handle.execDetached(
           `code-server --port ${listenPort} --auth none --bind-addr ${bindAddr} ${openDir} > /tmp/code-server.log 2>&1`,
         );
@@ -175,8 +167,6 @@ export const toggleDesktopServer = action({
     }
 
     if (args.action === "start") {
-      // Resolution comes from the VNC_RESOLUTION env var set at sandbox creation
-      // (see createSandbox in git.ts) — Xvfb starts at 1920x1080 natively.
       await handle.desktop.start();
     } else {
       await handle.desktop.stop();
@@ -225,7 +215,6 @@ export const startDesktopForBrowserEntity = internalAction({
     message: v.string(),
   }),
   handler: async (ctx, args) => {
-    // A task's or project's sandbox is its session's.
     const entity = await ctx.runQuery(internal.sessions.getForEntityInternal, {
       entityKind: args.entityKind,
       entityId: args.entityId,
@@ -286,14 +275,7 @@ export const startDesktopForBrowserEntity = internalAction({
   },
 });
 
-/** Cap on how many bytes the File Viewer will read from a single file. */
 const MAX_FILE_VIEWER_BYTES = 512 * 1024;
-/**
- * Cap on media bytes the File Viewer will base64 out of a sandbox. Base64
- * inflates by ~4/3, so 4 MB of file is ~5.5 MB of string over the exec
- * transport — inside Convex's function return limit, and cheap enough for the
- * browser to hold as a data URL.
- */
 const MAX_MEDIA_VIEWER_BYTES = 4 * 1024 * 1024;
 const NOT_FOUND_MARKER = "__EVA_NOT_FOUND__";
 const TOO_LARGE_MARKER = "__EVA_TOO_LARGE__";
@@ -363,9 +345,6 @@ export const readSandboxFile = action({
       return { status: "not_running" as const };
     }
 
-    // Output: first line is the byte count (or the not-found marker), and the
-    // file bytes follow the first newline. The script always exits 0 so
-    // execHandle does not throw for a missing file.
     const script =
       resolveViewerPathScript(args.path) +
       `if [ ! -f "$c" ]; then echo ${NOT_FOUND_MARKER}; ` +
@@ -401,18 +380,11 @@ export function isValidSandboxWritePath(path: string): boolean {
   if (!path.startsWith("/")) return false;
   if (path.includes(String.fromCharCode(0))) return false;
   if (path.endsWith("/")) return false;
-  // Catches `/../`, a leading `/..`, and a trailing `/..` in one pass.
   return !path.split("/").includes("..");
 }
 
-/**
- * Roots the File Viewer may touch: the primary checkout (current and legacy
- * path) and the multi-repo workspace. Home, config and `/tmp` at large hold
- * bootstrap secrets (git credential helper config, sandbox env file).
- */
 const VIEWER_ROOTS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR, WORKSPACE_ROOT];
 
-/** Path segments the viewer never serves, even inside a root. */
 const VIEWER_DENIED_NAMES = [".git", ".eva-env.sh", "git-credentials.env"];
 
 /**
@@ -428,13 +400,6 @@ export function isValidSandboxViewerPath(path: string): boolean {
   return VIEWER_ROOTS.some((root) => path.startsWith(`${root}/`));
 }
 
-/**
- * Shell prefix that sets `$c` to the symlink-resolved form of `path`, or to
- * "" when the resolved path leaves the viewer roots or hits a denied name. A
- * symlink inside the repo (or a symlinked parent dir) must not hop to
- * credentials elsewhere in the sandbox. `path` is single-quoted by
- * shell-quote, so it cannot inject.
- */
 function resolveViewerPathScript(path: string): string {
   const roots = VIEWER_ROOTS.map((root) => `${root}/*`).join("|");
   const denied = VIEWER_DENIED_NAMES.flatMap((name) => [
@@ -476,10 +441,6 @@ export const writeSandboxFile = action({
       throw new Error("Invalid file path");
     }
 
-    // The viewer reads at most MAX_FILE_VIEWER_BYTES, so a truncated read must
-    // never be saved back over the whole file. Capping writes at the same size
-    // makes that impossible even when the client forgets to check `truncated`.
-    // Checked before touching the sandbox so an oversized body costs nothing.
     const size = new TextEncoder().encode(args.content).byteLength;
     if (size > MAX_FILE_VIEWER_BYTES) {
       return { status: "too_large" as const, size };
@@ -494,17 +455,12 @@ export const writeSandboxFile = action({
       return { status: "not_running" as const };
     }
 
-    // Writes to the resolved path so a symlink cannot redirect the save
-    // outside the viewer roots. Only the path goes into this probe.
     const probe = `${resolveViewerPathScript(args.path)}printf %s "$c"`;
     const target = (await execHandle(handle, probe, 10)).trim();
     if (!isValidSandboxViewerPath(target)) {
       throw new Error("Invalid file path");
     }
 
-    // Goes through the provider's writeFile, never a shell command — see
-    // MAX_INLINE_EXEC_CONTENT_BYTES in sandboxFiles.ts for why content must
-    // never be interpolated into an exec argument.
     await writeFileToSandbox(handle, target, args.content);
     return { status: "ok" as const, size };
   },
@@ -547,10 +503,6 @@ export const readSandboxMediaFile = action({
       return { status: "not_running" as const };
     }
 
-    // Same output contract as readSandboxFile: a marker or the byte count on
-    // the first line, payload after the first newline. `base64 | tr -d '\n'`
-    // rather than `base64 -w0` so this does not depend on GNU coreutils flags.
-    // The script always exits 0 so execHandle does not throw for a missing file.
     const script =
       resolveViewerPathScript(args.path) +
       `if [ ! -f "$c" ]; then echo ${NOT_FOUND_MARKER}; ` +
@@ -586,7 +538,6 @@ export const readSandboxMediaFile = action({
   },
 });
 
-/** Cap on entries returned to the Files tab tree. */
 const MAX_FILE_LIST_ENTRIES = 20_000;
 
 /**
@@ -602,12 +553,6 @@ export const listSandboxFiles = action({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /**
-     * Lists a linked repo's checkout instead of the primary (multi-repo
-     * sessions) — an absolute sandbox path, e.g. `/tmp/workspace/<name>`.
-     * Omitted (or the primary's own path) keeps the existing
-     * `workspaceDirShell()` resolution, including the legacy-sandbox fallback.
-     */
     rootPath: v.optional(v.string()),
   },
   returns: v.union(
@@ -629,8 +574,6 @@ export const listSandboxFiles = action({
       return { status: "not_running" as const };
     }
 
-    // Echo the resolved workspace root first so legacy `/workspace/repo`
-    // sandboxes build correct absolute `?file=` paths. Keep default exec cwd.
     const dir = args.rootPath ? quote([args.rootPath]) : workspaceDirShell();
     const script =
       `d=${dir}; ` +

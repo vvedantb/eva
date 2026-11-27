@@ -21,7 +21,6 @@ const STEPS = [
 
 type Step = (typeof STEPS)[number];
 
-/** Returns the next deletion step in the ordered pipeline, or null if done. */
 function nextStep(current: Step): Step | null {
   const idx = STEPS.indexOf(current);
   if (idx === -1 || idx === STEPS.length - 1) return null;
@@ -161,14 +160,10 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(daemonState._id);
             deleted++;
           }
-          // Chat rows hang off each chat id; pre-chat sessions keep theirs on
-          // the session id.
           const chats = await listSessionChats(ctx.db, session._id);
           for (const parentId of [session._id, ...chats.map((c) => c._id)]) {
             deleted += (await deleteChatRows(ctx, parentId)).deleted;
           }
-          // `drafts` is indexed by user first: clear the session owner's and
-          // each chat creator's.
           const draftUsers = new Set([
             session.userId,
             ...chats.flatMap((c) => (c.createdBy ? [c.createdBy] : [])),
@@ -190,8 +185,6 @@ export const deleteRepoStep = internalMutation({
             deleted++;
           }
 
-          // Links this session held to OTHER repos; the mirror case (other
-          // sessions linking to this repo) is the "repoLinks" step.
           const links = await ctx.db
             .query("sessionRepos")
             .withIndex("by_session", (q) => q.eq("sessionId", session._id))
@@ -311,7 +304,6 @@ export const deleteRepoStep = internalMutation({
       }
 
       case "repoLinks": {
-        // Multi-repo sessions that cloned this repo alongside their own.
         const links = await ctx.db
           .query("sessionRepos")
           .withIndex("by_repo", (q) => q.eq("repoId", repoId))
@@ -328,8 +320,6 @@ export const deleteRepoStep = internalMutation({
           deleted++;
         }
 
-        // `repoGroups` is small and has no membership index, so scan it: a
-        // group loses this repo, and dies with its primary or its last member.
         const groups = await ctx.db.query("repoGroups").collect();
         for (const group of groups) {
           if (group.primaryRepoId === repoId) {
@@ -349,7 +339,6 @@ export const deleteRepoStep = internalMutation({
           await ctx.db.patch(group._id, {
             linkedRepoIds,
             updatedAt: Date.now(),
-            // The seeded snapshot was built for the old membership.
             seededSnapshotName: undefined,
             seededFingerprint: undefined,
           });
@@ -389,7 +378,6 @@ export const deleteRepoStep = internalMutation({
   },
 });
 
-/** Schedules the first deletion step for each target repo. */
 async function scheduleRepoDeletions(
   ctx: MutationCtx,
   targets: Doc<"githubRepos">[],

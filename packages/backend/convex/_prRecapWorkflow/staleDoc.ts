@@ -1,12 +1,10 @@
 import type { Doc } from "../_generated/dataModel";
 
-/** Doc fields handleStaleDoc reads when unwinding a timed-out doc workflow. */
 type StaleDocFields = Pick<
   Doc<"docs">,
   "testGenStatus" | "prRecapStatus" | "interviewHistory"
 >;
 
-/** Patch handleStaleDoc applies after cancelling a stale doc workflow. */
 type StaleDocPatch = {
   activeWorkflowId: undefined;
   testGenStatus?: "error";

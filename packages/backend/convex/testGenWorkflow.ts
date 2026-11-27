@@ -32,12 +32,10 @@ const testGenCompleteEvent = defineEvent({
   validator: workflowCompleteValidator,
 });
 
-/** Replaces double quotes with single quotes in a commit title for shell safety. */
 function sanitizeCommitTitle(title: string): string {
   return title.replace(/"/g, "'").trim() || "document";
 }
 
-/** Formats a list of requirements as a numbered list for the test generation prompt. */
 function formatRequirements(requirements: string[]): string {
   if (requirements.length === 0) {
     return "1. No explicit requirements provided. Infer coverage from the feature description and user flows.";
@@ -47,7 +45,6 @@ function formatRequirements(requirements: string[]): string {
     .join("\n");
 }
 
-/** Formats user flows as numbered markdown sections for the test generation prompt. */
 function formatUserFlows(
   userFlows: Array<{ name: string; steps: string[] }>,
 ): string {
@@ -66,7 +63,6 @@ function formatUserFlows(
     .join("\n\n");
 }
 
-// --- Workflow definition ---
 
 /** Runs the test generation workflow: prepares sandbox, generates tests, and creates a PR. */
 export const testGenWorkflow = workflow.define({
@@ -76,20 +72,16 @@ export const testGenWorkflow = workflow.define({
     installationId: v.number(),
   },
   handler: async (step, args): Promise<void> => {
-    // Step 1: Fetch doc data, check if already completed
     const docData = await step.runQuery(internal.testGenWorkflow.getDocData, {
       docId: args.docId,
     });
 
     if (docData.alreadyCompleted) return;
 
-    // Step 2: Set status to running
     await step.runMutation(internal.testGenWorkflow.setRunning, {
       docId: args.docId,
     });
 
-    // Declared outside the try so the finally can tear the sandbox down even
-    // when prepare itself throws part-way through.
     let sandboxId: string | undefined;
     try {
       ({ sandboxId } = await prepareSandboxSteps(step, {
@@ -120,7 +112,6 @@ export const testGenWorkflow = workflow.define({
         },
       );
 
-      // Step 4: Wait for callback
       const result = await step.awaitEvent(testGenCompleteEvent);
 
       let workflowSuccess = result.success;
@@ -160,8 +151,6 @@ export const testGenWorkflow = workflow.define({
               },
             );
           } else {
-            // No commits pushed → the agent wrote no tests; fail cleanly
-            // instead of letting a PR attempt 404 against a missing branch.
             workflowSuccess = false;
             workflowError =
               "Test generation completed without committing any code changes";
@@ -186,8 +175,6 @@ export const testGenWorkflow = workflow.define({
         });
       }
     } finally {
-      // The sandbox is ephemeral: nothing references it once the run is saved,
-      // so it has to be deleted here or it idles until the provider reaps it.
       if (sandboxId) {
         try {
           await step.runAction(internal.sandbox.deleteSandbox, {
@@ -202,7 +189,6 @@ export const testGenWorkflow = workflow.define({
   },
 });
 
-// --- Supporting internal functions ---
 
 /** Fetches doc and repo data and builds the test generation prompt with requirements and user flows. */
 export const getDocData = internalQuery({
@@ -393,8 +379,6 @@ export const cancelTestGen = authMutation({
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
-    // The doc has one workflow slot shared with the interview, generate and
-    // PR recap flows. Only cancel it when test generation is what holds it.
     if (doc.testGenStatus !== "running") return null;
     await cancelTrackedWorkflow(ctx, doc.activeWorkflowId);
 

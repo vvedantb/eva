@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { AI_PROVIDERS } from "../_validators/aiModels";
 
-/** Caps that keep a compromised signature from writing an unbounded row. */
 const MAX_COMMANDS = 100;
 const MAX_NAME_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -35,7 +34,6 @@ export type HarnessCatalogReport = {
   commands: ParsedCommands;
 };
 
-/** Decodes the JSON command list, treating unparseable input as malformed. */
 function decodeCommands(skillsJson: string): ParsedCommands | null {
   try {
     const parsed = commandsSchema.safeParse(JSON.parse(skillsJson));

@@ -40,12 +40,9 @@ interface SessionItem {
   title: string;
   titleRegeneration?: { startedAt: number };
   status: SandboxStatus;
-  /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
-  /** A turn waits on a blocking question (`api.sessions.list`). */
   isAwaitingAnswer?: boolean;
-  /** Finished reply the user has not seen (`api.sessions.list`). */
   hasUnread?: boolean;
   updatedAt?: number;
   sandboxId?: string;
@@ -53,34 +50,22 @@ interface SessionItem {
   baseBranch?: string;
   prUrl?: string;
   prState?: PrState;
-  /**
-   * Set only on rows this app sees through a linked checkout: the session's
-   * primary repo, which owns its URL (see `sessionHrefForRow`).
-   */
   linkedFrom?: RepoPathParts;
-  /** Linked repos cloned beside the primary; drives the `+N` badge. */
   linkedRepoCount?: number;
-  /** Source of a "Fork session" fork; drives the row's fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
   session: T;
   isSelected: boolean;
-  /** The app whose sidebar this row sits in; the row's own repo unless linked in. */
   repo: RepoPathParts;
   onNavigate?: () => void;
   onRename?: (session: T, newTitle: string) => Promise<void>;
-  /** Active list: archive. Omit in archived list. */
   onArchiveRequest?: (session: T) => void;
-  /** Archived list: unarchive. */
   onUnarchive?: (session: T) => Promise<void>;
-  /** Shows Fork session (active and archived lists); opens the fork. */
   onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
-  /** The session's app on rows in a cross-repo linked group (mark + hover name). */
   app?: RepoAppMarkRepo;
-  /** Rows in a linked-session group: shows "Remove from group". */
   onRemoveFromGroup?: (session: T) => void;
 }
 
@@ -104,15 +89,10 @@ export function SidebarSessionRow<T extends SessionItem>({
   const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
   const isRegeneratingTitle = useIsRegeneratingTitle(session);
-  // Same gate the chat header uses, minus archived rows — an archived session
-  // is read-only, so opening its PR from here would be a dead end.
   const canSendForReview = !isArchivedList && canSendSessionForReview(session);
-  // Row-local: the dialog belongs to this session and the row outlives it
-  // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(session._id);
-  // One cached subscription per repo, shared by every row of that repo.
   const draftMarks = useQuery(api.drafts.listMarks, { repoId: session.repoId });
   const hasDraft = draftMarks?.sessionIds.includes(session._id) ?? false;
 
@@ -197,8 +177,6 @@ export function SidebarSessionRow<T extends SessionItem>({
           />
         </ContextMenuContent>
       </ContextMenu>
-      {/* Sibling of the menu, not a child: Radix unmounts menu content on close,
-          which would tear the dialog down with it. */}
       {canSendForReview ? (
         <SessionReviewModal
           sessionId={session._id}

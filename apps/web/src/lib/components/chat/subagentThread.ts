@@ -1,16 +1,13 @@
 import type { ActivityStep } from "@vvedantb/ui";
 
-/** One run of the child thread: the subagent's prose, or the tools it ran. */
 type SubagentThreadBlock =
   | { kind: "text"; text: string }
   | { kind: "steps"; steps: ActivityStep[] };
 
 /** A subagent's transcript, read back out of its parent's activity steps. */
 export interface SubagentThread {
-  /** The prompt it was spawned with (recorded for new runs only). */
   prompt?: string;
   blocks: SubagentThreadBlock[];
-  /** The Agent tool result, unless the last block already says it. */
   result?: string;
 }
 

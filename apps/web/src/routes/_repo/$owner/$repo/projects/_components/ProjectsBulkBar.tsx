@@ -8,7 +8,6 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  /** Runs the archive flow, which owns its own confirm and Alt-to-skip. */
   onArchive: () => void;
 }
 

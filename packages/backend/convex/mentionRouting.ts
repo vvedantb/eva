@@ -1,20 +1,5 @@
 "use node";
 
-/**
- * Decides how loudly each chat `@`-mention is delivered.
- *
- * `notifyChatMentions` has already written the inbox rows and deliberately
- * skipped the instant email every other high-signal notification schedules;
- * this action asks Jev why each person was named and records the answer, which
- * is what picks instant email / daily digest / inbox only.
- *
- * Failure is not fatal and never silent: a mention that cannot be judged is
- * delivered as `normal` (toast, push, daily digest).
- *
- * Its own top-level module because `"use node"` cannot be mixed into the
- * isolate bundle `_mentions/*` is part of.
- */
-
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
@@ -25,7 +10,6 @@ import {
   urgencyFromRouting,
 } from "./_mentions/routingUrgency";
 
-/** Gateway usage tag, so the spend is attributable to this feature. */
 const ROUTING_TAG = "eva-mention-routing";
 
 export const routeMentions = internalAction({
@@ -44,8 +28,6 @@ export const routeMentions = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Sequential: a message mentions one to three people in practice, and the
-    // per-item fallback below means one slow judgement cannot lose another.
     for (const item of args.items) {
       const outcome = await evaluateDecision(
         {

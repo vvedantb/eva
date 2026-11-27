@@ -1,14 +1,3 @@
-/**
- * The `render_html` MCP tool: the agent hands Eva one self-contained HTML
- * page, and the page renders inline in the chat in a sandboxed frame.
- *
- * `render_ui` stays the tool for structured panels (numbers, checklists,
- * closed questions); this one is for what blocks cannot express — custom
- * charts, diagrams, mockups, small interactive pages. Storage is injected as
- * `run`, which keeps the Convex types out of this module and lets tests pass a
- * fake.
- */
-
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import {

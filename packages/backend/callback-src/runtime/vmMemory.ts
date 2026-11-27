@@ -11,7 +11,6 @@ export type VmMemory = {
   swapUsedMb: number;
 };
 
-/** One sample per window keeps log volume low; heartbeats can fire every second. */
 const VM_MEMORY_SAMPLE_INTERVAL_MS = 30_000;
 let lastSampleAt = 0;
 
@@ -47,7 +46,6 @@ export function appendVmMemory(body: URLSearchParams, now = Date.now()): void {
   try {
     sample = parseMeminfo(readFileSync("/proc/meminfo", "utf8"));
   } catch {
-    // Not Linux, or /proc unreadable: the heartbeat goes out without it.
     return;
   }
   if (sample === null) return;

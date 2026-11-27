@@ -4,15 +4,6 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle } from "./helpers";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
 
-/**
- * Chrome launch flags for the sandbox (Vercel's Xvnc framebuffer, display :1).
- * - --disable-dev-shm-usage: /dev/shm is tiny in these VMs.
- * - --user-data-dir: required for --remote-debugging-port to bind.
- * - --disable-gpu --in-process-gpu: Vercel/Amazon Linux has no GPU + no WM;
- *   match vercel-sandbox-gui so Chrome paints into the Xvnc framebuffer.
- * - background/throttle flags keep Convex/Supabase websockets alive in
- *   background tabs.
- */
 const CHROME_FLAGS = [
   "--no-sandbox",
   "--disable-dev-shm-usage",
@@ -62,7 +53,6 @@ export const CHROME_PREFS_SCRIPT = [
  */
 export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
   try {
-    // Already running with our debug port — keep existing tabs.
     const already = await sandbox.exec(
       "curl -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1",
       { timeoutSeconds: 5 },
@@ -84,7 +74,6 @@ export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
         "mkdir -p /home/eva/.config/chrome-debug",
         "rm -rf /home/eva/.config/chrome-debug/Singleton* 2>/dev/null || true",
         `node -e '${CHROME_PREFS_SCRIPT}' 2>/dev/null || true`,
-        // Resolve display: Vercel Xvnc is :1; :0 is a legacy fallback.
         'DISPLAY_VALUE="${EVA_DESKTOP_DISPLAY:-}"',
         'if [ -z "$DISPLAY_VALUE" ]; then DISPLAY=:1 xprop -root >/dev/null 2>&1 && DISPLAY_VALUE=:1; fi',
         'if [ -z "$DISPLAY_VALUE" ]; then DISPLAY=:0 xprop -root >/dev/null 2>&1 && DISPLAY_VALUE=:0; fi',
@@ -95,7 +84,6 @@ export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
       { timeoutSeconds: 30 },
     );
 
-    // Detach Chrome so it survives the launcher command exiting.
     await sandbox.execDetached(
       [
         "BROWSER=$(cat /tmp/eva-chrome-bin 2>/dev/null || true)",
@@ -105,7 +93,6 @@ export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
       ].join("; "),
     );
 
-    // Wait briefly for DevTools to come up (best-effort).
     await sandbox.exec(
       buildHttpReadyProbeCommand({
         url: "http://127.0.0.1:9222/json/version",
@@ -116,9 +103,7 @@ export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
       }),
       { timeoutSeconds: 20 },
     );
-  } catch {
-    // Non-fatal: Chrome launch failure shouldn't break the desktop
-  }
+  } catch {}
 }
 
 /** Starts the sandbox desktop environment and launches Chrome. */
@@ -136,11 +121,7 @@ export async function startDesktopWithChrome(
         "for i in 1 2 3 4 5 6 7 8 9 10; do DISPLAY=:1 xdpyinfo > /dev/null 2>&1 && break; DISPLAY=:0 xdpyinfo > /dev/null 2>&1 && break; sleep 1; done",
         15,
       );
-    } catch {
-      // Non-fatal: continue and hope display is ready
-    }
+    } catch {}
     await launchChrome(sandbox);
-  } catch {
-    // Non-fatal: entire desktop startup failure shouldn't block the workflow
-  }
+  } catch {}
 }

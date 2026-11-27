@@ -26,14 +26,12 @@ import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { ChatBodyMessage, ChatBodyQueuedMessage } from "./chatBodyUtils";
 
-/** "the Team account" or "Ana's account", as the usage-limit banner names it. */
 function accountLabel(credentialLabel: string): string {
   return credentialLabel === "Team"
     ? "the Team account"
     : `${credentialLabel}'s account`;
 }
 
-/** A picker change that would send the held queue now, waiting on a confirm. */
 type PendingSwitch =
   | { kind: "model"; model: AIModel }
   | { kind: "account"; accountId: string | null };

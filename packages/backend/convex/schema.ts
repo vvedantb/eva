@@ -112,7 +112,7 @@ const schema = defineSchema({
     .index("by_repo_and_archived", ["repoId", "archivedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
-  // projectDetails table removed. schema-narrowing-ok: deleteProjectDetails
+  // schema-narrowing-ok: deleteProjectDetails
 
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
@@ -134,21 +134,17 @@ const schema = defineSchema({
     .index("by_task_and_status", ["taskId", "status"])
     .index("by_status", ["status"]),
 
-  // Every pull request linked to a session, quick task or project. An owner
-  // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.
   pullRequests: defineTable(pullRequestFields)
     .index("by_pr_url", ["prUrl"])
     .index("by_session", ["owner.sessionId"])
     .index("by_task", ["owner.taskId"])
     .index("by_project", ["owner.projectId"])
     .index("by_repo_and_head_branch", ["repoId", "headBranch"])
-    // Watched PRs on a base branch: a push there may cause a merge conflict.
     .index("by_repo_base_and_watch", [
       "repoId",
       "baseBranch",
       "watch.startedAt",
     ])
-    // Watched PRs by head branch: a commit status there names no PR.
     .index("by_head_and_watch", ["headBranch", "watch.startedAt"]),
 
   agentTaskRunSummaries: defineTable({
@@ -211,22 +207,17 @@ const schema = defineSchema({
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
-  // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
+  // schema-narrowing-ok: clearTaskDependencies
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
   messages: defineTable(messageFields)
     .index("by_parent", ["parentId"])
-    // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
     .index("by_parent_and_role", ["parentId", "role"])
-    // The transcript: rows that are not thread replies (`replyTo` unset).
     .index("by_parent_and_reply_to", ["parentId", "replyTo"])
-    // A thread's replies, oldest first.
     .index("by_reply_to", ["replyTo"])
-    // A chat's thread roots (only roots carry `lastReplyAt`).
     .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
-    // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",
       filterFields: ["parentId"],
@@ -239,8 +230,6 @@ const schema = defineSchema({
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
     .index("by_parent_and_order", ["parentId", "order"])
-    // The main queue panel lists rows without `replyTo`: a queued thread
-    // reply waits in its thread, not in the chat's queue.
     .index("by_parent_and_reply_to_and_order", ["parentId", "replyTo", "order"]),
   sessions: defineTable(sessionFields)
     .index("by_repo", ["repoId"])
@@ -248,7 +237,6 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    // The Sessions list: standalone sessions only (owned ones are hidden).
     .index("by_repo_owner_deleted_and_archived_at", [
       "repoId",
       "owner.kind",
@@ -259,32 +247,20 @@ const schema = defineSchema({
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])
     .index("by_session_group", ["sessionGroupId"])
-    // The hidden session a task or project owns (`_sessions/owner.ts`).
-    // `deletedAt`: a task moved to another repo or into a project detaches
-    // (soft-deletes) its session, so the next use creates a fresh one.
     .index("by_owner_task", ["owner.taskId", "deletedAt"])
     .index("by_owner_project", ["owner.projectId"]),
-  // Chat threads inside a session (Main + parallel chats). See
-  // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
-  // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
-  // directly; `backfillSessionChats` empties this table and it can then be
-  // dropped from the schema.
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
   ),
-  // Extra repos cloned into a session's sandbox beside the primary (which stays
-  // on `sessions.repoId`). One row per linked repo per session.
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
     .index("by_repo", ["repoId"]),
-  // Linked-session groups (members: `sessions.by_session_group`).
   sessionGroups: defineTable(sessionGroupFields),
-  // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
@@ -294,26 +270,17 @@ const schema = defineSchema({
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
-  // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
-  // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
-  // Agent-authored HTML pages, one row per `render_html` call; the page body
-  // is its own row. Same three chat surfaces as `chatUiPanels`.
   chatHtmlRenders: defineTable(chatHtmlRenderFields).index("by_parent", [
     "parentId",
   ]),
   chatHtmlRenderBodies: defineTable(chatHtmlRenderBodyFields),
-  // Secret requests the agent posts as an inline card (`request_env_var`).
-  // Status only: the value goes to the encrypted env var stores.
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
     "parentId",
   ]),
-  // "Start this in a new session" cards the agent posts (`propose_session`).
   sessionProposals: defineTable(sessionProposalFields).index("by_parent", [
     "parentId",
   ]),
-  // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
-  // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(
     "by_parent_status",
     ["parentId", "status"],
@@ -322,20 +289,12 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])
     .index("by_message", ["messageId"]),
-  // Latest agent plan usage-limit reading per credential, upserted by the
-  // sandbox callback at the end of every turn (usageLimits:report). Plan limits
-  // belong to the credential, not the repo it ran on, so a user with two Claude
-  // accounts keeps a row for each and the shared team credential keeps one per
-  // team. Legacy per-repo rows still sit in the by_provider_account range and
-  // are filtered out on read — see `_usageLimits/rows.ts`.
   agentUsageLimits: defineTable(agentUsageLimitFields)
     .index("by_provider_account", ["provider", "providerAccountId"])
     .index("by_provider_team", ["provider", "teamId"]),
   backgroundProcesses: defineTable(backgroundProcessFields)
     .index("by_session_and_status", ["sessionId", "status"])
     .index("by_session_and_key", ["sessionId", "key"]),
-  // Per-sandbox rate-limit stamps for the preview poll's background heal
-  // (sandboxHeal.claim). Rows are tiny and reaped opportunistically on claim.
   sandboxHealStamps: defineTable({
     sandboxId: v.string(),
     lastHealAt: v.number(),
@@ -353,21 +312,10 @@ const schema = defineSchema({
     pendingQuestion: v.optional(v.string()),
     lastUpdatedAt: v.optional(v.number()),
   }).index("by_entity", ["entityId"]),
-  // Single-flight guard for warm-daemon launches (claimDaemonLaunchLease).
-  // Prewarm bursts (page opens, doc-patch refires) used to race the multi-
-  // second check-then-launch window and boot duplicate daemons; only the
-  // lease claimant launches, the rest no-op. Short TTL so a crashed launcher
-  // never blocks the next boot for long. One row per entity, upserted.
-  // Also holds the per-sandbox launch lock (`sandbox:<id>` keys, see
-  // `withSandboxLaunchLock`): launches share fixed /tmp runner files.
   daemonLaunchLeases: defineTable({
     entityId: v.string(),
     expiresAt: v.number(),
   }).index("by_entity", ["entityId"]),
-  // Blocking AskUserQuestion round-trip. The paused sandbox turn posts a row
-  // here (via canUseTool), the UI reads the unanswered one and writes the
-  // answer, and the sandbox claims the answer to resume the turn. `entityId`
-  // is the generic session/project/task id (matches streamingActivity).
   pendingQuestions: defineTable({
     entityId: v.string(),
     toolUseId: v.string(),
@@ -395,7 +343,6 @@ const schema = defineSchema({
     .index("by_message", ["messageId"])
     .index("by_repo", ["repoId"]),
 
-  // Thumbs on Eva turns and agent `submit_feedback` reports (Feedback page).
   feedback: defineTable(feedbackFields)
     .index("by_parent", ["parentId"])
     .index("by_message_and_user", ["messageId", "userId"])
@@ -444,7 +391,6 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
     .index("by_repo", ["repoId"]),
-  // Expo push tokens for the mobile app (see push.ts). One row per device.
   pushTokens: defineTable({
     userId: v.id("users"),
     token: v.string(),
@@ -549,23 +495,16 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Legacy MCP OAuth tables removed after the drain migrations emptied them.
   // schema-narrowing-ok: drainMcpAuthCodes
   // schema-narrowing-ok: drainMcpClientRegistrations
-  // MCP bearer token-cache table removed after the drain migration emptied it.
   // schema-narrowing-ok: drainMcpTokenCache
 
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])
     .index("by_secret", ["secret"]),
 
-  // App-wide singleton settings (only ever one row). Read/written via the
-  // helpers in `sandboxAutoStop.ts`.
   appSettings: defineTable(appSettingsFields),
 
-  // One row per (user, surface target). Persists unsent composer text for task
-  // comments and chat prompts so drafts survive page reloads.
-  // Not a stash queue — see `promptStashes` and internal/docs/prompt-stash-vs-drafts.md.
   drafts: defineTable(draftFields)
     .index("by_user_and_task", ["userId", "taskId"])
     .index("by_user_and_project", ["userId", "projectId"])
@@ -573,16 +512,11 @@ const schema = defineSchema({
     .index("by_user_and_chat", ["userId", "chatId"])
     .index("by_user_and_repo", ["userId", "repoId"]),
 
-  // Explicit ⌘S queue of frozen composer snapshots (text + attachment blobs),
-  // scoped per user per repo. Separate from `drafts` (live WIP upsert).
   promptStashes: defineTable(promptStashFields).index("by_user_and_repo", [
     "userId",
     "repoId",
   ]),
 
-  // Live sharing for the `/slides` deck — "follow the presenter" (Teams-style).
-  // The presenter is the sole driver: only the browser holding the secret
-  // `hostKey` (returned once from `createSession`) may move the deck.
   presentationSessions: defineTable({
     code: v.string(),
     hostKey: v.string(),
@@ -591,7 +525,6 @@ const schema = defineSchema({
     lastActiveAt: v.number(),
   }).index("by_code", ["code"]),
 
-  // Per-participant poll votes within a presentation session.
   presentationVotes: defineTable({
     code: v.string(),
     pollId: v.string(),

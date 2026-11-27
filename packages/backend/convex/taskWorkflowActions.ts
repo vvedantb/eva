@@ -41,7 +41,6 @@ import {
 import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 import { errorMessage } from "@vvedantb/server";
 
-// Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
 
 function buildTaskPullRequestBody(params: {
@@ -71,15 +70,6 @@ function buildTaskPullRequestBody(params: {
   );
 }
 
-/**
- * Runs a manual PR attempt and rethrows its failure as a `ConvexError`.
- *
- * Production Convex redacts plain `Error` messages, so every reason a manual
- * "Create PR" can fail — branch not ahead, missing base branch, GitHub
- * rejection — reached the user as a bare "Server Error" with nothing to act on.
- * `ConvexError` data crosses the wire, so the UI shows the reason. The original
- * is logged first, because the rethrow drops its stack.
- */
 async function withVisiblePrFailure<T>(
   label: string,
   attempt: () => Promise<T>,
@@ -121,10 +111,6 @@ type TaskPrCreationData = FunctionReturnType<
   typeof internal.taskWorkflow.getTaskPrCreationData
 >;
 
-/**
- * Opens and records the task's PR, or returns the live one already on the
- * task branch. The one path for the "Create PR" button and the task chat.
- */
 async function openTaskPr(
   ctx: GenericActionCtx<DataModel>,
   taskId: Id<"agentTasks">,
@@ -190,7 +176,6 @@ export const ensureTaskChatPr = internalAction({
         data.taskStatus !== "code_review",
       );
     } catch (error) {
-      // A turn that left the branch level with base (a revert) has no diff.
       if (!isBranchNotAheadError(error)) throw error;
     }
     return null;
@@ -307,7 +292,6 @@ export const createTaskPullRequest = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
-    // Optional: a task run in flight across the deploy calls without it.
     relatedPrs: v.optional(v.array(siblingPrValidator)),
     draft: v.optional(v.boolean()),
   },
@@ -351,7 +335,6 @@ export const refreshTaskPullRequestBody = internalAction({
     taskDescription: v.optional(v.string()),
     rootDirectory: v.string(),
     changeRequests: v.array(v.string()),
-    // Optional: a task run in flight across the deploy calls without it.
     relatedPrs: v.optional(v.array(siblingPrValidator)),
   },
   returns: v.string(),
@@ -476,8 +459,6 @@ export const reopenPullRequest = internalAction({
           `[github] Reopened PR #${args.prNumber} (${args.repoOwner}/${args.repoName})`,
         );
       }
-      // GitHub preserves the previous draft state on reopen, so flip it if the
-      // target status doesn't match.
       await syncPullRequestDraftState(octokit, pr, args.asReady);
       if (args.asReady) await removeLegacyDraftLabel(octokit, target, pr);
       return true;
@@ -543,7 +524,6 @@ export const markPrReadyForReview = internalAction({
         pull_number: args.prNumber,
       };
       const pr = await getPullRequest(octokit, target);
-      // Older Eva PRs carry a `draft` label; clear it even if already ready.
       await removeLegacyDraftLabel(octokit, target, pr);
       if (!pr.draft) return true; // already ready
       await markPullRequestReadyForReview(octokit, pr.node_id);
@@ -585,10 +565,6 @@ type DeploymentPollArgs = {
   attempt: number;
 };
 
-/**
- * Shared GitHub poll + retry decision. Callers persist onto the run or
- * session row and schedule the next attempt for their own action.
- */
 async function runDeploymentPollAttempt(
   ctx: GenericActionCtx<DataModel>,
   args: DeploymentPollArgs,

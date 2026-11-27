@@ -6,7 +6,6 @@ import {
   moveLegacyTranscriptPage,
 } from "../_sessionChats/helpers";
 
-/** Each session may read one 2 MiB page; 5 stays well under the 16 MiB limit. */
 const SESSIONS_PER_BATCH = 5;
 const DRAFTS_PER_BATCH = 200;
 

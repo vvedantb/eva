@@ -9,16 +9,9 @@ export const ownerArg = sandboxOwnerValidator;
 export interface ResolvedOwner {
   sandboxId: string;
   repoId: Id<"githubRepos">;
-  /**
-   * True when the owner is `stopping`/`closed`. A terminal connect must not
-   * exec on the sandbox in this state — on Vercel any exec lazily resumes a
-   * stopped VM (SDK withResume), which resurrects a sandbox the user stopped
-   * (invisible to the session status) and defeats a manual stop.
-   */
   isStoppingOrClosed: boolean;
 }
 
-/** A sandbox in `stopping`/`closed` must not be exec'd against (see ResolvedOwner.isStoppingOrClosed). */
 function isStoppingOrClosed(status: string | undefined): boolean {
   return status === "stopping" || status === "closed";
 }

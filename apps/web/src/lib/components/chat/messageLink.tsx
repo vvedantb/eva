@@ -53,7 +53,6 @@ export function ChatMessageScroll({
     if (!node || scrolledRef.current) return;
     scrolledRef.current = true;
     stopScroll();
-    // One frame of slack: the rows are still laying out on the first commit.
     requestAnimationFrame(() => {
       scrollRef.current
         ?.querySelector<HTMLElement>(

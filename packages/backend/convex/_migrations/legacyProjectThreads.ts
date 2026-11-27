@@ -16,30 +16,6 @@ import {
 } from "../_pullRequests/store";
 import { syncProjectSessionBranch } from "../_sessions/ownedSession";
 
-/**
- * Projects made before the coordinator kept their old project branch and
- * single project PR on the coordinator's session, and their tasks sat in
- * review with no PR of their own (their work went into the project PR). The
- * coordinator is read-only, so nobody could finish that work. Per live
- * project with an old PR:
- *
- * - PR open or draft: one new thread, "Earlier work (PR #n)", takes over the
- *   old branch (`agentTasks.branchName`) and the PR row (owner moves from the
- *   project to the task), so it can keep working and finishes when the PR
- *   merges. The old review tasks it absorbs are cancelled and listed in its
- *   description.
- * - PR merged: the old review tasks are done. PR closed: they are cancelled.
- * - Every case: the coordinator moves to a fresh project branch, off the old
- *   one (`branchVersion` + 1, `syncProjectSessionBranch` drops its VM).
- *
- * Draft and todo tasks stay in Triage for a person. Idempotent: a converted
- * project holds no project PR on its current branch, so a second run changes
- * nothing.
- *
- *   npx convex run --prod migrations:convertLegacyProjectThreads '{"dryRun": true}'
- *   npx convex run --prod migrations:convertLegacyProjectThreads
- */
-
 const REVIEW_STATUSES = new Set(["code_review", "business_review"]);
 
 const resultValidator = v.object({
@@ -84,7 +60,6 @@ export const convertLegacyProjectThreads = internalMutation({
   },
 });
 
-/** The old PR a project still holds on its current branch, if any. */
 async function legacyProjectPr(
   ctx: MutationCtx,
   project: Doc<"projects">,
@@ -99,7 +74,6 @@ async function legacyProjectPr(
   });
   const row = rows.find((r) => r.primary) ?? rows[0];
   if (row) return { prUrl: row.prUrl, state: row.state, row };
-  // A project whose PR predates the `pullRequests` table: only its summary.
   if (project.prUrl === undefined) return null;
   return {
     prUrl: project.prUrl,
@@ -127,7 +101,6 @@ async function convertProject(
     (task) => REVIEW_STATUSES.has(task.status) && task.prUrl === undefined,
   );
   const live = isLivePrState(pr.state);
-  // The coordinator still sits on the old branch: move it to a fresh one.
   const moveCoordinator =
     resolveProjectBranchName(project._id, project) === oldBranch;
   const result: ProjectResult = {
@@ -168,10 +141,6 @@ async function convertProject(
   return result;
 }
 
-/**
- * The thread that owns the old branch and PR from now on: approved, in review,
- * on the old branch, with the PR row moved from the project to it.
- */
 async function createEarlierWorkThread(
   ctx: MutationCtx,
   params: {
@@ -217,7 +186,6 @@ async function createEarlierWorkThread(
   await ensureSubscribed(ctx, taskId, project.userId);
 
   if (pr.row) {
-    // Webhooks now update the task: a merge marks it done.
     await ctx.db.patch(pr.row._id, {
       owner: { kind: "task", taskId },
       primary: true,
@@ -237,7 +205,6 @@ async function createEarlierWorkThread(
       title: project.title,
     });
   }
-  // The project holds no PR of its own any more.
   await ctx.db.patch(project._id, {
     prUrl: undefined,
     prState: undefined,

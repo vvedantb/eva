@@ -21,7 +21,6 @@ import { VERCEL_PREVIEW_PROXY_PORT } from "./vercelAppPorts";
 
 export { VERCEL_PREVIEW_PROXY_PORT };
 
-// Internal port range the injected navigation proxy listens on.
 const PROXY_PORT_MIN = 9000;
 const PROXY_PORT_MAX = 9999;
 const PROXY_PORT_COUNT = PROXY_PORT_MAX - PROXY_PORT_MIN + 1;
@@ -37,41 +36,18 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
  * instead of restarting the proxy onto their own upstream.
  */
 export const PREVIEW_TAB_PREFIX = "/__tab";
-// Bump when the generated proxy script changes so already-running proxies from
-// an older deploy are detected as stale (via the health response) and relaunched.
 const SCRIPT_VERSION = "stream-v34";
 
-/** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
 
-/** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
-  /** Public half of the preview-grant keypair, or null to disable gating. */
   publicKeyJwk: JWK | null;
   sandboxId: string;
   repoId: string;
-  /** Eva origin to redirect cold loads to for sign-in (e.g. WEB_APP_URL). */
   webAppUrl: string;
-  /** Whether to inject the navigation-sync script into HTML responses. */
   inject: boolean;
-  /**
-   * Port advertised in preview-auth redirects / grant claims. Defaults to the
-   * upstream targetPort. On Vercel, desktop/editor listen internally
-   * (16080/18080) while the browser hits the exposed proxy port (6080/8080) —
-   * pass the exposed port here so grants and /preview-auth stay aligned.
-   */
   authPort?: number;
-  /**
-   * Hex HMAC key for the session cookie (`previewSessionSecret`). Stable per
-   * sandbox port, so cookies survive a proxy restart.
-   */
   sessionSecret: string;
-  /**
-   * Activity heartbeat for the idle-pause sweep: the proxy POSTs
-   * `sandboxId` + `hmac` (+ the session's Clerk `subject`) to `activityUrl`
-   * at most once a minute while a preview page is on screen or a non-browser
-   * client calls it. Either value empty disables it.
-   */
   activityUrl?: string;
   activityHmac?: string;
 }
@@ -1480,11 +1456,6 @@ server.listen(proxyPort, "0.0.0.0", function handleListen() {
 `.trim();
 }
 
-/**
- * Proxy health read through the port's public URL. On Vercel this takes about
- * 35 ms; the in-sandbox `curl` exec below takes about 410 ms. Null when the
- * port has no public route or the request fails.
- */
 async function publicProxyHealth(
   sandbox: SandboxHandle,
   proxyPort: number,
@@ -1506,9 +1477,6 @@ async function proxyAlreadyRunning(
   proxyPort: number,
 ): Promise<boolean> {
   const expected = `target=${targetPort};${SCRIPT_VERSION}`;
-  // Fast path only: any other answer (old version, other target, edge error)
-  // falls through to the exec check, so a wrong public reply costs time, not
-  // correctness.
   if ((await publicProxyHealth(sandbox, proxyPort)) === expected) return true;
   try {
     const health = await execHandle(
@@ -1517,7 +1485,6 @@ async function proxyAlreadyRunning(
       5,
       "/tmp",
     );
-    // Version suffix forces a relaunch when the script changes across deploys.
     return health.trim() === expected;
   } catch {
     return false;
@@ -1534,12 +1501,6 @@ async function launchProxy(
   const pidPath = `/tmp/eva-preview-proxy-${targetPort}.pid`;
   const logPath = `/tmp/eva-preview-proxy-${targetPort}.log`;
   const script = buildPreviewProxyScript(authParams);
-  // The script is written with the file API, not a heredoc inside the exec
-  // command. It embeds the vendored html2canvas bundle (~200 KB), which pushes
-  // the single `bash -lc` argument past Linux's 128 KB per-argument cap
-  // (MAX_ARG_STRLEN), so every launch died with "failed to start process:
-  // fork/exec /usr/bin/bash: argument list too long". writeFile has no such
-  // limit (the ~330 KB callback runner ships the same way).
   await writeSandboxFile(sandbox, scriptPath, script);
   const command = [
     `if [ -f '${pidPath}' ] && kill -0 "$(cat '${pidPath}')" 2>/dev/null; then kill "$(cat '${pidPath}')" 2>/dev/null || true; fi`,
@@ -1549,7 +1510,6 @@ async function launchProxy(
   ].join("\n");
 
   await execHandle(sandbox, command, 15, "/tmp");
-  // Detach the proxy process so it survives on Vercel (nohup … & zombies there).
   await sandbox.execDetached(
     `EVA_PREVIEW_TARGET_PORT=${targetPort} EVA_PREVIEW_PROXY_PORT=${proxyPort} node '${scriptPath}' > '${logPath}' 2>&1`,
   );

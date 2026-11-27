@@ -6,7 +6,6 @@ import { action } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { execHandle, getSandboxHandle } from "./helpers";
 
-/** Static POSIX ps snapshot used for reconcile matching (no user input). */
 const PS_SNAPSHOT_CMD = "ps -wweo pid=,ppid=,etimes=,args=";
 
 const PROBE_MAX_CHARS = 160;

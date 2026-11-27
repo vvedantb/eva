@@ -25,7 +25,6 @@ const messageValidator = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
   ...messageFields,
-  // Resolved agent media (recordings/screenshots), in capture order.
   media: v.optional(
     v.array(
       v.object({
@@ -34,10 +33,7 @@ const messageValidator = v.object({
       }),
     ),
   ),
-  // Resolved URLs for user-attached input files, in the same order as
-  // attachmentStorageIds. Entries that fail to resolve are null.
   attachmentUrls: v.optional(v.array(v.union(v.string(), v.null()))),
-  // Parallel metadata for rendering (image thumb vs file chip).
   attachments: v.optional(
     v.array(
       v.object({
@@ -55,16 +51,8 @@ export const generateUploadUrl = authMutation({
   handler: async (ctx) => ctx.storage.generateUploadUrl(),
 });
 
-/**
- * Largest `tail` a caller may ask for: the web app's biggest older-history
- * page (`useOlderTranscript`). Past it, the caller asks for everything.
- */
 const MAX_TAIL = 400;
 
-/**
- * Which messages of a parent to read, oldest first in the result. Ranges are
- * on `_creationTime`, the last field of every index.
- */
 type MessageRange =
   | { kind: "all" }
   | { kind: "tail"; count: number }

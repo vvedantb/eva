@@ -46,9 +46,7 @@ export interface SessionMenuSession {
   branchName?: string;
   prUrl?: string;
   titleRegeneration?: { startedAt: number };
-  /** Unset before the first boot and after an archived sandbox is deleted — nothing to fork. */
   sandboxId?: string;
-  /** Mid-turn sessions cannot fork: the fork stops the source sandbox. */
   isExecuting?: boolean;
 }
 
@@ -64,26 +62,17 @@ export function useIsRegeneratingTitle(session: SessionMenuSession): boolean {
 }
 
 interface SessionMenuItemsProps {
-  /** Right-click menu (sidebar row, session tab) or the chat header "…" menu. */
   variant: "context" | "dropdown";
   session: SessionMenuSession;
   href: string;
   isRegeneratingTitle: boolean;
-  /** Rows and tabs that link elsewhere; the chat header is already the session. */
   showOpenInNewTab?: boolean;
-  /** Active list only — omitting hides Rename and Regenerate title. */
   onRenameRequest?: () => void;
-  /** Shows Fork session; called with the fork's path segment once it exists. */
   onForkNavigate?: (pathSegment: string) => void;
-  /** Sessions with a branch and no open PR yet — opens the review dialog. */
   onSendForReview?: () => void;
-  /** Active list: archive. Omit in archived list. */
   onArchiveRequest?: () => void;
-  /** Archived list: unarchive. */
   onUnarchive?: () => Promise<void>;
-  /** Rows in a linked-session group: take the session out of the group. */
   onRemoveFromGroup?: () => void;
-  /** Chat header only: a recap of the open chat (`useRecapChat`). */
   onRecapRequest?: () => void;
 }
 
@@ -118,8 +107,6 @@ export function SessionMenuItems({
   const iconSize = variant === "context" ? 16 : 14;
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const forkSession = useAction(api.sandbox.forkSession);
-  // Simple view hides branch/PR actions, matching the hidden PR chip on the
-  // row: dropping the values here drops Copy branch name, Open PR and Review.
   const simpleView = useSimpleView();
   const branchName = simpleView ? undefined : session.branchName;
   const prUrl = simpleView ? undefined : session.prUrl;
@@ -131,8 +118,6 @@ export function SessionMenuItems({
         ? "Agent working"
         : null;
 
-  // Groups: session actions (Copy is a submenu there), PR actions, then
-  // Archive. A divider opens a group only when the group has items.
   const showOpenPr = prs.length === 0 && prUrl !== undefined;
   const showSendForReview = onSendForReview !== undefined && !simpleView;
   const hasPrGroup = prs.length > 0 || showOpenPr || showSendForReview;
@@ -184,8 +169,6 @@ export function SessionMenuItems({
         <Item
           disabled={forkBlockedReason !== null}
           onSelect={() => {
-            // Can take a minute: a running source sandbox is stopped first so
-            // its disk (DBs included) is snapshotted for the fork to boot from.
             const toastId = "session-fork";
             toast.loading("Forking session…", { id: toastId });
             forkSession({ sessionId: session._id }).then(
@@ -204,7 +187,6 @@ export function SessionMenuItems({
         >
           <IconGitFork size={iconSize} />
           Fork session
-          {/* Disabled items drop pointer events, so a title tooltip never shows. */}
           {forkBlockedReason === null ? null : (
             <span className="ml-auto shrink-0 text-xs text-muted-foreground">
               {forkBlockedReason}
@@ -250,7 +232,6 @@ export function SessionMenuItems({
       </Sub>
       {hasPrGroup ? <Separator /> : null}
       <PrActionsSubmenus variant={variant} prs={prs} />
-      {/* A session whose PR predates the `pullRequests` rows has only a URL. */}
       {showOpenPr ? (
         <Item
           onSelect={() => {

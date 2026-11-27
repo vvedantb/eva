@@ -92,7 +92,6 @@ export type RepoSyncStrategy =
 
 const SESSION_LIFECYCLE: SandboxLifecycle = {
   autoStopInterval: 24 * 60,
-  // Auto-archive after 1 day; no auto-delete.
   autoArchiveInterval: 1 * 24 * 60,
 };
 
@@ -371,16 +370,8 @@ export async function createSandbox(
   readyTimeoutSeconds?: number,
   onSandboxAcquired?: (sandbox: SandboxHandle) => Promise<void>,
   forkFrom?: string,
-  /**
-   * How this sandbox uses the repo's shared package cache Drive. Defaults to
-   * the read-only reader role; only the seed-prep and group-builder sandboxes
-   * pass `writer`, since a Drive allows one read-write mount at a time.
-   * See ../_sandbox/driveCache.ts.
-   */
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
-  /** vCPUs; omit for the provider default (see `SandboxCreateParams.vcpus`). */
   vcpus?: number,
-  /** The GitHub token written into the env file (`mintSandboxGitToken`). */
   gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<SandboxHandle> {
   const repoId = sandboxEnvVars.REPO_ID;
@@ -714,7 +705,6 @@ export async function resolveBaseTarget(
   if (await remoteTrackingBranchExists(sandbox, baseBranch)) {
     return { ref: `origin/${baseBranch}`, source: "remote" };
   }
-  // Check local branches via SDK
   const branchList = await execSdkGitOperation(
     sandbox,
     `branches`,
@@ -735,7 +725,6 @@ async function resolveBranchStartTarget(
   ref: string;
   source: "localBranch" | "remoteBranch" | "base";
 }> {
-  // Check local branches via SDK
   const branchList = await execSdkGitOperation(
     sandbox,
     `branches`,
@@ -1312,7 +1301,6 @@ export async function pushBranchToOrigin(
   opts?: {
     timeoutSeconds?: number;
     retryAttempts?: number;
-    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
     workspaceDir?: string;
   },
 ): Promise<{ pushed: boolean; published: boolean }> {
@@ -1328,8 +1316,6 @@ export async function pushBranchToOrigin(
     ).trim();
     if (isChatSideBranch(currentBranch, branchName)) {
       if (await isAutoPublishPinned(sandbox, workspaceDir, branchName)) {
-        // The sender's `manualSideBranchPublish` flag: the agent owns its side
-        // branches, and the chip's "Commit & push" publishes them on request.
         logGit(
           `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; left unpublished by the branch policy (${details})`,
         );
@@ -1503,22 +1489,12 @@ async function publishCheckedOutBranch(
   throw new Error(`pushBranchToOrigin exhausted retries (${details})`);
 }
 
-/**
- * Replaces origin/<branch> with the sandbox's local branch — the user-confirmed
- * recovery after synchronizeBranchForPublish refuses a rewritten local branch.
- *
- * `--force-with-lease` is pinned to the remote-tracking ref refreshed by the
- * fetch below, so a push that landed between fetch and push aborts instead of
- * being silently discarded. When the fetch reports the remote branch deleted,
- * a plain push recreates it and no lease is needed.
- */
 export async function forcePushBranchToOrigin(
   sandbox: SandboxHandle,
   owner: string,
   name: string,
   branchName: string,
   opts?: {
-    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
     workspaceDir?: string;
   },
 ): Promise<void> {
@@ -1585,7 +1561,6 @@ type PreparedSandbox = {
   dockerReady: Promise<boolean>;
 };
 
-/** Creates a sandbox and prepares the repo by cloning or syncing from a snapshot. */
 export async function createSandboxAndPrepareRepo(
   ctx: ActionCtx,
   client: SandboxClient,
@@ -1598,30 +1573,12 @@ export async function createSandboxAndPrepareRepo(
   onSandboxAcquired?: (sandbox: SandboxHandle) => Promise<void>,
   onProgress?: (label: string) => Promise<void>,
   syncStrategy: RepoSyncStrategy = { mode: "all" },
-  // Override the SDK create-ready wait. Large seeded snapshots (~10GB) take
-  // well over the 30s default to start, so callers that boot from them (seeded
-  // snapshot builds) pass a longer value to avoid spurious create timeouts +
-  // the orphaned sandboxes they leave server-side.
   readyTimeoutSeconds?: number,
-  // When true, skip `pnpm/yarn install` during a fresh clone. Used by
-  // createSeedPrepSandbox: the launchSeedRun buildCommands run pnpm install
-  // inside the detached seed script, so installing here wastes 10–15 minutes
-  // and reliably trips Convex's 600s per-action ceiling on providers (Vercel)
-  // that don't have it pre-baked into their base snapshot.
   skipInstallDeps = false,
-  // "Fork session": fork this sandbox instead of booting `snapshotName`. The
-  // fork carries the repo checkout, so it takes the snapshot path below. No
-  // fallback on failure — the source's data is the point of a fork.
   forkFrom?: string,
-  // Shared package-cache Drive role. See createSandbox.driveCacheRole.
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
-  // When true, return without waiting for dockerd; the caller must await
-  // `dockerReady` before anything that needs Docker. Docker takes 2.8s at p50
-  // and 14.6s at p90, which a new session's repo prep should not wait on.
   deferDocker = false,
-  /** vCPUs for the new sandbox; omit for the provider default. */
   vcpus?: number,
-  /** The GitHub access of every token this sandbox gets at create and clone. */
   gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<PreparedSandbox> {
   let sandbox: SandboxHandle | undefined;
@@ -1663,7 +1620,7 @@ export async function createSandboxAndPrepareRepo(
               undefined,
               readyTimeoutSeconds,
               onSandboxAcquired,
-              undefined, // forkFrom — the fallback is a fresh boot
+              undefined,
               driveCacheRole,
               vcpus,
               gitAccess,
@@ -1672,10 +1629,6 @@ export async function createSandboxAndPrepareRepo(
             throw err;
           }
         }
-        // After createSandbox, not inside it: a missing docker binary installs
-        // through the package manager, which must not race createSandbox's jq
-        // install. Idempotent and serialized by a flock, so a later
-        // ensureDockerDaemon simply waits for this one. Never throws.
         const createdSandbox = sandbox;
         const dockerReady = runLoggedGitStep(
           "createSandbox.bootstrapDocker",
@@ -1684,16 +1637,7 @@ export async function createSandboxAndPrepareRepo(
         );
         if (!deferDocker) await dockerReady;
         if (effectiveSnapshot || forkFrom) {
-          // Deliberately no `installDependencies`/pnpm install on this path:
-          // a seeded/base snapshot already carries node_modules from the seed
-          // build (launchSeedRun's buildCommands), and normalizeSnapshotWorktree
-          // preserves untracked files (skips `git clean -fd`) whenever the
-          // seed marker is present, so node_modules survives the reset below.
-          // Re-installing here would cost minutes on every session create.
           await normalizeSnapshotWorktree(sandbox);
-          // The snapshot was baked with a stale token in its git config /
-          // remotes. Install the credential helper before any git network op
-          // so syncRepo (and later in-sandbox `git pull`) authenticate cleanly.
           await ensureGitCredentialHelper(ctx, sandbox, installationId, {
             owner,
             name,
@@ -1801,32 +1745,10 @@ export async function getOrCreateSandbox(
   });
 }
 
-/**
- * Does this error mean the sandbox is genuinely gone (deleted, archived,
- * expired) — i.e. safe to fall through to creating a new one?
- *
- * Takes the error object, not its message: classification reads the provider's
- * structured signals (HTTP status, error type) and only falls back to text for
- * a tagged provider error. See `sandboxErrors.ts`. An earlier version swallowed
- * every error and silently created a new sandbox, which orphaned the old one in
- * common races (e.g. user clicking Start while a stop is mid-flight — the
- * sandbox is in a transitional state, `start()` rejects, and we'd happily
- * burn a fresh sandbox + lose the old one's dev server / terminal state).
- */
 function isSandboxMissingError(err: unknown): boolean {
   return isSandboxGoneError(err);
 }
 
-/**
- * Attempts to resume an existing sandbox. Returns the sandbox on success,
- * `null` if the sandbox is genuinely gone (caller should create a new one),
- * or throws on persistent transient errors.
- *
- * Retries with backoff to ride through transitional sandbox states (e.g.
- * sandbox is mid-stop when Start is clicked). Only "missing" / unresumable
- * errors short-circuit to a new sandbox; everything else surfaces, so we
- * never silently abandon a recoverable sandbox.
- */
 async function tryResumeSandbox(
   ctx: ActionCtx,
   client: SandboxClient,
@@ -1862,16 +1784,11 @@ async function tryResumeSandbox(
       }
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: RESUME_READY_TIMEOUT_SECONDS,
-        // Explicit user start (Start clicked / new run on a reused sandbox):
-        // wait out a stop still snapshotting and resume, instead of refusing.
         resumeAfterStop: true,
         onRestoring: onProgress
           ? () => onProgress("Resuming sandbox...")
           : undefined,
       });
-      // Self-heal: rotate the per-sandbox secret and (re)install the helper on
-      // every resume so the in-sandbox `git pull` works without a stale token
-      // and so sandboxes that pre-date this change pick up the helper.
       await ensureGitCredentialHelper(ctx, sandbox, installationId, {
         owner,
         name,
@@ -1886,7 +1803,6 @@ async function tryResumeSandbox(
         logGit(
           `getOrCreateSandbox: resume failed because sandbox is gone — will create new one (${errorMessage(err)})`,
         );
-        // Unresumable (missing snap / deadline): do not burn another 180s retry.
         return null;
       }
       if (attempt === maxAttempts) throw err;

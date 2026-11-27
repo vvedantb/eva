@@ -16,11 +16,6 @@ import {
   type WatchedCheck,
 } from "./watchEvaluate";
 
-/**
- * One GraphQL read gives the PR's state, head, mergeability and every check on
- * the head commit — check runs and commit statuses (Vercel and the like) —
- * with whether branch protection or a ruleset requires each one.
- */
 const PR_WATCH_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
@@ -99,7 +94,6 @@ const prWatchResponseSchema = z.object({
   }),
 });
 
-/** Conclusions a person or the agent has to look at. */
 const FAILED_CONCLUSIONS = new Set([
   "FAILURE",
   "TIMED_OUT",
@@ -142,10 +136,6 @@ function toMergeability(value: string): Mergeability {
   return "unknown";
 }
 
-/**
- * GitHub answers UNKNOWN while it computes mergeability, which the first read
- * after a base push often starts. No webhook follows, so re-read a few times.
- */
 const MERGEABLE_READS = 3;
 const MERGEABLE_WAIT_MS = 5_000;
 
@@ -211,7 +201,6 @@ export const check = internalAction({
         repo: claimed.name,
       };
       const pr = await readPullRequest(ref, claimed.prNumber);
-      // Merged or closed: the pull_request webhook ends the watch too.
       if (!pr.open) {
         await record(null);
         return null;
@@ -229,8 +218,6 @@ export const check = internalAction({
         remarksNewestAt: feedback.newestAt,
       });
       if (report.changes.length > 0) {
-        // Same delivery as the CI and review automations: starts a turn, or
-        // queues behind the one already running.
         await ctx.runAction(internal.mcp.nodeActions.orchestratorSendMessage, {
           clerkUserId: target.clerkUserId,
           kind: target.kind,

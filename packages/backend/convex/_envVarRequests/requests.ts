@@ -73,7 +73,6 @@ export const getForAnswer = authQuery({
   },
 });
 
-/** Moves a pending request to its answer. False when it was already answered. */
 async function answer(
   ctx: MutationCtx,
   request: Doc<"envVarRequests">,

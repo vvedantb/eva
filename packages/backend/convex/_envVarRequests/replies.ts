@@ -1,10 +1,5 @@
 import { EVA_ENV_FILE } from "../_sandbox/vercelEnvFile";
 
-/**
- * The chat messages an answered secret card posts back to the agent. They name
- * the key only — never the value — and tell the agent where to find it.
- */
-
 export function savedReply(
   key: string,
   scope: "repo" | "team",

@@ -1,13 +1,3 @@
-/**
- * Readers for a single answer out of an {@link EvaluateOutcome}.
- *
- * Jev's answer map is keyed by the ids the caller asked under, and a failed
- * outcome has no answers at all. Every reader returns `null` rather than
- * throwing for the three ways a read can come up empty — the call failed, the
- * id is absent, or the answer is a different question type — so feature code
- * can fall back instead of branching on the outcome first.
- */
-
 import { z } from "zod";
 import type { EvaluateAnswer, EvaluateOutcome } from "./schema";
 
@@ -47,7 +37,6 @@ export function readScore(
   return { score: answer.score, probabilities: answer.probabilities ?? {} };
 }
 
-/** Provider metadata is untyped JSON on the wire, so parse before reading it. */
 const confidenceMetadata = z.object({
   typesafe: z.object({ confidence: z.record(z.string(), z.number()) }),
 });

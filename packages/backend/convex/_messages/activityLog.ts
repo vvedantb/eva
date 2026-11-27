@@ -1,16 +1,5 @@
 import { z } from "zod";
 
-/**
- * The per-step fields that only ever render inside a row's expanded disclosure
- * (`ActivityStepDetail` in @vvedantb/ui): the tool transcript, the edit before/after
- * pair, and the write preview.
- *
- * On a heavy session they are the bulk of what `listByParent` ships — measured
- * at 43% of the activity bytes on a real transcript (94 KB of 218 KB across 212
- * steps) — and a reader who never opens a disclosure pays for all of them on
- * every subscription update. `messages.activityLogById` serves the untrimmed
- * payload when a reader actually expands the turn.
- */
 const activityStepSchema = z
   .object({
     type: z.string().optional(),
@@ -30,11 +19,6 @@ const activityStepSchema = z
 
 const activityStepsSchema = z.array(activityStepSchema);
 
-/**
- * A sub-agent's `output` is its final report, and the Agents roster renders it
- * outside any disclosure (`deriveSubagents` in the web app), so those steps keep
- * theirs.
- */
 const KEEPS_OUTPUT = "subtask";
 
 /**
@@ -73,7 +57,6 @@ export function trimActivityLogForTranscript(
   return trimmedAny ? JSON.stringify(steps) : activityLog;
 }
 
-/** Null for a legacy plain-text log, or anything that is not a step array. */
 function parseSteps(activityLog: string) {
   try {
     return activityStepsSchema.safeParse(JSON.parse(activityLog));

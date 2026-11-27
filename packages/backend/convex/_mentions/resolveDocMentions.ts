@@ -47,8 +47,6 @@ export async function resolveDocMentions(
   const docs = new Map<string, ResolvedDocMention>();
   const mcpRefs = new Map<string, ResolvedMcpMention>();
 
-  // Ids resolve independently: look them up together, then fill the maps in
-  // message order so the prefix block order does not change.
   const ids = [...uniqueIds];
   const resolved = await Promise.all(
     ids.map((rawId) => resolveMention(ctx, rawId, repoId)),
@@ -103,7 +101,6 @@ export async function resolveDocMentions(
   return { resolvedMessage, prefixBlock };
 }
 
-/** One mention id, tried against docs, sessions, projects, then tasks. */
 async function resolveMention(
   ctx: QueryCtx,
   rawId: string,

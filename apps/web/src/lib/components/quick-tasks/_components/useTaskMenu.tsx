@@ -13,12 +13,9 @@ import type {
 type TaskMenuArgs = Omit<
   TaskCardMenuItemsProps,
   "variant" | "onArchive" | "onUnarchive" | "onMove"
-> & {
-  /** After an archive or move takes the task off this page (the task header). */
-  onRemoved?: () => void;
+> & {  onRemoved?: () => void;
 };
 
-/** "codebase/app" for monorepos, the codebase name for single-app repos. */
 function moveTargetName(
   targetId: Id<"githubRepos"> | null,
   groupedCodebases: GroupedCodebase[] | undefined,

@@ -1,11 +1,3 @@
-/**
- * Pure helpers for the emoji-suggestion action: the reactions Jev picks from,
- * and how its per-option probabilities turn back into emoji.
- *
- * Runtime-free so the `"use node"` action stays a thin wrapper and the ranking
- * rules can be tested without a gateway call.
- */
-
 /** Search box text cap — a query, not a message. */
 export const MAX_EMOJI_QUERY_CHARS = 200;
 /** Comment text cap — the gist is in the opening; Jev does not need an essay. */

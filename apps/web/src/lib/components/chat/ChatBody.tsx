@@ -132,23 +132,15 @@ export interface ChatSendOptions {
   draftContent?: string;
 }
 
-/**
- * The rendered slice of a long transcript: it runs from `firstId` to the end.
- * `key` is the chat it belongs to, so a reused shell starts a fresh window.
- */
 interface TranscriptWindow {
   key: string;
   firstId: string | undefined;
-  /** Set by a scroll-up load: where to hold the reader once the rows mount. */
   anchor?: TranscriptScrollAnchor;
-  /** Set by a jump to a turn that was not rendered: scroll there on mount. */
   scrollTo?: { messageId: string };
 }
 
-/** Typing pause before find searches the history above the loaded rows. */
 const FIND_SEARCH_DELAY_MS = 350;
 
-/** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
 interface InlineCard {
   _id: string;
   messageId?: string;

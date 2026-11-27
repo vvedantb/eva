@@ -51,19 +51,14 @@ export function ReplyThreadView({
   onClose,
 }: {
   rootId: string;
-  /** The chat the thread belongs to: its other threads for ↑ and ↓. */
   chatParentId: ChatParentId;
   repo: ChatRepo;
-  /** The chat's composer model: a reply that wakes Eva runs on it. */
   model: AIModel;
-  /** The panel is on screen: Escape anywhere on the page closes it. */
   isOpen: boolean;
   onOpen: (rootId: string) => void;
   onClose: () => void;
 }) {
   const thread = useQuery(api.messages.listReplies, { rootId });
-  // Eva's turn in this thread streams on the chat's row: her open bubble here
-  // shows it, as the chat shows a turn of its own.
   const streaming = useQuery(api.streaming.get, {
     entityId: chatStreamingEntityId(chatParentId),
   });

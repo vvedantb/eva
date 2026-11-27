@@ -92,20 +92,13 @@ function MergeAction({
 
   const canMerge = canMergePr(overview);
   const blocked = mergeBlocker(overview)?.detail ?? null;
-  const buttonLabel = mergeButtonLabel(overview);
-  // Only a stack that lands more than this PR needs listing in the dialog.
-  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
+  const buttonLabel = mergeButtonLabel(overview);  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
   const methodLabel =
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
   const runMerge = async () => {
-    // The skip-confirm click calls this straight from the trigger, so the
-    // trigger's disabled state is the only thing between two merges.
     if (merging) return;
-    setMerging(true);
-    // No `||` in the try and no `finally`: React Compiler bails on the whole
-    // file for either.
-    try {
+    setMerging(true);    try {
       const result = await mergePr({
         repoId,
         prNumber: overview.number,
@@ -180,9 +173,7 @@ function MergeAction({
 
       <Dialog
         open={confirming}
-        onOpenChange={(open) => {
-          // Closing mid-merge would hide the only progress the user sees.
-          if (!merging) setConfirming(open);
+        onOpenChange={(open) => {          if (!merging) setConfirming(open);
         }}
       >
         <DialogContent>
@@ -284,11 +275,6 @@ function ReopenAction({
   );
 }
 
-/**
- * Revert as work, not as an API call. GitHub has no "undo this merge" endpoint —
- * the revert is a commit on the base branch — so this starts a session there with
- * the revert already asked for, the same shape as the header's conflict remedy.
- */
 function RevertAction({ overview }: { overview: PrOverview }) {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
@@ -297,13 +283,8 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const [confirming, setConfirming] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const start = async () => {
-    // Same as merge: the skip-confirm path calls this from the trigger.
-    if (starting) return;
-    setStarting(true);
-    // Built before the `try`: expression-level control flow inside one bails
-    // the whole file out of the React Compiler.
-    const request = revertSessionRequest(overview);
+  const start = async () => {    if (starting) return;
+    setStarting(true);    const request = revertSessionRequest(overview);
     try {
       const { numId } = await createSession({ repoId, ...request });
       await navigate({

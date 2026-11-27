@@ -6,7 +6,6 @@ import {
   hasCodebaseRepoAccess,
 } from "../_githubRepos/helpers";
 
-/** Picks the workflow repo row for a codebase: the root row, else the first sibling. */
 function pickWorkflowRepo(
   siblings: Array<Doc<"githubRepos">>,
 ): Doc<"githubRepos"> | undefined {

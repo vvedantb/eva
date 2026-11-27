@@ -23,8 +23,6 @@ export const createFromTasks = authMutation({
       throw new Error("At least one task is required");
     }
     const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
-    // Only this repo's tasks may join the project: a foreign id would move
-    // another team's task under a project the caller owns.
     const tasks = await Promise.all(args.taskIds.map((id) => ctx.db.get(id)));
     if (tasks.some((task) => task !== null && task.repoId !== args.repoId)) {
       throw new Error("Tasks must belong to this repository");

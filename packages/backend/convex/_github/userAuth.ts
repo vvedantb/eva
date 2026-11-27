@@ -11,15 +11,10 @@ import { decryptValue, encryptValue } from "../encryption";
 import { getGitHubCredentials } from "../githubAuth";
 import { GITHUB_AUTH_REQUIRED } from "./authErrors";
 
-/** Refresh once the access token is this close to expiring. */
 const EXPIRY_SKEW_MS = 60 * 1000;
 
-// Octokit omits `expiresAt` when the App has user-token expiry switched off. The
-// token then lasts until revoked, so park the stored expiry far enough out that
-// the refresh path never triggers for it.
 const NON_EXPIRING_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
-/** Octokit throws RequestError, which carries the HTTP status as a property. */
 const octokitErrorSchema = z.object({ status: z.number() });
 
 interface ResolvedToken {
@@ -29,17 +24,6 @@ interface ResolvedToken {
   refreshTokenExpiresAt: number | null;
 }
 
-/**
- * The OAuth client for this GitHub App's user-authorization flow.
- *
- * Octokit owns the token endpoint: it signs requests with the client secret and
- * raises GitHub's OAuth failures, which arrive as HTTP 200 with an error body
- * rather than as an error status.
- *
- * Reached through `App` rather than the top-level `OAuthApp` export because that
- * export is typed for OAuth Apps, whose tokens never expire; `App.oauth` is the
- * GitHub-App-flavoured client, so `createToken` reports expiry and refresh.
- */
 function getOAuthApp() {
   const { appId, privateKey, clientId, clientSecret } = getGitHubCredentials();
   if (!clientId || !clientSecret) {
@@ -51,7 +35,6 @@ function getOAuthApp() {
     .oauth;
 }
 
-/** Parses an ISO expiry, refusing anything that would store as NaN. */
 function parseExpiry(iso: string): number {
   const parsed = Date.parse(iso);
   if (Number.isNaN(parsed)) {
@@ -60,7 +43,6 @@ function parseExpiry(iso: string): number {
   return parsed;
 }
 
-/** Converts Octokit's ISO expiry strings into the epoch millis we store. */
 function toResolvedToken(authentication: {
   token: string;
   expiresAt?: string;
@@ -81,7 +63,6 @@ function toResolvedToken(authentication: {
   };
 }
 
-/** Persists a token set for a user, encrypting both secrets at rest. */
 async function storeToken(
   ctx: ActionCtx,
   userId: Id<"users">,
@@ -127,10 +108,6 @@ export const completeUserAuthorization = internalAction({
   },
 });
 
-/**
- * The caller's usable GitHub access token in plaintext, or null when they have
- * not authorized Eva (or their authorization has lapsed beyond refresh).
- */
 async function resolveUserAccessToken(
   ctx: ActionCtx,
   userId: Id<"users">,

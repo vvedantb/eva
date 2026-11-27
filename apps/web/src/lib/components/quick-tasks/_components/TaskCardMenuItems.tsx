@@ -59,24 +59,14 @@ export interface TaskCardMenuItemsProps {
   variant: "context" | "dropdown";
   id: Id<"agentTasks">;
   title: string;
-  status: TaskStatus;
-  /** The task page; Copy link copies it. */
-  href?: string;
-  /** Cards link elsewhere; the task header already is the task. */
-  showOpenInNewTab?: boolean;
-  /** Task header only: its sandbox and PR commands, above the shared items. */
-  leading?: ReactNode;
-  /** Off in the task header, which has its own Run Eva button. */
-  showRunEva?: boolean;
+  status: TaskStatus;  href?: string;  showOpenInNewTab?: boolean;  leading?: ReactNode;  showRunEva?: boolean;
   assignedTo?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   groupedCodebases?: GroupedCodebase[];
   users?: User[];
   currentUserId?: Id<"users">;
-  projects?: Project[];
-  /** An archived task: read-only, so the menu offers Unarchive and no edits. */
-  archived?: boolean;
+  projects?: Project[];  archived?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
   onMove: (targetId: Id<"githubRepos">) => void;
@@ -133,22 +123,11 @@ export function TaskCardMenuItems({
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
-
-  // A card only needs runs and PRs once the menu is open — Radix mounts menu
-  // content on demand, so these stay per opened menu rather than per card on
-  // the board. PRs come primary first; a project task links its project's.
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
-  // A project task without PRs of its own links its project's, which is a bare
-  // URL here: the project's rows are not loaded on a task card.
-  const projectPrUrl =
+  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });  const projectPrUrl =
     taskPrs.length === 0
       ? projects?.find((project) => project._id === projectId)?.prUrl
-      : undefined;
-  // Tasks store no branch; the primary PR's head is the one Eva works on.
-  const branchName = taskPrs[0]?.headBranch;
-
-  // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
+      : undefined;  const branchName = taskPrs[0]?.headBranch;
   const canRun =
     (status === "todo" && runs !== undefined && runs.length === 0) ||
     status === "in_progress";
@@ -169,8 +148,6 @@ export function TaskCardMenuItems({
   const MenuLabel =
     variant === "context" ? ContextMenuLabel : DropdownMenuLabel;
   const iconSize = variant === "context" ? 16 : 14;
-
-  // Filter out the current repo from move targets
   const moveTargets = groupedCodebases?.filter((codebase) =>
     codebase.apps.some((app) => app._id !== repoId),
   );
@@ -303,12 +280,7 @@ export function TaskCardMenuItems({
             <IconClipboard size={iconSize} />
             Title
           </Item>
-          {href ? (
-            /*
-             * A card sits in a list or on the board, so the current pathname
-             * is that list — not the task. Copy the task's own href instead.
-             */
-            <Item
+          {href ? (            <Item
               onSelect={() => {
                 void navigator.clipboard.writeText(
                   window.location.origin + href,
@@ -360,14 +332,10 @@ export function TaskCardMenuItems({
             Move to codebase
           </SubTrigger>
           <SubContent className="max-h-80 overflow-y-auto">
-            {moveTargets.map((codebase) => {
-              // Filter out current repo from apps
-              const availableApps = codebase.apps.filter(
+            {moveTargets.map((codebase) => {              const availableApps = codebase.apps.filter(
                 (app) => app._id !== repoId,
               );
               if (availableApps.length === 0) return null;
-
-              // Single app codebase: show directly
               if (!codebase.isMonorepo || availableApps.length === 1) {
                 const app = availableApps[0];
                 return (
@@ -383,8 +351,6 @@ export function TaskCardMenuItems({
                   </Item>
                 );
               }
-
-              // Monorepo: show as submenu with apps grouped
               return (
                 <Sub key={codebase.codebase}>
                   <SubTrigger>{codebase.displayName}</SubTrigger>

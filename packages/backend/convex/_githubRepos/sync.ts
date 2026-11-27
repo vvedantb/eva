@@ -15,7 +15,6 @@ const upsertArgs = {
 };
 type UpsertArgs = ObjectType<typeof upsertArgs>;
 
-/** The row for this repo (or monorepo app), matched by GitHub id, then owner/name. */
 async function findExistingRow(
   ctx: MutationCtx,
   args: UpsertArgs,
@@ -80,7 +79,6 @@ export const syncDetectedApp = internalMutation({
   },
 });
 
-/** Marks a synced row connected and fills in identity GitHub now reports. */
 async function refreshRow(
   ctx: MutationCtx,
   existing: Doc<"githubRepos">,

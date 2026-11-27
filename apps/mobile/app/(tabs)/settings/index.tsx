@@ -30,8 +30,6 @@ export default function SettingsScreen() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const scheme = useScheme();
 
-  // Drop this phone's push token first, so the next account on it does not
-  // get this account's pushes.
   const handleSignOut = async () => {
     const token = await getPushToken({ ask: false });
     if (token) await unregister({ token });
@@ -42,7 +40,6 @@ export default function SettingsScreen() {
     <TabScreen>
       <PageHeader title="Settings" />
       <ScreenContainer reserveTabBar>
-        {/* The web `SettingsStack` rhythm: 32 between sections. */}
         <View className="gap-8">
           <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
@@ -50,10 +47,8 @@ export default function SettingsScreen() {
           <SettingsSection
             title="Email notifications"
             description="How Eva reaches you outside the app."
-            // The web section is `bodyVariant="list"`: the row carries its own padding.
             bodyVariant="list"
           >
-            {/* The whole row toggles, as the web `<label htmlFor>`; TalkBack reads one switch. */}
             <SettingsToggleRow
               title="Send summary and changelog"
               description="Receive a daily summary of unread notifications and the weekly changelog by email."
@@ -66,7 +61,6 @@ export default function SettingsScreen() {
                   checked={emailEnabled ?? false}
                   disabled={emailEnabled === undefined}
                   onCheckedChange={toggleEmail}
-                  // Eva's web switch is off on `bg-muted` with a `bg-white` thumb in both schemes.
                   offColor={EVA_THEME[scheme].muted}
                   thumbStyle={{ backgroundColor: emailEnabled ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
                 />
@@ -78,7 +72,6 @@ export default function SettingsScreen() {
             description="Eva notifies this phone when an agent needs your input or someone mentions you. Turn them off in Android settings."
           />
           <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>
-            {/* `lg`, a whole 44 target (the web `default` is 40). */}
             <Button variant="outline" size="lg" onPress={() => setConfirmSignOut(true)}>
               Sign out
             </Button>

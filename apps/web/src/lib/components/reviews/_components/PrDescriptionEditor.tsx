@@ -43,10 +43,7 @@ export function PrDescriptionEditor({
           <p className="text-xs text-destructive">{error}</p>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {/* eva authenticates as its GitHub App, so the edit is attributed to
-              the app rather than to the reader's account. */}
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2">          <p className="text-xs text-muted-foreground">
             Saved to GitHub as the eva app.
           </p>
           <span className="flex items-center gap-2">

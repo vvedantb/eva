@@ -2,10 +2,6 @@ import { v } from "convex/values";
 import { authQuery, authMutation, hasTaskAccess } from "./functions";
 import { reactionTargetValidator } from "./validators";
 
-// The UI only needs which emoji exist on each target and who reacted, so the
-// query projects away `_id`/`_creationTime`/`createdAt`. Keeping the shape lean
-// also lets the client build optimistic rows from real values (no fabricated
-// Id needed).
 const reactionViewValidator = v.object({
   targetType: reactionTargetValidator,
   targetId: v.string(),

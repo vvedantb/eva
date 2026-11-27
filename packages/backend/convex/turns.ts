@@ -71,11 +71,6 @@ const chatTurnStatusValidator = v.union(
 );
 type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
-/**
- * Whether one chat has a turn open, for a reader who may see it. The open
- * durable turn is canonical, synthetic turns included. `legacy` is only the
- * web's optimistic shape before a send's turn exists.
- */
 async function readChatStatus(
   ctx: QueryCtx,
   userId: Id<"users">,
@@ -95,16 +90,11 @@ async function readChatStatus(
   };
 }
 
-/**
- * The access check for one chat entity: false when the reader may see it,
- * null otherwise. Every chat runs on durable turns, so nothing else counts.
- */
 async function readLegacyExecuting(
   ctx: QueryCtx,
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<boolean | null> {
-  // Sessions and their chats run only on durable turns: no legacy fields.
   const chatId = ctx.db.normalizeId("sessionChats", entityId);
   if (chatId) {
     const chat = await ctx.db.get(chatId);
@@ -289,7 +279,6 @@ export const openAgentTurnLease = internalMutation({
   args: {
     entityId: turnEntityIdValidator,
     lane: v.optional(turnLaneValidator),
-    /** The session whose sandbox the agent holds (a project interview's). */
     sessionId: v.optional(v.id("sessions")),
     streamingEntityId: v.string(),
     model: v.optional(v.string()),
@@ -345,11 +334,6 @@ export const acquireOneShotLease = internalMutation({
   },
 });
 
-/**
- * Appends why the reconciler gave up to the shared stall alert. The shared
- * wording assumes a dead process; a turn finalised after grace expired needs
- * to say the process was alive but mute, or the user reads a wrong cause.
- */
 function withCauseDetail(
   alert: ChatAlert,
   cause: ExpiredTurnLeaseCause,
@@ -405,11 +389,6 @@ export const graceExpired = internalMutation({
   },
 });
 
-/**
- * Finalises one expired turn for any chat surface. A turn with a workflow
- * gets the full stale-turn teardown; a turn without one (a synthetic turn)
- * only closes its placeholder and frees the entity's synthetic slot.
- */
 async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
   ctx: MutationCtx,
   adapter: ChatSurfaceAdapter<TId, TEntity>,
@@ -433,9 +412,6 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
         cause,
         turn.silentSince ?? lastLeaseWriteAt,
       );
-  // Closed before either branch drains: an open turn still holds one of the
-  // session's parallel-chat slots, so a sibling parked on the cap would miss
-  // the slot this turn frees, with no later drain to release it.
   await closeTurn(ctx, turn, "error", { error: alert.text });
   if (entity && turn.workflowId !== undefined) {
     await finalizeStaleChatTurn(
@@ -464,11 +440,6 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
   }
 }
 
-/**
- * Finalises one expired agent turn (a quick-task run or a one-shot agent)
- * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
- */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,
   owner: AgentTurnOwner,
@@ -518,7 +489,6 @@ async function finalizeExpiredAgentTurn(
       }
       break;
     case "interview":
-      // The project interview is gone; a leftover turn only closes.
       break;
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
@@ -548,8 +518,6 @@ export const finalizeExpired = internalMutation({
       await finalize;
       return null;
     }
-    // No surface owns the id (e.g. a pre-sessionChats turn keyed by a session
-    // id). Close it anyway, or it stays open forever and starves `listExpired`.
     await clearStreamingActivity(ctx, turn.streamingEntityId);
     await closeTurn(ctx, turn, "error", {
       error: `Turn owner not recognised (${args.cause})`,
@@ -600,8 +568,6 @@ export const reconcile = internalAction({
         });
         continue;
       }
-      // Evidence must be read while the VM is still up, but never at the cost
-      // of leaving the turn open — a failed capture is only logged.
       if (decision.cause !== "sandbox_stopped" && turn.sandboxId) {
         try {
           const diagnostics = await ctx.runAction(

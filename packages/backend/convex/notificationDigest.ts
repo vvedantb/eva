@@ -20,8 +20,6 @@ export const sendDailyDigests = internalAction({
   returns: v.null(),
   handler: async (ctx) => {
     const appUrl = getEvaBaseUrl();
-    // Since the previous weekday run: Monday covers the weekend. Older unread
-    // items stay in the in-app inbox.
     const since = digestWindowStart(Date.now());
     const recipients = await ctx.runQuery(
       internal.notifications.getDigestRecipients,

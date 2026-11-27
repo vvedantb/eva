@@ -136,7 +136,6 @@ export const create = authMutation({
       args.content,
     );
 
-    // Commenting subscribes you to the task (sticky opt-out respected).
     await ensureSubscribed(ctx, args.taskId, ctx.userId);
 
     if (
@@ -166,10 +165,6 @@ export const create = authMutation({
       skip: notifiedUserIds,
     });
 
-    // Broadcast to the rest of the subscriber set (creator, assignee, followers).
-    // Mention/reply recipients are already in notifiedUserIds, so they keep their
-    // higher-signal notification instead of a duplicate broadcast. A "Make
-    // changes" submission reads as a change request rather than a new comment.
     await notifySubscribers(ctx, {
       taskId: args.taskId,
       type: args.requestsChanges ? "changes_requested" : "comment_added",

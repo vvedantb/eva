@@ -40,13 +40,6 @@ export const PROVIDER = process.env.AI_PROVIDER || "claude";
 export const MODEL =
   process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
-/**
- * Surfaces whose chat panel renders a blocking question and writes the answer
- * back: session `ChatPanel.tsx`, `TaskSandboxChatPanel.tsx` and
- * `ProjectSandboxChatPanel.tsx` all query `pendingQuestions.getActive` on the
- * entity id and call `pendingQuestions.answer`, and all three clear their rows
- * when the sandbox stops. Anything else has nobody to answer.
- */
 const QUESTION_ANSWERING_ENTITY_FIELDS = new Set([
   "sessionId",
   "chatId",
@@ -281,11 +274,6 @@ export const REPO_ID = process.env.REPO_ID;
  */
 export const PROVIDER_ACCOUNT_ID = process.env.PROVIDER_ACCOUNT_ID || "";
 
-// --- Reasoning / thinking effort ---
-// `AI_REASONING_EFFORT` is the abstract level from the traits menu, sent only
-// when the user picks a non-default level. Mapped per provider below:
-//   - Claude: Agent SDK `effort` option.
-//   - Codex: `model_reasoning_effort` in config.toml (see codexSession.ts).
 const REASONING_EFFORT = process.env.AI_REASONING_EFFORT || "";
 const AI_THINKING_ENABLED = process.env.AI_THINKING_ENABLED || "";
 const AI_CONTEXT_1M = process.env.AI_CONTEXT_1M || "";
@@ -299,8 +287,6 @@ export const claudeEffort =
     : "";
 
 const CODEX_REASONING_EFFORT: Record<string, string> = {
-  // GPT-5.6 Sol/Terra/Luna: none through `max`. GPT-6 Astra accepts
-  // low through `max` — the picker never offers "off" for it.
   off: "none",
   low: "low",
   medium: "medium",
@@ -348,16 +334,9 @@ export const normalizedCodexModel = MODEL.startsWith("codex:")
 export const normalizedOpencodeModel = MODEL.startsWith("opencode:")
   ? MODEL.slice("opencode:".length)
   : MODEL;
-// Legacy Eva cursor model ids baked a reasoning level into the slug (the
-// retired grok-4.5-low, gpt-5.5-low). The SDK rejects those: its model list
-// carries base ids only, with reasoning exposed as a per-model parameter.
-// Split here; the runner discovers the parameter id at runtime and degrades
-// to the base id when the model has none (resolveCursorModelSelection).
-// xhigh before high: "grok-4.6-xhigh".endsWith("-high") is also true.
 const CURSOR_REASONING_LEVELS = ["xhigh", "medium", "low", "high"];
 
 export function splitCursorModel(raw: string): { base: string; level: string } {
-  // Legacy CLI-era slugs: cursor-grok-4.5-* → grok-4.5-*.
   const unprefixed = raw.startsWith("cursor-grok-")
     ? raw.slice("cursor-".length)
     : raw;
@@ -376,10 +355,6 @@ const cursorModelRaw = MODEL.startsWith("cursor:")
 const cursorModelParts = splitCursorModel(cursorModelRaw);
 export const normalizedCursorModel = cursorModelParts.base;
 
-// Abstract traits-menu level → cursor reasoning level. Grok 4.6 accepts
-// xhigh; max still clamps to high (no Cursor model exposes max). Off sends
-// the bare model. Falls back to the legacy id suffix for pre-migration
-// AI_MODEL values that carried the level in the slug.
 const CURSOR_REASONING_EFFORT: Record<string, string> = {
   off: "",
   low: "low",
@@ -417,8 +392,6 @@ export const TOOL_STEP_TYPES = new Set([
   "todos",
 ]);
 
-// Pricing lives in @eva/shared so the web Usage page and this bundle read
-// one table. Re-exported to keep `computeCodexCostUsd` imports unchanged.
 export { CODEX_PRICING_PER_MILLION } from "@eva/shared/modelPricing";
 
 export const completedLabels: Record<string, string> = {

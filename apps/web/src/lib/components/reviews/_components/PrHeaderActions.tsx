@@ -49,9 +49,7 @@ export function PrHeaderActions({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   refreshing: boolean;
-  onRefresh: () => void;
-  /** Re-reads the overview after something on GitHub changed. */
-  onChanged: () => void;
+  onRefresh: () => void;  onChanged: () => void;
 }) {
   const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
@@ -126,11 +124,7 @@ export function PrHeaderActions({
                 <IconStack2 size={14} aria-hidden />
                 Stack a new session
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {/* Closing notifies every reviewer and stops CI, so it asks
-                  first. The Radix `onSelect` event carries no modifier, so only
-                  the Alt-held store can skip it. */}
-              <DropdownMenuItem
+              <DropdownMenuSeparator />              <DropdownMenuItem
                 className="text-destructive"
                 disabled={closing}
                 onSelect={() =>

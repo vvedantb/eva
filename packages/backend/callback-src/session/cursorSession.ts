@@ -25,8 +25,6 @@ export function syncCursorStateToPersist(): void {
 }
 
 function hydratePersistedCursorState(): void {
-  // MCP configuration is supplied directly to the Cursor SDK; no workspace
-  // file participates in session hydration.
   store.hydratePersistedState("hydratePersistedCursorState");
 }
 

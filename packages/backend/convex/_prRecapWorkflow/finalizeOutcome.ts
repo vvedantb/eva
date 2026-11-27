@@ -24,7 +24,6 @@ type FinalizePrRecapOutcomeParams = {
   prUrl: string;
   prTitle: string;
   headSha: string;
-  /** The run's setup, recorded on the doc only when it produced a recap. */
   model: Infer<typeof aiModelValidator>;
   reasoningLevel?: ReasoningLevel;
   thinkingEnabled?: boolean;

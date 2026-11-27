@@ -29,14 +29,9 @@ export function ReviewTimelineTab({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   onOpenCommit: (sha: string) => void;
-}) {
-  // The overview carries GitHub's first page of commits, which is the oldest —
-  // so a long branch hides its most recent work until Load more fetches it.
-  const allCommits = usePrCommits(repoId, overview.number);
+}) {  const allCommits = usePrCommits(repoId, overview.number);
   const commits = allCommits.commits ?? overview.commits;
-  const events = buildPrTimeline({ ...overview, commits });
-  // Newest first: what happened last is what a returning reader came for.
-  const rows = groupTimelineRows([...events].reverse());
+  const events = buildPrTimeline({ ...overview, commits });  const rows = groupTimelineRows([...events].reverse());
   const hiddenCommits = Math.max(0, overview.commitCount - commits.length);
   const canLoadCommits = allCommits.commits === undefined && hiddenCommits > 0;
 

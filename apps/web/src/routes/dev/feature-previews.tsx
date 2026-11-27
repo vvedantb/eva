@@ -598,7 +598,6 @@ function PreviewToolsPreview() {
   const [path, setPath] = useState("/billing");
   const [contain, setContain] = useState(false);
   const [poppedOut, setPoppedOut] = useState(false);
-  // The path input reads repo history, so borrow a real repo's context.
   return (
     <RepoProvider owner="vvedantb" repoParam="eva--web" passive>
       <RepoGate>

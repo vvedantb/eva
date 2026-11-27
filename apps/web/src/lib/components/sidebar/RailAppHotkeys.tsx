@@ -7,16 +7,8 @@ import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { useShortcutBinding } from "@/lib/hotkeys/useShortcut";
 import { SHORTCUT_DEFS, deriveSlotHotkey } from "@/lib/hotkeys/registry";
 
-/** Nine numbered slots jump straight to the 1st … 9th app tile in the rail. */
 const HOTKEY_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-/**
- * One `useHotkey` registration. Rendered once per slot so the hooks stay at a
- * fixed call site (no hooks inside a loop) while the repo list changes freely.
- *
- * This is the one shortcut that cannot go through `useShortcut`: the user binds
- * a single combo and the other eight slots derive their digit from it.
- */
 function RailAppHotkey({
   slot,
   repo,
@@ -59,7 +51,6 @@ export function RailAppHotkeys({
   onNavigate,
 }: {
   repos: RepoWithLogo[];
-  /** Repo section to land on, so a jump keeps the current view. */
   section: string | null;
   onNavigate: () => void;
 }) {

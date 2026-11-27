@@ -23,7 +23,6 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 export type ComposerMode = "comment" | "review";
 
-/** The web `text-xs` (12 / 16). */
 const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
 /**
@@ -54,7 +53,6 @@ export function ReviewComposer({
   onModeChange: (mode: ComposerMode) => void;
   repoId: Id<"githubRepos">;
   prNumber: number;
-  /** A closed or merged pull request still takes comments, but no verdict. */
   isOpen: boolean;
   onPosted: () => void;
 }) {
@@ -63,7 +61,6 @@ export function ReviewComposer({
   const addComment = useAction(api.github.addPrComment);
   const submitPrReview = useAction(api.github.submitPrReview);
   const pending = usePendingLineComments({ repoId, prNumber });
-  // Every pending comment carries a GitHub anchor: the phone drafts them on the pull request diff only.
   const comments = pending.comments.map((comment) => ({
     path: comment.path,
     body: comment.body,
@@ -77,7 +74,6 @@ export function ReviewComposer({
   const [event, setEvent] = useState<ReviewEvent>("COMMENT");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The field, focused once the sheet is on screen (`onShow`): focus is imperative.
   const field = useRef<TextInput>(null);
   const activeMode: ComposerMode = isOpen ? mode : "comment";
   const body = activeMode === "comment" ? commentBody : reviewBody;
@@ -121,7 +117,6 @@ export function ReviewComposer({
     <Sheet
       open={open}
       onOpenChange={(next) => {
-        // Closing mid-post would hide the only progress the user sees.
         if (!posting) onOpenChange(next);
       }}
     >
@@ -181,7 +176,6 @@ export function ReviewComposer({
           )}
         </SheetBody>
         <View className="flex-row items-center justify-between gap-3">
-          {/* eva authenticates as its GitHub App, so GitHub shows the app, not the reader. */}
           <Text className="min-w-0 shrink" style={[TEXT_XS, { color: muted }]}>
             Posted as the eva app.
           </Text>

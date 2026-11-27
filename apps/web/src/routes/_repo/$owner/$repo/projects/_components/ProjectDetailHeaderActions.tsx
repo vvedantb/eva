@@ -31,7 +31,6 @@ interface ProjectDetailHeaderActionsProps {
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
-  /** The project's main chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
 }
@@ -57,7 +56,6 @@ export function ProjectDetailHeaderActions({
   const projectsPath = `${basePath}/projects`;
   const segment = entityPathSegment(project);
   const isArchived = project.archivedAt !== undefined;
-  // Archived: back to the list, as a session archive does.
   const projectArchive = useProjectArchive(repoId, () => {
     void navigate({ to: toInternalRepoHref(projectsPath) });
   });

@@ -16,7 +16,6 @@ export type ReadableSiblingRepo = {
   githubId: number | undefined;
 };
 
-/** Case-insensitive owner/name key: GitHub treats `Org/Repo` and `org/repo` as one repository. */
 function repoKey(repo: { owner: string; name: string }): string {
   return `${repo.owner.toLowerCase()}/${repo.name.toLowerCase()}`;
 }
@@ -29,11 +28,6 @@ export function isSameGitHubRepo(
   return repoKey(a) === repoKey(b);
 }
 
-/**
- * Every `githubRepos` row for the same owner/name as the given rows, including
- * rows the user cannot access. The opt-out flag is shared across sibling app
- * rows, so the exclusion check must see the whole group to stay fail-closed.
- */
 async function collectGroupRows(
   db: GenericDatabaseReader<DataModel>,
   rows: Array<Doc<"githubRepos">>,

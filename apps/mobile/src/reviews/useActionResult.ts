@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 export type ActionResult<T> =
   | { status: "loading" }
   | { status: "error"; message: string }
-  /** `refreshing` keeps the data on screen while a reload runs. */
   | { status: "ready"; data: T; refreshing: boolean };
 
 type Settled<T> = { key: string; result: { status: "error"; message: string } | { status: "ready"; data: T } };
@@ -26,7 +25,6 @@ export function useActionResult<T>(
   const [settled, setSettled] = useState<Settled<T> | null>(null);
   const [refreshingKey, setRefreshingKey] = useState<string | null>(null);
 
-  // A reload that lands after the key moved on keeps the newer key's result.
   const settle = (next: Settled<T>) =>
     setSettled((previous) => (previous !== null && previous.key !== next.key ? previous : next));
   const failure = (keyed: string, cause: Error): Settled<T> => ({

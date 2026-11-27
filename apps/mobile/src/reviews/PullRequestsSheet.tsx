@@ -105,7 +105,6 @@ export function usePullRequestsSheet() {
   const [pickedId, setPickedId] = useState<OwnerPr["_id"] | null>(null);
   const [closeTarget, setCloseTarget] = useState<PrCloseTarget | null>(null);
   const prs = orderPrsLiveFirst(useOwnerPullRequests(owner ?? undefined));
-  // Read from the live list, so a PR closed elsewhere shows its new state here.
   const picked = pickedId === null ? undefined : prs.find((pr) => pr._id === pickedId);
 
   const dismiss = () => {
@@ -116,7 +115,6 @@ export function usePullRequestsSheet() {
     setPickedId(null);
     setOwner(next);
   };
-  // Leaves the sheet first: the next screen or dialog must not open under it.
   const act = (run: () => void) => {
     dismiss();
     run();
@@ -175,7 +173,6 @@ export function usePullRequestsSheet() {
   return { openFor, sheet };
 }
 
-/** One PR's page: the web `PrActionItems`, with Open PR first, as the phone has a PR screen. */
 function PrActions({
   pr,
   onOpen,
@@ -219,7 +216,6 @@ function PrActions({
       {live ? (
         <>
           <MenuDivider />
-          {/* Closing notifies every reviewer and stops CI, so it asks first, as the web. */}
           <SheetRow icon={IconGitPullRequestClosed} title="Close without merging" danger onPress={onClose} />
         </>
       ) : null}

@@ -8,7 +8,6 @@ import {
 import { resolveBinding, type ShortcutId } from "@/lib/hotkeys/registry";
 
 interface ShortcutsContextValue {
-  /** Sparse map of shortcut id to hotkey. Empty until the query resolves. */
   overrides: Record<string, string>;
 }
 

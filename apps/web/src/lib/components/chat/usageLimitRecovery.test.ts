@@ -5,12 +5,6 @@ import {
   usageLimitRetryCandidates,
 } from "@eva/shared/usageLimitRecovery";
 
-/**
- * The recovery banner repeats the provider's own reset hint back to the user,
- * so a wrong extraction either drops the one piece of information that says
- * whether waiting is cheaper than switching accounts, or pastes the whole
- * error string into a one-line banner.
- */
 describe("usageLimitResetText", () => {
   test("keeps the reset fragment out of a session-limit failure", () => {
     expect(
@@ -27,8 +21,6 @@ describe("usageLimitResetText", () => {
   });
 
   test("an error with no reset hint yields nothing to show", () => {
-    // The banner still renders — it just omits the ` · resets …` clause rather
-    // than inventing a time the provider never gave.
     expect(
       usageLimitResetText("Error: Claude usage limit reached"),
     ).toBeUndefined();

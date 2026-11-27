@@ -8,11 +8,8 @@ import { z } from "zod";
  */
 export const recapWalkthroughStepValidator = v.object({
   title: v.string(),
-  /** Markdown: what this step changes and why. */
   summary: v.string(),
-  /** Changed file paths this step covers, in reading order. */
   files: v.array(v.string()),
-  /** A decision only the reviewer can make; absent when there is none. */
   lookClosely: v.optional(v.string()),
 });
 
@@ -49,7 +46,6 @@ const agentStepSchema = z.object({
   lookClosely: z.string().trim().min(1).optional(),
 });
 
-/** Raw agent text → parsed JSON → walkthrough, in one boundary parse. */
 const agentWalkthroughSchema = z
   .string()
   .transform((text, ctx) => {
@@ -105,7 +101,6 @@ export function parseRecapWalkthrough(
   return steps;
 }
 
-/** Removes a surrounding ```json ... ``` fence if the model added one. */
 function stripJsonFence(value: string): string {
   const fenced = value.trim().match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/);
   return fenced ? fenced[1].trim() : value.trim();

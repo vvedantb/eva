@@ -322,7 +322,6 @@ export const pendingTurnFields = {
   turnId: v.optional(v.id("turns")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: v.optional(aiModelValidator),
-  /** Build vs plan; the daemon maps this onto Claude `setPermissionMode`. */
   interactionMode: v.optional(interactionModeValidator),
 };
 
@@ -337,47 +336,23 @@ export const sessionDaemonStateFields = {
   pendingTaskStops: v.optional(v.array(v.string())),
   cancelRequestedAt: v.optional(v.number()),
   sandboxSetupPending: v.optional(v.boolean()),
-  // Level-triggered: the usage chip asks the live Claude daemon to report
-  // plan windows via the Agent SDK. claimPendingTurn returns it without
-  // clearing; the refresh action clears it when it stops waiting.
   usageRefreshRequestedAt: v.optional(v.number()),
-  // Mirrors sessions.claimPausedUntil — the prewarm kill fence is read off
-  // this compact row on the 50ms claim poll.
   claimPausedUntil: v.optional(v.number()),
 };
 
-// Task and project chat fields (`chatTurnLifecycleVersion`, the sandbox and
-// chat-daemon fields, `lastChatModel` and traits) removed: their chats and
-// sandboxes run on owned sessions. schema-narrowing-ok: clearLegacyOwnerChatFields
+// schema-narrowing-ok: clearLegacyOwnerChatFields
 
 export const chatDaemonEntityFields = {
   pendingTurn: pendingTurnValidator,
   syntheticTurnMessageId: v.optional(v.id("messages")),
   backgroundAgents: v.optional(v.array(backgroundAgentEntryValidator)),
-  // Written only when the goal changes (set, check, met, cleared).
   goal: v.optional(agentGoalValidator),
   pendingTaskStops: v.optional(v.array(v.string())),
-  // Interrupt-cancel signal for a warm Claude daemon: cancelChatExecution sets this
-  // instead of killing the sandbox process; claimPendingTurn drains it
-  // unconditionally (even mid-turn, with no pendingTurn) so the daemon's poll
-  // loop notices and aborts its in-flight SDK query.
   cancelRequestedAt: v.optional(v.number()),
-  // Steer signal for a warm Claude/Codex daemon: a queued message waits with
-  // `steer: "requested"`. Kept on the entity so the 50ms claim poll reads the
-  // queue only while a steer is waiting (see `_chat/steer.ts`).
   steerRequestedAt: v.optional(v.number()),
-  // When the user last pressed Stop. Messages queued before it stay queued
-  // until the user presses Steer (see `nextRunnableQueuedMessage`).
   queueHeldAt: v.optional(v.number()),
-  // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
-  // for project and task chat daemons.
   usageRefreshRequestedAt: v.optional(v.number()),
-  // Self-expiring fence set by prewarm around a daemon kill. See
-  // `_chat/daemonClaimPause.ts`: while it is in the future claimPendingTurn
-  // hands back an empty claim so a dying daemon cannot take the turn (and its
-  // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
-  // The retired claim stamp field is removed; 0 prod rows held it on 2026-10-07.
   // schema-narrowing-ok: clearSessionPendingTurnClaimedAt
   // schema-narrowing-ok: clearTaskPendingTurnClaimedAt
   // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
@@ -424,10 +399,7 @@ export const prOwnerRefValidator = v.union(
 
 /** How a tracked PR came to be linked to its owner. */
 export const prOriginValidator = v.union(
-  // Opened by an Eva workflow through the GitHub API.
   v.literal("eva"),
-  // Opened inside the sandbox (or by hand) on an Eva branch, attached from the
-  // pull_request webhook by parsing the head branch.
   v.literal("agent"),
 );
 
@@ -438,22 +410,14 @@ export const prOriginValidator = v.union(
  */
 export const prWatchValidator = v.object({
   startedAt: v.number(),
-  /** Session only: the chat that asked, which every wake goes to. */
   sessionChatId: v.optional(v.id("sessionChats")),
-  /** Head commit the check fields below describe. Unset until first read. */
   headSha: v.optional(v.string()),
-  /** Names of the checks already reported as failed on `headSha`. */
   failedChecks: v.array(v.string()),
-  /** "All checks passed" was already reported for `headSha`. */
   passed: v.boolean(),
   conflicting: v.boolean(),
-  /** GitHub time of the newest comment already reported. */
   remarksThrough: v.number(),
-  /** Comment-only wakes in a row; the watch ends at the cap. */
   commentWakes: v.number(),
-  /** A debounced check is scheduled for this time. */
   checkAt: v.optional(v.number()),
-  /** First failed GitHub read in a row; the watch ends after 15 minutes. */
   unreadableSince: v.optional(v.number()),
 });
 
@@ -465,34 +429,21 @@ export const prWatchValidator = v.object({
  */
 export const pullRequestFields = {
   repoId: v.id("githubRepos"),
-  /** Canonical GitHub `html_url`. Unique across the table. */
   prUrl: v.string(),
   prNumber: v.number(),
   headBranch: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   title: v.optional(v.string()),
   state: prStateValidator,
-  /** Live state Eva closed when archiving or cancelling the owner. Undoing it reopens the PR. */
   stateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
-  /**
-   * The PR the owner's chrome keys off: the one Eva's own flow opened for the
-   * owner's current branch. At most one per owner; a newer Eva PR demotes it.
-   */
   primary: v.boolean(),
   origin: prOriginValidator,
   owner: prOwnerValidator,
-  /** Set while the owner's agent watches this PR. Cleared once it is terminal. */
   watch: v.optional(prWatchValidator),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
 
-/**
- * Denormalised summary of an owner's `pullRequests` rows so list queries can
- * draw PR chrome without a join. Written only by `syncOwnerPrSummary`.
- * `prUrl` is the primary PR (else the newest); `prState` rolls every row up:
- * live while any PR is live, otherwise merged if any merged, else closed.
- */
 const prSummaryFields = {
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
@@ -509,21 +460,15 @@ const prSummaryFields = {
 export const sessionChatFields = {
   sessionId: v.id("sessions"),
   repoId: v.id("githubRepos"),
-  /** Session owner, mirrored so the 50ms daemon claim poll skips the repo access read. */
   userId: v.id("users"),
   title: v.string(),
-  /** Per-session sequence; 1 is Main. Stable for links (`?chat=2`). */
   number: v.number(),
   isMain: v.boolean(),
-  /** Closed by the user. Main can never be archived. */
   archived: v.optional(v.boolean()),
   createdBy: v.optional(v.id("users")),
   updatedAt: v.optional(v.number()),
-  // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots
-  /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
+  // schema-narrowing-ok: clearSessionWorkflowSlots
   lastTurnFinishedAt: v.optional(v.number()),
-  // Composer settings, sticky per chat (see the matching session comments
-  // for each field's contract).
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   provider: v.optional(aiProviderValidator),
   lastModel: v.optional(aiModelValidator),
@@ -531,15 +476,10 @@ export const sessionChatFields = {
   lastThinkingEnabled: v.optional(v.boolean()),
   lastUse1mContext: v.optional(v.boolean()),
   lastFastMode: v.optional(v.boolean()),
-  // A Main chat backfilled from an existing session keeps the session id as
-  // its provider-transcript seed so it resumes the conversation Claude
-  // already holds instead of starting cold; a quick task's Main chat keeps the
-  // task id its old task chat ran under, a project's Main chat the project id
-  // and a project task's chat the task id. New chats hash their own id.
   claudePersistenceSeed: v.optional(
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
-  // Legacy taskId removed. schema-narrowing-ok: clearSessionChatTaskIds
+  // schema-narrowing-ok: clearSessionChatTaskIds
   ...chatDaemonEntityFields,
 };
 
@@ -561,31 +501,20 @@ export const taskRunValidator = v.union(
   v.object({
     state: v.literal("running"),
     workflowId: v.string(),
-    /** Absent only on rows migrated from the legacy `activeWorkflowId`. */
     runId: v.optional(v.id("agentRuns")),
   }),
 );
 
 export const agentTaskFields = {
   ...entityNumIdFields,
-  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
-  /** Archived: hidden from lists, still opens by URL; `unarchive` clears it. */
+  // schema-narrowing-ok: archiveDeletedEntities
   archivedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
-  // User-attached input files (paperclip / paste in the quick task composer),
-  // stored via Convex file storage. Materialized into the sandbox as
-  // /tmp/eva-attachment-* at launch so the agent can read them.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
-  /**
-   * Repos besides `repoId` this task changes in the same sandbox (a project
-   * coordinator's multi-repo task). Its work session gets one `sessionRepos`
-   * row per repo (`insertWorkSession`), each with its own PR.
-   */
   linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   projectId: v.optional(v.id("projects")),
-  /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
   origin: v.optional(taskOriginValidator),
   tags: v.optional(v.array(v.string())),
   taskNumber: v.optional(v.number()),
@@ -596,66 +525,23 @@ export const agentTaskFields = {
   createdBy: v.id("users"),
   assignedTo: v.optional(v.id("users")),
   model: v.optional(aiModelValidator),
-  // The user provider account whose credentials run this task (overriding the
-  // team credential). Absent = use the shared team credential. Resolved at
-  // launch in `signAndLaunchScript`.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  // Model traits for this task's runs (the sandbox chat keeps its own sticky
-  // `last*` copies below). Absent = the model's own default. Turned into
-  // AI_* env vars in `getTaskData` -> `launchOnExistingSandbox`.
   reasoningLevel: v.optional(reasoningLevelValidator),
   thinkingEnabled: v.optional(v.boolean()),
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
-  /**
-   * The task's own branch when it is not `eva/task-<id>` (`taskBranchName`).
-   * Only Step 9's conversion writes it: a project task that was in progress
-   * on its project's old branch keeps that branch, so its work goes on in its
-   * own PR.
-   */
   branchName: v.optional(v.string()),
-  /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
-  // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
-  // The change-request comment that put this task back to "todo" via "Make
-  // changes". A project task's change run starts later (the project
-  // scheduler), decoupled from the comment, so the id is parked here and copied onto the run's
-  // `triggeringCommentId` when the run is created, then cleared. Lets the
-  // timeline label project re-runs "made changes" like quick-task re-runs.
+  // schema-narrowing-ok: migrateTaskRunState
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
-  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
-  // Manager Ave thread watching this task for completion notifications
-  // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
-  /**
-   * When this project task was approved to run: at creation for the
-   * coordinator's tasks, from Triage by a person for feedback. The project
-   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
-   * Absent on quick tasks and on project tasks waiting in Triage.
-   */
   approvedAt: v.optional(v.number()),
-  /**
-   * When a person's Triage approval handed this task to the coordinator
-   * (v2 PR C). While set, the scheduler never starts the task: the
-   * coordinator starts it (`start_task`) or adds it to an open task
-   * (`merge_task_into`). Cleared when the coordinator starts it.
-   */
   handedToCoordinatorAt: v.optional(v.number()),
-  /**
-   * The open task the coordinator added this Triage item to
-   * (`merge_task_into`). The item itself is cancelled ("Added to #N").
-   */
   mergedIntoTaskId: v.optional(v.id("agentTasks")),
-  /** Restarts the coordinator spent on this failed task (at most 1). */
   coordinatorRetries: v.optional(v.number()),
-  /**
-   * A project task's phase: a label that groups tasks for status, never a
-   * branch. Ordered by `projects.phaseLabels`.
-   */
   phaseLabel: v.optional(v.string()),
   ...prSummaryFields,
 };
@@ -668,13 +554,7 @@ export const agentRunFields = {
   finishedAt: v.optional(v.number()),
   finalizingAt: v.optional(v.number()),
   resultSummary: v.optional(v.string()),
-  /**
-   * Text this run's prompt carries from whoever started it: the
-   * coordinator's note on a retry, or the answer to the task's question
-   * (`_projects/scheduler.ts` `startProjectTask`).
-   */
   note: v.optional(v.string()),
-  /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
   error: v.optional(v.string()),
   prError: v.optional(v.string()),
@@ -686,30 +566,11 @@ export const agentRunFields = {
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   mode: v.optional(runModeValidator),
-  // Who started this run (button click or "Make changes" submit). Absent on
-  // runs created before this field existed.
   triggeredBy: v.optional(v.id("users")),
-  // The change-request comment that started this run, set only for "Make
-  // changes" runs. Lets the timeline link a run to its comment explicitly
-  // rather than guessing by timestamp.
   triggeringCommentId: v.optional(v.id("taskComments")),
-  // Snapshot of which credential powered this run ("Team" or the account
-  // label). Stored at insert so history stays readable if the account is
-  // renamed or deleted later.
   credentialSourceLabel: v.optional(v.string()),
-  // Snapshot of the model used for this run. Absent on runs created before
-  // this field existed.
   model: v.optional(aiModelValidator),
-  // Screenshots and recordings the agent left in the sandbox deliverable
-  // folders, uploaded as the run finishes. A run has no `messages` row to hang
-  // media on — it renders as the quick task's first chat turn or as a timeline
-  // row, both built from this doc — so the ids live here instead.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  /**
-   * The start attempt a quick task run's claim took on its session
-   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
-   * fail exactly that start. Absent when the run reused an active session.
-   */
   sessionStartAttempt: v.optional(v.number()),
 };
 
@@ -719,96 +580,42 @@ export const sessionFields = {
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
   title: v.string(),
-  // Set while "Regenerate title" runs so every sidebar shows the in-progress
-  // state live; cleared on success or failure. Clients treat a startedAt older
-  // than a couple of minutes as stale.
   titleRegeneration: v.optional(v.object({ startedAt: v.number() })),
   branchName: v.optional(v.string()),
-  // Base branch this session checks out from and creates its branch off of.
-  // Chosen at creation (defaults to the repo default). Persisted so sandbox
-  // restarts/restores rebuild the session branch from the same base instead of
-  // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
-  /**
-   * Pull request this session stacks on. Its head branch is `baseBranch`, and
-   * the session's own PR joins that PR's GitHub stack once it opens.
-   */
   stackOnPrNumber: v.optional(v.number()),
-  /** Summary of the session's `pullRequests` rows (see `prSummaryFields`). */
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   prCount: v.optional(v.number()),
-  /** @deprecated Moved to `pullRequests.stateOnArchive`; cleared by `backfillPullRequests`. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
-  /**
-   * Short, user-safe reason the last wake attempt failed (≤200 chars, stack and
-   * request-id noise stripped). Set wherever a failed start puts the row back to
-   * `closed`; cleared at the start of every new attempt and on every transition
-   * to `active`. Without it a failed start is indistinguishable from a sleeping
-   * sandbox — a grey dot with no explanation and no retry.
-   */
   sandboxError: v.optional(v.string()),
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
-  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
-  // Legacy `archived` / `sandboxDeleteAfter` removed. schema-narrowing-ok: backfillSessionArchive
-  /**
-   * Set while the session is archived; absent while it is live. Owned by
-   * `_sessions/archive.ts` — read it through `isSessionArchived`.
-   */
+  // schema-narrowing-ok: backfillSessionArchive
   archive: v.optional(
     v.object({
       archivedAt: v.number(),
-      /**
-       * Earliest time the sandbox may be deleted (48h grace). Absent when the
-       * session had no sandbox at archive time, or once it was deleted.
-       */
       sandboxDeleteAfter: v.optional(v.number()),
     }),
   ),
-  /**
-   * Who the session belongs to: the user (standalone), a quick task or a
-   * project. Owned by `_sessions/owner.ts`; set at insert, never changed.
-   */
   owner: sessionOwnerValidator,
-  // `summary` removed. schema-narrowing-ok: retireSessionSummaries
+  // schema-narrowing-ok: retireSessionSummaries
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
-  /** Sticky Plan/Build toggle. Absent sessions are Build. */
   lastInteractionMode: v.optional(interactionModeValidator),
-  // `activeWorkflowId` / `turnLifecycleVersion` removed. schema-narrowing-ok: clearSessionWorkflowSlots
-  // The user provider account chosen for this session's runs (overriding the
-  // team credential). Session-scoped so the page-open daemon prewarm — which
-  // has no per-message context — still injects the right account. Absent = team
-  // credential. Set by startExecute from the composer's picker.
+  // schema-narrowing-ok: clearSessionWorkflowSlots
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  // The AI provider the session started on, taken from the model chosen at
-  // creation. Not a lock — the composer can move a session onto any visible
-  // model, including another provider's. Read as the fallback "previous
-  // provider" when a turn's predecessor carries no model stamp, so unstamped
-  // history is not replayed to the provider that already holds it (see
-  // `_shared/modelHandoff.ts`). Absent on older sessions.
   provider: v.optional(aiProviderValidator),
-  // Last model the user sent on this session. Page-open prewarm uses this so
-  // the warm daemon matches the composer's picker instead of defaulting to sonnet.
   lastModel: v.optional(aiModelValidator),
-  // Sticky composer effort for this session (mirrors lastModel). Without this,
-  // effort only lived in localStorage and reloads fell back to the model
-  // default (Claude → high), silently undoing a Medium pick.
   lastReasoningLevel: v.optional(reasoningLevelValidator),
-  // Sticky thinking / 1M context / Fast toggles (same contract as lastReasoningLevel).
   lastThinkingEnabled: v.optional(v.boolean()),
   lastUse1mContext: v.optional(v.boolean()),
   lastFastMode: v.optional(v.boolean()),
-  // Sticky Preview URL path for this session (e.g. "/dashboard"). Device
-  // viewport stays tab-local; port reuses `devPort` below.
   previewPath: v.optional(v.string()),
   previewPanePaths: v.optional(v.array(previewPanePathValidator)),
-  // Last ~500 lines of the Preview Console PTY (debounced client writes). Cap
-  // keeps sessions.get reads small; full scrollback stays in sessionStorage.
   terminalHistoryTail: v.optional(v.string()),
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
@@ -816,63 +623,20 @@ export const sessionFields = {
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   ...chatDaemonEntityFields,
-  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
-  // True while a new session's sandbox finishes pulling the latest base branch
-  // and reinstalling drifted dependencies, after early-ready already unlocked
-  // chat. `claimPendingTurn` withholds the queued first turn until this clears,
-  // so the agent never runs against a stale snapshot checkout or baked modules.
   sandboxSetupPending: v.optional(v.boolean()),
-  // True from early-ready until final-ready, i.e. while the session lifecycle
-  // is still launching background/startup services. Gates the Preview poll's
-  // background heal so it never relaunches daemons the lifecycle is about to
-  // launch itself (double launch orphaned children and truncated logs).
   sandboxServicesPending: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild Manager Ave flag; cleared by migration, then dropped. */
   isOrchestrator: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
-  // Manager Ave thread watching this session for completion notifications. Set
-  // implicitly when Ave touches this session (send/create) or via watch_agent;
-  // cleared by unwatch_agent or when the thread is reset.
   watchedByAve: v.optional(v.id("aveThreads")),
-  /**
-   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
-   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
-   * `branchName`, which is what Eva asked the sandbox to check out at boot.
-   * Detached HEAD is reported as the short commit sha.
-   */
   sandboxBranch: v.optional(v.string()),
-  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
   sandboxGitSync: v.optional(sandboxGitSyncValidator),
-  // Saved codebase group the session was created from, when one prefilled the
-  // linked repo selection. Informational: the `sessionRepos` rows are the
-  // source of truth, so editing the group later never rewrites this session.
   repoGroupId: v.optional(v.id("repoGroups")),
-  // How many `sessionRepos` rows this session has. Denormalised so list rows
-  // and resume paths can tell a multi-repo session apart without a join.
   linkedRepoCount: v.optional(v.number()),
-  /** Session this one was forked from ("Fork session"). Informational. */
   forkedFromSessionId: v.optional(v.id("sessions")),
-  /**
-   * Linked-session group. Set when a session's agent spins up another via
-   * `create_session`; cleared by "Remove from group".
-   */
   sessionGroupId: v.optional(v.id("sessionGroups")),
-  /**
-   * Source sandbox to Vercel-fork for this session's first sandbox, instead of
-   * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
-   * state) carry over.
-   */
   forkSourceSandboxId: v.optional(v.string()),
-  /**
-   * Set when the source was running at fork time and had to be stopped. The
-   * fork's first boot starts the source again once the Vercel fork has been
-   * taken (or has failed), never before — forking a mid-resume source is not
-   * something Vercel documents.
-   */
   forkRestartsSource: v.optional(v.boolean()),
 };
 
@@ -882,7 +646,6 @@ export const sessionFields = {
  * members; removing the second-last one dissolves it.
  */
 export const sessionGroupFields = {
-  /** User-set name. Unset: the UI shows the oldest member's title. */
   name: v.optional(v.string()),
   createdBy: v.id("users"),
 };
@@ -902,17 +665,12 @@ export const sessionRepoFields = {
   owner: v.string(),
   name: v.string(),
   installationId: v.number(),
-  /** Absolute clone path in the sandbox: `/tmp/workspace/<name>`. */
   path: v.string(),
-  /** The session branch, identical to the primary's `eva/session-<id>`. */
   branchName: v.string(),
   baseBranch: v.string(),
-  /** @deprecated Moved to `pullRequests` (`owner.sessionRepoId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
-  /** @deprecated See `prUrl`. */
   prState: v.optional(prStateValidator),
   installDependencies: v.boolean(),
-  /** Set once the sandbox has finished cloning this repo. */
   clonedAt: v.optional(v.number()),
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
@@ -925,13 +683,10 @@ export const sessionRepoFields = {
 export const repoGroupFields = {
   name: v.string(),
   createdBy: v.id("users"),
-  /** Copied from the primary repo so teammates see the group. */
   teamId: v.optional(v.id("teams")),
   primaryRepoId: v.id("githubRepos"),
   linkedRepoIds: v.array(v.id("githubRepos")),
   installDependencies: v.optional(v.boolean()),
-  // Seeded multi-repo snapshot captured for this exact membership, and the
-  // fingerprint of the inputs it was built from (mirrors `githubRepos`).
   seededSnapshotName: v.optional(v.string()),
   seededFingerprint: v.optional(v.string()),
   createdAt: v.number(),
@@ -955,7 +710,6 @@ export const harnessSkillValidator = v.object({
  */
 export const harnessSkillCatalogFields = {
   provider: aiProviderValidator,
-  /** Harness CLI version the catalog was read from, e.g. "2.1.239". */
   cliVersion: v.string(),
   skills: v.array(harnessSkillValidator),
   updatedAt: v.number(),
@@ -1179,10 +933,7 @@ export const projectFields = {
   // codeReviewer removed. schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
   model: v.optional(aiModelValidator),
-  // Whose credential this project's model preference is tied to (null/absent =
-  // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),

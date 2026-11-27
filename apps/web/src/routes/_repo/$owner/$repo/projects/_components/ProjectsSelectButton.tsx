@@ -9,7 +9,6 @@ import {
 import { IconCheckbox } from "@tabler/icons-react";
 
 interface ProjectsSelectButtonProps {
-  /** Hidden in the timeline view and once the selection bar has taken over. */
   visible: boolean;
   onClick: () => void;
 }

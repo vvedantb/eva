@@ -1,7 +1,6 @@
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 
-/** Log entity types whose entityId is an agentTasks document id. */
 const TASK_SCOPED_ENTITY_TYPES = new Set([
   "quickTask",
   "task-chat",
@@ -9,7 +8,6 @@ const TASK_SCOPED_ENTITY_TYPES = new Set([
 
 type LogRow = Pick<Doc<"logs">, "entityType" | "entityId" | "projectId">;
 
-/** Returns the linked agentTasks id for an untagged, task-scoped log row, else undefined. */
 function taskIdForLog(
   ctx: QueryCtx,
   entry: LogRow,

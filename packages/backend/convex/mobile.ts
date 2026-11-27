@@ -24,9 +24,7 @@ export {
   stop as stopTurn,
 } from "./chats";
 
-/** Sessions read per repo; the list is "what is going on now", not history. */
 const SESSIONS_PER_REPO = 15;
-/** Rows in the whole chat list. */
 const CHAT_LIST_LIMIT = 60;
 
 /**
@@ -44,19 +42,14 @@ export const listChats = authQuery({
     v.object({
       sessionId: v.id("sessions"),
       title: v.string(),
-      /** The group's repo, for its "+" (a new session in that repo). */
       repoId: v.id("githubRepos"),
       repoLabel: v.string(),
       status: sessionStatusValidator,
       updatedAt: v.number(),
-      /** An agent in one of its chats waits on your answer (as the web sidebar shows). */
       isAwaitingAnswer: v.boolean(),
-      /** One of its chats has a turn open: the web sidebar's "Working" glyph. */
       isExecuting: v.boolean(),
-      /** The session's primary PR and its rolled-up state, as the web sidebar row shows. */
       prUrl: v.optional(v.string()),
       prState: v.optional(prStateValidator),
-      /** For the row menu: Copy branch name and Copy link, as the web row's. */
       branchName: v.optional(v.string()),
       webPath: v.string(),
     }),
@@ -82,8 +75,6 @@ export const listChats = authQuery({
       }))
       .toSorted((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, CHAT_LIST_LIMIT);
-    // Turn flags only for repos that made the list: one open-turn read per
-    // repo, as the web list (`chatTurnFlagsForRepos`), never one per row.
     const { openIds, awaitingAnswerIds } = await chatTurnFlagsForRepos(
       ctx.db,
       rows.map((row) => row.repo._id),

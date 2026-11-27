@@ -1,11 +1,4 @@
-/**
- * Ordering rules for a message's agent media (recordings, screenshots).
- *
- * Generic over the id type: this is list logic over opaque ids, so call sites
- * keep their `Id<"_storage">` by inference and tests can use plain strings.
- */
 type MediaFields<TId> = {
-  /** Legacy single-media fields, still sent by callback bundles mid-deploy. */
   imageStorageId?: TId;
   videoStorageId?: TId;
   mediaStorageIds?: TId[];

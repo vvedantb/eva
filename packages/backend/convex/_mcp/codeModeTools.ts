@@ -1,12 +1,4 @@
 "use node";
-/**
- * Code mode: the whole Eva tool catalog behind two MCP tools. These two sit
- * beside the flat tools rather than replacing them — `execute` runs
- * model-written JavaScript in the QuickJS sandbox with a `tools` proxy that
- * dispatches to the same `EvaTool` definitions the flat mount exposes one by
- * one; `search_tools` (and `tools.search` inside a script) lets the model find
- * names and schemas without every definition sitting in its context.
- */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
@@ -22,7 +14,6 @@ import {
 
 const searchArgs = z.object({ query: z.string().optional() });
 
-/** The first paragraph of a tool description: enough to pick a tool by. */
 function summarize(description: string): string {
   const [first] = description.split(/\n\s*\n/);
   return (first ?? description).trim();
@@ -51,12 +42,6 @@ function searchTools(tools: readonly EvaTool[], query: string) {
     }));
 }
 
-/**
- * Converts a tool's MCP result into the JSON text a script receives. A single
- * text block that already is JSON passes through untouched, so scripts get
- * objects back from `toolJsonResult` tools; anything else becomes a JSON string or
- * the raw content array. Error results become rejections the script can catch.
- */
 function resultToJson(result: CallToolResult): string {
   const texts = result.content.flatMap((block) =>
     block.type === "text" ? [block.text] : [],
@@ -141,7 +126,6 @@ export function codeModeTools(tools: readonly EvaTool[]): EvaTool[] {
     defineTool({
       name: "execute",
       description: executeDescription(catalog),
-      // Scripts may call state-changing tools, so the wrapper counts as one.
       mutating: true,
       input: {
         code: z

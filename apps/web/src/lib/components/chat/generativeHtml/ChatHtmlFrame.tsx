@@ -89,20 +89,13 @@ function HtmlPage({
   height: number;
 }) {
   const { resolvedTheme } = useThemeMode();
-  // Built once, with the theme of the moment for a correct first paint. A new
-  // srcdoc would reload the page and drop its state, so later theme changes
-  // go through postMessage instead.
   const [srcDoc] = useState(() =>
     injectHtmlRenderBootstrap(html, readHostContext(resolvedTheme)),
   );
-  // The page reports its own height; until then the agent's height holds.
   const [reportedHeight, setReportedHeight] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // The iframe is an external system: push each theme change into it. Read on
-  // the next frame, because `ThemeModeProvider` applies the root classes in
-  // its own effect, which runs after this child's.
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       iframeRef.current?.contentWindow?.postMessage(
@@ -113,9 +106,6 @@ function HtmlPage({
     return () => cancelAnimationFrame(frame);
   }, [resolvedTheme]);
 
-  // Listens for this page's bridge messages for as long as the iframe is
-  // mounted. Messages from any other window, or that fail the parse, are
-  // ignored.
   const attachFrame = (iframe: HTMLIFrameElement | null) => {
     iframeRef.current = iframe;
     if (!iframe) return;
@@ -136,8 +126,6 @@ function HtmlPage({
     };
   };
 
-  // Same toggle as the preview and custom-tab panels. The browser's
-  // fullscreen styles size the box to the screen, over its inline height.
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
@@ -159,8 +147,6 @@ function HtmlPage({
         sandbox={SANDBOX}
         loading="lazy"
         className="block size-full border-0"
-        // Matches the page's own color-scheme, so the frame stays transparent
-        // on the chat background instead of painting an opaque canvas.
         style={{ colorScheme: resolvedTheme }}
       />
       {/* Always shown: the pointer over a cross-document iframe gives the

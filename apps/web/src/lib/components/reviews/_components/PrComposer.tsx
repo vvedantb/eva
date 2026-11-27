@@ -36,9 +36,7 @@ export function PrComposer({
   onPosted,
 }: {
   repoId: Id<"githubRepos">;
-  prNumber: number;
-  /** A closed or merged pull request still takes comments, but no verdict. */
-  isOpen: boolean;
+  prNumber: number;  isOpen: boolean;
   onPosted: () => void;
 }) {
   const review = usePendingReviewComments();

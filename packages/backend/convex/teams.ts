@@ -16,7 +16,6 @@ import {
 import { teamFields } from "./_validators/tableFields";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
-/** Team doc fields plus resolved media URLs and membership role for list/get. */
 const teamWithLogoValidator = v.object({
   _id: v.id("teams"),
   _creationTime: v.number(),
@@ -27,7 +26,6 @@ const teamWithLogoValidator = v.object({
   userRole: v.union(v.literal("owner"), v.literal("member")),
 });
 
-/** Computes a team's display name, deriving personal-team labels from the current user or owner. */
 async function resolveDisplayName(
   ctx: QueryCtx,
   team: Doc<"teams">,
@@ -40,7 +38,6 @@ async function resolveDisplayName(
   return `${ownerName}'s Team`;
 }
 
-/** Resolves logo/background storage ids to public URLs for UI rendering. */
 async function attachTeamMediaUrls(
   ctx: QueryCtx | MutationCtx,
   team: Doc<"teams">,
@@ -54,7 +51,6 @@ async function attachTeamMediaUrls(
   return { logoUrl, backgroundUrl };
 }
 
-/** Throws unless the user is a member of the team (any role). */
 async function assertTeamMember(
   db: GenericDatabaseReader<DataModel>,
   teamId: Id<"teams">,
@@ -154,8 +150,6 @@ export const list = authQuery({
 
 /** Fetches a single team by ID, returning null if not found or user isn't a member. */
 export const get = authQuery({
-  // Accepts a raw string so client route params need no `as Id` cast;
-  // normalizeId returns null for anything that is not a valid teams id.
   args: { id: v.string() },
   returns: v.union(teamWithLogoValidator, v.null()),
   handler: async (ctx, args) => {

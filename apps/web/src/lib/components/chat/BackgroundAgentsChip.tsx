@@ -36,15 +36,12 @@ export function BackgroundAgentsChip({
   onRequestStop: RequestAgentStop;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  // Set by `SubagentThreadLayer` on the sandbox chats that can show the thread.
   const openSubagent = use(OpenSubagentContext);
 
   const runningAgents = (backgroundAgents ?? []).filter(
     isVisibleBackgroundAgent,
   );
 
-  // The confirm dialog is modal and would close the popover anyway; closing
-  // it first keeps focus return predictable.
   const requestStop: RequestAgentStop = (toolUseId, title) => {
     setPopoverOpen(false);
     onRequestStop(toolUseId, title);

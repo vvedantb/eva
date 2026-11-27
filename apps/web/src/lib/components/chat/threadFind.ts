@@ -19,11 +19,7 @@ export function shouldCaptureChatFindShortcut(input: {
   readonly inEditable: boolean;
   readonly isDocumentRoot: boolean;
 }): boolean {
-  // The find bar's own input is editable, so it has to be answered first.
   if (input.inFindBar) return true;
-  // The composer sits inside [data-chat-pane], so `inChatPane` is true while
-  // the user types a prompt. Editable focus wins: mid-prompt Cmd+F belongs to
-  // the browser's native find, not to us.
   if (input.inEditable) return false;
   if (input.inChatPane) return true;
   return input.isDocumentRoot;

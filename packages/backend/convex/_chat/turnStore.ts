@@ -127,10 +127,6 @@ export async function openTurn(
   params: OpenTurnFields & {
     entityId: TurnEntityId;
     lane?: TurnLane;
-    /**
-     * The session the turn holds: a chat's session, or the session whose
-     * sandbox a run or a project interview works on.
-     */
     sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {
@@ -308,9 +304,6 @@ export async function renewTurnLease(
   }
   const state = turn.state === "finalizing" ? "finalizing" : "running";
   const durationMs = turnLeaseDurationMs(state);
-  // A turn the reconciler marked silent must always write, even when the
-  // renewal-throttle would skip it: the write is what clears `silentSince`,
-  // and without it a recovered daemon stays on the grace clock.
   if (
     turn.silentSince === undefined &&
     !shouldWriteTurnLeaseRenewal({
@@ -337,10 +330,6 @@ export async function renewTurnLease(
     leaseExpiresAt,
     silentSince: undefined,
   });
-  // A live turn keeps the sandbox's hard runtime cap ahead of it, or the
-  // provider kills it mid-work with no snapshot. Only on a written renewal
-  // (the throttle above), so at most once per half lease; two lease lengths
-  // keep the deadline ahead through a delayed renewal.
   if (turn.sandboxId !== undefined) {
     await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
       sandboxId: turn.sandboxId,
@@ -438,8 +427,6 @@ export async function closeTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  // Re-read: a caller's copy can be stale when an earlier step in the same
-  // mutation already closed the turn.
   const current = await ctx.db.get(turn._id);
   if (!current?.open || !canTransitionTurn(current.state, state)) return;
   const finishedAt = Date.now();
@@ -449,11 +436,6 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
-  // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
-  // one-shot lanes (summary, interview) are not replies, and their owner rows
-  // have no such field. Lease sweeps can close a turn after its chat was
-  // hard-deleted, and `patch` throws then. A session chat's turn stamps both
-  // the chat and its session, since the sidebar reads unread per session.
   const chatParentId =
     turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
   if (chatParentId && (await ctx.db.get(chatParentId))) {
@@ -464,27 +446,18 @@ export async function closeTurn(
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   if (session && chatParentId) {
     await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's or project's session reads unread on its owner's card, so the
-    // owner gets the watermark too (`chatReads.markRead` reads it with the
-    // chat).
     const ownerId = sessionOwnerEntityId(session);
     if (ownerId && (await ctx.db.get(ownerId))) {
       await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
     }
   }
   if (session && runId) {
-    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
-    // offer them their queued messages now. Scheduled, since the queue
-    // module imports this one.
     await ctx.scheduler.runAfter(
       0,
       internal._queues.helpers.drainQueueQuietly,
       { parentId: session._id },
     );
   }
-  // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished": a chat turn or a run counts for the
-  // session that holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
     turn.sessionId ?? turn.entityId,
@@ -532,7 +505,6 @@ export async function settleAgentTurnCompletion(
     error: string | null;
   },
 ): Promise<boolean> {
-  // Every one-shot agent launches under a turn and always sends its lease.
   const resolution = await resolveCompletionTurn(ctx, params);
   if (resolution.status !== "current") return false;
   await closeTurn(

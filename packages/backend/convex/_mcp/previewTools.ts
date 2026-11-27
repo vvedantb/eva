@@ -1,12 +1,3 @@
-/**
- * The `list_preview_tools` / `call_preview_tool` MCP tools: the agent runs a
- * WebMCP tool that the previewed app publishes, inside the user's live
- * preview. The sandbox cannot reach that browser, so the call is relayed
- * through a `previewToolCalls` row that the user's open Eva tab claims, runs
- * in the preview iframe and completes. Storage is injected as `relay`, which
- * keeps Convex function references out of this module and lets tests fake it.
- */
-
 import { toolErrorResult, toolTextResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -17,14 +8,12 @@ import { sleep } from "../_shared/async";
 type CallRow = Doc<"previewToolCalls">;
 
 export interface PreviewToolRelay {
-  /** Queues a request; null when the token's chat no longer exists. */
   readonly create: (
     request:
       | { kind: "list" }
       | { kind: "invoke"; name: string; argumentsJson: string },
   ) => Promise<Id<"previewToolCalls"> | null>;
   readonly get: (id: Id<"previewToolCalls">) => Promise<CallRow | null>;
-  /** Gives up on an unfinished row; returns the status it gave up from. */
   readonly expire: (
     id: Id<"previewToolCalls">,
     error: string,
@@ -33,7 +22,6 @@ export interface PreviewToolRelay {
 
 export interface PreviewToolTiming {
   readonly pollMs: number;
-  /** Must stay under code-mode `execute`'s 60 s deadline, with room for setup. */
   readonly timeoutMs: number;
 }
 
@@ -72,7 +60,6 @@ function resultOf(row: CallRow): CallToolResult {
       `The preview tool failed: ${row.error ?? "no error message was given."}`,
     );
   }
-  // Raw page output: re-encoding it through toolJsonResult would double-escape JSON.
   return toolTextResult(row.resultJson ?? "null");
 }
 

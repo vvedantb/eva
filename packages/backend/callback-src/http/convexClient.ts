@@ -44,14 +44,12 @@ export async function fetchWithTimeout(
   }
 }
 
-/** Calculates exponential backoff delay with jitter for retry attempts. */
 function buildRetryDelayMs(attempt: number): number {
   const exponential = Math.pow(2, attempt - 1) * CALLBACK_HTTP_RETRY_BASE_MS;
   const jitter = Math.floor(Math.random() * 500);
   return exponential + jitter;
 }
 
-/** Runs an HTTP callback, retrying with exponential backoff on failure. */
 async function withRetries<T>(
   label: string,
   maxRetries: number,
@@ -67,8 +65,6 @@ async function withRetries<T>(
       attempt++;
       if (attempt > maxRetries || !shouldRetry(error)) throw e;
       const delayMs = buildRetryDelayMs(attempt);
-      // Timestamped: these lines are the only record of a daemon stalling
-      // between heartbeats, and an untimestamped one says nothing about when.
       log(
         label +
           " attempt " +
@@ -98,10 +94,6 @@ export function shouldRetryHttpError(error: Error): boolean {
   return !(error instanceof HttpResponseError) || error.status >= 500;
 }
 
-/**
- * POSTs a signed form body to a Convex HTTP route. The routes authenticate the
- * scoped HMAC in the body, not the sandbox's Convex identity token.
- */
 async function postSignedForm(
   url: string,
   body: URLSearchParams,
@@ -119,7 +111,6 @@ async function postSignedForm(
   return res.text();
 }
 
-/** Calls a Convex mutation or action via HTTP API. */
 async function callConvex(
   type: ConvexCallType,
   path: string,
@@ -197,14 +188,10 @@ export async function callHarnessSkillCatalogReport(
   );
 }
 
-/** Lightweight heartbeat that only bumps streamingActivity.lastUpdatedAt in Convex. */
 async function callStreamingHeartbeatTouchOnce(
   entityId: string,
 ): Promise<string | JsonValue> {
-  // Captured once: the verdict must be judged against the lease the request
-  // carried, not whatever this process owns by the time the reply lands.
   const identity = getCurrentTurnLease();
-  // No lease, no turn to report on: the server would only answer terminal.
   if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
@@ -232,7 +219,6 @@ async function callStreamingHeartbeatTouchOnce(
   return response;
 }
 
-/** Sends one streaming heartbeat request through the scoped HMAC endpoint or the authenticated mutation fallback. */
 async function callStreamingHeartbeatOnce(
   entityId: string,
   currentActivity: string,

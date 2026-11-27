@@ -18,23 +18,17 @@ export type ChatMentionSurface =
   | {
       kind: "session";
       session: Doc<"sessions">;
-      /** The chat posted in; a project task's own chat speaks for the task. */
       chat?: Doc<"sessionChats">;
     }
   | { kind: "project"; project: Doc<"projects"> }
   | { kind: "task"; task: Doc<"agentTasks"> };
 
-/** Reads as "... mentioned you in a session chat". */
 const SURFACE_NAME: Record<ChatMentionSurface["kind"], string> = {
   session: "session",
   project: "project",
   task: "task",
 };
 
-/**
- * Entity context handed to `createNotification`, which turns it into the href
- * and the context label shown on the notification card.
- */
 function notificationTarget(surface: ChatMentionSurface): {
   repoId?: Id<"githubRepos">;
   sessionId?: Id<"sessions">;
@@ -55,7 +49,6 @@ function notificationTarget(surface: ChatMentionSurface): {
   }
 }
 
-/** The chat's own title, given to routing as context for the message. */
 function surfaceTitle(surface: ChatMentionSurface): string {
   switch (surface.kind) {
     case "session":
@@ -67,10 +60,6 @@ function surfaceTitle(surface: ChatMentionSurface): string {
   }
 }
 
-/**
- * A task's or project's session notifies as its owner: the link opens the
- * task or project page.
- */
 async function ownerSurface(
   ctx: MutationCtx,
   surface: ChatMentionSurface,
@@ -90,17 +79,8 @@ async function ownerSurface(
   return surface;
 }
 
-/** Most unread notifications one send looks through for this chat's mentions. */
 const OWN_MENTIONS_SCAN = 100;
 
-/**
- * Posting in a chat answers what asked for you there: your unread Needs you
- * notifications for this chat (mentions, routed questions, agent messages)
- * are marked read, so they leave Inbox → Needs you (plan
- * `projects-v2-chat.md`, decision 3). The chat id is
- * the one `createNotification` stores (`chatTarget`: task, else session,
- * else project).
- */
 async function answerOwnChatMentions(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -125,8 +105,6 @@ async function answerOwnChatMentions(
   }
 }
 
-/** How much of the message routing is shown. Long enough for the ask, short
- * enough that a pasted log does not dominate the judgement. */
 const ROUTING_MESSAGE_LIMIT = 4000;
 
 /**
@@ -144,15 +122,12 @@ const ROUTING_MESSAGE_LIMIT = 4000;
 export async function notifyChatMentions(
   ctx: MutationCtx,
   args: {
-    /** Tokenized message text, i.e. still containing `@[Name](userId)`. */
     content: string;
     authorUserId: Id<"users">;
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
   await answerOwnChatMentions(ctx, args.authorUserId, args.surface);
-  // A task and its session share the repo, so the recipients need no owner
-  // read; it only runs once someone is mentioned.
   const recipients = await teamMentionRecipients(
     ctx,
     args.content,
@@ -169,8 +144,6 @@ export async function notifyChatMentions(
   const title = `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
-  // Routing runs after every notification exists, in one action: the judgement
-  // is per mentioned person but the message and its context are shared.
   const routed: {
     notificationId: Id<"notifications">;
     userId: Id<"users">;
@@ -196,9 +169,6 @@ export async function notifyChatMentions(
 
   if (routed.length === 0) return;
 
-  // Jev decides how loudly each mention is delivered. Scheduled rather than
-  // awaited because it is a network call, and because a mention must land in
-  // the inbox whether or not the gateway answers — see mentionRouting.ts.
   await ctx.scheduler.runAfter(0, internal.mentionRouting.routeMentions, {
     items: routed,
     message: stripSkillTokens(stripMentionTokens(args.content)).slice(

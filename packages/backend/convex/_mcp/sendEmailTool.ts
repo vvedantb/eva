@@ -1,12 +1,3 @@
-/**
- * The `send_email` MCP tool: an agent mailing the user who owns the connection.
- *
- * The input schema, its caps, the description and the result shape live here,
- * runtime-free, so the V8 tool layer (`mcp/tools.ts`) and the `"use node"`
- * action (`mcp/sendEmail.ts`) share one contract. The send itself is injected
- * as `run`, which keeps SendGrid and markdown inside the node module.
- */
-
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";

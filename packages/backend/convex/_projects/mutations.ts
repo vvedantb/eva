@@ -111,7 +111,6 @@ export const update = authMutation({
     projectEndDate: v.optional(v.number()),
     tags: v.optional(v.array(v.string())),
     model: v.optional(v.union(aiModelValidator, v.null())),
-    // null = clear to team credentials. undefined = no change.
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
@@ -124,8 +123,6 @@ export const update = authMutation({
       ctx.userId,
     );
     assertProjectNotArchived(project);
-    // `id` must be omitted — leaving it in the rest-spread patches a stray
-    // `id` field onto the document and breaks projects:list return validation.
     const {
       id: _projectId,
       projectLead,
@@ -160,7 +157,6 @@ export const update = authMutation({
       );
       updates.providerAccountId = nextProviderAccountId;
     }
-    // Explicit account in this update wins; only reconcile when model alone changes.
     if (
       model !== undefined &&
       providerAccountId === undefined &&
@@ -177,7 +173,6 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
-    // A new account lifts a usage-limit hold: the scheduler goes on.
     if (nextProviderAccountId !== project.providerAccountId) {
       await ctx.scheduler.runAfter(
         0,
@@ -185,8 +180,6 @@ export const update = authMutation({
         { projectId: args.id },
       );
     }
-    // The session mirrors the title and base branch, and moves to an edited
-    // branch (the one branch writer).
     const edited = await ctx.db.get(args.id);
     if (edited) {
       await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });

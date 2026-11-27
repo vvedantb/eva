@@ -1,15 +1,5 @@
 "use node";
 
-/**
- * Turns stored screenshots into images Jev will accept. TypeSafe rejects any
- * side outside 280–1568 px (a 1920×1080 capture fails as "invalid request
- * body"), so every image is fitted inside that box and re-encoded as PNG,
- * which keeps UI text crisp.
- *
- * Leaf module: sharp plus generated types only, so `_jev/client.ts` and the
- * node actions that call it stay out of import cycles.
- */
-
 import sharp from "sharp";
 import type { Id } from "../_generated/dataModel";
 
@@ -19,21 +9,12 @@ export interface LoadedImage {
   mediaType: "image/png";
 }
 
-/** TypeSafe's per-side bounds, from docs.typesafe.ai/images (Limits table). */
 const MAX_SIDE_PX = 1568;
 const MIN_SIDE_PX = 280;
-/** Stored files past this are not worth decoding: a screenshot is ~1–3 MB. */
 const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
 
-/**
- * Fits one image inside Jev's bounds. Shrinks the long side to 1568 px, then
- * grows the short side to 280 px when a very wide or tiny image would fall
- * under it; a strip that cannot meet both is dropped by the caller.
- */
 async function fitForJev(source: Uint8Array): Promise<Uint8Array | null> {
   const image = sharp(source, { animated: false });
-  // Sniffed from the bytes: an upload's stored content type is whatever the
-  // uploader claimed.
   const { width, height, format } = await image.metadata();
   if (format !== "png" && format !== "jpeg") return null;
   if (width === undefined || height === undefined) return null;

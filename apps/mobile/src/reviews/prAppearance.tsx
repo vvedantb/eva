@@ -15,7 +15,6 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
 import type { Scheme } from "@/ui/theme";
 
-/** Tailwind's emerald and violet, the web review colours (`emerald-600`, `violet-700`, ...). */
 const EMERALD = { 300: "#6ee7b7", 400: "#34d399", 500: "#10b981", 600: "#059669", 700: "#047857" } as const;
 const VIOLET = { 300: "#c4b5fd", 500: "#8b5cf6", 700: "#6d28d9" } as const;
 

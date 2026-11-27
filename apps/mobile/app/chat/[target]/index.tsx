@@ -115,11 +115,8 @@ import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
-/** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
 
-/** The session actions the chat header ⋯ adds; it has Copy link of its own. */
-// The header has its own Copy link (every chat kind), so the session's is left out.
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
@@ -139,13 +136,11 @@ export default function ChatScreen() {
   const scheme = useScheme();
   const chat = useQuery(api.chats.get, { target });
   const parentId = chat?.parentId;
-  // The web's load plan: newest 30, live after that, older pages as the reader scrolls up.
   const transcript = useChatTranscript(parentId);
   const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const chatQuestion = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
-  // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
   const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
   // Read while it is on screen (this screen focused, the app in front), as the web marks its open chat;

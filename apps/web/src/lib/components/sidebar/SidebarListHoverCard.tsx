@@ -26,7 +26,6 @@ function authorDisplayName(user: {
   return "Unknown";
 }
 
-/** Folder rows are tight â€” first name only (or first token of fullName / email). */
 function authorFirstName(user: {
   firstName?: string | null;
   fullName?: string | null;
@@ -41,7 +40,6 @@ function authorFirstName(user: {
   return "Unknown";
 }
 
-/** Avatar + display name for sidebar hover footers (sessions, docs, automations). */
 function HoverCardAuthor({ userId }: { userId: Id<"users"> }) {
   const user = useQuery(api.users.get, { id: userId });
   if (!user) {
@@ -98,7 +96,6 @@ interface ForkLink {
   repo: { owner: string; name: string; rootDirectory?: string };
 }
 
-/** One "Forked from" / "Forked into" line linking to the other session. */
 function ForkLinkRow({ label, link }: { label: string; link: ForkLink }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -114,7 +111,6 @@ function ForkLinkRow({ label, link }: { label: string; link: ForkLink }) {
   );
 }
 
-/** Fork lineage, loaded on hover so session lists stay join-free. */
 function SessionForkLinks({ sessionId }: { sessionId: Id<"sessions"> }) {
   const links = useQuery(api.sessions.getForkLinks, { id: sessionId });
   if (!links || (!links.forkedFrom && links.forks.length === 0)) return null;
@@ -132,15 +128,11 @@ function SessionForkLinks({ sessionId }: { sessionId: Id<"sessions"> }) {
 
 interface SessionHoverCardBodyProps {
   title: string;
-  /** When set, loads the first user-message preview from messages (SoT). */
   sessionId?: Id<"sessions">;
-  /** Precomputed preview â€” prefer sessionId so list queries stay join-free. */
   preview?: string | null;
   createdAt: number;
   userId: Id<"users">;
-  /** Branch chosen at session creation. Absent on sessions predating the field. */
   baseBranch?: string;
-  /** The session's app, named above the title (rows in a linked group). */
   app?: RepoAppMarkRepo;
 }
 
@@ -206,7 +198,6 @@ interface SidebarListHoverCardProps {
   title: string;
   preview?: string | null;
   createdAt: number;
-  /** Author when known (new docs / automations). Omitted for legacy docs. */
   userId?: Id<"users">;
   children: ReactNode;
 }

@@ -27,7 +27,6 @@ export { UserMessageAttachments };
 /** What came back from an upload attempt: the ids that stuck, and what did not. */
 export interface ChatAttachmentUploads {
   ids: Id<"_storage">[];
-  /** Files the agent will never see — disallowed kinds and failed uploads. */
   failed: Array<{ name: string }>;
 }
 
@@ -84,11 +83,6 @@ export function describeFailedAttachments(
   return rest > 0 ? `${shown} +${rest} more` : shown;
 }
 
-/**
- * Chips grow in and shrink back out along the same path. Attaching or removing
- * a file used to be a hard cut in the busiest control in the app. Critically
- * damped — picking a file carries no momentum, so there is nothing to overshoot.
- */
 const CHIP_MOTION = {
   initial: { opacity: 0, scale: 0.9 },
   animate: { opacity: 1, scale: 1 },
@@ -159,9 +153,6 @@ export function ChatAttachmentPreview() {
                     type="button"
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     onClick={() => {
-                      // Computed outside the try/catch — the React Compiler
-                      // bails on value blocks (??, ||) inside try/catch and
-                      // drops memoization for the whole file.
                       const filename = file.filename ?? "pasted-text.txt";
                       const mediaType = file.mediaType || "text/plain";
                       void (async () => {

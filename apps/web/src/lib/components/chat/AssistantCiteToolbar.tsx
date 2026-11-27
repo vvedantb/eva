@@ -24,19 +24,13 @@ interface CiteTarget {
   y: number;
 }
 
-/** Room for Cite + Save, so the pair never runs off the right edge. */
 const TOOLBAR_WIDTH = 150;
 
 export function AssistantCiteToolbar({
   forcedTarget,
   chatParentId,
 }: {
-  /** Demo / screenshot seed — skips live selection. */
   forcedTarget?: CiteTarget;
-  /**
-   * Enables Save, which keeps the selection as a note in the chat's Log
-   * (Documents tab). Chats without one (Manager Ave) have no Log.
-   */
   chatParentId?: ChatParentId;
 }) {
   const citations = usePendingCitations();
@@ -45,11 +39,6 @@ export function AssistantCiteToolbar({
 
   if (!citations) return null;
 
-  /**
-   * `selectionchange` only fires on the document, so the listener stays global.
-   * It is registered from a ref callback on a mounted node (cleanup returned)
-   * instead of an effect — useEffect is banned in this repo.
-   */
   const watchSelection = (node: HTMLSpanElement | null) => {
     if (!node) return;
     const onSelectionChange = () => {
@@ -73,7 +62,6 @@ export function AssistantCiteToolbar({
     };
   };
 
-  /** Same whitespace clean-up and length cap for Cite and Save. */
   const takeCitation = (verb: string) => {
     if (!target) return null;
     const citation = createCitation({
@@ -118,8 +106,6 @@ export function AssistantCiteToolbar({
 
   return (
     <>
-      {/* Anchor for the document listener: the toolbar itself only renders
-          once there is a selection, so it cannot own the subscription. */}
       {forcedTarget ? null : <span hidden ref={watchSelection} />}
       {target ? (
         <div

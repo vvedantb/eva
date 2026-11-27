@@ -82,9 +82,6 @@ export function consumeEvaMcpEnvironment(
     auth: env.EVA_MCP_AUTH,
     baseUrl: env.EVA_MCP_BASE_URL,
   });
-  // The callback keeps the MCP descriptor in memory. Removing the transport
-  // variables stops agent tools and unrelated child processes inheriting the
-  // bearer token through their environment.
   const evaAuth = env.EVA_MCP_AUTH;
   const evaBase = env.EVA_MCP_BASE_URL;
   delete env.EVA_MCP_AUTH;
@@ -117,14 +114,12 @@ export function consumeEvaMcpEnvironment(
   };
 }
 
-/** Eva's own server names; a repo `.eva/mcp.json` entry can never replace them. */
 const RESERVED_MCP_SERVER_NAMES = new Set(["eva", "linear", "figma"]);
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Thrown inside one server's parse; the message becomes the skip warning. */
 class SkipServer extends Error {}
 
 function substituteVars(
@@ -247,10 +242,6 @@ const REPO_MCP_PATH = join(WORK_DIR, ".eva", "mcp.json");
  */
 export const hasRepoMcpFile = existsSync(REPO_MCP_PATH);
 
-/**
- * Reads `<WORK_DIR>/.eva/mcp.json`. The Cursor turn worker re-imports this
- * module and re-reads the file itself, so repo servers need no handoff.
- */
 function loadRepoMcpServers(evaServers: McpServers): McpServers {
   if (!hasRepoMcpFile) return evaServers;
   let text: string;

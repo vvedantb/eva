@@ -33,31 +33,20 @@ export function DiffEntriesDialogBody({
   entries: readonly DiffFileEntry[];
   additions?: number;
   deletions?: number;
-  changedFiles?: number;
-  /** Shown under the diff when the payload was clipped; null when it was not. */
-  truncatedNotice: ReactNode;
+  changedFiles?: number;  truncatedNotice: ReactNode;
 }) {
-  const { resolvedTheme } = useThemeMode();
-  // Computed as statements rather than parameter defaults: React Compiler
-  // cannot reorder calls/member access in a default initialiser and bails.
-  const additions =
+  const { resolvedTheme } = useThemeMode();  const additions =
     additionsProp ?? entries.reduce((sum, entry) => sum + entry.additions, 0);
   const deletions =
     deletionsProp ?? entries.reduce((sum, entry) => sum + entry.deletions, 0);
-  const changedFiles = changedFilesProp ?? entries.length;
-  // Scroll targets are found by id, not a ref map: `${fileIdPrefix}-${index}`.
-  const fileIdPrefix = useId();
-  // Below `md` the tree and the diffs are separate panes; a pick switches over.
-  const [showContentSignal, setShowContentSignal] = useState(0);
+  const changedFiles = changedFilesProp ?? entries.length;  const fileIdPrefix = useId();  const [showContentSignal, setShowContentSignal] = useState(0);
   const paths = entries.map((entry) => entry.path);
   const statuses = Object.fromEntries(
     entries.map((entry): [string, GitStatus] => [entry.path, entry.status]),
   );
 
   const handleSelect = (path: string) => {
-    setShowContentSignal((n) => n + 1);
-    // Next frame: on mobile the diff pane has only just been shown.
-    requestAnimationFrame(() => {
+    setShowContentSignal((n) => n + 1);    requestAnimationFrame(() => {
       document
         .getElementById(`${fileIdPrefix}-${paths.indexOf(path)}`)
         ?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -70,10 +59,7 @@ export function DiffEntriesDialogBody({
         "min-h-0 flex-1 space-y-3 overflow-y-auto",
         entries.length > 1 && "pl-3",
       )}
-    >
-      {/* Read-only: these line numbers belong to the commit, so a review comment
-          drafted here would land on the wrong lines of the pull request diff. */}
-      <NoPendingReviewComments>
+    >      <NoPendingReviewComments>
         <div className="space-y-3">
           {entries.map((entry, index) => (
             <ListEnter
@@ -127,9 +113,7 @@ export function DiffEntriesDialogBody({
   return (
     <DialogBody
       className={cn(
-        "flex flex-col gap-3",
-        // The split needs a definite height to scroll its two panes apart.
-        entries.length > 1 && "h-[75dvh] overflow-hidden",
+        "flex flex-col gap-3",        entries.length > 1 && "h-[75dvh] overflow-hidden",
       )}
     >
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

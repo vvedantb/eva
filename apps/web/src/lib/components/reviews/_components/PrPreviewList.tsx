@@ -4,11 +4,6 @@ import { ToneIcon, type PrOverview, type StatusTone } from "./prOverviewMeta";
 
 type PrPreview = PrOverview["previews"][number];
 
-/**
- * Deployment states as GitHub reports them, mapped onto the four tones the rest
- * of the surface already uses. `error` and `failure` are the same news told by
- * two providers, and `queued` and `in_progress` are both "not yet".
- */
 function previewTone(state: string): StatusTone {
   if (state === "success") return "success";
   if (state === "failure" || state === "error") return "failure";
@@ -92,11 +87,6 @@ function PreviewRow({ preview }: { preview: PrPreview }) {
   );
 }
 
-/**
- * The hostname where there is one, the environment name where there is not.
- * `URL` throws on anything that is not absolute, and providers do occasionally
- * report a bare path, so the fall-back is the raw string rather than a crash.
- */
 function previewLabel(preview: PrPreview): string {
   if (preview.url === null) return preview.environment;
   try {

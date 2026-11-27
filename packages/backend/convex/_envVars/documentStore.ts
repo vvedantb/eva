@@ -30,10 +30,6 @@ export type EnvVarEntry = {
   key: string;
   value: string;
   sandboxExclude?: boolean;
-  /**
-   * Given only to snapshot seed runs, never to session sandboxes. Always
-   * stored with `sandboxExclude: true`, so every sandbox reader skips it.
-   */
   seedOnly?: boolean;
 };
 
@@ -44,7 +40,6 @@ export function upsertEnvVarEntry(
 ): EnvVarEntry[] {
   const existing = vars.find((candidate) => candidate.key === entry.key);
   const next = vars.filter((candidate) => candidate.key !== entry.key);
-  // A value edit keeps a seed-only variable seed-only.
   const keepSeedOnly =
     existing?.seedOnly === true && entry.sandboxExclude === true;
   next.push(keepSeedOnly ? { ...entry, seedOnly: true } : entry);

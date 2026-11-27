@@ -13,10 +13,6 @@ const emptyDaemonEntitySnapshot = {
   syntheticTurnMessageId: undefined,
 };
 
-// Long enough to cover a normal launch (token mint + upload + boot ≈ 5–15s),
-// short enough that a launcher that died without releasing never blocks the
-// next boot for long. Archived-sandbox resumes can outlive the lease — the
-// in-sandbox spawn flock still dedupes any launch that slips past it.
 const DAEMON_LAUNCH_LEASE_MS = 30_000;
 
 /**
@@ -28,8 +24,6 @@ const DAEMON_LAUNCH_LEASE_MS = 30_000;
  * the in-sandbox spawn flock still dedupes any launch that slips past it.
  */
 export const claimDaemonLaunchLease = internalMutation({
-  // `entityId` is the lease key: an entity id, or `sandboxLaunchLockKey(...)`
-  // for the per-sandbox launch lock (see `withSandboxLaunchLock`).
   args: { entityId: v.string(), ttlMs: v.optional(v.number()) },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -151,7 +145,6 @@ export const isEntitySandboxStopRequested = internalQuery({
     const isStopped = (status: string | undefined) =>
       status === "stopping" || status === "closed";
     if (args.entityTable === "sessionChats") {
-      // A chat shares its session's sandbox; a closed chat needs no daemon.
       const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
       const chat = chatId ? await ctx.db.get(chatId) : null;
       if (!chat || chat.archived === true) return true;
@@ -219,7 +212,6 @@ export const reconcileStoppedSandboxStatus = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // A chat shares its session's sandbox, so its status lives on the session.
     const chatId =
       args.entityTable === "sessionChats"
         ? ctx.db.normalizeId("sessionChats", args.entityId)

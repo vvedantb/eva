@@ -17,22 +17,13 @@ export type ChatEntityRef = {
   chatId: Id<"sessionChats">;
 };
 
-/**
- * What the usage-limit recovery card needs from a surface. `undefined` when
- * this viewer cannot move the chat onto another account: a read-only session,
- * or a task/project viewed by someone other than its owner (task and project
- * chat are owner-sticky; the account picker is gated the same way).
- */
 interface UsageLimitRecoveryInputs {
   messages: ReadonlyArray<ChatBodyMessage>;
   accounts: ReadonlyArray<ModelAccount>;
-  /** Maps a picker id string back to the branded id from the live docs. */
   resolveAccountId: (
     id: string | null,
   ) => Id<"userProviderAccounts"> | undefined;
-  /** undefined while the entity query loads; null = Team credential. */
   currentAccountId: Id<"userProviderAccounts"> | null | undefined;
-  /** Persists the sticky account and waits for the daemon handoff. */
   onSwitchAccount: (id: Id<"userProviderAccounts"> | null) => Promise<void>;
   isSandboxActive: boolean;
 }
@@ -43,12 +34,9 @@ interface UsageLimitRecoveryInputs {
  * it when a shared piece actually needs more, not before.
  */
 export interface SandboxChatSurface {
-  /** Undefined for a task's or project's chat before its session exists. */
   entity: ChatEntityRef | undefined;
   repoId: Id<"githubRepos">;
-  /** The chat's current model. */
   model: AIModel;
-  /** A running turn owns the context; never interrupt it with an offer. */
   isExecuting: boolean;
   /** The chat cannot be written to at all — hides per-agent stop buttons. */
   isReadOnly: boolean;
