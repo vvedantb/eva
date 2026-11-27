@@ -83,6 +83,12 @@ export interface PreviewToolbarTheme {
   muted: string;
   /** `text-warning`, a queued comment. */
   warning: string;
+  /** `border-input` as a `<textarea>` paints it, the note card's text field. */
+  inputBorder: string;
+  /** `border-ring/50`, that field while it has focus. */
+  focusBorder: string;
+  /** `text-secondary-foreground`, the secondary buttons. */
+  secondaryText: string;
   /** The segmented tabs: the trough and the active pill. */
   tabTrack: string;
   tabPill: string;
