@@ -6,9 +6,6 @@ import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
 
-/** Title of the chat every session starts with. */
-export const MAIN_CHAT_TITLE = "Main";
-
 /** Convex validator for a full session chat document including system fields. */
 export const sessionChatValidator = v.object({
   _id: v.id("sessionChats"),
@@ -59,7 +56,7 @@ export async function getSessionChatWithAccess(
   return context;
 }
 
-/** Every chat row of a session (only Main once `deleteExtraSessionChats` has run); for deletes. */
+/** Every chat row of a session (one, Main); for deletes. */
 export async function listSessionChats(
   db: DatabaseReader,
   sessionId: Id<"sessions">,
@@ -76,9 +73,7 @@ export async function findMainChat(
 ): Promise<Doc<"sessionChats"> | null> {
   return await db
     .query("sessionChats")
-    .withIndex("by_session_and_number", (q) =>
-      q.eq("sessionId", sessionId).eq("number", 1),
-    )
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
     .first();
 }
 
@@ -314,9 +309,6 @@ export async function insertMainChat(
     sessionId: session._id,
     repoId: session.repoId,
     userId: session.userId,
-    title: MAIN_CHAT_TITLE,
-    number: 1,
-    isMain: true,
     createdBy: session.createdBy ?? session.userId,
     updatedAt: session.updatedAt ?? Date.now(),
     claudePersistenceSeed: session._id,

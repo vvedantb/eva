@@ -67,9 +67,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: "codex:gpt-5.6-sol",
     });
     // A read-only chat: the chat of an archived session (a teammate's, so it
@@ -87,9 +84,6 @@ async function fixture() {
       sessionId: archivedSessionId,
       repoId,
       userId: strangerId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const taskId = await ctx.db.insert("agentTasks", {
       repoId,
@@ -351,9 +345,6 @@ describe("mobile api", () => {
           sessionId,
           repoId: ids.repoId,
           userId: ids.userId,
-          title: "Chat 2",
-          number: 2,
-          isMain: false,
           createdBy: ids.userId,
           updatedAt: requestedAt,
           pendingTurn: { prompt: "other", requestedAt },

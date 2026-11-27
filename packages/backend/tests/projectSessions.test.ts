@@ -100,7 +100,7 @@ describe("projects on sessions", () => {
         ],
       );
       // The task chats in its own session's Main chat, on its own branch.
-      expect(chat).toMatchObject({ isMain: true });
+      expect(chat?.sessionId).toBe(taskSession?._id);
       expect(chat?.taskId).toBeUndefined();
       expect(taskSession).toMatchObject({
         owner: { kind: "task", taskId: f.taskId },

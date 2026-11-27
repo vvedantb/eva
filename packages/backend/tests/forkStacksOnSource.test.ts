@@ -50,9 +50,6 @@ async function fixture() {
       sessionId: id,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: "claude:sonnet",
     });
     await ctx.db.insert("messages", {
@@ -99,9 +96,7 @@ async function createFork(stackOnSource: boolean) {
   return await t.run(async (ctx) => {
     const mainChat = await ctx.db
       .query("sessionChats")
-      .withIndex("by_session_and_number", (q) =>
-        q.eq("sessionId", sessionId).eq("number", 1),
-      )
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .first();
     const chatId = mainChat?._id ?? sessionId;
     return {

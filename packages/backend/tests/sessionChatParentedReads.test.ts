@@ -43,17 +43,11 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const sideChatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
       userId,
-      title: "Chat 2",
-      number: 2,
-      isMain: false,
     });
     await ctx.db.insert("messages", {
       parentId: mainChatId,

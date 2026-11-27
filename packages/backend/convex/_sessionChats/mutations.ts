@@ -102,7 +102,7 @@ async function onChatAccountChanged(
   providerAccountId: Id<"userProviderAccounts"> | undefined,
 ): Promise<void> {
   const projectId = sessionOwnerProjectId(session);
-  if (!chat.isMain || projectId === undefined) return;
+  if (projectId === undefined) return;
   if (providerAccountId === chat.providerAccountId) return;
   await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
     projectId,

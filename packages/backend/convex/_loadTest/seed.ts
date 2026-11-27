@@ -231,9 +231,6 @@ export const setup = internalMutation({
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const projectId = await db.insert("projects", {
       repoId,
@@ -461,20 +458,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
-    if (i % 3 === 1) {
-      await db.insert("sessionChats", {
-        sessionId,
-        repoId,
-        userId,
-        title: "Side chat",
-        number: 2,
-        isMain: false,
-      });
-    }
     if (linked) {
       await db.insert("sessionRepos", {
         sessionId,

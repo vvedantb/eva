@@ -208,9 +208,6 @@ describe("legacy session rows move onto the Main chat", () => {
           sessionId: f.sessionId,
           repoId: f.repoId,
           userId: f.userId,
-          title: "Main",
-          number: 1,
-          isMain: true,
         }),
       );
       await seedChatRows(f, f.sessionId);
@@ -242,9 +239,6 @@ describe("reading a session chat clears the sidebar dot", () => {
           sessionId: f.sessionId,
           repoId: f.repoId,
           userId: f.userId,
-          title: "Main",
-          number: 1,
-          isMain: true,
           lastTurnFinishedAt: 100,
         });
       });
@@ -273,17 +267,11 @@ describe("repo deletion", () => {
           sessionId: f.sessionId,
           repoId: f.repoId,
           userId: f.userId,
-          title: "Main",
-          number: 1,
-          isMain: true,
         }),
         await ctx.db.insert("sessionChats", {
           sessionId: f.sessionId,
           repoId: f.repoId,
           userId: f.userId,
-          title: "Chat 2",
-          number: 2,
-          isMain: false,
           createdBy: f.otherId,
         }),
       ]);

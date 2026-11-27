@@ -50,9 +50,6 @@ function busySessionChat(f: Fixture, rows: Row[]) {
       sessionId,
       repoId: f.repoId,
       userId: f.userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const start = Date.now();
     await ctx.db.insert("turns", {

@@ -243,9 +243,6 @@ describe("readHandoffHistory", () => {
         sessionId,
         repoId,
         userId,
-        title: "Main",
-        number: 1,
-        isMain: true,
       });
       // 8 rows of ~600 KB: ~4.8 MB, more than twice the 2 MB budget.
       for (let index = 0; index < 8; index += 1) {

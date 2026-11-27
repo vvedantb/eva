@@ -201,10 +201,10 @@ export const startWatch = internalMutation({
         { pullRequestId: row._id, checkAt: fresh.startedAt },
       );
     } else {
-      // The chat a session watch woke is gone with parallel chats
-      // (`deleteExtraSessionChats` clears old values).
-      const { sessionChatId: _dropped, ...kept } = row.watch;
-      await setPullRequestWatch(ctx, row._id, { ...kept, commentWakes: 0 });
+      await setPullRequestWatch(ctx, row._id, {
+        ...row.watch,
+        commentWakes: 0,
+      });
     }
     return { ok: true, prUrl: row.prUrl, prNumber: row.prNumber };
   },
