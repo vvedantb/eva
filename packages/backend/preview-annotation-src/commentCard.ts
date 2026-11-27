@@ -67,9 +67,9 @@ const STYLES = `
 .css div { display: flex; gap: 6px; margin-bottom: 2px; }
 .css .prop { flex: none; color: var(--idle-text); }
 .css .val { min-width: 0; overflow-wrap: anywhere; }
-textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--disc); color: var(--surface-text); font: 14px/20px var(--font); white-space: pre-wrap; resize: none; }
+textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--input-border); border-radius: 10px; background: var(--disc); color: var(--surface-text); font: 14px/20px var(--font); letter-spacing: 0; white-space: pre-wrap; resize: none; }
 textarea::placeholder { color: var(--idle-text); }
-textarea:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+textarea:focus-visible { border-color: var(--focus-border); outline: none; }
 .error { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--destructive); }
 .error[hidden] { display: none; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }

@@ -1691,6 +1691,9 @@ function evaPreviewAnnotationScript(): void {
       popover: read("popover"),
       muted: read("muted"),
       warning: read("warning"),
+      inputBorder: read("inputBorder"),
+      focusBorder: read("focusBorder"),
+      secondaryText: read("secondaryText"),
       tabTrack: read("tabTrack"),
       tabPill: read("tabPill"),
     };

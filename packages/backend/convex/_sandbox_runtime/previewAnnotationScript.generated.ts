@@ -6,15 +6,13 @@
  */
 export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
 (() => {
-  // preview-annotation-src/theme.ts
-  var BAR_SHADOW_BASE = "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px";
-  var TIP_SHADOW_BASE = "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.01) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.01) 0px 1.16px 1.5px 0px";
+  // preview-annotation-src/themeFallback.generated.ts
   var LIGHT_THEME = {
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
     surface: "oklab(1 0 0 / 0.95)",
     surfaceText: "oklch(0.2103 0 0)",
-    barShadow: \`\${BAR_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
-    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
+    barShadow: "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px",
+    tipShadow: "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.00999999) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.00999999) 0px 1.16px 1.5px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px",
     tipRadius: "16px",
     idleText: "oklch(0.5517 0 0)",
     hoverBg: "oklab(0.9524 0 0 / 0.6)",
@@ -32,15 +30,18 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     popover: "oklch(1 0 0)",
     muted: "oklch(0.9524 0 0)",
     warning: "oklch(0.7819 0.159 72.33)",
+    inputBorder: "oklch(0.9 0 0)",
+    focusBorder: "oklab(0.2103 0 0 / 0.5)",
+    secondaryText: "oklch(0.2103 0 0)",
     tabTrack: "oklch(0.94 0 0)",
     tabPill: "oklch(1 0 0)"
   };
   var DARK_THEME = {
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
     surface: "oklab(0.313316 0.000133276 -0.0054974 / 0.95)",
-    surfaceText: "oklch(0.9911 0 0)",
-    barShadow: \`\${BAR_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
-    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
+    surfaceText: "rgb(250, 250, 250)",
+    barShadow: "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px",
+    tipShadow: "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.00999999) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.00999999) 0px 1.16px 1.5px 0px, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px",
     tipRadius: "16px",
     idleText: "rgb(159, 160, 162)",
     hoverBg: "oklab(0.352463 0.000133812 -0.00533339 / 0.6)",
@@ -58,9 +59,14 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     popover: "rgb(48, 49, 52)",
     muted: "rgb(58, 59, 62)",
     warning: "oklch(0.8203 0.1392 76.34)",
+    inputBorder: "rgb(78, 79, 82)",
+    focusBorder: "oklab(0.9911 0 0 / 0.5)",
+    secondaryText: "oklch(0.9911 0 0)",
     tabTrack: "rgb(48, 49, 52)",
     tabPill: "rgb(68, 69, 72)"
   };
+
+  // preview-annotation-src/theme.ts
   var current = null;
   function getTheme() {
     if (current) return current;
@@ -93,6 +99,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       "--popover": theme.popover,
       "--muted": theme.muted,
       "--warning": theme.warning,
+      "--input-border": theme.inputBorder,
+      "--focus-border": theme.focusBorder,
+      "--secondary-text": theme.secondaryText,
       "--tab-track": theme.tabTrack,
       "--tab-pill": theme.tabPill
     };
@@ -128,9 +137,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
 .css div { display: flex; gap: 6px; margin-bottom: 2px; }
 .css .prop { flex: none; color: var(--idle-text); }
 .css .val { min-width: 0; overflow-wrap: anywhere; }
-textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--disc); color: var(--surface-text); font: 14px/20px var(--font); white-space: pre-wrap; resize: none; }
+textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--input-border); border-radius: 10px; background: var(--disc); color: var(--surface-text); font: 14px/20px var(--font); letter-spacing: 0; white-space: pre-wrap; resize: none; }
 textarea::placeholder { color: var(--idle-text); }
-textarea:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+textarea:focus-visible { border-color: var(--focus-border); outline: none; }
 .error { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--destructive); }
 .error[hidden] { display: none; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
@@ -406,10 +415,10 @@ button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke
 :host { all: initial; position: fixed; z-index: 2147483647; top: \${INSET_PX}px; right: \${INSET_PX}px; bottom: \${INSET_PX}px; font: 16px/24px var(--font); letter-spacing: -0.02em; }
 .drawer { box-sizing: border-box; display: flex; flex-direction: column; width: var(--drawer-width); height: 100%; overflow: hidden; border-radius: var(--tip-radius); background: var(--field); color: var(--surface-text); box-shadow: var(--bar-shadow); opacity: 0; transform: scale(0.98); transition: opacity 160ms ease-out, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1); }
 .drawer.in { opacity: 1; transform: none; }
-.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 500; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
 .filters { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 12px 6px; }
-.seg { box-sizing: border-box; display: inline-flex; align-items: center; height: 32px; padding: 4px; border-radius: var(--tip-radius); background: var(--tab-track); }
-.seg button { height: 24px; padding: 0 10px; border-radius: 16px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.005em; color: var(--idle-text); }
+.seg { box-sizing: border-box; display: inline-flex; align-items: center; height: 32px; padding: 4px; border-radius: var(--tip-radius); background: var(--tab-track); color: var(--idle-text); }
+.seg button { gap: 0; height: 24px; padding: 0 10px; border-radius: 16px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.005em; color: var(--idle-text); }
 .seg button[aria-pressed="true"] { background: var(--tab-pill); color: var(--surface-text); }
 .list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .group { display: flex; flex-direction: column; gap: 8px; }
@@ -421,7 +430,7 @@ button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke
 .meta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; line-height: 16px; letter-spacing: 0.01em; color: var(--idle-text); }
 .chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--field); color: var(--surface-text); font-family: Menlo, ui-monospace, SFMono-Regular, monospace; }
 .time { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
-.feedback { margin: 0; font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback { margin: 0; font-size: 14px; line-height: 20px; letter-spacing: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reply { margin-top: 8px; padding: 6px 8px; border-radius: 10px; background: var(--muted); font-size: 12px; line-height: 16px; letter-spacing: 0.005em; color: var(--idle-text); }
 .reply b { display: block; margin-bottom: 2px; font-weight: 500; color: var(--surface-text); }
 .reply p { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
@@ -435,7 +444,7 @@ button { all: unset; box-sizing: border-box; display: flex; align-items: center;
 button:hover { background: var(--hover-bg); color: var(--hover-text); }
 button:active { transform: scale(0.96); }
 button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
-button.secondary { background: var(--active-bg); color: var(--surface-text); }
+button.secondary { background: var(--active-bg); color: var(--secondary-text); }
 button.secondary:hover { opacity: 0.9; }
 button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 button.icon { width: 24px; height: 24px; padding: 0; }
@@ -2190,6 +2199,9 @@ svg.mark { width: 44px; height: 44px; }
         popover: read("popover"),
         muted: read("muted"),
         warning: read("warning"),
+        inputBorder: read("inputBorder"),
+        focusBorder: read("focusBorder"),
+        secondaryText: read("secondaryText"),
         tabTrack: read("tabTrack"),
         tabPill: read("tabPill")
       };
