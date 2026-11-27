@@ -61,7 +61,8 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
           "flex items-start gap-2",
           count === 1 ? "max-w-lg" : "w-full",
           count > 3 &&
-            "overflow-x-auto scrollbar scroll-fade-x snap-x snap-mandatory pb-1",
+            // No edge fade: it masked the first caption once the row scrolled.
+            "overflow-x-auto scrollbar snap-x snap-mandatory pb-1",
         )}
       >
         {images.map((image, index) => (
@@ -78,7 +79,7 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
             <button
               type="button"
               onClick={() => setLightboxIndex(index)}
-              className="block motion-press active:scale-[0.99]"
+              className="block max-w-full motion-press active:scale-[0.99]"
             >
               <img
                 src={image.url}
@@ -86,7 +87,9 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
                 loading="lazy"
                 className={cn(
                   MEDIA_OUTLINE,
-                  "rounded-surface max-h-96 w-full cursor-pointer object-contain object-top transition-opacity hover:opacity-90",
+                  // Sized by the image, not the tile, so the ring hugs a tall
+                  // phone capture instead of framing empty side bars.
+                  "rounded-surface block h-auto max-h-96 w-auto max-w-full cursor-pointer transition-opacity hover:opacity-90",
                 )}
               />
             </button>
