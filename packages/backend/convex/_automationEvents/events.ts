@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   DEFAULT_ISSUE_LABEL,
   type AutomationTrigger,
-  type RepoEventKind,
 } from "./labels";
 
 export {
@@ -99,7 +98,7 @@ export const ciPassedValidator = v.object({
 export type CiPassed = Infer<typeof ciPassedValidator>;
 
 /** Delay before a queued event runs, so a burst of webhooks lands as one run. */
-export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
+export const EVENT_DEBOUNCE_MS: Record<RepoEvent["kind"], number> = {
   // Each check suite (Actions, Vercel, …) completes separately.
   ci_failed: 90_000,
   // One review arrives as a review event plus one event per inline comment.
@@ -165,9 +164,14 @@ export function triggerMatchesEvent(
   event: RepoEvent,
 ): boolean {
   if (trigger === undefined || trigger.kind !== "event") return false;
-  // A `pr_updated` trigger also covers the opening push, which GitHub reports
-  // as `opened`, not `synchronize`.
-  if (trigger.event === "pr_updated" && event.kind === "pr_opened") return true;
+  // `pr_opened_or_updated` is a trigger choice only: GitHub reports the first
+  // push as `opened` and later ones as `synchronize`, so it takes both events.
+  if (
+    trigger.event === "pr_opened_or_updated" &&
+    (event.kind === "pr_opened" || event.kind === "pr_updated")
+  ) {
+    return true;
+  }
   if (trigger.event !== event.kind) return false;
   if (event.kind !== "issue_labeled") return true;
   const wanted = (trigger.label ?? DEFAULT_ISSUE_LABEL).trim().toLowerCase();
