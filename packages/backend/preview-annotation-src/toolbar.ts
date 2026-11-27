@@ -163,11 +163,11 @@ const DARK_THEME: ToolbarTheme = {
   destructive: "oklch(0.594 0.1973 24.63)",
 };
 
-/** Sizes mirror the old bar: `p-1` pill, `size-8` buttons, `size-4` icons. */
+/** Larger than the old bar for reach: 44px targets, 22px icons, 14px text. */
 const STYLES = `
-:host { all: initial; position: fixed; z-index: 2147483647; font: 12px/1.3 var(--font); }
-.bar { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
+:host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.3 var(--font); }
+.bar { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
 button:hover { background: var(--hover-bg); color: var(--hover-text); }
 button:active { transform: scale(0.96); }
 button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
@@ -177,12 +177,12 @@ button[hidden], .tools[hidden], .notice[hidden], .badge[hidden], .tip[hidden] { 
 .handle, .handle:hover { cursor: grab; touch-action: none; background: none; }
 .handle:active { cursor: grabbing; }
 .handle svg.icon { color: var(--destructive); }
-.tools { display: flex; align-items: center; gap: 2px; }
-svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-svg.mark { width: 32px; height: 32px; }
-.badge { position: absolute; top: -2px; right: -2px; display: flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 999px; background: var(--badge-bg); color: var(--badge-text); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.notice { padding: 0 10px 0 6px; white-space: nowrap; color: var(--idle-text); }
-.tip { position: absolute; bottom: calc(100% + 8px); left: 0; padding: 6px 12px; border-radius: var(--tip-radius); background: var(--surface); color: var(--surface-text); box-shadow: var(--tip-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 12px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
+.tools { display: flex; align-items: center; gap: 4px; }
+svg.icon { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.mark { width: 44px; height: 44px; }
+.badge { position: absolute; top: -2px; right: -2px; display: flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 999px; background: var(--badge-bg); color: var(--badge-text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.notice { padding: 0 12px 0 8px; font-size: 14px; white-space: nowrap; color: var(--idle-text); }
+.tip { position: absolute; bottom: calc(100% + 8px); left: 0; padding: 8px 14px; border-radius: var(--tip-radius); background: var(--surface); color: var(--surface-text); box-shadow: var(--tip-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 14px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
 `;
 
 interface StoredToolbar {
@@ -358,7 +358,7 @@ export function mountToolbar(
     mark.style.display = expanded ? "none" : "";
     closeIcon.style.display = expanded ? "" : "none";
     // A collapsed circle has no padding ring.
-    bar.style.padding = expanded ? "4px" : "0";
+    bar.style.padding = expanded ? "6px" : "0";
     const pressed: Record<ToolName, boolean> = {
       select: view.selecting,
       comments: view.commentsActive,
@@ -495,7 +495,7 @@ export function mountToolbar(
   applyTheme(darkScheme.matches ? DARK_THEME : LIGHT_THEME);
 
   render();
-  const size = 32;
+  const size = 44;
   place(
     stored?.left ?? window.innerWidth - size - 16,
     stored?.top ?? window.innerHeight - size - 16,
