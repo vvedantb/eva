@@ -31,16 +31,30 @@ import {
 } from "@/lib/hooks/useSimpleView";
 import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
 
-interface SandboxPaneSlotsProps {  activeTab: string;
+interface SandboxPaneSlotsProps {
+  activeTab: string;
   panes: SandboxPanesApi;
   preview: SandboxPreviewApi;
   owner: SandboxOwner;
   sandboxId: string | undefined;
   isActive: boolean;
-  repoId: Id<"githubRepos">;  cacheKey: string;
-  devCommand?: string;  prUrl?: string;  customTabs?: ReadonlyArray<Doc<"appTabs">>;
-  agentBrowsingAt?: number;  onReleaseBrowserLock?: () => void;  runConsoleDevCommandOnConnect?: boolean;  onStartSandbox?: () => void;
-  isSandboxStarting?: boolean;  onAnnotationSubmit: AnnotationSubmit;  miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;  previewPortOptions?: readonly PreviewPortOption[];  viewState: SandboxViewState | undefined;  presenceEnabled?: boolean;  onScreen?: boolean;  autoWakeEligible?: boolean;
+  repoId: Id<"githubRepos">;
+  cacheKey: string;
+  devCommand?: string;
+  prUrl?: string;
+  customTabs?: ReadonlyArray<Doc<"appTabs">>;
+  agentBrowsingAt?: number;
+  onReleaseBrowserLock?: () => void;
+  runConsoleDevCommandOnConnect?: boolean;
+  onStartSandbox?: () => void;
+  isSandboxStarting?: boolean;
+  onAnnotationSubmit: AnnotationSubmit;
+  miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;
+  previewPortOptions?: readonly PreviewPortOption[];
+  viewState: SandboxViewState | undefined;
+  presenceEnabled?: boolean;
+  onScreen?: boolean;
+  autoWakeEligible?: boolean;
 }
 
 export type SandboxViewState = FunctionReturnType<
@@ -108,7 +122,8 @@ export function SandboxPaneSlots({
     simpleView && isSimpleViewHiddenSandboxTab(activeTab)
       ? "preview"
       : activeTab;
-  const entityId = sandboxOwnerParentId(owner);  const currentUserId = useQuery(api.auth.me);
+  const entityId = sandboxOwnerParentId(owner);
+  const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
   const engaged = useUserEngaged();
   const setPreviewPath = useMutation(
@@ -201,7 +216,8 @@ export function SandboxPaneSlots({
               onPathChange={(path) => {
                 void setPreviewPath({
                   owner,
-                  path,                  ...(index === 0 ? {} : { paneId: id }),
+                  path,
+                  ...(index === 0 ? {} : { paneId: id }),
                 });
               }}
               onStartSandbox={onStartSandbox}

@@ -8,7 +8,6 @@ import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 import { ProjectStageCounts } from "./ProjectStageCounts";
 
 interface ProjectProgressBarProps {
-  /** The project's derived status (`useProjectTaskStatus` / `useProjectListStatuses`). */
   status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }

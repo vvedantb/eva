@@ -34,7 +34,9 @@ export function useSessionSandboxError(
 export function SandboxErrorNotice({
   sandboxError,
   onRetry,
-}: {  sandboxError: string;  onRetry: () => void;
+}: {
+  sandboxError: string;
+  onRetry: () => void;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-surface bg-destructive/10 px-2 py-1">

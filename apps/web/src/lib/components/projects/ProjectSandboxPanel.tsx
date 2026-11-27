@@ -53,7 +53,6 @@ import {
 import { ProjectTaskPane } from "./ProjectTaskPane";
 import { projectTaskRailTabs } from "./useProjectTaskTabs";
 
-/** Sandbox tabs a task's sandbox has but the coordinator's does not. */
 const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "preview",
   "browser",
@@ -63,7 +62,6 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "files",
 ]);
 
-/** The rail tab of an open reply thread; same descriptor shape as Tasks. */
 const REPLIES_TAB: SandboxTabDescriptor = {
   value: "replies",
   label: "Replies",
@@ -72,7 +70,6 @@ const REPLIES_TAB: SandboxTabDescriptor = {
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
-  /** The project's session: its chat feeds the Agents tab and annotations. */
   projectSession: OwnedSession;
   projectNumId?: number;
   sandboxId: string | undefined;
@@ -87,28 +84,14 @@ interface ProjectSandboxPanelProps {
   sandboxTab: ProjectSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The sandbox is closed and the host would allow a Start: no last-start
-   * error, not read-only, no run or build owning it. Combined in
-   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
-   */
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
-  /** Mini-player title; Expand returns to this project's Preview tab. */
   title: string;
-  /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
   onCloseThread: () => void;
-  /**
-   * The selected chat tab's task (`?task=`): the panel shows its tabs only.
-   * Undefined on Eva's tab.
-   */
   selectedTask: ProjectTaskListRow | undefined;
-  /** A task tab is selected but its row is still loading. */
   selectedTaskLoading: boolean;
-  /** The tasks open as chat tabs: the Tasks tab marks their rows. */
   openTaskIds: ReadonlySet<string>;
-  /** Opens a task as a chat tab (a Tasks tab row). */
   onOpenTask: (taskNumId: number) => void;
 }
 
@@ -138,7 +121,6 @@ export function ProjectSandboxPanel({
   openTaskIds,
   onOpenTask,
 }: ProjectSandboxPanelProps) {
-  // An open reply thread adds the Replies tab (projects v2, PR D).
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
   const simpleView = useSimpleView();
   const navigate = useNavigate();
@@ -156,15 +138,8 @@ export function ProjectSandboxPanel({
     projectId,
     repoId,
   );
-  // A selected task tab shows its own tabs only (Details first); one that
-  // lost its content (the sandbox stopped) falls back to Details.
   const taskSelected = selectedTask !== undefined || selectedTaskLoading;
   const taskTabs = selectedTask ? visibleProjectTaskTabs(selectedTask) : [];
-  // The coordinator only reads code and delegates: no dev server, no edits,
-  // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
-  // those lands on Tasks; a task's own sandbox keeps them all.
-  // Replies without an open thread (an old link) lands on Tasks too, as
-  // does a task tab on Eva's tab.
   const activeTab: ProjectSandboxTab = taskSelected
     ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
       ? sandboxTab
@@ -175,7 +150,6 @@ export function ProjectSandboxPanel({
       ? "tasks"
       : sandboxTab;
   const triageCount = taskStatus?.counts.triage ?? 0;
-  // Tasks leads the rail; its badge counts what waits in Triage.
   const tasksTab: SandboxTabDescriptor = {
     value: "tasks",
     label: "Tasks",
@@ -185,9 +159,6 @@ export function ProjectSandboxPanel({
       triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
   };
 
-  // Content-keyed Agents tab, folded from the chat transcript the project's
-  // chat panel already subscribes to (same entity ids). Artifacts stay on the
-  // project: the backend files its session's artifacts under it.
   const artifactSource = { kind: "project" as const, projectId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
@@ -213,7 +184,6 @@ export function ProjectSandboxPanel({
       to: toInternalRepoHref(
         `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
       ),
-      // Keep diffFile across sandbox tabs.
       search: true,
     });
   };
@@ -228,7 +198,6 @@ export function ProjectSandboxPanel({
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
-  // This surface has no custom tabs, so the tab bar only emits builtin ids.
   const handleTabChange = (tab: string) => {
     if (isProjectSandboxTab(tab)) navigateToSandboxTab(tab);
   };
@@ -374,15 +343,12 @@ export function ProjectSandboxPanel({
               prUrl={prUrl}
               agentBrowsingAt={viewState?.agentBrowsingAt}
               onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-              // Backend starts the app in the Console tmux session after startup.
               runConsoleDevCommandOnConnect={false}
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
               onAnnotationSubmit={submitAnnotation}
-              // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
-              // A collapsed rail keeps its preview parked.
               miniPlayer={
                 projectPathSegment && !collapsed
                   ? {

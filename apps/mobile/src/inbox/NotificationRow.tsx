@@ -46,26 +46,19 @@ export function NotificationRow({
   repo: NotificationRepo | undefined;
   onOpen: (notification: Doc<"notifications">) => void;
   onMarkRead: (notification: Doc<"notifications">) => void;
-  /** The web menu's Mark as read / Mark as unread. */
   onToggleRead: (notification: Doc<"notifications">) => void;
-  /** The web menu's Archive / Unarchive: the promise rejects when it fails, so the row comes back. */
   onToggleArchive: (notification: Doc<"notifications">) => Promise<unknown>;
-  /** A long press outside select mode: start it with this row ticked. */
   onStartSelect: (notification: Doc<"notifications">) => void;
-  /** Select mode, as the web: a checkbox leads the row, a press toggles it, and Mark read hides. */
   selection?: { checked: boolean; onToggle: (notification: Doc<"notifications">) => void };
 }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
   const unread = !notification.read;
-  // A low-urgency row reads as already read even while unread, as on the web.
   const emphasised = unread && notification.urgency !== "low";
   const parts = splitNotificationTitle(notification);
   const appearance = getNotificationAppearance(notification);
-  // An empty title still names the row: the type's label ("Run failed").
   const subject = parts.subject || appearance.label;
   const event = parts.event;
-  // No event phrase: the repo keeps a second line, so rows stay one height.
   const detail = event ?? repo?.label;
   const Glyph = NOTIFICATION_ICONS[appearance.icon];
   const tone = toneColors(appearance.tone, scheme);

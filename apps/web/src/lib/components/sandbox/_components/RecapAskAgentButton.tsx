@@ -15,7 +15,8 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 interface RecapAskAgentButtonProps {
   step: RecapWalkthroughStep;
   prUrl: string;
-  prNumber: number;  workBranch: string | null;
+  prNumber: number;
+  workBranch: string | null;
 }
 
 function stepPrompt({

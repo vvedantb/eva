@@ -61,7 +61,9 @@ function patch(path: string, added: string): string {
   ].join("\n");
 }
 
-interface HunkHeaderCounts {  readonly declared: readonly [number, number];  readonly actual: [number, number];
+interface HunkHeaderCounts {
+  readonly declared: readonly [number, number];
+  readonly actual: [number, number];
 }
 
 function hunkHeaderCounts(patch: string): HunkHeaderCounts[] {
@@ -357,13 +359,15 @@ describe("lineRangeCommentTarget", () => {
       startLine: 10,
       startSide: "RIGHT",
       label: "+10 to +11",
-    });    expect(lineRangeCommentTarget(rows, 4, 1)).toEqual({
+    });
+    expect(lineRangeCommentTarget(rows, 4, 1)).toEqual({
       line: 11,
       side: "RIGHT",
       startLine: 9,
       startSide: "RIGHT",
       label: "9 to 11",
-    });    expect(lineRangeCommentTarget(rows, 2, 3)).toMatchObject({ line: 10, side: "RIGHT", startLine: 10, startSide: "LEFT" });
+    });
+    expect(lineRangeCommentTarget(rows, 2, 3)).toMatchObject({ line: 10, side: "RIGHT", startLine: 10, startSide: "LEFT" });
     expect(lineRangeCommentTarget(rows, 2, 2)).toEqual({
       line: 10,
       side: "LEFT",

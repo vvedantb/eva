@@ -78,7 +78,8 @@ export function SandboxQuickOpenDialogs({
     "openSandboxFile",
     (event) => {
       event.preventDefault();
-      setActionsOpen(false);      if (!fileOpen) fileList.refresh();
+      setActionsOpen(false);
+      if (!fileOpen) fileList.refresh();
       setFileOpen(!fileOpen);
     },
     { enabled: hotkeysEnabled && filesEnabled },

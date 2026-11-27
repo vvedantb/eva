@@ -27,7 +27,8 @@ export function PreviewSnapshotDialog({
   onOpenChange: (open: boolean) => void;
   onAddToChat?: (snapshot: PreviewSnapshot) => void;
 }) {
-  if (!snapshot) return null;  const selected = selectSnapshotForPrompt(snapshot);
+  if (!snapshot) return null;
+  const selected = selectSnapshotForPrompt(snapshot);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -101,7 +101,8 @@ function diffOptions<LAnnotation>({
   ReviewableFileDiffProps,
   "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines">): FileDiffOptions<LAnnotation, undefined> {
   return {
-    diffStyle: diffView,    theme: DIFF_THEMES,
+    diffStyle: diffView,
+    theme: DIFF_THEMES,
     themeType: resolvedTheme,
     disableFileHeader: hideFileHeader === true,
     overflow: wrapLines === true ? "wrap" : "scroll",
@@ -136,7 +137,9 @@ function AnnotatableDiff({
 }: Pick<
   ReviewableFileDiffProps,
   "path" | "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines"
-> & {  renderFileDiff: FileDiffMetadata;  commentFileDiff: FileDiffMetadata;
+> & {
+  renderFileDiff: FileDiffMetadata;
+  commentFileDiff: FileDiffMetadata;
   review: NonNullable<ReturnType<typeof usePendingReviewComments>>;
 }) {
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
@@ -207,7 +210,8 @@ function AnnotatableDiff({
         fileDiff: commentFileDiff,
         range,
         text: "",
-      });      if (!preview) return;
+      });
+      if (!preview) return;
       setSelectedLines(range);
       setDraft({
         id,

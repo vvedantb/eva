@@ -197,7 +197,6 @@ export function PrFileDiff({
     onPathChange(next.path);
   };
 
-
   return (
     <View className="flex-1">
       {diff.truncated ? <TruncatedNote /> : null}

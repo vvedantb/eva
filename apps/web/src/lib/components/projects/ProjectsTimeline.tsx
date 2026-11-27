@@ -40,9 +40,7 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 interface ProjectsTimelineProps {
   projects: Project[];
-  /** The project's derived stage (`projectStatus`). */
   stageOf: (projectId: string) => ProjectStage;
-  /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
   basePath: string;
   range: GanttRange;

@@ -93,7 +93,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
     }
   };
 
-
   return (
     <Screen onBack={leave}>
       <KeyboardAvoidingView style={{ flex: 1 }}>

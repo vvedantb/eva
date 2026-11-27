@@ -46,11 +46,16 @@ interface LogicalSize {
   height: number;
 }
 
-interface HostEntry {  key: string;  group: string;
-  src: string;  epoch: number;
+interface HostEntry {
+  key: string;
+  group: string;
+  src: string;
+  epoch: number;
   anchor: HTMLElement | null;
   rect: Rect | null;
-  element: HTMLIFrameElement | null;  logical: LogicalSize | null;  bordered: boolean;
+  element: HTMLIFrameElement | null;
+  logical: LogicalSize | null;
+  bordered: boolean;
   attachedAt: number;
 }
 const MAX_IFRAMES = 3;
@@ -63,7 +68,8 @@ const MAX_IFRAMES = 3;
  * the offsets it is applying instead, and the overlay takes them in the same
  * commit.
  */
-export interface PreviewGesture {  key: string;
+export interface PreviewGesture {
+  key: string;
   dx: number;
   dy: number;
   dWidth: number;
@@ -116,7 +122,8 @@ function getPreviewGesture(): PreviewGesture | null {
 
 const movingPanels = new Map<Element, number>();
 
-function onDockMotion(event: Event): void {  if (!("ms" in event) || typeof event.ms !== "number") return;
+function onDockMotion(event: Event): void {
+  if (!("ms" in event) || typeof event.ms !== "number") return;
   const panel = event.target;
   if (!(panel instanceof Element)) return;
   window.clearTimeout(movingPanels.get(panel));
@@ -241,14 +248,16 @@ function scheduleRemeasure(): void {
     remeasureAll();
   });
 }
-function remeasureAll(): void {  if (gesture !== null) return;
+function remeasureAll(): void {
+  if (gesture !== null) return;
   if (document.visibilityState !== "visible") {
     syncLayoutListeners();
     return;
   }
   let changed = false;
   for (const [key, entry] of entries) {
-    if (entry.anchor === null) continue;    const rect = measure(entry.anchor);
+    if (entry.anchor === null) continue;
+    const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });
       changed = true;
@@ -261,7 +270,8 @@ function remeasureAll(): void {  if (gesture !== null) return;
 function evictOverCap(): void {
   if (entries.size <= MAX_IFRAMES) return;
   let oldest: HostEntry | null = null;
-  for (const entry of entries.values()) {    if (entry.anchor !== null) continue;
+  for (const entry of entries.values()) {
+    if (entry.anchor !== null) continue;
     if (oldest === null || entry.attachedAt < oldest.attachedAt) {
       oldest = entry;
     }
@@ -273,16 +283,21 @@ function evictOverCap(): void {
 
 interface AttachOptions {
   anchor: HTMLElement;
-  group: string;  src: string | undefined;
+  group: string;
+  src: string | undefined;
   epoch: number;
-  logical: LogicalSize | null;  onElement: (el: HTMLIFrameElement | null) => void;  role: PreviewAnchorRole;  miniPlayer?: PreviewMiniPlayerSource;
+  logical: LogicalSize | null;
+  onElement: (el: HTMLIFrameElement | null) => void;
+  role: PreviewAnchorRole;
+  miniPlayer?: PreviewMiniPlayerSource;
 }
 
 function attach(key: string, options: AttachOptions): (() => void) | undefined {
   const existing = entries.get(key);
   notePreviewAnchorAttached(key, options.role);
 
-  if (options.src === undefined) {    if (options.role === "panel") disarmPreviewMiniPlayer(key);
+  if (options.src === undefined) {
+    if (options.role === "panel") disarmPreviewMiniPlayer(key);
     if (existing !== undefined) {
       entries.set(key, { ...existing, anchor: null, rect: null });
       notify();
@@ -293,12 +308,14 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   const sameEpoch = existing !== undefined && existing.epoch === options.epoch;
   entries.set(key, {
     key,
-    group: options.group,    src: sameEpoch ? existing.src : options.src,
+    group: options.group,
+    src: sameEpoch ? existing.src : options.src,
     epoch: options.epoch,
     anchor: options.anchor,
     rect: measure(options.anchor),
     element: sameEpoch ? existing.element : null,
-    logical: options.logical,    bordered: options.role === "panel" && options.logical !== null,
+    logical: options.logical,
+    bordered: options.role === "panel" && options.logical !== null,
     attachedAt: Date.now(),
   });
   evictOverCap();
@@ -338,7 +355,8 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
       onElementByKey.delete(key);
     }
     options.onElement(null);
-    const entry = entries.get(key);    if (entry !== undefined && entry.anchor === options.anchor) {
+    const entry = entries.get(key);
+    if (entry !== undefined && entry.anchor === options.anchor) {
       entries.set(key, { ...entry, anchor: null, rect: null });
       notify();
       notePreviewAnchorDetached(key);
@@ -356,7 +374,8 @@ function iframeRefFor(key: string): (el: HTMLIFrameElement | null) => void {
   if (cached !== undefined) return cached;
   const callback = (el: HTMLIFrameElement | null) => {
     const entry = entries.get(key);
-    if (entry === undefined || entry.element === el) return;    if (el !== null) setPreviewDocumentLoading(el, true);
+    if (entry === undefined || entry.element === el) return;
+    if (el !== null) setPreviewDocumentLoading(el, true);
     entries.set(key, { ...entry, element: el });
     onElementByKey.get(key)?.(el);
     notify();
@@ -434,9 +453,12 @@ export function PreviewIframeHost() {
           <div
             key={entry.key}
             className={cn(
-              "absolute overflow-hidden",              logical ? "bg-black" : "bg-background",              live !== null || steppedAside
+              "absolute overflow-hidden",
+              logical ? "bg-black" : "bg-background",
+              live !== null || steppedAside
                 ? "pointer-events-none"
-                : "pointer-events-auto",              steppedAside ? "opacity-0" : "transition-opacity duration-150",
+                : "pointer-events-auto",
+              steppedAside ? "opacity-0" : "transition-opacity duration-150",
               entry.bordered && "border border-border",
               !visible && "hidden",
             )}
@@ -455,7 +477,8 @@ export function PreviewIframeHost() {
               key={entry.epoch}
               ref={iframeRefFor(entry.key)}
               src={entry.src}
-              title="Preview"              allow="tools"
+              title="Preview"
+              allow="tools"
               onLoad={(event) => {
                 setPreviewDocumentLoading(event.currentTarget, false);
               }}
@@ -480,9 +503,12 @@ export function PreviewIframeHost() {
   );
 }
 
-interface PreviewAnchorProps {  entryKey: string;  group: string;
+interface PreviewAnchorProps {
+  entryKey: string;
+  group: string;
   src: string | undefined;
-  epoch: number;  logicalSize: { width: number; height: number } | null;
+  epoch: number;
+  logicalSize: { width: number; height: number } | null;
   role: PreviewAnchorRole;  miniPlayer?: PreviewMiniPlayerSource;
   onElement?: (el: HTMLIFrameElement | null) => void;
 }
@@ -540,7 +566,8 @@ interface PersistentPreviewBodyProps extends Omit<
   PreviewAnchorProps,
   "role" | "src" | "onElement"
 > {
-  src: string | undefined;  covered: boolean;
+  src: string | undefined;
+  covered: boolean;
   loading?: React.ReactNode;
 }
 

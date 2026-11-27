@@ -32,11 +32,14 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
  * shortcut, the tab-bar toggle button, and the action palette.
  */
 export interface TerminalPanelApi {
-  expanded: boolean;  toggle: () => void;  newTerminal: () => void;
+  expanded: boolean;
+  toggle: () => void;
+  newTerminal: () => void;
   newTerminalDisabled: boolean;
 }
 
-interface SandboxWorkspaceProps {  owner: SandboxOwner;
+interface SandboxWorkspaceProps {
+  owner: SandboxOwner;
   storageScope: string;
   sandboxId: string | undefined;
   isActive: boolean;
@@ -99,7 +102,8 @@ export function SandboxWorkspace({
     bottomPanelRef.current?.collapse();
   }, [expanded, savedBottomSize, bottomPanelRef]);
 
-  const handleResize = (size: PanelSize) => {    if (!isMeasuredPanelSize(size)) return;
+  const handleResize = (size: PanelSize) => {
+    if (!isMeasuredPanelSize(size)) return;
     const collapsed = size.asPercentage === 0;
     if (collapsedRef.current === collapsed) return;
     collapsedRef.current = collapsed;

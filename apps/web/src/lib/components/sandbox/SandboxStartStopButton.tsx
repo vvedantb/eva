@@ -44,7 +44,8 @@ export function SandboxStartStopButton({
   const idlePause = useQuery(
     api.sandboxIdlePause.getSandboxIdlePauseSettings,
     simpleView ? {} : "skip",
-  );  const autoWakes = idlePause === undefined || idlePause.mode === "on";
+  );
+  const autoWakes = idlePause === undefined || idlePause.mode === "on";
   if (simpleView && (isActive || (!hasStartError && autoWakes))) return null;
   const blockedMidTurn = isActive && isAssistantResponding;
   const label = isActive
@@ -56,7 +57,8 @@ export function SandboxStartStopButton({
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
       <Button
-        size={size === "sm" ? "icon-sm" : "icon"}        variant="secondary"
+        size={size === "sm" ? "icon-sm" : "icon"}
+        variant="secondary"
         onClick={() => {
           if (blockedMidTurn) return;
           onToggle(isActive ? "stop" : "start");

@@ -58,7 +58,8 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
   const generatePrRecap = useAction(api.docs.generatePrRecap);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [view, setView] = useState<PrRecapView>("recap");  const [pendingModel, setPendingModel] = useState<AIModel>();
+  const [view, setView] = useState<PrRecapView>("recap");
+  const [pendingModel, setPendingModel] = useState<AIModel>();
   const [pendingTraits, setPendingTraits] = useState<StoredModelTraits>();
 
   const model = normalizeAIModel(
@@ -153,7 +154,9 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
   }
 
   const isPending = recapDoc.prRecapStatus === "pending";
-  const isErrored = recapDoc.prRecapStatus === "error";  const isStalled = isPending && recapDoc.activeWorkflowId === undefined;  const isIncompleteReady = isIncompleteReadyRecap(recapDoc);
+  const isErrored = recapDoc.prRecapStatus === "error";
+  const isStalled = isPending && recapDoc.activeWorkflowId === undefined;
+  const isIncompleteReady = isIncompleteReadyRecap(recapDoc);
   const docPath = entityPathSegment(recapDoc);
   const shortSha =
     recapDoc.headSha !== undefined ? recapDoc.headSha.slice(0, 7) : null;
@@ -253,7 +256,8 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
 
       {recapDoc.headSha !== undefined &&
       hasStoredRecap(recapDoc) &&
-      !isPending ? (        <RecapStaleBanner
+      !isPending ? (
+        <RecapStaleBanner
           prUrl={prUrl}
           repoId={repoId}
           recapSha={recapDoc.headSha}

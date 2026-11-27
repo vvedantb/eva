@@ -4,7 +4,8 @@ import type { SandboxOwner } from "@eva/backend";
 type PreviewMiniPlayerMode = "auto" | "manual";
 
 /** What the pane knows and the host does not: where the preview belongs. */
-export interface PreviewMiniPlayerSource {  owner: SandboxOwner;
+export interface PreviewMiniPlayerSource {
+  owner: SandboxOwner;
   sandboxId: string;  returnTo: string;
   title: string;
 }

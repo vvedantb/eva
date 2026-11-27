@@ -49,7 +49,8 @@ export function PreviewWebMcpDialog({
           ) : (
             <ul className="space-y-3">
               {discovery.tools.map((tool, index) => (
-                <li                  key={`${index}:${tool.name}`}
+                <li
+                  key={`${index}:${tool.name}`}
                   className="rounded-md border border-border bg-muted/40 px-3 py-2"
                   data-testid={`webmcp-tool-${tool.name}`}
                 >

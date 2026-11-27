@@ -45,7 +45,8 @@ export function PreviewToolCallExecutor({
     id: Id<"previewToolCalls">,
     row: PreviewToolCallRow,
     frame: HTMLIFrameElement,
-  ) {    const target = frame.contentWindow;
+  ) {
+    const target = frame.contentWindow;
     if (!target || startedCallIds.has(id)) return;
     startedCallIds.add(id);
     const won = await claim({ id, clientId: TAB_CLIENT_ID });
@@ -57,7 +58,8 @@ export function PreviewToolCallExecutor({
 
   return (
     <>
-      {pending.map((row) => (        <span
+      {pending.map((row) => (
+        <span
           hidden
           key={row._id}
           ref={(node) => {

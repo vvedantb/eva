@@ -1,7 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
 import { z } from "zod";
 
-
 const exitSchema = z.object({
   reason: z.string(),
   timestamp: z.number(),

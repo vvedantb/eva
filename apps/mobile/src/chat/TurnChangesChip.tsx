@@ -18,7 +18,6 @@ import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import { useScheme } from "@/ui/theme";
 
-
 /** What the turn actions act on: the reply, its session, its repo and its checkpoints. */
 export type TurnChangesTarget = {
   checkpoint: TurnCheckpoint;

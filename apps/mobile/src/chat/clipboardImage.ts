@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useSyncExternalStore } from "react";
 import { AppState, Platform } from "react-native";
 
-
 let available = false;
 let pasted = false;
 const listeners = new Set<() => void>();

@@ -13,7 +13,8 @@ import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 const CAPTURE_TIMEOUT_MS = 20_000;
 
 interface PreviewSnapshotOptions {
-  iframeElement: HTMLIFrameElement | null;  seedSnapshot?: PreviewSnapshot;
+  iframeElement: HTMLIFrameElement | null;
+  seedSnapshot?: PreviewSnapshot;
 }
 
 /**

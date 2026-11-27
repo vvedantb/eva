@@ -34,7 +34,6 @@ export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
   mode: "project-task",
 };
 
-/** The sandbox pane each task tab shows; Details is not a pane. */
 const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> =
   {
     "task-details": null,
@@ -87,18 +86,14 @@ export function ProjectTaskPane({
   taskId: Id<"agentTasks">;
   numId: number | undefined;
   title: string;
-  /** The task's own PR; Review shows only with one. */
   prUrl: string | undefined;
   tab: ProjectTaskTab;
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   collapsed: boolean;
   onSelectTab: (tab: ProjectTaskTab) => void;
 }) {
   const detail = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
   const paneTab = PANE_TAB[tab];
-  // Mount the sandbox panes on the first visit to one of their tabs, then
-  // keep them while this task stays selected (the parent keys it by task).
   const [panesVisited, setPanesVisited] = useState(paneTab !== null);
   if (paneTab !== null && !panesVisited) setPanesVisited(true);
   const { expand, openDiffs } = useProjectTaskExpand({
@@ -194,10 +189,6 @@ export function ProjectTaskPane({
   );
 }
 
-/**
- * The task sandbox's Preview, Browser and Review panes, keyed by the task's
- * session as on its full page (same pane storage scope).
- */
 function ProjectTaskSandboxPanes({
   taskId,
   owner,

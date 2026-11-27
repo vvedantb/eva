@@ -34,14 +34,17 @@ export function SandboxCommitPushButton({
   size = "sm",
 }: {
   gitSync: Doc<"sessions">["sandboxGitSync"];
-  isSandboxActive: boolean;  target: SandboxGitTarget | undefined;  size?: "sm" | "default";
+  isSandboxActive: boolean;
+  target: SandboxGitTarget | undefined;
+  size?: "sm" | "default";
 }) {
   const simpleView = useSimpleView();
   const commitAndPush = useAction(api.sandbox.commitAndPushSandbox);
   const [isPushing, setIsPushing] = useState(false);
 
   const uncommitted = gitSync?.uncommittedFiles ?? 0;
-  const unpushed = gitSync?.unpushedCommits ?? 0;  if (
+  const unpushed = gitSync?.unpushedCommits ?? 0;
+  if (
     target === undefined ||
     !isSandboxActive ||
     (uncommitted === 0 && unpushed === 0)

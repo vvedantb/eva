@@ -28,7 +28,8 @@ function overlayAfter(next: PreviewMiniPlayerFrame): Rect | null {
 }
 
 describe("published gesture offsets carry the overlay to the window", () => {
-  test("dragging towards the bottom-right corner", () => {    const next = {
+  test("dragging towards the bottom-right corner", () => {
+    const next = {
       ...ORIGIN,
       right: ORIGIN.right - 40,
       bottom: ORIGIN.bottom - 25,
@@ -47,7 +48,8 @@ describe("published gesture offsets carry the overlay to the window", () => {
     expect(overlayAfter(next)).toEqual(paintedBox(next));
   });
 
-  test("growing from the bottom-right grip", () => {    const next = {
+  test("growing from the bottom-right grip", () => {
+    const next = {
       right: ORIGIN.right - 60,
       bottom: ORIGIN.bottom - 45,
       width: ORIGIN.width + 60,

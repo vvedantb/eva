@@ -7,7 +7,9 @@ import { usePrDiff } from "@/lib/components/sandbox/usePrDiff";
 
 interface RecapStaleBannerProps {
   prUrl: string;
-  repoId: Id<"githubRepos">;  recapSha: string;  action?: ReactNode;
+  repoId: Id<"githubRepos">;
+  recapSha: string;
+  action?: ReactNode;
 }
 
 /**

@@ -14,7 +14,10 @@ import { prNumberFromGithubUrl } from "@eva/shared";
 import { ReviewTabsPanel } from "@/lib/components/reviews/ReviewTabsPanel";
 import { usePrTabParam } from "./usePrTabParam";
 
-interface PrPanelProps {  owner: PrOwnerRef;  prUrl?: string;  repoId: Id<"githubRepos">;
+interface PrPanelProps {
+  owner: PrOwnerRef;
+  prUrl?: string;
+  repoId: Id<"githubRepos">;
   isActive: boolean;
 }
 
@@ -28,7 +31,9 @@ interface PrPanelProps {  owner: PrOwnerRef;  prUrl?: string;  repoId: Id<"githu
  */
 export function PrPanel({ owner, prUrl, repoId, isActive }: PrPanelProps) {
   const { prTab, setPrTab } = usePrTabParam();
-  const pullRequests = useQuery(api.pullRequests.listForOwner, { owner });  const [selectedParam] = useQueryState("pr", reviewPullRequestParser);  const selected =
+  const pullRequests = useQuery(api.pullRequests.listForOwner, { owner });
+  const [selectedParam] = useQueryState("pr", reviewPullRequestParser);
+  const selected =
     pullRequests?.find((pr) => pr._id === selectedParam) ?? pullRequests?.[0];
   const reviewUrl = selected?.prUrl ?? prUrl;
   const reviewRepoId = selected?.repoId ?? repoId;
@@ -44,14 +49,16 @@ export function PrPanel({ owner, prUrl, repoId, isActive }: PrPanelProps) {
   if (isActive && resolvedDefault === null) {
     if (!reviewUrl) {
       setResolvedDefault("diffs");
-    } else if (recapDoc !== undefined) {      setResolvedDefault(
+    } else if (recapDoc !== undefined) {
+      setResolvedDefault(
         recapDoc !== null && isViewableRecap(recapDoc) ? "summary" : "diffs",
       );
     }
   }
 
   return (
-    <ReviewTabsPanel      key={reviewUrl ?? "none"}
+    <ReviewTabsPanel
+      key={reviewUrl ?? "none"}
       repoId={reviewRepoId}
       prUrl={reviewUrl}
       prNumber={prNumber}

@@ -11,7 +11,8 @@ import type { WebMcpDiscovery } from "@/lib/components/sandbox/previewWebMcp";
 const DISCOVER_TIMEOUT_MS = 12_000;
 
 interface PreviewWebMcpOptions {
-  iframeElement: HTMLIFrameElement | null;  seedDiscovery?: WebMcpDiscovery;
+  iframeElement: HTMLIFrameElement | null;
+  seedDiscovery?: WebMcpDiscovery;
 }
 
 /**

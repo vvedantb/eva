@@ -22,7 +22,6 @@ export type DiffRef = PrRef | CompareRef;
 
 const prKey = (ref: DiffRef) => ("prNumber" in ref ? `${ref.repoId}.${ref.prNumber}` : `${ref.repoId}.${ref.base}...${ref.head}`);
 
-
 type PrDiffPayload = { entries: DiffFileEntry[]; truncated: boolean; repoUrl: string; headSha: string };
 
 export type PrDiffState =
@@ -99,7 +98,6 @@ export function usePrDiff(pr: DiffRef | null): { state: PrDiffState; reload: () 
   };
 }
 
-
 const ignoreWhitespaceStore = persistedStore("prDiffIgnoreWs", false, (raw) => (raw === "true" ? true : raw === "false" ? false : null));
 
 /**
@@ -137,7 +135,6 @@ export function useViewedFiles(pr: DiffRef): {
     count: paths.length,
   };
 }
-
 
 /**
  * A line comment drafted on Code, waiting to be posted with a review: GitHub's

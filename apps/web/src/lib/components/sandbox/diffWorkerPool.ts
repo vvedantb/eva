@@ -22,7 +22,8 @@ export const DIFF_THEMES: ThemesType = {
 };
 
 export const DIFF_POOL_OPTIONS: WorkerPoolOptions = {
-  workerFactory: () => new DiffsWorker(),  poolSize: 4,
+  workerFactory: () => new DiffsWorker(),
+  poolSize: 4,
 };
 
 export const DIFF_HIGHLIGHTER_OPTIONS: WorkerInitializationRenderOptions = {

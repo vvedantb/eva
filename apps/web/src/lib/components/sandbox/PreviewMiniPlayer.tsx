@@ -86,7 +86,8 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
           logicalSize={logicalSize}
           role="miniPlayer"
         />
-      </div>      <div className="relative h-2.5 shrink-0 bg-muted">
+      </div>
+      <div className="relative h-2.5 shrink-0 bg-muted">
         <div
           {...resizeHandlers}
           role="separator"

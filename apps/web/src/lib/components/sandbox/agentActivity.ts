@@ -9,10 +9,14 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
  * share.
  */
 export interface SubagentView {
-  toolUseId: string;  title: string;  status: string;
+  toolUseId: string;
+  title: string;
+  status: string;
   backgrounded: boolean;
   startedAt?: number;
-  settledAt?: number;  steps: ActivityStep[];  resultText?: string;
+  settledAt?: number;
+  steps: ActivityStep[];
+  resultText?: string;
 }
 
 export type SubagentTone = "active" | "success" | "danger" | "muted";
@@ -35,7 +39,8 @@ function statusFromStep(step: ActivityStep): string {
 function subagentTitle(step: ActivityStep): string | undefined {
   const detail = step.detail?.trim();
   if (detail) return detail;
-  const label = step.label.trim();  if (label && label !== "Running agent..." && label !== "Ran agent") {
+  const label = step.label.trim();
+  if (label && label !== "Running agent..." && label !== "Ran agent") {
     return label;
   }
   return undefined;
@@ -54,8 +59,11 @@ export function deriveSubagents({
   streamingActivity,
   backgroundAgents,
   sandboxRunning = true,
-}: {  activityLogs: ReadonlyArray<string | undefined>;  streamingActivity?: string;
-  backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;  sandboxRunning?: boolean;
+}: {
+  activityLogs: ReadonlyArray<string | undefined>;
+  streamingActivity?: string;
+  backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
+  sandboxRunning?: boolean;
 }): SubagentView[] {
   const byId = new Map<string, SubagentView>();
   const order: string[] = [];
@@ -94,7 +102,8 @@ export function deriveSubagents({
       }
     }
     for (const [parentId, kids] of childrenByParent) {
-      const agent = upsert(parentId);      if (kids.length >= agent.steps.length) agent.steps = kids;
+      const agent = upsert(parentId);
+      if (kids.length >= agent.steps.length) agent.steps = kids;
     }
   };
 

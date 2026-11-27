@@ -32,7 +32,9 @@ export function SessionSourcePane({
   children,
 }: {
   title: string;
-  count?: number;  viewAllHref: string;  actions?: ReactNode;
+  count?: number;
+  viewAllHref: string;
+  actions?: ReactNode;
   loading: boolean;
   children: ReactNode;
 }) {

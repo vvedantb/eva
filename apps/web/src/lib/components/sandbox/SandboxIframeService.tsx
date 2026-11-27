@@ -44,12 +44,31 @@ function startErrorMessage(
   return `${message}\n\nLogs:\n${result.logs}`;
 }
 
-interface SandboxIframeServiceProps {  cacheNamespace: string;
+interface SandboxIframeServiceProps {
+  cacheNamespace: string;
   cacheKey: string;
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
-  port: number;  startAction: () => Promise<StartResult>;  stopAction: () => Promise<unknown>;  transformUrl?: (url: string) => string;  onReady?: (url: string) => void;  ensureStartedBeforeReady?: boolean;  maxAttempts: number;  icon: ComponentType<{ className?: string }>;  inactiveLabel: string;  idleLabel: string;  startLabel: string;  startingLabel: string;  pollFailedError: string;  startFailedError: string;  loadFailedError: string;  iframeAllow?: string;  autoStartKey?: number;  externalHref?: string;  wake?: SandboxWake;
+  port: number;
+  startAction: () => Promise<StartResult>;
+  stopAction: () => Promise<unknown>;
+  transformUrl?: (url: string) => string;
+  onReady?: (url: string) => void;
+  ensureStartedBeforeReady?: boolean;
+  maxAttempts: number;
+  icon: ComponentType<{ className?: string }>;
+  inactiveLabel: string;
+  idleLabel: string;
+  startLabel: string;
+  startingLabel: string;
+  pollFailedError: string;
+  startFailedError: string;
+  loadFailedError: string;
+  iframeAllow?: string;
+  autoStartKey?: number;
+  externalHref?: string;
+  wake?: SandboxWake;
 }
 
 /**
@@ -83,7 +102,8 @@ export function SandboxIframeService({
   autoStartKey,
   externalHref,
   wake,
-}: SandboxIframeServiceProps) {  const [cachedUrl, setCachedUrl] = useSessionStorage<string | null>(
+}: SandboxIframeServiceProps) {
+  const [cachedUrl, setCachedUrl] = useSessionStorage<string | null>(
     `eva:${cacheNamespace}:${cacheKey}:${sandboxId ?? "no-sandbox"}`,
     null,
   );
@@ -96,7 +116,8 @@ export function SandboxIframeService({
   const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const attempts = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const handledAutoStartKey = useRef<number | undefined>(undefined);  const generation = useRef(0);
+  const handledAutoStartKey = useRef<number | undefined>(undefined);
+  const generation = useRef(0);
   const refreshIframe = () => {
     setIframeKey((k) => k + 1);
   };
@@ -111,7 +132,8 @@ export function SandboxIframeService({
   const acceptReady = (rawUrl: string) => {
     const finalUrl = transformUrl ? transformUrl(rawUrl) : rawUrl;
     setUrl(finalUrl);
-    setState("running");    setCachedUrl(stripPreviewGrant(finalUrl));
+    setState("running");
+    setCachedUrl(stripPreviewGrant(finalUrl));
     onReady?.(finalUrl);
   };
 
@@ -206,17 +228,20 @@ export function SandboxIframeService({
     setCachedUrl(null);
     try {
       await stopAction();
-    } catch {    }
+    } catch {
+    }
   };
 
   /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler, no-effect/no-chain-state-updates, no-effect/no-pass-data-to-parent --
      Reads sessionStorage and kicks off a readiness poll against the sandbox;
-     the sandbox can also go down without any local event. */  useEffect(() => {
+     the sandbox can also go down without any local event. */
+  useEffect(() => {
     if (isActive && sandboxId && state === "idle") {
       if (
         autoStartKey !== undefined &&
         handledAutoStartKey.current !== autoStartKey
-      ) {        handledAutoStartKey.current = autoStartKey;
+      ) {
+        handledAutoStartKey.current = autoStartKey;
         void start();
         return;
       }

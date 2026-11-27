@@ -25,7 +25,6 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 interface ProjectsListViewProps {
   projectsByPhase: Record<ProjectStage, Project[]>;
   visiblePhases: Set<ProjectStage>;
-  /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
   onArchive: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;

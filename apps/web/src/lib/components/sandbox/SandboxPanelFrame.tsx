@@ -34,7 +34,8 @@ export function SandboxEmptyRailFrame({
   children,
 }: {
   collapsed: boolean;
-  onToggle: () => void;  showToggle?: boolean;
+  onToggle: () => void;
+  showToggle?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -74,8 +75,10 @@ export function SandboxNotStartedRail({
 }: {
   collapsed: boolean;
   onToggle: () => void;
-  ownerLabel: "task" | "project";  onStart: (() => void) | undefined;
-  isStarting: boolean;  isPending: boolean;
+  ownerLabel: "task" | "project";
+  onStart: (() => void) | undefined;
+  isStarting: boolean;
+  isPending: boolean;
   showToggle?: boolean;
 }) {
   return (

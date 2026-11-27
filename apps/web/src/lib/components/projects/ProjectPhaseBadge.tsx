@@ -22,7 +22,6 @@ export interface PhaseStyle {
   bg: string;
   cardBg: string;
   bar: string;
-  /** CSS colour of `bar`, for the timeline's Gantt status. */
   barColor: string;
   text: string;
   label: string;

@@ -24,7 +24,8 @@ interface RecapWalkthroughProps {
   steps: readonly RecapWalkthroughStep[];
   prUrl: string;
   prNumber: number;
-  repoId: Id<"githubRepos">;  scrollRoot: HTMLElement | null;
+  repoId: Id<"githubRepos">;
+  scrollRoot: HTMLElement | null;
 }
 
 /**
@@ -49,7 +50,8 @@ export function RecapWalkthrough({
     rawState.status === "ready" && ignoreWhitespace
       ? { ...rawState, entries: applyIgnoreWhitespace(rawState.entries) }
       : rawState;
-  const workBranch = rawState.status === "ready" ? rawState.workBranch : null;  const current = Math.min(index, steps.length - 1);
+  const workBranch = rawState.status === "ready" ? rawState.workBranch : null;
+  const current = Math.min(index, steps.length - 1);
   const step = steps[current];
   if (step === undefined) return null;
   const goTo = (next: number) => {
@@ -155,7 +157,8 @@ function StepFileDiff({
 }: {
   path: string;
   state: PrDiffState;
-  scrollRoot: HTMLElement | null;  eager: boolean;
+  scrollRoot: HTMLElement | null;
+  eager: boolean;
 }) {
   const { resolvedTheme } = useThemeMode();
   if (state.status === "loading") {

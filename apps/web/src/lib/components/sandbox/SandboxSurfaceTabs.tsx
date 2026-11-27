@@ -37,14 +37,18 @@ export function SandboxSurfaceTabs({
   isAgentActive = false,
   hasUnread = false,
   onSurfaceChange,
-}: {  mainLabel: string;
+}: {
+  mainLabel: string;
   surface: SandboxSurface;
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
-  isSandboxStopping: boolean;  isAgentActive?: boolean;  hasUnread?: boolean;
+  isSandboxStopping: boolean;
+  isAgentActive?: boolean;
+  hasUnread?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
-  const simpleView = useSimpleView();  const liveStatus = isSandboxStopping
+  const simpleView = useSimpleView();
+  const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
       ? "starting"
@@ -70,7 +74,8 @@ export function SandboxSurfaceTabs({
       >
         <TabsTrigger value="main">{mainLabel}</TabsTrigger>
         <TabsTrigger value="sandbox" className="gap-1.5">
-          Sandbox          {isAgentActive ? (
+          Sandbox
+          {isAgentActive ? (
             <span className="flex shrink-0 items-center" title="Working">
               <LoadingState
                 label="Working"
