@@ -2,12 +2,6 @@ import type { ComponentType } from "react";
 import { SidePanelTabs, type SidePanelTabLayout } from "@vvedantb/ui";
 import { TablerIconByName } from "@/lib/components/TablerIconByName";
 
-/**
- * Why two kinds: a single `bg-primary` dot used to mean both "the agent is
- * driving Chrome right now" and "a plan landed, go read it". Those are
- * different asks — `activity` pulses because it is live and stops on its own,
- * `content` sits still because it waits for the user to act.
- */
 type SandboxTabIndicator = "activity" | "content";
 
 /**

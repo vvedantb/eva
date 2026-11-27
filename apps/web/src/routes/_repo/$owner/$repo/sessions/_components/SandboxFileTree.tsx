@@ -32,9 +32,7 @@ interface SandboxFileTreeProps {
   onRefresh: () => void;
   onSelectFile: (relPath: string) => void;
   rootLabel?: string;
-  /** Which side of the viewer this tree currently sits on. */
   side: "left" | "right";
-  /** Moves the tree to the other side of the viewer. */
   onToggleSide: () => void;
 }
 

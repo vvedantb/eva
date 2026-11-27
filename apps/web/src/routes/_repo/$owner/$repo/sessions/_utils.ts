@@ -96,7 +96,6 @@ export function sendVercelPtyControl(
 }
 
 const VERCEL_PTY_CWD = "/tmp/repo";
-/** Must match packages/backend/convex/_sandbox/vercelEnvFile.ts */
 const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 const EVA_ENV_SOURCE_CMD = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`;
 
@@ -116,18 +115,6 @@ export function startVercelPty(
 ): void {
   const cwd = opts.cwd ?? VERCEL_PTY_CWD;
   const sessionName = safeVercelSessionName(opts.sessionName);
-  // Newlines (not ";") so `if/then/fi` is valid bash. Prefer attach to an
-  // existing session so reconnects don't thrash create/destroy.
-  // alternate-screen off: keep output in xterm scrollback (Console scrollbar).
-  // terminal-overrides disables tmux's own outer alternate screen. The
-  // alternate-screen window option below only affects programs inside tmux;
-  // without both, xterm's normal buffer has no history for wheel/drag scroll.
-  // status off: the status bar shrinks tmux's scroll region by one row, and
-  // xterm only pushes lines into scrollback when a scroll spans the FULL
-  // viewport — with the bar on, nothing ever reaches scrollback (no scrollbar).
-  // mouse off (global + session): never let tmux capture the wheel.
-  // New tmux sessions start bash with sandbox env sourced so typed commands
-  // (e.g. pnpm run dev) see the same secrets as agent exec / auto-launch.
   sendVercelPtyControl(ws, {
     type: "start",
     command: "bash",
@@ -225,7 +212,6 @@ export function previewPortOptions(
   return options.length > 1 ? options : [];
 }
 
-// --- CodebasesPicker (multi-repo sessions) ------------------------------
 
 export type CodebaseRepoRow = FunctionReturnType<
   typeof api.githubRepos.list

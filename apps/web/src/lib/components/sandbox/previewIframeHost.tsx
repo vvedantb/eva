@@ -483,14 +483,10 @@ export function PreviewIframeHost() {
   );
 }
 
-interface PreviewAnchorProps {  entryKey: string;
-  /** `${sandboxId}:${port}` for group eviction. */
-  group: string;
+interface PreviewAnchorProps {  entryKey: string;  group: string;
   src: string | undefined;
   epoch: number;  logicalSize: { width: number; height: number } | null;
-  role: PreviewAnchorRole;
-  /** Pane only — see {@link AttachOptions.miniPlayer}. */
-  miniPlayer?: PreviewMiniPlayerSource;
+  role: PreviewAnchorRole;  miniPlayer?: PreviewMiniPlayerSource;
   onElement?: (el: HTMLIFrameElement | null) => void;
 }
 
@@ -547,9 +543,7 @@ interface PersistentPreviewBodyProps extends Omit<
   PreviewAnchorProps,
   "role" | "src" | "onElement"
 > {
-  src: string | undefined;
-  /** True while an error overlay must show — hides the hosted iframe. */
-  covered: boolean;
+  src: string | undefined;  covered: boolean;
   loading?: React.ReactNode;
 }
 

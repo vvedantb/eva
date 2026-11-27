@@ -50,10 +50,6 @@ export function PreviewPaneTabs({
                 role="tab"
                 aria-selected={selected}
                 className={cn(
-                  // `motion-press` rather than a hand-listed
-                  // `transition-[transform,background-color]`: Tailwind compiles
-                  // `scale-[0.96]` to the individual `scale` property, which
-                  // `transform` never matched, so this tab press was inert.
                   "motion-press flex h-full min-w-24 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
                   selected
                     ? "text-foreground"

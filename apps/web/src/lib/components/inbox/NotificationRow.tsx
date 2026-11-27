@@ -117,13 +117,8 @@ export function NotificationRow({
               className={cn("shrink-0", LIST_ROW_CONTROL_CLASS)}
             />
           ) : null}
-          {/* Matches `ListRow`, which every comparable row in the app is built on
-          and which presses at 0.99 — the inbox row was hand-rolled and so never
-          picked it up. */}
           <button
             onClick={(click) => {
-              // While selecting, the row is a checkbox target: clicking must not
-              // mark it read or move the detail pane. Shift extends the range.
               if (isSelecting) {
                 onToggleCheck(click.shiftKey);
                 return;
@@ -133,7 +128,6 @@ export function NotificationRow({
             aria-current={selected ? "true" : undefined}
             className="motion-press flex min-w-0 flex-1 items-center gap-3 py-3 text-left active:scale-[0.99] focus-visible:outline-hidden"
           >
-            {/* Fixed-width dot slot so read and unread rows stay aligned. */}
             <span className="flex w-1.5 shrink-0 justify-center" aria-hidden>
               {unread ? (
                 <span className="size-1.5 rounded-full bg-primary" />
@@ -141,10 +135,6 @@ export function NotificationRow({
             </span>
             <NotificationSourceAvatar notification={notification} repo={repo} />
             <div className="flex min-w-0 flex-1 flex-col">
-              {/* Read rows drop to the muted tone rather than fading the whole row,
-              so logos and timestamps stay legible. A `low` urgency row reads as
-              already-read even while unread: routing judged it incidental, and
-              the emphasis belongs on the rows that want something. */}
               <div className="flex min-w-0 items-center gap-1.5">
                 <span
                   className={cn(
