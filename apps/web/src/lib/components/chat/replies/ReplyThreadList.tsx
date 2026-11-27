@@ -5,6 +5,9 @@ import { IconMessages } from "@tabler/icons-react";
 import { Button, ConversationEmptyState } from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
+import { compactRelativeTime } from "@eva/shared/dates";
+import { EvaIcon } from "@/lib/components/EvaIcon";
+import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { ThreadSummary } from "@/lib/components/chat/replies/ThreadSummary";
 import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
 
@@ -46,6 +49,15 @@ export function ReplyThreadRows({
     <ul className="min-h-0 flex-1 overflow-y-auto p-2">
       {threads.map((thread) => (
         <li key={thread.rootId} className="rounded-control p-2 hover:bg-accent-soft">
+          <div className="flex items-center gap-2 pb-1 text-xs text-muted-foreground">
+            {thread.authorId ? (
+              <UserMessageAvatar userId={thread.authorId} />
+            ) : (
+              <EvaIcon size={16} />
+            )}
+            {thread.authorId ? null : <span className="font-medium text-foreground">Eva</span>}
+            <span>{compactRelativeTime(thread.rootAt)}</span>
+          </div>
           <Button
             variant="ghost"
             className="h-auto w-full justify-start whitespace-normal p-0 text-left text-sm font-normal hover:bg-transparent"

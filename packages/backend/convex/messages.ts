@@ -318,6 +318,10 @@ export const listThreadSummaries = authQuery({
     v.object({
       rootId: v.id("messages"),
       preview: v.string(),
+      /** The root's author; absent for Eva's messages. */
+      authorId: v.optional(v.id("users")),
+      /** When the root was sent. */
+      rootAt: v.number(),
       replyCount: v.number(),
       lastReplyAt: v.number(),
       replierIds: v.array(v.id("users")),
@@ -335,6 +339,8 @@ export const listThreadSummaries = authQuery({
     return roots.map((root) => ({
       rootId: root._id,
       preview: threadRootPreview(root.content),
+      authorId: root.role === "user" ? root.userId : undefined,
+      rootAt: root.timestamp,
       replyCount: root.replyCount ?? 0,
       lastReplyAt: root.lastReplyAt ?? 0,
       replierIds: root.replierIds ?? [],
