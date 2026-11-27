@@ -149,7 +149,6 @@ export const autoStartTask = internalMutation({
         rollbackStatus: "todo",
       });
     } catch {
-      // startTaskRun recorded the failure on the run and rolled the task back.
     }
 
     return null;

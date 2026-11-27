@@ -70,7 +70,6 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
-    // The run's lease, sent by every callback launched with one.
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

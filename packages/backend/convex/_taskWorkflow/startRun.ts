@@ -75,7 +75,6 @@ export async function startTaskRun(
     triggeringCommentId?: Id<"taskComments">;
     clearPendingChangeRequest: boolean;
     rollbackStatus: Doc<"agentTasks">["status"];
-    /** Extra text for the run's prompt (`agentRuns.note`). */
     note?: string;
   },
 ): Promise<Id<"agentRuns">> {

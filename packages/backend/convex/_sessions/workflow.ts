@@ -793,7 +793,6 @@ export const clearSessionClosedStatus = internalMutation({
     if (!session || session.status !== "closed") return null;
     await ctx.db.patch(args.sessionId, {
       status: "active",
-      // Awake again: whatever the last attempt failed on is history.
       sandboxError: undefined,
       updatedAt: Date.now(),
     });

@@ -118,7 +118,6 @@ export async function cleanUpStaleRun(
     repoId?: Id<"githubRepos">;
     errorMessage: string;
     exitReason: string;
-    /** The workflow the task tracks; cancelled, and the task's run state ended. */
     workflowId?: string;
     taskStatus: string;
   },

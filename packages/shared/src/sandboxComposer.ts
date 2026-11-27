@@ -9,16 +9,12 @@ export const SANDBOX_CHAT_COPY = {
   stoppingTitle: "Putting Eva to sleep…",
   asleepTitle: "Eva is asleep",
   asleepDescription: "Eva's sandbox is asleep.",
-  /** Sending while asleep queues the message and wakes Eva to run it. */
   asleepPlaceholder: "Send a message to wake Eva up…",
-  /** The last turn hit a usage limit; sends queue until just after the reset. */
   usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
-  /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
-  /** Teaches the three composer affordances on an empty, awake chat. */
   activeDescription:
     "Type / for skills, @ to mention, or drop files to attach.",
 } as const;

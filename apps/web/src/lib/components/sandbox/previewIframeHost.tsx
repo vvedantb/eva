@@ -116,10 +116,7 @@ function getPreviewGesture(): PreviewGesture | null {
 
 const movingPanels = new Map<Element, number>();
 
-function onDockMotion(event: Event): void {
-  // Duck-typed, not `instanceof`: a hot-reloaded dock motion module is a
-  // second class, and the event must still land.
-  if (!("ms" in event) || typeof event.ms !== "number") return;
+function onDockMotion(event: Event): void {  if (!("ms" in event) || typeof event.ms !== "number") return;
   const panel = event.target;
   if (!(panel instanceof Element)) return;
   window.clearTimeout(movingPanels.get(panel));

@@ -22,14 +22,12 @@ import {
   resolveAutomationDoc,
 } from "./systemAutomations";
 
-/** Return validator for a full automation document. */
 const automationDoc = v.object({
   _id: v.id("automations"),
   _creationTime: v.number(),
   ...automationFields,
 });
 
-/** Hides soft-deleted rows and applies the system-automation catalog overlay. */
 function visibleAutomation(
   automation: Doc<"automations"> | null,
 ): Doc<"automations"> | null {
@@ -37,10 +35,6 @@ function visibleAutomation(
   return visible ? resolveAutomationDoc(visible) : null;
 }
 
-/**
- * The weekly changelog title is reserved: `changelog.ts` finds that automation
- * by title and it broadcasts to every user, so no other automation may take it.
- */
 function assertTitleNotReserved(title: string): void {
   if (title.trim() === CHANGELOG_AUTOMATION_TITLE) {
     throw new Error("That automation title is reserved");
@@ -92,8 +86,6 @@ export const getByNumId = authQuery({
       .first();
     if (automation) return visibleAutomation(automation);
 
-    // Shared automations are stored on the canonical (parent) repo, so a
-    // child-app lookup misses them; mirror listAutomationsForRepo's fallback.
     const canonicalId = await resolveCanonicalRepoId(ctx.db, args.repoId);
     if (canonicalId === args.repoId) return null;
     const sharedAutomation = await ctx.db
@@ -161,10 +153,6 @@ export const update = authMutation({
       ctx.userId,
     );
 
-    // A system automation's definition is code-owned, but everything else —
-    // schedule, model, enabled, email — belongs to the install and takes the
-    // path below. `model` is not part of SystemAutomationDefinition, so it is
-    // the user's to pick here exactly as it is on a normal automation.
     if (automation.systemKey !== undefined) {
       const editsDefinition =
         args.title !== undefined ||
@@ -177,7 +165,6 @@ export const update = authMutation({
           "A system automation's title, prompt and mode are managed by eva",
         );
       }
-      // Only an event preset's label is the install's to change.
       const catalogTrigger = getSystemAutomation(automation.systemKey)?.trigger;
       if (
         args.trigger !== undefined &&
@@ -191,7 +178,6 @@ export const update = authMutation({
       }
     }
 
-    // The changelog automation itself may keep (re-save) its own title.
     if (args.title !== undefined && args.title !== automation.title) {
       assertTitleNotReserved(args.title);
     }
@@ -251,8 +237,6 @@ export const remove = authMutation({
     if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    // System rows delete the same way: a soft delete is the uninstall, and
-    // reinstalling from the Hub revives this row with its run history intact.
     const cronName = `automation-${String(args.id)}`;
     await safeDeleteCron(ctx, cronName);
 

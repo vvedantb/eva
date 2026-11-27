@@ -52,7 +52,6 @@ export function SessionChatTabs({
   const [menuFor, setMenuFor] = useState<Doc<"sessionChats"> | null>(null);
   const [renaming, setRenaming] = useState<{ chat: Doc<"sessionChats">; title: string } | null>(null);
   const [deleting, setDeleting] = useState<Doc<"sessionChats"> | null>(null);
-  // Chats closed before tabs became permanent stay hidden, as the web.
   const open = (chats ?? []).filter((chat) => chat.archived !== true);
   if (open.length === 0) return null;
   const running = new Set<string>((statuses ?? []).map((status) => status.chatId));
@@ -183,7 +182,6 @@ export function SessionChatTabs({
         onConfirm={() => {
           const target = deleting;
           if (!target) return;
-          // Deleting the open chat moves to Main, as the web.
           const main = open.find((chat) => chat.isMain);
           remove({ chatId: target._id }).then(
             () => {

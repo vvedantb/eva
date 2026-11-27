@@ -125,7 +125,6 @@ export async function insertWorkSession(
     numId: await allocateNumId(ctx.db, seed.repoId, "sessions"),
     branchName: seed.branchName,
     baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
-    // Its Main chat copies these (`insertMainChat`).
     ...chatSeedFields(await chatSeedSettings(ctx.db, target)),
     updatedAt: Date.now(),
   });

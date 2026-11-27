@@ -204,7 +204,6 @@ export async function recordRunPullRequest(
     runId: Id<"agentRuns"> | undefined;
     taskId: Id<"agentTasks">;
     prUrl: string;
-    /** Initial state when the PR is not tracked yet. Defaults to draft. */
     state?: PrState;
   },
 ): Promise<void> {

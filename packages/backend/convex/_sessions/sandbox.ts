@@ -299,7 +299,6 @@ export async function requestSessionSandboxStop(
       stopReason,
     });
   } else {
-    // No sandbox to stop — close immediately.
     await ctx.db.patch(sessionId, {
       ptySessionId: undefined,
       status: "closed",
@@ -751,7 +750,6 @@ export const sandboxReady = internalMutation({
       sandboxId: args.sandboxId,
       branchName: args.branchName,
       status: "active",
-      // Awake: whatever the last attempt failed on is history.
       sandboxError: undefined,
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),

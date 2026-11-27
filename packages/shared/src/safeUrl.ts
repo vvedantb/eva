@@ -1,9 +1,4 @@
 /**
- * Guards for URLs that come from data (markdown, notifications, agent
- * output) before they reach a link, `window.open`, an iframe or the router.
- */
-
-/**
  * True only for an absolute http(s) URL. `javascript:` and `data:` would run
  * script in the app's origin.
  */
@@ -30,7 +25,6 @@ export function isInternalAppHref(href: string): boolean {
   );
 }
 
-/** C0 controls, DEL and C1 controls (Unicode category Cc). */
 function hasControlChar(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);

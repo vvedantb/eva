@@ -29,8 +29,6 @@ export function ThemePreview({
 }) {
   const radiusLabel =
     RADIUS_OPTIONS.find((r) => r.value === radius)?.label ?? radius;
-  // Guarded because a stored accent can outlive the build that defined it —
-  // see `lookupAccent` in ThemeContext, which also says how to unwind this.
   const accent = lookupAccent(accentColor);
 
   return (

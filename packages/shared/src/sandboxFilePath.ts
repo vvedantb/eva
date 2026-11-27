@@ -1,12 +1,5 @@
-/**
- * Sandbox file paths: the primary checkout (`/tmp/repo`), linked repos under
- * the multi-repo workspace (`/tmp/workspace/<name>`), and repo-relative git
- * paths. Pure, so web and phone read one rule.
- */
-
 const SANDBOX_REPO_PREFIXES = ["/tmp/repo/", "/workspace/repo/"] as const;
 
-/** Multi-repo sessions clone linked repos here; see `workspaceLayout.ts`. */
 const WORKSPACE_PREFIX = "/tmp/workspace/";
 
 /**

@@ -1,9 +1,3 @@
-/**
- * The cross-repo Sessions list, as pure data: the web sidebar
- * (`GlobalSessionsSidebar`) and the phone Sessions tab both order and group
- * the per-repo `sessions.list` / `sessions.listArchived` rows through it.
- */
-
 export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
 export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 

@@ -162,14 +162,6 @@ export function NotificationRow({
               ) : null}
             </div>
           </button>
-          {/* At `sm` and up the timestamp and Dismiss share one slot, and hovering
-          an unread row swaps one for the other. Dismiss is anchored at `right-11`
-          rather than the row edge so that swap happens beside the status icon
-          (16px icon + 16px row padding + the 12px row gap) instead of over it.
-          Below `sm` the swap is unusable — touch has no hover, so Dismiss was
-          unreachable — so there the button leaves the overlay, sits in flow after
-          the status icon as a 40px icon-only target, and the timestamp keeps its
-          place. Both halves are `max-sm:`-scoped so the desktop row is untouched. */}
           <RelativeDateTime
             at={notification.createdAt}
             className={cn(
@@ -177,12 +169,7 @@ export function NotificationRow({
               unread && "sm:group-hover:invisible",
             )}
           />
-          {/* Trailing status column, outside the Dismiss overlay's reach: the
-          type colour is what the eye runs down the list, so it stays put while
-          hovering swaps the timestamp beside it for Dismiss. */}
           <NotificationStatusIcon notification={notification} />
-          {/* Hidden while selecting: the row is a selection target then, and a
-          hover action that quietly changes read state is a trap. */}
           {unread && !isSelecting ? (
             <Button
               size="sm"

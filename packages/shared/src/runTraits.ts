@@ -1,6 +1,5 @@
 import type { ReasoningLevel, StoredModelTraits } from "@eva/backend";
 
-/** The run-trait fields as they are stored on (and written to) a task, recap doc or project. */
 interface RunTraitFields {
   reasoningLevel?: ReasoningLevel;
   thinkingEnabled?: boolean;

@@ -106,7 +106,6 @@ export const recordSessionPr = internalMutation({
       repoId: args.repoId,
       prUrl: args.prUrl,
       state: args.prState,
-      // Only the primary repo's own PR drives the session's chrome.
       primary: args.sessionRepoId === undefined,
       origin: "eva",
       headBranch: args.headBranch,

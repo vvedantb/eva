@@ -126,7 +126,6 @@ export function SessionGroupBadge({ sessionId }: SessionGroupBadgeProps) {
         onOpenChange={setIsArchiveOpen}
         sessionId={sessionId}
         label={group.name ?? "Linked sessions"}
-        // This session was in the group, so it is archived now.
         onArchived={() => void navigate({ to: "/sessions" })}
       />
     </>

@@ -22,7 +22,6 @@ const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
 };
 
-/** A task run's claim on its session's sandbox. */
 type TaskRunSessionClaim = NonNullable<
   FunctionReturnType<typeof internal.sessions.claimSandboxForTaskRun>
 >;
@@ -31,7 +30,6 @@ type PrEnrichmentData = FunctionReturnType<
   typeof internal.taskWorkflow.getPrEnrichmentData
 >;
 
-/** The terminal fields `completeRun` records for a run. */
 type RunOutcome = {
   success: boolean;
   error: string | null;
@@ -113,8 +111,6 @@ export const taskExecutionWorkflow = workflow.define({
           createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
         }));
       } catch (prepareError) {
-        // The claimed start failed: the normal start-failure transition
-        // (`starting` → `closed`, fenced by the claim's attempt).
         if (!sessionClaim.wasActive) {
           await step.runMutation(internal.sessions.sandboxError, {
             sessionId: args.ownedSessionId,

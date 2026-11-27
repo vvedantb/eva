@@ -134,10 +134,6 @@ type LinkedSession = {
   linkedFrom: { owner: string; name: string; rootDirectory?: string };
 };
 
-/**
- * `alreadyListed` holds the ids the caller found through `by_repo`, so a session
- * that is both primary and linked here is never listed twice.
- */
 async function gatherLinkedSessions(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,

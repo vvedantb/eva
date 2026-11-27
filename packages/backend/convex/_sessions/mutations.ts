@@ -163,8 +163,6 @@ export async function createSession(
     title,
     owner: STANDALONE_SESSION_OWNER,
     status: "starting",
-    // The first boot is a start request like any other; see
-    // `_sandbox/transitions.ts`.
     sandboxStartAttempt: 1,
     createdBy: ctx.userId,
     updatedAt: Date.now(),
@@ -174,8 +172,6 @@ export async function createSession(
       ? { stackOnPrNumber: args.stackOnPrNumber }
       : {}),
     providerAccountId,
-    // The provider the session started on. Informational only — the composer
-    // may move the session onto another provider later.
     provider: getAIModelProvider(model),
     lastModel: model,
     ...composerTraitFields({

@@ -1,10 +1,3 @@
-/**
- * An automation run's email: drafted when the run succeeds, reviewed and
- * edited on the run, then sent to its recipients. With `emailAutoSend`
- * the draft step is skipped. `run.email.status` is the single source of truth:
- * only a `sent` email is ever delivered, and only a `draft` can change, so a
- * double click or a retry cannot send twice.
- */
 
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { v } from "convex/values";
@@ -74,11 +67,6 @@ export function renderAutomationEmail(opts: {
   });
 }
 
-/**
- * Who an automation's email goes to. The weekly changelog broadcasts to every
- * opted-in user; any other automation emails only the opted-in members of its
- * repo's team (or the repo's connector when the repo has no team).
- */
 async function collectRunEmailRecipients(
   db: DatabaseReader,
   automation: Doc<"automations">,
@@ -108,7 +96,6 @@ async function collectRunEmailRecipients(
   );
 }
 
-/** This automation's count of successful runs: the email's edition number. */
 async function countSuccessfulRuns(
   db: DatabaseReader,
   automationId: Id<"automations">,
@@ -122,7 +109,6 @@ async function countSuccessfulRuns(
   return runs.length;
 }
 
-/** Marks the email sent and schedules delivery. The only path to a send. */
 async function sendEmail(
   ctx: MutationCtx,
   runId: Id<"automationRuns">,
@@ -173,7 +159,6 @@ export async function queueRunEmail(
   });
 }
 
-/** Loads a run the user can access whose email is still a draft. */
 async function loadDraft(
   db: DatabaseReader,
   userId: Id<"users">,

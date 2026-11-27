@@ -1717,8 +1717,6 @@ export const extendSandboxDeadline = internalAction({
   },
 });
 
-// Reconcile sweep cap per tick: one provider GET per entity, so bound the
-// worst case. Anything past the cap is caught on the next interval.
 const RECONCILE_SWEEP_MAX_ENTITIES = 50;
 
 /**
@@ -1791,7 +1789,6 @@ export const killEntityDaemon = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      // No daemon survives a stop, and an exec would resume the VM.
       const sandbox = await getRunningSandboxHandle(
         ctx,
         args.repoId,
@@ -1804,24 +1801,11 @@ export const killEntityDaemon = internalAction({
         10,
       );
     } catch {
-      /* sandbox may be deleted */
     }
     return null;
   },
 });
 
-/**
- * Pre-warm a session's provider daemon so the user's FIRST message is warm.
- *
- * The ~20s "slow hi" is a cold respawn: after the daemon idle-exits (or a
- * fresh/resumed sandbox), the first message pays token mint + 132KB script
- * upload + node/CLI boot before any token. This action, fired when the session
- * page opens, does that boot ahead of time: it launches the provider runtime
- * and waits for the first prompt via the handoff protocol. By
- * the time the user types, tryWarmDaemonHandoff finds a live daemon and the turn
- * skips the boot entirely. No-op if a daemon is already alive for this session.
- * Best-effort: any failure is swallowed (the normal path still works).
- */
 /**
  * Warms the daemon of one session chat. Chats of a session share the sandbox
  * but each runs its own agent process, keyed by the chat id.
@@ -1874,7 +1858,6 @@ export const prewarmSessionDaemon = internalAction({
   },
 });
 
-/** Arguments of every agent launch on an existing sandbox. */
 const launchArgs = {
   sandboxId: v.string(),
   entityId: v.string(),
@@ -1895,7 +1878,6 @@ const launchArgs = {
   sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
   requireTaskCommit: v.optional(v.boolean()),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /** Entity owner for personal-credential decrypt; defaults to `userId`. */
   credentialOwnerUserId: v.optional(v.id("users")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
@@ -1916,8 +1898,6 @@ async function launchAgentOnSandbox(
   );
   const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-  // Download any user-attached input images into the sandbox and point the
-  // agent at them via a prompt note (the CLI providers read files by path).
   let prompt = args.prompt;
   if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
     const paths = await materializeAttachmentsToSandbox(
@@ -1953,8 +1933,6 @@ async function launchAgentOnSandbox(
     extraEnvVars.TURN_ID = String(args.turnId);
     extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
   }
-  // Session-wide trait overrides. Only non-default values are sent from the UI;
-  // the runner maps effort to each provider's native control (see config.ts).
   Object.assign(
     extraEnvVars,
     buildTraitEnvVars({

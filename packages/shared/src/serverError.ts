@@ -22,7 +22,6 @@ export function readableErrorMessage(message: string, fallback: string): string 
     .replace(/\[Request ID:[^\]]*\]/g, "")
     .replace(/\bServer Error\b/g, "")
     .replace(/\bUncaught [A-Za-z]*Error:?/g, "")
-    // Everything from the first stack frame on is for the logs, not the user.
     .split(" at ")[0];
   const trimmed = (cleaned ?? "").trim();
   return trimmed.length > 0 ? trimmed : fallback;
