@@ -54,6 +54,9 @@ export function ReviewSummaryTab({
           onChanged={onChanged}
         />
 
+        {/* Open when there is a walkthrough to read, folded to its Generate
+            control when there is not. Keyed on that, so the default re-applies
+            once the recap query settles. */}
         <SummarySection
           key={`recap:${hasRecap}`}
           title="Recap"
@@ -98,6 +101,11 @@ export function ReviewSummaryTab({
   );
 }
 
+/**
+ * The description, rendered, with a pencil beside it. One piece of state holds
+ * both halves of the editor: a string is the draft being written, `null` means
+ * it is being read.
+ */
 function SummaryDescription({
   repoId,
   overview,

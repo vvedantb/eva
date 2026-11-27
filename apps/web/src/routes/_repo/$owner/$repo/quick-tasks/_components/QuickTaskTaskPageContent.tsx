@@ -66,6 +66,7 @@ export function QuickTaskTaskPageContent({
               to: toInternalRepoHref(
                 `${basePath}/quick-tasks/${pathSegment}/sandbox/${tab}`,
               ),
+              // Keep diffFile across sandbox tabs.
               search: true,
             });
           },

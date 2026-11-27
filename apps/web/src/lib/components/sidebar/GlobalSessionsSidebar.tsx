@@ -47,11 +47,17 @@ const SESSION_LIST_QUERIES = {
   archived: api.sessions.listArchived,
 } satisfies Record<SessionListMode, unknown>;
 
+/** One list query per repo for the mode, cached so `useQueries` keeps its subscriptions. */
 const sessionListQueries = perRepoQueryCache<
   (typeof SESSION_LIST_QUERIES)[SessionListMode],
   RepoRow["_id"]
 >();
 
+/**
+ * One app's rows out of the `useQueries` map. A failed query is reported as an
+ * `Error` value; a group treats that the same as "still loading" rather than
+ * rendering a half-built list.
+ */
 function listedSessions(
   result: SessionListItem[] | Error | undefined,
 ): SessionListItem[] | undefined {
@@ -67,6 +73,7 @@ export function GlobalSessionsSidebar({
   onNavigate,
 }: GlobalSessionsSidebarProps) {
   const { settings } = useSessionsSidebarSettings();
+  // Not persisted: the list opens on Active each time.
   const [listMode, setListMode] = useState<SessionListMode>("active");
   const { request: requestConfirm } = useRequestConfirm();
   const { archive } = useArchiveSession();
@@ -86,6 +93,8 @@ export function GlobalSessionsSidebar({
   const [sessionToArchive, setSessionToArchive] =
     useState<SessionArchiveTarget | null>(null);
 
+  // The only watch on the lists: the rows are handed to each group as a prop.
+  // The list mode picks active or archived rows, so linked groups form in both.
   const sessionsByRepoId = useQueries(
     sessionListQueries(
       SESSION_LIST_QUERIES[listMode],
@@ -94,6 +103,7 @@ export function GlobalSessionsSidebar({
     ),
   );
   const currentUserId = useQuery(api.auth.me, settings.onlyMine ? {} : "skip");
+  // "Only my sessions" drops a teammate's rows before any group sees them.
   const visibleSessions = (repoId: RepoRow["_id"]) => {
     const rows = listedSessions(sessionsByRepoId[repoId]);
     return settings.onlyMine
@@ -101,6 +111,7 @@ export function GlobalSessionsSidebar({
       : rows;
   };
 
+  // Linked groups and apps as one ordered list (`sessionListEntries`).
   const orderedEntries =
     repos === undefined
       ? undefined
@@ -166,6 +177,7 @@ export function GlobalSessionsSidebar({
                       <LinkedSessionGroupSection
                         key={entry._id}
                         group={entry.group}
+                        // Linked groups start open; a toggle is remembered.
                         open={linkedGroupOpen.storedOpen(entry._id) ?? true}
                         onOpenChange={(open) => {
                           linkedGroupOpen.setGroupOpen(entry._id, open);

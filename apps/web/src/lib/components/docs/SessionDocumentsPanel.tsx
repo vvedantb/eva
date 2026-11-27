@@ -31,10 +31,18 @@ export function useSourceDocuments(source: ChatSourceArg) {
   return { docs, documentCount: docs?.length };
 }
 
+/**
+ * Sandbox-pane list of documents linked to this chat. The same rows appear in
+ * the repo Documents sidebar (with a source badge). Here, rows and "New" open
+ * an inline editor so notes are written without leaving the chat.
+ */
 /** A project's Documents tab: its summary and the child tasks it rolls up. */
 export interface ProjectDocumentsContext {
+  /** The coordinator's summary doc, pinned first; undefined before it writes one. */
   summaryDocId: string | undefined;
+  /** Live task counts, above the summary row and its body. */
   counts: ReactNode;
+  /** The child task that wrote a Log entry (`sourceTaskId`). */
   taskSource: (taskId: string) => ChatSource | undefined;
 }
 

@@ -30,6 +30,7 @@ export function usePrEdit(
   error: string | null;
 } {
   const updatePr = useAction(api.github.updatePullRequest);
+  // Built from the same factories the panels read, so the keys cannot drift.
   const getOverview = useAction(api.github.getPullRequestOverview);
   const getHeader = useAction(api.github.getPullRequestHeader);
   const queryClient = useQueryClient();
@@ -47,6 +48,8 @@ export function usePrEdit(
       queryClient.setQueryData(headerKey, (prev) =>
         prev === undefined ? prev : { ...prev, title },
       );
+      // The pull request list is uncached on the server, so refetching it is
+      // enough to show the new title in the sidebar.
       void queryClient.invalidateQueries({ queryKey: ["pr", "list", repoId] });
       onSaved?.();
     },

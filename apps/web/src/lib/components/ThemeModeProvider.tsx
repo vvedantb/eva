@@ -21,6 +21,11 @@ function getSystemAppearance(): "light" | "dark" {
     : "light";
 }
 
+/**
+ * Apply DOM classes for the resolved appearance.
+ * Neutral is dark-family: `class="dark neutral"` so Tailwind `dark:` keeps working
+ * while `.dark.neutral` surface tokens lift the near-black Dark palette.
+ */
 function applyAppearance(appearance: ThemeAppearance, mode: ThemeMode) {
   const root = document.documentElement;
   root.classList.toggle(
@@ -31,7 +36,17 @@ function applyAppearance(appearance: ThemeAppearance, mode: ThemeMode) {
   writeThemeAppearanceHint(appearance, mode);
 }
 
+/**
+ * Seed the pre-sync theme from the FOUC hint (or legacy `theme` key) so the
+ * first client render matches index.html. Convex is the source of truth once
+ * it loads — we no longer persist preference to localStorage `"theme"`.
+ *
+ * The hint's `mode` is the preference, so System boots as System. Hints written
+ * before `mode` existed only carry a resolved appearance, which is the best
+ * available guess for them.
+ */
 function readInitialTheme(): ThemeMode {
+  // readThemeHintSeed swallows its own parse / private-mode failures.
   const { mode, appearance } = readThemeHintSeed();
   if (mode) return mode;
   if (appearance) return appearance;
@@ -39,12 +54,15 @@ function readInitialTheme(): ThemeMode {
     const legacy = localStorage.getItem("theme");
     if (legacy && isThemeMode(legacy)) return legacy;
   } catch {
+    // Ignore.
   }
   return "light";
 }
 
 export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useConvexAuth();
+  // The saved preference owns the theme. `null` = never set, `undefined` =
+  // loading or signed out; both fall back to the boot hint.
   const syncedTheme = useQuery(
     api.auth.getTheme,
     isAuthenticated ? {} : "skip",
@@ -54,13 +72,22 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       localStore.setQuery(api.auth.getTheme, {}, args.theme);
     },
   );
+  // First paint (and signed-out pages) only: what index.html already painted.
   const [hintTheme, setHintTheme] = useState<ThemeMode>(readInitialTheme);
+  // A page that pins a theme without saving it (the dev UI gallery's
+  // `?theme=`). That page clears it on unmount.
   const [previewTheme, setPreviewTheme] = useState<ThemeMode | null>(null);
   const theme: ThemeMode = previewTheme ?? syncedTheme ?? hintTheme;
+  // The OS preference lives in React state, not just the DOM: `appearance` and
+  // `resolvedTheme` feed Sonner and the diff viewer, and they went stale when a
+  // System user flipped their OS theme mid-session.
   const [systemAppearance, setSystemAppearance] = useState(getSystemAppearance);
   const appearance: ThemeAppearance = themeAppearance(theme, systemAppearance);
   const resolvedTheme = appearanceToResolvedTheme(appearance);
 
+  // Every mode persists, System included — it is a preference ("follow the
+  // OS"), not a resolved appearance. The optimistic update moves `syncedTheme`
+  // in the same tick, so there is no flash while the write is in flight.
   const setTheme = (t: ThemeMode) => {
     applyAppearance(themeAppearance(t, systemAppearance), t);
     if (!isAuthenticated) {
@@ -78,6 +105,7 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     applyAppearance(appearance, theme);
   }, [appearance, theme]);
 
+  // matchMedia is a genuine external system, so it is read through an effect.
   useEffect(() => {
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {

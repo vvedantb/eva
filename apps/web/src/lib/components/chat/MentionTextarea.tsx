@@ -35,17 +35,53 @@ import { EVA_MENTION_ID, EVA_MENTION_ITEM } from "@eva/shared";
 export type MentionTextareaHandle = MentionEditorHandle;
 
 interface MentionTextareaProps {
+  /** Absent (Manager Ave): no people/data mentions and no skills link. */
   repo?: ChatRepo;
+  /** `/` menu entries — repo skills plus installed Eva skills. */
   skillItems?: SlashItem[];
   placeholder?: string;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
+  /**
+   * Previously sent messages as editable display text, newest-first. When
+   * provided, Alt+ArrowUp recalls older messages and Alt+ArrowDown moves
+   * back toward the live draft (terminal-style history).
+   */
   history?: string[];
+  /**
+   * When true, pasted images and large plain-text pastes are added as
+   * attachments (via the prompt-input attachment context) instead of being
+   * inserted as text.
+   */
   enableAttachmentPaste?: boolean;
+  /**
+   * What this composer is for, e.g. "message to an AI coding agent working on
+   * acme/web". Used for inline AI completion when the per-user experimental
+   * "Composer autocomplete" flag is on; otherwise ignored.
+   */
   completionContext?: string;
+  /**
+   * The chat this composer replies to, set only while it waits on the user.
+   * Used for the next-message ghost text when the per-user experimental
+   * "Composer predictions" flag is on; otherwise ignored.
+   */
   predictionTarget?: ComposerPredictionTarget;
+  /**
+   * Called when Enter would have submitted but the submit button is disabled.
+   * The keystroke is still swallowed — this only lets the composer say why,
+   * instead of Enter doing nothing at all on a sleeping sandbox.
+   */
   onBlockedSubmit?: () => void;
+  /**
+   * The visible draft after every edit. Separate from the prompt-input
+   * controller so a caller can react to typing (skill suggestions) without
+   * subscribing the whole composer to each keystroke.
+   */
   onDraftChange?: (value: string) => void;
+  /**
+   * A project coordinator chat: `@Eva` joins the people in the picker, so a
+   * message can say who it is for (`chatMessageRoute`).
+   */
   mentionEva?: boolean;
   className?: string;
 }
@@ -89,13 +125,17 @@ export const MentionTextarea = forwardRef<
     value,
     flags?.composerPredictions === true ? predictionTarget : undefined,
   );
+  // Never both: a prediction needs an empty draft, a completion needs text.
   const { suggestion, dismiss } =
     prediction.suggestion !== undefined ? prediction : completion;
 
+  // Cursor into `history` (null = editing the live draft) and the draft stashed
+  // when history navigation began, so Alt+ArrowDown past the newest entry restores it.
   const historyIndexRef = useRef<number | null>(null);
   const stashedDraftRef = useRef("");
   const setInput = controller.textInput.setInput;
 
+  // Any manual keystroke exits history navigation back to a fresh draft.
   const handleValueChange = (next: string) => {
     historyIndexRef.current = null;
     setInput(next);
@@ -128,12 +168,18 @@ export const MentionTextarea = forwardRef<
     return true;
   };
 
+  // People chips are not navigable — a mention names a teammate, it does not
+  // point at a page.
   const handleMentionChipClick = (id: string) => {
     if (peopleIds.has(id)) return;
     void navigateToData(id);
   };
 
+  // Skills settings do not exist in simple view, so the chip and the empty
+  // state must not point at a page that redirects straight back out.
   const simpleView = useSimpleView();
+  // Soft keyboard, not viewport: a narrow desktop window still has a physical
+  // Enter key that should send; a phone Return key should insert a newline.
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
   const skillsSettingsHref = repo
@@ -155,6 +201,7 @@ export const MentionTextarea = forwardRef<
       }
       suggestion={suggestion}
       onAcceptSuggestion={
+        // Through handleValueChange so accepting also exits history recall.
         suggestion ? () => handleValueChange(value + suggestion) : undefined
       }
       onDismissSuggestion={dismiss}
@@ -167,6 +214,7 @@ export const MentionTextarea = forwardRef<
       initialMentionMap={initialMentionMap}
       initialSkillMap={initialSkillMap}
       renderMentionChipHoverCard={(id) =>
+        // `@Eva` names no account: no profile card.
         id === EVA_MENTION_ID ? null : peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
         ) : repo ? (
@@ -176,6 +224,7 @@ export const MentionTextarea = forwardRef<
       renderSkillChipHoverCard={(id) =>
         isSkillTokenId(id) ? <SkillMentionHoverCardBody skillId={id} /> : null
       }
+      // The prediction takes the placeholder's place; both would overlap.
       placeholder={prediction.suggestion !== undefined ? "" : placeholder}
       ariaLabel={placeholder ?? "Message input"}
       onImageFiles={enableAttachmentPaste ? attachments.add : undefined}
@@ -190,6 +239,8 @@ export const MentionTextarea = forwardRef<
           : undefined
       }
       dataSlot="input-group-control"
+      // max-h is where the composer starts scrolling instead of growing. 200px
+      // is +40px on the previous 160px — two more 20px `text-sm` lines.
       className={
         className ??
         "min-h-16 max-h-50 self-stretch overflow-y-auto rounded-none p-6 text-left focus-visible:outline-hidden"
@@ -220,6 +271,9 @@ export const MentionTextarea = forwardRef<
                 submitButton instanceof HTMLButtonElement &&
                 submitButton.disabled
               ) {
+                // Enter on a disabled composer used to do nothing at all, which
+                // reads as the app ignoring the user. The caller decides whether
+                // there is anything worth saying (an empty draft: no).
                 onBlockedSubmit?.();
                 return;
               }

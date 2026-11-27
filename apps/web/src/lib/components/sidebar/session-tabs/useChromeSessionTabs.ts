@@ -3,12 +3,14 @@
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
 
+/** True when pathname is the global sessions landing or any repo sessions route. */
 function isSessionsNavPath(pathname: string): boolean {
   if (pathname === "/sessions" || pathname === "/sessions/") return true;
   const parts = pathname.split("/").filter(Boolean);
   return parts.includes("sessions");
 }
 
+/** Convex opt-in for Chrome-style session tabs (false while loading). */
 function useExperimentalSessionTabsEnabled(): boolean {
   const flags = useQuery(api.auth.getExperimentalFlags);
   return flags?.sessionTabs === true;

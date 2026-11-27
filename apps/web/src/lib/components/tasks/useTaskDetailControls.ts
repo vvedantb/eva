@@ -25,7 +25,9 @@ type QuickTaskSandboxRouting = {
   sandboxTab: TaskRouteSandboxTab;
   onSandboxTabChange: (tab: TaskRouteSandboxTab) => void;
   onExitSandboxView: () => void;
+  /** Opens Files tab with `?file=` set (chat file chips). */
   onOpenFile: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
   onViewDiff: (repoRelativePath?: string) => void;
 };
 
@@ -119,6 +121,11 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   };
 }
 
+/**
+ * A task moved back to `todo` after it already ran keeps its branch, so it
+ * previews like a reviewed task rather than offering a first run again.
+ * Mirrors `isPreviewSandboxAllowed` in the backend.
+ */
 function deriveSandboxFlags(
   task: TaskDetailTask,
   sandbox: OwnedSandboxFields,
@@ -202,6 +209,8 @@ export function useTaskSandboxControls({
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const { sandbox } = taskSession;
+  // Every action targets the session; a running sandbox implies it exists,
+  // so `ensure` only reads it there.
   const onSession =
     (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
     async () => {

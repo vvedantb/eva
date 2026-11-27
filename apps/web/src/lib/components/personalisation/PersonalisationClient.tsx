@@ -48,6 +48,9 @@ export function PersonalisationClient() {
   const [seenSaved, setSeenSaved] = useState(savedValue);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Adopt a new saved value during render rather than in an effect, and only
+  // when the draft is untouched. Picking a role preset (optimistic update) or a
+  // save from another tab used to wipe whatever the user was typing.
   if (savedValue !== seenSaved) {
     setSeenSaved(savedValue);
     if (draft === seenSaved) {
@@ -67,7 +70,10 @@ export function PersonalisationClient() {
         "personalisation-instructions",
       );
     } catch {
+      // Toast already shown.
     }
+    // No `finally`: the catch swallows, so this always runs (and `finally`
+    // bails the React Compiler out of the whole file).
     setIsSaving(false);
   };
 

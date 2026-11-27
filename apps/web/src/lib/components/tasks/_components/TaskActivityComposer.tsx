@@ -11,6 +11,11 @@ interface TaskActivityComposerProps {
   taskId: Id<"agentTasks">;
 }
 
+// ---------------------------------------------------------------------------
+// Outer shell — loads the draft, shows a disabled editor while loading,
+// mounts the inner form exactly once when the draft resolves.
+// ---------------------------------------------------------------------------
+
 /** Comment input pinned below the task activity timeline. */
 export function TaskActivityComposer({ taskId }: TaskActivityComposerProps) {
   const draft = useQuery(api.drafts.getForTarget, {
@@ -20,6 +25,8 @@ export function TaskActivityComposer({ taskId }: TaskActivityComposerProps) {
   const editorClassName =
     "min-h-14 max-h-44 rounded-none border-0 bg-transparent px-3.5 py-3 shadow-none focus-visible:ring-0 transition-[background-color]";
 
+  // While draft is undefined (query not yet resolved), show a disabled
+  // placeholder using the same chrome so layout doesn't shift.
   if (draft === undefined) {
     return (
       <div className="space-y-3">

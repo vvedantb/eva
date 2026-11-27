@@ -27,6 +27,8 @@ describe("repoBasePaths", () => {
   });
 
   it("adds the router-internal `--` form for a monorepo app", () => {
+    // location.pathname uses the `--` form; hrefs use the slash form. Matching
+    // only one of them silently loses the active-row highlight.
     expect(repoBasePaths(web)).toEqual([
       "/vvedantb/eva/web",
       "/vvedantb/eva--web",
@@ -58,6 +60,14 @@ describe("repoMatchesPath", () => {
   });
 });
 
+/**
+ * `useArchiveSession` redirects off the session route when the session you are
+ * looking at is the one being archived. It used to ask
+ * `pathname.includes("/sessions/" + id)`, which is true for far more than that
+ * one session — so archiving a sibling from the sidebar threw you out of the
+ * session you were reading. These cases pin the boundaries that check relies
+ * on.
+ */
 describe("sessionMatchesPath", () => {
   it("matches the session's own route", () => {
     expect(sessionMatchesPath(eva, "12", "/vvedantb/eva/sessions/12")).toBe(
@@ -72,6 +82,7 @@ describe("sessionMatchesPath", () => {
   });
 
   it("does not match a longer id that starts with the same digits", () => {
+    // The regression: archiving session 12 navigated away from session 123.
     expect(sessionMatchesPath(eva, "12", "/vvedantb/eva/sessions/123")).toBe(
       false,
     );
@@ -81,6 +92,7 @@ describe("sessionMatchesPath", () => {
   });
 
   it("does not match the same id under a different app", () => {
+    // Session numbers restart per app, so the repo has to be part of the test.
     expect(sessionMatchesPath(web, "12", "/vvedantb/eva/sessions/12")).toBe(
       false,
     );

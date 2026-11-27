@@ -12,6 +12,7 @@ import { describeLocation } from "../_utils";
 
 type Member = FunctionReturnType<typeof api.teamMembers.list>[number];
 
+/** Same window the sidebar's online avatars use, so the two never disagree. */
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
 function getDisplayName(user: Member["user"]): string {
@@ -33,6 +34,8 @@ export function TeamActivityTab({ members }: { members: Array<Member> }) {
   const currentUserId = useQuery(api.auth.me);
   const { following, startFollowing, stopFollowing } = useFollow();
 
+  // Presence is decided here, not in the query: the server returns a raw
+  // `lastSeenAt` and only a client can re-evaluate the window as time passes.
   const now = useQuantizedNow(30_000);
   const onlineMembers = members.filter(
     (member) =>

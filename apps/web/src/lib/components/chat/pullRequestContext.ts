@@ -9,6 +9,7 @@ import { prNumberFromGithubUrl, type PrState } from "@eva/shared";
 export interface PullRequestContext {
   readonly number: number;
   readonly title: string;
+  /** Canonical GitHub `html_url`. The identity of the chip (dedupe key). */
   readonly url: string;
   readonly headBranch?: string;
   readonly baseBranch?: string;
@@ -22,6 +23,10 @@ export const PULL_REQUEST_DRAG_MIME = "application/x-eva-pull-request";
 const MAX_TITLE_LENGTH = 300;
 const MAX_BRANCH_LENGTH = 255;
 
+/**
+ * The drag payload is untrusted: any page can set this MIME type on a drag
+ * that ends in Eva. Only a github.com pull URL whose number matches passes.
+ */
 const pullRequestContextSchema = z
   .object({
     number: z.number().int().positive(),
@@ -104,6 +109,7 @@ function pullRequestStateLabel(pr: PullRequestContext): string {
   return pr.isDraft ? "draft" : pr.state;
 }
 
+/** One line per field: a newline in a title must not forge another field. */
 function escapePullRequestText(value: string): string {
   return value.replace(/\s+/g, " ").replaceAll("<", "\\u003c");
 }

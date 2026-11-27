@@ -60,6 +60,7 @@ export function DocCommentsPanel({
         <Button
           size="icon-sm"
           variant="ghost"
+          // 24px on desktop, as before; `icon-sm` is 32px and only wanted on touch.
           className="sm:size-6"
           aria-label="Close comments"
           onClick={onClose}

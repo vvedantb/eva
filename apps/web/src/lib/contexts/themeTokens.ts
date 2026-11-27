@@ -118,6 +118,7 @@ export const ACCENT_COLORS: Record<
   {
     label: string;
     preview: string;
+    /** Dark checkmark on the swatch (yellow/white/etc.). */
     checkDark?: boolean;
     light: {
       primary: string;

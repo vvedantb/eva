@@ -54,6 +54,9 @@ export function usePrMetaEdit(
     mutationFn: () => queryClient.fetchQuery(options),
   });
 
+  // Spelled out three times rather than built by a helper: `useMutation` is a
+  // hook, and a hook called from a closure is a lint error and a footgun the
+  // moment one of the three becomes conditional.
   const reviewers = useMutation({
     mutationFn: (logins: string[]) =>
       setReviewersAction({ repoId, prNumber, logins }),

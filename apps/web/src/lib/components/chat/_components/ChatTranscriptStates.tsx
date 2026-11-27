@@ -1,6 +1,13 @@
 import { Button, CenteredSpinner, ConversationEmptyState } from "@vvedantb/ui";
 
 /**
+ * What a chat shows instead of turns: the empty state, and the placeholder for
+ * a transcript that has not arrived yet. Both live here so the two cases cannot
+ * drift apart — telling a user "no messages yet" while the query is still in
+ * flight is a lie the eye catches every time a task chat opens.
+ */
+
+/**
  * Stand-in for a transcript still loading. Convex returns `undefined` until the
  * first page lands, and the panels collapse that into `[]` — without this the
  * empty state flashes on every open of a chat that has plenty of messages.

@@ -11,6 +11,7 @@ interface RepoSectionBreadcrumbProps {
   sectionLabel: string;
   onSectionClick: () => void;
   entityLabel: string;
+  /** When set, the leaf becomes a menu that switches between these siblings. */
   entitySwitcher?: {
     ariaLabel: string;
     emptyLabel: string;

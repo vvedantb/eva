@@ -14,6 +14,15 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./QuickTasksDemo.css";
 
+// Quick tasks: small changes, many at once. Beats: three tasks are already
+// running; the visitor types a fourth and runs it, and it starts at once
+// beside them (no queue); then the tasks finish one by one, each landing in
+// review with its own pull request while the running count rolls down. The
+// payoff is the new task landing too: every row in review, nothing running.
+//
+// Real strings: the typed task, the task titles, their branches, the pull
+// request numbers and the two counts. The older, merged tasks are bars.
+
 type Status = "running" | "review";
 
 interface Task {
@@ -22,6 +31,7 @@ interface Task {
   pr: number;
 }
 
+/** Newest first. The first is the one the visitor types. */
 const TASKS: readonly Task[] = [
   { title: "Bump vite to 8.1", branch: "eva/bump-vite", pr: 142 },
   { title: "Add empty state to inbox", branch: "eva/inbox-empty", pr: 140 },
@@ -31,6 +41,7 @@ const TASKS: readonly Task[] = [
 
 const TYPED = TASKS[0].title;
 
+/** Merged tasks from before the story: filler under the live rows. */
 const OLDER = [
   { title: 132, branch: 88 },
   { title: 164, branch: 104 },
@@ -80,6 +91,7 @@ async function story(a: Act<S>) {
   await a.move({ at: "counts", x: 1.4, y: 0.5 });
   await a.wait(700);
 
+  // They finish in their own time, each with its own pull request
   a.mark("finish");
   for (const i of [3, 1, 2]) {
     await a.set((s) => ({ status: finish(s.status, i), review: s.review + 1 }));

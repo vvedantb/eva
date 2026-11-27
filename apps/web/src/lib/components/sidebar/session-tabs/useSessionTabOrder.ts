@@ -2,8 +2,10 @@
 
 import { useLocalStorage } from "usehooks-ts";
 
+/** localStorage key for the manual tab order, keyed by repo id. */
 const SESSION_TAB_ORDER_KEY = "eva:session-tabs:order";
 
+/** The stored value is user-writable, so non-id-list entries are dropped. */
 function parseOrderByRepoId(
   value: Record<string, string[]>,
 ): Record<string, string[]> {

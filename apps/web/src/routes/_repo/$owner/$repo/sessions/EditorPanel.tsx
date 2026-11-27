@@ -14,6 +14,7 @@ interface EditorPanelProps {
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
   externalHref?: string;
   wake?: SandboxWake;
 }

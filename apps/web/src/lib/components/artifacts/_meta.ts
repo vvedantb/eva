@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+// The cowork-artifact-meta manifest embedded in a Cowork artifact's HTML. Extra
+// keys (schemaVersion, mcpServerNames, …) are ignored by the non-strict schema.
 const metaSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),

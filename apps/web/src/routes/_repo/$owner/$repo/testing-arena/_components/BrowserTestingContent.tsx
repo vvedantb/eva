@@ -30,6 +30,7 @@ type EvaluationReport = FunctionReturnType<
 type Scenario = FunctionReturnType<typeof api.arenaScenarios.listByDoc>[number];
 type ArenaDoc = NonNullable<FunctionReturnType<typeof api.docs.getByNumId>>;
 
+/** Selection key for the scenario editor; any other key is a report id. */
 const SCENARIOS_KEY = "scenarios";
 
 function runLabel(report: EvaluationReport) {
@@ -202,6 +203,7 @@ export function BrowserTestingContent({
 }) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
+  // With no explicit pick: follow a live run, else open the scenario editor.
   const activeKey =
     selectedKey ??
     reports?.find((r) => r.status === "running")?._id ??

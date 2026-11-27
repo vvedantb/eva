@@ -6,8 +6,13 @@ import { toast } from "@vvedantb/ui";
 
 const TOAST_ID = "connection-status";
 
+/**
+ * Short drops are normal (tab wake, a flaky hop) and the client recovers on its
+ * own, so nothing is said until the outage outlasts this.
+ */
 const GRACE_MS = 3_000;
 
+/** Module-level so a remount cannot lose the "we owe them a Back online". */
 let disconnectedToastShown = false;
 
 function subscribeToOnline(listener: () => void): () => void {
@@ -46,10 +51,16 @@ export function ConnectionStatusToast() {
     if (!isDisconnected) {
       if (!disconnectedToastShown) return;
       disconnectedToastShown = false;
+      // Updates the sticky toast in place rather than dismissing it first:
+      // sonner defers a dismiss to the next frame, so a same-id toast created
+      // straight after it is removed as soon as that frame lands. The update
+      // path also resets the lifetime, so Infinity → 2000 auto-closes.
       toast.success("Back online", { id: TOAST_ID, duration: 2000 });
       return;
     }
 
+    // Already complaining: re-title immediately when the network drops out
+    // from under an already-dead socket, rather than waiting the grace again.
     const delay = disconnectedToastShown ? 0 : GRACE_MS;
     const timerId = window.setTimeout(() => {
       disconnectedToastShown = true;

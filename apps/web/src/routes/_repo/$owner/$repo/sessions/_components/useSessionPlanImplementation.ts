@@ -21,6 +21,7 @@ export function useSessionPlanImplementation({
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
+  /** The chat tab whose model and account a new session inherits. */
   chatId: Id<"sessionChats">;
   handleSend: (
     content: string,
@@ -70,6 +71,8 @@ export function useSessionPlanImplementation({
     planMarkdown: string,
     plan?: ProposedPlanRow,
   ) => {
+    // Resolved above the `try` so the block holds no expression-level control
+    // flow — React Compiler bails on the whole file otherwise.
     const resolvedProviderAccountId =
       resolveAccountId(providerAccountId) ?? null;
     try {

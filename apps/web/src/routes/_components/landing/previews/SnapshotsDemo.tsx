@@ -11,6 +11,15 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./SnapshotsDemo.css";
 
+// A sandbox boots from a snapshot, told by the system with no cursor. Beats:
+// the boot starts and the timer runs; the steps tick off one after another
+// because each is already in the image (tooling, dependencies, a seeded
+// database); the dev server comes up and the preview loads beside the list;
+// the header reads ready with the timer stopped at 6s (the payoff).
+//
+// Real strings: the header and its timer, the snapshot line, the five steps
+// and their details, the preview's address.
+
 const STEPS = [
   { label: "Restore snapshot", detail: "Built 03:00" },
   { label: "Tooling", detail: "Node, pnpm, agent CLIs" },
@@ -19,6 +28,7 @@ const STEPS = [
   { label: "Dev server", detail: "Port 3000" },
 ];
 
+/** Steps finished after each second on the timer: the dev server takes two. */
 const DONE_AT = [1, 2, 3, 3, 4, 5];
 
 type S = { booting: boolean; secs: number; done: number; ready: boolean };
@@ -41,6 +51,7 @@ async function story(a: Act<S>) {
   await a.wait(2500);
 }
 
+/** Filler table rows on the app the preview loads. */
 const TABLE = [
   [72, 48, 40],
   [96, 36, 52],

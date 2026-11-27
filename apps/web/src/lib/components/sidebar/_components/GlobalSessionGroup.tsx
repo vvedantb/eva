@@ -40,6 +40,11 @@ type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 interface GlobalSessionGroupProps {
   repo: RepoWithLogo;
   pathname: string;
+  /**
+   * This app's sessions for the current list mode, already watched once by the
+   * sidebar. The group used to run its own watch through a different cache, so
+   * every app in the list held two live subscriptions to the same rows.
+   */
   sessions: SessionListItem[] | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -101,6 +106,7 @@ export function GlobalSessionGroup({
     sourceSessions?.filter(
       (s) => s.status === "active" && isSessionSidebarActive(s),
     ).length ?? 0;
+  // Simple view wakes sandboxes from the Preview tab, so it shows no awake count.
   const runningLabel =
     listMode === "active" && !simpleView ? countLabel(runningCount) : null;
   const hasNoResults = !isLoading && sortedSessions.length === 0;
@@ -129,6 +135,11 @@ export function GlobalSessionGroup({
               <span className="truncate text-xs font-medium text-muted-foreground">
                 {label}
               </span>
+              {/* This count is the sidebar's live read on "how many agents are
+                  working right now", so it mounts, climbs and clears while the
+                  user is reading something else — the same job as the rail's
+                  unread dots, and now the same entrance. `children` rather than
+                  a bare label because the badge is a dot plus a number. */}
               <CountPop
                 label={runningLabel}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0"

@@ -23,6 +23,7 @@ export function ProjectOverviewTab({
   title: string;
   description: string | undefined;
   documentsHref: string | undefined;
+  /** An archived project: the context and every field are read-only. */
   readOnly: boolean;
 }) {
   const { status } = useProjectTaskStatus(projectId, repoId);

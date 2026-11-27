@@ -11,11 +11,15 @@ import {
 } from "./_utils/tocUtils";
 
 interface FloatingTocProps {
+  // Scroll container holding the rendered headings. Doubles as the scroll root
+  // for active-section tracking.
   containerRef: RefObject<HTMLElement | null>;
+  // Re-scan headings whenever the document content changes.
   content: string;
   className?: string;
 }
 
+/** Offset from the top of the scroll container when picking / scrolling to a section. */
 const SCROLL_SPY_OFFSET = 96;
 
 function headingTopInContainer(
@@ -48,6 +52,7 @@ export function FloatingToc({
 
   const activeId = clickActiveId ?? scrollActiveId ?? items[0]?.id ?? null;
 
+  // Scan rendered headings whenever content changes.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -67,6 +72,7 @@ export function FloatingToc({
   /* eslint-disable no-effect/no-external-store-subscription --
      Reads live scroll position and element geometry on every scroll/resize;
      useSyncExternalStore would re-measure the whole heading list per render. */
+  // Highlight the last heading that has scrolled past the top of the viewport.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || items.length === 0) return;
@@ -164,6 +170,8 @@ function FloatingTocItems({
   minLevel: number;
   onItemClick: (id: string) => void;
 }) {
+  // Mounts with the nav shell (headings >= 2). Later content edits keep this
+  // mounted, so `useFirstPaintGate` blocks restagger after the first scan.
   const firstPaint = useFirstPaintGate();
 
   return (

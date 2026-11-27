@@ -39,9 +39,12 @@ export function ProjectDetailClient({
 }: {
   projectId: Id<"projects">;
   projectNumId?: number;
+  /** The coordinator rail's tab (Tasks on the project index). */
   sandboxTab: ProjectSandboxTab;
+  /** Primary tab. `work` is the index route, so deep links keep working. */
   mainTab?: ProjectMainTab;
   selectedTaskId?: Id<"agentTasks">;
+  /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
 }) {
   const navigate = useNavigate();
@@ -59,6 +62,7 @@ export function ProjectDetailClient({
     isSandboxStopping,
     sandboxId: projectSandboxId,
   } = sandbox;
+  // The project chats in its session's Main chat; nothing before it exists.
   const chatId = sandbox.projectSession.owned?.chatId;
   const chatTurnOpen = useChatTurnOpen(chatId);
   const chatUnread = useChatUnread(chatId);
@@ -73,9 +77,11 @@ export function ProjectDetailClient({
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
+  // The rail tab a reply thread opened over: ✕ on Replies returns to it.
   const [threadReturnTab, setThreadReturnTab] =
     useState<ProjectSandboxTab>("tasks");
 
+  // A reply thread opens as the rail's Replies tab (`?thread=`), selected.
   const openThread = (messageId: string) => {
     if (!projectPathSegment) return;
     if (sandboxTab !== "replies") setThreadReturnTab(sandboxTab);
@@ -88,6 +94,7 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
+  // ✕ drops the Replies tab and goes back to the tab before it.
   const closeThread = () => {
     if (!projectPathSegment) return;
     void navigate({
@@ -99,6 +106,7 @@ export function ProjectDetailClient({
     });
   };
 
+  // Tasks open as chat tabs beside Eva (`?tasks=`, `?task=`).
   const taskTabs = useProjectTaskTabs({
     basePath,
     projectPathSegment,
@@ -106,6 +114,7 @@ export function ProjectDetailClient({
     onShowPanel: () => setExpandRightSignal((n) => n + 1),
   });
 
+  // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
     if (!projectPathSegment) return;
@@ -143,6 +152,8 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   });
 
+  // Chat sub-agent CTA row → Agents tab + expand the sandbox pane (same shape
+  // as SessionDetailClient's onOpenAgentsTab; the tab is a route segment here).
   const openAgentsTab = () => {
     if (!projectPathSegment) return;
     void navigate({
@@ -169,6 +180,7 @@ export function ProjectDetailClient({
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
+      /* Project / Sandbox live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs

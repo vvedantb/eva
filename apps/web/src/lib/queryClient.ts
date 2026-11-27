@@ -12,8 +12,15 @@ import { QueryClient } from "@tanstack/react-query";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      // A GitHub round trip costs hundreds of milliseconds, so anything fetched
+      // in the last 30 seconds is good enough to paint immediately while a
+      // background refetch runs.
       staleTime: 30_000,
+      // Every consumer renders its own error state with a retry control, and a
+      // silent triple retry only delays it.
       retry: false,
+      // Diff payloads are large and re-highlighting flashes the whole file list,
+      // so returning to the tab does not refetch.
       refetchOnWindowFocus: false,
     },
   },

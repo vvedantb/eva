@@ -59,9 +59,11 @@ export interface EnvVar {
   key: string;
   value: string;
   sandboxExclude: boolean;
+  /** Given to snapshot seed runs only; implies sandboxExclude. */
   seedOnly?: boolean;
 }
 
+/** Lock button cycle: in sandbox → seed only → excluded → in sandbox. */
 function nextSandboxScope(v: EnvVar): {
   sandboxExclude: boolean;
   seedOnly: boolean;
@@ -87,6 +89,7 @@ interface EnvVarsTableProps {
     seedOnly: boolean,
   ) => Promise<void>;
   description: string;
+  /** Repo tab shows VERCEL_PROJECT_ID; team tab omits repo-only infra slots. */
   scope?: EnvVarScope;
   readOnly?: boolean;
 }
@@ -101,6 +104,7 @@ export function EnvVarsTable({
   scope = "repo",
   readOnly = false,
 }: EnvVarsTableProps) {
+  /** Which section's add row is open: sandbox vars or seed-only vars. */
   const [addingTo, setAddingTo] = useState<"sandbox" | "seed" | null>(null);
   const adding = addingTo !== null;
   const [keyInput, setKeyInput] = useState("");
@@ -137,6 +141,7 @@ export function EnvVarsTable({
 
   const handleAdd = async () => {
     if (!keyInput.trim() || !valueInput.trim() || !onUpsert) return;
+    // A seed var is saved seed-only at once, so it never reaches a sandbox.
     const seedOnly = addingTo === "seed";
     setSaving(true);
     try {
@@ -150,6 +155,7 @@ export function EnvVarsTable({
       setKeyInput("");
       setValueInput("");
     } catch {
+      // Toast already shown.
     }
     setSaving(false);
   };
@@ -167,6 +173,8 @@ export function EnvVarsTable({
   const saveEdit = async () => {
     if (!editingKey || !editValue.trim() || !onUpsert) return;
     const existing = vars?.find((v) => v.key === editingKey);
+    // Read out here: optional chaining and `??` inside the `try` bail the React
+    // Compiler out of this whole file. See CLAUDE.md.
     const sandboxExclude = existing?.sandboxExclude ?? false;
     setSaving(true);
     try {
@@ -184,6 +192,7 @@ export function EnvVarsTable({
         return next;
       });
     } catch {
+      // Toast already shown.
     }
     setSaving(false);
   };
@@ -204,6 +213,7 @@ export function EnvVarsTable({
       });
       setDeleteKey(null);
     } catch {
+      // Toast already shown.
     }
   };
 
@@ -253,6 +263,8 @@ export function EnvVarsTable({
     const parsed = parseEnvVars(bulkText);
     if (parsed.length === 0) return;
     setBulkSaving(true);
+    // Built out here: a ternary inside the `try` bails the React Compiler out
+    // of this whole file. See CLAUDE.md.
     const successMessage = `Imported ${parsed.length} variable${parsed.length !== 1 ? "s" : ""}`;
     try {
       await withMutationToast(
@@ -266,6 +278,7 @@ export function EnvVarsTable({
       setShowBulkPaste(false);
       setBulkText("");
     } catch {
+      // Toast already shown.
     }
     setBulkSaving(false);
   };
@@ -275,6 +288,7 @@ export function EnvVarsTable({
   const connectorSlots = filterSlotsForScope(CONNECTOR_ENV_VARS, scope);
   const infraSlots = filterSlotsForScope(INFRA_ENV_VARS, scope);
   const convexSlots = filterSlotsForScope(CONVEX_ENV_VARS, scope);
+  // Known slot keys are surfaced above — keep them out of the free-form table.
   const freeformVars = vars?.filter((v) => !SLOT_ENV_VAR_KEYS.has(v.key));
   const sandboxVars = (
     freeformVars?.filter((v) => !v.sandboxExclude) ?? []
@@ -522,9 +536,11 @@ export function EnvVarsTable({
     </TableRow>
   ) : null;
 
+  // Seed-only vars need the scope toggle backend (repo and team tables).
   const canAddSeedVars =
     !readOnly && onUpsert !== undefined && onToggleSandboxExclude !== undefined;
 
+  /** Add and bulk-paste both create free-form vars, so they sit on that card. */
   const freeformActions = readOnly ? undefined : (
     <div className="flex shrink-0 items-center gap-2">
       <Button
@@ -603,6 +619,7 @@ export function EnvVarsTable({
         </div>
       ) : (
         <>
+          {/* The table owns the card's full width, so the body carries no padding. */}
           <SettingsSection
             title="Sandbox variables"
             action={freeformActions}

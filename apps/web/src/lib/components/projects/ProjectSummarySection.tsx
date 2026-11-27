@@ -25,6 +25,7 @@ export function ProjectSummarySection({
 }: {
   projectId: Id<"projects">;
   status: ProjectStatus | undefined;
+  /** The project's Documents tab (pre-internal path), or undefined without a numId. */
   documentsHref: string | undefined;
 }) {
   const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
@@ -68,6 +69,7 @@ export function ProjectSummaryDocLink({
   children,
 }: {
   docId: Id<"docs">;
+  /** The project's Documents tab (pre-internal path). */
   documentsHref: string;
   className?: string;
   children: ReactNode;

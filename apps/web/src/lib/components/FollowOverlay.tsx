@@ -55,6 +55,7 @@ function FollowOverlayInner({
   const lastSeenPath = userData?.lastSeenPath;
 
   useEffect(() => {
+    // Another user's path: follow it only while it stays on-app.
     if (!lastSeenPath || !isInternalAppHref(lastSeenPath)) return;
 
     if (lastPathRef.current === undefined) {
@@ -90,6 +91,8 @@ function FollowOverlayInner({
           <span>
             Following <span data-pii>{name}</span>
           </span>
+          {/* Escape also stops following, but a phone has no Escape key and the
+              overlay swallows every other tap — so this has to be reachable. */}
           <Button
             size="icon"
             variant="ghost"

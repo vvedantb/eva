@@ -15,9 +15,12 @@ import type { PrOverview } from "./_components/prOverviewMeta";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 export type PrOverviewState =
+  // No pull request to load — the work being reviewed has not opened one yet.
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
+  // `refreshing` keeps the panel on screen during a refetch instead of
+  // collapsing back to a spinner.
   | { status: "ready"; overview: PrOverview; refreshing: boolean };
 
 /**
@@ -40,6 +43,8 @@ export function usePrOverview(
   const options = prOverviewQuery(getOverview, repoId, prNumber);
   const query = useQuery(options);
 
+  // Forced because the point of Reload is to get past the server-side
+  // ActionCache as well; the result lands in the same cache entry.
   const reload = useMutation({
     mutationFn: () =>
       prNumber === undefined
@@ -65,6 +70,8 @@ export function usePrOverview(
         refreshing: query.isFetching || reload.isPending,
       };
     }
+    // A failed revalidate keeps the overview already on screen, so only a cold
+    // miss reaches this branch as an error.
     if (query.isError) {
       return {
         status: "error",
@@ -92,6 +99,7 @@ export function usePrCommits(
   prNumber: number,
 ): {
   commits: PrCommitsData["commits"] | undefined;
+  /** True when even the full listing hit GitHub's own 250-commit ceiling. */
   truncated: boolean;
   load: () => void;
   loading: boolean;

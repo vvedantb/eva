@@ -89,6 +89,7 @@ function PullRequestRow({
   onSelect,
 }: {
   pr: ReviewPullRequest;
+  /** Set while the list spans several repos (`pullRequestRepoLabel`). */
   repoLabel: string | undefined;
   selected: boolean;
   onSelect: () => void;
@@ -157,6 +158,10 @@ function PullRequestRow({
   );
 }
 
+/**
+ * Shown while the agent watches the PR (`watch_pull_request`): checks,
+ * reviews and conflicts wake its chat. Clicking stops the watch.
+ */
 function StopWatchButton({ pr }: { pr: ReviewPullRequest }) {
   const stopWatch = useMutation(api.pullRequests.stopWatch);
   return (

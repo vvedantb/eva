@@ -46,6 +46,11 @@ export type PreviewSnapshotInbound =
   | { type: "snapshot"; requestId: string; snapshot: PreviewSnapshot }
   | { type: "error"; requestId: string; message: string };
 
+/**
+ * The preview iframe hosts the user's own app, so every field below is
+ * attacker-controlled. Caps are applied at parse time (not at format time) so
+ * nothing oversized is ever retained in React state either.
+ */
 const MAX_LIST_ITEMS = 200;
 const MAX_TOKEN_LENGTH = 64;
 const MAX_NAME_LENGTH = 256;
@@ -54,9 +59,16 @@ const MAX_CONSOLE_TEXT_LENGTH = 2_000;
 const MAX_URL_LENGTH = 2_048;
 const MAX_TITLE_LENGTH = 256;
 const MAX_VISIBLE_TEXT_LENGTH = 4_000;
+/** ~1.5 MB of base64, i.e. a large full-page PNG; longer is dropped, not cut. */
 const MAX_SCREENSHOT_DATA_URL_LENGTH = 2_000_000;
+/** Budget for the body of one <preview_snapshot> block, delimiters excluded. */
 const MAX_PROMPT_BODY_LENGTH = 32_000;
 
+/**
+ * Roles and console levels are known vocabularies, not free text. Rejecting
+ * anything else here means they can never carry newlines or prompt delimiters,
+ * whatever a future caller does with them.
+ */
 const TOKEN_PATTERN = new RegExp(
   `^[A-Za-z][A-Za-z0-9 _-]{0,${MAX_TOKEN_LENGTH}}$`,
 );
@@ -145,6 +157,8 @@ function parseList<T>(
   for (const entry of value) {
     const parsed = parseOne(entry);
     if (parsed) out.push(parsed);
+    // Stop early: a hostile page can send millions of entries, and everything
+    // that survives here is retained in React state.
     if (out.length >= MAX_LIST_ITEMS) break;
   }
   return out;
@@ -274,6 +288,9 @@ export function formatSnapshotPrompt(snapshot: PreviewSnapshot): string {
     "networkFailures:",
     ...(networkLines.length > 0 ? networkLines : ["- (none)"]),
   ].join("\n");
+  // Backstop on the assembled block: per-field caps multiplied by per-list caps
+  // still leave room for a very large prompt, and the escape pass can grow the
+  // text sixfold. Truncating escaped text is safe — it cannot resurrect a "<".
   const bounded =
     body.length > MAX_PROMPT_BODY_LENGTH
       ? `${body.slice(0, MAX_PROMPT_BODY_LENGTH)}\n(truncated)`

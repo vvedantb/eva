@@ -44,6 +44,7 @@ function DocDetailTabPage() {
       backTo={`${basePath}/docs`}
     >
       {(doc) =>
+        // PR recaps moved to Reviews — keep old /docs/$numId links working.
         doc.kind === "pr-recap" && doc.prNumber !== undefined ? (
           <Navigate
             to="/$owner/$repo/reviews/$prNumber/$reviewTab"

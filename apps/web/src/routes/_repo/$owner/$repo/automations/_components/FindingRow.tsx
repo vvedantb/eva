@@ -114,6 +114,7 @@ export function FindingRow({
           </a>
         )}
       </div>
+      {/* Outside the trigger: an anchor inside a button is invalid markup. */}
       {duplicateNumId !== undefined && (
         <p className="pb-2 pl-10 pr-3 text-xs text-muted-foreground">
           Looks like task{" "}

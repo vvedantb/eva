@@ -24,7 +24,12 @@ import { useRefreshUsage } from "./useRefreshUsage";
 
 interface UsageLimitsIndicatorProps {
   repoId: Id<"githubRepos">;
+  /** Active chat model — scopes the chip bar (e.g. Fable → Weekly Fable %). */
   model: string | null | undefined;
+  /**
+   * Sticky credential for this chat. `undefined` while still loading; `null` is
+   * Team. Only affects the chip bar — the popover always lists every account.
+   */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
   accountLabel: string;
 }

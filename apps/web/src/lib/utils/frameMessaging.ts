@@ -1,3 +1,9 @@
+/**
+ * postMessage with a preview iframe, bound to the origin the frame was pointed
+ * at. Never "*": once the page navigates to another site, it neither receives
+ * our messages nor gets its replies accepted.
+ */
+
 /** The frame's http(s) origin, or null before it has a real `src`. */
 export function frameOrigin(frame: HTMLIFrameElement | null): string | null {
   if (!frame?.src) return null;

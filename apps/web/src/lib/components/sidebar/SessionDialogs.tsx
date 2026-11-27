@@ -34,6 +34,7 @@ interface SessionDialogsProps {
   onCloseRename: () => void;
   archiveTarget: SessionArchiveTarget | null;
   onCloseArchive: () => void;
+  /** After a successful archive, e.g. to close the mobile sidebar drawer. */
   onArchived?: () => void;
 }
 

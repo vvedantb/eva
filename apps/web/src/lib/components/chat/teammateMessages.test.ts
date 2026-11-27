@@ -6,6 +6,8 @@ import {
   otherUserIdsInChat,
 } from "@eva/shared";
 
+// The web chat and the phone chat both read these to draw a teammate's turn
+// on the left with their name, so they live in `@eva/shared`.
 describe("isOtherUserChatMessage", () => {
   test("a user turn from someone else is a teammate's", () => {
     expect(isOtherUserChatMessage({ role: "user", userId: "them" }, "me")).toBe(

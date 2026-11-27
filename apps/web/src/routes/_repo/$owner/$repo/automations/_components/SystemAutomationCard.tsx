@@ -25,6 +25,10 @@ import type { Icon } from "@tabler/icons-react";
 import { describeCron } from "@/lib/components/CronScheduleCard";
 import { describeTrigger } from "./trigger";
 
+/**
+ * Per-entry glyph for the card's icon tile. Keyed by catalog key so the backend
+ * stays free of presentation; unknown keys fall back to the generic mark.
+ */
 const ENTRY_ICONS: Record<string, Icon> = {
   "daily-standup": IconFileText,
   "find-critical-bugs": IconBug,
@@ -41,11 +45,15 @@ const ENTRY_ICONS: Record<string, Icon> = {
 interface SystemAutomationCardProps {
   entryKey: string;
   title: string;
+  /** One-line card copy, not the prompt. */
   blurb: string;
+  /** Cron expression in UTC; shown in the reader's local time. */
   cronSchedule: string;
+  /** Event presets show what fires them instead of a schedule. */
   trigger: AutomationTrigger;
   readOnly: boolean;
   installed: boolean;
+  /** Per-repo URL id once installed; null otherwise. */
   numId: number | null;
   basePath: string;
   onInstall: () => void;
@@ -73,6 +81,7 @@ export function SystemAutomationCard({
   const schedule = describeCron(cronSchedule);
   const eventText = describeTrigger(trigger);
   const EntryIcon = ENTRY_ICONS[entryKey] ?? IconSparkles;
+  // Plain `string`: `<Link to>` is a union of known route paths.
   const href: string = `${basePath}/automations/${numId}`;
 
   return (
@@ -87,6 +96,8 @@ export function SystemAutomationCard({
         <div className="flex items-start gap-3">
           <span
             className={cn(
+              // rounded-lg, not rounded-surface: a 36px tile should read as a
+              // circle under the "Full" radius theme, like other compact chrome.
               "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
               installed
                 ? "bg-primary/10 text-primary"
@@ -105,8 +116,12 @@ export function SystemAutomationCard({
           </div>
         </div>
 
+        {/* Pre-install the schedule is only a seed value, so showing a clock
+            time would read as a fixed property of the automation. */}
         {(installed || readOnly || eventText !== null) && (
           <div className="flex flex-wrap items-center gap-1.5">
+            {/* An event trigger is fixed by the catalog, so unlike a
+                schedule it is shown before install too. */}
             {eventText !== null ? (
               <Chip icon={IconBolt}>{eventText}</Chip>
             ) : (
@@ -174,6 +189,7 @@ export function SystemAutomationCard({
   );
 }
 
+/** Small metadata pill in the card body. */
 function Chip({ icon: ChipIcon, children }: { icon: Icon; children: string }) {
   return (
     <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">

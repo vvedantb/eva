@@ -24,6 +24,7 @@ export function PageMotionProvider({ children }: { children: ReactNode }) {
   );
   const disabled = flags?.disablePageMotion === true;
 
+  // Syncs Motion's module-level config (an external system) with the flag.
   useLayoutEffect(() => {
     MotionGlobalConfig.instantAnimations = disabled;
   }, [disabled]);

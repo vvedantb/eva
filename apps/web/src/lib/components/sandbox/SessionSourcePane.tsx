@@ -18,6 +18,13 @@ import {
 } from "react";
 import { sourcePanelItemParser } from "@/lib/search-params";
 
+/**
+ * Sandbox Artifacts / Documents chrome.
+ *
+ * The pane itself is `bg-card`. A muted wash behind the list lets each row
+ * sit as a real surface (shadow ring, not a hairline) so cards no longer
+ * vanish into the same fill or hover as flush pills.
+ */
 const CARD_SHADOW =
   "shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_1px_2px_-1px_rgba(0,0,0,0.06),0_2px_4px_0_rgba(0,0,0,0.04)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]";
 const CARD_SHADOW_HOVER =
@@ -33,7 +40,9 @@ export function SessionSourcePane({
 }: {
   title: string;
   count?: number;
+  /** Full page for this kind of row ("View all"). */
   viewAllHref: string;
+  /** Extra header controls, before "View all". */
   actions?: ReactNode;
   loading: boolean;
   children: ReactNode;

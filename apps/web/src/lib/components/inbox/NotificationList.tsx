@@ -12,11 +12,14 @@ import type { Id } from "@eva/backend";
 interface NotificationListProps {
   notifications: Notification[];
   repoById: Map<Id<"githubRepos">, RepoWithLogo>;
+  /** How the list is sectioned: by day, repo or notification type. */
   group: InboxGroup;
   selectedId: string | null;
   onSelect: (notification: Notification) => void;
   onMarkRead: (notification: Notification) => void;
+  /** Right-click menu action: flips the row between read and unread. */
   onToggleRead: (notification: Notification) => void;
+  /** Right-click menu action: archives the row, or puts it back. */
   onToggleArchive: (notification: Notification) => void;
   isSelecting: boolean;
   checkedIds: ReadonlySet<string>;
@@ -53,6 +56,7 @@ export function NotificationList({
           exit={{ opacity: 0 }}
           transition={tokenTransition.fast}
         >
+          {/* Sticky so the section label stays readable while its rows scroll by. */}
           <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-1.5">
             <span className="text-xs font-medium text-muted-foreground">
               {section.label}

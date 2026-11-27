@@ -22,6 +22,7 @@ interface UsageOverviewTotals {
 interface UsageOverviewProps {
   title: string;
   totals: UsageOverviewTotals;
+  /** True when the backend hit its row cap and the numbers are a floor. */
   truncated: boolean;
 }
 

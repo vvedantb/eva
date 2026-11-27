@@ -44,6 +44,7 @@ export function ComposerSpeechButton({ disabled }: { disabled?: boolean }) {
     );
   }
 
+  // Still loading the flag, or web speech unavailable with flag off.
   return null;
 }
 
@@ -79,8 +80,10 @@ function GatewaySpeechButton({
   return (
     <PromptInputButton
       tooltip={label}
+      // The tooltip is hover-only, so on touch this is the button's only name.
       aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
+      // Clickable while connecting: the click cancels a slow mic prompt.
       disabled={disabled || isPolishing}
       className={isListening && !isConnecting ? "text-destructive" : undefined}
     >

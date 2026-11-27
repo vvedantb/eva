@@ -2,7 +2,9 @@ import { useState } from "react";
 
 type Slide = {
   current: string;
+  /** The tab that was active before the last switch; it slides out. */
   leaving: string | null;
+  /** 1: the new tab is right of the old one. `null` until the first switch. */
   direction: 1 | -1 | null;
 };
 
@@ -24,6 +26,7 @@ export function useKeepAliveTabSlide(
     leaving: null,
     direction: null,
   });
+  // Adjust-state-on-change in render, so the switch commit already has it.
   if (value !== slide.current) {
     setSlide({
       current: value,

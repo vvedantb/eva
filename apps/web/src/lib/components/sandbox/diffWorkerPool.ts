@@ -23,6 +23,9 @@ export const DIFF_THEMES: ThemesType = {
 
 export const DIFF_POOL_OPTIONS: WorkerPoolOptions = {
   workerFactory: () => new DiffsWorker(),
+  // Per-file highlight tasks run in tens of milliseconds, so four workers keep
+  // the queue drained without paying for eight shiki instances alongside an
+  // already memory-heavy review surface.
   poolSize: 4,
 };
 

@@ -1,21 +1,47 @@
 import { useSyncExternalStore } from "react";
 import type { SandboxOwner } from "@eva/backend";
 
+/**
+ * Preview mini-player (picture-in-picture) state.
+ *
+ * A session's, quick task's or project's Preview pane can keep running in a floating window after the
+ * user leaves the sessions area. The window shows the SAME hosted iframe as
+ * the pane did (see previewIframeHost), so the app under development is not
+ * reloaded — this store only decides WHICH entry floats and WHY:
+ *
+ * - `auto`: the visible pane armed itself, then its anchor detached (route
+ *   change out of `/sessions/*`). The pane re-attaching closes it again.
+ * - `manual`: the user pressed "Pop out". The pane shows a placeholder until
+ *   the user brings the preview back or expands it.
+ *
+ * Arming is a declaration ("if this anchor detaches, float it with these
+ * details"), not a subscription: it outlives the pane's unmount on purpose,
+ * because the unmount is precisely the moment it is needed.
+ */
+
 type PreviewMiniPlayerMode = "auto" | "manual";
 
 /** What the pane knows and the host does not: where the preview belongs. */
 export interface PreviewMiniPlayerSource {
+  /** Session, quick task or project whose doc says if the sandbox is live. */
   owner: SandboxOwner;
   sandboxId: string;
+  /** Route of the owner's Preview tab — Expand navigates here. */
   returnTo: string;
   title: string;
 }
 
 export interface PreviewMiniPlayerTarget extends PreviewMiniPlayerSource {
+  /** Placeholder identity shared with the hosted iframe (pathStorageKey). */
   entryKey: string;
+  /** `${sandboxId}:${port}` — dropped with the sandbox. */
   group: string;
   src: string;
   epoch: number;
+  /**
+   * Guest CSS viewport to contain inside the window. Missing = 1280×800, so a
+   * fill pane still letterboxes instead of reflowing into the chrome.
+   */
   logicalSize?: { width: number; height: number };
 }
 
@@ -26,7 +52,9 @@ export interface PreviewMiniPlayerEntry extends PreviewMiniPlayerTarget {
 export type PreviewAnchorRole = "panel" | "miniPlayer";
 
 let current: PreviewMiniPlayerEntry | null = null;
+/** At most one pane is visible at a time, so one armed slot is enough. */
 let armed: PreviewMiniPlayerTarget | null = null;
+/** Keys whose detach is waiting a microtask to see whether they re-attach. */
 const pendingFloat = new Set<string>();
 const listeners = new Set<() => void>();
 

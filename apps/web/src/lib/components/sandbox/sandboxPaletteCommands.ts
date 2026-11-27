@@ -24,6 +24,7 @@ export interface SandboxCommandTab {
   value: SandboxTab;
   label: string;
   icon: ComponentType<{ className?: string }>;
+  /** Filled variant for the active tab chip, when Tabler ships one. */
   activeIcon?: ComponentType<{ className?: string }>;
 }
 
@@ -42,9 +43,11 @@ interface BuildSandboxPaletteCommandsArgs {
   consoleDock: ConsoleDockApi;
   terminalPanel: TerminalPanelApi;
   onTabChange: (tab: string) => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
   onNewPreview?: () => void;
   newPreviewDisabled: boolean;
   simpleView?: boolean;
+  /** Desktop rail: tab labels under the icons. */
   showRailLabels: boolean;
   onToggleRailLabels: () => void;
 }
@@ -161,6 +164,8 @@ export function buildSandboxPaletteCommands({
     });
   }
 
+  // Outside the `simpleView` gate: the rail is there either way, and this is
+  // how a reader who cannot place the icons finds out the labels exist.
   commands.push({
     id: "toggle-rail-labels",
     label: showRailLabels ? "Hide tab labels" : "Show tab labels",

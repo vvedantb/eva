@@ -14,6 +14,8 @@ const DIFF_VIEW_PATH = /\/review\/diffs\/(unified|split)\/?$/;
 export function useDiffSearchParams() {
   const navigate = useNavigate();
   const router = useRouter();
+  // Primitive selections: the whole pathname/search object changes on every
+  // navigation, which re-rendered each kept-alive diff consumer with it.
   const diffFile = useRouterState({
     select: (s) => {
       const search = s.location.search;
@@ -40,6 +42,7 @@ export function useDiffSearchParams() {
   };
 
   const setDiffView = (view: DiffView) => {
+    // Read at call time so this handler stays stable across navigations.
     const pathname = router.state.location.pathname;
     if (DIFF_VIEW_PATH.test(pathname)) {
       const nextPath = pathname.replace(

@@ -18,11 +18,20 @@ import {
 
 interface ReviewCommentMessageProps {
   text: string;
+  /** Absent (Manager Ave): plain markdown, no mention chips. */
   repo?: ChatRepo;
 }
 
+// `wrap-anywhere` rather than `wrap-break-word`: only the former shrinks the
+// min-content width, so an unbreakable token (JWT, long URL) wraps inside the
+// bubble instead of widening it. `pre` blocks are unaffected (white-space: pre).
 const BODY_CLASS = "text-sm wrap-anywhere";
 
+// This component only ever renders user-authored chat messages, whose composer
+// offers both teammates and data entities, so every `@` token here needs its
+// kind resolved (`atKind="user"`) rather than assumed to be data.
+
+/** One text run of a user message, with mention chips when there is a repo. */
 function MessageText({ text, repo }: { text: string; repo?: ChatRepo }) {
   if (!repo) return <PlainMarkdownText text={text} className={BODY_CLASS} />;
   return (
@@ -58,6 +67,10 @@ function ReviewCommentCard({
   );
 }
 
+/**
+ * A quote the user cited from an Eva reply. Clicking it scrolls to and
+ * flashes the source turn, same as the pending chip in the composer.
+ */
 function CitationCard({
   messageId,
   text,
@@ -108,6 +121,8 @@ export function ReviewCommentMessage({
         }))
       : [segment],
   );
+  // The prompt appends cited quotes after the text; show them first, like a
+  // reply quoting what it answers.
   const segments = [
     ...parsed.filter((segment) => segment.kind === "citation"),
     ...parsed.filter((segment) => segment.kind !== "citation"),

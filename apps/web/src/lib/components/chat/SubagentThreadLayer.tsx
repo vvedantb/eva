@@ -49,12 +49,18 @@ export function SubagentThreadLayer({
   const simpleView = useSimpleView();
   const { requestStop, stopDialog } = useStopBackgroundAgent(surface.entity);
 
+  // Only the messages that mention this agent are parsed — a plain substring
+  // test on the id keeps a long transcript from being parsed on every tick.
   const sources: SubagentSource[] = [];
   let liveActivity: string | undefined;
   if (subagentId) {
+    // Streaming payloads can outlive their turn; only read one while it runs.
+    // The surface's `isExecuting` is the same turn rule the composer uses.
     if (surface.isExecuting && streamingActivity?.includes(subagentId)) {
       liveActivity = streamingActivity;
     }
+    // The live payload already holds the running turn's steps; reading that
+    // message's stored log too would repeat them in the thread.
     const runningMessageId = liveActivity
       ? messages.filter((message) => !message.isSystemAlert).at(-1)?._id
       : undefined;
@@ -87,6 +93,8 @@ export function SubagentThreadLayer({
   return (
     <OpenSubagentContext value={openSubagent}>
       <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* aria-hidden as well as inert: `isComposerVisible` reads it, so
+            type-to-focus cannot write keystrokes into the hidden draft. */}
         <div
           inert={isOpen}
           aria-hidden={isOpen || undefined}
@@ -100,12 +108,15 @@ export function SubagentThreadLayer({
             parentTitle={parentTitle}
             sources={sources}
             liveActivity={liveActivity}
+            // Same rule as the Agents tab: only a backgrounded run can be
+            // stopped on its own.
             canStop={
               subagentTone(agent.status) === "active" &&
               agent.backgrounded &&
               !surface.isReadOnly
             }
             onRequestStop={requestStop}
+            // Replace, so Back from the parent does not reopen the thread.
             onClose={() => void setSubagentId(null, { history: "replace" })}
             onOpenFile={onOpenFile}
           />

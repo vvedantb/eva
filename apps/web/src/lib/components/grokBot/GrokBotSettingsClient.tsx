@@ -19,6 +19,9 @@ export function GrokBotSettingsClient() {
   const setWebhook = useAction(api.grokBotActions.setWebhook);
   const clearSettings = useMutation(api.grokBot.clearSettings);
 
+  // The saved URL owns the field until the user types; `null` = untouched.
+  // Kept after Save (the action can resolve before the query catches up, so
+  // dropping it would flash the old URL); it then equals the saved value.
   const [urlDraft, setUrlDraft] = useState<string | null>(null);
   const [key, setKey] = useState("");
   const url = urlDraft ?? settings?.url ?? "";

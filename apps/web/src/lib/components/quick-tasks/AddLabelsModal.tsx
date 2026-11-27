@@ -65,6 +65,8 @@ export function AddLabelsModal({
   const handleAdd = async () => {
     if (newLabels.length === 0) return;
     setIsLoading(true);
+    // Built out here: a ternary inside the `try` bails the React Compiler out
+    // of this whole file. See CLAUDE.md.
     const successMessage = `Added labels to ${count} task${count === 1 ? "" : "s"}`;
     try {
       await withMutationToast(

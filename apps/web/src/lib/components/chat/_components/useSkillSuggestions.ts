@@ -24,6 +24,7 @@ export function useSkillSuggestions(skillItems: ReadonlyArray<SlashItem>): {
   chips: SlashItem[];
   dismiss: (id: string) => void;
 } {
+  // Behind the `skillSuggestions` experimental flag: off means no Jev call and no chips.
   const enabled =
     useQuery(api.auth.getExperimentalFlags)?.skillSuggestions ?? false;
   const suggest = useAction(api.skillSuggestions.suggest);
@@ -47,6 +48,7 @@ export function useSkillSuggestions(skillItems: ReadonlyArray<SlashItem>): {
       })),
     })
       .then((response) => setEvaluated({ forText: text, response }))
+      // Background hint: a failed evaluation just leaves the chips hidden.
       .catch(() => {});
   });
 

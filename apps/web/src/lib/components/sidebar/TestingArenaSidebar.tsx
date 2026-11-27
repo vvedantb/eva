@@ -69,6 +69,7 @@ export function TestingArenaSidebar({
   }, [createRequestId]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
+  // Only docs with content can be evaluated; the rest are skipped.
   const testableDocs = (docs ?? []).filter((d) => d.hasContent);
 
   const handleTestAll = async () => {
@@ -76,6 +77,7 @@ export function TestingArenaSidebar({
     if (testableDocs.length === 0) return;
     setIsTestingAll(true);
     try {
+      // Fire all evaluations; one failure must not abort the batch.
       await Promise.allSettled(
         testableDocs.map((doc) =>
           startEvaluation({

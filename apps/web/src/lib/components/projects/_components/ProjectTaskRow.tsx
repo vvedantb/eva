@@ -105,6 +105,7 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
+  /** Open as a chat tab beside Eva. */
   open?: boolean;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
@@ -165,6 +166,7 @@ export function ProjectTaskRow({
       aria-label={task.title}
       selected={open}
       accentClassName={open ? "bg-primary" : undefined}
+      // The tint and stripe mark it; no ring.
       className={open ? "ring-0" : FLAT_ROW_CLASS}
       contentClassName={FLAT_ROW_CONTENT_CLASS}
     >
@@ -205,6 +207,10 @@ export function ProjectTaskRow({
   );
 }
 
+/**
+ * A Triage row's Reject (cancels the task) and Approve (lets the scheduler
+ * start it). They show on row hover or focus only.
+ */
 function TriageButtons({
   projectId,
   taskId,

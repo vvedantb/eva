@@ -22,6 +22,7 @@ import { UsageModelTable } from "./UsageModelTable";
 interface UsageOverviewViewProps {
   repoId: Id<"githubRepos">;
   range: TimeRange;
+  /** Quantised "now" from the client: the window end and the bucket the clock sits in. */
   now: number;
   title: string;
 }
@@ -40,6 +41,8 @@ export function UsageOverviewView({
   const bucket = range === "24h" ? "hour" : "day";
   const bucketMs = bucket === "hour" ? HOUR_MS : DAY_MS;
   const startTime = getStartTime(range, now) ?? 0;
+  // `now` is floored to the bucket, so the window must reach past it to include
+  // the bucket in progress.
   const endTime = now + bucketMs;
   const tzOffsetMinutes = new Date().getTimezoneOffset();
 

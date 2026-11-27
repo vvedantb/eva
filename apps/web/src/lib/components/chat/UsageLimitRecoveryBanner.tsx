@@ -24,11 +24,13 @@ import { UsageLimitAccountOption } from "./UsageLimitAccountOption";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { useRetryLastTurnWithAccount } from "./useRetryLastTurnWithAccount";
 
+/** A candidate whose id has been checked against the live account docs. */
 interface ResolvedCandidate {
   key: string;
   name: string;
   isTeam: boolean;
   isOwn: boolean;
+  /** null = the team credential. */
   accountId: Id<"userProviderAccounts"> | null;
 }
 
@@ -52,11 +54,19 @@ export function UsageLimitRecoveryBanner({
   const retryLastTurn = useRetryLastTurnWithAccount(surface.entity);
   const now = useQuantizedNow(60_000);
   const newest = recovery?.messages.at(-1);
+  // Its own const so the narrowing below survives: `undefined` here is either
+  // "no recovery" or "entity still loading", and `showsCard` rules out both.
   const currentAccountId = recovery?.currentAccountId;
+  // Whether the card renders at all, decided before the query so a chat that
+  // never hit a limit does not subscribe to usage readings it will not show.
   const showsCard =
     recovery !== undefined &&
     isUsageLimitFailure(newest) &&
+    // Until the entity lands we do not know which account to exclude, and
+    // offering a switch to the account already in use is worse than waiting.
     currentAccountId !== undefined;
+  // Same query and same quantised clock as the composer's usage chip, so the
+  // cache serves both and the two surfaces cannot disagree by a tick.
   const entries = useQuery(
     api.usageLimits.getForViewer,
     showsCard ? { repoId: surface.repoId, now } : "skip",
@@ -66,6 +76,8 @@ export function UsageLimitRecoveryBanner({
   if (showsCard) {
     const { accounts, resolveAccountId, onSwitchAccount, isSandboxActive } =
       recovery;
+    // Every provider can run out, so the card names the one that did rather
+    // than saying "Claude" at a Cursor or Codex limit.
     const provider = getAIModelProvider(surface.model);
     const providerLabel = getProviderLabel(provider);
     const candidates = usageLimitRetryCandidates({
@@ -77,6 +89,8 @@ export function UsageLimitRecoveryBanner({
         return [{ ...candidate, isTeam: true, accountId: null }];
       }
       const accountId = resolveAccountId(candidate.accountId);
+      // A deleted account is still in a stale picker snapshot; retrying on it
+      // would fail server-side, so leave it out rather than offer a dead row.
       if (accountId === undefined) return [];
       return [{ ...candidate, isTeam: false, accountId }];
     });
@@ -95,6 +109,10 @@ export function UsageLimitRecoveryBanner({
 
     const handleRetry = (candidate: ResolvedCandidate) => {
       setInFlightKey(candidate.key);
+      // The switch has to complete before the retry stages the turn, or the
+      // replacement daemon would still be running the exhausted credential.
+      // Cleanup is duplicated across `then`/`catch` rather than written once in a
+      // `finally`: React Compiler cannot compile a `finally`.
       void catchMutationError(
         onSwitchAccount(candidate.accountId).then(() =>
           retryLastTurn(candidate.accountId),

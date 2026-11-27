@@ -2,6 +2,9 @@ import * as appUi from "@vvedantb/ui";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, mock } from "bun:test";
 
+// pnpm installs one @vvedantb/ui copy per peer set, so @eva/ui would get its
+// own copy with its own UiConfig context. Give it the app's copy, as Vite's
+// `resolve.dedupe` does for the bundle.
 mock.module(
   Bun.resolveSync("@vvedantb/ui", Bun.resolveSync("@eva/ui", import.meta.dir)),
   () => appUi,
@@ -9,6 +12,18 @@ mock.module(
 const { EvaUiProvider } = await import("@eva/ui");
 const { ConfirmDialog } = appUi;
 
+/**
+ * The swap to the library `ConfirmDialog` (`size="md"`) shipped its own md
+ * spacing: `py-6` round the question, `pb-4` under the header, `pt-4` over the
+ * footer, and the question at `text-sm`. Eva's dialogs grew big gaps until
+ * `UiConfig.ConfirmDialog` in `packages/ui/src/config/overlays.ts` won them
+ * back. Those classes only hold if the config is still there and the library
+ * still merges it after its size classes, so render the parts and read the
+ * classes that reach the DOM.
+ *
+ * `ConfirmDialog.Content` renders through a portal, which does not render on
+ * the server, so its width is not checked here.
+ */
 function renderMdParts(): string {
   return renderToStaticMarkup(
     <EvaUiProvider>

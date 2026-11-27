@@ -48,9 +48,11 @@ export function AveLauncherButton({
 }: {
   isOpen: boolean;
   onToggle: () => void;
+  /** Hover/focus — start the chat chunk before the first click. */
   onIntent?: () => void;
   dragHandlers: AveLauncherDragHandlers;
   isDragging: boolean;
+  /** True for the click the browser fires after a drop; see the hook. */
   shouldIgnoreClick: () => boolean;
 }) {
   const stateLabelId = useId();
@@ -75,13 +77,23 @@ export function AveLauncherButton({
             "hidden md:flex size-12 items-center justify-center rounded-full",
             "smooth-shadow-ring-lg active:scale-[0.94]",
             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40",
+            // Touch drags must not scroll the page out from under the pointer.
             "touch-none",
+            // Nudging the button under the cursor while it is being dragged
+            // reads as the drag lagging, so hover growth is dropped mid-drag.
             isDragging ? "cursor-grabbing" : "cursor-grab hover:scale-[1.03]",
+            // AveMark clips the star. The working pip hangs off the corner
+            // like a rail tile, so this circle must not clip descendants.
             isOpen
               ? "bg-popover/95 text-popover-foreground backdrop-blur-md"
               : "bg-transparent",
           )}
         >
+          {/* Open → a close affordance: the mark says "summon Ave", but once the
+              panel is up the same button dismisses it, and an unchanged glyph
+              reads as "open it again". Both glyphs stay mounted so the swap
+              can crossfade instead of teleporting. The pip rides the Eva layer
+              so it leaves with the mark. */}
           <span className="relative size-full">
             <span
               className={cn(
@@ -115,8 +127,15 @@ export function AveLauncherButton({
   );
 }
 
+/** The CSS animation that times the done/error one-shots; see globals.css. */
 const ONE_SHOT_ANIMATION = "ave-hold";
 
+/**
+ * The launcher's face: mark, eyes and corner cues for one `AveLogoState`.
+ * `data-ave-state` drives every animation from globals.css, so the state is
+ * the only thing React decides. A one-shot reports its end through
+ * `onOneShotEnd` when its `ave-hold` timer runs out.
+ */
 function AveFace({
   state,
   labelId,
@@ -158,6 +177,16 @@ function AveLiveFace({ labelId }: { labelId: string }) {
   );
 }
 
+/**
+ * Subscribes to Ave's thread, live activity, transcript and waiting
+ * questions, and derives the face. Each query is shared with `useAveChat` and
+ * the badge through the cached `useQuery`, so nothing subscribes twice.
+ *
+ * Done and error play only on a running → idle edge seen while mounted, never
+ * on first load. The edge is caught during render by comparing against the
+ * last status seen; whether the run failed is read at that moment, from the
+ * alert row `_ave/run.ts` writes in the same mutation that idles the thread.
+ */
 function useAveLogoState() {
   const thread = useQuery(api.ave.getThread, {});
   const streaming = useQuery(api.ave.getStreaming, {});

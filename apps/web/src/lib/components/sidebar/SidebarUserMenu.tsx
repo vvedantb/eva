@@ -31,6 +31,7 @@ import { useSearch } from "@/lib/contexts/SearchContext";
 
 interface SidebarUserMenuProps {
   name: string;
+  /** Search only does anything on repo routes, so the item is gated. */
   showSearch?: boolean;
 }
 

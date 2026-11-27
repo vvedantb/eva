@@ -1,5 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Legacy `/quick-tasks/$numId/$detailTab` (e.g. `/activity`) redirects to the
+// canonical tab-less URL now that quick tasks only have one detail surface.
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/quick-tasks/$numId/$detailTab",
 )({
@@ -11,6 +13,7 @@ export const Route = createFileRoute(
         repo: params.repo,
         numId: params.numId,
       },
+      // Merge prev so nuqs-managed filter params (q, statuses, …) survive.
       search: (prev) => ({
         ...prev,
         draft: undefined,

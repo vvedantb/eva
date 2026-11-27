@@ -39,20 +39,28 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
+/** No task open as a chat tab. */
 const NO_OPEN_TASKS: ReadonlySet<string> = new Set();
 
+/** The Pull requests group's key, beside the display statuses. */
 const PULL_REQUESTS = "pull_requests";
 
+/** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs: their rows are marked. */
   openTaskIds: ReadonlySet<string>;
   failedTaskIds: ReadonlySet<string>;
+  /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
   basePath: string;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
+  /** Who added each Triage task, first names by user id ("Added by <name>"). */
   authorNames: ReadonlyMap<string, string>;
+  /** Task numbers by task id: names where a merged Triage item went. */
   numIdOf: (taskId: string) => number | undefined;
+  /** An archived project: no triage buttons, no row menu. */
   readOnly: boolean;
 }
 
@@ -90,6 +98,10 @@ function ProjectTaskRowFor({
   );
 }
 
+/**
+ * A group's header on a soft band: the label, the count and a chevron that
+ * turns open, all muted. `actions` sit at the band's end, outside the toggle.
+ */
 function GroupHeader({
   label,
   count,
@@ -126,11 +138,16 @@ function GroupHeader({
 interface ProjectTaskListPanelProps {
   projectId: Id<"projects">;
   tasks: Task[];
+  /** Tasks archived on their own: listed under Archived, with Unarchive. */
   archivedTasks: Task[];
+  /** An archived project: no Approve all, triage buttons or row menu. */
   readOnly: boolean;
+  /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
+  /** The tasks open as chat tabs (`?tasks=`). */
   openTaskIds?: ReadonlySet<string>;
+  /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
 
@@ -196,6 +213,8 @@ export function ProjectTaskListPanel({
     setIsApproving(false);
   };
 
+  // Groups come and go with their tasks, so the open set is derived: each
+  // group's default, flipped where the reader toggled it.
   const groups = [
     ...sections.map((section) => ({
       key: section.status,
@@ -236,6 +255,8 @@ export function ProjectTaskListPanel({
     readOnly,
   };
 
+  // Tasks added without "Start now" wait in Triage: its header approves them
+  // all.
   const triageActions =
     !readOnly && toApprove.length > 0 ? (
       <Button

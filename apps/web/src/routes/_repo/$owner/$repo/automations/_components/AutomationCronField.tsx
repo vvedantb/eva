@@ -12,6 +12,7 @@ export function AutomationCronField({
   onSave,
 }: {
   cronSchedule: string;
+  /** Resolves once the save settles (success or handled failure). */
   onSave: (cronSchedule: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -25,6 +26,8 @@ export function AutomationCronField({
           setDraft(null);
           return;
         }
+        // Keep the draft until the save lands so the field does not flash
+        // the old value; drop it only if the user has not typed since.
         void onSave(value).then(() =>
           setDraft((current) => (current === value ? null : current)),
         );

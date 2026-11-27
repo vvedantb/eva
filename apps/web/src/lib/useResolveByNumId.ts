@@ -12,10 +12,16 @@ import {
   type LegacyRedirect,
 } from "@/lib/numId";
 
+/** Derived from the query args so the entity list has one source of truth. */
 type RepoEntityType = FunctionArgs<
   typeof api.legacyIds.resolveNumId
 >["entityType"];
 
+/**
+ * Handles the pre-numId URL shape: a param that is not a positive integer is
+ * treated as a Convex document id, looked up once, and turned into the
+ * canonical numId path. Skips entirely for normal numId params.
+ */
 function useLegacyRedirect(
   param: string | undefined,
   repoId: Id<"githubRepos">,

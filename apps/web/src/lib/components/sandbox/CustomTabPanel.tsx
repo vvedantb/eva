@@ -24,9 +24,18 @@ interface CustomTabPanelProps {
   port: number;
   sandboxId: string | undefined;
   isActive: boolean;
+  /**
+   * False while another sandbox tab is selected. Keeps the iframe mounted
+   * (parent hides this panel) but pauses readiness polling.
+   */
   isForeground?: boolean;
+  /**
+   * App Preview port; custom tabs are served through the Preview's auth proxy
+   * under /__tab/<port>/ because Vercel exposes a single public app slot.
+   */
   previewPort: number;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
   externalHref?: string;
   wake?: SandboxWake;
 }
@@ -61,11 +70,17 @@ export function CustomTabPanel({
   const [state, setState] = useState<PanelState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [iframeKey, setIframeKey] = useState(0);
+  // Bumped by Retry so the poll effect restarts without clearing a cached URL
+  // on ordinary foreground toggles.
   const [retryNonce, setRetryNonce] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const attempts = useRef(0);
+  // Bumped on every config change so an in-flight poll continuation bails
+  // instead of re-arming after the sandbox stopped or the tab unmounted.
   const generation = useRef(0);
+  // Written in an effect (not during render) so React Compiler can compile the
+  // file; the async poll continuations that read it only run after commit.
   const foregroundRef = useRef(isForeground);
   useEffect(() => {
     foregroundRef.current = isForeground;
@@ -81,6 +96,7 @@ export function CustomTabPanel({
   /* eslint-disable no-effect/no-adjust-state-on-prop-change --
      The reset also cancels the in-flight poll and bumps a generation counter,
      so it has to happen as a side effect rather than during render. */
+  // Clear cached URL when the sandbox / port identity changes (not on tab hide).
   useEffect(() => {
     generation.current += 1;
     stopPolling();
@@ -92,11 +108,14 @@ export function CustomTabPanel({
   }, [isActive, sandboxId, port, previewPort, retryNonce]);
   /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
+  // Poll only while the sandbox is up and this tab is foreground; keep iframe
+  // state when the user switches away.
   useEffect(() => {
     stopPolling();
     if (!isActive || !sandboxId || !isForeground) {
       return stopPolling;
     }
+    // Already resolved — keep the cached iframe, do not re-poll.
     if (url !== null && state === "running") {
       return stopPolling;
     }

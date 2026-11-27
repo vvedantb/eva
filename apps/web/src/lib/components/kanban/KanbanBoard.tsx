@@ -48,6 +48,7 @@ interface KanbanBoardProps<T extends BaseTask> {
   renderOverlay: (item: T) => ReactNode;
   fillHeight?: boolean;
   columnExtra?: (status: TaskStatus) => ReactNode;
+  /** Keyed rows above a column's cards that are not cards (no drag); counted in the header. */
   columnLead?: (status: TaskStatus) => ReactNode[];
 }
 
@@ -70,6 +71,10 @@ export function KanbanBoard<T extends BaseTask>({
   const [activeOverlayWidth, setActiveOverlayWidth] = useState<number | null>(
     null,
   );
+  // The card a drop is moving. It must not glide: the user already carried it
+  // to its column, and a glide would fly it back from where the drag began.
+  // Cleared once the move commits (a Convex mutation resolves after the query
+  // shows it).
   const [droppedId, setDroppedId] = useState<string | null>(null);
 
   const itemsById = new Map(items.map((item) => [item._id, item]));
@@ -125,6 +130,9 @@ export function KanbanBoard<T extends BaseTask>({
       console.error("Failed to update status:", err);
       toast.error("Could not move the card. Try again.");
     }
+    // Clear after the try/catch instead of using `finally`: React Compiler
+    // bails on the whole file when it meets a `finally` clause. The catch
+    // swallows, so this runs on success and on error.
     setDroppedId(null);
   };
 

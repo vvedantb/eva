@@ -59,6 +59,7 @@ describe("splitCorruptedSandboxTabParam", () => {
   });
 
   it("decodes once-encoded slash paths from URLSearchParams", () => {
+    // How TanStack/qss typically serializes paths (slashes as %2F).
     expect(
       splitCorruptedSandboxTabParam("diffs?diffFile=apps%2Fweb%2Ffoo.tsx"),
     ).toEqual({

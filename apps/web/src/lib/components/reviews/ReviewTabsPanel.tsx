@@ -32,12 +32,25 @@ import {
 
 interface ReviewTabsPanelProps {
   repoId: Id<"githubRepos">;
+  /** Absent until a pull request exists for the work being reviewed. */
   prUrl?: string;
   prNumber?: number;
   activeTab: ReviewTab;
   onTabChange: (tab: ReviewTab) => void;
+  /**
+   * Shown in place of the header until the overview lands — the standalone
+   * page's cached title, so a revisited pull request names itself at once.
+   */
   placeholder?: ReactNode;
+  /**
+   * Renews every payload the surface shows, not just the overview — the
+   * standalone page also has a title block, read from its own query.
+   */
   refresh?: { run: () => void; running: boolean };
+  /**
+   * Every PR the chat holds, for the Pull requests tab, and which one the
+   * other tabs show. Sandbox surfaces only — absent, the tab is not offered.
+   */
   pullRequests?: {
     items: readonly ReviewPullRequest[];
     selectedId: Id<"pullRequests"> | undefined;
@@ -79,7 +92,11 @@ export function ReviewTabsPanel({
   );
   const { state, reload } = usePrOverview(repoId, prNumber);
   const overview = state.status === "ready" ? state.overview : null;
+  // The commit Code is scoped to. Owned here because Timeline sets it too: a
+  // commit row opens Code on that commit.
   const [codeCommit, setCodeCommit] = useState<string | null>(null);
+  // Where Code puts its few controls: the right end of the tab row, as Cursor
+  // keeps layout and tree toggles beside the tabs instead of a second toolbar.
   const [codeControlsSlot, setCodeControlsSlot] = useState<HTMLElement | null>(
     null,
   );
@@ -99,6 +116,9 @@ export function ReviewTabsPanel({
   );
 
   return (
+    // Mounted above the tabs, so the workers spin up while Code is still hidden
+    // rather than on the click that reveals it. The pool is a refcounted
+    // singleton shared by every review surface.
     <WorkerPoolContextProvider
       poolOptions={DIFF_POOL_OPTIONS}
       highlighterOptions={DIFF_HIGHLIGHTER_OPTIONS}
@@ -179,6 +199,9 @@ export function ReviewTabsPanel({
           ))}
         </div>
 
+        {/* Floats over the content; no tab reserves a footer for it. From `lg`
+            it steps left of the Manager Ave launcher, which owns the
+            viewport's bottom-right corner there. */}
         {overview === null ? null : (
           <div className="absolute right-4 bottom-4 z-20 lg:right-20">
             <PrComposer
@@ -194,6 +217,7 @@ export function ReviewTabsPanel({
   );
 }
 
+/** The states before Summary and Timeline have an overview to render. */
 function OverviewGate({
   state,
   reload,

@@ -42,6 +42,7 @@ export function DocRecapRegenerateButton({
         "doc-regenerate-recap",
       );
     } catch {
+      // The toast already reported it.
     }
     setBusy(false);
   };

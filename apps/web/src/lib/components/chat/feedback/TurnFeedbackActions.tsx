@@ -41,6 +41,8 @@ export function TurnFeedbackActions({
   comment?: string;
 }) {
   const rateTurn = useMutation(api.feedback.rateTurn);
+  // The open comment box: which thumb opened it and the text so far. Local so
+  // the box opens on click, before the saved rating comes back.
   const [draft, setDraft] = useState<{
     sentiment: FeedbackSentiment;
     text: string;

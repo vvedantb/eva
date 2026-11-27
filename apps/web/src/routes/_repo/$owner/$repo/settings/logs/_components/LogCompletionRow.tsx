@@ -7,6 +7,7 @@ interface LogCompletionRowProps {
   title: string;
   createdAt: number;
   rawResultEvent: string | undefined;
+  /** When set, the entity kind is included in the meta line (project view). */
   entityType?: string;
 }
 

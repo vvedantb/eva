@@ -11,8 +11,13 @@ export type GatewayDictationStatus =
   | "listening"
   | "error";
 
+/** xAI grok-stt native rate — avoids extra server-side resampling. */
 const TARGET_SAMPLE_RATE = 16_000;
 
+/**
+ * Inline AudioWorklet: Float32 mic frames → Int16 LE mono PCM at the target
+ * rate, resampling when the AudioContext cannot run at that rate.
+ */
 const PCM_WORKLET_SOURCE = `
 class PcmProcessor extends AudioWorkletProcessor {
   process(inputs) {
@@ -51,6 +56,9 @@ function stopMediaTracks(mediaStream: MediaStream) {
   }
 }
 
+// Module-level so the dynamic import() stays outside the hook body — the
+// React Compiler cannot lower import expressions and bails out of memoizing
+// the whole file when one appears inside a compiled function.
 function loadGatewayDictationSdk() {
   return import(
     /* webpackChunkName: "gateway-dictation" */ "./gatewayDictationSdk"
@@ -74,6 +82,10 @@ type TranscriptHandlers = {
   onStreamError: (message: string) => void;
 };
 
+/**
+ * Consumes the AI SDK transcription stream. Kept outside the hook's `try`
+ * so React Compiler does not bail on `for await` / ternaries in try blocks.
+ */
 async function consumeTranscriptionStream(
   fullStream: AsyncIterable<{ type: string }>,
   handlers: TranscriptHandlers,
@@ -116,6 +128,8 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
   const mintToken = useAction(api.transcription.mintTranscriptionToken);
   const [status, setStatus] = useState<GatewayDictationStatus>("idle");
   const onTextRef = useRef(onText);
+  // Latest-ref via effect, not a render-time write — the React Compiler
+  // rejects ref writes during render and bails on the whole file.
   useEffect(() => {
     onTextRef.current = onText;
   });
@@ -133,6 +147,7 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
     }
   }, []);
 
+  // Mic + WebSocket session must stop when the composer unmounts.
   useEffect(() => {
     return () => {
       generationRef.current += 1;
@@ -141,6 +156,8 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
   }, [cleanup]);
 
   const stop = useCallback(() => {
+    // Invalidate a start still connecting (no session yet), so it gives up
+    // after its awaits instead of opening the mic once the user said stop.
     generationRef.current += 1;
     cleanup();
     setStatus("idle");
@@ -163,6 +180,9 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
         onTextRef.current(textPrefix + committed + pending);
       };
 
+      // Create the context synchronously in the click turn so browsers allow
+      // resume(); awaiting the token first leaves the context suspended and
+      // the worklet never emits PCM → Gateway closes the socket.
       const audioContext = new AudioContext();
       const abortController = new AbortController();
 
@@ -185,6 +205,7 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           return;
         }
 
+        // Resume again after the async gap — some browsers re-suspend.
         if (audioContext.state !== "running") {
           await audioContext.resume();
         }
@@ -211,6 +232,8 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           "eva-pcm-processor",
         );
         sourceNode.connect(workletNode);
+        // Worklets only run when connected into the graph; mute so mic isn't
+        // played back through speakers.
         const mute = audioContext.createGain();
         mute.gain.value = 0;
         workletNode.connect(mute);
@@ -242,10 +265,12 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           try {
             workletNode.disconnect();
           } catch {
+            // already disconnected
           }
           try {
             sourceNode.disconnect();
           } catch {
+            // already disconnected
           }
           stopMediaTracks(mediaStream);
           void audioContext.close();
@@ -253,6 +278,7 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
             try {
               streamController.close();
             } catch {
+              // already closed
             }
             streamController = null;
           }
@@ -274,6 +300,8 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           await loadGatewayDictationSdk();
 
         if (generationRef.current !== generation) {
+          // Close this start's own audio only: a newer start may already own
+          // `sessionRef`, and `cleanup()` would close that one instead.
           closeAudio();
           const currentSession = sessionRef.current;
           if (currentSession) {
@@ -285,6 +313,8 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           return;
         }
 
+        // Browser uses the short-lived `vcst_` token as apiKey — never the
+        // server Gateway credential. Model id must match the token scope.
         const clientGateway = createGateway({ apiKey: token });
         const result = experimental_streamTranscribe({
           model: clientGateway.transcription(modelId),

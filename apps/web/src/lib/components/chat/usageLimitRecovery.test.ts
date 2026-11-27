@@ -5,6 +5,12 @@ import {
   usageLimitRetryCandidates,
 } from "@eva/shared/usageLimitRecovery";
 
+/**
+ * The recovery banner repeats the provider's own reset hint back to the user,
+ * so a wrong extraction either drops the one piece of information that says
+ * whether waiting is cheaper than switching accounts, or pastes the whole
+ * error string into a one-line banner.
+ */
 describe("usageLimitResetText", () => {
   test("keeps the reset fragment out of a session-limit failure", () => {
     expect(
@@ -21,12 +27,19 @@ describe("usageLimitResetText", () => {
   });
 
   test("an error with no reset hint yields nothing to show", () => {
+    // The banner still renders — it just omits the ` · resets …` clause rather
+    // than inventing a time the provider never gave.
     expect(
       usageLimitResetText("Error: Claude usage limit reached"),
     ).toBeUndefined();
   });
 });
 
+/**
+ * The card leads with its own countdown, so the provider's wall-clock time is
+ * shown as a parenthetical. Leaving "resets" or the brackets in would read
+ * "Resets in 2h 10m (resets 12pm (UTC))".
+ */
 describe("usageLimitResetClock", () => {
   test("drops the verb and the brackets", () => {
     expect(
@@ -49,6 +62,12 @@ describe("usageLimitResetClock", () => {
   });
 });
 
+/**
+ * Every row in the card is a credential the retry will actually run on, so a
+ * wrong list either offers the exhausted account back (which fails again), an
+ * account for a provider this chat is not using, or spends the shared team
+ * credential when a personal one would have done.
+ */
 describe("usageLimitRetryCandidates", () => {
   const accounts = [
     { id: "acc_priya", provider: "claude", label: "Priya", isOwn: false },

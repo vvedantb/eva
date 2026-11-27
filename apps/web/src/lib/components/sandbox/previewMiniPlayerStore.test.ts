@@ -14,6 +14,13 @@ import {
   type PreviewMiniPlayerTarget,
 } from "./previewMiniPlayerStore";
 
+/**
+ * The mini-player must float exactly when the user leaves a visible preview
+ * behind — not on the keyed remounts the pane performs while it stays on
+ * screen, and not after the user dismissed it. The host reports attach and
+ * detach; this store decides.
+ */
+
 const owner = {
   kind: "session" as const,
   sessionId: z.custom<Id<"sessions">>().parse("sess_1"),
@@ -35,6 +42,7 @@ function target(
   };
 }
 
+/** queueMicrotask callbacks run once the current task yields. */
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }

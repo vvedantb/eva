@@ -38,6 +38,7 @@ export const TASK_DETAILS_TAB = {
 
 export type TaskDetailsTab = (typeof TASK_DETAILS_TAB)["value"];
 
+/** What the pane reads from `useTaskDetail`; the caller owns the queries. */
 type TaskDetailsData = Pick<
   ReturnType<typeof useTaskDetail>,
   | "status"
@@ -71,9 +72,15 @@ export function TaskDetailsPane({
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks">;
   detail: TaskDetailsData;
+  /** Tag suggestions (the quick task page's); none elsewhere. */
   allTags?: string[];
+  /**
+   * The number and editable title. Off in the project side panel, whose own
+   * header already names the task; Expand opens the full page to rename it.
+   */
   showHeader?: boolean;
 }) {
+  /** Which detail pane is on screen below `@2xl`; both show at `@2xl` and up. */
   const [showMobileProperties, setShowMobileProperties] = useState(false);
   const {
     status,
@@ -96,6 +103,15 @@ export function TaskDetailsPane({
   return (
     <TaskReactionsProvider taskId={taskId}>
       <div className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Below `@2xl` (the pane, not the window: it also sits in the narrow
+            project side panel) the two columns stack, which buried Status / Priority /
+            Labels / Project under the whole (unbounded) activity timeline — on a
+            phone the only way to change a task's status was to scroll past every
+            run and comment. One pane at a time instead, same model the split
+            primitives use, following ProjectTabs' CSS-gated shape so desktop
+            keeps rendering both columns with no JS involved.
+            Local state, not a URL tab: on desktop both panes are on screen at
+            once, so there is nothing here worth linking to. */}
         <div className="shrink-0 @2xl:hidden">
           <MobilePaneSwitcher
             labels={{ left: "Overview", right: "Properties" }}
@@ -105,6 +121,8 @@ export function TaskDetailsPane({
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scrollbar @2xl:overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col @2xl:grid @2xl:grid-cols-[14fr_6fr] @2xl:grid-rows-1 @2xl:overflow-hidden">
+            {/* Only one column is hidden at a time below `@2xl`, and the scroller
+                above stays the single scroll owner for whichever is showing. */}
             <div
               className={cn(
                 "min-h-0 min-w-0 @2xl:flex @2xl:flex-1 @2xl:flex-col @2xl:overflow-hidden",
@@ -172,6 +190,8 @@ export function TaskDetailsPane({
                 </div>
               </div>
             </div>
+            {/* `mt-6` is gone: it separated this from the overview when the two
+                stacked, and as its own pane it starts at the top instead. */}
             <div
               className={cn(
                 "flex min-w-0 shrink-0 flex-col overflow-x-hidden px-4 pb-4 @max-2xl:pt-4 @2xl:overflow-hidden @2xl:px-0 @2xl:pb-0 @2xl:pl-8 @2xl:pr-6 @2xl:pt-5",

@@ -76,8 +76,10 @@ const VIEW_OPTIONS: {
   { key: "list", icon: IconList, label: "List view" },
 ];
 
+/** The views in their toolbar order (the content slides by it). */
 const PROJECT_VIEW_ORDER = VIEW_OPTIONS.map((opt) => opt.key);
 
+/** Each view's own layout, kept on its sliding panel. */
 const PROJECT_VIEW_PANEL_CLASS: Record<ProjectView, string> = {
   kanban: "flex min-h-0 min-w-0 flex-1 flex-col",
   timeline: "flex flex-1 min-h-0 min-w-0",
@@ -90,6 +92,7 @@ function isProjectView(value: string): value is ProjectView {
 
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
+  // Not persisted, as the Sessions sidebar: the page opens on Active.
   const [listMode, setListMode] = useState<ArchiveListMode>("active");
   const isArchivedList = listMode === "archived";
   const liveProjects = useQuery(
@@ -101,6 +104,7 @@ export function ProjectsClient() {
     isArchivedList ? { repoId: repo._id } : "skip",
   );
   const projects = isArchivedList ? archivedProjects : liveProjects;
+  // Each project's stage is derived from its child tasks, never stored.
   const statuses = useProjectListStatuses(repo._id, isArchivedList);
   const stageOf = (projectId: string): ProjectStage =>
     statuses?.get(projectId)?.stage ?? "todo";
@@ -117,11 +121,15 @@ export function ProjectsClient() {
     },
     setParams,
   ] = useProjectFilters();
+  // The Archived list has no Timeline: an archived project's dates are
+  // read-only, and the timeline drags them. It shows the list instead.
   const view = isArchivedList && savedView === "timeline" ? "list" : savedView;
   const viewOptions = isArchivedList
     ? VIEW_OPTIONS.filter((opt) => opt.key !== "timeline")
     : VIEW_OPTIONS;
   const searchQuery = q;
+  // Derive the visible set from the persisted blocklist so new columns show
+  // by default and "all visible" is independent of how many columns exist.
   const hiddenPhaseSet = new Set<ProjectStage>(hiddenPhases);
   const visiblePhases = new Set<ProjectStage>(
     PROJECT_STAGES.filter((c) => !hiddenPhaseSet.has(c)),
@@ -203,6 +211,8 @@ export function ProjectsClient() {
             if (isProjectView(value)) setParams({ view: value });
           }}
         >
+          {/* Taller below `sm` so the icon-only triggers clear the tap floor;
+              `hit-target` is no use inside the list's own overflow clip. */}
           <TabsList className="tabs-segmented h-8 max-sm:h-10">
             {viewOptions.map((opt) => (
               <Tooltip key={opt.key}>
@@ -221,6 +231,8 @@ export function ProjectsClient() {
           </TabsList>
         </Tabs>
       )}
+      {/* The timeline has no rows to check, so selection is not offered there;
+          the Archived list has none, as quick tasks (row Unarchive only). */}
       <ProjectsSelectButton
         visible={
           hasProjects &&

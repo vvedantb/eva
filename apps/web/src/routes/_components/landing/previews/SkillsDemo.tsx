@@ -15,6 +15,14 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./SkillsDemo.css";
 
+// A skill reaches the agent, told by the system with no cursor. Beats: a push
+// lands on main with a new skill; the skills list syncs and the new skill opens
+// at the top; in a task beside it, the agent loads that skill (the payoff) and
+// starts its answer the way the skill says.
+//
+// Real strings: the folder and its sync status, the commit, the skill names
+// and the new skill's description, the task, the loaded skill, the reply.
+
 const REPLY =
   "I will follow the migration rules: widen the table, backfill, then narrow.";
 const REPLY_WORDS = REPLY.split(" ").length;
@@ -69,12 +77,14 @@ async function story(a: Act<S>) {
   await a.wait(2200);
 }
 
+/** Skills already in the repository: real names, filler descriptions. */
 const SKILLS = [
   { name: "ship", w: 128 },
   { name: "review", w: 104 },
   { name: "changelog", w: 140 },
 ];
 
+/** Filler skills under the named ones, running off the window's foot. */
 const FILLER = [
   [64, 118],
   [82, 96],

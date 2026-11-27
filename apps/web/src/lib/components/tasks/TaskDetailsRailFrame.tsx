@@ -65,6 +65,7 @@ export function TaskDetailsRailFrame({
                 key={tab.value}
                 tab={tab}
                 layout={layout}
+                // Desktop: the active tab shows and hides the card.
                 onReselect={isMobile ? undefined : onToggle}
               />
             ))}

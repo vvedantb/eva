@@ -2,8 +2,14 @@ import { Button } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 
 interface TurnErrorNoticeProps {
+  /** What went wrong, in Eva's words: "Claude usage limit reached". */
   title: string;
+  /** The provider's own text, kept verbatim under the title. */
   detail?: string;
+  /**
+   * Way out of the failure, on the row itself (usually Retry). Omitted when the
+   * chat is read-only or there is nothing to re-send.
+   */
   action?: { label: string; onClick: () => void };
 }
 

@@ -21,6 +21,11 @@ import { PageWrapper } from "@/lib/components/PageWrapper";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
+/**
+ * A standup is a lead line plus a couple of `###` theme headings, so the
+ * default heading scale swamps the bullets it labels. Demote headings to a
+ * quiet section label and tighten list spacing to keep each card skimmable.
+ */
 const standupProseClass =
   "text-sm " +
   "[&_h1]:text-xs [&_h2]:text-xs [&_h3]:text-xs [&_h4]:text-xs " +
@@ -46,6 +51,9 @@ export function TodayClient() {
   const install = useMutation(api.automations.installSystemAutomation);
   const markRead = useMutation(api.today.markStandupsRead);
 
+  // Opening Today reads every standup so far. An effect, not a click handler,
+  // because the page is also reached by URL, and a standup that lands while
+  // the page is open is read on arrival. It only writes while one is unread.
   useEffect(() => {
     if (unreadAt === null) return;
     void markRead({ repoId });
@@ -93,6 +101,8 @@ export function TodayClient() {
           </EmptyState.Root>
         )
       ) : (
+        // The rail is drawn on the list, not per entry, so it runs unbroken
+        // between cards instead of restarting at each one.
         <ol className="relative space-y-4 border-l border-border pl-6 sm:pl-8">
           {entries.map((entry, index) => (
             <m.li

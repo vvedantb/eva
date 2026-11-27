@@ -1,3 +1,4 @@
+/** Served by the `tablerIconData()` vite plugin — see apps/web/vite/tablerIconData.ts. */
 declare module "virtual:tabler-icon-data" {
   type TablerIconNodes = [
     tag: string,

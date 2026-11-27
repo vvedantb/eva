@@ -4,10 +4,13 @@ import { api } from "@eva/backend";
 import type { DraftReadiness } from "./readinessHints";
 import { useIdleCallback } from "@vvedantb/ui";
 
+/** Long enough that the judgement lands in a pause, not between two words. */
 const READINESS_IDLE_MS = 800;
+/** Below this there is nothing to judge — every short draft is "too vague". */
 const READINESS_MIN_CHARS = 40;
 
 interface DraftReadinessState {
+  /** The description the result was judged against; stale results are dropped. */
   forText: string;
   result: DraftReadiness;
 }
@@ -27,6 +30,7 @@ export function useDraftReadiness(): {
   dismiss: () => void;
   reset: () => void;
 } {
+  // Behind the `draftReadiness` experimental flag: off means no Jev call and no banner.
   const enabled =
     useQuery(api.auth.getExperimentalFlags)?.draftReadiness ?? false;
   const assess = useAction(api.draftReadiness.assess);
@@ -36,6 +40,8 @@ export function useDraftReadiness(): {
   const schedule = useIdleCallback(
     READINESS_IDLE_MS,
     (title: string, description: string) => {
+      // The pending timer cannot be cancelled when the modal unmounts; a
+      // setState on an unmounted component is a no-op in React 19.
       void assess({ title, description })
         .then((result) => setState({ forText: description, result }))
         .catch(() => {});
@@ -53,6 +59,7 @@ export function useDraftReadiness(): {
       if (!enabled) return;
       const trimmed = description.trim();
       if (trimmed.length < READINESS_MIN_CHARS) return;
+      // Mid-mention or mid-skill: the editor is about to rewrite the text.
       const lastWord = trimmed.split(/\s+/).at(-1) ?? "";
       if (lastWord.startsWith("@") || lastWord.startsWith("/")) return;
       schedule(title, description);

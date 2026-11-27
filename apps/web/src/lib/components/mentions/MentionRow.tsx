@@ -17,6 +17,9 @@ export type { MentionKind };
 
 const KIND_ICON_CLASS = "shrink-0 text-muted-foreground";
 
+/** Reuses the sidebar nav glyphs so a session in the picker reads like the
+ *  Sessions nav item. Their hover animations are gated on `.group:hover`, so
+ *  they stay still here. */
 function MentionKindIcon({ kind }: { kind: MentionKind }) {
   switch (kind) {
     case "document":
@@ -30,6 +33,11 @@ function MentionKindIcon({ kind }: { kind: MentionKind }) {
   }
 }
 
+/**
+ * Badges that name an AI provider get its mark, so a Claude-provided skill is
+ * recognisable before the word is read. Badges naming anything else (Eva,
+ * Person) are text-only.
+ */
 function BadgeLogo({
   provider,
 }: {
@@ -46,12 +54,16 @@ function previewOneLine(text: string, maxLength = 72): string {
 }
 
 export interface MentionRowProps {
+  /** The character that inserts this entry, shown before the label. */
   prefix: "@" | "/";
   label: string;
   description?: string;
+  /** Source badge (e.g. Eva, Claude, Person). Suppressed when an icon is shown. */
   badge?: string;
   provider?: AIProvider;
+  /** Data entity kind — renders a leading icon instead of the kind badge. */
   kind?: MentionKind;
+  /** Set for teammates, whose avatar replaces the icon. */
   personUserId?: Id<"users">;
 }
 
@@ -69,6 +81,11 @@ export function MentionRow({
   personUserId,
 }: MentionRowProps): ReactNode {
   const detail = description ? previewOneLine(description) : null;
+  // The kind icon takes the trailing slot the kind badge used to occupy, so
+  // every label starts in the same column (a leading icon would indent data
+  // rows past skill rows) and the type marker stays in one consistent place.
+  // Only a teammate's avatar leads, because it identifies the person rather
+  // than naming a type.
   const trailing =
     kind !== undefined ? (
       <MentionKindIcon kind={kind} />

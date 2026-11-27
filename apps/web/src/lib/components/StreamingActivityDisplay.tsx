@@ -35,6 +35,12 @@ import {
   visibleActivityKey,
 } from "@/lib/components/streamingActivityHeartbeat";
 
+/**
+ * How long an empty-but-live activity payload is treated as ordinary startup
+ * lag before the placeholder admits it is receiving nothing. Every turn opens
+ * with a few empty writes, so a shorter grace period would cry wolf on healthy
+ * runs; past a minute the silence is the story.
+ */
 const SILENT_STREAM_NOTICE_AFTER_SECONDS = 60;
 
 function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
@@ -105,6 +111,10 @@ function useSilentStreamNotice(
   return silent;
 }
 
+/**
+ * Clock of last *visible* work. Reasoning-token updates leave this alone so
+ * a long think still heartbeats instead of looking like a hang.
+ */
 function useLastVisibleOutputAt(
   activity: string | undefined,
   isStreaming: boolean,
@@ -155,6 +165,11 @@ export function StreamingActivityDisplay({
   thinkingLabel?: string;
   startedAt?: number;
   onOpenFile?: (path: string) => void;
+  /**
+   * The stream is a sandbox startup run. Set it where the caller already knows
+   * (the session chat reads the startup stream directly); elsewhere the steps
+   * themselves give it away.
+   */
   isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
@@ -226,6 +241,16 @@ export function sandboxStartupTail(
   ) : null;
 }
 
+/**
+ * The untrimmed activity payload for a transcript message, fetched only once a
+ * reader opens a fold that could show the stripped step detail.
+ *
+ * `messages.listByParent` ships steps without their `output`/`edits`/
+ * `contentPreview` — roughly half the activity bytes on a heavy session, none
+ * of it on screen until a disclosure opens. Deliberately the uncached
+ * `useQuery`: the subscription should die with the chat rather than keep the
+ * bytes this whole change exists to avoid.
+ */
 function useFullActivityLog(messageId: string | undefined) {
   const [requested, setRequested] = useState(false);
   const fullLog = useQuery(
@@ -249,6 +274,11 @@ export function ActivityLogDisplay({
   onOpenFile,
 }: {
   activityLog: string;
+  /**
+   * Transcript messages only. Enables on-demand loading of the step detail
+   * `messages.listByParent` trimmed; surfaces with an inline log (project and
+   * doc interviews) leave it unset and render what they were given.
+   */
   messageId?: string;
   name?: string;
   icon?: ReactNode;
@@ -284,6 +314,10 @@ export function ActivityLogDisplay({
     );
   }
 
+  // No parseable steps: a text-only reply (no tools) has an empty activity log
+  // ("[]"). Render nothing rather than a "View logs" accordion wrapping a bare
+  // "[]". The raw fallback below is only for a genuinely non-empty, unparseable
+  // log (kept for debugging odd payloads).
   const trimmedLog = activityLog.trim();
   if (trimmedLog === "" || trimmedLog === "[]") {
     return null;

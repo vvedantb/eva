@@ -21,6 +21,10 @@ import {
 import { PrAvatar } from "./prReviewParts";
 import { SummaryMetaRow } from "./SummarySection";
 
+/**
+ * A verdict rides the face that earned it rather than a row of its own: the
+ * ring replaces the separator between overlapping avatars, so it costs no size.
+ */
 const VERDICT_RING: Record<string, string> = {
   APPROVED: "ring-emerald-500",
   CHANGES_REQUESTED: "ring-destructive",
@@ -96,6 +100,7 @@ export function SummaryMetaRows({
           )}
           <PrMetaEditor
             title="Reviewers"
+            // Only *requested* reviewers can be un-asked; GitHub rejects the rest.
             selected={overview.requestedReviewers.map((r) => r.login)}
             options={userOptions}
             loading={edit.loading}
@@ -160,6 +165,7 @@ export function SummaryMetaRows({
         </span>
       </SummaryMetaRow>
 
+      {/* Only where something deploys: most repositories have no preview. */}
       {overview.previews.length === 0 ? null : (
         <SummaryMetaRow
           icon={<IconRocket size={13} aria-hidden />}
@@ -181,6 +187,10 @@ function LabelChip({ label }: { label: PrLabel }) {
   );
 }
 
+/**
+ * Label colours come from GitHub as data, so they cannot be theme tokens; keeping
+ * them to a dot is what keeps contrast safe in both themes.
+ */
 function LabelDot({ color }: { color: string }) {
   return (
     <span

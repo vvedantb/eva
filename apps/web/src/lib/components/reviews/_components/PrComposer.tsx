@@ -37,6 +37,7 @@ export function PrComposer({
 }: {
   repoId: Id<"githubRepos">;
   prNumber: number;
+  /** A closed or merged pull request still takes comments, but no verdict. */
   isOpen: boolean;
   onPosted: () => void;
 }) {

@@ -38,6 +38,8 @@ export function useRepoLogoUpload() {
       }
       await setLogo({ repoId, storageId });
     };
+    // `try`/`finally` without a `catch` bails the React Compiler out of this
+    // whole file, so the reset is duplicated instead. See CLAUDE.md.
     try {
       await withMutationToast(
         uploadAndSave(),

@@ -7,6 +7,7 @@ import { api } from "@eva/backend";
 import { MENTION_CHIP_CLASS, MENTION_CHIP_SELF_CLASS } from "./mentionChipStyles";
 
 interface UserMentionChipProps {
+  /** Convex user id from an `@[label](id)` mention token. */
   userId: string;
   label: string;
 }

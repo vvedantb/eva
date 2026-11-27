@@ -16,8 +16,10 @@ import type { ShortcutId } from "@/lib/hotkeys/registry";
 export interface SpotlightAction {
   id: string;
   title: string;
+  /** Matched against the query but never shown — synonyms for the title. */
   keywords: string;
   icon: SpotlightIcon;
+  /** Shown as a key cap when the action also has a shortcut. */
   shortcutId?: ShortcutId;
   run: () => void;
 }
@@ -27,6 +29,11 @@ interface SpotlightActionDeps {
   toggleSidebar: () => void;
   setTheme: (mode: ThemeMode) => void;
   openShortcutsCheatsheet: () => void;
+  /**
+   * The current URL's repo, as a quick-tasks link. Quick tasks belong to an
+   * app, so the action is omitted rather than guessing one when the user is
+   * somewhere global.
+   */
   quickTasksHref: string | null;
 }
 

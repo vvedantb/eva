@@ -29,6 +29,7 @@ export function ProjectChatTabs({
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
   rows: ReadonlyArray<ProjectTaskTabRow>;
+  /** The selected task tab's numId; null for Eva. */
   selected: number | null;
   evaRunning: boolean;
   isArchived: boolean;
@@ -38,6 +39,7 @@ export function ProjectChatTabs({
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   return (
     <>
+      {/* Eva stays pinned on the left; only the task tabs scroll. */}
       <div className="flex min-w-0 shrink-0 items-center pt-2">
         <div className="shrink-0 pb-1.5 pl-2">
           <ChatTab

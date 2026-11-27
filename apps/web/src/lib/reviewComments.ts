@@ -182,6 +182,11 @@ function getReviewCommentAnchorPoint(
   };
 }
 
+/**
+ * Resolves a selected line span to GitHub's anchor: the last line carries the
+ * comment, and a start line is only sent when the span really covers more than
+ * that one line (GitHub rejects a start equal to the end).
+ */
 function buildReviewCommentAnchor(
   lines: ReadonlyArray<DiffReviewLine>,
 ): ReviewCommentAnchor | null {

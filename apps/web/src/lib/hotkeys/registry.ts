@@ -18,6 +18,11 @@ import {
 export { SHORTCUT_DEFS, SHORTCUT_IDS, SHORTCUT_SECTIONS, shortcutDef };
 export type { ShortcutDef, ShortcutId };
 
+/**
+ * Parses an arbitrary string into the library's `Hotkey` union. Convex stores
+ * overrides as plain strings, so this is the boundary that keeps a bad or
+ * stale value from reaching `useHotkey` — and keeps the codebase free of casts.
+ */
 function isHotkey(value: string): value is Hotkey {
   return validateHotkey(value).valid;
 }

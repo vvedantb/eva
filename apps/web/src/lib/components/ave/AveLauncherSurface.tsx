@@ -27,7 +27,9 @@ export function AveLauncherSurface({
   onMinimize,
 }: {
   isOpen: boolean;
+  /** The panel keeps its chat once opened, so mounting outlives being open. */
   isMounted: boolean;
+  /** On `/ave` the page is the chat; hide the floating copy of it. */
   isHidden: boolean;
   onOpen: () => void;
   onMinimize: () => void;

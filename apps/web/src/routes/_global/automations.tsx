@@ -9,6 +9,7 @@ export const Route = createFileRoute("/_global/automations")({
   component: AutomationsGlobalPage,
 });
 
+/** Landing for the rail Automations entry — pick an automation from the sidebar. */
 function AutomationsGlobalPage() {
   const simpleView = useSimpleView();
   if (simpleView) {

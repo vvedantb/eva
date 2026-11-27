@@ -2,6 +2,11 @@
 
 import { cn } from "@eva/ui";
 
+/**
+ * The small pieces every review tab shares, kept in one file so the header,
+ * Summary, Timeline and Code cannot each grow their own avatar or diffstat.
+ */
+
 /** `+n −m` in mono, green and red — the diffstat t3code puts on every row. */
 export function PrDiffStat({
   additions,
@@ -11,6 +16,7 @@ export function PrDiffStat({
 }: {
   additions: number;
   deletions: number;
+  /** Drop a side that is zero, so a pure addition reads `+2`, not `+2 −0`. */
   hideZero?: boolean;
   className?: string;
 }) {

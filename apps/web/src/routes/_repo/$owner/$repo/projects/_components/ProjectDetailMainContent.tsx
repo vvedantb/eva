@@ -14,10 +14,13 @@ interface ProjectDetailMainContentProps {
   projectId: Id<"projects">;
   project: ProjectDetailProject;
   mainTab: ProjectMainTab;
+  /** The coordinator: its chat and rail (Tasks first). */
   coordinatorContent: ReactNode;
   basePath: string;
+  /** A task is open (`$taskNumId`): it replaces the coordinator. */
   isTaskOpen: boolean;
   selectedTaskId?: Id<"agentTasks">;
+  /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
 }
 

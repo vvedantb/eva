@@ -1,5 +1,6 @@
 import { prStateTone, type PrState, type PrStateTone } from "@eva/shared";
 
+/** The web class for each shared PR icon tone. */
 const PR_STATE_TONE_CLASS: Record<PrStateTone, string> = {
   success: "text-success",
   codeReview: "text-status-code-review",

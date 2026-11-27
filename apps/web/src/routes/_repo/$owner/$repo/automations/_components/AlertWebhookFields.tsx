@@ -25,6 +25,7 @@ export function AlertWebhookFields({
     id: automationId,
   });
   const rotate = useMutation(api.automations.rotateAlertSecret);
+  // The one moment the plain secret exists in the browser. Never persisted.
   const [freshSecret, setFreshSecret] = useState<string | null>(null);
 
   if (webhook === undefined || webhook === null) return null;

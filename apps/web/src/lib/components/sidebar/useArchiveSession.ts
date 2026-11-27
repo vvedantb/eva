@@ -13,6 +13,7 @@ import {
 
 export interface ArchiveSessionTarget {
   session: { _id: Id<"sessions"> };
+  /** Scopes the "am I on this session?" check; ids are only unique per app. */
   repo: RepoPathParts;
   pathSegment: string;
 }
@@ -37,6 +38,8 @@ export function useArchiveSession() {
     setIsArchiving(true);
     try {
       await archiveSession({ sessionId: target.session._id });
+      // Archiving stops a sandbox and closes a pull request, so it says so and
+      // offers the way back: `unarchive` reopens the PR it closed.
       toast.success("Session archived", {
         id: "session-archive",
         description: "The sandbox was stopped and any open PR closed.",
@@ -53,6 +56,9 @@ export function useArchiveSession() {
           },
         },
       });
+      // Must be the exact route, not a substring: `includes` sent the user
+      // away from session 123 whenever session 12 was archived, and matched
+      // the same id under a different app.
       if (sessionMatchesPath(target.repo, target.pathSegment, pathname)) {
         void navigate({ to: "/sessions" });
       }

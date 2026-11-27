@@ -31,9 +31,13 @@ import { useRecapChat } from "@/lib/components/chat/useRecapChat";
 
 interface SessionHeaderMenuProps {
   session: Doc<"sessions">;
+  /** Any chat of the session holds a turn — blocks Fork session. */
   isExecuting: boolean;
+  /** The open chat tab: "Recap chat" recaps it. */
   chatId: Id<"sessionChats">;
+  /** The chat has messages, so a recap has something to say. */
   canRecap: boolean;
+  /** Set when the session can go to review; opens the review dialog. */
   onOpenReviewModal?: () => void;
 }
 
@@ -125,6 +129,7 @@ export function SessionHeaderMenu({
           />
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* Siblings of the menu: Radix unmounts menu content on close. */}
       <SessionDialogs
         pathname={pathname}
         renameTarget={renameTarget}

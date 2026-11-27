@@ -32,6 +32,7 @@ import {
 import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
 
 interface SandboxPaneSlotsProps {
+  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   panes: SandboxPanesApi;
   preview: SandboxPreviewApi;
@@ -39,21 +40,67 @@ interface SandboxPaneSlotsProps {
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
+  /** sessionStorage cache namespace for editor / desktop URL caches. */
   cacheKey: string;
   devCommand?: string;
+  /** PR URL for the PR tab; absent when no PR exists for this surface. */
   prUrl?: string;
+  /** User-defined tabs for this app; expected pre-filtered to enabled ones. */
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
   agentBrowsingAt?: number;
+  /**
+   * Clears the agent-browsing soft lock for this owner (session/task/project
+   * mutation, provided by the caller). Takeover overlay only renders when set.
+   */
   onReleaseBrowserLock?: () => void;
+  /**
+   * When false, the Preview Console does not auto-type the start command
+   * (session sandboxes start it in tmux from the backend after startup).
+   * Defaults to true for tasks/projects.
+   */
   runConsoleDevCommandOnConnect?: boolean;
+  /** Preview empty state Start button when sandbox is stopped. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /*
+   * Preview tools every surface must wire (session, quick task, project).
+   * Required on purpose: an optional prop here let one surface silently lose
+   * menu items. Add a new preview tool as a required prop too.
+   */
+  /** Preview select-element → owner chat submit. */
   onAnnotationSubmit: AnnotationSubmit;
+  /**
+   * The visible preview may float into the mini-player. `undefined` only
+   * while this pane is not on screen (collapsed rail, cached sibling).
+   */
   miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;
+  /**
+   * Multi-repo sessions: the dev-server port of each checked-out repo, offered
+   * beside the Preview port input. Omitted for a single-repo surface.
+   */
   previewPortOptions?: readonly PreviewPortOption[];
+  /**
+   * The owner's sticky view state (`sandboxPanes.getViewState`); `undefined`
+   * while it loads. Owns each preview pane's path and the console tail.
+   */
   viewState: SandboxViewState | undefined;
+  /**
+   * Whether this host is the one on screen. Sessions keep up to three shells
+   * mounted and every host may collapse its rail; only a visible host may hold the
+   * idle-pause presence beacon or auto-wake. Defaults to true.
+   */
   presenceEnabled?: boolean;
+  /**
+   * False while this host sits hidden in the session cache. Iframe tabs
+   * (Editor, Browser, custom tabs) unmount then to free their browser
+   * processes; they reload when the session is shown again. Defaults to true.
+   */
   onScreen?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined
+   * here with the setting and recent input on a visible tab to auto-wake.
+   */
   autoWakeEligible?: boolean;
 }
 
@@ -61,6 +108,11 @@ export type SandboxViewState = FunctionReturnType<
   typeof api.sandboxPanes.getViewState
 >;
 
+/**
+ * One preview pane's sticky path: the main pane (no `paneId`) reads the
+ * owner's `previewPath`, an extra pane its own entry. `undefined` while the
+ * view state loads, so the iframe waits instead of loading the wrong path.
+ */
 function previewPanePath(
   viewState: SandboxViewState | undefined,
   paneId: string | undefined,
@@ -74,6 +126,7 @@ function previewPanePath(
   return path ?? "/";
 }
 
+/** Optimistic copy of `sandboxPanes.setPreviewPath` for the local cache. */
 function withPreviewPanePath(
   viewState: NonNullable<SandboxViewState>,
   paneId: string | undefined,
@@ -123,6 +176,11 @@ export function SandboxPaneSlots({
       ? "preview"
       : activeTab;
   const entityId = sandboxOwnerParentId(owner);
+  // Idle pause: a VM tab in the foreground AND in use keeps the sandbox awake
+  // (presence beacon, always on). With the setting fully on, the same tab
+  // wakes a paused sandbox, and the external links become Eva wake links so
+  // they outlive a pause. "In use" (recent input) stops an unattended visible
+  // tab from holding or re-waking the sandbox indefinitely.
   const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
   const engaged = useUserEngaged();
@@ -162,6 +220,8 @@ export function SandboxPaneSlots({
     handleClosePreview,
   } = panes;
 
+  // Keep Preview chrome + iframes mounted while the Preview tab is hidden so
+  // switching away (Editor / Review / …) does not remount the running app.
   const previewRegion = (
     <div className="flex h-full min-h-0 flex-col">
       <div className={resolvedTab === "preview" ? undefined : "hidden"}>
@@ -218,6 +278,7 @@ export function SandboxPaneSlots({
                 void setPreviewPath({
                   owner,
                   path,
+                  // The first pane is the main pane: no paneId.
                   ...(index === 0 ? {} : { paneId: id }),
                 });
               }}

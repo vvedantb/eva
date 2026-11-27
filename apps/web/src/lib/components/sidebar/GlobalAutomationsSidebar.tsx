@@ -37,6 +37,7 @@ export function GlobalAutomationsSidebar({
     repos,
   });
 
+  // Stable identity required by useQueries.
   const automationListQueries = useMemo(() => {
     if (repos === undefined) return {};
     return Object.fromEntries(
@@ -51,6 +52,9 @@ export function GlobalAutomationsSidebar({
   }, [repos]);
   const automationsByRepoId = useQueries(automationListQueries);
 
+  // A monorepo parent's `shared` automations surface in every child app, so
+  // claim each one for the app that owns it; anything whose owner is not in
+  // the accessible set falls back to the first app that surfaced it.
   const ownedByRepoId = new Map<string, AutomationListItem[]>();
   const loadingByRepoId = new Map<string, boolean>();
   const claimed = new Set<string>();

@@ -6,8 +6,10 @@ import { Button, EmptyState } from "@vvedantb/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 interface EntityNotFoundProps {
+  /** Singular label used in copy, e.g. "task", "session", "document". */
   entityLabel: string;
   description?: string;
+  /** Absolute or app path to navigate back to the list/index. */
   backTo?: string;
   backLabel?: string;
 }

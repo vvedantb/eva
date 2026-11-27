@@ -6,18 +6,25 @@ import { CrossfadeIcon, MessageActionsBar, MessageAction } from "@vvedantb/ui";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
 
 export interface ChatMessageActionItem {
+  // Stable identity for the action button.
   key: string;
+  // Accessible label + tooltip text.
   label: string;
   icon: ReactNode;
   onClick: () => void;
+  // Toggled/selected styling (e.g. an active rating or share state).
   active?: boolean;
   disabled?: boolean;
 }
 
 interface ChatMessageActionsProps {
+  // When set, a built-in copy-to-clipboard action is prepended. Pass the raw
+  // message text (not tokenized markup) so the clipboard holds readable copy.
   copyText?: string;
+  // Extra actions rendered after copy (retry, rating, share, custom).
   actions?: ChatMessageActionItem[];
   className?: string;
+  /** When false, parent handles hover/focus reveal (e.g. shared row with timestamp). */
   revealOnHover?: boolean;
 }
 
@@ -59,6 +66,9 @@ export function ChatMessageActions({
     <MessageActionsBar
       className={cn(
         "gap-0.5",
+        // `reveal-on-hover transition-opacity` keeps the quiet hover reveal on pointer devices but
+        // ships copy / retry / branch visible below `sm`, where there is no
+        // hover to reveal them with.
         revealOnHover && "reveal-on-hover transition-opacity",
         className,
       )}

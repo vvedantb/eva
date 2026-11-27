@@ -22,6 +22,7 @@ import {
 } from "@/lib/hooks/useOpenPrsOnGithub";
 import { sidebarRowPresence } from "@/lib/components/sidebar/_utils/sidebarRowPresence";
 
+/** How long the pointer must rest on a row before it counts as intent. */
 const HOVER_INTENT_MS = 90;
 
 interface ReviewsSidebarRowProps {
@@ -34,10 +35,17 @@ interface ReviewsSidebarRowProps {
     updatedAt: string;
   };
   href: string;
+  /** The PR on github.com; plain clicks go here when `openPrsOnGithub` is on. */
   githubUrl: string;
   isActive: boolean;
   onNavigate?: () => void;
+  /**
+   * Warms the review payloads for this PR. Called on hover intent (and
+   * immediately on keyboard focus), so opening the row has nothing left to
+   * fetch.
+   */
   onPrefetch: () => void;
+  /** Opens the sidebar's rename dialog for this pull request. */
   onRename: () => void;
 }
 
@@ -51,7 +59,10 @@ export function ReviewsSidebarRow({
   onRename,
 }: ReviewsSidebarRowProps) {
   const openPrOnGithubClick = useOpenPrOnGithubClick();
+  // A plain click leaves Eva for GitHub, so warming the in-app review is waste.
   const prefetch = useOpenPrsOnGithub() ? undefined : onPrefetch;
+  // Sweeping the pointer down the list should not fire a fetch per row, so the
+  // warm-up waits for the pointer to settle.
   const intentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelIntent = () => {

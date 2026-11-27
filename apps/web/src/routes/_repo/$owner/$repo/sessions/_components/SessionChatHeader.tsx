@@ -19,13 +19,18 @@ import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   session: Doc<"sessions">;
+  /** The chat tab shown — context usage is per chat, like its transcript. */
   chatId: Id<"sessionChats">;
+  /** Any chat of the session holds a turn — blocks Fork session. */
   isAnyChatExecuting: boolean;
   messageCount: number;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
+  /** Work on the sandbox branch not on GitHub yet; drives Commit & push. */
   sandboxGitSync: Doc<"sessions">["sandboxGitSync"];
+  /** True while the assistant holds the turn — hides the sleep button. */
   isAssistantResponding: boolean;
+  /** Active model + sticky credential — only the chip bar cares. */
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
   usageAccountLabel: string;
@@ -55,8 +60,12 @@ export function useSessionChatHeader({
   onOpenReviewModal,
 }: SessionChatHeaderArgs) {
   const sessionId = session._id;
+  // Same gate as the sidebar row: an archived session is read-only.
   const canSendForReview =
     session.archive === undefined && canSendSessionForReview(session);
+  // A start that failed leaves the session `closed`, which the header would
+  // otherwise render as an ordinary sleeping sandbox. The hook reads the row
+  // itself because nothing upstream hands this header the failure.
   const sandboxError = useSessionSandboxError(sessionId);
 
   const headerLeft = (

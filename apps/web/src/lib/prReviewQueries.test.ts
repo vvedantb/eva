@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { prErrorMessage, toPrDiffData } from "./prReviewQueries";
 
+/** Two files, so the transform has to split rather than pass the text through. */
 const DIFF = `diff --git a/src/one.ts b/src/one.ts
 index 1111111..2222222 100644
 --- a/src/one.ts
@@ -39,6 +40,7 @@ describe("toPrDiffData", () => {
       "modified",
       "added",
     ]);
+    // Placeholder height estimation reads these, so a bad split shows up here.
     expect(data.entries[0]).toMatchObject({
       additions: 1,
       deletions: 1,
@@ -73,6 +75,7 @@ describe("prErrorMessage", () => {
     expect(prErrorMessage(new Error("Not Found"), "fallback")).toBe(
       "Not Found",
     );
+    // A rejected action can carry an empty message; the panels still need words.
     expect(prErrorMessage(new Error(""), "fallback")).toBe("fallback");
     expect(prErrorMessage(null, "fallback")).toBe("fallback");
   });

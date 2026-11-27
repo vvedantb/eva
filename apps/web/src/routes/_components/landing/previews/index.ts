@@ -18,6 +18,7 @@ import { TeamsDemo } from "./TeamsDemo";
 
 export interface LandingDemo {
   Demo: ComponentType<LandingDemoProps>;
+  /** How long the story runs before it calls `onEnd`; the tab underline fills over it. */
   seconds: number;
 }
 

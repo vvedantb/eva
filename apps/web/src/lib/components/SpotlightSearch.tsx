@@ -33,6 +33,7 @@ import {
 import { SpotlightItem } from "@/lib/components/_components/SpotlightItem";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
 
+/** What a selected row records in Recents — the shape both hits and recents share. */
 interface SelectableHit {
   type: string;
   title: string;
@@ -48,6 +49,7 @@ export function SpotlightSearch() {
   const { collapsed, setCollapsed } = useSidebar();
   const { setTheme } = useThemeMode();
   const { recents, record } = useRecentSpotlightItems();
+  // Quick tasks belong to an app, so the action needs the repo in the URL.
   const { owner, repo } = useParams({ strict: false });
 
   const results = useQuery(
@@ -116,6 +118,7 @@ export function SpotlightSearch() {
             <CommandEmpty className="flex h-full min-h-48 items-center justify-center py-0">
               {results === undefined ? "Searching…" : "No results found"}
             </CommandEmpty>
+            {/* Where you were, then what you can do, then what was found. */}
             {showRecents ? (
               <CommandGroup heading="Recent">
                 {recents.map((item, index) => (

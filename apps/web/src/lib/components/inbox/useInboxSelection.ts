@@ -24,11 +24,15 @@ export function rangeBetween(
 export interface InboxSelection {
   isSelecting: boolean;
   selectedIds: ReadonlySet<string>;
+  /** Last plain-toggled row; the other end of a shift-click range. */
   anchorId: string | null;
+  /** Enters selection mode (the header's Select button). */
   start: () => void;
+  /** Toggles one row, or extends from the anchor when shift is held. */
   toggle: (id: string, extend?: boolean) => void;
   selectAll: () => void;
   clear: () => void;
+  /** Leaves selection mode and drops the selection. */
   exit: () => void;
 }
 

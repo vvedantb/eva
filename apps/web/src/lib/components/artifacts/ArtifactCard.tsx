@@ -50,7 +50,9 @@ export function ArtifactCard({
   onOpen,
 }: {
   artifact: ArtifactRow;
+  /** `"task"`: only rows a child task made (a project's own tab). */
   showSource?: boolean | "task";
+  /** Sandbox pane: a list row. The global Artifacts page keeps the tile. */
   compact?: boolean;
   onOpen?: (artifactId: string) => void;
 }) {

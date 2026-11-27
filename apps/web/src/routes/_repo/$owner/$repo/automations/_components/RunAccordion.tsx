@@ -180,6 +180,8 @@ function RunAccordion({
   const completedSteps = run.activityLog
     ? parseActivitySteps(run.activityLog)
     : null;
+  // When findings render below instead of resultSummary, the activity's
+  // trailing response text isn't shown as adjacent final text.
   const showsFindings = Boolean(
     actionsEnabled && run.findings && run.findings.length > 0,
   );

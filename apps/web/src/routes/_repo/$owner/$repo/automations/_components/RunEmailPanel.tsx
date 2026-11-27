@@ -98,6 +98,8 @@ function EmailDraft({
         </Tabs>
       </div>
 
+      {/* Hidden, not unmounted: the Preview tab activates on pointer-down,
+          and an unmounted field never fires the blur that saves it. */}
       <div className={mode === "edit" ? "space-y-2" : "hidden"}>
         <Input
           aria-label="Subject"

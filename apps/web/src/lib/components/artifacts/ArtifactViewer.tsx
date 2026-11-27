@@ -59,6 +59,8 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Only the artifact name is essential on a phone, so the breadcrumb and
+          the new-tab label collapse to their icons and keep an accessible name. */}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <Link
           to="/artifacts"

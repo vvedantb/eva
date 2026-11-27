@@ -6,11 +6,27 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { suggestChangesKey } from "@handlewithcare/prosemirror-suggest-changes";
 
+/**
+ * In-document anchoring for comments.
+ *
+ * `DocCommentMark` is a neutral mark (`span[data-comment-anchor]`) carrying the
+ * thread's anchorId. It rides prosemirror-sync steps, so the anchored range
+ * follows concurrent edits and reaches every collaborator for free. The mark
+ * itself is unstyled — all highlighting is applied by `DocCommentHighlight`'s
+ * decorations, keyed on which anchors are currently *open*. That way resolving
+ * a thread simply drops it from the open set and the highlight disappears
+ * everywhere without touching the document (reopening restores it). The
+ * backend markdown mirror ignores unknown marks, so anchors never leak into
+ * `docs.content`.
+ */
+
 const MARK_NAME = "docComment";
 
 export const DocCommentMark = Mark.create({
   name: MARK_NAME,
+  // Distinct threads may overlap on the same text.
   excludes: "",
+  // Typing at the edge of a commented range must not extend the comment.
   inclusive: false,
   addAttributes() {
     return {
@@ -97,6 +113,7 @@ export const DocCommentHighlight = Extension.create<DocCommentHighlightOptions>(
               const anchorId = el?.getAttribute("data-comment-anchor");
               if (!anchorId) return false;
               options.onAnchorClick(anchorId);
+              // Don't swallow the click — cursor placement still works.
               return false;
             },
           },
@@ -114,6 +131,7 @@ export function setCommentHighlightState(
   editor.view.dispatch(
     editor.state.tr
       .setMeta(docCommentHighlightKey, state)
+      // Never let a highlight-only transaction become a tracked suggestion.
       .setMeta(suggestChangesKey, { skip: true }),
   );
 }
@@ -148,6 +166,7 @@ export function removeCommentAnchor(editor: Editor, anchorId: string): void {
   editor.view.dispatch(tr.setMeta(suggestChangesKey, { skip: true }));
 }
 
+/** All text ranges currently carrying the given anchor's mark. */
 function collectAnchorRanges(
   doc: PMNode,
   anchorId: string,

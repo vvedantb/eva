@@ -16,8 +16,10 @@ export interface TranscriptScrollAnchor {
   contentTop: number;
 }
 
+/** Each anchor restores once: later renders must not pull the reader back. */
 const restoredAnchors = new WeakSet<TranscriptScrollAnchor>();
 
+/** Starts loading this far before the reader reaches the top. */
 const PRELOAD_MARGIN_PX = 1200;
 
 function rowElement(viewport: HTMLElement, messageId: string) {
@@ -75,11 +77,20 @@ export function ChatEarlierTurnsLoader({
     if (!onReach) return;
     const observer = new IntersectionObserver(
       (entries) => {
+        // A hidden transcript (a cached session shell) has a zero-size
+        // viewport, and IntersectionObserver counts a zero-area edge touch as
+        // intersecting. Without this, every switch away re-rendered the hidden
+        // chat, re-observed, and loaded 25 more turns into it.
         const reached = entries.some(
           (entry) =>
             entry.isIntersecting && (entry.rootBounds?.height ?? 0) > 0,
         );
         if (!reached) return;
+        // Still locked to the bottom: nobody is reading up here. The marker
+        // can pass through view before the chat settles at its bottom (see
+        // ChatBottomPin); loading then added 25 turns per visit and froze
+        // the page for ~1 s each time. Scrolling up releases the lock; a
+        // chat too short to scroll still loads.
         const canScroll =
           viewport.scrollHeight - viewport.clientHeight > PRELOAD_MARGIN_PX;
         if (canScroll && !state.escapedFromLock) return;
@@ -95,5 +106,7 @@ export function ChatEarlierTurnsLoader({
     return () => observer.disconnect();
   };
 
+  // Zero height, and `-mb-3` cancels the transcript's `gap-3`, so the marker
+  // takes no space: the first row sits exactly where it would without it.
   return <div ref={observe} aria-hidden="true" className="-mb-3 h-0 shrink-0" />;
 }

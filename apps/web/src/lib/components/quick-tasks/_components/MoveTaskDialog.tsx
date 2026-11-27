@@ -13,6 +13,7 @@ export function useMoveAgentTask() {
   const { repoId } = useRepo();
   return useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
+      // Moving to a different repo — remove from the current repo's list
       if (args.repoId) {
         patchLoadedQuery(
           localStore,
@@ -29,6 +30,7 @@ interface MoveTaskDialogProps {
   targetId: Id<"githubRepos"> | null;
   targetAppName: string;
   onClose: () => void;
+  /** After a successful move, once the dialog has closed. */
   onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;

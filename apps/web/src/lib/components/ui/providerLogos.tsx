@@ -1,3 +1,7 @@
+// Brand-coloured provider marks for env slots and connections. The artwork
+// comes from the package (`ProviderIcon`, `@vvedantb/ui/logos`); these wrappers
+// only keep each mark a labelled image, since slots show them on their own.
+
 import { cn } from "@eva/ui";
 import type { ComponentType } from "react";
 import {

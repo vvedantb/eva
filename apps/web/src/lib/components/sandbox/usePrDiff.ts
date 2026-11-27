@@ -16,6 +16,7 @@ export type PrDiffState =
   | { status: "error" }
   | ({
       status: "ready";
+      /** True while a background revalidate or manual refresh is in flight. */
       refreshing: boolean;
     } & PrDiffData);
 
@@ -37,6 +38,9 @@ export function usePrDiff(
   const options = prDiffQuery(getPrDiff, repoId, prNumber);
   const query = useQuery(options);
 
+  // Refresh has to bypass the server-side ActionCache too, so it calls the
+  // action with `force` instead of refetching the query, then writes the result
+  // into the same cache entry. A failed refresh leaves the diff on screen.
   const refresh = useMutation({
     mutationFn: (number: number) =>
       getPrDiff({ repoId, prNumber: number, force: true }).then(toPrDiffData),
@@ -44,6 +48,7 @@ export function usePrDiff(
   });
 
   const state = ((): PrDiffState => {
+    // No URL yet is a pending state; a URL we cannot read a number out of is not.
     if (prUrl === undefined) return { status: "loading" };
     if (prNumber === undefined) return { status: "error" };
     if (query.data !== undefined) {

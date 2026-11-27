@@ -6,6 +6,9 @@ export const clientEnv = createEnv({
   client: {
     VITE_CONVEX_URL: z.string().min(1),
     VITE_CLERK_PUBLISHABLE_KEY: z.string().min(1),
+    // Opt-in, so an instance that sets nothing gets the compact page. A plain
+    // boolean would be wrong here: every Vite env value arrives as a string,
+    // and `Boolean("false")` is `true`.
     VITE_NEW_LANDING: z.enum(["true", "false"]).optional(),
   },
   runtimeEnv: import.meta.env,

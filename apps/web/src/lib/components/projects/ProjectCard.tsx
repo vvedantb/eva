@@ -55,16 +55,26 @@ interface ProjectCardProps {
   accentColor: string;
   members?: Array<Id<"users">>;
   projectLead?: Id<"users">;
+  /** Derived from the child tasks (`useProjectListStatuses`). */
   status?: ProjectListStatus;
   sandboxStatus?: SandboxStatus;
+  /** Finished project chat reply the user has not seen (`api.projects.list`). */
   hasUnread?: boolean;
+  /** The project chat waits on a blocking question; the "?" mark replaces the status dot. */
   isAwaitingAnswer?: boolean;
   isActive?: boolean;
   isSelecting?: boolean;
   isSelected?: boolean;
+  /** `shiftKey` asks the owner for a range selection from its anchor. */
   onToggleSelect?: (event: { shiftKey: boolean }) => void;
+  /** Public (slash) path; rendered via router Link so rewrites own the href. */
   href?: string;
+  /**
+   * Plain-click handler. Call `event.preventDefault()` to cancel Link
+   * navigation (e.g. while a dialog is open).
+   */
   onClick?: (event: MouseEvent<HTMLElement>) => void;
+  /** In the Archived list: the menu offers Unarchive. */
   archived?: boolean;
   onArchive: () => void;
 }
@@ -137,6 +147,8 @@ export function ProjectCard({
                 event.preventDefault();
                 return;
               }
+              // While selecting, the whole card is a selection target — the
+              // stretched link would otherwise navigate away mid-selection.
               if (isSelecting) {
                 event.preventDefault();
                 onToggleSelect?.({ shiftKey: event.shiftKey });
@@ -153,6 +165,10 @@ export function ProjectCard({
         {isSelecting ? (
           <Checkbox
             checked={isSelected}
+            // One handler, not `onClick` + `onCheckedChange`: Radix composes
+            // its own toggle after ours and skips it once the event is
+            // default-prevented, so this reads the shift modifier without
+            // toggling twice.
             onClick={(event) => {
               event.stopPropagation();
               event.preventDefault();
@@ -215,6 +231,7 @@ export function ProjectCard({
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {/* `mt-[7px]` centres the 6px dot on the 20px title line. */}
         <UnreadDot show={hasUnread} className="mt-[7px]" />
       </div>
 
@@ -234,6 +251,9 @@ export function ProjectCard({
               </span>
             ) : null}
           </div>
+          {/* Touch has no right-click, so below `sm` the same items get a
+              visible kebab. `LIST_ROW_CONTROL_CLASS` lifts it above the row's
+              stretched link overlay, which is at z-1. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

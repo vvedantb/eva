@@ -39,6 +39,8 @@ export const Route = createFileRoute("/_repo/$owner/$repo/projects/$numId")({
 function ProjectDetailShell() {
   const { numId } = Route.useParams();
   const { basePath, repoId } = useRepo();
+  // Child params (`taskNumId`, `sandboxTab`) belong to routes this
+  // layout renders in place of an Outlet, so read them loosely.
   const params = useParams({ strict: false });
   const isSandboxSurface = useRouterState({
     select: (s) => s.matches.some((m) => m.routeId === SANDBOX_ROUTE_ID),
@@ -59,6 +61,9 @@ function ProjectDetailShell() {
 
   const mainTab: ProjectMainTab = isOverviewTab ? "overview" : "work";
 
+  // A legacy `$taskNumId` redirects on its own once the project segment is
+  // canonical — `replaceRouteIdSegment` only touches its own segment, so the two
+  // hops converge without either knowing about the other.
   if (task.redirectTo !== null) {
     return <Navigate to={task.redirectTo} search={true} replace />;
   }
@@ -74,11 +79,13 @@ function ProjectDetailShell() {
           projectId={projectDoc._id}
           projectNumId={project.numId ?? undefined}
           mainTab={mainTab}
+          // The project index is the coordinator on its Tasks tab.
           sandboxTab={
             isSandboxSurface
               ? sandboxTabFrom(sandboxTabParam, isSandboxReview)
               : PROJECT_DEFAULT_SANDBOX_TAB
           }
+          // The task view owns its own loading / not-found states.
           selectedTaskId={
             taskNumId === undefined ? undefined : (task.convexId ?? undefined)
           }

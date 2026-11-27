@@ -15,8 +15,13 @@ import {
   formatBadgeLabel,
 } from "@/lib/utils/evaMark";
 
+/** The static icon shipped in public/, restored when this unmounts. */
 const PLAIN_ICON_HREF = "/favicon.svg";
 
+/**
+ * Badge fill/fg from the chosen accent (Settings → Theme), matching how
+ * `applyCustomThemeVars` paints `--accent` / `--accent-foreground`.
+ */
 function badgeAccentColors(
   appearance: "light" | "neutral" | "dark",
   accentColor: AccentColor,
@@ -62,6 +67,8 @@ export function FaviconController() {
   const accentColor = customTheme?.accentColor ?? DEFAULT_ACCENT_COLOR;
 
   useEffect(() => {
+    // The tab title carries the same count as the badge ("(3) … | Eva"), so it
+    // is published from here rather than from a second subscription.
     setDocumentUnreadCount(needsYouCount ?? 0);
 
     const link = document.querySelector(
@@ -78,6 +85,7 @@ export function FaviconController() {
       fg,
     );
 
+    // Unmounting without clearing would leave a stale count on the tab.
     return () => {
       link.href = PLAIN_ICON_HREF;
     };

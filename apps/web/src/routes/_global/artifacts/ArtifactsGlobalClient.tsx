@@ -15,6 +15,7 @@ export function ArtifactsGlobalClient() {
 
   return (
     <PageWrapper title="Artifacts" fillHeight={isEmpty}>
+      {/* Stacks below `sm` so the blurb is not squeezed beside the Upload button. */}
       <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-sm:min-w-0 text-sm text-muted-foreground">
           Hosted dashboards that read live data through the Eva connector.

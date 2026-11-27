@@ -24,7 +24,9 @@ export function AveChat({
   size = "popover",
   visible = true,
 }: {
+  /** The full-screen `/ave` page has room for a taller question dock. */
   size?: RoutedQuestionDockSize;
+  /** False while the popover is minimized: it stays mounted but unseen. */
   visible?: boolean;
 }) {
   return (

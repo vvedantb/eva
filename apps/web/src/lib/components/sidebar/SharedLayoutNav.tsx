@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+// shared-layout pill slide between sidebar rows
 const sidebarSharedLayoutTransition = {
   type: "tween" as const,
   duration: 0.08,
@@ -77,6 +78,8 @@ export function SharedLayoutNavSurface({
   isActive: boolean;
 }) {
   const { layoutId, hoveredId, setHoveredId } = useSharedLayoutNav();
+  // Resting active uses a static fill — `layoutId` inside AnimatePresence
+  // parents (session rows) often fails to paint until hover remounts it.
   const showStaticActive = hoveredId === null && isActive;
   const showSlidingPill = hoveredId === itemId;
 
@@ -104,6 +107,12 @@ export function sidebarNavLinkClass(
   collapsed?: boolean,
 ): string {
   return cn(
+    // `motion-press`, not `motion-base`: these rows are the most-pressed
+    // controls in the app and the rail tiles beside them already answer a
+    // pointer-down (`RepoRail`), so a nav row that stayed still read as the
+    // dead one of the pair. 0.99 because the row is full-width — the same
+    // figure `ListRow` uses, where a deeper scale on a 20rem-wide target
+    // looks like the panel flexing rather than the row acknowledging.
     "group motion-press active:scale-[0.99] flex w-full items-center gap-2 rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
     collapsed && "lg:justify-center lg:px-0",
     isActive

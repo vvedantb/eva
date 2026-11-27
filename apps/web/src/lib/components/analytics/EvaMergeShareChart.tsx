@@ -12,6 +12,7 @@ import { cssColor } from "@/lib/utils/cssColor";
 import { prErrorMessage } from "@/lib/prReviewQueries";
 import { useChartAnimation } from "./chartMotion";
 
+/** Lazy chart.js + react-chartjs-2 so stats pages don't pay the cost up front. */
 const lineChartModules = Promise.all([
   import("react-chartjs-2"),
   import("chart.js"),
@@ -100,6 +101,7 @@ export function EvaMergeShareChart({
       datasets: [
         {
           label: "Merged by Eva",
+          // No merges (or no history) leaves a gap: 0% would read as "none by Eva".
           data: buckets.map((b) =>
             b.covered && b.totalMerged > 0
               ? Math.round((b.evaMerged / b.totalMerged) * 100)

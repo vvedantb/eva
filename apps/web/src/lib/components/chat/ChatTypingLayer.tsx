@@ -26,6 +26,8 @@ export function ChatTypingLayer({
       <PromptInputTypingBridge onActivity={onActivity} onIdle={stopTyping} />
       <TypingIndicator
         users={typingUsers}
+        // Anchored to ChatComposer's padded `relative` root; the left inset
+        // matches its padding so the indicator lines up with the input.
         className="absolute bottom-full left-3 md:left-4"
       />
     </>

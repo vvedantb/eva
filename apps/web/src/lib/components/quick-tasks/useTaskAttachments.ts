@@ -14,11 +14,16 @@ import { useUploadBlobs } from "@/lib/components/attachments/useUploadBlobs";
 /** One file in the quick task composer, either picked locally or already stored. */
 export type TaskAttachment = {
   key: string;
+  /** Original filename. Absent for files loaded back from a draft. */
   name?: string;
   contentType: string | null;
+  /** Object URL while composing, signed storage URL once loaded from a draft. */
   url: string | null;
+  /** True when `url` is an object URL this hook is responsible for revoking. */
   isObjectUrl: boolean;
+  /** Set once the blob is in Convex storage. */
   storageId: Id<"_storage"> | null;
+  /** Set while the blob only exists in the browser. */
   file: File | null;
 };
 
@@ -58,6 +63,7 @@ export function useTaskAttachments() {
           rejections.add("max_files");
           continue;
         }
+        // Only images need a preview URL; text attachments render as an icon.
         const isImage = isImageContentType(file.type);
         accepted.push({
           key: crypto.randomUUID(),
@@ -84,6 +90,11 @@ export function useTaskAttachments() {
     });
   };
 
+  /**
+   * Replace one local attachment's content in place. Clears storageId so the
+   * next upload() re-uploads the edited blob. Hydrated draft attachments
+   * (storageId set, file === null) should not call this — open read-only.
+   */
   const replace = (key: string, file: File) => {
     setAttachments((current) =>
       current.map((item) => {
@@ -110,6 +121,7 @@ export function useTaskAttachments() {
     });
   };
 
+  /** Replaces the list with files already in storage (loading a saved draft). */
   const hydrate = (
     stored: Array<{
       storageId: Id<"_storage">;
@@ -130,6 +142,11 @@ export function useTaskAttachments() {
     });
   };
 
+  /**
+   * Uploads any local files and returns every attachment's storage id in the
+   * order the user attached them. Files that fail to upload are dropped with a
+   * toast rather than blocking task creation.
+   */
   const upload = async (): Promise<Id<"_storage">[]> => {
     const pending = attachments.filter(
       (item): item is TaskAttachment & { file: File } => item.file !== null,
@@ -154,6 +171,8 @@ export function useTaskAttachments() {
       toast.error("Some attachments failed to upload and were left off.");
     }
 
+    // Mark uploaded files as stored so retrying a failed submit does not upload
+    // the same blob twice. Object URLs stay valid for the previews.
     setAttachments((current) =>
       current.map((item) => {
         const uploaded = idByKey.get(item.key);

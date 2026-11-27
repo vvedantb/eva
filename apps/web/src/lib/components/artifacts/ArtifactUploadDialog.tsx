@@ -92,6 +92,9 @@ export function ArtifactUploadDialog({
     }
 
     setUploading(true);
+    // Built before the try, and the compound guard below split into two: React
+    // Compiler bails on the whole file when a conditional or logical expression
+    // sits inside a try/catch.
     const artifactDescription = description.trim() || undefined;
     try {
       const uploadUrl = await generateUploadUrl({});
@@ -152,6 +155,9 @@ export function ArtifactUploadDialog({
           <DialogTitle>Upload artifact</DialogTitle>
         </DialogHeader>
 
+        {/* DialogBody, not a plain div: the dialog caps its own height, so the
+            form has to scroll internally rather than being clipped on a short
+            (or landscape) phone. */}
         <DialogBody className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="artifact-file">Artifact HTML</Label>

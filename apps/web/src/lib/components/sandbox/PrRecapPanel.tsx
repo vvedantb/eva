@@ -50,6 +50,11 @@ interface PrRecapPanelProps {
   recapDoc: RecapDoc | undefined;
 }
 
+/**
+ * Recap sub-tab for the sandbox PR panel — generate/stream/ready states for
+ * Eva-origin (and any) PR recaps keyed by prUrl.
+ */
+/** The recap's views in their on-screen order (the content slides by it). */
 const PR_RECAP_VIEWS = ["recap", "summary"] as const;
 type PrRecapView = (typeof PR_RECAP_VIEWS)[number];
 
@@ -59,6 +64,8 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [view, setView] = useState<PrRecapView>("recap");
+  // Only the pending override lives in state; the last run's setup is read off
+  // the recap doc, so a reload shows what actually produced the recap.
   const [pendingModel, setPendingModel] = useState<AIModel>();
   const [pendingTraits, setPendingTraits] = useState<StoredModelTraits>();
 
@@ -155,7 +162,12 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
 
   const isPending = recapDoc.prRecapStatus === "pending";
   const isErrored = recapDoc.prRecapStatus === "error";
+  // Pending with no workflow behind it means the run died: show the failure and
+  // re-enable Generate instead of spinning on a stale activity trail forever.
   const isStalled = isPending && recapDoc.activeWorkflowId === undefined;
+  // Older runs stored progress text as "ready" with no HTML walkthrough. The
+  // write path rejects that now; the shared helper keeps this view and the docs
+  // one reading those rows the same way.
   const isIncompleteReady = isIncompleteReadyRecap(recapDoc);
   const docPath = entityPathSegment(recapDoc);
   const shortSha =
@@ -257,6 +269,8 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       {recapDoc.headSha !== undefined &&
       hasStoredRecap(recapDoc) &&
       !isPending ? (
+        // No action here: the toolbar's Regenerate (with its model picker)
+        // sits right above, and two buttons for one action read as two.
         <RecapStaleBanner
           prUrl={prUrl}
           repoId={repoId}

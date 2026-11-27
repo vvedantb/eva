@@ -12,6 +12,7 @@ import {
 } from "../_utils";
 import { useChartAnimation } from "@/lib/components/analytics/chartMotion";
 
+/** Lazy chart.js + react-chartjs-2 so the settings bundle does not pay for it up front. */
 const barChartModules = Promise.all([
   import("react-chartjs-2"),
   import("chart.js"),
@@ -32,6 +33,7 @@ const SERIES_TOKENS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"];
 
 interface UsageByModelChartProps {
   buckets: ReadonlyArray<UsageChartBucket>;
+  /** Every bucket start in the range, including empty ones. */
   starts: ReadonlyArray<number>;
   bucket: UsageBucketSize;
 }

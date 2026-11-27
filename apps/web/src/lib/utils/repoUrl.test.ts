@@ -32,6 +32,9 @@ describe("repoUrl monorepo slash rewrite", () => {
     );
   });
 
+  // Regression: clicking a monorepo card carried a `?query`/`#hash`, and the
+  // rewrite dropped it — the address bar flipped and the card hard-loaded a bare
+  // dash URL. Both directions must carry the suffix through untouched.
   it("preserves the query/hash suffix in both directions", () => {
     expect(
       toInternalRepoHref("/evalucom/carepulse-ts/web/quick-tasks/204?draft=1"),
@@ -41,6 +44,8 @@ describe("repoUrl monorepo slash rewrite", () => {
     ).toBe("/evalucom/carepulse-ts/web/sessions#thread-9");
   });
 
+  // Regression: `/teams/…` and other global roots share the three-segment shape
+  // of a monorepo path, so a naive rewrite mangled them into `teams--…`.
   it("leaves global (non-repo) prefixes untouched", () => {
     expect(toInternalRepoHref("/teams/design/activity")).toBe(
       "/teams/design/activity",
@@ -50,12 +55,15 @@ describe("repoUrl monorepo slash rewrite", () => {
     );
   });
 
+  // Regression: a href already in dash form must not be re-encoded into
+  // `repo--app--app` when its third segment is an app name, not a sub-page.
   it("does not double-encode an already-internal dash href", () => {
     expect(toInternalRepoHref("/evalucom/carepulse-ts--web/dashboard")).toBe(
       "/evalucom/carepulse-ts--web/dashboard",
     );
   });
 
+  // A plain repo URL (no monorepo app) has nothing to convert either way.
   it("leaves single-repo hrefs unchanged", () => {
     expect(toDisplayRepoHref("/evalucom/carepulse-ts/sessions")).toBe(
       "/evalucom/carepulse-ts/sessions",
@@ -65,6 +73,8 @@ describe("repoUrl monorepo slash rewrite", () => {
     );
   });
 
+  // Switching apps in the rail keeps the section you are looking at, and drops
+  // everything below it — a task or session id belongs to the app you left.
   it("reads the repo section from either URL form", () => {
     expect(
       repoSectionFromPath("/evalucom/carepulse-ts--web/quick-tasks/204"),
@@ -77,6 +87,9 @@ describe("repoUrl monorepo slash rewrite", () => {
     ).toBe("settings");
   });
 
+  // Sessions and Automations render one cross-repo panel behind their own rail
+  // entry, so carrying them onto an app tile would keep that panel open instead
+  // of showing the app sidebar the click asked for.
   it("drops sections owned by a global rail entry", () => {
     expect(
       repoSectionFromPath("/evalucom/carepulse-ts/web/sessions/42"),
@@ -108,6 +121,8 @@ describe("repoUrl monorepo slash rewrite", () => {
     );
   });
 
+  // The router resolves `to` as a pathname and never splits a query out of it,
+  // so a comment notification handed over whole would match nothing.
   it("splits a comment anchor out of a notification href", () => {
     expect(
       hrefToNavigateOptions(

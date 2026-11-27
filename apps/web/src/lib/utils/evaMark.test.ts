@@ -6,6 +6,7 @@ function runtimeSvg(badgeLabel: string | null): string {
   return decodeURIComponent(uri.replace("data:image/svg+xml,", ""));
 }
 
+/** Geometry that must match between the runtime favicon and `favicon.svg`. */
 function markGeometry(svg: string) {
   return {
     circles: [...svg.matchAll(/<circle cx="(\d+)" cy="(\d+)" r="(\d+)"/g)].map(
@@ -16,6 +17,10 @@ function markGeometry(svg: string) {
   };
 }
 
+/**
+ * Regression: the favicon disc was inset and off-centre (210/210/r210), so its
+ * edge missed the pixel grid and the tab icon looked blurry and jagged.
+ */
 test("runtime favicon disc fills the whole 512 canvas", () => {
   expect(markGeometry(runtimeSvg(null)).circles).toEqual([
     "256,256,256",
@@ -23,6 +28,7 @@ test("runtime favicon disc fills the whole 512 canvas", () => {
   ]);
 });
 
+/** The badge draws on top; it must not move or resize the mark under it. */
 test("unread badge leaves the mark geometry unchanged", () => {
   const plain = markGeometry(runtimeSvg(null));
   const badged = markGeometry(runtimeSvg("3"));

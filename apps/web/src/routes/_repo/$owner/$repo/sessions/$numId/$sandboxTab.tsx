@@ -155,5 +155,6 @@ export const Route = createFileRoute(
       });
     }
   },
+  // Shell is rendered by the `$numId` layout so Preview/Console stay mounted.
   component: () => null,
 });

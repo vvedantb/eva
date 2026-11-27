@@ -12,10 +12,20 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./StatsDemo.css";
 
+// A repository's Stats page. Beats: the range menu opens; Last 90 days is
+// picked, so the bars ease to the quarter, PRs shipped rolls up and the
+// leaderboard reorders; the pointer comes onto the chart and the headline
+// reads out the week under it; it runs right to the busiest week and rests
+// there (the payoff). The activity heatmap is context.
+//
+// Real strings: the headline and its value, the range, the week, the three
+// contributors and their counts, the two section labels.
+
 const RANGES = ["Last 7 days", "Last 30 days", "Last 90 days", "All time"];
 const MONTH = 1;
 const QUARTER = 2;
 
+/** PRs shipped per bucket: about 2.5 days each over 30 days, a week over 90. */
 const SERIES = {
   month: [3, 5, 4, 6, 4, 5, 7, 3, 5, 6, 2, 4],
   quarter: [6, 8, 6, 10, 9, 13, 11, 14, 12, 15, 13, 10],
@@ -39,12 +49,14 @@ const SCRUB_FROM = 5;
 
 const sum = (values: number[]) => values.reduce((total, n) => total + n, 0);
 
+/** Top contributors: Jonas leads the month, Riya the quarter. */
 const PEOPLE = [
   { name: "Riya", month: 14, quarter: 34 },
   { name: "Jonas", month: 18, quarter: 27 },
   { name: "Ada", month: 9, quarter: 19 },
 ];
 
+/** Activity heatmap, 0 to 4: 14 weeks of seven days, written out so it never changes. */
 const HEAT = [
   "1021310",
   "0232410",
@@ -62,6 +74,7 @@ const HEAT = [
   "1232200",
 ].map((week) => week.split("").map(Number));
 
+/** The plot's geometry per layout, shared by the bars and the scrub. */
 const PLOT = {
   wide: { width: 340, height: 176 },
   compact: { width: 302, height: 120 },

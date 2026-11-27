@@ -16,6 +16,7 @@ export function ShortcutRow({
   id: ShortcutId;
   binding: Hotkey;
   isOverridden: boolean;
+  /** Names of other shortcuts sharing this combo, if any. */
   conflictsWith: ReadonlyArray<string>;
   onRecord: (hotkey: Hotkey | null) => void;
 }) {
@@ -23,6 +24,8 @@ export function ShortcutRow({
 
   return (
     <SettingsToggleRow
+      // The recorder plus Reset is ~185px, which leaves the description one
+      // word wide on a phone — wrap the action under the label instead.
       className="max-sm:flex-wrap"
       title={def.name}
       description={

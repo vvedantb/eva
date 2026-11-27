@@ -49,6 +49,11 @@ function PreviewViewportResizeHandles({
   ) {
     if (event.button !== 0) return;
     event.preventDefault();
+    // Listen on the captured handle, not window, and end on
+    // `lostpointercapture`: it fires after pointerup/cancel and also when the
+    // browser drops capture (window blur, alt-tab). A window `pointerup` never
+    // arrives when the release lands in the preview iframe or another app,
+    // which left the drag stuck to the cursor.
     const handle = event.currentTarget;
     handle.setPointerCapture(event.pointerId);
     const originX = event.clientX;

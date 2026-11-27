@@ -14,6 +14,8 @@ import {
 import type { Id } from "@eva/backend";
 import { z } from "zod";
 
+// The picker logic the web `MentionEditor` and the phone composer share.
+
 const ADA = z.custom<Id<"users">>().parse("k17ada0000000000000000000000ad01");
 const DOC = "k17doc000000000000000000000000d1";
 
@@ -58,6 +60,7 @@ describe("accepting a pick and sending it", () => {
       skillMap: new Map([["eva-capture", skillId]]),
     });
     expect(wire).toBe(`ask @[Ada Lovelace](${ADA}) /[eva-capture](${skillId})`);
+    // And back: what a restored stash or draft hands the editor.
     expect(tokenizedToEditable(wire)).toEqual({
       displayText: "ask @Ada Lovelace /eva-capture",
       mentionMap: new Map([["Ada Lovelace", ADA]]),

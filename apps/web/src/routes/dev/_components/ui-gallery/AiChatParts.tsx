@@ -40,6 +40,7 @@ import {
 } from "@tabler/icons-react";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
+/** Inline SVG so the image attachment needs no network and decodes the same every time. */
 const SAMPLE_IMAGE_URL =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(

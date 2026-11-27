@@ -13,6 +13,8 @@ import {
   toggleQuickTaskStatus,
 } from "@eva/shared";
 
+// The task status, number and priority helpers the web and the phone share.
+
 describe("task meta", () => {
   it("groups tasks into every status section in workflow order, keeping input order and dropping drafts", () => {
     const sections = groupByTaskStatus([
@@ -54,6 +56,7 @@ describe("task meta", () => {
     ];
     const pick = (patch: Partial<typeof QUICK_TASK_LIST_DEFAULTS>) =>
       applyQuickTaskFilters(tasks, { ...QUICK_TASK_LIST_DEFAULTS, ...patch }, now).map((task) => task.id);
+    // The search reads the title and the description.
     expect(pick({ q: "FOOTER", sortField: "priority" })).toEqual(["b", "a", "c"]);
     expect(pick({ timeRange: "30d", sortField: "created", sortDir: "asc" })).toEqual(["b", "a"]);
     expect(pick({ user: "u1", tags: ["ui"] })).toEqual(["a"]);
@@ -69,6 +72,7 @@ describe("task meta", () => {
       { key: "statuses", text: "5 Statuses" },
     ]);
     expect(quickTaskFilterChips({ ...filters, ...clearedQuickTaskFilters() }, { user: () => undefined })).toEqual([]);
+    // The last status cannot be turned off: an empty filter would hide every task.
     expect(toggleQuickTaskStatus(["todo"], "todo")).toEqual(["todo"]);
   });
 

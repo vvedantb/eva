@@ -41,6 +41,13 @@ export function RepoGroup({
                 </h3>
               </div>
               <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {/* No `initial={false}` here: `RepoCard` carries an
+                    `initial={{opacity:0,y:10}}` with `motionStagger(index)`, and
+                    suppressing the initial pass meant that stagger only ever ran
+                    when a codebase was added or removed later — never on the
+                    first paint of the home grid it was written for. Home resolves
+                    from a spinner, so the cards are replacing it rather than
+                    appearing over nothing. */}
                 <AnimatePresence>
                   {items.map((repo, index) => (
                     <RepoCard

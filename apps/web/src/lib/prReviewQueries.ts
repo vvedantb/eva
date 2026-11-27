@@ -10,6 +10,15 @@ import {
   type DiffFileEntry,
 } from "@eva/shared";
 
+/**
+ * Query definitions for the three pull request review payloads.
+ *
+ * Overview, diff, and header all come from Convex actions, so caching, in-flight
+ * deduplication, staleness, and prefetching are TanStack Query's job. Defining
+ * each query once here is what lets a hover over the reviews list warm exactly
+ * the entries the panels then read — the keys cannot drift apart.
+ */
+
 /** Every one of these actions takes the same arguments, so one shape covers all. */
 export type PrRunner<T> = (args: {
   repoId: Id<"githubRepos">;
@@ -44,6 +53,7 @@ export interface PrDiffData {
   readonly baseSha: string;
   readonly headSha: string;
   readonly repoUrl: string;
+  /** Branch a session can start on for this PR; null when there is none. */
   readonly workBranch: string | null;
 }
 

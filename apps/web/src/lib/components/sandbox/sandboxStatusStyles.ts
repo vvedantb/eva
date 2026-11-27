@@ -1,6 +1,18 @@
 
+/**
+ * Shared visual styles for the sandbox status dot — used by the session sidebar
+ * item, list/kanban cards, and the Task/Project surface tabs. Each state maps
+ * to a tailwind class for the dot and a human label for the tooltip / `title`.
+ *
+ * Labels speak the same wake/sleep metaphor as the controls ("Wake up Eva" /
+ * "Put Eva to sleep"): a sandbox is Awake, Waking up, Going to sleep or Asleep,
+ * never "Running" / "Stopped". `error` is a display-only state derived by
+ * {@link sandboxDisplayStatus} — the backend has no such status.
+ */
+
 import type { SandboxDisplayStatus } from "@eva/shared";
 
+// Moved to `@eva/shared` so the phone's wake control reads the same states.
 export {
   sandboxDisplayStatus,
   type SandboxDisplayStatus,

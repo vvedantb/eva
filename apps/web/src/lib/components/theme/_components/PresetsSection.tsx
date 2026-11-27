@@ -92,6 +92,8 @@ export function PresetsSection({
               aria-pressed={active}
               onClick={() => onApplyPreset(preset.theme)}
               className={cn(
+                // Matches the other theme pickers: border carries the selected
+                // state, inactive keeps a transparent one to avoid reflow.
                 "relative flex h-full w-full flex-col items-center gap-2 rounded-surface border p-3 text-xs font-medium transition-[background-color,border-color,color] sm:gap-3 sm:p-4 sm:text-sm",
                 active
                   ? "border-border bg-primary/8 text-primary"

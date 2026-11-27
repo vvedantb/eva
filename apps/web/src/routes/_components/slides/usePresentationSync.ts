@@ -4,6 +4,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { z } from "zod";
 import { api } from "@eva/backend";
 
+/** Session code → host key, for every deck this browser is presenting. */
 const HOST_KEYS_STORAGE = "eva:presentation-host-keys";
 const hostKeysSchema = z.record(z.string(), z.string());
 
@@ -95,6 +96,8 @@ export function usePresentationSync({
     updateSearch({ session: result.code });
   };
 
+  // No `finally`: the React Compiler cannot compile it and skips the whole
+  // file. The cleanup runs in the `catch` and again after the `try`.
   const startSharing = async () => {
     setIsStarting(true);
     try {
@@ -109,6 +112,7 @@ export function usePresentationSync({
   const stopSharing = async () => {
     if (!sessionCode || !hostKey) return;
     await stopSharingMut({ code: sessionCode, hostKey }).catch(() => undefined);
+    // Avoid computed ObjectPattern keys: React Compiler bails on them (BuildHIR).
     setHostKeys((keys) => {
       const next: Record<string, string> = {};
       for (const [code, key] of Object.entries(keys)) {

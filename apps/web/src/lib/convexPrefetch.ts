@@ -3,8 +3,19 @@ import type { FunctionArgs, FunctionReference } from "convex/server";
 import { convex } from "@/lib/convex";
 import { decodeRepoParam } from "@/lib/utils/repoUrl";
 
+/**
+ * How long a prefetched subscription outlives the hover that started it. Long
+ * enough to cover a slow click; short enough that sweeping the pointer down
+ * the sidebar does not keep dozens of results live.
+ */
 const PREFETCH_HOLD_MS = 30_000;
 
+/**
+ * Whether the Convex client holds a Clerk token. Route loaders run as soon as
+ * Clerk reports a session, before `ConvexProviderWithClerk` gives Convex the
+ * token; a prefetch in that gap reaches the backend signed out and fails with
+ * "Not authenticated". Written by `TrackConvexAuth` in `ClientProvider`.
+ */
 let convexAuthenticated = false;
 
 export function setConvexAuthenticated(value: boolean) {

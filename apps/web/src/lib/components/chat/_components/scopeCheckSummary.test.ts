@@ -40,6 +40,11 @@ function check(overrides: Partial<ScopeCheck> = {}): ScopeCheck {
   };
 }
 
+/**
+ * The thresholds are the whole contract: a reviewer reads the chip's colour
+ * before its text, so a turn landing one point either side of a boundary has
+ * to pick the tone the number implies.
+ */
 describe("scopeCheckTone", () => {
   it("is clear below the review threshold", () => {
     expect(scopeCheckTone(check({ unrequestedProbability: 0 }))).toBe("clear");
@@ -111,6 +116,10 @@ describe("scopeCheckLabel", () => {
   });
 });
 
+/**
+ * The failure this chip exists for is a change nobody was told about, so an
+ * unreported hunk outranks the count of unrequested ones in the label.
+ */
 describe("unreported changes", () => {
   const silent = hunk({ mentioned: 0.05 });
   const owned = hunk({ file: "src/b.ts", mentioned: 0.95 });

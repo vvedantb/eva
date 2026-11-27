@@ -18,6 +18,21 @@ export const Route = createFileRoute("/_global/sessions")({
   component: SessionsCodebasePicker,
 });
 
+/**
+ * Landing for the rail's Sessions entry: pick which codebase to open sessions
+ * for. It used to forward straight to the first app's composer, which made the
+ * rail tile a shortcut to one arbitrary app; the picker makes the choice
+ * explicit and keeps the URL stable for its other callers (spotlight's
+ * "Sessions" entry in `convex/spotlight.ts`, and the fallback both session
+ * archive dialogs navigate to after archiving the session being viewed).
+ *
+ * Deliberately not a `PageWrapper` page: this is a one-decision interstitial,
+ * so it renders as a centered column instead of a titled page with a top-left
+ * header. Text inside the column stays left-aligned.
+ *
+ * Rows link to `<app>/sessions` via `repoSessionsIndexPath`, the same helper
+ * the rail and hotkeys use, so there is one definition of an app's sessions URL.
+ */
 function SessionsCodebasePicker() {
   const repos = useQuery(api.githubRepos.list, {});
 

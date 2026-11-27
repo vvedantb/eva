@@ -45,6 +45,7 @@ export interface PrMenuPullRequest {
   repoId: Id<"githubRepos">;
 }
 
+/** Up to this many PRs sit in the menu itself; more fold into one submenu. */
 const INLINE_PR_LIMIT = 2;
 
 /**
@@ -72,6 +73,7 @@ export function PrActionsSubmenus({
   const rows = orderPrsLiveFirst(prs).map((pr) => (
     <Sub key={pr._id}>
       <SubTrigger className="max-w-56 items-start">
+        {/* No branch line: a chat's PRs mostly share one session branch. */}
         <PrRow
           status={pr.state === "draft" ? "open" : pr.state}
           draft={pr.state === "draft"}
@@ -150,6 +152,8 @@ function PrActionItems({
       {live ? (
         <>
           <Separator />
+          {/* Closing notifies every reviewer and stops CI, so it asks first;
+              Alt-held skips the dialog, as on the review header. */}
           <Item
             className="text-destructive"
             onSelect={() =>

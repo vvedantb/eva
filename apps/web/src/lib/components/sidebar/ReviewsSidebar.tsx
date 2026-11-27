@@ -37,12 +37,15 @@ export function ReviewsSidebar({
   onNavigate,
 }: ReviewsSidebarProps) {
   const listPullRequests = useAction(api.github.listPullRequests);
+  // Bound once here so the row only needs a `() => void` — the query module
+  // stays free of any dependency on the Convex client.
   const runners = {
     diff: useAction(api.github.getPrDiff),
     overview: useAction(api.github.getPullRequestOverview),
     header: useAction(api.github.getPullRequestHeader),
   };
   const queryClient = useQueryClient();
+  // One rename dialog serves the whole list; this is the row it is open for.
   const [renaming, setRenaming] = useState<PrToRename | null>(null);
   const [listState, setListState] = useQueryState(
     "prState",

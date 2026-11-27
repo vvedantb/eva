@@ -4,16 +4,33 @@ import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { z } from "zod";
 
+/** Launcher diameter (`size-12`). The drag maths needs it in px, not rem. */
 const LAUNCHER_SIZE_PX = 48;
+/** Smallest gap kept between the launcher — or the panel — and a viewport edge. */
 const EDGE_GAP_PX = 8;
+/** Gap between the launcher and the panel stacked above it. */
 const PANEL_GAP_PX = 8;
+/** Pointer travel that turns a press into a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4;
 
+/**
+ * Sized in percentages rather than `100vw`/`100dvh`: both surfaces are
+ * `position: fixed`, so a percentage resolves against the initial containing
+ * block — the viewport *minus* scrollbars — while `100vw` includes the
+ * scrollbar and would push the clamped launcher a scrollbar's width off screen.
+ */
 const PANEL_WIDTH = "min(26rem, calc(100% - 2rem))";
 const PANEL_HEIGHT = "min(40rem, calc(100% - 7rem))";
 
 const STORAGE_KEY = "eva:ave:launcher-offset";
 
+/**
+ * Distance from the viewport's bottom-right corner, in px.
+ *
+ * Corner-relative rather than top-left: the launcher's resting place is the
+ * bottom-right, so anchoring there keeps it where the user left it when the
+ * window grows, instead of drifting away from the corner it was parked in.
+ */
 const offsetSchema = z.object({
   right: z.number().finite(),
   bottom: z.number().finite(),
@@ -21,8 +38,14 @@ const offsetSchema = z.object({
 
 type LauncherOffset = z.infer<typeof offsetSchema>;
 
+/** Where the launcher sat before it could be moved: `right-4 bottom-4`. */
 const DEFAULT_OFFSET: LauncherOffset = { right: 16, bottom: 16 };
 
+/**
+ * localStorage is written by hand elsewhere and survives schema changes, so the
+ * stored value is parsed rather than trusted — a `NaN` offset would propagate
+ * through the clamp and leave the launcher unreachable with no way to reset it.
+ */
 function deserializeOffset(raw: string): LauncherOffset {
   try {
     const parsed = offsetSchema.safeParse(JSON.parse(raw));
@@ -37,6 +60,19 @@ interface FixedViewport {
   height: number;
 }
 
+/**
+ * The box a `position: fixed` element is actually laid out in.
+ *
+ * Measured off the launcher — its used `left`/`right` plus its own width are the
+ * containing block by definition — rather than read from `innerWidth` or
+ * `documentElement.clientWidth`. Both of those can count a classic scrollbar as
+ * usable space, and the JS clamp has to agree with the CSS `clamp()` below or a
+ * drag pushes the offset past what CSS will draw, leaving the launcher pinned to
+ * the edge while the pointer keeps going and jumping on the next press.
+ *
+ * `offsetWidth`, not `getBoundingClientRect()`: the button is mid-`:active` here
+ * and its press transform must not be measured as layout.
+ */
 function fixedViewport(element: HTMLElement): FixedViewport {
   const style = getComputedStyle(element);
   const width =
@@ -50,6 +86,7 @@ function fixedViewport(element: HTMLElement): FixedViewport {
   };
 }
 
+/** Keeps the whole launcher on screen, whatever the pointer does. */
 function clampOffset(
   offset: LauncherOffset,
   viewport: FixedViewport,
@@ -100,6 +137,7 @@ interface DragState {
   startX: number;
   startY: number;
   origin: LauncherOffset;
+  /** Measured once at press: it cannot change while a pointer is captured. */
   viewport: FixedViewport;
   moved: boolean;
 }
@@ -112,9 +150,12 @@ export interface AveLauncherDragHandlers {
 }
 
 export interface AveLauncherPosition {
+  /** Spread onto an ancestor of both the launcher and the panel. */
   cssVars: CSSProperties & Record<`--${string}`, string>;
+  /** Spread onto the launcher button. */
   dragHandlers: AveLauncherDragHandlers;
   isDragging: boolean;
+  /** True once per drag, for the click the browser fires after the drop. */
   shouldIgnoreClick: () => boolean;
 }
 
@@ -135,6 +176,8 @@ export function useAveLauncherPosition(): AveLauncherPosition {
     DEFAULT_OFFSET,
     { deserializer: deserializeOffset },
   );
+  // Live position while the pointer is down; `null` means "not dragging", so
+  // the committed offset is the single source of truth at rest.
   const [dragOffset, setDragOffset] = useState<LauncherOffset | null>(null);
   const drag = useRef<DragState | null>(null);
   const pendingClickSuppression = useRef(false);
@@ -143,6 +186,8 @@ export function useAveLauncherPosition(): AveLauncherPosition {
 
   const onPointerDown = (event: PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
+    // A drop always produces the click this flag is waiting for, but clear it
+    // anyway so a swallowed click can never carry over into the next press.
     pendingClickSuppression.current = false;
     const viewport = fixedViewport(event.currentTarget);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -150,6 +195,8 @@ export function useAveLauncherPosition(): AveLauncherPosition {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      // Re-clamp: the saved offset may point off a window that has since been
+      // made smaller, in which case CSS is already drawing it somewhere else.
       origin: clampOffset(savedOffset, viewport),
       viewport,
       moved: false,
@@ -161,8 +208,11 @@ export function useAveLauncherPosition(): AveLauncherPosition {
     if (state === null || state.pointerId !== event.pointerId) return;
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
+    // Below the threshold this is still a click. Crossing it once latches, so a
+    // drag that returns to its origin does not turn back into a click.
     if (!state.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     state.moved = true;
+    // Offsets grow towards the bottom-right corner, so pointer travel subtracts.
     setDragOffset(
       clampOffset(
         {
@@ -183,6 +233,8 @@ export function useAveLauncherPosition(): AveLauncherPosition {
     }
     if (!state.moved) return;
     pendingClickSuppression.current = true;
+    // Batched with the reset below, so the launcher never renders a frame at
+    // the old saved offset between letting go and the write landing.
     if (dragOffset !== null) setSavedOffset(dragOffset);
     setDragOffset(null);
   };

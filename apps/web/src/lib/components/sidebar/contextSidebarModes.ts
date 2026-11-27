@@ -11,6 +11,7 @@ export type ContextSidebarMode =
   | "reviews"
   | "testing-arena";
 
+/** Nav items whose click swaps the whole sidebar into a focused drill-down view. */
 const CONTEXT_SIDEBAR_BY_NAV_NAME = new Map<string, ContextSidebarMode>([
   ["Settings", "settings"],
   ["Documents", "docs"],

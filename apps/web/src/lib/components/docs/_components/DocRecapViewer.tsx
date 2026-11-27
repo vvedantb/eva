@@ -76,6 +76,9 @@ export function DocRecapViewer({
     (c) => !c.parentId && c.resolvedAt === undefined,
   ).length;
   const [copied, setCopied] = useState(false);
+  // Arriving from a comment notification opens the panel the comment lives in;
+  // a plain visit still starts closed. Lazy initial state rather than an effect
+  // — the panel is open on the first paint, so nothing flashes shut.
   const commentAnchorId = useCommentAnchorId();
   const [commentsOpen, setCommentsOpen] = useState(
     () => commentAnchorId !== null,
@@ -114,6 +117,7 @@ export function DocRecapViewer({
   /* eslint-disable no-effect/no-event-handler --
      Redirects a legacy URL the user can arrive at from a bookmark or a link, so
      the trigger is the route itself rather than anything clicked here. */
+  // Legacy `/html` and `/content` on recap docs → `/recap` and `/summary`.
   useEffect(() => {
     if (activeTab === viewTab) return;
     const segment = entityPathSegment(doc);
@@ -151,11 +155,16 @@ export function DocRecapViewer({
 
   const isRecapPending = doc.prRecapStatus === "pending";
   const isRecapErrored = doc.prRecapStatus === "error";
+  // Pending with no workflow behind it means the run died — see PrRecapPanel.
   const isRecapStalled = isRecapPending && doc.activeWorkflowId === undefined;
+  // Rows written before the write path enforced the invariant — see
+  // `recapState` in the backend, which both recap views share.
   const isRecapIncompleteReady = isIncompleteReadyRecap(doc);
 
   const handleReviseRecap = async () => {
     setIsRevising(true);
+    // `try`/`finally` without a `catch` bails the React Compiler out of this
+    // whole file, so the reset is duplicated instead. See CLAUDE.md.
     try {
       await withMutationToast(
         reviseRecap({ docId: doc._id }),
@@ -172,6 +181,7 @@ export function DocRecapViewer({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* `flex-wrap`: title plus trailing controls do not share one row on a phone. */}
       <div className="flex max-sm:flex-wrap items-center gap-1.5 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
         <h1 className="min-w-0 truncate text-balance text-lg font-semibold">
           {doc.title}

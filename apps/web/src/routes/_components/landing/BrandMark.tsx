@@ -21,7 +21,13 @@ export type BrandName =
   | "clerk";
 
 interface BrandMarkAsset {
+  /** Path under `apps/web/public/brands`. */
   src: string;
+  /**
+   * Dark-mode variant, set only where the light mark is near-black or its brand
+   * colour is too dark to read on a dark surface. The rest carry brand colours
+   * that work on either surface, so they ship as a single file.
+   */
   darkSrc?: string;
 }
 

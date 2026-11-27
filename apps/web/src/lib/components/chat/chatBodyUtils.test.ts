@@ -72,6 +72,7 @@ describe("buildPrecedingUserTurns", () => {
       ]),
     );
     expect(turns.get("a1")?.label).toBe("u1");
+    // A second reply in one turn has no user turn directly before it.
     expect(turns.has("a2")).toBe(false);
     expect(turns.get("a3")?.label).toBe("u2");
     expect(turns.has("handoff")).toBe(false);
@@ -99,6 +100,7 @@ describe("findTurnWindowStart", () => {
   });
 
   test("covers the whole transcript when it has fewer turns", () => {
+    // Index 0, not the first user row: the rows before it must stay visible.
     expect(findTurnWindowStart(transcript, 3)).toBe(0);
     expect(findTurnWindowStart(transcript, 25)).toBe(0);
   });
@@ -117,6 +119,8 @@ describe("findStreamingTargetMessage", () => {
   });
 
   test("a queued turn's newer placeholder does not steal a still-streaming older turn", () => {
+    // The session-62 incident: a synthetic loop-continuation bubble was still
+    // streaming when a queued user message inserted its own placeholder.
     const messages = [
       user("u1"),
       finished("loop-turn"),
@@ -199,6 +203,7 @@ describe("visibleChatMessages", () => {
 });
 
 describe("findHandoffBoundaryIds", () => {
+  // Typing `model` as the doc's union keeps these fixtures pinned to real ids.
   const sent = (_id: string, model?: ChatBodyMessage["model"]) => ({
     _id,
     role: "user" as const,
@@ -277,6 +282,7 @@ describe("findNewMessageIds", () => {
   });
 
   test("counts a reply by its finish time", () => {
+    // Started before the anchor, finished after it: still new.
     expect(findNewMessageIds([timedReply("a", 3, 9)], 5, me)).toEqual(["a"]);
   });
 
@@ -363,6 +369,10 @@ describe("chatNeedsOtherUserDirectory", () => {
   });
 });
 
+/**
+ * The failed-turn notice states the error itself, so the stamp the harness
+ * writes in front of the text would be said twice.
+ */
 describe("stripErrorPrefix", () => {
   test("drops the harness stamp", () => {
     expect(
@@ -383,6 +393,13 @@ describe("stripErrorPrefix", () => {
   });
 });
 
+/**
+ * Reported bug: "Usage limit reached wrong provider name" (fix 64e95e7e). The
+ * notice was hard-coded to "Claude usage limit reached", so a chat running on
+ * Cursor or Codex blamed a provider it never used — and the recovery it
+ * suggests (switch account, wait for the reset) is per provider, so the user
+ * was sent to the wrong account list.
+ */
 describe("turnErrorTitle", () => {
   const rateLimited = (turnModel?: string, messageModel?: string) =>
     turnErrorTitle({
@@ -401,12 +418,15 @@ describe("turnErrorTitle", () => {
   });
 
   test("falls back to the assistant row's own stamp", () => {
+    // Retry paths render a failure with no user turn above it to read.
     expect(rateLimited(undefined, "cursor:composer-2.5")).toBe(
       "Cursor usage limit reached",
     );
   });
 
   test("the turn's stamp wins over the row's", () => {
+    // The row is stamped when the reply lands; the turn's stamp is what the
+    // run was actually sent on, so it is the one that ran out.
     expect(rateLimited("cursor:composer-2.5", "claude:opus")).toBe(
       "Cursor usage limit reached",
     );
@@ -417,6 +437,8 @@ describe("turnErrorTitle", () => {
   });
 
   test("every other failure is still framed as one", () => {
+    // Only "rate_limit" used to get a notice, so any other failed turn
+    // rendered as markdown and read like Eva answering "Error: …".
     expect(
       turnErrorTitle({
         errorType: "generic",
@@ -437,6 +459,12 @@ describe("turnErrorTitle", () => {
   });
 });
 
+/**
+ * A send that throws no longer writes an `Error:` turn into the transcript; it
+ * raises a toast with "Restore draft" instead, and this is the toast's body.
+ * The three send paths (session, task, project) all read it, so a Convex
+ * envelope leaking through would be shown to the user in all three.
+ */
 describe("readableSendError", () => {
   test("keeps only the thrown message from a Convex server error", () => {
     expect(
@@ -457,6 +485,11 @@ describe("readableSendError", () => {
   });
 });
 
+/**
+ * The transcript card is a record of an answered question. A question still on
+ * screen in the composer dock must not also render as a card, and a legacy
+ * step written before the options were persisted has nothing to show.
+ */
 describe("collectQuestionSteps", () => {
   const questions: ActivityStep["questions"] = [
     {
@@ -508,6 +541,12 @@ describe("collectQuestionSteps", () => {
   });
 });
 
+/**
+ * The bug this covers: quick task chat locked its composer whenever the
+ * sandbox was not marked active, and a quick task's first run only marks it
+ * active once the run winds down. Now nothing but an account swap locks it:
+ * a sleeping sandbox or a usage limit queues the message instead.
+ */
 describe("sandboxComposerState", () => {
   const base = {
     isSandboxActive: true,
@@ -563,6 +602,11 @@ describe("sandboxComposerState", () => {
   });
 });
 
+/**
+ * The composer, the subagent thread, the Agents roster and the design panel
+ * used to each derive "is a turn running" from different inputs, so one chat
+ * could read as working in one place and idle in another. They share this.
+ */
 describe("isChatTurnExecuting", () => {
   const working = withIds([user("u1"), placeholder("a1")]);
   const settled = withIds([user("u1"), finished("a1")]);
@@ -588,6 +632,7 @@ describe("isChatTurnExecuting", () => {
   });
 
   test("an open turn runs before its bubble lands", () => {
+    // A synthetic continuation opens a turn before its bubble lands.
     expect(
       isChatTurnExecuting({ status: turnFor("a2"), messages: settled }),
     ).toBe(true);
@@ -597,6 +642,7 @@ describe("isChatTurnExecuting", () => {
   });
 
   test("a stale open status ends once its bubble has finished", () => {
+    // The server closes the turn and finishes its bubble in one mutation.
     expect(
       isChatTurnExecuting({ status: turnFor("a1"), messages: settled }),
     ).toBe(false);

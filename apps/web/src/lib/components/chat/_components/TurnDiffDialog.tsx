@@ -42,6 +42,7 @@ export function TurnDiffDialog({
             {turnDiffRange({ beforeSha, afterSha })}
           </DialogDescription>
         </DialogHeader>
+        {/* Mounted only while open, so an unopened row never fetches. */}
         {open ? (
           <TurnDiffBody
             repoId={repoId}

@@ -49,6 +49,8 @@ export function NewAppsDialog({
     setSkipped(next);
   };
 
+  // One codebase at a time. Kept out of `save`'s `try`: the React Compiler
+  // cannot compile this loop inside a `try` and would skip the whole file.
   const importAll = async () => {
     for (const group of codebases.values()) {
       const [first] = group;

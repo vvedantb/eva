@@ -17,6 +17,11 @@ import {
   EVA_MARK_PURPLE,
 } from "@eva/shared/evaMark";
 
+/**
+ * Favicon disc colours. Must read against OS tab chrome, not the app shell.
+ * Discord keeps one bright mark; we do the same — light tile in every theme
+ * so the disc silhouette never vanishes on a dark tab bar.
+ */
 const FAVICON_SURFACE: Record<ThemeAppearance, string> = {
   light: "#FFFFFF",
   dark: "#FFFFFF",
@@ -30,19 +35,36 @@ export const SHELL_COLOR: Record<ThemeAppearance, string> = {
   neutral: "#222325",
 };
 
+/**
+ * Favicon layout, in the 512 viewBox.
+ *
+ * The disc fills the whole canvas and is centred, so its edges land on the
+ * pixel grid at 16/32 px. An inset, off-centre disc rendered blurry and
+ * jagged in the tab strip. The unread badge is drawn after the mark, on top
+ * of the disc's bottom-right, so the layout is the same with or without a
+ * count and the tab icon does not resize as notifications arrive and clear.
+ */
 const DISC_CX = 256;
 const DISC_CY = 256;
 const DISC_R = 256;
+/**
+ * Badge centre on the disc's BR (drawn after it = on top). Nudged into the
+ * corner; outer red may kiss the viewBox like Discord. Digit is slightly
+ * under 2× so it stays readable when the bubble hangs off the edge.
+ */
 const BADGE_CENTER = 340;
+/** Thin dark separator only; red gets almost the whole bubble. */
 const BADGE_CUTOUT_RADIUS = 210;
 const BADGE_RADIUS = 198;
 
+/** Slightly under 2× the pre-enlarge badges (220 / 160 / 100). */
 function badgeFontSize(label: string): number {
   if (label.length >= 3) return 180;
   if (label.length === 2) return 290;
   return 400;
 }
 
+/** Full-canvas disc + enlarged disc star, clipped to the disc. */
 function markGroup(surface: string): string {
   return (
     `<defs><clipPath id="eva-disc"><circle cx="${DISC_CX}" cy="${DISC_CY}" r="${DISC_R}"/></clipPath></defs>` +
@@ -54,6 +76,7 @@ function markGroup(surface: string): string {
   );
 }
 
+/** Unread bubble drawn after the mark so it sits on top of the disc edge. */
 function badgeGroup(label: string, fill: string, fg: string): string {
   return (
     `<circle cx="${BADGE_CENTER}" cy="${BADGE_CENTER}" r="${BADGE_CUTOUT_RADIUS}" fill="#060606"/>` +

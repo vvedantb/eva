@@ -8,7 +8,13 @@ type ThemeHint = {
   radius?: string;
   fontFamily?: string;
   letterSpacing?: string;
+  /** Resolved appearance for FOUC. Convex owns the real preference. */
   appearance?: "light" | "neutral" | "dark";
+  /**
+   * The preference behind `appearance`. Needed because "system" resolves to a
+   * light/dark appearance, so the appearance alone cannot round-trip it.
+   * Absent in hints written before this field existed.
+   */
   mode?: ThemeMode;
 };
 
@@ -62,6 +68,7 @@ function writeThemeHint(patch: ThemeHint) {
       JSON.stringify({ ...readThemeHint(), ...patch }),
     );
   } catch {
+    // Ignore quota / private mode failures — live query still wins.
   }
 }
 

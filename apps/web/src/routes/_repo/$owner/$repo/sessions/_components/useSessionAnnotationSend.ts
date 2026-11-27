@@ -24,6 +24,7 @@ export function useSessionAnnotationSend(
 ): AnnotationSubmit {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
+  // Model + traits + account are owned by Convex.
   const {
     model,
     traits,
@@ -36,6 +37,8 @@ export function useSessionAnnotationSend(
       traits,
       providerAccountId: stickyProviderAccountId,
     });
+  // Owner-scoped, matching the composer picker — resolving against the
+  // viewer's own accounts would drop the sticky account to Team.
   const { options: accounts, resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId, isRouteActive);
 

@@ -18,6 +18,10 @@ import { SystemAutomationCard } from "./_components/SystemAutomationCard";
 import { NewAutomationButton } from "./_components/NewAutomationButton";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
+/**
+ * Flips `installed` in the Hub list so the card switches over before the server
+ * round-trip. `numId` waits for the real row.
+ */
 function patchInstalled(installed: boolean) {
   return (
     localStore: OptimisticLocalStore,
@@ -47,6 +51,11 @@ export const Route = createFileRoute("/_repo/$owner/$repo/automations/")({
   component: AutomationsHubPage,
 });
 
+/**
+ * Automations Hub: the eva-managed automation catalog for this app, plus "New"
+ * for a custom one. Installing an entry adds it to the app's automations; the
+ * definition stays owned by eva.
+ */
 function AutomationsHubPage() {
   const { repoId, basePath } = useRepo();
   const systemAutomations = useQuery(api.automations.listSystemAutomations, {

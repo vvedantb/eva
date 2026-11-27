@@ -44,11 +44,18 @@ interface DiffFileAccordionItemProps {
   onViewedChange: (viewed: boolean) => void;
   wrapLines: boolean;
   repoId: Id<"githubRepos">;
+  /**
+   * Commits the diff was taken between — needed to read whole file contents.
+   * Null for a lone commit, whose parent the payload does not carry.
+   */
   refs: { baseSha: string; headSha: string } | null;
   /** `https://github.com/<owner>/<name>`, for the "View file" link. */
   repoUrl: string;
+  /** The ref the "View file" link opens the file at. */
   viewRef: string;
+  /** Scrolling ancestor, so the diff body can defer until it is near view. */
   scrollRoot: Element | null;
+  /** Skip deferral for the file being scrolled to. */
   eager: boolean;
 }
 
@@ -96,6 +103,11 @@ export function DiffFileAccordionItem({
   const pendingComments =
     review?.comments.filter((comment) => comment.filePath === path).length ?? 0;
 
+  /**
+   * Pulls both ends of the file so the diff can be re-derived from whole files.
+   * That is the only way to offer GitHub's "expand unchanged lines": the PR
+   * patch itself only carries a few lines of context around each hunk.
+   */
   const loadFullFile = () => {
     if (refs === null) return;
     setFullFile({ status: "loading" });
@@ -123,10 +135,16 @@ export function DiffFileAccordionItem({
     fullFile.status !== "ready";
 
   return (
+    // A card per file, as Cursor's diff viewer draws it: rounded, a gap to the
+    // next, and a header that reads the whole path at body size. The path
+    // wraps rather than truncating — a cut-off name is the thing that made
+    // this hard to read.
     <AccordionItem
       value={path}
       className="group/item overflow-clip rounded-lg border border-border bg-background last:border-b"
     >
+      {/* File actions on right-click, as Cursor keeps the row to path,
+          counts and the tick. */}
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-background/95 pr-3 pl-3 backdrop-blur-sm group-data-[state=open]/item:border-b">
@@ -169,6 +187,8 @@ export function DiffFileAccordionItem({
                 />
               )}
 
+              {/* Outside the trigger so ticking Viewed does not also fold the
+              file. The tick alone, as Cursor has it; the label names it. */}
               <span
                 className="flex items-center"
                 onClick={(event) => event.stopPropagation()}
@@ -282,6 +302,10 @@ export function DiffFileAccordionItem({
   );
 }
 
+/**
+ * A path that may wrap after any `/`, so a long one breaks between folders
+ * instead of mid-name.
+ */
 function BreakablePath({ path }: { path: string }) {
   const parts = path.split("/");
   return parts.map((part, index) => (

@@ -58,8 +58,15 @@ export function ComposerStash({
 }: {
   repoId: Id<"githubRepos">;
   mentionRef: RefObject<MentionTextareaHandle | null>;
+  /** Panels stacked flush above the input (tasks, queued messages). */
   panels: ReactNode;
+  /**
+   * Muted under-card bar. Receives the stash trigger (or null when empty) so
+   * the caller can place it after `underCardLeading` and before the model
+   * picker.
+   */
   bar: (stashButton: ReactNode) => ReactNode;
+  /** The composer input chrome the drawer anchors to. */
   children: ReactNode;
 }) {
   const { textInput, attachments } = usePromptInputController();
@@ -78,6 +85,8 @@ export function ComposerStash({
     "stashDraft",
     (event) => {
       event.preventDefault();
+      // The drawer is portaled, so while open the active element sits outside
+      // `rootRef` — hence the `open` short-circuit.
       if (!open && !rootRef.current?.contains(document.activeElement)) return;
 
       const isEmpty =
@@ -114,6 +123,7 @@ export function ComposerStash({
             aria-label={`Prompt stash, ${entries.length} saved`}
             title="Prompt stash"
             className="motion-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.98]"
+            // Keep composer focus when toggling from the input.
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => setOpen((prev) => !prev)}
           >
@@ -154,6 +164,8 @@ export function ComposerStash({
         }}
         onEscapeKeyDown={() => mentionRef.current?.focus()}
         onInteractOutside={(event) => {
+          // The tab toggles; letting dismiss also fire re-opens it on the same
+          // click.
           if (
             event.target instanceof Node &&
             tabRef.current?.contains(event.target)
@@ -231,6 +243,7 @@ export function ComposerDock({
 }) {
   return (
     <div ref={ref} className="flex flex-col">
+      {/* The dock owns the inset, so the panels inside it are full width. */}
       <div className="mx-auto w-[calc(100%-1.5rem)]">{panels}</div>
       {children}
       {bar}

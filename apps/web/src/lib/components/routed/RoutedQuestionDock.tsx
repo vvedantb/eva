@@ -35,6 +35,7 @@ type RoutedThread = FunctionReturnType<
 /** Where the dock is mounted; the full-screen page has room for a taller one. */
 export type RoutedQuestionDockSize = "popover" | "page";
 
+/** Caps the question and its replies; the header and reply box stay in view. */
 const BODY_MAX_HEIGHT: Record<RoutedQuestionDockSize, string> = {
   popover: "max-h-[min(30dvh,15rem)]",
   page: "max-h-[min(50dvh,32rem)]",
@@ -65,6 +66,11 @@ export function RoutedQuestionDock({
   return <QuestionPager threads={threads} size={size} />;
 }
 
+/**
+ * One question at a time. A list of expandable rows made the popover a stack
+ * of half-visible cards; paging keeps the open question whole and the reply
+ * box always in the same place.
+ */
 function QuestionPager({
   threads,
   size,
@@ -73,6 +79,8 @@ function QuestionPager({
   size: RoutedQuestionDockSize;
 }) {
   const [currentId, setCurrentId] = useState<string>(threads[0]._id);
+  // An answered question leaves the list; land on the one that took its slot
+  // rather than jumping back to the first.
   const [lastIndex, setLastIndex] = useState(0);
   const foundIndex = threads.findIndex((thread) => thread._id === currentId);
   const index =
@@ -115,11 +123,13 @@ function QuestionPager({
           </div>
         ) : null}
       </div>
+      {/* Keyed so the draft and the open "why" panel belong to one question. */}
       <QuestionCard key={thread._id} thread={thread} size={size} />
     </div>
   );
 }
 
+/** Teammate chips: "Priya replied" in the success tone, "Waiting on Sam" muted. */
 function TeammateChips({
   teammates,
 }: {
@@ -161,12 +171,15 @@ function QuestionCard({
   const resolve = useMutation(api.routedThreads.resolve);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // As in `MentionTextarea`: a phone's Return key inserts a newline, while a
+  // physical Enter key sends.
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
   const teammates =
     me === undefined
       ? []
       : thread.participants.filter((participant) => participant.userId !== me);
+  // The first Eva message carries the briefing; its body is the title.
   const briefing = messages?.find((message) => message.authorKind === "eva");
   const replies = messages?.filter((message) => message !== briefing) ?? [];
 
@@ -183,7 +196,10 @@ function QuestionCard({
       );
       setDraft("");
     } catch {
+      // Toast already shown.
     }
+    // No `finally`: the catch swallows, so this always runs (and `finally`
+    // bails the React Compiler out of the whole file).
     setSending(false);
   };
 
@@ -250,6 +266,8 @@ function QuestionCard({
           aria-label="Your answer"
           placeholder="Your answer…"
           className="max-h-32 min-h-7 flex-1 resize-none bg-transparent py-1 text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground"
+          // Same keys as the chat composer: Enter sends, Shift+Enter breaks
+          // the line. An IME confirming a word also fires Enter; leave it be.
           onKeyDown={(event) => {
             if (
               !isCoarsePointer &&

@@ -25,6 +25,7 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 interface ProjectsListViewProps {
   projectsByPhase: Record<ProjectStage, Project[]>;
   visiblePhases: Set<ProjectStage>;
+  /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
   onArchive: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
@@ -77,6 +78,8 @@ export function ProjectsListView({
         if (!visiblePhases.has(phase)) return [];
         const cfg = projectStageConfig[phase];
         const items = projectsByPhase[phase] ?? [];
+        // Shift-click spans this section only — the visible order of the group
+        // the click landed in, not the whole flattened list.
         const sectionIds = items.map((p) => p._id);
         const Icon = cfg.icon;
 

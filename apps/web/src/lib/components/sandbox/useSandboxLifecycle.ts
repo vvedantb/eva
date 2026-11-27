@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Doc } from "@eva/backend";
 
+/** Same union for sessions, quick tasks and projects. */
 type SandboxStatus = Doc<"sessions">["status"];
 
 type SandboxAction = "start" | "stop";
@@ -16,8 +17,11 @@ type SandboxAction = "start" | "stop";
 export function useSandboxLifecycle(status: SandboxStatus | undefined) {
   const [pending, setPending] = useState<SandboxAction | null>(null);
 
+  /** Runs `request` with `action` pending. `request` owns its error toast. */
   const run = async (action: SandboxAction, request: () => Promise<void>) => {
     setPending(action);
+    // `.finally`, not a `try`/`finally` statement: React Compiler bails on
+    // the whole file for a `try` without a `catch`.
     await request().finally(() => setPending(null));
   };
 

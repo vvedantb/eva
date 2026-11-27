@@ -17,6 +17,8 @@ export const SESSIONS_APP_GROUPS_OPEN_KEY = "eva:sessions-app-groups-open:v1";
 export const LINKED_SESSION_GROUPS_OPEN_KEY =
   "eva:linked-session-groups-open:v1";
 
+// The sort orders and sort helpers live in `@eva/shared`, which the phone
+// Sessions tab shares; this module stays the web's one import for them.
 export {
   APP_SORT_ORDERS,
   SESSION_SORT_ORDERS,
@@ -52,6 +54,7 @@ export interface SessionsSidebarSettings {
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
   layout: SessionLayout;
+  /** Hide sessions another teammate started. */
   onlyMine: boolean;
 }
 

@@ -50,6 +50,8 @@ export function useSessionPlanDocument(sessionId: Id<"sessions">) {
         "session-plan-doc",
       );
       const doc = await convex.query(api.docs.get, { id: docId });
+      // Nested ifs: React Compiler bails on a ternary inside try, and an early
+      // return would skip the setIsSavingDoc(false) below.
       if (doc) {
         const segment = entityPathSegment(doc);
         if (segment) {

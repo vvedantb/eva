@@ -13,7 +13,9 @@ import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatMessageActionItem } from "./ChatMessageActions";
 
 interface ChatMessageContextMenuProps {
+  /** Stored message body (may include mention/skill tokens + markdown). */
   content: string;
+  /** Row-specific actions (turn diff / restore) listed after the copy items. */
   extraItems?: ChatMessageActionItem[];
   children: ReactElement;
 }
@@ -42,6 +44,8 @@ export function ChatMessageContextMenu({
       <ContextMenuTrigger
         asChild
         onContextMenuCapture={(event) => {
+          // Images keep the native menu (Copy image, Save image as…).
+          // Stop propagation, not default, so Radix never sees the event.
           if (event.target instanceof HTMLImageElement) event.stopPropagation();
         }}
       >

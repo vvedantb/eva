@@ -12,8 +12,11 @@ import {
 export type { TypingUser };
 
 export interface TypingPresence {
+  /** Other teammates currently typing in this room (never includes self). */
   typingUsers: TypingUser[];
+  /** Call on each keystroke. Broadcasts "typing" on the rising edge only. */
   onActivity: () => void;
+  /** Broadcasts "stopped typing" immediately (e.g. on submit/unmount). */
   stopTyping: () => void;
 }
 
@@ -30,8 +33,12 @@ export function useTypingPresence(
   roomId: string,
   userId: Id<"users"> | undefined,
 ): TypingPresence {
+  // Mounting usePresence keeps the user *present* in the room (online), which
+  // is distinct from *typing*; the indicator filters on data.isTyping.
   const presenceState = usePresence(api.presence, roomId, userId ?? "");
   const updateTyping = useMutation(api.presence.updateTyping);
+  // One typing flag per composer: "typing" on the first keystroke, "stopped"
+  // after a quiet spell, on send, or when the room changes.
   const [signal] = useState(() =>
     createTypingSignal((room, isTyping) => {
       updateTyping({ roomId: room, isTyping }).catch(console.error);
@@ -43,6 +50,8 @@ export function useTypingPresence(
     signal.activity(roomId);
   }
 
+  // Clear the flag when leaving the conversation (unmount or room change).
+  // `roomId` on purpose: a new room stops the old one's flag.
   useEffect(() => signal.stop, [signal, roomId]);
 
   const typingUsers = typingUsersFrom(presenceState, userId);

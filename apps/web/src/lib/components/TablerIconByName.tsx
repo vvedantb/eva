@@ -7,8 +7,22 @@ import {
 } from "react";
 import { IconLayoutGrid } from "@tabler/icons-react";
 
+/**
+ * Renders a Tabler icon chosen at runtime by name (custom app tabs store the
+ * name as free text, e.g. "IconBolt").
+ *
+ * Resolving an arbitrary name needs every icon's path data. That comes from
+ * `virtual:tabler-icon-data` (see apps/web/vite/tablerIconData.ts) — a single
+ * lazy module of raw SVG nodes — instead of Tabler's 6095-export barrel, which
+ * used to pull ~6,100 modules into every build. Only screens that render a
+ * custom tab icon download the data; everyone else pays nothing.
+ */
 interface TablerIconByNameProps {
   name: string;
+  /**
+   * `filled` resolves `${name}Filled`. Icons without one render the outline at
+   * a bolder stroke, so an active state still reads.
+   */
   variant?: "default" | "filled";
   className?: string;
 }
@@ -19,6 +33,8 @@ interface IconProps {
   className?: string;
 }
 
+// Mirrors @tabler/icons-react's defaultAttributes so data-rendered icons are
+// pixel-identical to the statically imported components.
 const SVG_ATTRS: Record<
   "outline" | "filled",
   Record<string, string | number>
@@ -64,6 +80,10 @@ function iconFromData(
   };
 }
 
+/**
+ * `lazy()` components must be stable across renders — a fresh one each render
+ * would suspend forever — so each name gets exactly one, cached module-side.
+ */
 const lazyIcons = new Map<
   string,
   LazyExoticComponent<ComponentType<IconProps>>
@@ -98,6 +118,8 @@ export function TablerIconByName({
 }: TablerIconByNameProps) {
   const Icon = lazyIconFor(name, variant);
 
+  // The fallback doubles as the unknown-name placeholder, so the icon slot keeps
+  // its size and only swaps shape once the data lands (first render only).
   return (
     <Suspense fallback={<IconLayoutGrid className={className} />}>
       <Icon className={className} />

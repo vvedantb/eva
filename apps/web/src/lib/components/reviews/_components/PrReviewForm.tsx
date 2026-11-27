@@ -42,6 +42,8 @@ export function PrReviewForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Only comments drawn on this diff carry a GitHub anchor; ones parsed out of
+  // an agent message have diff-relative indices GitHub cannot place.
   const pending = review?.comments ?? [];
   const comments = pending.flatMap((comment) =>
     comment.anchor === null

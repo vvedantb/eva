@@ -12,6 +12,15 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./SessionsDemo.css";
 
+// A live session: the agent fixes a bug while the visitor watches each pane of
+// the sandbox. Beats: the reply streams under the bug report; the visitor opens
+// Diff and the fix writes itself in; Terminal shows the tests passing; back on
+// Preview the same postcode is now accepted (the payoff) and the chat says the
+// pull request is open.
+//
+// Real strings: the bug report, the reply, the two diff lines, the test
+// result, the postcode and its error, the pull request.
+
 const REPLY =
   "The pattern rejects the space. I will allow one and run the tests.";
 const REPLY_WORDS = REPLY.split(" ").length;

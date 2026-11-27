@@ -46,6 +46,9 @@ export function ReactionBar({ groups, toggle }: ReactionBarProps) {
                   onClick={() => toggle(group.emoji)}
                   aria-pressed={group.reactedByMe}
                   className={cn(
+                    // 24px chips are not a tap target, and they sit 4px apart, so
+                    // they grow to the 40px floor below `sm` rather than bleeding
+                    // into each other with `hit-target`.
                     "flex h-10 items-center gap-1 rounded-full border px-2 text-xs leading-none transition-colors sm:h-6",
                     group.reactedByMe
                       ? "border-primary bg-primary/10 text-foreground"

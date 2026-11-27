@@ -29,6 +29,7 @@ interface FlagGroup {
   flags: FlagRow[];
 }
 
+/** Every flag, once, in the section it shows under. */
 const FLAG_GROUPS: FlagGroup[] = [
   {
     title: "Appearance",
@@ -171,6 +172,7 @@ const FLAG_GROUPS: FlagGroup[] = [
   },
 ];
 
+/** Each group's first row index, so the enter stagger flows down the page. */
 const GROUP_START_INDEX = FLAG_GROUPS.map((_, groupIndex) =>
   FLAG_GROUPS.slice(0, groupIndex).reduce(
     (count, group) => count + group.flags.length,

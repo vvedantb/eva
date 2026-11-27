@@ -25,6 +25,8 @@ export function useAvailableAiModels(
 
   const normalizedModel = normalizeAIModel(currentModel);
   const visible = getVisibleAIModelOptions(availability, normalizedModel);
+  // Simple view narrows the same list rather than a separate source, so the
+  // provider/availability rules above still hold.
   const options = simpleView
     ? getSimpleViewModelOptions(visible, normalizedModel)
     : visible;
@@ -36,6 +38,16 @@ export function useAvailableAiModels(
   };
 }
 
+/**
+ * The current user's provider accounts for the model picker.
+ *
+ * `options` are the picker's account groups (empty while loading or when none
+ * exist, so the picker falls back to team-only). `resolveId` maps a stored
+ * string id (the picker carries plain strings) back to the branded
+ * `Id<"userProviderAccounts">` from the live docs, so callers pass a properly
+ * typed id to mutations without a cast. Unknown ids (e.g. a deleted account)
+ * resolve to undefined — the run falls back to the team credential.
+ */
 function toModelAccounts(
   accounts: Parameters<typeof toPickerAccounts>[0] | undefined,
 ): {
@@ -43,6 +55,7 @@ function toModelAccounts(
   resolveId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
   ready: boolean;
 } {
+  // Most recently updated first so create-time defaults prefer the latest.
   const options: ReadonlyArray<ModelAccount> = toPickerAccounts(accounts ?? []);
   const resolveId = (
     id: string | null,

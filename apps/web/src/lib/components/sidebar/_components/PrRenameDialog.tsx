@@ -48,6 +48,8 @@ export function PrRenameDialog({
             The new title is pushed to GitHub as the eva app.
           </DialogDescription>
         </DialogHeader>
+        {/* Keyed on the pull request, so opening a different row starts its form
+            from that row's title instead of the last one's. */}
         {pr === null ? null : (
           <RenameForm
             key={pr.number}

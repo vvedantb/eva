@@ -39,6 +39,11 @@ interface PublishRecoveryBannerProps {
   isSandboxActive: boolean;
 }
 
+/**
+ * Compact per-repo recovery action for a multi-repo session's linked clones.
+ * Divergence is only detected for the session branch as a whole, so a linked
+ * repo is offered on the same refusal, gated on it having a published PR.
+ */
 function LinkedRepoRecoveryRow({
   label,
   requested,
@@ -97,6 +102,8 @@ export function PublishRecoveryBanner({
   const { request: requestConfirm } = useRequestConfirm();
 
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
+  // Not an early return: the banner animates out, so it has to stay mounted
+  // inside AnimatePresence for one more frame after the refusal is superseded.
   const visible = needsPublishRecovery(newest);
   const newestId = newest?._id;
   const isRequested = (target: ForcePushTarget) =>
@@ -109,6 +116,9 @@ export function PublishRecoveryBanner({
     setConfirmTarget(null);
     if (newestId === undefined) return;
     const key = forcePushOfferKey(newestId, target);
+    // Marked requested before the mutation settles: the button unmounts at
+    // once, so an alt-click double-click cannot send a second force-push.
+    // A failure takes the mark back so the user can retry.
     if (requestedOffers.includes(key)) return;
     setRequestedOffers((keys) => [...keys, key]);
     void catchMutationError(
@@ -125,6 +135,7 @@ export function PublishRecoveryBanner({
     );
   };
 
+  /** Alt-click skips the dialog, as everywhere else confirmation is offered. */
   const requestForcePush = (
     target: ForcePushTarget,
     event: { altKey?: boolean },

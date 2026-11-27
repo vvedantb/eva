@@ -41,13 +41,17 @@ export function PreviewActionBar({
   sketch,
 }: {
   iframeElement: HTMLIFrameElement | null;
+  /** True while something else owns the preview (Sketch, mini-player). */
   hidden: boolean;
+  /** Omit where there is no chat to send an annotation to. */
   selectElement?: PreviewToggle;
+  /** Omit where no composer can take the sketch image. */
   sketch?: PreviewToggle;
 }) {
   const box = useIframeBox(iframeElement);
   const freeze = usePreviewFreeze(iframeElement);
   const screenshot = usePreviewScreenshot(iframeElement);
+  // The iframe paints 0×0 while its pane is hidden.
   if (hidden || !box || box.width === 0 || box.height === 0) return null;
 
   return createPortal(
@@ -107,6 +111,7 @@ function PreviewActionButton({
 }: {
   icon: ReactNode;
   label: string;
+  /** Toggles report their state; one-shot actions omit it. */
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;

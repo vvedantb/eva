@@ -26,6 +26,7 @@ export function SourceDocumentEditor({
 }: {
   doc: { _id: Id<"docs">; title: string };
   onBack: () => void;
+  /** Above the body: a project summary's live task counts. */
   header?: ReactNode;
 }) {
   return (
@@ -40,6 +41,7 @@ export function SourceDocumentEditor({
   );
 }
 
+/** Uncontrolled so typing never fights the live query; saves on blur. */
 function DocTitleInput({ id, title }: { id: Id<"docs">; title: string }) {
   const updateDoc = useMutation(api.docs.update);
 

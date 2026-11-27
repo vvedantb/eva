@@ -17,6 +17,7 @@ import {
   type ChatSourceKind,
 } from "./chatSource";
 
+// Same icons as PLATFORM_SECTIONS (Sessions / Quick Tasks / Projects).
 const SOURCE_ICONS: Record<ChatSourceKind, Icon> = {
   session: IconTerminal2,
   task: IconCode,

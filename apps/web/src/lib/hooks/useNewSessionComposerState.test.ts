@@ -5,12 +5,21 @@ import { z } from "zod";
 import type { Id } from "@eva/backend";
 import type { useNewSessionComposerState as UseComposerState } from "./useNewSessionComposerState";
 
+/**
+ * Regression (fix #1011): the new-session composer saved the last model,
+ * traits and provider account in localStorage, so a stale pick overrode the
+ * repo default on every later visit. Only the prompt draft may persist now;
+ * older blobs that still hold model/traits/account must be ignored.
+ */
+
 const repoId = z.custom<Id<"githubRepos">>().parse("repo_1");
 const storage = new Map<string, string>();
 
 let useComposerState: typeof UseComposerState;
 
 beforeAll(async () => {
+  // usehooks-ts decides "server" once at import time, so the fake window must
+  // exist before the hook module loads.
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {

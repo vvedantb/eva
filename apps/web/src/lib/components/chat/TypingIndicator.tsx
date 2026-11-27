@@ -7,6 +7,7 @@ import { AnimatePresence, m } from "motion/react";
 import { typingLabelParts, type TypingUser } from "@eva/shared/typingPresence";
 
 function typingLabel(users: TypingUser[]): ReactNode {
+  // Parts never repeat in one label ("Ada and Bo are typing"), so each keys by its content.
   return typingLabelParts(users).map((part) =>
     "name" in part ? (
       <span key={`name:${part.name}`} data-pii>

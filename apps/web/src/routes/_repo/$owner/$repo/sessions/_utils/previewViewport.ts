@@ -437,11 +437,13 @@ export interface PreviewContainSize {
 /** The three pieces of pane state the two toolbar toggles move between. */
 export interface PreviewFraming {
   viewport: PreviewViewport;
+  /** Fill mode only: letterbox `containSize` instead of reflowing the guest. */
   contain: boolean;
   containSize: PreviewContainSize;
 }
 
 export interface PreviewFramingChange extends PreviewFraming {
+  /** An aspect lock belongs to one box; a new box has to drop it. */
   resetAspectRatio: boolean;
 }
 

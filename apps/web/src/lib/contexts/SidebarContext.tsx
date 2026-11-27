@@ -22,8 +22,15 @@ function writeCookie(collapsed: boolean) {
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  /**
+   * Whether the below-`md` drawer is showing. Owned here rather than by
+   * `Sidebar` because the drawer is the only way to reach a list on a phone,
+   * so pages whose whole content is "select something from the sidebar" have
+   * to be able to open it (`OpenNavigationButton`).
+   */
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  /** Sticky entry point for Sessions: rail → global list, in-repo nav → per-repo list. */
   sessionsNavMode: SessionsNavMode;
   setSessionsNavMode: (mode: SessionsNavMode) => void;
 }
@@ -34,8 +41,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsedState] = useState(readCookie);
   const [sessionsNavMode, setSessionsNavMode] =
     useSessionStorage<SessionsNavMode>(SESSIONS_NAV_MODE_KEY, "repo");
+  // Not persisted: a drawer that reopens itself on the next visit is a bug, and
+  // navigation closes it (see `Sidebar`), so the only meaningful value is now.
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Every hide and show (rail tile, shortcut, search) passes here, so the
+  // panel's dock motion lives here too.
   const setCollapsed = (value: boolean) => {
     writeCookie(value);
     if (value) {

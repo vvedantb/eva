@@ -7,6 +7,7 @@ import {
 } from "./logs";
 
 test("parseResultEvent keeps input vs cache token categories separate", () => {
+  // Cost UI must not treat cache reads as billed input tokens.
   const event = parseResultEvent(
     JSON.stringify({
       total_cost_usd: 1.25,

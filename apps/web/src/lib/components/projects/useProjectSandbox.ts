@@ -61,6 +61,7 @@ export function useProjectSandbox(projectId: Id<"projects">) {
     });
 
   return {
+    /** The project's session and chat; the sandbox fields come off it. */
     projectSession,
     sandbox,
     isSandboxActive,

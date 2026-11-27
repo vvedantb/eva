@@ -38,6 +38,7 @@ export type NotificationAppearance = {
   iconColor: string;
 };
 
+/** The Tabler component for each shared icon name. */
 const ICONS: Record<NotificationIconName, typeof IconBell> = {
   Check: IconCheck,
   UserPlus: IconUserPlus,
@@ -53,6 +54,7 @@ const ICONS: Record<NotificationIconName, typeof IconBell> = {
   MessageQuestion: IconMessageQuestion,
 };
 
+/** The badge variant, avatar tint and glyph colour of each shared tone. */
 const TONE_CLASSES: Record<
   NotificationTone,
   Pick<NotificationAppearance, "badgeVariant" | "iconBg" | "iconColor">

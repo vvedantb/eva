@@ -49,6 +49,7 @@ export function ReposClient() {
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [newApps, setNewApps] = useState<ReadonlyArray<NewApp>>([]);
   const { request: requestConfirm } = useRequestConfirm();
+  // Reads storage in the first render (initializeWithValue), so no banner flash.
   const [welcomeDismissed, setWelcomeDismissed] = useLocalStorage(
     WELCOME_STORAGE_KEY,
     false,

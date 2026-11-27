@@ -5,6 +5,7 @@ import {
   isSandboxUserEngaged,
 } from "@eva/shared";
 
+/** Skip the timer reset for input this close to the last one (pointermove floods). */
 const INPUT_THROTTLE_MS = 1_000;
 
 const listeners = new Set<() => void>();
@@ -32,11 +33,16 @@ function noteInput(): void {
   recompute();
 }
 
+/** Switching to the tab is a deliberate act; hiding it ends engagement now. */
 function onVisibilityChange(): void {
   if (document.visibilityState === "visible") noteInput();
   else recompute();
 }
 
+/**
+ * Input inside a cross-origin iframe (Preview, editor) never reaches this
+ * document. Focus moving into one is the last signal we see, so count it.
+ */
 function onWindowBlur(): void {
   setTimeout(() => {
     if (document.activeElement instanceof HTMLIFrameElement) noteInput();
@@ -49,6 +55,7 @@ function start(): void {
   }
   document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("blur", onWindowBlur);
+  // Mounting a sandbox tab means someone just opened or navigated to it.
   noteInput();
 }
 

@@ -22,6 +22,7 @@ const EMPTY_COPY: Record<InboxFilter, { title: string; description: string }> =
   };
 
 interface InboxListPaneProps {
+  /** `undefined` while the query is in flight. */
   notifications: Notification[] | undefined;
   filter: InboxFilter;
   group: InboxGroup;
@@ -64,6 +65,8 @@ export function InboxListPane({
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <EmptyState.Root
+          // The celebratory animation belongs to "you cleared the inbox", not
+          // to a filter that happens to be empty.
           enter={filter === "all"}
         >
           <EmptyState.Icon icon={IconInbox} size={24} />

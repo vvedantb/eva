@@ -38,11 +38,16 @@ interface StatusFieldsSectionProps {
   status: TaskStatus | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
+  /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
+  /** Locks the model picker — the model that ran must stay on the record. */
   hasRuns: boolean;
+  /** Only the task owner can move it onto their own provider account. */
   isOwner: boolean;
   allTags: string[];
+  /** An archived task (or one in an archived project): every field is disabled. */
   readOnly: boolean;
 }
 

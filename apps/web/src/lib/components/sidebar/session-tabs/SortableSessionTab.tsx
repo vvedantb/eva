@@ -30,6 +30,8 @@ export function SortableSessionTab(props: SessionChromeTabProps) {
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
+        // `touch-none` is what lets the touch sensor's hold-to-arm win over the
+        // browser's own gesture handling; the strip never scrolls anyway.
         "flex min-w-0 flex-1 touch-none",
         isDragging && "z-20 opacity-70",
       )}

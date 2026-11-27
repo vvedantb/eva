@@ -31,6 +31,7 @@ export function useStoredGroupOpen(storageKey: string, defaultOpen?: boolean) {
   const storedOpen = (id: string): boolean | undefined =>
     parseOpenById(openById)[id];
 
+  /** `liveIds` drops entries for groups that no longer exist. */
   const setGroupOpen = (
     id: string,
     open: boolean,
@@ -51,8 +52,11 @@ export function useStoredGroupOpen(storageKey: string, defaultOpen?: boolean) {
 }
 
 interface SidebarAppGroupOpenOptions {
+  /** localStorage key — one per sidebar section so they do not collide. */
   storageKey: string;
+  /** URL segment that marks the section, e.g. `/sessions`. */
   sectionSegment: string;
+  /** Accessible apps; a toggle prunes stored entries for apps not in it. */
   repos: RepoRow[] | undefined;
 }
 
@@ -66,6 +70,7 @@ export function useSidebarAppGroupOpen(
   const isGroupOpen = (repo: RepoRow): boolean => {
     const open = stored.storedOpen(repo._id);
     if (open !== undefined) return open;
+    // Default: collapsed unless this app owns the active URL in this section.
     return (
       repoMatchesPath(repo, pathname) &&
       pathname.includes(options.sectionSegment)
@@ -73,6 +78,7 @@ export function useSidebarAppGroupOpen(
   };
 
   const setGroupOpen = (repoId: string, open: boolean) => {
+    // Prune only once the app list has loaded, or every entry would go.
     const liveIds = options.repos
       ? new Set<string>(options.repos.map((repo) => repo._id))
       : undefined;

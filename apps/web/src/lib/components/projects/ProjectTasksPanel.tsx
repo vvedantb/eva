@@ -35,7 +35,9 @@ export function ProjectTasksPanel({
   projectNumId: number | undefined;
   repoId: Id<"githubRepos">;
   basePath: string;
+  /** The tasks open as chat tabs (`?tasks=`); their rows are marked. */
   openTaskIds?: ReadonlySet<string>;
+  /** Opens a task as a chat tab; without it a row opens its page. */
   onOpenTask?: (taskNumId: number) => void;
 }) {
   const navigate = useNavigate();
@@ -48,6 +50,7 @@ export function ProjectTasksPanel({
     projectId,
     archived: true,
   });
+  // An archived project is read-only: no new tasks.
   const isArchived =
     useQuery(api.projects.get, { id: projectId })?.archivedAt !== undefined;
   const projectSegment = entityPathSegment({ numId: projectNumId });

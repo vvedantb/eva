@@ -38,16 +38,24 @@ export function SandboxSurfaceTabs({
   hasUnread = false,
   onSurfaceChange,
 }: {
+  /** Label for the non-sandbox half, e.g. "Task" or "Project". */
   mainLabel: string;
   surface: SandboxSurface;
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
+  /** A turn is in flight — the pixel grid stands in for the status dot. */
   isAgentActive?: boolean;
+  /**
+   * The chat has an unseen reply. The chat lives on the sandbox surface, so
+   * the dot shows only on the other one, and a turn in flight hides it.
+   */
   hasUnread?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
   const simpleView = useSimpleView();
+  // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
+  // can still read true while the sandbox is on its way up or down.
   const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
@@ -75,6 +83,8 @@ export function SandboxSurfaceTabs({
         <TabsTrigger value="main">{mainLabel}</TabsTrigger>
         <TabsTrigger value="sandbox" className="gap-1.5">
           Sandbox
+          {/* Same swap the session rows make: a turn in flight already implies
+              an active sandbox, so the grid stands in for the dot. */}
           {isAgentActive ? (
             <span className="flex shrink-0 items-center" title="Working">
               <LoadingState

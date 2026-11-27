@@ -33,6 +33,7 @@ const SEARCH_STEPS = new Set<ActivityStep["type"]>([
   "search_files",
 ]);
 
+/** Tool calls that are not a search. Prose, reasoning and notices are not tools. */
 const TOOL_STEPS = new Set<ActivityStep["type"]>([
   "read",
   "edit",
@@ -63,7 +64,9 @@ export function aveLogoState({
   threadStatus: "idle" | "running" | undefined;
   currentActivity: string | undefined;
   waitingCount: number | undefined;
+  /** An observed running → idle edge whose one-shot has not cleared yet. */
   justFinished: boolean;
+  /** The run that just finished ended on Ave's error alert row. */
   lastRunErrored: boolean;
 }): AveLogoState {
   if (justFinished) return lastRunErrored ? "error" : "done";

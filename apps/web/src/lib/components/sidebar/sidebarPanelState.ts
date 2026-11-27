@@ -71,6 +71,9 @@ export function parseSidebarRepoRoute(pathname: string): SidebarRepoRoute {
   }
   const o = segments[0];
   const n = segments[1];
+  // Guard non-repo routes before the repo-route heuristic below, otherwise
+  // sub-paths like /teams/{id}/members are misread as /owner/repo/appName
+  // (because "members" isn't a KNOWN_SUB_PAGE) and the repo nav renders.
   if (NON_REPO_ROUTES.has(o)) {
     return { ...NON_REPO_ROUTE };
   }
@@ -117,6 +120,7 @@ export interface SidebarPanelFlags {
 const isLandingPath = (pathname: string, root: string) =>
   pathname === root || pathname === `${root}/`;
 
+/** Root settings, plus the dev-only `/testing` pages that share its panel. */
 function isGlobalSettingsPanelPath(pathname: string): boolean {
   return (
     isGlobalSettingsPath(pathname) ||
@@ -138,6 +142,7 @@ export function routeHasSidePanel({
   SidebarPanelInput,
   "pathname" | "isRepoRoute" | "useChromeSessionTabs"
 >): boolean {
+  // Experimental Chrome tabs replace the sessions second column (rail only).
   return (
     ((isRepoRoute || isLandingPath(pathname, "/sessions")) &&
       !useChromeSessionTabs) ||
@@ -155,9 +160,13 @@ function getGlobalPanelFlags({
 }: SidebarPanelInput) {
   const pathParts = pathname.split("/").filter(Boolean);
   const isGlobalSessionsLanding = isLandingPath(pathname, "/sessions");
+  // Per-app Sessions sidebar was removed; any sessions URL (landing or deep
+  // link like /$owner/$repo/.../sessions/$numId/preview) uses the root list.
   const isRepoSessionsPath = isRepoRoute && pathParts.includes("sessions");
   const isSessionsPath = isGlobalSessionsLanding || isRepoSessionsPath;
   const showGlobalSessionsPanel = isSessionsPath && !useChromeSessionTabs;
+  // Automations mirror Sessions: one cross-repo panel behind the rail entry,
+  // shown for the landing page and for every repo-scoped automation URL.
   const isRepoAutomationsPath =
     isRepoRoute && pathParts.includes("automations");
   const showGlobalAutomationsPanel =
@@ -191,6 +200,8 @@ export function getSidebarPanelFlags(
     !showGlobalSessionsPanel &&
     !showGlobalAutomationsPanel &&
     contextSidebarMode !== "main";
+  // Global panels are a source list: compact title row (like nested Sandboxes),
+  // not a 64px page heading and not an empty column.
   const isFlatPanel =
     showGlobalSessionsPanel ||
     showGlobalAutomationsPanel ||

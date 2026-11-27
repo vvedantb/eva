@@ -54,10 +54,17 @@ export function useTaskChatBinding(
     ownerLabel: "task",
     title: task?.title,
     common,
+    // The first run is its own workflow, not a chat turn: Stop names the task
+    // so it reaches the run, even before the chat exists.
     stopTarget: { taskId },
   });
 }
 
+// Quick tasks open the chat with the first run rendered as a normal turn:
+// the task prompt as the user message, the run's activity log + summary as
+// the assistant reply. From the moment the run starts, so its steps stream
+// here rather than into a timeline accordion on the task page (see
+// firstRunChatTurn.ts).
 function useTaskFirstRunChatTurn(
   taskId: Id<"agentTasks">,
   task: TaskChatTask,
@@ -70,6 +77,8 @@ function useTaskFirstRunChatTurn(
   const firstRun = findFirstRunChatTurnRun(runs);
   const isInProgress =
     firstRun !== undefined && isRunInProgress(firstRun.status);
+  // The log row is only written when the run completes, so an in-flight run
+  // reads its live activity off the streaming row instead.
   const activityLog = useQuery(
     api.agentRuns.getActivityLog,
     firstRun && !isInProgress ? { id: firstRun._id } : "skip",
@@ -111,6 +120,9 @@ function useFirstRunMediaQueries(
       ? { taskId }
       : "skip",
   );
+  // Screenshots and recordings the run left behind, uploaded by the sandbox as
+  // it finished. Only resolved when the run says it has some, so a text-only
+  // run costs no extra query.
   const firstRunMedia = useQuery(
     api.agentRuns.getMedia,
     firstRun && (firstRun.mediaStorageIds?.length ?? 0) > 0

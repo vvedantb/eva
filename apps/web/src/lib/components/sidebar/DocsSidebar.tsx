@@ -109,10 +109,12 @@ export function DocsSidebar({
   }, [createRequestId]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
+  // PR recaps live under Reviews now — Documents is non-recap only.
   const filteredDocs = docs
     ? docs.filter((doc) => doc.kind !== "pr-recap")
     : [];
 
+  /** Opens a just-created doc in the viewer and closes the dialog. */
   const finishCreate = (
     created: Awaited<ReturnType<typeof createDoc>>,
   ): boolean => {
@@ -208,6 +210,9 @@ export function DocsSidebar({
     target: { id: Id<"docs">; title: string } | null = docToDelete,
   ) => {
     if (!target) return;
+    // Resolved before the try (it needs no await, and the guard above already
+    // proves target): React Compiler bails on the whole file when a
+    // conditional or logical expression sits inside a try/catch.
     const docToDeleteSegment = docs?.find((d) => d._id === target.id);
     const deletePathSegment = docToDeleteSegment
       ? entityPathSegment(docToDeleteSegment)
@@ -321,6 +326,8 @@ export function DocsSidebar({
                       chatSourceRoute(doc.source, "documents") ? (
                         <ContextMenuItem
                           onClick={() => {
+                            // The guard above narrows the JSX, not this
+                            // callback, so the source is re-checked here.
                             if (!doc.source) return;
                             const route = chatSourceRoute(
                               doc.source,

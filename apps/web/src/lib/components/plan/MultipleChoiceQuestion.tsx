@@ -24,6 +24,13 @@ import {
   type ParsedQuestion,
 } from "@eva/shared/pendingQuestion";
 
+/**
+ * The pressable surface of an option card. A stretched native `<button>` rather
+ * than `role="button" tabIndex={0}` plus a hand-written Enter/Space handler on
+ * the card div — see `list-row.tsx` for why the native element has to own the
+ * role and the keyboard behaviour. Nested controls (the "Other" text field) opt
+ * back above it with `LIST_ROW_CONTROL_CLASS`.
+ */
 const OPTION_OVERLAY_CLASS =
   "absolute inset-0 z-1 cursor-pointer rounded-surface focus-visible:outline-hidden";
 
@@ -35,9 +42,17 @@ interface MultipleChoiceQuestionProps {
   options?: OptionItem[];
   questions?: QuestionItem[];
   onAnswer: (answer: string) => void;
+  /**
+   * When provided, submitting calls this with a structured map (question text →
+   * selected label; multi-select joined as a comma-separated string) INSTEAD of
+   * {@link onAnswer}'s `Q:/A:` string. Used for blocking AskUserQuestion, where
+   * the answer becomes a real tool_result rather than a new chat message.
+   */
   onAnswerStructured?: (answers: Record<string, string>) => void;
   isLoading?: boolean;
   questionNumber?: number;
+  // Optional controls appended to the submit row (e.g. a question counter and
+  // a Clear button) so callers can keep them on the same line as the action.
   trailingControls?: ReactNode;
 }
 
@@ -97,6 +112,7 @@ export function MultipleChoiceQuestion({
     ? (customAnswers[currentStep] ?? "").trim().length > 0
     : (answers[currentStep] ?? []).length > 0;
 
+  // Structured answer keyed by question text; shape shared with mobile.
   const buildAnswer = () =>
     buildStructuredAnswer(resolvedQuestions, (_, idx) =>
       otherActive[idx]
@@ -104,6 +120,7 @@ export function MultipleChoiceQuestion({
         : (answers[idx] ?? []),
     );
 
+  // The chat message for a saved question: the same text on the phone.
   const formatAnswer = () =>
     formatQuestionAnswers(resolvedQuestions, buildAnswer());
 

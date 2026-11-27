@@ -1,3 +1,4 @@
+/** How many non-archived sessions to show before the expand control. */
 const SESSION_SIDEBAR_PREVIEW_LIMIT = 3;
 
 /**

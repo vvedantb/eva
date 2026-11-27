@@ -24,6 +24,7 @@ export interface SlideEntry {
 }
 
 export const SLIDES: SlideEntry[] = [
+  // ── Act 1 · Open (dark) ──────────────────────────────────────────────
   {
     id: "00",
     title: "Start",
@@ -39,6 +40,7 @@ export const SLIDES: SlideEntry[] = [
     steps: 0,
   },
 
+  // ── Act 2 · The problem + features (light) ───────────────────────────
   {
     id: "02",
     title: "The gap",
@@ -82,6 +84,7 @@ export const SLIDES: SlideEntry[] = [
     steps: 0,
   },
 
+  // ── Act 3 · Tech + how it works (light) ──────────────────────────────
   {
     id: "08",
     title: "Tech stack",
@@ -104,6 +107,7 @@ export const SLIDES: SlideEntry[] = [
     steps: 0,
   },
 
+  // ── Act 4 · Key insight + demo + close (dark) ────────────────────────
   {
     id: "11",
     title: "Key insight",

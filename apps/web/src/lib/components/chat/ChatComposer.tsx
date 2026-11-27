@@ -78,9 +78,18 @@ export interface ChatModelPicker {
   model: AIModel;
   setModel: (model: AIModel) => void;
   modelOptions: ReadonlyArray<ModelOption<AIModel>>;
+  /**
+   * The user's own provider accounts. When non-empty, the model picker nests
+   * Team + account submenus under each provider; the chosen account's
+   * credentials run the turn (see `accountId`/`onAccountChange`).
+   */
   accounts?: ReadonlyArray<ModelAccount>;
   accountId?: string | null;
   onAccountChange?: (accountId: string | null) => void;
+  /**
+   * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context).
+   * When provided, trait pills appear above the model list for capable models.
+   */
   displayTraits?: {
     effortLevel: ReasoningLevel | undefined;
     thinkingEnabled: boolean;
@@ -91,16 +100,22 @@ export interface ChatModelPicker {
 }
 
 interface ChatComposerProps {
+  /** Absent (Manager Ave): no skills, stash or repo mentions. */
   repo?: ChatRepo;
+  /** A project coordinator chat: `@Eva` is in the mention picker. */
   mentionEva?: boolean;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something; default "Queued". */
   queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
   heldFollowUps?: ChatHeldFollowUp[];
   messageHistory: string[];
   isExecuting: boolean;
   isInputDisabled: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
   disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
   onStartSandbox?: () => void;
   placeholder: string;
   modelPicker?: ChatModelPicker;
@@ -110,15 +125,25 @@ interface ChatComposerProps {
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   preInputContent?: React.ReactNode;
+  /** Chips that share the skill suggestions' row, just above the input. */
   statusChips?: React.ReactNode;
+  /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
+  /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
   streamingTurnId?: string;
+  /**
+   * Optional left-side control on the under-input bar (e.g. base branch).
+   * The bar renders whenever it has anything to hold (this, the stash
+   * trigger or the model picker); this slot is only the extra leading control.
+   */
   underCardLeading?: React.ReactNode;
   draft?: ChatDraftSeed;
+  /** Persist draft in localStorage when no Convex conversation exists yet. */
   localDraft?: LocalChatDraft;
   isDraftLoading?: boolean;
   hasPendingContext?: boolean;
   allowEmptySubmit?: boolean;
+  /** Set while the chat waits on the user; drives composer predictions. */
   predictionTarget?: ComposerPredictionTarget;
 }
 
@@ -150,6 +175,7 @@ export function ChatComposer({
   allowEmptySubmit = false,
   predictionTarget,
 }: ChatComposerProps) {
+  // Simple view hides the model picker; the model still drives skill items.
   const simpleView = useSimpleView();
   const visibleModelPicker = simpleView ? undefined : modelPicker;
   const skillItems = useSkillSlashItems(
@@ -167,7 +193,11 @@ export function ChatComposer({
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
   const [isUploading, setIsUploading] = useState(false);
+  // The verdict is keyed by the exact text it judged; readers look it up
+  // against PromptInput's live text, which is the only copy of the draft.
   const readiness = useDraftReadiness();
+  // A follow-up leans on the thread above it, so "too vague" is a false
+  // alarm there. Only the opening message of a chat is judged.
   const judgesDraft = messageHistory.length === 0;
   const {
     updateQueuedMessage,
@@ -175,6 +205,7 @@ export function ChatComposer({
     reorderQueuedMessages,
     steerQueuedMessage,
   } = useQueuedMessageMutations(queuedMessages);
+  // Convex draft wins when both are passed (existing sessions).
   const seed = draft ?? localDraft;
 
   const handleSubmit = async (
@@ -184,7 +215,11 @@ export function ChatComposer({
     const visible = text.trim();
     let uploads: ChatAttachmentUploads = { ids: [], failed: [] };
     if (files.length > 0) {
+      // Fetch uploads report no bytes, so the only honest progress signal is
+      // that the send is busy: the submit button spins and stops accepting.
       setIsUploading(true);
+      // Reset is duplicated into the catch rather than using `finally`: the
+      // React Compiler bails on the whole file when it meets one.
       try {
         uploads = await uploadChatAttachments(files);
       } catch (error) {
@@ -201,6 +236,9 @@ export function ChatComposer({
           description: "Remove them or try again.",
         },
       );
+      // Sending anyway produced a turn the user believed carried a screenshot
+      // Eva never received. PromptInput keeps the text and the files exactly
+      // when onSubmit rejects, so throwing is what preserves the composer.
       throw new Error("Chat attachments failed to upload");
     }
     if (
@@ -212,6 +250,7 @@ export function ChatComposer({
       return;
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
+    // The judged draft is gone once it is sent; a nudge about it is not.
     readiness.reset();
     await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
@@ -233,6 +272,11 @@ export function ChatComposer({
   const mutedBar = (stashButton: ReactNode) =>
     !underCardLeading && !stashButton && !visibleModelPicker ? null : (
       <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
+        {/* On a phone the bar is ~340px wide and the model name is long, so a
+          `shrink-0` picker left the leading control (the base branch) one
+          letter. Both sides give width there: the leading control takes a share
+          of the free space, the picker shrinks and truncates. Desktop keeps the
+          picker at its natural width. */}
         {underCardLeading ? (
           <div className="min-w-0 max-sm:flex-1 max-sm:basis-0">
             {underCardLeading}
@@ -295,6 +339,7 @@ export function ChatComposer({
         items={heldFollowUps}
         renderContent={renderQueuedContent}
       />
+      {/* Last, so it sits flush on the input card it warns about. */}
       {judgesDraft && <ComposerReadinessBanner readiness={readiness} />}
     </>
   );
@@ -329,8 +374,13 @@ export function ChatComposer({
   );
 
   return (
+    // `relative` anchors the absolutely positioned typing indicator to the
+    // composer, so it floats just above it instead of a distant ancestor.
     <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
       {preInputContent}
+      {/* One chip row on the input: status chips first, then skill
+          suggestions. Same inset as the stash dock, so it lines up with the
+          input card. Empty, it takes no height (each chip owns its margin). */}
       <div className="mx-auto flex w-[calc(100%-1.5rem)] flex-wrap items-center gap-x-1.5">
         {statusChips}
         <SkillSuggestionChips
@@ -392,6 +442,7 @@ export function ChatComposer({
   );
 }
 
+/** The readiness nudge for whatever PromptInput holds right now. */
 function ComposerReadinessBanner({
   readiness,
 }: {

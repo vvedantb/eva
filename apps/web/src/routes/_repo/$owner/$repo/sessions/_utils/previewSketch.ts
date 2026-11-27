@@ -2,6 +2,7 @@
 export interface SketchPoint {
   x: number;
   y: number;
+  /** Line width at this point. Faster strokes draw thinner, like a pen. */
   width: number;
 }
 
@@ -11,7 +12,9 @@ export type SketchStroke = SketchPoint[];
 export const SKETCH_INK = "#ef4444";
 const MAX_WIDTH = 4;
 const MIN_WIDTH = 1.75;
+/** Width lost per CSS pixel moved between samples. */
 const SPEED_THINNING = 0.12;
+/** Share of the new width taken each sample, so width changes stay smooth. */
 const WIDTH_EASING = 0.35;
 
 /** The next point of a stroke, its width eased from the previous point. */
@@ -44,6 +47,7 @@ export function drawSketchStrokes(
     const [first] = stroke;
     if (!first) continue;
     if (stroke.length === 1) {
+      // A tap leaves a dot.
       context.beginPath();
       context.arc(
         first.x * scale,

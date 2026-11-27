@@ -31,6 +31,7 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 
+/** Ties every sharing switch to the one visible explanation under the list. */
 const SHARING_HELP_ID = "account-sharing-help";
 
 /**
@@ -87,6 +88,7 @@ export function AccountsClient() {
             Add account
           </Button>
         }
+        // The list and its empty state manage their own padding.
         bodyVariant="list"
       >
         {accounts === undefined ? (
@@ -106,6 +108,9 @@ export function AccountsClient() {
                 index={index}
                 className="flex max-sm:flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
               >
+                {/* `basis-full` below `sm`: the share toggle plus two icon
+                    buttons take the whole width of a phone, so the account
+                    details own the first line and the controls the second. */}
                 <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                   <p className="truncate text-sm font-medium">
                     {account.label}
@@ -115,16 +120,22 @@ export function AccountsClient() {
                     {account.credentials.length} credential
                     {account.credentials.length !== 1 ? "s" : ""}
                   </p>
+                  {/* A standing share is only safe if its owner can see it
+                      being spent on, so surface who ran on it last. */}
                   {account.lastUsedAt !== undefined && (
                     <p className="truncate text-xs text-muted-foreground">
                       Last used{" "}
                       {account.lastUsedByName
                         ? `by ${account.lastUsedByName} `
                         : ""}
+                      {/* Stamped by the server, so a few seconds of clock skew
+                          would otherwise read as "in a few seconds". */}
                       {relativeTime(Math.min(account.lastUsedAt, Date.now()))}
                     </p>
                   )}
                 </div>
+                {/* Not a <label>: it would re-dispatch the click to the switch
+                    and toggle it twice. */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   Share with team
                   <Switch
@@ -176,6 +187,9 @@ export function AccountsClient() {
                 </Tooltip>
               </ListEnter>
             ))}
+            {/* The explanation of the switch, said once and visibly — it was a
+                14-word `title`, which a touch user never sees at all. Each
+                switch points at it with `aria-describedby`. */}
             <p
               id={SHARING_HELP_ID}
               className="px-4 py-3 text-xs text-muted-foreground"

@@ -43,19 +43,31 @@ export const timeRangeParser = parseAsStringLiteral(timeRanges)
   .withDefault("30d")
   .withOptions(searchOptions);
 
+// Quick Tasks list filters (shareable "what you're looking at" state). View
+// mode is a per-user presentation preference and stays in localStorage —
+// see quick-tasks/_utils.ts.
+// No default here (unlike most parsers): the fallback depends on the active
+// view, so quick-tasks/_utils.ts resolves null against a per-view default.
 export const quickTaskSortFieldParser = parseAsStringLiteral(
   QUICK_TASK_SORT_FIELDS,
 ).withOptions(searchOptions);
 
+// Same reason as quickTaskSortFieldParser — the default direction pairs with
+// the per-view default field, so it cannot be baked in here.
 export const quickTaskSortDirParser =
   parseAsStringLiteral(sortDirections).withOptions(searchOptions);
 
+// Quick Tasks default to "all time" (unlike the generic timeRangeParser's
+// "30d" default used elsewhere) and have no hourly view, so they keep their
+// own vocabulary and default.
 export const quickTaskTimeRangeParser = parseAsStringLiteral(
   QUICK_TASK_TIME_RANGES,
 )
   .withDefault(QUICK_TASK_FILTER_DEFAULTS.timeRange)
   .withOptions(searchOptions);
 
+// The defaults are the shared ones, so "cleared" (`clearedQuickTaskFilters`)
+// and "not filtered" cannot disagree.
 export const quickTaskUserParser = parseAsString
   .withDefault(QUICK_TASK_FILTER_DEFAULTS.user)
   .withOptions(searchOptions);
@@ -68,6 +80,12 @@ export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
   .withDefault([])
   .withOptions(searchOptions);
 
+// Projects list filters (shareable "what you're looking at" state). View,
+// timelineRange, and timelineZoom are per-user presentation preferences and
+// stay in localStorage — see projects/_utils.ts.
+// hiddenPhases stores exclusions (blocklist) of the derived project stages
+// (`PROJECT_STAGES`), so the default is empty. Old links naming a stored
+// phase ("code_review", "completed") drop those values.
 export const hiddenProjectStagesParser = parseAsArrayOf(
   parseAsStringLiteral(PROJECT_STAGES),
 )
@@ -80,10 +98,14 @@ export const projectSortFieldParser = parseAsStringLiteral(PROJECT_SORT_FIELDS)
 
 export type { SandboxTab };
 
+// Full sandbox path of the file open in the session File Viewer tab, persisted
+// in the URL so a viewed file survives reload and is shareable.
 export const fileViewerPathParser = parseAsString
   .withDefault("")
   .withOptions(searchOptions);
 
+// Whether a markdown file in the File Viewer shows rendered output or its
+// source. In the URL alongside `?file=` so the choice survives reload.
 const markdownViews = ["rendered", "source"] as const;
 export const markdownViewParser = parseAsStringLiteral(markdownViews)
   .withDefault("rendered")
@@ -93,6 +115,10 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return SANDBOX_TABS.some((tab) => tab === s);
 }
 
+/**
+ * Tabs that do not talk to the VM: Review, Agents, PRD, … and a project
+ * coordinator's Tasks.
+ */
 const NON_VM_SANDBOX_TABS = new Set([
   "tasks",
   "review",
@@ -146,6 +172,24 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
   return taskRouteSandboxTabs.some((tab) => tab === s);
 }
 
+/**
+ * The review tab set, shared by the standalone Reviews page
+ * (`/reviews/$prNumber/$reviewTab`) and the sandbox Review tab
+ * (`…/review/$tab`). One union so the two surfaces cannot drift apart.
+ *
+ * Three tabs, as t3code lays a pull request out: Summary (metadata, recap,
+ * description, checks, comments), Timeline (everything that happened, in
+ * order), and Code. Code keeps the `diffs` slug because its layout segment
+ * (`…/review/diffs/unified|split`) is nested under it on every sandbox surface.
+ *
+ * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
+ * `diffs`) are in links pasted into tasks and PR comments, so
+ * `canonicalReviewTab` still answers to every one of them.
+ *
+ * `prs` lists every pull request a session, quick task or project holds, and
+ * picks which one the other three tabs show. Sandbox surfaces only: the
+ * standalone page is already one pull request.
+ */
 const reviewTabs = ["summary", "timeline", "diffs", "prs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
 export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
@@ -165,6 +209,7 @@ export function canonicalReviewTab(s: string): ReviewTab | undefined {
   return isReviewTab(s) ? s : undefined;
 }
 
+// Layout for the Diffs tab — path segment (`/review/diffs/unified`).
 const diffViews = ["unified", "split"] as const;
 export type DiffView = (typeof diffViews)[number];
 export function isDiffView(s: string): s is DiffView {
@@ -271,6 +316,9 @@ export function parseDiffSearchFields(search: {
 export function parseCommentAnchorSearchField(search: { comment?: string }): {
   comment?: string;
 } {
+  // Optional rather than `comment: string | undefined`: TanStack derives the
+  // route's search type from this return, and a required-but-undefined key
+  // would force every `navigate({ search })` under the route to restate it.
   return typeof search.comment === "string" ? { comment: search.comment } : {};
 }
 
@@ -291,6 +339,8 @@ export function isSnapshotSettingsTab(s: string): s is SnapshotSettingsTab {
   return snapshotSettingsTabs.some((tab) => tab === s);
 }
 
+// `content`/`html` are PRD docs; `recap`/`summary` are PR-recap docs.
+// Legacy recap URLs still use `html`/`content` and canonicalize at the viewer.
 const docViewerTabs = ["content", "html", "recap", "summary"] as const;
 export type DocViewerTab = (typeof docViewerTabs)[number];
 
@@ -314,20 +364,26 @@ export const docModeParser = parseAsStringLiteral(docModes)
   .withDefault("editing")
   .withOptions(searchOptions);
 
+// Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
 export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 
 /** `?panelItem=` value that opens the chat Log instead of a doc row. */
 export const CHAT_LOG_PANEL_ITEM = "log";
 
+// Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
 export const chatLogKindParser =
   parseAsStringLiteral(CHAT_LOG_ENTRY_KINDS).withOptions(searchOptions);
 
+// Feedback page filters (`/feedback?sentiment=negative&from=agent&repo=o/r`).
+// Absent = all.
 export const feedbackSentimentParser =
   parseAsStringLiteral(FEEDBACK_SENTIMENTS).withOptions(searchOptions);
 export const feedbackAuthorParser =
   parseAsStringLiteral(FEEDBACK_AUTHORS).withOptions(searchOptions);
 export const feedbackRepoParser = parseAsString.withOptions(searchOptions);
 
+// Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
+// Absent means the chat's primary PR.
 export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
 
 const docCommentFilters = ["open", "resolved"] as const;
@@ -344,6 +400,8 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
+// The Inbox's two views: what waits for you (derived, no read state) and the
+// notification feed. Needs you is the default.
 export const inboxViews = ["needs", "updates"] as const;
 export type InboxView = (typeof inboxViews)[number];
 export const inboxViewParser = parseAsStringLiteral(inboxViews)
@@ -354,6 +412,9 @@ export function isInboxView(s: string): s is InboxView {
   return inboxViews.some((view) => view === s);
 }
 
+// "archived" is a separate list rather than a third state of the same one: the
+// backend splits the 100-row window on `archivedAt`, so Unread only ever means
+// "unread and not archived".
 export const inboxFilters = ["all", "unread", "archived"] as const;
 export type InboxFilter = (typeof inboxFilters)[number];
 export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
@@ -364,6 +425,8 @@ export function isInboxFilter(s: string): s is InboxFilter {
   return inboxFilters.some((filter) => filter === s);
 }
 
+// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
+// is part of what you are looking at, so it rides the URL with the filter.
 export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
 export type InboxGroup = (typeof inboxGroups)[number];
 export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
@@ -374,10 +437,17 @@ export function isInboxGroup(s: string): s is InboxGroup {
   return inboxGroups.some((group) => group === s);
 }
 
+// Selected notification id in the two-pane inbox, kept in the URL so the
+// selection survives reload and a notification can be linked directly.
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
 
+// The comment a notification click-through is aimed at. Written by the backend
+// into the notification href (`?comment=<id>`), never by the UI, so it replaces
+// rather than pushes — going back should leave the page, not the highlight.
 export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 
+// The chat message a shared link points at (`?message=<id>`). Written only
+// into copied links, so it replaces rather than pushes, like `?comment`.
 export const messageLinkParser = parseAsString.withOptions(searchOptions);
 
 export type { PullRequestListState } from "@eva/shared";
@@ -445,6 +515,11 @@ export const logViewParser = parseAsStringLiteral(logViews)
   .withDefault("overview")
   .withOptions(searchOptions);
 
+// New-session "linked codebases" picker (multi-repo sessions). Comma-separated
+// repo ids resolved against `githubRepos.list` by the picker — stale/unknown
+// ids are dropped rather than passed into `sessions.create` unbranded. Saved
+// codebase groups whose primary is a DIFFERENT repo deep-link here with these
+// same keys prefilled (see CodebasesPicker.tsx).
 export const linkedRepoIdsParser = parseAsArrayOf(parseAsString)
   .withDefault([])
   .withOptions(searchOptions);
@@ -460,9 +535,14 @@ export const installDependenciesParser = parseAsStringLiteral(
   .withDefault("1")
   .withOptions(searchOptions);
 
+// "Stack a new session on this PR" (review header). The PR number and its head
+// branch, which becomes the new session's base; the session's own PR then joins
+// that PR's GitHub stack. Cleared by the navigation that follows a send.
 export const stackOnPrParser = parseAsInteger.withOptions(searchOptions);
 export const stackBaseParser = parseAsString.withOptions(searchOptions);
 
+// Session Files tab root selector (multi-repo sessions): "" is the primary
+// repo (/tmp/repo), otherwise a linked repo's sandbox path.
 export const filesRootParser = parseAsString
   .withDefault("")
   .withOptions(searchOptions);

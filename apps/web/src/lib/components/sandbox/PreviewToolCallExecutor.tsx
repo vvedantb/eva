@@ -12,6 +12,7 @@ import {
   type PreviewToolCallRow,
 } from "@/lib/components/sandbox/previewWebMcp";
 
+/** Under the backend's 40 s wait, so the agent sees our error, not its own. */
 const PREVIEW_TOOL_CALL_TIMEOUT_MS = 30_000;
 
 export type PreviewToolCallParentId = Id<"sessions">;
@@ -22,8 +23,14 @@ export function sandboxOwnerParentId(
   return owner.sessionId;
 }
 
+/** One id per browser tab: the backend's claim election is between tabs. */
 const TAB_CLIENT_ID = crypto.randomUUID();
 
+/**
+ * Rows this tab has already started. Every preview pane of a chat mounts an
+ * executor and they all see the same pending rows, so the first one to reach
+ * a row takes it for the whole tab.
+ */
 const startedCallIds = new Set<Id<"previewToolCalls">>();
 
 /**
@@ -48,6 +55,7 @@ export function PreviewToolCallExecutor({
     row: PreviewToolCallRow,
     frame: HTMLIFrameElement,
   ) {
+    // A pane whose iframe has no document yet leaves the row for one that does.
     const target = frame.contentWindow;
     if (!target || startedCallIds.has(id)) return;
     startedCallIds.add(id);
@@ -57,11 +65,16 @@ export function PreviewToolCallExecutor({
     await complete({ id, clientId: TAB_CLIENT_ID, ...outcome });
   }
 
+  // Without an iframe there is nothing to run against, so no anchors mount and
+  // nothing is claimed. When the element arrives the anchors mount fresh.
   if (!iframeElement || !pending) return null;
 
   return (
     <>
       {pending.map((row) => (
+        // Anchor per pending row: the ref callback runs once when the row first
+        // appears — the effect-free equivalent of a mount effect, since
+        // useEffect is banned here. `startedCallIds` makes re-runs no-ops.
         <span
           hidden
           key={row._id}

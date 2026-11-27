@@ -6,6 +6,7 @@ import {
   SIDE_PANEL_RAIL_WIDTH_PX,
 } from "@vvedantb/ui";
 
+/** One preference for every sandbox rail in the app, hence a fixed key. */
 const STORAGE_KEY = "eva:sandbox-rail:labels";
 
 interface SandboxRailLabels {

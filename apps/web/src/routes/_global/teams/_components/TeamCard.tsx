@@ -62,6 +62,8 @@ export function TeamCard({
               className="block rounded-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35"
             >
               <Card className="h-full transition-colors hover:bg-muted/50">
+                {/* `max-sm:pr-10` reserves the lane the touch kebab sits in so
+                    the role pill never runs under it. */}
                 <CardHeader className="max-sm:pr-10">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -83,6 +85,9 @@ export function TeamCard({
                 </CardHeader>
               </Card>
             </Link>
+            {/* Touch has no right-click, so below `sm` the same items get a
+                visible kebab. It is a sibling of the <Link> rather than a child
+                (a button may not nest in an anchor) and sits above it at z-2. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

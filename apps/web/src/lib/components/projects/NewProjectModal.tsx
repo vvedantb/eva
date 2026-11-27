@@ -37,6 +37,7 @@ import { withMutationToast } from "@/lib/utils/mutationToast";
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** When provided, called with the new project id and auto-navigation is skipped. */
   onCreated?: (projectId: Id<"projects">) => void;
 }
 
@@ -105,6 +106,7 @@ export function NewProjectModal({
       if (onCreated) {
         onCreated(projectId);
       } else {
+        // The coordinator chat is on the project's sandbox surface.
         navigate({
           to: toInternalRepoHref(
             `${basePath}/projects/${projectId}/sandbox/documents`,
@@ -136,6 +138,8 @@ export function NewProjectModal({
     >
       <DialogContent
         className="max-w-2xl gap-0 p-0"
+        // Radix focuses the first focusable element (a header button); the
+        // prompt is what the person types into, so it takes focus instead.
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           editorRef.current?.focus();
@@ -154,6 +158,8 @@ export function NewProjectModal({
           />
         </div>
 
+        {/* Wider gaps below `sm` so the `hit-target` bleed on each trigger does
+            not overlap its neighbour's. */}
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-5 py-3 max-sm:gap-3">
           <Popover>
             <PopoverTrigger asChild>
@@ -182,6 +188,9 @@ export function NewProjectModal({
         <DialogFooter className="flex-col-reverse gap-2 border-t border-border px-5 py-3 sm:flex-row sm:justify-end">
           <Tooltip>
             <TooltipTrigger asChild>
+              {/* The tooltip's span is a flex item in the phone's stacked
+                  footer, so it — and the buttons inside — have to stretch or
+                  the actions sit narrow. */}
               <span className="inline-flex gap-2 max-sm:w-full max-sm:flex-col-reverse">
                 <Button
                   variant="secondary"

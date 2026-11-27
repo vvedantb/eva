@@ -18,10 +18,20 @@ import { prStateIconClass } from "./prStateIconClass";
 import { PrActionsSubmenus } from "./pr-menu/PrActionsSubmenus";
 
 interface PrLinkMenuItemsArgs {
+  /** Offers Create PR when set; omit on surfaces without that action. */
   createPr?: { enabled: boolean; isCreating: boolean; onCreate: () => void };
   prUrl: string | undefined;
+  /** Colours the View PR icon (sessions only); others leave it default. */
   prState?: PrState;
+  /**
+   * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
+   * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).
+   */
   owner?: PrOwnerRef;
+  /**
+   * True when a deployment exists — renders the disabled View Preview hint,
+   * behind the `viewVercelDeployment` experimental flag.
+   */
   hasDeployment: boolean;
 }
 
@@ -70,6 +80,7 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
         {showViewPr && hasPrRows ? (
           <PrActionsSubmenus variant="dropdown" prs={ownerPrs} />
         ) : null}
+        {/* A chat whose PR predates the `pullRequests` rows has only a URL. */}
         {showViewPr && !hasPrRows && args.prUrl !== undefined ? (
           <DropdownMenuItem asChild>
             <a href={args.prUrl} target="_blank" rel="noopener noreferrer">

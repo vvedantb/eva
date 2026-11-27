@@ -1,5 +1,11 @@
 import type { PrOverview } from "./prOverviewMeta";
 
+/**
+ * Every field `pullRequestOverviewValidator` requires, filled with a neutral
+ * default: an open, mergeable pull request with nothing attached to it. Shared
+ * so the review tests that only care about two or three fields do not each keep
+ * their own copy of the shape and drift apart when the validator grows.
+ */
 const BASE_OVERVIEW: PrOverview = {
   number: 1,
   title: "Add feature",

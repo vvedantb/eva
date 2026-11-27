@@ -24,6 +24,7 @@ import {
 } from "@/lib/dev/preview";
 
 export function ChangelogDialog() {
+  // Keyed by preview search so reopening `?changelog` resets dismiss without an effect.
   const [dismissedPreviewKey, setDismissedPreviewKey] = useState<string | null>(
     null,
   );

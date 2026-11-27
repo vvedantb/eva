@@ -19,6 +19,8 @@ export function TaskActivityItem({
   event: TaskActivityEvent;
   users: User[] | undefined;
 }) {
+  // PR merge/close is a GitHub-driven event, not a field edit, so it reads as a
+  // sentence rather than an "X → Y" change and has no actor avatar.
   const description = describeTaskActivity(event, users);
   if (description.kind === "pr") {
     return (
@@ -51,6 +53,7 @@ export function TaskActivityItem({
 
   return (
     <div className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground">
+      {/* Fixed slot on the shared timeline rail — bg masks the connector. */}
       <span className="relative z-10 flex size-4 shrink-0 items-center justify-center bg-background">
         {event.userId && actor ? (
           <UserInitials

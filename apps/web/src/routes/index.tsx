@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LandingPage } from "./_components/LandingPage";
 
 const searchSchema = z.object({
+  // A bare `?agent` (no value) parses as "", so accept it alongside `?agent=true`.
   agent: z
     .union([z.boolean(), z.literal("")])
     .optional()
@@ -11,6 +12,8 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/")({
   validateSearch: searchSchema,
+  // A preload must not navigate the whole page, so the agent-login hand-off
+  // only runs for a real visit.
   beforeLoad: ({ context, search, preload }) => {
     if (search.agent && !preload) {
       window.location.href = "/api/auth/agent-login";

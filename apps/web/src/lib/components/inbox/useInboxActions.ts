@@ -13,6 +13,7 @@ export interface InboxListArgs {
   archived: boolean;
 }
 
+/** Rewrites the list the inbox is currently showing. */
 function patchList(
   localStore: OptimisticLocalStore,
   listArgs: InboxListArgs,
@@ -23,12 +24,14 @@ function patchList(
   );
 }
 
+/** Moves the unread badge by `delta`, never below zero. */
 function adjustUnread(localStore: OptimisticLocalStore, delta: number): void {
   patchLoadedQuery(localStore, api.notifications.countUnread, {}, (count) =>
     Math.max(0, count + delta),
   );
 }
 
+/** Flips a set of rows' read state and moves the badge by what actually changed. */
 function setManyRead(
   localStore: OptimisticLocalStore,
   listArgs: InboxListArgs,
@@ -48,6 +51,11 @@ function setManyRead(
   adjustUnread(localStore, read ? -changed : changed);
 }
 
+/**
+ * Drops rows that crossed the archive line out of the list being shown. The
+ * badge only moves for archiving, since unarchiving returns rows that were
+ * marked read on the way in.
+ */
 function removeFromList(
   localStore: OptimisticLocalStore,
   listArgs: InboxListArgs,
@@ -159,6 +167,9 @@ export function useInboxActions(listArgs: InboxListArgs) {
         "inbox-bulk-read",
       );
     },
+    // The toast fires with the optimistic update rather than after the round
+    // trip: the rows are already gone from the list by then, so waiting would
+    // only delay the one control that brings them back.
     archive: (ids: Id<"notifications">[]) => {
       if (ids.length === 0) return;
       void catchMutationError(

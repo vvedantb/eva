@@ -77,6 +77,8 @@ export function IssuesList({ report }: { report: EvaluationReport }) {
     if (selected.size === 0) return;
     const count = selected.size;
     setIsCreating(true);
+    // Ternaries inside the `try`, and a `try`/`finally` with no `catch`, each
+    // bail the React Compiler out of this whole file. See CLAUDE.md.
     const plural = count === 1 ? "" : "s";
     const successMessage = autoRun
       ? `Created and started ${count} task${plural}`

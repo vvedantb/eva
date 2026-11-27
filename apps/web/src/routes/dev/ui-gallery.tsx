@@ -23,6 +23,11 @@ import { AiActivitySection } from "./_components/ui-gallery/AiActivitySection";
 import { KiboSection } from "./_components/ui-gallery/KiboSection";
 import { MarkdownSection } from "./_components/ui-gallery/MarkdownSection";
 
+/**
+ * Static specimens of every eva UI component (`@vvedantb/ui` under eva's config), one section per page load, so
+ * the UI migration can be proven pixel-identical with before/after captures
+ * (`/tmp/eva-migration/capture.mjs`). Dev only.
+ */
 const SECTION_NAMES = [
   "feedback",
   "controls",
@@ -72,6 +77,11 @@ export const Route = createFileRoute("/dev/ui-gallery")({
   component: UiGalleryPage,
 });
 
+/**
+ * Pins `?theme=` through the app's own ThemeModeProvider (the `.dark` class
+ * on <html>) as a preview, so it beats the saved theme without persisting it
+ * to Convex. Released when the gallery unmounts.
+ */
 function useGalleryTheme(theme: "light" | "dark") {
   const { setPreviewTheme } = useThemeMode();
   useEffect(() => {

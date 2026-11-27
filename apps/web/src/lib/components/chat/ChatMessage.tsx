@@ -77,11 +77,16 @@ import { MessageToolbar } from "@/lib/components/chat/_components/MessageToolbar
 
 const EVA_ICON = <EvaIcon />;
 
+/**
+ * A left-side bubble (a teammate, or Eva in the coordinator): the bottom-left
+ * corner squares against the avatar, so only the run's last bubble has it.
+ */
 function sideBubbleRadius(joinsNext: boolean): string {
   const r = "clamp(0.75rem, var(--radius), 1rem)";
   return joinsNext ? r : `${r} ${r} ${r} 0`;
 }
 
+/** Provider mark under an assistant turn; tooltip lists model, effort, account. */
 function MessageModelIcon({
   model,
   reasoningLevel,
@@ -118,41 +123,111 @@ function MessageModelIcon({
 
 interface ChatMessageProps {
   message: ChatBodyMessage;
+  /**
+   * False for rows the user has already scrolled past — the transcript backlog
+   * mounts a whole chat at once, and 80 simultaneous enter animations is both
+   * wrong (nothing arrived) and the most expensive part of that commit.
+   */
   animateIn?: boolean;
+  /** Absent (Manager Ave): user turns render as plain markdown. */
   repo?: ChatRepo;
+  /**
+   * False in simple view: drops the meta row under every turn (user: time,
+   * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
+   * stay on the right-click menu.
+   */
   showTurnMeta?: boolean;
+  /** The viewer's `scopeCheck` experimental flag. */
   showScopeCheck?: boolean;
+  /** True when this user turn belongs to a teammate (left-aligned). */
   isOtherUser?: boolean;
+  /** First name shown above teammate bubbles. */
   senderFirstName?: string;
+  /**
+   * Eva's reply sits in a teammate-style bubble with her mark (the project
+   * coordinator, which only talks and delegates).
+   */
   assistantBubble?: boolean;
+  /**
+   * The next row is the same sender's bubble: this one leaves the avatar (and
+   * its square corner) to the last bubble of the run.
+   */
   joinsNext?: boolean;
+  /** This user turn switches to a different model provider. */
   isHandoffBoundary?: boolean;
+  /**
+   * Preceding user turn's model snapshot — shown under the assistant reply
+   * (model lives on the user message at send/dequeue time).
+   */
   turnModel?: string;
   turnReasoningLevel?: string;
+  /** "Team" or the selected userProviderAccounts label/first name. */
   turnCredentialSourceLabel?: string;
   streamingActivity?: string;
   streamingContent?: string;
   onOpenFile?: (path: string) => void;
   onViewDiff?: (repoRelativePath?: string) => void;
+  /**
+   * Opens the Agents sandbox tab. Undefined on surfaces without one (tasks,
+   * projects), which also suppresses the sub-agent CTA row entirely.
+   */
   onOpenAgentsTab?: () => void;
+  /** Entity-wide sub-agent lifecycle entries; narrowed to this turn's spawns. */
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
   sandboxRunning?: boolean;
+  /**
+   * Sessions only: enables "Diff this turn" / "Restore to before this turn"
+   * on assistant turns that carry checkpoint shas.
+   */
   turnCheckpoint?: TurnCheckpointContext;
+  /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
+  /** Flash the row a shared message link (`?message=<id>`) opened at. */
   linkHighlight?: boolean;
+  /**
+   * Sessions: start a new chat with the transcript through this message. Takes
+   * the id so the parent can pass one stable handler to every row — a per-row
+   * closure is a new prop each render and re-renders the whole transcript.
+   */
   onFork?: (messageId: string) => void;
+  /**
+   * Reply threads (the coordinator chat): opens this message's thread. Adds
+   * the Reply action and, once it has replies, the "N replies" row under it.
+   * Takes the id so one stable handler serves every row, like `onFork`.
+   */
   onReply?: (messageId: string) => void;
+  /**
+   * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
+   * is read-only, which is what hides the Retry action on a failed turn.
+   */
   onRetryTurn?: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
   ) => void;
+  /** The preceding user turn, i.e. what Retry re-sends. */
   precedingUser?: {
     content: string;
     attachmentStorageIds?: Id<"_storage">[];
   };
+  /**
+   * Agent-composed panels (`render_ui`) for this turn. On a settled assistant
+   * reply they take the prose's slot behind a UI / Text tab strip, so only one
+   * of the two renderings is on screen. Otherwise (user turn, still streaming,
+   * failed turn, no prose) they render directly above the meta row so a panel
+   * is never dropped.
+   */
   belowContent?: ReactNode;
+  /**
+   * Artifacts saved in this turn (`create_artifact`). They sit with the turn's
+   * output, like media, and never take the prose's slot behind a tab.
+   */
   artifacts?: ReactNode;
+  /**
+   * Shows thumbs up / down on a finished assistant turn. False on surfaces
+   * with no chat parent (Manager Ave) and in simple view's hidden meta row.
+   */
   canRate?: boolean;
+  /** The viewer's saved rating and comment on this turn, if any. */
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
 }
@@ -210,6 +285,7 @@ export const ChatMessage = memo(function ChatMessage({
   const turnState = getAssistantTurnState(message);
   const copySource = turnCopySource(message.content, streamingContent);
   const copyPlain = copySource ? tokenizedToDisplayText(copySource) : undefined;
+  // A reply still streaming has nothing worth linking to yet.
   const userActions = [
     turnState.isStreamingPlaceholder ? undefined : buildLinkAction(message._id),
     buildForkAction(onFork, message._id),
@@ -218,6 +294,8 @@ export const ChatMessage = memo(function ChatMessage({
       : buildReplyAction(onReply, message._id),
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
+  // The coordinator chat swaps the footer row for a floating toolbar and
+  // keeps "N replies" on its own line under the bubble (projects v2, PR D).
   const toolbarMode = assistantBubble;
   const toolbar =
     toolbarMode && !turnState.isStreamingPlaceholder ? (
@@ -226,6 +304,7 @@ export const ChatMessage = memo(function ChatMessage({
         copyText={copyPlain}
         menuItems={rowActions.filter((action) => action.key !== "reply")}
         time={
+          // Eva's reply: when it finished and how long it took, as the footer row.
           message.role === "assistant" && message.finishedAt
             ? `${formatClockTime(message.finishedAt)} · ${formatDuration(message.timestamp, message.finishedAt)}`
             : formatClockTime(message.timestamp)
@@ -249,6 +328,8 @@ export const ChatMessage = memo(function ChatMessage({
         onOpen={() => onReply(message._id)}
       />
     ) : null;
+  // Under the bubble: "N replies", in the coordinator chat (no footer row
+  // there) or wherever the footer row is hidden.
   const underLine =
     threadControl && (toolbarMode || !showTurnMeta) ? threadControl : null;
 
@@ -321,6 +402,7 @@ export const ChatMessage = memo(function ChatMessage({
             )}
           </AIMessage>
           {underLine ? (
+            // Under the bubble: "N replies" (see `underLine`).
             <div
               className={cn(
                 "mt-1 flex flex-wrap items-center gap-2",
@@ -339,6 +421,7 @@ export const ChatMessage = memo(function ChatMessage({
   );
 });
 
+/** What Copy takes: the settled prose, else whatever has streamed so far. */
 function turnCopySource(content: string, streamingContent?: string): string {
   return content.trim().length > 0 ? content : (streamingContent ?? "");
 }
@@ -397,7 +480,9 @@ function UserTurn({
   threadControl,
   toolbar,
 }: {
+  /** "N replies", always visible in the footer row. */
   threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
   toolbar?: ReactNode;
   joinsNext: boolean;
   message: ChatBodyMessage;
@@ -411,6 +496,8 @@ function UserTurn({
   copyPlain?: string;
   userActions: ChatMessageActionItem[];
 }) {
+  // Two MCP provenances, never both on one row: a child chat shows the turns
+  // posted from outside the composer, Eva shows the wake-ups its children fired.
   const isOrchestratorNotification = message.orchestratorNotification === true;
   const sentViaMcp = message.sentViaOrchestrator === true;
   const orchestratorTag = isOrchestratorNotification
@@ -431,6 +518,7 @@ function UserTurn({
           data-pii
           className={cn(
             "text-2xs font-medium text-muted-foreground",
+            // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
             "pl-9",
           )}
         >
@@ -494,8 +582,12 @@ function UserTurnBubble({
   isOtherUser: boolean;
   joinsNext: boolean;
   isMcpProvenance: boolean;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
   toolbar?: ReactNode;
 }) {
+  // min-w-0 stops the default `min-width: auto` on this flex item from letting
+  // one unbreakable token (a JWT, a long URL) stretch the bubble past the
+  // message column.
   const bubble = (
     <div className="flex min-w-0 max-w-full items-end gap-2">
       {isOtherUser ? (
@@ -509,7 +601,8 @@ function UserTurnBubble({
           isOtherUser
             ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
             : isMcpProvenance
-              ?
+              ? // Not typed in the Eva composer — drop it a tone
+                // step off the accent bubble.
                 "rounded-surface bg-muted group-[.is-user]:bg-muted"
               : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
         )}
@@ -530,8 +623,13 @@ function UserTurnBubble({
   );
 }
 
+/** How wide a coordinator chat bubble may grow (Eva, you and teammates). */
 const COORDINATOR_BUBBLE_MAX_WIDTH = "max-w-[70%]";
 
+/**
+ * The coordinator chat's bubble frame: the floating toolbar sits on its
+ * top-right corner and carries the time (the footer row is gone there).
+ */
 function BubbleWithToolbar({
   toolbar,
   className = "max-w-full",
@@ -551,6 +649,7 @@ function BubbleWithToolbar({
 
 interface AssistantTurnProps {
   message: ChatBodyMessage;
+  /** "Eva" over the first bubble of a run of her replies (the coordinator chat). */
   senderName?: string;
   turnState: ReturnType<typeof getAssistantTurnState>;
   showTurnMeta: boolean;
@@ -573,7 +672,9 @@ interface AssistantTurnProps {
   artifacts?: ReactNode;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies", always visible in the footer row. */
   threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
   toolbar?: ReactNode;
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
@@ -616,6 +717,9 @@ function AssistantTurn({
     turnModel,
     messageModel: message.model,
   });
+  // A panel and the prose that introduced it are two renderings of one answer,
+  // so the panel takes the slot and the prose moves behind a tab. Needs real
+  // prose to switch to, and a failed turn shows its error notice instead.
   const panelTabs =
     belowContent !== undefined &&
     turnErrorTitle === null &&
@@ -646,6 +750,12 @@ function AssistantTurn({
         {artifacts ? (
           <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
         ) : null}
+        {/* Sits above `belowContent` so agent-composed panels keep
+            their promised slot directly over the meta row. Shown in
+            simple view too: the verdict is a safety signal, and simple
+            view hiding it is exactly the reader who needs it. The hover card's per-hunk rows only
+            link out when the diff surface exists — simple view bounces
+            away from that tab, so they degrade to plain rows there. */}
         {showScopeCheck && message.scopeCheck ? (
           <div className="mt-1">
             <ScopeCheckChip
@@ -654,6 +764,8 @@ function AssistantTurn({
             />
           </div>
         ) : null}
+        {/* Only the panels the tab strip did not claim — a still-
+            streaming or failed turn has no prose to trade places with. */}
         {belowContent && !panelTabs ? (
           <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
         ) : null}
@@ -676,6 +788,7 @@ function AssistantTurn({
   );
 }
 
+/** Lines the rows under a bubbled reply up with the bubble, past Eva's mark. */
 function BubbleIndent({
   bubble,
   children,
@@ -690,6 +803,11 @@ function BubbleIndent({
   );
 }
 
+/**
+ * Streaming and settled bodies stay one ternary of fragments in one component
+ * so the rows they share by position (sub-agent CTA, question cards) keep
+ * their state when the turn settles.
+ */
 function AssistantTurnContent({
   message,
   turnState,
@@ -728,15 +846,22 @@ function AssistantTurnContent({
 }) {
   const simpleView = useSimpleView();
   const { isStreamingPlaceholder, questionSteps } = turnState;
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
   const streamingSteps = isStreamingPlaceholder
     ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
   const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
+  // The timeline shows the live text between the steps, in order. Simple view
+  // has no timeline, and older callbacks send no response steps, so the
+  // joined text block stays for them.
   const streamingTextIsInline =
     !simpleView && streamingSteps.some((step) => step.type === "response");
 
   const mediaEntries = message.media ?? [];
 
+  // Only surfaces with an Agents tab get the doorway to it.
   const agentSpawn = !onOpenAgentsTab
     ? null
     : deriveAgentSpawnSummary({
@@ -754,6 +879,9 @@ function AssistantTurnContent({
     <MessageContent
       className={cn(
         "py-2",
+        // The teammate bubble, mirrored onto Eva's side.
+        // `group-[.is-assistant]:w-fit` outranks the kit's own
+        // `group-[.is-assistant]:w-full`; a plain `w-fit` loses to it.
         bubble
           ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
           : "px-1",
@@ -761,6 +889,8 @@ function AssistantTurnContent({
       style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
     >
       {isStreamingPlaceholder && bubble ? (
+        // The coordinator chats like a person: dots while it works, the steps
+        // only on the finished message. A blocking question still shows.
         <>
           <EvaTypingLine />
           <AssistantQuestionCards steps={streamingQuestionSteps} />
@@ -789,6 +919,8 @@ function AssistantTurnContent({
         </>
       ) : (
         <>
+          {/* The coordinator chats like a person: its bubble is the reply
+              only, with no "Worked for" steps. */}
           {message.activityLog && !bubble && (
             <ActivityLogDisplay
               activityLog={message.activityLog}
@@ -825,11 +957,13 @@ function AssistantTurnContent({
       )}
     >
       {senderName ? (
+        // As a teammate's name: avatar (16) + gap (8) + bubble px-3 (12).
         <span className="pl-9 text-2xs font-medium text-muted-foreground">
           {senderName}
         </span>
       ) : null}
       <div className="flex min-w-0 max-w-full items-end gap-2">
+        {/* The rail's Eva mark. */}
         <div className="size-4 shrink-0 text-foreground">
           {joinsNext ? null : <IconEva size={16} />}
         </div>
@@ -845,6 +979,7 @@ function AssistantTurnContent({
   );
 }
 
+/** Settled reply: the error notice for a failed turn, else the prose (or panel tabs). */
 function AssistantTurnOutcome({
   message,
   turnErrorTitle,
@@ -860,11 +995,18 @@ function AssistantTurnOutcome({
   onRetryTurn?: ChatMessageProps["onRetryTurn"];
   precedingUser?: ChatMessageProps["precedingUser"];
 }) {
+  /* wrap-anywhere: without it a long unbreakable token is silently clipped by
+     MessageContent's overflow-hidden. */
+  // Settled text: "static" skips Streamdown's streaming pass (repair of
+  // unclosed syntax plus a post-mount transition re-render), which on a long
+  // chat re-rendered every reply at once about two seconds after opening.
   const turnProse = (
     <Markdown mode="static" components={CHAT_MARKDOWN_COMPONENTS}>
       {message.content}
     </Markdown>
   );
+  // Retrying means re-sending the prompt this turn answered, so it needs the
+  // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
     onRetryTurn && precedingUser
       ? {
@@ -907,6 +1049,8 @@ function AssistantTurnOutcome({
           ) : (
             turnProse
           )}
+          {/* A stopped turn can hold no text at all; without this it reads as
+              an empty reply rather than a turn that was cut short. */}
           {message.stopped ? (
             <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <IconPlayerStop size={12} />
@@ -937,7 +1081,9 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel?: string;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
   threadControl: ReactNode;
+  /** False while the reply still streams: nothing to rate yet. */
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
@@ -973,6 +1119,9 @@ function AssistantTurnMeta({
             ) : null}
             {message.finishedAt && message.timestamp ? (
               <span className="text-2xs tabular-nums text-muted-foreground/60">
+                {/* The turn's clock time is when Eva finished, not
+                    when it started — the duration next to it already
+                    says how long the reply took. */}
                 {formatClockTime(message.finishedAt)} ·{" "}
                 {formatDuration(message.timestamp, message.finishedAt)}
               </span>
@@ -1003,6 +1152,11 @@ function UserMessageBody({
   );
 }
 
+/**
+ * Provider mark under the user turn that switched providers — the quiet twin of
+ * the "Handed off from X to Y" alert row. Matches the `orchestratorTag` chip
+ * above the bubble so both provenance tags read as one family.
+ */
 function HandoffModelChip({
   model,
   className,
@@ -1039,6 +1193,7 @@ function UserMessageMeta({
   copyPlain?: string;
   actions?: ChatMessageActionItem[];
   timestamp?: number;
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
   threadControl?: ReactNode;
   className?: string;
 }) {

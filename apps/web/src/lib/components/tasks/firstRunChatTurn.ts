@@ -4,6 +4,13 @@ import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 
 type AgentRun = FunctionReturnType<typeof api.agentRuns.listByTask>[number];
 
+/**
+ * The fields the rule below reads, spelled out structurally instead of taking
+ * the whole `AgentRun`: callers still get their own row type back (see the
+ * generic), and the rule stays exercisable in a test without fabricating
+ * Convex ids. `triggeringCommentId` widens to `string` for the same reason —
+ * only whether it is set matters here.
+ */
 type ChatTurnRunFields = {
   status: AgentRun["status"];
   mode?: AgentRun["mode"];
@@ -75,6 +82,7 @@ export function firstRunAssistantContent({
   status: AgentRun["status"];
   resultSummary?: string;
   finishedAt?: number;
+  /** Resolved log for the run — `null` when it has none. */
   activityLog: string | null;
   startedAt: number;
 }): { content: string; activityLog?: string; finishedAt?: number } {
@@ -107,8 +115,18 @@ export function buildFirstRunChatTurn({
     "_id" | "title" | "description" | "createdAt" | "createdBy"
   >;
   run: AgentRun;
+  /**
+   * Resolved log for the run — `null` when the run has none, which is always
+   * the case while it is in flight (the log is written once on completion).
+   */
   activityLog: string | null;
+  /** Task attachments resolved to URLs, shown on the prompt bubble. */
   attachments?: { url: string | null; contentType: string | null }[];
+  /**
+   * Screenshots and recordings the run captured, resolved to URLs. They ride
+   * the assistant reply exactly like a chat turn's media — the run is the only
+   * place they are stored, since this turn has no `messages` row.
+   */
   media?: { url: string | null; contentType: string | null }[];
 }): ChatBodyMessage[] {
   const startedAt = run.startedAt ?? run._creationTime;
@@ -122,6 +140,8 @@ export function buildFirstRunChatTurn({
         : task.title,
       timestamp: task.createdAt,
       userId: task.createdBy,
+      // Snapshots stored on the run; buildPrecedingUserTurns reads them off the
+      // user turn to show the model icon under the assistant reply.
       ...(run.model !== undefined ? { model: run.model } : {}),
       ...(run.credentialSourceLabel !== undefined
         ? { credentialSourceLabel: run.credentialSourceLabel }

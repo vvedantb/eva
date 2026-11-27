@@ -45,6 +45,7 @@ export function UsageClient() {
   const [searchQuery, setSearchQuery] = useQueryState("q", searchParser);
   const [logView, setLogView] = useQueryState("view", logViewParser);
 
+  // Hourly for the 24h window so the current hour's bar fills in; daily otherwise.
   const now = useQuantizedNow(timeRange === "24h" ? HOUR_MS : DAY_MS);
   const startTime = getStartTime(timeRange, now);
   const query = (searchQuery ?? "").toLowerCase().trim();
@@ -53,6 +54,7 @@ export function UsageClient() {
   const isOverview = logView === "overview";
   const isProjectView = logView === "project";
 
+  // The ledger tabs own these subscriptions; the overview has its own query.
   const logs = useQuery(
     api.logs.listByRepo,
     isOverview

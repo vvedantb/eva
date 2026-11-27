@@ -20,6 +20,9 @@ function MainContent({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
+        // `dvh`, not `vh`: with `overflow-hidden` on the shell, a `100vh`
+        // height on iOS pushes the bottom of every repo page under the browser
+        // chrome with no way to scroll to it.
         "relative flex flex-col",
         SHELL_VIEWPORT_ROUTE_CLASS,
       )}
@@ -49,6 +52,7 @@ function RepoLayoutInner() {
           </div>
         </RepoGate>
       </MainContent>
+      {/* The host window already draws cursors; a second layer would double them. */}
       {IS_EMBEDDED ? null : <LiveCursors />}
     </RepoProvider>
   );

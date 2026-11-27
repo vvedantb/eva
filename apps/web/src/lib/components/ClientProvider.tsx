@@ -38,6 +38,7 @@ function EnsureUser() {
   return null;
 }
 
+/** Mirrors Convex auth into `convexPrefetch`, which route loaders read outside React. */
 function TrackConvexAuth() {
   const { isAuthenticated } = useConvexAuth();
   useEffect(() => {
@@ -69,6 +70,12 @@ function PresenceInner({ userId }: { userId: Id<"users"> }) {
   return null;
 }
 
+/**
+ * How long an unused query stays subscribed, and how many may wait. The
+ * library defaults (5 min, 250) kept every full transcript a session switch
+ * left behind live in memory and still receiving updates. 1 min covers a
+ * quick switch back; older sessions reload their tail first.
+ */
 const QUERY_CACHE_EXPIRATION_MS = 60_000;
 const QUERY_CACHE_MAX_IDLE_ENTRIES = 50;
 
@@ -103,6 +110,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <Navigate to="/" />
       </Unauthenticated>
       <Authenticated>
+        {/* TooltipProvider lives in `__root`, above the layers that render
+            outside this gate. */}
         <ThemeProvider>
           {children}
           <BlurPidEffect />

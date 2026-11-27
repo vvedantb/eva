@@ -30,6 +30,9 @@ export function SlideDeck({
   const containerRef = useRef<HTMLDivElement>(null);
   const stageAreaRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  // Previous slide in state, not a ref: reading a ref during render makes the
+  // React Compiler skip the whole file. Adjusting state during render is the
+  // supported way to compare against the previous prop.
   const [prevSlide, setPrevSlide] = useState(slide);
   const [direction, setDirection] = useState<1 | -1>(1);
   if (slide !== prevSlide) {

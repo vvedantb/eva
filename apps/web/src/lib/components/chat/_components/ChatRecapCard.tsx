@@ -17,6 +17,7 @@ export function ChatRecapCard({
   onDismiss,
 }: {
   kind: "away" | "full";
+  /** Undefined while the model writes it. */
   text: string | undefined;
   repo: ChatRepo;
   onDismiss: () => void;

@@ -3,6 +3,7 @@ import { type UsageTone } from "@eva/shared/usageLimits";
 import { USAGE_TONE_FILL_CLASS } from "./toneClasses";
 
 interface UsageBarProps {
+  /** Percentage of the window consumed, 0-100. */
   utilization: number;
   tone: UsageTone;
   className?: string;

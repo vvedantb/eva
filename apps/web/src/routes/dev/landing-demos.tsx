@@ -22,6 +22,7 @@ const DEMO_KEYS = [
 
 const searchSchema = z.object({
   demo: z.enum(DEMO_KEYS).catch("sessions"),
+  /** Container width in px: 666 is the showcase column at the widest page. */
   width: z.coerce.number().int().min(280).max(1200).catch(666),
 });
 

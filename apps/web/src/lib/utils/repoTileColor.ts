@@ -2,7 +2,9 @@ import { catColorForSlot } from "@vvedantb/ui";
 import { repoTileSlot } from "@eva/shared";
 
 export interface RepoTileColor {
+  /** Tinted fill behind the fallback initial. */
   bg: string;
+  /** Initial's colour — paired with `bg` so it reads in both themes. */
   text: string;
 }
 

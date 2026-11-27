@@ -199,6 +199,7 @@ describe("hostile payloads stay bounded", () => {
     );
 
     const block = formatWebMcpPrompt(inbound.discovery);
+    // 32k body budget, plus the fixed call instruction and delimiters.
     expect(block.length).toBeLessThanOrEqual(32_400);
     expect(block).toContain("(truncated)\nCall these with the Eva MCP tool");
     expect(block.endsWith("</webmcp_tools>")).toBe(true);
@@ -229,6 +230,7 @@ describe("hostile payloads stay bounded", () => {
   });
 });
 
+/** A fake Eva window: records listeners so a test can deliver replies. */
 function fakeHost() {
   const listeners = new Set<(event: WebMcpMessageEvent) => void>();
   const host: WebMcpHost = {
@@ -243,11 +245,13 @@ function fakeHost() {
     host,
     listeners,
     deliver(event: WebMcpMessageEvent) {
+      // Set iteration tolerates a listener removing itself mid-delivery.
       for (const listener of listeners) listener(event);
     },
   };
 }
 
+/** A fake iframe window that remembers what Eva posted to it. */
 function fakeTarget() {
   const posted: Array<{ type: string; requestId: string }> = [];
   const target: WebMcpTarget = {
@@ -296,6 +300,7 @@ describe("requestWebMcp", () => {
       result: { refunded: true },
     };
 
+    // Another window, another request, and a non-object are all ignored.
     deliver({ source: {}, data: result });
     deliver({ source: target, data: { ...result, requestId: "other" } });
     deliver({ source: target, data: "noise" });
@@ -370,10 +375,13 @@ describe("requestWebMcp", () => {
     const { target, posted } = fakeTarget();
     const reply = requestWebMcp(target, { type: "list" }, 30_000, host);
     const requestId = onlyRequestId(posted);
+    // Catch before the timer fires so the rejection is never unhandled. Bun
+    // hangs on an `expect(...).rejects` built before fake time moves.
     const settled = reply.catch((error: Error) => error.message);
     vi.advanceTimersByTime(30_000);
     expect(await settled).toBe("The preview did not answer within 30s");
     expect(listeners.size).toBe(0);
+    // A late reply after the timeout has nowhere to go.
     deliver({
       source: target,
       data: { type: "eva-preview-webmcp-error", requestId, message: "late" },

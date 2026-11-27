@@ -27,6 +27,7 @@ import {
   type CodebaseRepoRow,
 } from "../_utils";
 
+/** One row's logo + label, shared by group rows and repo rows. */
 function RowIdentity({
   logoUrl,
   seed,
@@ -160,6 +161,10 @@ export function ForeignGroupRow({ group }: { group: CodebaseGroup }) {
       to={toInternalRepoHref(
         repoHref(primary.owner, primary.name, primary.rootDirectory),
       )}
+      // `linked`/`group` are nuqs-owned, so they are absent from the router's
+      // typed search union and a bare object literal is rejected. The updater
+      // form carries the current search through and adds them on top, which is
+      // also what nuqs itself does when the picker writes these keys.
       search={(prev) => ({ ...prev, linked, group: String(group._id) })}
       className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60"
     >

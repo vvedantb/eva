@@ -40,6 +40,7 @@ export function useTaskArchive() {
     );
   };
 
+  /** Resolves `true` once archived; `false` after the error toast. */
   const archive = (ids: ReadonlyArray<Id<"agentTasks">>) => {
     const copy = archiveCopy("task", ids.length);
     return Promise.all(ids.map((id) => archiveTask({ id }))).then(
@@ -68,6 +69,7 @@ export function useTaskArchive() {
 interface ArchiveTaskDialogProps {
   open: boolean;
   onClose: () => void;
+  /** After a successful archive, once the dialog has closed. */
   onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;

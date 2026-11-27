@@ -52,6 +52,7 @@ export function AddAccountDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
+        {/* Remount when opened/editing target changes so draft state resets. */}
         {open ? (
           <AddAccountForm
             key={editing?._id ?? "new"}
@@ -81,6 +82,7 @@ function AddAccountForm({
   const [saving, setSaving] = useState(false);
   const [prefilling, setPrefilling] = useState(editing !== null);
 
+  // Reveal masked credentials once on mount when editing an existing account.
   useEffect(() => {
     if (!editing) return;
     let cancelled = false;
@@ -116,6 +118,8 @@ function AddAccountForm({
       const value = values[field.key]?.trim() ?? "";
       return value.length > 0 ? [{ key: field.key, value }] : [];
     });
+    // Built out here: ternaries and optional chaining inside the `try` bail the
+    // React Compiler out of this whole file. See CLAUDE.md.
     const accountId = editing?._id;
     const successMessage = editing ? "Account updated" : "Account added";
     const errorMessage = editing
@@ -159,6 +163,8 @@ function AddAccountForm({
                 disabled={editing !== null}
                 onClick={() => setProvider(option)}
                 className={cn(
+                  // `max-sm:min-h-10` lifts the 30px chip to a comfortable tap
+                  // target on touch without changing the desktop density.
                   "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors max-sm:min-h-10",
                   provider === option
                     ? "border-border bg-muted text-foreground"

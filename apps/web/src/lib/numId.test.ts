@@ -83,6 +83,10 @@ describe("resolveEntity", () => {
     expect(resolveEntity("12", null, { kind: "none" }).status).toBe("not-found");
   });
 
+  // Regression: links minted before the numId URLs (notification hrefs, "view
+  // in Eva" links in PR bodies) carry a raw Convex id. While that id is being
+  // looked up the route must NOT render "not found" — the flash was the whole
+  // symptom, and the param is never a valid numId in this state.
   it("stays loading — never not-found — while a legacy id is looked up", () => {
     const result = resolveEntity(doc._id, undefined, { kind: "loading" });
     expect(result).toEqual({
@@ -99,6 +103,8 @@ describe("resolveEntity", () => {
       kind: "redirect",
       to: "/acme/app/quick-tasks/7",
     });
+    // Status must not be `ready`, or the route paints the entity for a frame
+    // before the redirect it is also being told to perform.
     expect(result.status).toBe("loading");
     expect(result.redirectTo).toBe("/acme/app/quick-tasks/7");
   });
@@ -109,6 +115,8 @@ describe("resolveEntity", () => {
     expect(result.redirectTo).toBeNull();
   });
 
+  // The legacy lookup owns the outcome outright: a stale document left in the
+  // cache from the previous route must not race it into `ready`.
   it("lets the legacy lookup win over a document already in cache", () => {
     expect(resolveEntity(doc._id, doc, { kind: "loading" }).status).toBe(
       "loading",

@@ -37,11 +37,16 @@ import { useSandboxChatDraft } from "./useSandboxChatDraft";
 export interface SandboxChatPanelProps {
   isSandboxActive: boolean;
   isSandboxToggling?: boolean;
+  /** Startup steps while the preview sandbox wakes; undefined otherwise. */
   sandboxStartupActivity?: string;
+  /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
   onViewDiff?: (repoRelativePath?: string) => void;
+  /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
+  /** The task or project is archived: the chat is read-only (no composer). */
   isArchived?: boolean;
 }
 
@@ -65,15 +70,28 @@ export function SandboxChatPanel({
   onThreadOpen,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
+  /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
+  /**
+   * Messages take replies in threads (the project coordinator). The open
+   * thread is the `?thread=` param; the page shows it beside the chat.
+   */
   replyThreads?: boolean;
+  /**
+   * Opens a thread the page's way (the project rail's Replies tab). Without
+   * it, opening only sets `?thread=`.
+   */
   onThreadOpen?: (messageId: string) => void;
 }) {
   const { repo, basePath } = useRepo();
   const [, setThreadId] = useQueryState("thread", replyThreadParser);
   const { entity, doc, model, firstRun, ownerLabel } = binding;
+  // All undefined until the owner's session exists: nothing to read yet, and
+  // the first send creates it.
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
+  // `messages` is the live part; the rendered transcript adds the history
+  // above it once the reader goes there.
   const history = useOlderTranscript({
     parentId: parentId ?? "skip",
     live: messages,
@@ -87,10 +105,13 @@ export function SandboxChatPanel({
     api.streaming.get,
     streamingEntityId ? { entityId: streamingEntityId } : "skip",
   );
+  // Eva's open turn answers in a reply thread: the main chat shows no running
+  // bubble for it, only a status line that opens the thread.
   const threadTurn = useQuery(
     api.messages.openThreadTurn,
     replyThreads && parentId ? { parentId } : "skip",
   );
+  // The first run streams to its own row while it owns the bubble.
   const streaming = threadTurn
     ? undefined
     : firstRun?.isInProgress
@@ -100,6 +121,7 @@ export function SandboxChatPanel({
     if (onThreadOpen) onThreadOpen(messageId);
     else void setThreadId(messageId);
   };
+  // Same entityId the sandbox posts with (the entity id, not the stream key).
   const blockingQuestion = useQuery(
     api.pendingQuestions.getActive,
     parentId ? { entityId: parentId } : "skip",
@@ -172,6 +194,7 @@ export function SandboxChatPanel({
       handleSend(command, undefined, { skipReviewComments: true }),
   });
 
+  // The first run opens the chat, so it shows once nothing older is left.
   const chatMessages = [
     ...(history.hasOlder ? [] : (firstRun?.turn ?? [])),
     ...(history.messages ?? []),
@@ -214,6 +237,7 @@ export function SandboxChatPanel({
           streamingActivity={streaming?.currentActivity}
           streamingContent={streaming?.currentContent}
           streamingPendingQuestion={streaming?.pendingQuestion}
+          // A thread turn's question is answered in its thread.
           blockingQuestion={threadTurn ? undefined : (blockingQuestion ?? undefined)}
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}

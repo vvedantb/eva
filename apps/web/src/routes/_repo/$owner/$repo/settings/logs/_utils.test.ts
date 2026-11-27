@@ -33,8 +33,15 @@ function completion(fields: {
   };
 }
 
+/**
+ * These helpers were inlined across LogsSummaryGrid and ProjectSpendingGroup
+ * before the settings/logs consolidation; the numbers they produce are the
+ * spend a repo owner is billed against, so a silent drift here is expensive.
+ */
 describe("project-tagged completions bill as one line", () => {
   test("every project entity type collapses into the project group", () => {
+    // Chats, tasks, and interviews under a project must not split the bill
+    // across project-chat + quickTask + project rows.
     expect(groupKeyFor({ entityType: "project-chat", projectId: "p1" })).toBe(
       "project",
     );
@@ -101,6 +108,7 @@ describe("logTotals sums a period of completions", () => {
   });
 
   test("unparseable and missing result events count as zero, never NaN", () => {
+    // A single NaN poisons the sum and the summary renders "$NaN".
     const totals = logTotals([
       { entityType: "session", rawResultEvent: "{" },
       { entityType: "doc" },
@@ -137,6 +145,7 @@ describe("usageOf prefers the denormalised columns", () => {
       inputTokens: 10,
       outputTokens: 4,
       durationMs: 900,
+      // Deliberately disagrees with the columns: it must not be consulted.
       rawResultEvent: JSON.stringify({ total_cost_usd: 99 }),
     });
     expect(usage).toEqual({
@@ -173,6 +182,7 @@ describe("chart bucketing", () => {
   });
 
   test("bucketStartsBetween aligns to the local day boundary", () => {
+    // BST: getTimezoneOffset is -60, so local midnight is 23:00 UTC.
     const tzMs = -60 * 60_000;
     const starts = bucketStartsBetween(T0, T0 + DAY, DAY, tzMs);
     expect(starts).toEqual([
@@ -188,6 +198,7 @@ describe("chart bucketing", () => {
         { bucketStart: T0, model: "haiku", costUsd: 0.1 },
         { bucketStart: T0 + 2 * HOUR, model: "opus", costUsd: 5 },
         { bucketStart: T0, model: "opus", costUsd: 1 },
+        // Outside the window: ignored.
         { bucketStart: T0 - HOUR, model: "opus", costUsd: 100 },
       ],
       starts,

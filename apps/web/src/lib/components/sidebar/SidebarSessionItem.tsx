@@ -41,34 +41,54 @@ import {
   SESSIONS_TEXT_INDENT,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
+/** Identity of a session's actual primary repo, for a row linked in from it. */
 type SessionLinkedFrom = RepoPathParts;
 
 
 interface SidebarSessionItemProps {
   href: string;
   title: string;
+  /** "Regenerate title" is running — a muted hint sits beside the title. */
   isRegeneratingTitle?: boolean;
   sessionId: Id<"sessions">;
   userId: Id<"users">;
   createdAt: number;
   updatedAt?: number;
   status: SandboxStatus;
+  /** Reason the last wake attempt failed — turns the dot red on a closed row. */
   sandboxError?: string;
+  /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
+  /** The open turn waits on a blocking question; the "?" mark replaces the grid. */
   isAwaitingAnswer?: boolean;
+  /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
+  /** The user has an unsent message in this session; a pencil in the unread slot. */
   hasDraft?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
   prState?: PrState;
+  /** Branch chosen at session creation, shown in the hover card. */
   baseBranch?: string;
+  /** Multi-repo session: how many repos are cloned alongside the primary. */
   linkedRepoCount?: number;
+  /**
+   * Set when this row is shown here only because the session links this repo
+   * in — its actual primary repo (and href) is `linkedFrom`, not the repo
+   * whose sidebar this row lives in.
+   */
   linkedFrom?: SessionLinkedFrom;
+  /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /**
+   * The session's own app on rows in a cross-repo linked group: its mark sits
+   * left of the title, and the hover card names it.
+   */
   app?: RepoAppMarkRepo;
 }
 
+/** Fork glyph on rows made by "Fork session"; the hover card names the source. */
 function ForkedGlyph({ show }: { show: boolean }) {
   if (!show) return null;
   return (
@@ -80,6 +100,7 @@ function ForkedGlyph({ show }: { show: boolean }) {
   );
 }
 
+/** Multi-repo session: `+N` badge for how many repos clone alongside it. */
 function LinkedRepoCountBadge({ count }: { count?: number }) {
   if (!count) return null;
   return (
@@ -92,6 +113,7 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
   );
 }
 
+/** Muted hint on a row linked in from another repo's session. */
 function LinkedFromHint({ linkedFrom }: { linkedFrom?: SessionLinkedFrom }) {
   if (!linkedFrom) return null;
   return (
@@ -119,6 +141,12 @@ function SessionPrIcon({
   );
 }
 
+/**
+ * Leading mark: the "?" mark while the turn waits on the user's answer, the
+ * Drive pixel grid while it runs (both replace sandbox status — an open turn
+ * already implies an active sandbox). Otherwise the sandbox status color dot
+ * (simple view: error only).
+ */
 function SessionStatusLeading({
   label,
   dotClassName,
@@ -197,6 +225,7 @@ export function SidebarSessionItem({
   const isFolder = settings.layout === "folder";
   const displayStatus = sandboxDisplayStatus({ status, sandboxError });
   const statusStyle = SANDBOX_STATUS_STYLES[displayStatus];
+  // The row has no room for the reason, so the hover title carries it.
   const statusLabel =
     displayStatus === "error" && sandboxError
       ? `${statusStyle.label} — ${sandboxError}`
@@ -214,6 +243,8 @@ export function SidebarSessionItem({
     isAwaitingAnswer ||
     isExecuting ||
     showsSandboxStatusDot(displayStatus, simpleView);
+  // Executing wins: the leading "Working" grid says more than the dot would.
+  // One trailing mark: unread wins over the unsent-message pencil.
   const showUnread = hasUnread && !isExecuting;
   const trailingMark =
     hasDraft && !showUnread ? (

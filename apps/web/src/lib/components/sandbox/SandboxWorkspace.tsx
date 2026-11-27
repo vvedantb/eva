@@ -33,12 +33,15 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
  */
 export interface TerminalPanelApi {
   expanded: boolean;
+  /** Expands (creating the first terminal when none exist) or collapses. */
   toggle: () => void;
+  /** Creates a terminal pane and reveals the panel. */
   newTerminal: () => void;
   newTerminalDisabled: boolean;
 }
 
 interface SandboxWorkspaceProps {
+  /** Keys the panes, preview and PTYs (a quick task's is its session). */
   owner: SandboxOwner;
   storageScope: string;
   sandboxId: string | undefined;
@@ -93,6 +96,13 @@ export function SandboxWorkspace({
     setExpanded(next);
   };
 
+  // Imperative resize/collapse runs after the state commit rather than inside
+  // setPanelExpanded: its closure flows through the children() render call
+  // (terminalPanel), and a ref read reachable from render bails the whole file
+  // out of React Compiler memoization. The collapsedRef guard skips the sync
+  // when the change originated from a drag (handleResize already saw it), so
+  // no resize fires mid-drag. This also covers `expanded` flips from other
+  // tabs via the shared localStorage key.
   useEffect(() => {
     if (collapsedRef.current === !expanded) return;
     collapsedRef.current = !expanded;
@@ -104,6 +114,9 @@ export function SandboxWorkspace({
   }, [expanded, savedBottomSize, bottomPanelRef]);
 
   const handleResize = (size: PanelSize) => {
+    // A hidden panel reports NaN, not a collapse — see `isMeasuredPanelSize`.
+    // Reading it as expanded flipped the stored open flag on every session
+    // switch, leaving the Mod+J toggle a click behind the real panel.
     if (!isMeasuredPanelSize(size)) return;
     const collapsed = size.asPercentage === 0;
     if (collapsedRef.current === collapsed) return;

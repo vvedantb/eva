@@ -159,5 +159,6 @@ export const Route = createFileRoute(
       });
     }
   },
+  // Shell is rendered by the `sandbox` layout so Preview/Console stay mounted.
   component: () => null,
 });

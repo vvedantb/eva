@@ -5,6 +5,15 @@ import {
   stripPreviewGrantFromPath,
 } from "./previewGrant";
 
+/**
+ * The grant is a fresh bearer token on every getPreviewUrl call, so raw
+ * preview URLs never compare equal. Two things depend on stripping it:
+ * cached/shared links must not carry a token that goes stale or leaks access,
+ * and the preview hook compares grant-stripped targets to decide whether the
+ * iframe already shows the right app — a wrong answer reloads the running app
+ * on every return to a cached session tab.
+ */
+
 const GRANT = "__eva_grant";
 
 describe("stripPreviewGrant", () => {

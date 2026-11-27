@@ -19,8 +19,19 @@ import { BrandMark } from "../BrandMark";
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./DraftsDemo.css";
 
+// Somewhere to put an idea. Beats: the visitor writes an idea down and adds
+// it, and it drops in at the top of the drafts; they promote it; the draft
+// becomes a running task in its own row, with the Tasks icon, its number and
+// the agent at work (the payoff); the sidebar counts it out of Drafts and into
+// Tasks.
+//
+// Real strings: the title, the field, the typed idea, the two older drafts,
+// Promote, the task it became and the two sidebar counts. Meta lines and the
+// rest of the sidebar are bars.
+
 const IDEA = "Retry failed webhooks";
 
+/** Where the pointer waits: below the list, clear of the rows' words. */
 const REST = {
   wide: { x: 470, y: 340 },
   compact: { x: 250, y: 400 },

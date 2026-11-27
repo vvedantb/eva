@@ -10,7 +10,9 @@ import { LANDING_PREVIEWS } from "./previews";
 
 interface ShowcaseState {
   index: number;
+  /** Cleared for good once the visitor picks a tab themselves. */
   auto: boolean;
+  /** Whether the showcase is on screen — timers should not run out of sight. */
   visible: boolean;
 }
 
@@ -45,6 +47,8 @@ export function LandingShowcase({
   const autoRunning = tab.auto && tab.visible;
   const { Demo, seconds } = LANDING_PREVIEWS[active.preview];
 
+  // Stable for the stage's sake (a new callback restarts its script), so the
+  // auto/visible check reads current state instead of closing over it.
   const advance = () => {
     setTab((current) =>
       current.auto && current.visible
@@ -153,6 +157,11 @@ export function LandingShowcase({
   );
 }
 
+/**
+ * The active tab's underline. While the showcase is cycling it fills over the
+ * demo's length; otherwise it is a plain marker. They are separate branches
+ * because remounting is what restarts the fill.
+ */
 function TabUnderline({
   countdownKey,
   running,
@@ -183,6 +192,7 @@ function TabUnderline({
   );
 }
 
+/** Fades new panel content in on tab change. Keyed, so it replays each swap. */
 function SwapIn({
   swapKey,
   className,

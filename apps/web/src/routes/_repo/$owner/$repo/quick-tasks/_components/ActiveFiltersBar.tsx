@@ -15,6 +15,10 @@ export function ActiveFiltersBar<K extends string>({
   onClearAll,
 }: ActiveFiltersBarProps<K>) {
   return (
+    // Chips are 20px tall on a pointer device, which is not a tap target. They
+    // grow to the 40px floor below `sm` rather than taking `hit-target`:
+    // a chip's neighbour is 6px away, so the 8px ::after bleed on each of them
+    // would overlap and one chip would clear the other's filter.
     <AnimatePresence>
       <m.div
         key="active-filters"

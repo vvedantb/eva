@@ -26,6 +26,8 @@ export function ChatArtifactCard({
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Same toggle as `ChatHtmlFrame`. Fullscreen needs the preview, so it also
+  // expands the card; the frame mounts inside the fullscreen box.
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
@@ -104,6 +106,7 @@ function ArtifactPreview({
 }: {
   artifact: { _id: Id<"artifacts">; name: string };
 }) {
+  // The card rows carry no signed URL; `get` resolves it on first preview.
   const withUrl = useQuery(api.artifacts.get, { id: artifact._id });
   if (withUrl === undefined) {
     return (

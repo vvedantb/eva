@@ -17,14 +17,26 @@ export const BOTTOM_PANEL_ID = "bottom";
 type PanelPlacement = "left" | "right" | "top" | "bottom";
 
 interface PersistentPanelSizeOptions {
+  /** localStorage namespace. The size is stored under `${storageKey}:size`. */
   storageKey: string;
+  /** Which of the two panels the stored size describes. */
   panel: PanelPlacement;
+  /** Size used until the user drags, e.g. `"60%"` or `"256px"`. */
   defaultSize: string;
 }
 
 interface PersistentPanelSize {
+  /**
+   * Pass to the persisted panel's `defaultSize`. Frozen at mount, since the
+   * group only reads it once and changing it later would fight the live layout.
+   */
   initialSize: string;
+  /**
+   * The latest stored size, for callers that resize imperatively — expanding a
+   * collapsed panel back to the width the user chose, for instance.
+   */
   savedSize: string;
+  /** Pass to the `Group`'s `onLayoutChanged`. */
   onLayoutChanged: (layout: Layout) => void;
 }
 
@@ -50,14 +62,21 @@ export function usePersistentPanelSize({
   );
   const savedSize = usableStoredSize(storedSize, defaultSize);
   const [initialSize] = useState(savedSize);
+  // Guards the first layout report; see `onLayoutChanged` below.
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
   }, []);
 
   const onLayoutChanged = (layout: Layout) => {
+    // The group reports its starting layout from a layout effect, and effects
+    // run child-first — so it fires before this component's own effects, while
+    // `useLocalStorage`'s setter is still a stub that throws. Nothing is lost by
+    // skipping it: that first report only echoes back `initialSize`.
     if (!isMounted.current) return;
     const percentage = panelPercentage(layout, panel);
+    // Null when a panel is missing; 0 when collapsed — collapsed state is
+    // tracked separately, and 0 is not a width worth returning to.
     if (percentage === null || percentage === 0) return;
     setSavedSize(`${percentage}%`);
   };

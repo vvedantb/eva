@@ -39,6 +39,7 @@ type AutomationListItem = FunctionReturnType<
 
 interface GlobalAutomationGroupProps {
   repo: RepoWithLogo;
+  /** Deduped to this app by the parent panel. */
   automations: AutomationListItem[];
   isLoading: boolean;
   pathname: string;
@@ -159,6 +160,8 @@ export function GlobalAutomationGroup({
                     segment,
                     pathname,
                   );
+                  // Plain `string`, not a template-literal type: `<Link to>` is a
+                  // union of known route paths and rejects the narrowed form.
                   const href: string = `${baseUrl}/${segment}`;
                   return (
                     <m.div

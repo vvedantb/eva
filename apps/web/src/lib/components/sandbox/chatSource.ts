@@ -2,6 +2,11 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { encodeRepoParam } from "@/lib/utils/repoUrl";
 
+/**
+ * The chat (session / quick task / project) a doc or artifact was created
+ * from. Backend: `convex/_chatSource/helpers.ts`; both tables share it.
+ */
+
 /** Chat to list or create rows for (`listForSource` / `create`). */
 export type ChatSourceArg = FunctionArgs<
   typeof api.docs.listForSource
@@ -14,6 +19,7 @@ export type ChatSource = NonNullable<
 
 export type ChatSourceKind = ChatSource["kind"];
 
+// The labels are shared with the phone Documents list.
 export {
   chatSourceKindLabel,
   chatSourceLabel,

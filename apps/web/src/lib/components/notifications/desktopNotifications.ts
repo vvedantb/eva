@@ -1,5 +1,18 @@
 import { useSyncExternalStore } from "react";
 
+/**
+ * OS-level pop-ups for inbox notifications while an Eva window is open but
+ * not focused (another app in front, minimised, background tab).
+ *
+ * Per device, not a Convex flag: the browser grants permission per device, so
+ * a synced flag would read "on" on a laptop that never allowed it. The
+ * localStorage opt-in lets someone switch it off without revoking the
+ * browser permission.
+ *
+ * Only works while an Eva window is open. Delivering with Eva closed needs
+ * Web Push — see internal/desktop-notifications-web-push.md.
+ */
+
 const STORAGE_KEY = "eva-desktop-notifications";
 
 type EnableResult = "granted" | "denied" | "unsupported";
@@ -26,6 +39,7 @@ function setOptIn(on: boolean): void {
 
 function subscribe(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
+  // Another tab toggling it.
   window.addEventListener("storage", onStoreChange);
   return () => {
     listeners.delete(onStoreChange);

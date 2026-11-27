@@ -10,6 +10,7 @@ import { ListEnter } from "@vvedantb/ui";
 
 interface UsageProviderSectionProps {
   entry: UsageAccountEntry;
+  /** Passed in so every row in one card measures against the same instant. */
   now: number;
 }
 

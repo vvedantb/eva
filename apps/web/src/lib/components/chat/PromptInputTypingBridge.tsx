@@ -19,6 +19,8 @@ export function PromptInputTypingBridge({
   const { textInput } = usePromptInputController();
   const value = textInput.value;
 
+  // Ignore the initial value (which may be a restored draft) so merely opening
+  // a conversation with a saved draft does not mark the user as typing.
   const seenInitial = useRef(false);
 
   useEffect(() => {

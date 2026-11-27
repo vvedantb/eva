@@ -31,6 +31,7 @@ interface ProjectDetailHeaderActionsProps {
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
+  /** The project's main chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
 }
@@ -56,6 +57,7 @@ export function ProjectDetailHeaderActions({
   const projectsPath = `${basePath}/projects`;
   const segment = entityPathSegment(project);
   const isArchived = project.archivedAt !== undefined;
+  // Archived: back to the list, as a session archive does.
   const projectArchive = useProjectArchive(repoId, () => {
     void navigate({ to: toInternalRepoHref(projectsPath) });
   });
@@ -75,6 +77,8 @@ export function ProjectDetailHeaderActions({
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         {isArchived ? <ArchivedLabel /> : null}
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
+        {/* The controls share the chat header track. Tasks start through
+            Approve and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
           <DropdownMenu>
@@ -95,6 +99,7 @@ export function ProjectDetailHeaderActions({
               />
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Siblings of the menu: Radix unmounts menu content on close. */}
           {projectMenu.dialogs}
           <ProjectArchiveDialog
             target={projectArchive.target}
@@ -102,6 +107,10 @@ export function ProjectDetailHeaderActions({
             onConfirm={projectArchive.confirm}
             isArchiving={projectArchive.isArchiving}
           />
+          {/* One control for both directions — see `SandboxStartStopButton`.
+            Inert while a chat turn is in flight. This is the
+            only wake/sleep control now, the sandbox chat header carries
+            usage alone. The coordinator is read-only: no Commit & push. */}
           {isArchived ? null : (
             <SandboxStartStopButton
               isActive={isSandboxActive}

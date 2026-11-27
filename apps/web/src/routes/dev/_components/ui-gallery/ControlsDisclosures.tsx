@@ -24,6 +24,7 @@ import {
 import { IconChevronDown, IconSettings } from "@tabler/icons-react";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
+/** Fixed dates so the calendar never shows the real month or today. */
 const CALENDAR_MONTH = new Date(2025, 2, 1);
 const CALENDAR_TODAY = new Date(2025, 2, 3);
 const CALENDAR_SELECTED = new Date(2025, 2, 14);

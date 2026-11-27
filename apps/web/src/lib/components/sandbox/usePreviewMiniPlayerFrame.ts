@@ -9,13 +9,19 @@ import {
   type PreviewGesture,
 } from "./previewIframeHost";
 
+/** Smallest gap kept between the window and a viewport edge. */
 const EDGE_GAP_PX = 8;
+/** Pointer travel that turns a press into a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4;
 const MIN_WIDTH_PX = 240;
 const MIN_HEIGHT_PX = 150;
 
 const STORAGE_KEY = "eva:preview-mini-player:frame";
 
+/**
+ * Corner-relative like the Ave launcher: the window's resting place is the
+ * bottom-right, so anchoring there keeps it parked when the viewport grows.
+ */
 const frameSchema = z.object({
   right: z.number().finite(),
   bottom: z.number().finite(),
@@ -32,6 +38,7 @@ const DEFAULT_FRAME: PreviewMiniPlayerFrame = {
   height: 260,
 };
 
+/** Stored values are parsed, not trusted: a NaN would strand the window. */
 function deserializeFrame(raw: string): PreviewMiniPlayerFrame {
   try {
     const parsed = frameSchema.safeParse(JSON.parse(raw));
@@ -46,6 +53,7 @@ interface Viewport {
   height: number;
 }
 
+/** `clientWidth` excludes a classic scrollbar, matching `position: fixed`'s box. */
 function currentViewport(): Viewport {
   const root = document.documentElement;
   return { width: root.clientWidth, height: root.clientHeight };
@@ -55,6 +63,7 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
+/** Keeps the whole window on screen at its current size. */
 function clampFrame(
   frame: PreviewMiniPlayerFrame,
   viewport: Viewport,
@@ -114,6 +123,7 @@ interface GestureState {
   startX: number;
   startY: number;
   origin: PreviewMiniPlayerFrame;
+  /** Measured once at press: it cannot change while a pointer is captured. */
   viewport: Viewport;
   moved: boolean;
 }
@@ -126,9 +136,13 @@ export interface PointerGestureHandlers {
 }
 
 export interface PreviewMiniPlayerFrameApi {
+  /** Spread onto the fixed window element. */
   style: CSSProperties;
+  /** Spread onto the title bar. */
   moveHandlers: PointerGestureHandlers;
+  /** Spread onto the bottom-right corner grip. */
   resizeHandlers: PointerGestureHandlers;
+  /** Which gesture is live, for cursor and select-none styling. */
   gesture: Gesture | null;
 }
 
@@ -154,6 +168,8 @@ export function usePreviewMiniPlayerFrame(
     DEFAULT_FRAME,
     { deserializer: deserializeFrame },
   );
+  // Live frame while the pointer is down; `null` = at rest, so the committed
+  // frame is the single source of truth between gestures.
   const [live, setLive] = useState<{
     kind: Gesture;
     frame: PreviewMiniPlayerFrame;
@@ -181,6 +197,8 @@ export function usePreviewMiniPlayerFrame(
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      // Re-clamp: the saved frame may hang off a window that has since shrunk,
+      // in which case CSS is already drawing it somewhere else.
       origin: clampFrame(savedFrame, viewport),
       viewport,
       moved: false,
@@ -193,10 +211,12 @@ export function usePreviewMiniPlayerFrame(
     if (state === null || state.pointerId !== event.pointerId) return;
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
+    // Below the threshold this is still a click. Crossing it once latches.
     if (!state.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     state.moved = true;
     const { kind, origin, viewport } = state;
     if (kind === "move") {
+      // Offsets grow towards the bottom-right corner, so pointer travel subtracts.
       const moved = clampFrame(
         { ...origin, right: origin.right - dx, bottom: origin.bottom - dy },
         viewport,
@@ -205,6 +225,8 @@ export function usePreviewMiniPlayerFrame(
       publish(moved, origin);
       return;
     }
+    // Resize from the bottom-right corner: that corner follows the pointer
+    // while the top-left stays put, so the offsets shrink as the size grows.
     const right = Math.max(origin.right - dx, EDGE_GAP_PX);
     const bottom = Math.max(origin.bottom - dy, EDGE_GAP_PX);
     const resized = clampFrame(
@@ -229,6 +251,8 @@ export function usePreviewMiniPlayerFrame(
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (!state.moved) return;
+    // Batched with the reset, so no frame renders at the old saved offset
+    // between letting go and the write landing.
     if (live !== null) setSavedFrame(live.frame);
     setLive(null);
   };

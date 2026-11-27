@@ -43,6 +43,11 @@ interface SessionChromeTabsBarProps {
   pathname: string;
 }
 
+/**
+ * One app's rows out of a `useQueries` map. A failed query is reported as an
+ * `Error` value; the groups treat that the same as "still loading" rather than
+ * rendering a half-built strip.
+ */
 function listedSessions(
   result: SessionListItem[] | Error | undefined,
 ): SessionListItem[] | undefined {
@@ -146,11 +151,18 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
 
   return (
     <>
+      {/* The strip sits one tone step off the page so the selected tab, painted in
+          the page's own colour, reads as part of the content below — Chrome's
+          trick. z-20 keeps it above the page's top primary gradient. */}
       <div className="relative z-20 flex h-10 shrink-0 items-end bg-muted dark:bg-muted/40">
+        {/* Divider between strip and content. It is drawn behind the tabs rather
+            than as the strip's own border so the selected tab can cover it. */}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border"
         />
+        {/* Chrome's strip never scrolls: tabs shrink to fit the width, and the
+            chevron menu lists whatever no longer fits. */}
         <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-hidden px-1">
           {orderedRepos === undefined ? (
             <CenteredSpinner label="Loading session tabs" className="p-2" />
@@ -190,6 +202,8 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
               />
             ))
           )}
+          {/* Chrome's new-tab button: one + after the last group, never squeezed
+              out by tab pressure. A session needs an app, so it asks which. */}
           {orderedRepos && orderedRepos.length > 0 ? (
             <div className="flex h-9 shrink-0 items-center">
               <SessionTabsNewMenu repos={orderedRepos} />

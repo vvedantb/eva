@@ -62,14 +62,18 @@ export function PreviewPanelNavBar({
   onToggleFullscreen?: () => void;
   port: number;
   onPortChange: (port: number) => void;
+  /** Multi-repo sessions: one dev-server port per checked-out repo. */
   portOptions?: readonly PreviewPortOption[];
   previewPath: string;
   onPathChange: (path: string) => void;
   viewport: PreviewViewport;
   onToggleDevice: () => void;
+  /** Letterbox a locked viewport instead of filling the pane (responsive). */
   contain: boolean;
   onToggleContain: () => void;
+  /** Sessions and quick tasks on desktop only: toggles the floating mini-player. */
   popOut?: { active: boolean; onToggle: () => void };
+  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }) {
   const { iframeRef } = useWebPreview();
@@ -79,6 +83,7 @@ export function PreviewPanelNavBar({
   const deviceActive = viewport.mode !== "fill";
   const containActive = contain || deviceActive;
   const busy = snapshot.capturing || webMcp.discovering;
+  // The menu hides these modes, so the trigger carries their "on" state.
   const anyModeActive =
     deviceActive ||
     containActive ||
@@ -174,6 +179,7 @@ function PreviewToolItem({
 }: {
   icon: ReactNode;
   label: string;
+  /** Toggles show a check while on; one-shot actions omit it. */
   active?: boolean;
   disabled?: boolean;
   onSelect: () => void;

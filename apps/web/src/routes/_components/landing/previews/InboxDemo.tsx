@@ -16,6 +16,15 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./InboxDemo.css";
 
+// The inbox, while work lands in it. Beats: a task run finishes with a
+// failing check and drops in at the top; a pull request becomes ready for
+// review and drops in above it, the unread count rolling with each; the
+// visitor opens the pull request, its dot clears and the detail pane shows it
+// with its one action (the payoff).
+//
+// Real strings: the three notifications, their times, the unread count, the
+// open notification's detail and its button. Older rows are placeholder.
+
 type Kind = "pr" | "run" | "question";
 
 const KINDS: Record<Kind, { icon: Icon; tone: string }> = {
@@ -24,6 +33,7 @@ const KINDS: Record<Kind, { icon: Icon; tone: string }> = {
   question: { icon: IconMessage, tone: "neutral" },
 };
 
+/** Older rows under the story: bar widths for the title, line two and time. */
 const OLDER = [
   { title: 132, sub: 96, meta: 18, unread: true },
   { title: 108, sub: 120, meta: 22 },

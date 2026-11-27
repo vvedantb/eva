@@ -22,6 +22,8 @@ export function SkillSuggestionChips({
   chips: SlashItem[];
   onPick: (item: SlashItem) => void;
 }) {
+  // No early return on zero chips: AnimatePresence must stay mounted to play
+  // the last chip's exit. The row it sits in belongs to `ChatComposer`.
   return (
     <AnimatePresence initial={false}>
       {chips.map((chip) => (

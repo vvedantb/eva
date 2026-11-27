@@ -37,7 +37,16 @@ interface TaskSandboxPanelProps {
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
+  /**
+   * Resolved dev port for the current sandbox (the quick task session's
+   * `devPort`, or a project task's own) — already accounts for any per-app
+   * override on the repo.
+   */
   devPort?: number;
+  /**
+   * Full dev command for the current sandbox. Wired into the first terminal
+   * pane so it auto-starts the dev server with the resolved PORT.
+   */
   devCommand?: string;
   owner: SandboxOwner;
   panes: SandboxPanesApi;
@@ -45,12 +54,19 @@ interface TaskSandboxPanelProps {
   prUrl?: string;
   activeTab: SandboxTab | TaskDetailsTab;
   onTabChange: (tab: SandboxTab | TaskDetailsTab) => void;
+  /** A project task's Details tab body; leads the rail when set. */
   details?: ReactNode;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined in
+   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
+   */
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
   miniPlayer: { returnTo: string; title: string } | undefined;
 }
 
@@ -88,6 +104,9 @@ export function TaskSandboxPanel({
   const submitAnnotation = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
 
+  // Content-keyed Agents tab, folded from the chat transcript the task's chat
+  // panel already subscribes to (same entity ids). Artifacts stay on the task:
+  // the backend files a quick task's session artifacts under it.
   const artifactSource = { kind: "task" as const, taskId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
@@ -122,6 +141,8 @@ export function TaskSandboxPanel({
 
   const tabBarValue = activeTab === "prd" ? "preview" : activeTab;
 
+  // This surface has no custom tabs, so the tab bar only emits builtin ids
+  // (and Details for a project task).
   const handleTabChange = (tab: string) => {
     if (details !== undefined && tab === TASK_DETAILS_TAB.value) {
       onTabChange(TASK_DETAILS_TAB.value);
@@ -224,12 +245,15 @@ export function TaskSandboxPanel({
             prUrl={prUrl}
             agentBrowsingAt={viewState?.agentBrowsingAt}
             onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
+            // Backend starts the app in the Console tmux session after startup.
             runConsoleDevCommandOnConnect={false}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             autoWakeEligible={autoWakeEligible}
             onAnnotationSubmit={submitAnnotation}
+            // A collapsed rail is not on screen: no presence beacon, no auto-wake.
             presenceEnabled={!collapsed}
+            // A collapsed rail keeps its preview parked.
             miniPlayer={
               miniPlayer !== undefined && !collapsed
                 ? { ...miniPlayer, owner }

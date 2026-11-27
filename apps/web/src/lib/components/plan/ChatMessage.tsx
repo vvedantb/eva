@@ -25,6 +25,9 @@ interface ChatMessageProps {
   logs?: string;
   isStreaming?: boolean;
   userId?: Id<"users">;
+  // Stamped when the assistant placeholder was inserted (drives the live
+  // timer while streaming) and when the run completed (drives the static
+  // duration label on the collapsed activity accordion).
   startedAt?: number;
   finishedAt?: number;
 }
@@ -115,6 +118,7 @@ export function ChatMessage({
     </m.div>
   );
 
+  // Activity stream isn't copyable message text — only wrap finished turns.
   if (isStreaming) return messageBody;
 
   return (

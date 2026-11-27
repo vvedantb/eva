@@ -13,8 +13,10 @@ import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 
 interface MessageMentionTextProps {
   text: string;
+  /** Absent (Manager Ave): tokens render as inert chips. */
   repo?: ChatRepo;
   className?: string;
+  /** Root element — `"span"` for inline single-line contexts (see MentionText). */
   as?: "p" | "span";
 }
 
@@ -39,6 +41,8 @@ export function MessageMentionText({
           e.stopPropagation();
           void navigateToData(match.id);
         };
+        // This renders the author's own draft/queued text, so a token may name
+        // either a teammate or a data entity — AtMentionChip resolves which.
         return (
           <AtMentionChip
             key={key}

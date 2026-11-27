@@ -2,6 +2,14 @@ import { isValidElement, type ReactNode } from "react";
 import { expect, test } from "bun:test";
 import { PreviewViewportFrame } from "./PreviewViewportFrame";
 
+/**
+ * Regression (fix #1031): a viewport resize drag stayed stuck to the cursor
+ * when the release landed in the preview iframe or another app, or the window
+ * lost focus. The drag listened for `pointerup` on window, which never
+ * arrived. It now listens on the captured handle and ends on
+ * `lostpointercapture`, or on a move with no button held.
+ */
+
 const POINTER_ID = 7;
 
 class FakeHandle extends EventTarget {
@@ -68,6 +76,7 @@ function findHandle(
   if (!isValidElement<TreeProps>(node)) return undefined;
   if (node.props["aria-label"] === label) return node.props.onPointerDown;
   if (typeof node.type === "function") {
+    // Expand the hook-free handles component to reach its buttons.
     return findHandle(Reflect.apply(node.type, undefined, [node.props]), label);
   }
   return findHandle(node.props.children, label);
@@ -98,6 +107,8 @@ test("losing pointer capture ends the drag", () => {
   const { handle, sizes } = startDrag("Resize width");
   handle.dispatchEvent(pointer("pointermove", { clientX: 100 }));
 
+  // Fires after pointerup/cancel, and when the browser drops capture on
+  // window blur — the cases where a window `pointerup` never arrives.
   handle.captured.delete(POINTER_ID);
   handle.dispatchEvent(pointer("lostpointercapture"));
   handle.dispatchEvent(pointer("pointermove", { clientX: 300 }));

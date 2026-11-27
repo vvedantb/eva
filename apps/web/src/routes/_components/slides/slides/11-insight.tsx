@@ -3,6 +3,8 @@ import { motion, type Variants } from "motion/react";
 import { SlideStepContext } from "../_components/SlideShell";
 import { motionEase } from "@vvedantb/ui";
 
+/** `--motion-ease-out`, as a bezier tuple `motion/react` accepts. */
+
 const wordVariants: Variants = {
   hidden: { opacity: 0, y: 8, filter: "blur(8px)" },
   show: {

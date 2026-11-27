@@ -116,6 +116,11 @@ export function DropdownMenuSection() {
   );
 }
 
+/**
+ * Radix ContextMenu has no `open` prop: it opens on a `contextmenu` event at
+ * the pointer. A synthetic event at the trigger's fixed offset opens it at a
+ * stable spot on load.
+ */
 function openContextMenuOnMount(node: HTMLSpanElement | null) {
   if (!node) return;
   requestAnimationFrame(() => {

@@ -64,19 +64,25 @@ type ChatTurnStatus = FunctionReturnType<
 
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The session row; the header "…" menu reads its fields. */
   session: Doc<"sessions">;
+  /** The chat tab this panel shows; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
+  /** Every live chat of the session, for the tab strip. */
   chats: Doc<"sessionChats">[];
+  /** Open turns across the session's chats (tab dots + the slot-wait caption). */
   chatStatuses: ChatTurnStatus[];
   onSelectChat: (chat: Doc<"sessionChats">) => void;
   onCreateChat: () => void;
   isCreatingChat: boolean;
   title: string;
   branchName?: string;
+  /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prState?: PrState;
   messages: TranscriptMessage[];
+  /** The transcript has not loaded: show the loader, not the empty state. */
   isLoadingMessages: boolean;
   queuedMessages: QueuedSessionMessage[];
   streamingActivity?: string;
@@ -85,15 +91,25 @@ interface ChatPanelProps {
   startupStreamingActivity?: string;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
+  /** True while status is stopping / stop mutation in flight — not a start. */
   isSandboxStopping?: boolean;
   onSandboxToggle: (action: "start" | "stop") => void;
   isArchived?: boolean;
+  /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
+  /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
+  /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
   onViewDiff?: (repoRelativePath?: string) => void;
+  /** Opens the PRD sandbox tab (used by the Plan Ready banner). */
   onOpenPrdTab?: () => void;
+  /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   backgroundAgents?: Doc<"sessionChats">["backgroundAgents"];
+  /**
+   * False while this session shell is cached-hidden. Skips chat-local
+   * subscriptions that would otherwise keep a background turn warm.
+   */
   isRouteActive?: boolean;
 }
 
@@ -132,6 +148,8 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
   const chatId = chat._id;
+  // `messages` is the live part; the rendered transcript adds the history
+  // above it once the reader goes there.
   const history = useOlderTranscript({
     parentId: isRouteActive ? chatId : "skip",
     live: isLoadingMessages ? undefined : messages,
@@ -146,8 +164,11 @@ export function ChatPanel({
   const { sendForReview } = useSendSessionForReview(sessionId);
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
+  // The picker lists the session owner's accounts, not the viewer's — the turn
+  // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId, isRouteActive);
+  // Model + traits + account are owned by Convex, per chat tab.
   const {
     model,
     setModel,
@@ -166,6 +187,9 @@ export function ChatPanel({
       onTraitsPersist: setTraits,
       providerAccountId: stickyProviderAccountId,
     });
+  // Every visible model, across providers: a session may be moved onto another
+  // provider mid-conversation, and each pick carries the account it was made
+  // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
   const draftTarget = { kind: "sessionChat" as const, sessionId, chatId };
@@ -216,6 +240,8 @@ export function ChatPanel({
         next === null ? null : (resolveAccountId(next) ?? null),
       ),
   });
+  // Cached-hidden shells skip the turn-status subscription. The persisted open
+  // turn is canonical; see `isChatTurnExecuting`.
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
     isRouteActive ? { entityId: chatId } : "skip",
@@ -275,6 +301,8 @@ export function ChatPanel({
       goal: chat.goal,
       providerAccountId: stickyProviderAccountId ?? undefined,
     },
+    // A stopped session sandbox still gets the offer: sending wakes it. Until
+    // the sticky account loads there is no account to exclude, so no offer.
     canSwitchAccount: !isReadOnly && stickyProviderAccountId !== undefined,
     messages,
     accounts,
@@ -332,6 +360,8 @@ export function ChatPanel({
       isCreating={isCreatingChat}
     />
   );
+  // Queued on this chat while the session's run slots are all taken: the
+  // server parked the send instead of starting it (see `startExecute`).
   const isWaitingForSlot =
     !isExecuting &&
     queuedMessages.length > 0 &&
@@ -407,7 +437,8 @@ export function ChatPanel({
   const emptyStateDescription = isSandboxActive
     ? SANDBOX_CHAT_COPY.activeDescription
     : isSandboxToggling
-      ?
+      ? // Waking or sleeping is already the whole story; a second line would
+        // only restate the title.
         ""
       : SANDBOX_CHAT_COPY.asleepDescription;
 
@@ -486,6 +517,9 @@ export function ChatPanel({
           onCancel={handleCancel}
           onForkTranscript={handleForkTranscript}
           afterMessage={(messageId) => {
+            // Only plans captured on a message render in the transcript, so a
+            // plan stays where it was proposed. Unanchored plan content (Edit,
+            // update_plan, a seeded implementation session) lives in the Plan tab.
             const plan = proposedPlanForMessage(capturedPlans, messageId);
             if (!plan) return null;
             return (

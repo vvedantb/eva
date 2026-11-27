@@ -30,6 +30,7 @@ interface OverflowSession {
   title: string;
   updatedAt?: number;
   _creationTime: number;
+  /** Linked-in row: the session's primary repo owns its URL. */
   linkedFrom?: RepoPathParts;
 }
 
@@ -40,6 +41,7 @@ export interface OverflowGroup {
 
 interface SessionTabsOverflowMenuProps {
   groups: OverflowGroup[];
+  /** All apps - so empty apps still get a New session entry. */
   allRepos: RepoWithLogo[];
   pathname: string;
 }

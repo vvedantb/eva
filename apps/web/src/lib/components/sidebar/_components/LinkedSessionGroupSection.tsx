@@ -76,6 +76,7 @@ export function LinkedSessionGroupSection({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(false);
+  // `members` stays oldest first: the oldest names the group and owns rename.
   const [first] = group.members;
   const sortedSessions = sortSessionsForSidebar(
     group.members.map(({ session }) => session),
@@ -100,6 +101,8 @@ export function LinkedSessionGroupSection({
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <ContextMenu>
+        {/* The menu trigger wraps the collapsible trigger: both set
+            `data-state`, and the chevron must read the collapsible's. */}
         <ContextMenuTrigger asChild>
           <div>
             <CollapsibleTrigger asChild>
@@ -199,6 +202,7 @@ export function LinkedSessionGroupSection({
             sessionId={first.session._id}
             label={group.label}
             onArchived={() => {
+              // The open session was in the group, so it is gone now.
               if (selectedSessionId) void navigate({ to: "/sessions" });
               onNavigate?.();
             }}

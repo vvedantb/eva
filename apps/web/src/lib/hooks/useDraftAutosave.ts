@@ -4,10 +4,17 @@ import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
 import { useSingleFlight } from "@vvedantb/ui";
 
+/**
+ * Minimal shape the autosave needs from a mention editor ref: a tokenizer that
+ * converts the editor's display text (with @Label / /Label chips) into the
+ * stored `@[Label](id)` token form. Satisfied by `MentionEditorHandle` and its
+ * aliases (`MentionTextareaHandle`, `CommentMentionInputHandle`).
+ */
 interface DraftTokenizer {
   tokenize: (text: string) => string;
 }
 
+/** Draft target union — sourced from the backend mutation so it stays in sync. */
 type DraftTarget = FunctionArgs<typeof api.drafts.set>["target"];
 
 /**
@@ -30,6 +37,7 @@ export function useDraftAutosave<T extends DraftTokenizer>(
   const saveDraft = useSingleFlight(setDraft);
 
   const save = (rawValue: string): void => {
+    // Tokenize at save time so stored content carries mention/skill ids.
     const content = mentionRef.current?.tokenize(rawValue) ?? rawValue;
     void saveDraft({ target, content });
   };

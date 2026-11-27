@@ -3,8 +3,17 @@
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import type { SandboxTab } from "@/lib/search-params";
 
+/**
+ * Tab order matches `SandboxTabBar`'s always-visible rail (Preview, Browser,
+ * Review). Editor / Computer follow when the surface enables them.
+ */
 const SANDBOX_TAB_BAR_ORDER: SandboxTab[] = ["preview", "browser", "review"];
 
+/**
+ * Returns the Shift+Tab cycle order: an owner's leading tabs, enabled
+ * builtins, then Editor/Computer when shown, then File Viewer / PRD if
+ * shown, then custom tab slugs.
+ */
 function getCyclableSandboxTabs(
   enabledTabs?: ReadonlyArray<SandboxTab>,
   showPrdTab?: boolean,
@@ -79,6 +88,7 @@ export function useCycleSandboxTabHotkey({
   showDesignsTab?: boolean;
   showFilesTab?: boolean;
   customTabSlugs?: ReadonlyArray<string>;
+  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
   leadingTabSlugs?: ReadonlyArray<string>;
   showComputerTab?: boolean;
   showEditorTab?: boolean;

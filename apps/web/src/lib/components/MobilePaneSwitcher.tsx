@@ -25,7 +25,9 @@ export function MobilePaneSwitcher({
   onSelect,
 }: {
   labels: MobilePaneLabels;
+  /** Which pane is on screen — drives `aria-pressed`. */
   showingRight: boolean;
+  /** Called with the requested pane, including when it is already showing. */
   onSelect: (pane: "left" | "right") => void;
 }) {
   return (

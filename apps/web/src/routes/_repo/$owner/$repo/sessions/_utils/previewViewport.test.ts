@@ -121,6 +121,14 @@ describe("preview viewport", () => {
     });
   });
 
+  /**
+   * The contain size is read back out of sessionStorage, so a stale entry from
+   * an older build, or one edited by hand, is well-formed JSON of the wrong
+   * shape. Coercion made each of these NaN, and the clamp floors NaN to the
+   * 240px minimum — the preview letterboxed to a 240×240 stamp and, because the
+   * bad value stays on disk, kept doing it on every reload. Well-formed JSON is
+   * the case that survives `JSON.parse`, so the try/catch alone never caught it.
+   */
   test.each([
     ["strings instead of numbers", '{"width":"1280","height":"800"}'],
     ["a missing height", '{"width":1280}'],
@@ -134,6 +142,7 @@ describe("preview viewport", () => {
   });
 
   test("still clamps a real but out-of-range stored size", () => {
+    // Numbers we can trust are clamped, not discarded — only the shape is fatal.
     expect(parsePreviewContainSize('{"width":10,"height":10}')).toEqual({
       width: 240,
       height: 240,
@@ -141,6 +150,18 @@ describe("preview viewport", () => {
   });
 });
 
+/**
+ * The preview toolbar has two toggles over one guest box: Device (frame it at a
+ * chosen size) and Contain (letterbox a locked size inside the pane). They share
+ * `contain` and `containSize`, and both flags survive in sessionStorage, so a
+ * combination left behind by one toggle is what the other reads on the next
+ * click — and on the next page load, long after the click that set it.
+ *
+ * Every wrong combination still renders a plausible preview at the wrong size,
+ * which is exactly the failure a screenshot review waves through. The state
+ * these assertions pin is: contain is meaningless outside fill mode, no toggle
+ * ever leaves both on, and switching frames never loses the box the user sized.
+ */
 describe("preview device/contain framing", () => {
   const fill = { mode: "fill" } as const;
   const phone = presetViewport("iphone-12-pro");
@@ -158,6 +179,8 @@ describe("preview device/contain framing", () => {
     });
 
     test("ignores a stale contain flag on a device viewport", () => {
+      // The device frame is already a locked box. Honouring contain here paints
+      // the stored 1280×800 while the toolbar still reads "iPhone 12 Pro".
       expect(framedPreviewViewport(phone, true, desktop)).toEqual(phone);
     });
   });
@@ -173,6 +196,8 @@ describe("preview device/contain framing", () => {
         width: 980,
         height: 641,
       });
+      // The frame is the same pixels the user was already looking at, so the
+      // aspect lock they set on that box still applies.
       expect(next.resetAspectRatio).toBe(false);
     });
 
@@ -189,6 +214,9 @@ describe("preview device/contain framing", () => {
     });
 
     test("drops contain when leaving fill", () => {
+      // Turning the frame on from a contained pane is the path that used to
+      // leave contain set: harmless until the frame came off again, at which
+      // point the pane letterboxed to a box nobody had chosen.
       const next = togglePreviewDevice(
         {
           viewport: fill,
@@ -223,6 +251,8 @@ describe("preview device/contain framing", () => {
       });
       expect(next.viewport).toEqual(fill);
       expect(next.contain).toBe(true);
+      // Same pixels, no frame: dropping the device size here would snap the
+      // preview to 1280×800 the instant the button was pressed.
       expect(
         framedPreviewViewport(next.viewport, next.contain, next.containSize),
       ).toEqual({ mode: "freeform", width: 390, height: 844 });
@@ -235,6 +265,8 @@ describe("preview device/contain framing", () => {
         containSize: { width: 900, height: 600 },
       });
       expect(on.contain).toBe(true);
+      // Not a snapshot of the pane: that would match the pane exactly and read
+      // as a dead button until the splitter moved.
       expect(on.containSize).toEqual({ width: 900, height: 600 });
 
       const off = togglePreviewContain(on);
@@ -253,6 +285,8 @@ describe("preview device/contain framing", () => {
         width: 1440,
         height: 900,
       });
+      // Back to a frame, sized from the pane rather than the phone — but with
+      // contain off, so the two never stack.
       expect(framed.contain).toBe(false);
       expect(framed.viewport).toEqual({
         mode: "freeform",

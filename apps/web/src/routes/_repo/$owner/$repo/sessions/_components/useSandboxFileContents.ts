@@ -15,16 +15,25 @@ interface UseSandboxFileContentsArgs {
   sandboxId: string | undefined;
   repoId: Id<"githubRepos">;
   isActive: boolean;
+  /** Absolute sandbox path from `?file=`; empty when nothing is open. */
   filePath: string;
 }
 
 export interface SandboxFileContentsApi {
   state: ViewerState;
+  /**
+   * Bumped on every successful read and install, so callers can build a
+   * highlight cache key that changes exactly when the contents do.
+   */
   revision: number;
   refresh: () => void;
+  /** Record contents we just wrote, so no re-read is needed to show them. */
   install: (content: string) => void;
 }
 
+// Last successful read per sandbox+path. The session view re-renders every ~5s
+// (agent streaming heartbeat); seeding from this cache lets a re-render or
+// remount show content instantly instead of flashing the loading spinner.
 const fileCache = new Map<string, LoadedPayload>();
 
 /**
@@ -47,8 +56,13 @@ export function useSandboxFileContents({
       fileCache.get(fileCacheKey(sandboxId, filePath)) ?? { kind: "empty" }
     );
   });
+  // The (path + refresh) tuple we last kicked a load for. Guards against the
+  // ~5s heartbeat re-renders re-fetching the same file over and over: we only
+  // load when the selected file actually changes or Refresh bumps refreshKey.
   const loadedFor = useRef<string>("");
 
+  // The one effect here is unavoidable: the file to read comes from the URL,
+  // and reading it is an action with no query to subscribe to.
   useEffect(() => {
     if (!filePath) {
       setState({ kind: "empty" });
@@ -66,6 +80,8 @@ export function useSandboxFileContents({
     if (attempt === loadedFor.current) return;
     loadedFor.current = attempt;
 
+    // Show cached content immediately (no spinner) while we revalidate; only
+    // fall back to the spinner when this file has never been read.
     const cached = fileCache.get(key);
     setState(cached ?? { kind: "loading" });
 
@@ -91,6 +107,8 @@ export function useSandboxFileContents({
             setRevision((n) => n + 1);
           } else {
             fileCache.delete(key);
+            // if/else rather than a ternary: React Compiler bails on the whole
+            // file when a conditional expression sits inside a try/catch.
             if (res.status === "too_large") {
               setState({ kind: "too_large", size: res.size });
             } else {
@@ -121,6 +139,7 @@ export function useSandboxFileContents({
         }
       } catch (err) {
         if (cancelled) return;
+        // Let the next change retry rather than pinning the failed attempt.
         loadedFor.current = "";
         setState({
           kind: "error",
@@ -131,6 +150,9 @@ export function useSandboxFileContents({
 
     return () => {
       cancelled = true;
+      // A cancelled attempt must not count as loaded: StrictMode runs this
+      // effect twice on mount, and the second run would otherwise skip the
+      // read the first run just abandoned, leaving the viewer on its spinner.
       loadedFor.current = "";
     };
   }, [
@@ -149,6 +171,8 @@ export function useSandboxFileContents({
     refresh: () => setRefreshKey((k) => k + 1),
     install: (content: string) => {
       if (!sandboxId || !filePath) return;
+      // A saved file is never truncated: the write action refuses anything over
+      // the read cap, so what we sent is the whole file.
       const payload: LoadedPayload = {
         kind: "loaded",
         content,

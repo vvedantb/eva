@@ -59,6 +59,8 @@ export function PrCommentForm({
         </p>
       ) : null}
       <div className="flex items-center justify-between gap-2">
+        {/* eva authenticates as its GitHub App, so the comment carries the
+            app's identity rather than the reader's account. */}
         <p className="text-xs text-muted-foreground">Posted as the eva app.</p>
         <Button
           size="sm"

@@ -15,10 +15,14 @@ export const treeThemeVars: CSSProperties & Record<`--${string}`, string> = {
   "--trees-bg-muted-override": "var(--surface-secondary)",
   "--trees-border-color-override": "var(--border)",
   "--trees-accent-override": "var(--accent)",
+  // Rows carry state with fill alone — hover tint, muted fill when selected —
+  // and no outline on the clicked or focused row.
   "--trees-focus-ring-color-override": "transparent",
   "--trees-focus-ring-width-override": "0px",
   "--trees-selected-focused-border-color-override": "transparent",
   "--trees-selected-bg-override": "var(--surface-secondary)",
+  // The tree defaults to `system-ui`; point it at the app's own sans stack so
+  // it follows the user's theme font like every other surface.
   "--trees-font-family-override": "var(--font-sans)",
 };
 

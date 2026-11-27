@@ -20,6 +20,7 @@ interface TaskFilesSectionProps {
   onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onReplace: (key: string, file: File) => void;
+  /** The draft this composer is editing, when its files are already in storage. */
   draftTaskId: Id<"agentTasks"> | null;
 }
 
@@ -50,6 +51,7 @@ export function TaskFilesSection({
 }: TaskFilesSectionProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const removeAttachment = useMutation(api.agentTasks.removeAttachment);
+  // The stored file awaiting confirmation, held until confirm or cancel.
   const [pending, setPending] = useState<{
     key: string;
     storageId: Id<"_storage">;
@@ -60,6 +62,8 @@ export function TaskFilesSection({
   const [open, setOpen] = useState<OpenTextAttachment | null>(null);
 
   const requestRemove = (attachment: TaskAttachment) => {
+    // Not stored yet, or stored but not yet attached to a draft (a failed
+    // submit): dropping it locally is all we can do.
     if (!attachment.storageId || !draftTaskId) {
       onRemove(attachment.key);
       return;
@@ -84,6 +88,8 @@ export function TaskFilesSection({
   }) => {
     if (!draftTaskId) return;
     setIsRemoving(true);
+    // Reset is duplicated into the catch instead of using `finally`: React
+    // Compiler bails on the whole file when it meets a `finally` clause.
     try {
       await withMutationToast(
         removeAttachment({
@@ -113,6 +119,8 @@ export function TaskFilesSection({
       const title = labelForAttachment(attachment.name, attachment.contentType);
       const filename = attachment.name ?? "pasted-text.txt";
       const mediaType = attachment.contentType || "text/plain";
+      // Hydrated drafts have storageId + no local File — open read-only so
+      // editing would not orphan the stored blob.
       const readOnly =
         attachment.file === null && attachment.storageId !== null;
 
@@ -196,6 +204,7 @@ export function TaskFilesSection({
           className="hidden"
           onChange={(e) => {
             onAdd(Array.from(e.target.files ?? []));
+            // Reset so picking the same file again still fires onChange.
             e.target.value = "";
           }}
         />

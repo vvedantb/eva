@@ -19,8 +19,10 @@ import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 interface SessionGroupArchiveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Any member of the group; the mutation finds the group from it. */
   sessionId: Id<"sessions">;
   label: string;
+  /** After a successful archive, e.g. to leave a session that is now gone. */
   onArchived?: () => void;
 }
 
@@ -35,6 +37,8 @@ export function SessionGroupArchiveDialog({
   label,
   onArchived,
 }: SessionGroupArchiveDialogProps) {
+  // Read only while open; the sidebar may hide members ("Only mine"), but the
+  // archive reaches every active member, so the count comes from the server.
   const group = useQuery(
     api.sessions.listGroup,
     open ? { id: sessionId } : "skip",

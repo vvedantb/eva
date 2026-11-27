@@ -34,6 +34,7 @@ interface QuickTasksBulkBarProps {
   onClearSelection: () => void;
   activeBulkAction: BulkAction | null;
   onSetBulkAction: (action: BulkAction | null) => void;
+  /** Alt-click skips the confirm dialog for these actions. */
   onSkipConfirm?: Partial<
     Pick<Record<BulkAction, () => void>, "archive" | "run">
   >;
@@ -41,12 +42,15 @@ interface QuickTasksBulkBarProps {
 
 interface ActionDef {
   key: BulkAction;
+  /** Full label used in the More menu and for accessibility. */
   label: string;
+  /** Shorter label shown inline in the bar (defaults to `label`). */
   shortLabel?: string;
   icon: React.ComponentType<{ size: number; className?: string }>;
   destructive?: boolean;
 }
 
+/** Actions shown directly in the bar with responsive labels. */
 const primaryActions: ActionDef[] = [
   {
     key: "changeStatus",
@@ -63,6 +67,7 @@ const primaryActions: ActionDef[] = [
   { key: "run", label: "Run Tasks", shortLabel: "Run", icon: IconPlayerPlay },
 ];
 
+/** Secondary actions tucked into the "More" dropdown to keep the bar compact. */
 const moreActions: ActionDef[] = [
   { key: "assignMe", label: "Assign to Me", icon: IconUserCheck },
   { key: "addLabels", label: "Add Labels", icon: IconTags },
@@ -70,6 +75,7 @@ const moreActions: ActionDef[] = [
   { key: "schedule", label: "Schedule Run", icon: IconCalendarClock },
 ];
 
+/** Last in the bar, not destructive: the toast's Undo brings the tasks back. */
 const archiveAction: ActionDef = {
   key: "archive",
   label: "Archive All",
@@ -102,6 +108,7 @@ export function QuickTasksBulkBar({
     onSetBulkAction(action);
   };
 
+  /** Only `run` and `archive` have an Alt-to-skip path to advertise. */
   const toBarAction = (action: ActionDef): BulkBarAction => ({
     ...action,
     showSkipHint: action.key === "run" || action.key === "archive",

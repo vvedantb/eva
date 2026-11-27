@@ -10,6 +10,8 @@ import { useState } from "react";
  */
 export function useLoadedFade(loading: boolean): string | undefined {
   const [shownLoading, setShownLoading] = useState(loading);
+  // Adjust-state-on-change in render: a reload (new range, new filter) that
+  // shows the spinner again fades the content in again.
   if (loading && !shownLoading) setShownLoading(true);
   return !loading && shownLoading
     ? "animate-in fade-in duration-300"

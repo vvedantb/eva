@@ -45,6 +45,8 @@ export function useQueuedMessageMutations(
     );
   });
 
+  // Shows "Steering…" at once; the server may instead send the row as the
+  // next turn (Cursor, OpenCode, idle chat), which removes it.
   const steerQueuedMessage = useMutation(
     api.queuedMessages.steer,
   ).withOptimisticUpdate((localStore, args) => {

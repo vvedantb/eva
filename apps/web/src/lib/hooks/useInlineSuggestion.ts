@@ -8,7 +8,9 @@ import {
 } from "@vvedantb/ui";
 
 export interface InlineSuggestion {
+  /** Ghost text to render after the caret, or undefined when there is none. */
   suggestion: string | undefined;
+  /** Suppress the current suggestion until the text changes again. */
   dismiss: () => void;
 }
 

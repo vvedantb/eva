@@ -22,6 +22,13 @@ export {
   type AttachmentFileMeta,
 } from "@eva/shared";
 
+/**
+ * Shared rules and labelling for user-attached files, used by the chat
+ * composer, the quick task composer, and the task detail view. Keeping the
+ * accept lists and limits in one place means every surface rejects the same
+ * files with the same wording.
+ */
+
 /** Pasted plain text longer than this attaches as a `.txt` file instead. */
 export const PASTE_ATTACHMENT_THRESHOLD_CHARS = 2000;
 

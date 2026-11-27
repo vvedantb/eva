@@ -10,6 +10,7 @@ export function useOpenPrsOnGithub(): boolean {
   return flags?.openPrsOnGithub === true;
 }
 
+/** A plain left click: no modifier, so the browser would follow the link in place. */
 function isPlainLeftClick(event: {
   button: number;
   metaKey: boolean;

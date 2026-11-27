@@ -26,12 +26,14 @@ import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { ChatBodyMessage, ChatBodyQueuedMessage } from "./chatBodyUtils";
 
+/** "the Team account" or "Ana's account", as the usage-limit banner names it. */
 function accountLabel(credentialLabel: string): string {
   return credentialLabel === "Team"
     ? "the Team account"
     : `${credentialLabel}'s account`;
 }
 
+/** A picker change that would send the held queue now, waiting on a confirm. */
 type PendingSwitch =
   | { kind: "model"; model: AIModel }
   | { kind: "account"; accountId: string | null };
@@ -61,10 +63,12 @@ export function useChatQueueGate({
   setModel,
   setAccount,
 }: {
+  /** Undefined for a chat not created yet: nothing is queued on it. */
   parentId: Id<"sessionChats"> | undefined;
   messages: ReadonlyArray<ChatBodyMessage>;
   queuedMessages: ReadonlyArray<ChatBodyQueuedMessage>;
   model: AIModel;
+  /** The composer's account; null = Team. */
   accountId: string | null;
   accounts: ReadonlyArray<Pick<ModelAccount, "id" | "label">>;
   resolveAccountId: (
@@ -72,6 +76,7 @@ export function useChatQueueGate({
   ) => Id<"userProviderAccounts"> | undefined;
   isSandboxActive: boolean;
   setModel: (model: AIModel) => void;
+  /** Persists the pick; resolves once the replacement daemon is warm. */
   setAccount: (accountId: string | null) => Promise<void>;
 }) {
   const now = useQuantizedNow(60_000);
@@ -89,9 +94,11 @@ export function useChatQueueGate({
       message.providerAccountId ?? null,
     ),
   ).length;
+  /** Whether a picker change moves the held queue off the exhausted credential. */
   const releasesQueue = (nextModel: AIModel, nextAccountId: string | null) =>
     heldCount > 0 && !isHeldByUsageLimit(hold, nextModel, nextAccountId);
 
+  /** The queue panel's heading: why the queued messages have not sent. */
   const queueLabel = (isExecuting: boolean): string | undefined =>
     queuePanelLabel({
       isExecuting,
@@ -123,9 +130,13 @@ export function useChatQueueGate({
     setIsSwitching(true);
     const nextModel = next.kind === "model" ? next.model : model;
     const nextAccountId = next.kind === "account" ? next.accountId : accountId;
+    // An account switch waits for the replacement daemon first, so the queue
+    // cannot send on the exhausted credential's warm daemon.
     const ready =
       next.kind === "account" ? setAccount(next.accountId) : Promise.resolve();
     const queueParentId = parentId;
+    // Cleanup is duplicated across `then`/`catch` rather than written once in a
+    // `finally`: React Compiler cannot compile a `finally`.
     void catchMutationError(
       ready.then(() =>
         queueParentId === undefined

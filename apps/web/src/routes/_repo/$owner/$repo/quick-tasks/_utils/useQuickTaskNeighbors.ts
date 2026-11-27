@@ -12,6 +12,7 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 interface UseQuickTaskNeighborsArgs {
   taskId: string;
+  /** Whether the open surface is the detail tabs or the sandbox. */
   navSurface: "detail" | "sandbox";
   sandboxTab?: TaskRouteSandboxTab;
 }
@@ -36,6 +37,8 @@ export function useQuickTaskNeighbors({
   const selectedTask = tasks?.find((t) => t._id === taskId);
 
   const orderedTasks = useFilteredQuickTasks(tasks, {
+    // Kanban and list both render tasks grouped by status, so prev/next must
+    // walk that same order. Only the table view is a flat sorted list.
     groupByStatus: view === "kanban" || view === "list",
   });
 

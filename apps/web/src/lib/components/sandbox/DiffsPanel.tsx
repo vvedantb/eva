@@ -38,14 +38,25 @@ import {
 } from "@eva/shared";
 
 interface DiffsPanelProps {
+  /** PR URL for the current surface; absent when no PR exists yet. */
   prUrl?: string;
   repoId: Id<"githubRepos">;
+  /** The pull request's commits, to name the one Code is scoped to. */
   commits: readonly PrCommit[];
+  /** A commit to scope the diff to; null for the whole change. */
   commit: string | null;
   onCommitChange: (sha: string | null) => void;
+  /**
+   * Where to render Code's controls — the tab row's right end — or null while
+   * Code is not the open tab.
+   */
   controlsSlot: HTMLElement | null;
 }
 
+/**
+ * Code reads a size up from the 13/20 the diff renderer defaults to, as Cursor
+ * sets it. Custom properties inherit into the renderer's shadow DOM.
+ */
 const CODE_TYPE_VARS: CSSProperties & Record<`--${string}`, string> = {
   "--diffs-font-size": "14px",
   "--diffs-line-height": "22px",
@@ -58,6 +69,7 @@ type DiffSource =
       status: "ready";
       entries: readonly DiffFileEntry[];
       truncated: boolean;
+      /** Both ends of the diff, for "load full file"; null for a lone commit. */
       refs: { baseSha: string; headSha: string } | null;
       refreshing: boolean;
     };
@@ -84,6 +96,8 @@ export function DiffsPanel({
   const { owner, name } = useRepo();
   const { diffView, setDiffView, diffFile, setDiffFile } =
     useDiffSearchParams();
+  // Split view puts two code columns into a phone-width pane, so below `md` the
+  // diff is always unified, whatever the URL says.
   const isNarrow = useMediaQuery("(max-width: 767px)");
   const effectiveDiffView = isNarrow ? "unified" : diffView;
   const { isViewed, setViewed, viewedPaths } = useDiffViewedFiles(prUrl);
@@ -103,11 +117,15 @@ export function DiffsPanel({
   const review = usePendingReviewComments();
 
   const [fileFilter, setFileFilter] = useState("");
+  // Controlled open set — independent of Viewed, so a viewed file can still be
+  // expanded to re-read without clearing the tick (GitHub UX).
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [showContentSignal, setShowContentSignal] = useState(0);
   const [seededFilesKey, setSeededFilesKey] = useState<string | null>(null);
+  // State, not a ref: each file body needs it as its IntersectionObserver root.
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // The file set (`filesKey`) whose remembered file was already scrolled to.
   const initialScrollKeyRef = useRef<string | null>(null);
   const setFileRef = (path: string) => (el: HTMLDivElement | null) => {
     if (!el) {
@@ -115,6 +133,7 @@ export function DiffsPanel({
       return;
     }
     fileRefs.current.set(path, el);
+    // On first load with a remembered file, scroll to it once per file set.
     if (path === diffFile && initialScrollKeyRef.current !== filesKey) {
       el.scrollIntoView({ block: "start" });
       initialScrollKeyRef.current = filesKey;
@@ -144,6 +163,9 @@ export function DiffsPanel({
     return commitQuery.isError ? { status: "error" } : { status: "loading" };
   })();
 
+  // A drafted review comment is anchored by its position in a walk of the patch
+  // it was drawn on, and ignore-whitespace rewrites that patch. Flipping the
+  // toggle underneath one would silently move it, so it is refused instead.
   const hasPendingComments = (review?.comments.length ?? 0) > 0;
   const handleIgnoreWhitespaceChange = (next: boolean) => {
     if (hasPendingComments) {
@@ -170,12 +192,16 @@ export function DiffsPanel({
   const statuses = Object.fromEntries(
     fileEntries.map((entry): [string, GitStatus] => [entry.path, entry.status]),
   );
+  // Remounts the tree (whose model is created once) when the listed files change.
   const filesKey = `${commit ?? "all"}\n${filePaths.join("\n")}`;
   const visibleKey = `${commit ?? "all"}\n${visiblePaths.join("\n")}`;
 
+  // Re-seed open files when the changed set changes: open everything not yet
+  // Viewed, so a returning reviewer lands on what is left.
   if (source.status === "ready" && filesKey !== seededFilesKey) {
     setSeededFilesKey(filesKey);
     const unviewed = filePaths.filter((path) => !viewedPaths.includes(path));
+    // A remembered file opens even when it is marked Viewed.
     setOpenPaths(
       diffFile && !unviewed.includes(diffFile)
         ? [...unviewed, diffFile]
@@ -192,6 +218,7 @@ export function DiffsPanel({
   const handleSelect = (path: string) => {
     setDiffFile(path);
     ensureOpen(path);
+    // Below `md` the tree and the diff are separate panes.
     setShowContentSignal((n) => n + 1);
     requestAnimationFrame(() => {
       fileRefs.current
@@ -202,6 +229,7 @@ export function DiffsPanel({
 
   const handleViewedChange = (path: string, viewed: boolean) => {
     setViewed(path, viewed);
+    // GitHub: checking Viewed folds the file; unchecking unfolds it.
     setOpenPaths((current) => {
       if (viewed) return current.filter((entry) => entry !== path);
       return current.includes(path) ? current : [...current, path];
@@ -259,6 +287,7 @@ export function DiffsPanel({
               This diff exceeds the size limit. Changes shown are incomplete.
             </p>
           ) : null}
+          {/* One card per file with room between them, as Cursor lays it out. */}
           <Accordion
             type="multiple"
             value={openPaths}
@@ -285,6 +314,7 @@ export function DiffsPanel({
                   repoUrl={repoUrl}
                   viewRef={source.refs?.headSha ?? commit ?? "HEAD"}
                   scrollRoot={scrollRoot}
+                  // The scroll target must exist before it can be scrolled to.
                   eager={diffFile === entry.path}
                 />
               </div>
@@ -323,6 +353,8 @@ export function DiffsPanel({
   const body =
     treeOpen && fileEntries.length > 0 ? (
       <ResizableSidebar
+        // A new key, so widths remembered from the old narrow tree do not
+        // carry over and cut file names off again.
         storageKey="diff-file-tree-code"
         defaultWidth="340px"
         side="right"

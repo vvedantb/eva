@@ -25,7 +25,13 @@ export function SessionProposalCard({
   onReply,
 }: {
   proposal: SessionProposal;
+  /** Repo route prefix for the link to the started session. */
   basePath?: string;
+  /**
+   * Posts "do it here" to the agent. Undefined when the chat cannot send right
+   * now (archived, or the sandbox is asleep), which disables that button only:
+   * a new session does not need this chat.
+   */
   onReply?: (message: string) => void;
 }) {
   if (proposal.status === "pending") {
@@ -68,11 +74,14 @@ function PendingSessionProposal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reset is duplicated into the catch instead of using `finally`: React
+  // Compiler bails on the whole file when it meets a `finally` clause.
   const answer = async (choose: () => Promise<void>) => {
     if (submitting) return;
     setSubmitting(true);
     setError(null);
     try {
+      // The card turns into its answered row once the query updates.
       await choose();
       setSubmitting(false);
     } catch (cause) {

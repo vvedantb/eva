@@ -52,6 +52,8 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   },
   {
     id: "opencode",
+    // Not PROVIDER_LABELS.opencode ("opencode"): this slot has always said
+    // "OpenCode". Which casing is right is an open product question.
     label: "OpenCode",
     primaryKey: PROVIDER_PRIMARY_AUTH_KEY.opencode,
     matchKeys: OPENCODE_AUTH_ENV_KEYS,

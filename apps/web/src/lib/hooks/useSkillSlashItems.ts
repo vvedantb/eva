@@ -9,6 +9,7 @@ import type { SlashItem } from "@/lib/components/mentions";
  * composer loads the same three queries (see `skillSlashItems`).
  */
 export function useSkillSlashItems(
+  /** Undefined (Manager Ave, no codebase): the `/` menu is empty. */
   repoId: Id<"githubRepos"> | undefined,
   provider?: AIProvider,
 ): SlashItem[] {
@@ -18,6 +19,8 @@ export function useSkillSlashItems(
     useQuery(api.repoSystemSkills.listForRepo, repoId ? { repoId } : "skip") ??
     [];
   const catalogProvider = harnessCatalogProvider(provider);
+  // The harness's own catalog, reported by the sandboxes that run it. Global,
+  // so it is keyed by provider rather than repo.
   const harnessCatalog = useQuery(
     api.harnessSkills.getForProvider,
     catalogProvider && repoId ? { provider: catalogProvider } : "skip",

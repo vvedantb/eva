@@ -9,6 +9,7 @@ export interface CredentialFieldSpec {
   key: string;
   label: string;
   required: boolean;
+  /** Render as a multi-line textarea (JSON/TOML blobs) instead of an input. */
   multiline?: boolean;
   placeholder?: string;
 }

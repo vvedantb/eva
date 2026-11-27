@@ -4,22 +4,42 @@ import type { ReactNode } from "react";
 import { useIntersectionObserver } from "usehooks-ts";
 import type { DiffView } from "@/lib/search-params";
 
+/** Pierre's default diff line height, in px. */
 const LINE_HEIGHT_PX = 20;
+/** Height of a hunk separator row ("line-info" style), in px. */
 const HUNK_SEPARATOR_PX = 29;
+/** Vertical padding around the rendered diff body. */
 const BODY_PADDING_PX = 8;
+/**
+ * How far outside the scroll container a file starts rendering. Roughly one
+ * viewport of lookahead, so scrolling never lands on a placeholder.
+ */
 const LOOKAHEAD = "1000px 0px";
 
 interface DiffFileLazyBodyProps {
+  /** Change counts, used to reserve the right amount of space up front. */
   additions: number;
   deletions: number;
   contextLines: number;
   hunkCount: number;
   diffView: DiffView;
+  /**
+   * The scrolling ancestor. Must be the Diffs panel's own `overflow-auto`
+   * element: with the default (viewport) root, every file below the panel's
+   * visible area counts as intersecting and nothing is deferred.
+   */
   scrollRoot: Element | null;
+  /** Renders immediately, for the file a tree click or URL is scrolling to. */
   eager: boolean;
   children: ReactNode;
 }
 
+/**
+ * Estimated rendered height of a file's diff. Only needs to be close enough
+ * that the scrollbar does not jump noticeably when the real diff replaces the
+ * placeholder — split view stacks changed lines side by side, so it is as tall
+ * as the longer side rather than both sides combined.
+ */
 function estimateHeightPx({
   additions,
   deletions,

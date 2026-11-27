@@ -12,6 +12,11 @@ import {
   sandboxPausedAlertText,
 } from "@eva/shared";
 
+/**
+ * Auto-wake fires when a visible sandbox tab of a paused sandbox mounts. A
+ * failed start lands back on `closed` and remounts it, so the cooldown is what
+ * stops a start that keeps failing from looping.
+ */
 describe("shouldFireAutoWake", () => {
   beforeEach(() => {
     resetAutoWakeHistory();
@@ -78,6 +83,10 @@ describe("isSandboxLifecycleAlert", () => {
   });
 });
 
+/**
+ * Session 98 stayed awake overnight: a tab left visible on an unattended screen
+ * held presence. Engagement needs a visible tab AND input inside the window.
+ */
 describe("isSandboxUserEngaged", () => {
   const now = 1_000_000_000;
 

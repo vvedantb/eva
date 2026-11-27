@@ -8,6 +8,7 @@ import {
   type AveLogoState,
 } from "@/lib/components/ave/aveLogoState";
 
+/** The pip's corner, shared by the pip and its tools ripple. */
 const PIP_SPOT = "absolute -right-0.5 -top-0.5 size-2.5 rounded-full";
 const PIP_CLASS = cn(PIP_SPOT, "ring-2 ring-background");
 

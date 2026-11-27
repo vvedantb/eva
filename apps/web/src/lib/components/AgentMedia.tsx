@@ -20,6 +20,9 @@ export function AgentMedia({ entries }: { entries: AgentMediaEntry[] }) {
   return (
     <>
       {videos.map((url, index) => (
+        // Capped to the same width `ImageGalleryPreview` uses, so a video and a
+        // screenshot in the same reply line up instead of the video spanning
+        // the whole pane.
         <VideoPreview key={index} url={url} className="max-w-lg" />
       ))}
       {images.length > 0 ? (

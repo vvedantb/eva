@@ -44,6 +44,7 @@ function comment(partial: Partial<PrComment>): PrComment {
   return { ...BASE_COMMENT, ...partial };
 }
 
+/** Timestamp helper — the timeline only cares about relative order, not real dates. */
 function at(ms: number): string {
   return new Date(ms).toISOString();
 }

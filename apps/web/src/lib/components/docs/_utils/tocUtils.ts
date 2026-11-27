@@ -57,4 +57,5 @@ export function assignHeadingIds(
   return items;
 }
 
+/** Matches FloatingToc scroll offset so click-scroll lands below sticky chrome. */
 const SCROLL_MARGIN_TOP_PX = 96;

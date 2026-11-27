@@ -6,6 +6,7 @@ import dayjs from "@eva/shared/dates";
 import { cssColor } from "@/lib/utils/cssColor";
 import { type CHART_ANIMATION, useChartAnimation } from "./chartMotion";
 
+/** Lazy chart.js + react-chartjs-2 so stats pages don't pay the cost up front. */
 const barChartModules = Promise.all([
   import("react-chartjs-2"),
   import("chart.js"),
@@ -43,6 +44,8 @@ function PRsBarChart({
   options: {
     responsive: boolean;
     maintainAspectRatio: boolean;
+    // Chart.js only accepts its own easing names, so keep the literal type
+    // the constant carries rather than widening `easing` to `string`.
     animation: typeof CHART_ANIMATION | false;
     plugins: { legend: { display: boolean } };
     scales: { y: { beginAtZero: boolean; ticks: { stepSize: number } } };

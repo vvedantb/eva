@@ -1,11 +1,18 @@
+/** Hostnames that can only ever mean "the machine this code is running on". */
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
+/**
+ * Path the sandbox preview proxy forwards to the sandbox's Convex backend,
+ * WebSocket upgrades included. `vite/convexDevProxy.ts` serves the same path off
+ * the dev server so it resolves on either origin.
+ */
 const PROXIED_CONVEX_PATH = "/__convex";
 
 function isLoopback(hostname: string): boolean {
   return LOOPBACK_HOSTNAMES.has(hostname);
 }
 
+/** Convex concatenates `${address}/api/…`, so a trailing slash doubles it. */
 function withoutTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
