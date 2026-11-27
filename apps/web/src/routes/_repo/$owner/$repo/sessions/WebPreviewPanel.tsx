@@ -40,12 +40,14 @@ import {
 } from "./_components/PreviewCommentsDrawer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePublishPreviewViewport } from "@/lib/contexts/PreviewViewportContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
 import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";
 import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
 import { PreviewViewportFrame } from "./_components/PreviewViewportFrame";
 import {
   FILL_PREVIEW_VIEWPORT,
+  findPreviewViewportPreset,
   framedPreviewViewport,
   parsePreviewContainSize,
   parsePreviewViewport,
@@ -234,6 +236,19 @@ export function WebPreviewPanel({
     viewport,
     contain,
     containSize,
+  );
+  // The agent hears the size of a custom frame with every message.
+  usePublishPreviewViewport(
+    isActive && framedViewport.mode !== "fill"
+      ? {
+          width: framedViewport.width,
+          height: framedViewport.height,
+          label:
+            framedViewport.mode === "preset"
+              ? findPreviewViewportPreset(framedViewport.id)?.label
+              : undefined,
+        }
+      : null,
   );
   const pathLoaded = path !== undefined;
   const previewPath = normalizePreviewPath(path ?? "/");
