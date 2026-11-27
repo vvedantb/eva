@@ -32,6 +32,7 @@ import {
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
 import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
+import { RailMentionsHoverCard } from "@/lib/components/sidebar/RailMentionsHoverCard";
 import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
@@ -218,19 +219,27 @@ function RepoRailView({
               <IconEva size={22} className="shrink-0" />
             </Link>
           </Sidebar.RailItem>
-          <Sidebar.RailItem asChild label="Inbox" active={inboxActive}>
-            <Link to="/inbox" onClick={onNavigate}>
-              <InboxArrowIcon
-                size={22}
-                active={inboxActive}
-                cutoutColor={CUTOUT_COLOR}
-                className="shrink-0"
-              />
-              <ErrorBoundary>
-                <InboxNeedsYouBadge />
-              </ErrorBoundary>
-            </Link>
-          </Sidebar.RailItem>
+          {/* The mentions card replaces the tile's own tooltip. */}
+          <RailMentionsHoverCard onNavigate={onNavigate}>
+            <Sidebar.RailItem
+              asChild
+              label="Inbox"
+              showTooltip={false}
+              active={inboxActive}
+            >
+              <Link to="/inbox" onClick={onNavigate}>
+                <InboxArrowIcon
+                  size={22}
+                  active={inboxActive}
+                  cutoutColor={CUTOUT_COLOR}
+                  className="shrink-0"
+                />
+                <ErrorBoundary>
+                  <InboxNeedsYouBadge />
+                </ErrorBoundary>
+              </Link>
+            </Sidebar.RailItem>
+          </RailMentionsHoverCard>
           <Sidebar.RailItem
             asChild
             label={
