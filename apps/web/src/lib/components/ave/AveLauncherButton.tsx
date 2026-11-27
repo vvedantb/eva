@@ -14,6 +14,7 @@ import { IconX } from "@tabler/icons-react";
 import { AveStatePip } from "@/lib/components/ave/AveActiveDot";
 import { AveEyes } from "@/lib/components/ave/AveEyes";
 import { AveBadge } from "@/lib/components/ave/AveBadge";
+import { useAveUnread } from "@/lib/components/ave/aveUnread";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
   aveLogoState,
@@ -139,17 +140,21 @@ const ONE_SHOT_ANIMATION = "ave-hold";
 function AveFace({
   state,
   labelId,
+  hasUnread = false,
   onOneShotEnd,
   children,
 }: {
   state: AveLogoState;
   labelId: string;
+  /** Ave has something to say: the idle mark spins; see globals.css. */
+  hasUnread?: boolean;
   onOneShotEnd?: () => void;
   children?: ReactNode;
 }) {
   return (
     <span
       data-ave-state={state}
+      data-ave-unread={hasUnread}
       className="ave-face relative size-full"
       onAnimationEnd={(event) => {
         if (event.animationName === ONE_SHOT_ANIMATION) onOneShotEnd?.();
@@ -170,8 +175,14 @@ function AveFace({
 
 function AveLiveFace({ labelId }: { labelId: string }) {
   const { state, clearOneShot } = useAveLogoState();
+  const hasUnread = useAveUnread();
   return (
-    <AveFace state={state} labelId={labelId} onOneShotEnd={clearOneShot}>
+    <AveFace
+      state={state}
+      labelId={labelId}
+      hasUnread={hasUnread}
+      onOneShotEnd={clearOneShot}
+    >
       <AveBadge />
     </AveFace>
   );
