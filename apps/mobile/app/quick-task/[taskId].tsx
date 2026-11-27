@@ -183,10 +183,10 @@ function TaskOverview({
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
   const hasActiveRun = runFacts?.hasActiveRun ?? false;
   const hasRuns = runFacts?.hasRuns ?? false;
-  // The web page's sandbox and git actions, leading the "…" sheet.
-  const git = useTaskGitActions({ task, hasRuns, hasActiveRun });
   // A project archives with its tasks, so its task is read-only too.
   const project = useQuery(api.projects.get, task.projectId ? { id: task.projectId } : "skip");
+  // The web page's sandbox and git actions, leading the "…" sheet.
+  const git = useTaskGitActions({ task, projectPrUrl: project?.prUrl, hasRuns, hasActiveRun });
   const archived = task.archivedAt !== undefined;
   const readOnly = archived || project?.archivedAt !== undefined;
   const actions = useQuickTaskActions({

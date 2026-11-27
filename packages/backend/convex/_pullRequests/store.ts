@@ -4,6 +4,7 @@ import {
   combineRepoPrStates,
   isLivePrState,
   type LivePrState,
+  taskPrUrl,
 } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
@@ -771,11 +772,15 @@ export function sessionRepoPullRequest(
 }
 
 /**
- * A task's own PR summary. Every task owns its PR; an old project task's PR
- * on the project branch stays with the project (`projects.prUrl`).
+ * The PR a task links to (`taskPrUrl` in `@eva/shared`): its own, else its
+ * project's. The project is read only when the task has no PR of its own.
  */
-export function taskPrUrl(
-  task: Pick<Doc<"agentTasks">, "prUrl">,
-): string | undefined {
-  return task.prUrl;
+export async function loadTaskPrUrl(
+  db: DatabaseReader,
+  task: Pick<Doc<"agentTasks">, "prUrl" | "projectId">,
+): Promise<string | undefined> {
+  if (task.prUrl !== undefined || task.projectId === undefined) {
+    return task.prUrl;
+  }
+  return taskPrUrl(task, (await db.get(task.projectId))?.prUrl);
 }

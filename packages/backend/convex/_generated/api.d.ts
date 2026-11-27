@@ -198,7 +198,6 @@ import type * as _mentions_skillToken from "../_mentions/skillToken.js";
 import type * as _messages_activityLog from "../_messages/activityLog.js";
 import type * as _messages_media from "../_messages/media.js";
 import type * as _messages_preview from "../_messages/preview.js";
-import type * as _messages_publicRole from "../_messages/publicRole.js";
 import type * as _messages_replies from "../_messages/replies.js";
 import type * as _messages_threadParticipants from "../_messages/threadParticipants.js";
 import type * as _migrations_backfillEvaPrRecapOrigin from "../_migrations/backfillEvaPrRecapOrigin.js";
@@ -797,7 +796,6 @@ declare const fullApi: ApiFromModules<{
   "_messages/activityLog": typeof _messages_activityLog;
   "_messages/media": typeof _messages_media;
   "_messages/preview": typeof _messages_preview;
-  "_messages/publicRole": typeof _messages_publicRole;
   "_messages/replies": typeof _messages_replies;
   "_messages/threadParticipants": typeof _messages_threadParticipants;
   "_migrations/backfillEvaPrRecapOrigin": typeof _migrations_backfillEvaPrRecapOrigin;

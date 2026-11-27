@@ -13,15 +13,11 @@ import { allocateNumId } from "../numId";
 import {
   aiModelValidator,
   getAIModelProvider,
-  previewAnnotationValidator,
   reasoningLevelValidator,
-  roleValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
-import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { sessionAccountHolder } from "../_projects/projectAccount";
 import {
   assertProviderAccountUsableBy,
   resolveDefaultProviderAccountId,
@@ -45,8 +41,6 @@ import {
   getRepoGroupForSession,
 } from "../repoGroups";
 import { insertSessionRepos } from "./repos";
-import { touchUserActivity } from "../_sandbox/activity";
-import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
   assertStandaloneSession,
   isStandaloneSession,
@@ -300,67 +294,37 @@ export async function createSession(
   return { sessionId, numId };
 }
 
-/** Adds a message to one chat of a session. */
-export const addMessage = authMutation({
+/**
+ * Posts the web's send-failure bubble (`annotationSend.ts`) into a chat: an
+ * assistant row whose text starts with `Error: `. Every other message goes
+ * through `chats.send`. Any other text is refused, so a repo member cannot
+ * forge an agent reply in a teammate's chat.
+ */
+export const postSendError = authMutation({
   args: {
     chatId: v.id("sessionChats"),
-    role: roleValidator,
     content: v.string(),
-    clientId: v.optional(v.string()),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    model: v.optional(aiModelValidator),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    /** Preview "Select element" sends: where the annotation points. */
-    annotation: v.optional(previewAnnotationValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    assertComposerMessageRole(args);
+    if (!args.content.startsWith("Error: ")) {
+      throw new Error("Only user messages can be posted to this chat");
+    }
     const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
-    const credential =
-      args.role === "user"
-        ? await resolveMessageCredential(
-            ctx.db,
-            args.providerAccountId ?? chat.providerAccountId,
-            await sessionAccountHolder(
-              ctx.db,
-              session,
-              args.providerAccountId ?? chat.providerAccountId,
-            ),
-          )
-        : undefined;
     await ctx.db.insert("messages", {
       parentId: chat._id,
-      role: args.role,
+      role: "assistant",
       content: args.content,
       timestamp: Date.now(),
-      clientId: args.clientId,
       userId: ctx.userId,
-      attachmentStorageIds: args.attachmentStorageIds,
-      ...credential,
-      ...(args.role === "user"
-        ? {
-            model: args.model,
-            reasoningLevel: args.reasoningLevel,
-            annotation: args.annotation,
-          }
-        : {}),
     });
     const now = Date.now();
     await ctx.db.patch(chat._id, { updatedAt: now });
     await ctx.db.patch(session._id, { updatedAt: now });
-    if (args.role === "user") {
-      await touchUserActivity(
-        ctx,
-        { kind: "session", entityId: String(session._id) },
-        { source: "chat", userId: ctx.userId },
-      );
-    }
     return null;
   },
 });

@@ -9,6 +9,7 @@ import {
 
 const TABLE_FIELDS = "packages/backend/convex/_validators/tableFields.ts";
 const SCHEMA = "packages/backend/convex/schema.ts";
+const ENUMS = "packages/backend/convex/_validators/enums.ts";
 
 /** Build a minimal unified diff for one file. */
 function diffFor(file, body) {
@@ -147,6 +148,22 @@ test("never flags comment lines", () => {
     migrationsSource: NO_MIGRATIONS,
   });
   assert.equal(result.ok, true);
+});
+
+test("flags a removed union member in the stored enums file", () => {
+  const result = analyzeSchemaNarrowing({
+    diff: diffFor(
+      ENUMS,
+      ["@@ -44 +43,0 @@", '-  "cancelled",'].join("\n") +
+        "\n" +
+        ["@@ -60 +59,0 @@", '-  v.literal("retry_pending"),'].join("\n"),
+    ),
+    newContent: 'v.union(v.literal("scheduled"))',
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.removals[0].name, "retry_pending");
+  assert.equal(result.removals[0].file, ENUMS);
 });
 
 test("ignores diffs to files outside the watched set", () => {

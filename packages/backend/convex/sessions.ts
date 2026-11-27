@@ -18,7 +18,7 @@ export {
 } from "./_sessions/repos";
 
 export {
-  addMessage,
+  postSendError,
   update,
   archive,
   archiveGroup,

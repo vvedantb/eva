@@ -63,12 +63,11 @@ Raw stdout is also appended to `/tmp/run-design.raw.jsonl`. Completion marker: `
 
 ## Overlap with Convex workflow watchdog
 
-Quick tasks and automations use **both** the sandbox callback (this script) and, for tasks only, Convex heartbeat watchdogs.
+Every agent turn uses **both** the sandbox callback (this script) and Convex's turn lease. A task's run is a chat turn; doc, evaluation, test-gen, PR-recap, browser and automation agents are one-shot agent jobs (`convex/_agentJobs/`).
 
-| Layer                        | Owner                       | Quick-task values                   | Purpose                          |
-| ---------------------------- | --------------------------- | ----------------------------------- | -------------------------------- |
-| Callback `MAX_TOTAL_RUNTIME` | sandbox script              | 3h (`TURN_MAX_RUNTIME_MS`)          | Hard turn lifetime cap           |
-| Convex `checkStaleRuns`      | `_taskWorkflow/watchdog.ts` | 5m probe / 25m unverified kill      | Heartbeat staleness (tasks only) |
-| `handleStaleRun`             | workflow                    | 3.5h (`TURN_BACKSTOP_MS`)           | Absolute backstop (tasks only)   |
-
-Automations rely on callback timeouts only — no task watchdog.
+| Layer                        | Owner                                         | Values                     | Purpose                              |
+| ---------------------------- | --------------------------------------------- | -------------------------- | ------------------------------------ |
+| Callback `MAX_TOTAL_RUNTIME` | sandbox script                                | 3h (`TURN_MAX_RUNTIME_MS`) | Hard turn lifetime cap               |
+| Turn lease reconciler        | `convex/turns.ts` `reconcile`                 | per-state lease            | Heartbeat staleness (every turn)     |
+| Chat turn backstop           | `convex/workflowWatchdog.ts` `handleStaleSessionChat` | 3.5h (`TURN_BACKSTOP_MS`) | Absolute backstop (chat turns, task runs included) |
+| Agent job backstop           | `convex/agentJobs.ts` `handleStale`           | 3.5h (`TURN_BACKSTOP_MS`)  | Absolute backstop (one-shot agents)  |

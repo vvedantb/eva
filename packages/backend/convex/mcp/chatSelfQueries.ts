@@ -6,7 +6,7 @@ import { mcpPullRequestValidator, toMcpPullRequests } from "./queries";
 import {
   listOwnerPullRequests,
   sessionRepoPullRequest,
-  taskPrUrl,
+  loadTaskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
 import { slugifyAppTabName } from "@eva/shared/appTabSlug";
@@ -101,7 +101,7 @@ async function ownerFields(
       owner: { kind: "task", taskId: task._id },
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: task.baseBranch,
-      prUrl: taskPrUrl(task),
+      prUrl: await loadTaskPrUrl(ctx.db, task),
       prState: task.prState,
       devPort: session.devPort,
       devCommand: session.devCommand,

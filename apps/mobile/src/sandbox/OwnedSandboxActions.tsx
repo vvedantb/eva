@@ -5,6 +5,7 @@ import {
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,
+  taskPrUrl,
   WAKE_EVA_LABEL,
   WAKE_EVA_RETRY_LABEL,
 } from "@eva/shared";
@@ -160,23 +161,25 @@ function ResolveDialog({
  */
 export function useTaskGitActions({
   task,
+  projectPrUrl,
   hasRuns,
   hasActiveRun,
 }: {
   task: Pick<Task, "_id" | "status" | "prUrl" | "projectId" | "repoId">;
+  /** The task's project's PR, the fallback link when the task has none. */
+  projectPrUrl: string | undefined;
   hasRuns: boolean;
   hasActiveRun: boolean;
 }) {
+  const prUrl = taskPrUrl(task, projectPrUrl);
   const sandbox = useOwnedSandbox({ kind: "task", taskId: task._id });
   const simpleView = useSimpleView();
-  const prRow = useOwnerPrRow({ kind: "task", taskId: task._id }, task.prUrl, task.repoId);
+  const prRow = useOwnerPrRow({ kind: "task", taskId: task._id }, prUrl, task.repoId);
   const createTaskPr = useAction(api.taskWorkflowActions.createTaskPr);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [resolving, setResolving] = useState(false);
-  // A project task's PR is its project's: the project page creates it, as the web.
-  const canCreatePr =
-    task.projectId === undefined &&
-    taskCanCreatePr({ latestPrUrl: task.prUrl, hasRuns, hasActiveRun });
+  // Every task opens its own PR, a project's task included, as on the web.
+  const canCreatePr = taskCanCreatePr({ latestPrUrl: prUrl, hasRuns, hasActiveRun });
   const canResolve =
     !simpleView &&
     taskCanResolveConflicts(

@@ -33,7 +33,7 @@ import {
   findPullRequestByUrl,
   listOwnerPullRequests,
   sessionRepoPullRequest,
-  taskPrUrl,
+  loadTaskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
 import {
@@ -877,13 +877,13 @@ function chatTargetOwner(
   return projectId ? { kind, projectId } : null;
 }
 
-/** A task's own PR summary (every task owns its PR). */
+/** The PR a task links to: its own, else its project's (`loadTaskPrUrl`). */
 async function taskPrUrlById(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
 ): Promise<string | undefined> {
   const task = await ctx.db.get(taskId);
-  return task ? taskPrUrl(task) : undefined;
+  return task ? await loadTaskPrUrl(ctx.db, task) : undefined;
 }
 
 /** One pull request linked to a chat, as reported over MCP. */

@@ -4,8 +4,11 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { FALLBACK_GIT_BASE_BRANCH, taskCanCreatePr } from "@eva/shared";
-import { taskPrUrl } from "@/lib/githubPr";
+import {
+  FALLBACK_GIT_BASE_BRANCH,
+  taskCanCreatePr,
+  taskPrUrl,
+} from "@eva/shared";
 import { canEditTaskText } from "@eva/shared/taskDetail";
 import { useTaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
@@ -104,7 +107,12 @@ function deriveRunSummary({
   projects,
 }: TaskDetailQueries) {
   const status = task?.status;
-  const latestPrUrl = taskPrUrl(task, projects);
+  const latestPrUrl = task
+    ? taskPrUrl(
+        task,
+        projects?.find((project) => project._id === task.projectId)?.prUrl,
+      )
+    : undefined;
   const hasTabContent =
     hasRuns || (comments !== undefined && comments.length > 0);
   return {
