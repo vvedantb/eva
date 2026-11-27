@@ -54,13 +54,13 @@ import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { useTaskMenu } from "./_components/useTaskMenu";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
+import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
 >[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
-
 
 interface QuickTaskCardProps {
   id: Id<"agentTasks">;
@@ -108,11 +108,18 @@ interface QuickTaskCardProps {
   isAwaitingAnswer?: boolean;
   /** In the Archived list: the menu offers Unarchive. */
   archived?: boolean;
+  /**
+   * `card`: the kanban card (title, tags, author, age).
+   * `row`: one compact line for list view, like a session row; description,
+   * tags and author move to a hover card.
+   */
+  layout?: "card" | "row";
 }
 
 export function QuickTaskCard({
   id,
   title,
+  description,
   status,
   priority,
   numId,
@@ -139,7 +146,9 @@ export function QuickTaskCard({
   hasUnread = false,
   isAwaitingAnswer = false,
   archived = false,
+  layout = "card",
 }: QuickTaskCardProps) {
+  const isRow = layout === "row";
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
   const accentClass = showError ? "bg-destructive" : statusMeta.bar;
@@ -181,173 +190,174 @@ export function QuickTaskCard({
   const creatorFirstName =
     createdByUser?.firstName ?? createdByUser?.fullName?.split(/\s+/)[0];
 
-  const ageAndMenu = (
-    <>
-      <span className="text-2xs tabular-nums text-muted-foreground/70">
-        {compactRelativeTime(createdAt)}
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)}
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Task actions"
-          >
-            <IconDots className="size-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
+  const age = (
+    <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/70">
+      {compactRelativeTime(createdAt)}
+    </span>
+  );
+
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)}
           onClick={(e) => e.stopPropagation()}
+          aria-label="Task actions"
         >
-          <TaskCardMenuItems variant="dropdown" {...menuProps} />
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <IconDots className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <TaskCardMenuItems variant="dropdown" {...menuProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const tagBadges = tags?.map((tag) => (
+    <Badge
+      key={tag}
+      variant="secondary"
+      className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
+    >
+      <span className="flex min-w-0 items-center gap-0.5">
+        <IconTag className="size-2.5 shrink-0" />
+        <span className="truncate">{tag}</span>
+      </span>
+    </Badge>
+  ));
+
+  const checkbox = isSelecting ? (
+    <Checkbox
+      checked={isSelected}
+      // One handler, not `onClick` + `onCheckedChange`: Radix composes
+      // its own toggle after ours and skips it once the event is
+      // default-prevented, so this reads the shift modifier without
+      // toggling twice.
+      onClick={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        onToggleSelect?.({ shiftKey: event.shiftKey });
+      }}
+      className={cn("shrink-0", !isRow && "mt-0.5", LIST_ROW_CONTROL_CLASS)}
+    />
+  ) : null;
+
+  const titleBlock = (
+    <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+      <EntityNumLabel numId={numId} />
+      <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+        {title}
+      </MarqueeOnHover>
+    </div>
+  );
+
+  const marks = (
+    <>
+      {priority ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <PriorityIcon level={priority} size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {/* One mark, never two: a turn in flight already implies an awake
+          sandbox, so the pixel grid stands in for the status dot — the same
+          swap the session rows and the sandbox surface tabs make. A
+          question waiting on the user beats both. */}
+      {isAwaitingAnswer ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <AwaitingAnswerMark />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Eva asked you a question</TooltipContent>
+        </Tooltip>
+      ) : showAgentPulse ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <LoadingState
+                label="Working"
+                variant="Drive"
+                size="sm"
+                iconOnly
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Eva is replying</TooltipContent>
+        </Tooltip>
+      ) : sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                "relative size-2 shrink-0 rounded-full hit-target",
+                SANDBOX_STATUS_STYLES[sandboxStatus].dot,
+              )}
+            />
+          </TooltipTrigger>
+          <TooltipContent>
+            {SANDBOX_STATUS_STYLES[sandboxStatus].label}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      {/* Executing wins: the dot shows once the turn has ended. */}
+      <UnreadDot show={hasUnread && !isAgentActive} />
+      {scheduledAt ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center text-primary hit-target">
+              <IconClock className="size-3.5" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {status === "todo"
+              ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
+              : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </>
   );
 
-  const card = (
-    <ListRow
-      accentClassName={accentClass}
-      selected={isActive}
-      link={
-        href ? (
-          <DynamicLink to={toInternalRepoHref(href)} search={true} />
-        ) : undefined
-      }
-      onClick={
-        hasDialogOpen || onClick
-          ? (event) => {
-              if (hasDialogOpen) {
-                event.preventDefault();
-                return;
-              }
-              onClick?.(event);
-            }
-          : undefined
-      }
-      aria-label={title}
-      contentClassName="flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
-      className={cn(
-        showError
-          ? "border border-destructive/30 bg-destructive/5"
-          : isInProgress
-            ? "bg-card"
-            : undefined,
-        isSelected && "ring-2 ring-primary/40",
-      )}
-    >
-      <div className="flex min-w-0 items-start gap-2">
-        {isSelecting ? (
-          <Checkbox
-            checked={isSelected}
-            // One handler, not `onClick` + `onCheckedChange`: Radix composes
-            // its own toggle after ours and skips it once the event is
-            // default-prevented, so this reads the shift modifier without
-            // toggling twice.
-            onClick={(event) => {
-              event.stopPropagation();
-              event.preventDefault();
-              onToggleSelect?.({ shiftKey: event.shiftKey });
-            }}
-            className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
+  // Row layout: one line, like a session row. The draft comment badge
+  // shrinks to the pencil the session rows use for an unsent message.
+  const rowBody = (
+    <div className="flex min-w-0 items-center gap-2">
+      {checkbox}
+      {titleBlock}
+      {age}
+      <div className="flex shrink-0 items-center gap-1.5">
+        {marks}
+        {hasDraftComment ? (
+          <IconPencil
+            className="size-3 shrink-0 text-muted-foreground"
+            aria-label="Draft comment"
           />
         ) : null}
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <EntityNumLabel numId={numId} />
-          <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
-            {title}
-          </MarqueeOnHover>
-        </div>
+        {menu}
+      </div>
+    </div>
+  );
 
+  const cardBody = (
+    <>
+      <div className="flex min-w-0 items-start gap-2">
+        {checkbox}
+        {titleBlock}
         <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-          {priority ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <PriorityIcon level={priority} size={14} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {/* One mark, never two: a turn in flight already implies an awake
-              sandbox, so the pixel grid stands in for the status dot — the same
-              swap the session rows and the sandbox surface tabs make. A
-              question waiting on the user beats both. */}
-          {isAwaitingAnswer ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <AwaitingAnswerMark />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Eva asked you a question</TooltipContent>
-            </Tooltip>
-          ) : showAgentPulse ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <LoadingState
-                    label="Working"
-                    variant="Drive"
-                    size="sm"
-                    iconOnly
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Eva is replying</TooltipContent>
-            </Tooltip>
-          ) : sandboxStatus &&
-            showsSandboxStatusDot(sandboxStatus, simpleView) ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "relative size-2 shrink-0 rounded-full hit-target",
-                    SANDBOX_STATUS_STYLES[sandboxStatus].dot,
-                  )}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                {SANDBOX_STATUS_STYLES[sandboxStatus].label}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {/* Executing wins: the dot shows once the turn has ended. */}
-          <UnreadDot show={hasUnread && !isAgentActive} />
-          {scheduledAt ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center text-primary hit-target">
-                  <IconClock className="size-3.5" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {status === "todo"
-                  ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
-                  : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          {marks}
         </div>
       </div>
 
       {hasMetadata ? (
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
-            >
-              <span className="flex min-w-0 items-center gap-0.5">
-                <IconTag className="size-2.5 shrink-0" />
-                <span className="truncate">{tag}</span>
-              </span>
-            </Badge>
-          ))}
+          {tagBadges}
           {hasDraftComment ? (
             <Badge
               variant="secondary"
@@ -376,18 +386,76 @@ export function QuickTaskCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {ageAndMenu}
+          {age}
+          {menu}
         </div>
       </div>
+    </>
+  );
+
+  const card = (
+    <ListRow
+      accentClassName={accentClass}
+      selected={isActive}
+      link={
+        href ? (
+          <DynamicLink to={toInternalRepoHref(href)} search={true} />
+        ) : undefined
+      }
+      onClick={
+        hasDialogOpen || onClick
+          ? (event) => {
+              if (hasDialogOpen) {
+                event.preventDefault();
+                return;
+              }
+              onClick?.(event);
+            }
+          : undefined
+      }
+      aria-label={title}
+      contentClassName={
+        isRow
+          ? "px-2.5 py-1.5 pl-3 sm:pl-3.5"
+          : "flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
+      }
+      className={cn(
+        showError
+          ? "border border-destructive/30 bg-destructive/5"
+          : isInProgress
+            ? "bg-card"
+            : undefined,
+        isSelected && "ring-2 ring-primary/40",
+      )}
+    >
+      {isRow ? rowBody : cardBody}
     </ListRow>
   );
 
-  const wrappedCard = isInProgress ? (
+  const beamedCard = isInProgress ? (
     <BorderBeam active colorVariant="progress" className="rounded-surface">
       {card}
     </BorderBeam>
   ) : (
     card
+  );
+
+  const wrappedCard = isRow ? (
+    <SidebarListHoverCard
+      title={title}
+      preview={description}
+      createdAt={createdAt}
+      userId={createdByUser?._id}
+      details={
+        tagBadges && tagBadges.length > 0 ? (
+          <div className="flex flex-wrap gap-1">{tagBadges}</div>
+        ) : undefined
+      }
+    >
+      {beamedCard}
+    </SidebarListHoverCard>
+  ) : (
+    beamedCard
   );
 
   return (
