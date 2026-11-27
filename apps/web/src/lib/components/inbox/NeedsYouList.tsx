@@ -41,7 +41,6 @@ export function NeedsYouList({ rows }: { rows: NeedsYouRow[] | undefined }) {
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
       {groupNeedsYou(rows).map((section) => (
         <div key={section.group}>
-          {/* Sticky, as the Updates list's section labels. */}
           <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-1.5">
             <span className="text-xs font-medium text-muted-foreground">
               {section.label}{" "}
@@ -92,7 +91,6 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   );
 }
 
-/** The row's one action, by group: Reply, Open PR, Reject + Approve, Retry. */
 function NeedsYouAction({
   row,
   onReply,

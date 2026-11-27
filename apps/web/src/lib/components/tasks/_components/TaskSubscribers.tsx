@@ -50,13 +50,9 @@ export function TaskSubscribers({
     currentUserId !== undefined &&
     currentUserId !== null &&
     subscriberIds.has(currentUserId);
-  // Anyone in the workspace can follow or be added to a task, not just devs
-  // (unlike the code-reviewer assignee picker, which is dev-only).
   const manageableUsers = users ?? [];
 
   return (
-    // Wraps because this row shares a flex line with the "Activity" label in
-    // the task detail, and the avatar stack grows with the subscriber count.
     <div className="flex max-sm:min-w-0 max-sm:flex-wrap items-center gap-2">
       <Button
         variant={isSubscribed ? "secondary" : "outline"}
@@ -103,7 +99,6 @@ export function TaskSubscribers({
           <Button
             variant="ghost"
             size="icon-sm"
-            // 28px on desktop, as before; `icon-sm` is 32px and only wanted on touch.
             className="text-muted-foreground sm:size-7"
             aria-label="Manage subscribers"
           >

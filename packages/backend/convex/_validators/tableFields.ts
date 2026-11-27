@@ -267,10 +267,6 @@ export const chatReadParentIdValidator = v.union(
   v.id("projects"),
 );
 
-/**
- * Every durable turn owner: the three chats, quick-task runs, and the rows the
- * one-shot agents work on (automation runs, docs, evaluation reports).
- */
 // schema-narrowing-ok: clearLegacyOwnerChatFields
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
@@ -282,10 +278,6 @@ export const turnEntityIdValidator = v.union(
   v.id("evaluationReports"),
 );
 
-/**
- * A one-shot agent that works on a row which also owns chat turns. The lane
- * keeps its turn apart from the chat's: chat turns leave it unset.
- */
 // schema-narrowing-ok: retireSessionSummaries
 export const turnLaneValidator = v.literal("interview");
 

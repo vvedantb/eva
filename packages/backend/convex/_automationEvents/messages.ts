@@ -1,9 +1,5 @@
 import { describeAlert, TRUSTED_ASSOCIATIONS, type RepoEvent } from "./events";
 
-/**
- * Chat and task copy for event-triggered automations. Pure, so the exact text
- * an agent receives is unit-tested (see tests/automationEvents.test.ts).
- */
 
 /** Lines kept from the end of each failed job's log. */
 export const LOG_TAIL_LINES = 150;
@@ -23,7 +19,6 @@ export interface FeedbackItem {
   author: string;
   body: string;
   url: string;
-  /** Inline review comments only. */
   path: string | null;
   line: number | null;
 }
@@ -118,7 +113,6 @@ export function collectFeedback(
   };
 }
 
-// GitHub Actions prefixes every log line with an ISO timestamp.
 const ACTIONS_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z /;
 // eslint-disable-next-line no-control-regex
 const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;

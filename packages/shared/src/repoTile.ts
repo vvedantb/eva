@@ -5,19 +5,15 @@
  */
 export type RepoTileSlot = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
-// The tile's original 8-colour palette, in its original hash-bucket order:
-// blue, emerald, amber, rose, purple, lime, indigo, orange. Each bucket maps
-// onto the nearest `cat-*` slot so every repo keeps the colour family it
-// already had. The mapping is injective, so tiles stay as distinguishable.
 const SLOT_BY_BUCKET: Record<number, RepoTileSlot> = {
-  0: 1, // blue -> blue
-  1: 6, // emerald -> emerald
-  2: 4, // amber -> amber
-  3: 5, // rose -> rose
-  4: 2, // purple -> violet
-  5: 3, // lime -> teal (nearest remaining hue)
-  6: 7, // indigo -> sky
-  7: 8, // orange -> orange
+  0: 1,
+  1: 6,
+  2: 4,
+  3: 5,
+  4: 2,
+  5: 3,
+  6: 7,
+  7: 8,
 };
 
 /**

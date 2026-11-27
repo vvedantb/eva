@@ -6,16 +6,10 @@ import { authMutation, authQuery, hasRepoAccess } from "../functions";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { automationTrigger } from "./systemAutomations";
 
-/**
- * The inbound webhook of a `production_alert` automation. Each install gets
- * its own URL (it names the automation) and its own bearer secret. Only the
- * secret's hash is stored, so the plain value is shown once, when generated.
- */
 
 /** Route prefix in `http.ts`; the automation id follows it. */
 export const AXIOM_ALERT_PATH_PREFIX = "/api/alerts/axiom/";
 
-/** The automation, when it exists, takes alerts, and the user may see it. */
 async function alertAutomation(
   db: DatabaseReader,
   userId: Id<"users">,

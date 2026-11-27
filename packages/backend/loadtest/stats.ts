@@ -1,4 +1,3 @@
-
 export function quantile(sorted: ReadonlyArray<number>, q: number): number {
   if (sorted.length === 0) return Number.NaN;
   const pos = (sorted.length - 1) * q;

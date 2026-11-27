@@ -12,7 +12,6 @@ import type { InboxGroup } from "@/lib/search-params";
 
 export { OTHER_REPO_GROUP_LABEL, urgencyLabel } from "@eva/shared/notificationGroups";
 
-/** Only the fields a repo label is built from, so callers can pass the full row. */
 type RepoLabelFields = Pick<RepoWithLogo, "label" | "name" | "rootDirectory">;
 
 export type NotificationGroup = SharedNotificationGroup<Notification>;

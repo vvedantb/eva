@@ -10,7 +10,6 @@ import {
   renderEvaEnvFile,
 } from "../convex/_sandbox/vercelEnvFile";
 
-
 function pathAfterSourcing(envFile: string): string[] {
   const file = join(mkdtempSync(join(tmpdir(), "eva-env-")), ".eva-env.sh");
   writeFileSync(file, envFile);

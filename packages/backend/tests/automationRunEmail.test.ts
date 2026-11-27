@@ -5,7 +5,6 @@ import schema from "../convex/schema";
 import { CHANGELOG_AUTOMATION_TITLE } from "../convex/_changelog/entry";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|automation-owner";
 const DELIVERY = "automationEmail:sendAutomationEmail";

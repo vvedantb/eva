@@ -4,7 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|artifact-source";
 const STRANGER_CLERK_ID = "clerk|artifact-source-stranger";

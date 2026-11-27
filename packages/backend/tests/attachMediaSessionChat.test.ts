@@ -5,7 +5,6 @@ import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|attach-media-session-chat";
 const STRANGER = "clerk|attach-media-stranger";

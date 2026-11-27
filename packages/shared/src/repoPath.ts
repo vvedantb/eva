@@ -30,7 +30,6 @@ export function entityHref(
   return numId === undefined ? section : `${section}/${numId}`;
 }
 
-/** Repo sections whose `<numId>` pages have a hover card in chat. */
 const LINKABLE_SECTIONS = ["sessions", "quick-tasks", "projects", "docs"] as const;
 export type EvaLinkSection = (typeof LINKABLE_SECTIONS)[number];
 

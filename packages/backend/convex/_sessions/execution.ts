@@ -495,10 +495,6 @@ export const startExecute = authMutation({
       return "queued";
     }
 
-    // Daemon-pull dispatch: stage the turn for a warm daemon to claim in one
-    // poll instead of waiting on the workflow's durable step queue. The user
-    // row is already stored (the client sends addMessage first), so handoff
-    // detection sees it and posts its alert above the new placeholder.
     await maybeInsertModelHandoffAlert(
       ctx,
       chat._id,
@@ -753,8 +749,6 @@ export const addReply = authMutation({
       surface,
     });
 
-    // A reply wakes Eva only when it @mentions her: replies are between
-    // people by default (projects v2, decision 2).
     if (mentionsEva(content)) {
       const { rootId, content: omitted, ...settings } = args;
       void rootId;

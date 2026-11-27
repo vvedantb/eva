@@ -300,7 +300,6 @@ export async function authorizedRunningHandle(
   if (!identity) throw new Error("Not authenticated");
 
   await assertActionSandboxAccess(ctx, repoId, sandboxId);
-  // File browsing/editing is a human interaction for the idle-pause sweep.
   await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
     sandboxId,
     source: "files",

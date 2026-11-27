@@ -183,7 +183,6 @@ async function runSwapScript(
       .map((line) => line.trim())
       .filter((line) => line.startsWith(MARKER_PREFIX));
     const status = markers.at(-1) ?? `no status (exit ${result.exitCode})`;
-    // Earlier markers (the low-disk cleanup) go in the log line too.
     const logged = markers.length > 1 ? markers.join(" | ") : status;
     console.log(`[sandbox] ${label}: ${logged} on ${sandbox.id}`);
     return status;

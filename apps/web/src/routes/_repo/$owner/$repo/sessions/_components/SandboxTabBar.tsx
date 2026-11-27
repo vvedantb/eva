@@ -75,15 +75,10 @@ interface SandboxTabBarProps {
   leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
   agentBrowsingAt?: number;
   hotkeysEnabled?: boolean;
-  /**
-   * Extra classes on the bar itself. Sessions pass the chat-header padding so
-   * the two columns share a row height on mobile; desktop rail overrides it.
-   */
   className?: string;
   fileList: SandboxFileListApi;
   consoleDock: ConsoleDockApi;
   terminalPanel: TerminalPanelApi;
-  /** Desktop: content pane is hidden; the rail stays. Ignored below `md`. */
   collapsed?: boolean;
   onToggle?: () => void;
 }
@@ -159,9 +154,7 @@ export function SandboxTabBar({
       customTabs: visibleCustomTabs,
     }),
   ];
-  // Desktop is icon-only unless the reader has asked for the labelled rail.
   const iconOnly = !isMobile && !showLabels;
-  // Phone-only rule: the desktop rail decides its own labels above.
   const collapseLabels = isMobile && tabDescriptors.length > MAX_LABELLED_TABS;
 
   const tabLayout = (value: string): SidePanelTabLayout => {
@@ -172,8 +165,6 @@ export function SandboxTabBar({
   const hotkeyLabel = formatForDisplay(
     useShortcutBinding("toggleSandboxPanel"),
   );
-  // Desktop only: the active tab shows and hides the card (there is no
-  // separate toggle). The phone's pane switcher owns show and hide.
   const onActiveTabClick = isMobile ? undefined : onToggle;
   const activeTabHint = onActiveTabClick
     ? `${collapsed ? "Show" : "Hide"} panel (${hotkeyLabel})`
@@ -256,8 +247,6 @@ export function SandboxTabBar({
               key={tab.value}
               index={index}
               fast
-              /* The stacked chip fills the rail, so its wrapper has to as
-                 well — an `inline-flex` box is content-sized. */
               className={cn(
                 "inline-flex",
                 showLabels ? "md:w-full" : undefined,

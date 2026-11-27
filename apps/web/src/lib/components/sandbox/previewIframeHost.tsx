@@ -18,21 +18,6 @@ import {
 } from "./previewContain";
 import { setPreviewDocumentLoading } from "./previewDocumentLoading";
 
-/**
- * Global preview-iframe keep-alive.
- *
- * Preview iframes are the one thing React unmounting destroys irrecoverably:
- * detaching an iframe from the DOM discards its document, so any remount
- * reloads the app under development. Route changes (/home, cross-app cold
- * switches) unmount the session tree no matter how it is cached, so the
- * iframes live OUTSIDE the router instead — in {@link PreviewIframeHost},
- * mounted once at the app root. Panels render a measured placeholder
- * ({@link PersistentPreviewBody}); the host overlays the real iframe on the
- * placeholder's rect. The iframe element never moves in the DOM (moving also
- * reloads it) — it only repositions, and hides via `display: none` (which
- * keeps the document alive) while its placeholder is hidden or unmounted.
- */
-
 interface PreviewInfo {
   url: string;
   port: number;
@@ -61,25 +46,13 @@ interface LogicalSize {
   height: number;
 }
 
-interface HostEntry {
-  /** Placeholder identity (pathStorageKey) — stable across remounts. */
-  key: string;
-  /** `${sandboxId}:${port}` — evicted together when the sandbox stops. */
-  group: string;
-  src: string;
-  /** Bump = deliberate reload; the host remounts the iframe on change. */
-  epoch: number;
+interface HostEntry {  key: string;  group: string;
+  src: string;  epoch: number;
   anchor: HTMLElement | null;
   rect: Rect | null;
-  element: HTMLIFrameElement | null;
-  /** Guest CSS viewport; null = fill the placeholder. */
-  logical: LogicalSize | null;
-  /** Device emulation active — host wrapper draws the device edge borders. */
-  bordered: boolean;
+  element: HTMLIFrameElement | null;  logical: LogicalSize | null;  bordered: boolean;
   attachedAt: number;
 }
-
-/** Hidden iframes keep running dev apps (HMR sockets, timers) — cap RAM. */
 const MAX_IFRAMES = 3;
 
 /**
@@ -90,9 +63,7 @@ const MAX_IFRAMES = 3;
  * the offsets it is applying instead, and the overlay takes them in the same
  * commit.
  */
-export interface PreviewGesture {
-  /** Anchor being manipulated — every other overlay is unaffected. */
-  key: string;
+export interface PreviewGesture {  key: string;
   dx: number;
   dy: number;
   dWidth: number;
@@ -143,12 +114,6 @@ function getPreviewGesture(): PreviewGesture | null {
   return gesture;
 }
 
-/**
- * Panels mid dock motion (`DOCK_MOTION_EVENT`), to their settle timer. An
- * iframe over one steps aside: it cannot follow the panel's transform, so it
- * floated at full size over a scaling card and lagged the width slide. When
- * the motion ends it is re-measured and fades back in place.
- */
 const movingPanels = new Map<Element, number>();
 
 function onDockMotion(event: Event): void {
@@ -231,8 +196,6 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
 }
 
 let remeasureRaf = 0;
-
-/** Anchors inside `hidden` shells/tabs paint at 0×0 — skip them and their listeners. */
 function anchorNeedsLayoutTracking(anchor: HTMLElement): boolean {
   if (document.visibilityState !== "visible") return false;
   const rect = anchor.getBoundingClientRect();
@@ -248,11 +211,6 @@ function hasActiveLayoutAnchor(): boolean {
   return false;
 }
 
-/**
- * Window-level layout listeners exist only while at least one visible
- * placeholder needs tracking. Scroll uses capture so scrolling inside any
- * container repositions the overlay, not just document scrolls.
- */
 let layoutListenersAttached = false;
 function syncLayoutListeners(): void {
   const shouldAttach = hasActiveLayoutAnchor();
@@ -278,8 +236,6 @@ if (typeof document !== "undefined") {
     syncLayoutListeners();
   });
 }
-
-/** Coalesce scroll/resize/RO into one measure per frame. */
 function scheduleRemeasure(): void {
   if (document.visibilityState !== "visible") return;
   if (remeasureRaf !== 0) return;
@@ -288,23 +244,14 @@ function scheduleRemeasure(): void {
     remeasureAll();
   });
 }
-
-/** Re-reads every anchored placeholder's rect; notifies only on change. */
-function remeasureAll(): void {
-  // Mid-gesture the anchor has already moved, so re-measuring it here would
-  // double-count the offsets the window is publishing.
-  if (gesture !== null) return;
+function remeasureAll(): void {  if (gesture !== null) return;
   if (document.visibilityState !== "visible") {
     syncLayoutListeners();
     return;
   }
   let changed = false;
   for (const [key, entry] of entries) {
-    if (entry.anchor === null) continue;
-    // Measure 0×0 anchors too: a sandbox tab switch hides the pane with
-    // `display: none` without unmounting it, and skipping it here left the
-    // overlay painted at the last visible rect. A 0×0 rect hides the overlay.
-    const rect = measure(entry.anchor);
+    if (entry.anchor === null) continue;    const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });
       changed = true;
@@ -317,9 +264,7 @@ function remeasureAll(): void {
 function evictOverCap(): void {
   if (entries.size <= MAX_IFRAMES) return;
   let oldest: HostEntry | null = null;
-  for (const entry of entries.values()) {
-    // Anchored = a mounted panel is showing it; never evict those.
-    if (entry.anchor !== null) continue;
+  for (const entry of entries.values()) {    if (entry.anchor !== null) continue;
     if (oldest === null || entry.attachedAt < oldest.attachedAt) {
       oldest = entry;
     }
@@ -331,33 +276,16 @@ function evictOverCap(): void {
 
 interface AttachOptions {
   anchor: HTMLElement;
-  group: string;
-  /** Undefined = nothing to show (loading/error) — hides any cached iframe. */
-  src: string | undefined;
+  group: string;  src: string | undefined;
   epoch: number;
-  logical: LogicalSize | null;
-  /** Receives the live iframe element (panels wire it into iframeRef). */
-  onElement: (el: HTMLIFrameElement | null) => void;
-  /** A pane anchor wins over an auto mini-player; a mini-player anchor does not. */
-  role: PreviewAnchorRole;
-  /**
-   * Pane only: float into the mini-player if this anchor detaches for good.
-   * Undefined disarms (pane hidden, collapsed, mobile, or nothing to show).
-   */
-  miniPlayer?: PreviewMiniPlayerSource;
+  logical: LogicalSize | null;  onElement: (el: HTMLIFrameElement | null) => void;  role: PreviewAnchorRole;  miniPlayer?: PreviewMiniPlayerSource;
 }
 
-/**
- * Claims the host slot for `key` while the placeholder is mounted. Returns
- * the detach cleanup: the iframe is hidden but kept cached for the next visit.
- */
 function attach(key: string, options: AttachOptions): (() => void) | undefined {
   const existing = entries.get(key);
   notePreviewAnchorAttached(key, options.role);
 
-  if (options.src === undefined) {
-    // Loading or error state — the panel is showing an overlay there instead.
-    if (options.role === "panel") disarmPreviewMiniPlayer(key);
+  if (options.src === undefined) {    if (options.role === "panel") disarmPreviewMiniPlayer(key);
     if (existing !== undefined) {
       entries.set(key, { ...existing, anchor: null, rect: null });
       notify();
@@ -368,19 +296,12 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   const sameEpoch = existing !== undefined && existing.epoch === options.epoch;
   entries.set(key, {
     key,
-    group: options.group,
-    // Same epoch = the cached document must be kept; a revalidated src for
-    // the same target carries a fresh grant and would reload it.
-    src: sameEpoch ? existing.src : options.src,
+    group: options.group,    src: sameEpoch ? existing.src : options.src,
     epoch: options.epoch,
     anchor: options.anchor,
     rect: measure(options.anchor),
     element: sameEpoch ? existing.element : null,
-    logical: options.logical,
-    // Device chrome belongs on the pane's contained box, not the mini-player
-    // body — that overlay is the letterbox, so a border there would frame the
-    // bars instead of the page.
-    bordered: options.role === "panel" && options.logical !== null,
+    logical: options.logical,    bordered: options.role === "panel" && options.logical !== null,
     attachedAt: Date.now(),
   });
   evictOverCap();
@@ -420,10 +341,7 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
       onElementByKey.delete(key);
     }
     options.onElement(null);
-    const entry = entries.get(key);
-    // Only the anchor that still owns the slot un-anchors it; a superseded
-    // anchor (pane took over from the mini-player) must not report a detach.
-    if (entry !== undefined && entry.anchor === options.anchor) {
+    const entry = entries.get(key);    if (entry !== undefined && entry.anchor === options.anchor) {
       entries.set(key, { ...entry, anchor: null, rect: null });
       notify();
       notePreviewAnchorDetached(key);
@@ -432,11 +350,6 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   };
 }
 
-/**
- * Stable per-key iframe ref callbacks. Inline closures would change identity
- * every host render, making React detach/re-run them and ping-pong `notify`
- * into an infinite render loop.
- */
 const iframeRefByKey = new Map<
   string,
   (el: HTMLIFrameElement | null) => void
@@ -446,9 +359,7 @@ function iframeRefFor(key: string): (el: HTMLIFrameElement | null) => void {
   if (cached !== undefined) return cached;
   const callback = (el: HTMLIFrameElement | null) => {
     const entry = entries.get(key);
-    if (entry === undefined || entry.element === el) return;
-    // A fresh element is a fresh document: it spins until its first `load`.
-    if (el !== null) setPreviewDocumentLoading(el, true);
+    if (entry === undefined || entry.element === el) return;    if (el !== null) setPreviewDocumentLoading(el, true);
     entries.set(key, { ...entry, element: el });
     onElementByKey.get(key)?.(el);
     notify();
@@ -526,17 +437,9 @@ export function PreviewIframeHost() {
           <div
             key={entry.key}
             className={cn(
-              "absolute overflow-hidden",
-              // Dark canvas so contain letterbox reads as bars, not leftover
-              // chrome — muted matches the title bar and hides the ratio.
-              logical ? "bg-black" : "bg-background",
-              // Iframes swallow pointer events, so every overlay goes inert
-              // for the duration of a gesture, not just the dragged one.
-              live !== null || steppedAside
+              "absolute overflow-hidden",              logical ? "bg-black" : "bg-background",              live !== null || steppedAside
                 ? "pointer-events-none"
-                : "pointer-events-auto",
-              // Out at once as a dock motion starts, back with a short fade.
-              steppedAside ? "opacity-0" : "transition-opacity duration-150",
+                : "pointer-events-auto",              steppedAside ? "opacity-0" : "transition-opacity duration-150",
               entry.bordered && "border border-border",
               !visible && "hidden",
             )}
@@ -555,13 +458,7 @@ export function PreviewIframeHost() {
               key={entry.epoch}
               ref={iframeRefFor(entry.key)}
               src={entry.src}
-              title="Preview"
-              // The preview is cross-origin, and Chrome's native WebMCP
-              // (`navigator.modelContext`) refuses to run in a cross-origin
-              // frame unless the embedder delegates the `tools` feature. Without
-              // it every agent `call_preview_tool` fails with a permissions
-              // policy error.
-              allow="tools"
+              title="Preview"              allow="tools"
               onLoad={(event) => {
                 setPreviewDocumentLoading(event.currentTarget, false);
               }}
@@ -586,15 +483,11 @@ export function PreviewIframeHost() {
   );
 }
 
-interface PreviewAnchorProps {
-  /** Stable placeholder identity — the panel's pathStorageKey. */
-  entryKey: string;
+interface PreviewAnchorProps {  entryKey: string;
   /** `${sandboxId}:${port}` for group eviction. */
   group: string;
   src: string | undefined;
-  epoch: number;
-  /** Guest CSS viewport; null = fill the placeholder. */
-  logicalSize: { width: number; height: number } | null;
+  epoch: number;  logicalSize: { width: number; height: number } | null;
   role: PreviewAnchorRole;
   /** Pane only — see {@link AttachOptions.miniPlayer}. */
   miniPlayer?: PreviewMiniPlayerSource;

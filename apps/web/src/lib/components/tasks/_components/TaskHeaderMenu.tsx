@@ -26,7 +26,6 @@ import {
 
 interface TaskHeaderMenuProps extends TaskSandboxMenuItemsProps {
   task: Doc<"agentTasks">;
-  /** The task's chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   buttonSize: "default" | "sm";
   iconSize: number;
@@ -54,7 +53,6 @@ export function TaskHeaderMenu({
     task.repoId ? { repoId: task.repoId } : "skip",
   );
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
-  // Create PR only: the task's PR rows come from `TaskCardMenuItems`.
   const createPrItem = usePrLinkMenuItems({
     createPr,
     prUrl: undefined,
@@ -75,7 +73,6 @@ export function TaskHeaderMenu({
     currentUserId: currentUserId ?? undefined,
     projects: projects ?? undefined,
     archived: task.archivedAt !== undefined,
-    // Archived or moved: back to the list, as a session archive does.
     onRemoved: () => {
       void navigate({ to: toInternalRepoHref(tasksPath) });
     },
@@ -122,7 +119,6 @@ export function TaskHeaderMenu({
           />
         </DropdownMenuContent>
       </DropdownMenu>
-      {/* Siblings of the menu: Radix unmounts menu content on close. */}
       {dialogs}
     </>
   );

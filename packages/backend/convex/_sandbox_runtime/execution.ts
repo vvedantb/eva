@@ -887,12 +887,7 @@ const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
 function isSandboxSetupRetryable(message: string): boolean {
   return (
     isSandboxNetworkIssue(message) ||
-    // Transport only: setup deletes and recreates the VM, so a permanent auth
-    // failure or a bare "network" substring must not trigger it.
     isTransientTransportError(message) ||
-    // Exit code -1 typically means the command was terminated abnormally
-    // (sandbox not yet accepting commands, transport error, killed mid-exec) —
-    // this is transient, unlike non-zero exit codes from real command failures.
     message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
@@ -1359,8 +1354,6 @@ function buildDaemonOptsSig(
 ): string {
   const fastMode =
     traits.fastMode === undefined ? "" : traits.fastMode ? "1" : "0";
-  // A daemon started with other system prompt text must respawn, or the turn
-  // would leave out instructions the prompt expects the system prompt to hold.
   const systemPromptSig = systemPrompt
     ? createHash("sha256").update(systemPrompt).digest("hex").slice(0, 12)
     : "";
@@ -1413,7 +1406,6 @@ type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
   entityTable: "sessionChats";
 };
 
-/** The implementation behind `prewarmSessionDaemon`. */
 async function runPrewarmEntityDaemon(
   ctx: ActionCtx,
   args: PrewarmEntityDaemonParams,
@@ -1424,16 +1416,6 @@ async function runPrewarmEntityDaemon(
   }
   try {
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Never exec on a sandbox that is not running. On Vercel, any exec — even
-    // the daemon alive-check below — lazily resumes a stopped VM, resurrecting
-    // it WITHOUT its dev server, Convex backend, or Console tmux session
-    // (services only launch in the startup workflow). Prewarm is best-effort:
-    // skip instead, and flip a stale "active" status to "closed" so the UI
-    // offers Start — which also stops connectPty from resurrecting it.
-    //
-    // Use classifyForReconcile (not sandbox.state): a hard-timeouted Vercel VM
-    // makes status throw and state reports "starting", which would skip the
-    // flip forever while the UI still says active.
     const classification = await sandbox.classifyForReconcile();
     if (classification !== "alive") {
       console.log(
@@ -1461,8 +1443,6 @@ async function runPrewarmEntityDaemon(
       );
       return { prewarmed: false };
     }
-    // Every caller is a session chat (`entityTable: "sessionChats"`), whose
-    // turn prompt `buildSessionPrompt` shapes for this system prompt.
     const systemPrompt = chatSystemPrompt(normalizedModel);
     const providerAccountCredentialRevision = args.providerAccountId
       ? await resolveProviderAccountCredentialRevision(
@@ -1495,11 +1475,6 @@ async function runPrewarmEntityDaemon(
       return alive.trim().split("\n").pop()?.trim() ?? "cold";
     };
 
-    /**
-     * Runs `decide` with turn claims fenced off, so the daemon this prewarm is
-     * about to kill cannot claim a turn (and its 2-minute running lease)
-     * between the decision and the process dying. Always clears the fence.
-     */
     const withClaimPaused = async (
       decide: () => Promise<{ prewarmed: boolean } | null>,
     ): Promise<{ prewarmed: boolean } | null> => {
@@ -1552,9 +1527,6 @@ async function runPrewarmEntityDaemon(
         console.log(
           `[sandbox][execution] prewarmEntityDaemon: stale callback script — uploading bundle entityId=${entityIdStr}`,
         );
-        // Safe before the mid-turn check: this only touches disk. The live
-        // daemon notices the new fingerprint and exits for respawn itself once
-        // its work settles (callbackScriptWentStaleOnDisk).
         await uploadCallbackScriptBundle(sandbox);
         return await withClaimPaused(async () => {
           const snapshot = await readTurnSnapshot();
@@ -1564,9 +1536,6 @@ async function runPrewarmEntityDaemon(
             );
             return { prewarmed: false };
           }
-          // Disk now matches the expected fingerprint, so a follow-up probe
-          // would report "alive" while the old process is still running the
-          // previous bundle. Kill so this prewarm falls through to launch.
           await killDaemon();
           return null;
         });
@@ -1574,11 +1543,6 @@ async function runPrewarmEntityDaemon(
       return null;
     };
 
-    // The alive classification above is a point-in-time read. A Stop can land
-    // while this prewarm waits on the launch lease (up to minutes), and every
-    // later exec — or ensureSandboxRunning — would lazily resume the stopped VM
-    // (task 262: stopped 12:47:11, prewarm resumed it 8s later). Poll the
-    // user's stop intent before each step that can wake the sandbox.
     const stopRequested = () =>
       ctx.runQuery(internal.sandboxDaemon.isEntitySandboxStopRequested, {
         entityTable: args.entityTable,
@@ -1595,16 +1559,6 @@ async function runPrewarmEntityDaemon(
     const initialReady = await settleIfReady(await probeAliveState());
     if (initialReady !== null) return initialReady;
 
-    // Single-flight the kill+launch: prewarm bursts (page opens, doc-patch
-    // refires) all reach here seeing "cold" during the multi-second launch
-    // window; only the lease claimant proceeds. The in-sandbox spawn flock is
-    // the hard guarantee — this just stops losers paying a full launch.
-    //
-    // Losers used to return immediately. That stranded a pending-turn prewarm
-    // when page-open had already claimed the lease with a stale lastModel:
-    // send/workflow fire once, lose the race, and nothing retried, so the
-    // wrong daemon mismatch-polled claimPendingTurn until a later prewarm
-    // happened to run (observed: ~3 minutes on Manager Ave).
     const claimLease = () =>
       ctx.runMutation(internal.sandboxDaemon.claimDaemonLaunchLease, {
         entityId: entityIdStr,
@@ -1630,9 +1584,6 @@ async function runPrewarmEntityDaemon(
       }
     }
     try {
-      // Re-probe after claiming: the holder may have finished as a different
-      // model during the wait, and the first probe is stale even on the
-      // no-wait path (TOCTOU between alive-check and lease).
       const aliveState = await probeAliveState();
       const claimedReady = await settleIfReady(aliveState);
       if (claimedReady !== null) return claimedReady;
@@ -1655,12 +1606,6 @@ async function runPrewarmEntityDaemon(
             );
             return { prewarmed: false };
           }
-          // Log both sigs so the diverging field is visible (the bare
-          // "respawning" line hid the reasoning-level mismatch behind the
-          // session-166 hang). Read the on-disk sig only on this rare path so
-          // alive/cold probes pay no extra exec. The sig carries model, tools,
-          // trait flags, account id, revision and entity id — no secrets.
-          // Best-effort: a failed read must not abort the respawn.
           const onDiskSig = await execHandle(
             sandbox,
             `cat ${JSON.stringify(entityDaemonPaths(args.entityIdField, entityIdStr).opts)} 2>/dev/null || true`,
@@ -1676,10 +1621,6 @@ async function runPrewarmEntityDaemon(
       }
 
       if (await skipIfStopped()) return { prewarmed: false };
-      // skipDocker: the agent daemon needs neither swap nor dockerd, and the
-      // sandbox's own startup path already provisions both. On a new session
-      // this wait (~4s measured) sat before the launch, racing the
-      // createSandbox bootstrap of the same dockerd.
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
         skipDocker: true,

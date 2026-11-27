@@ -29,12 +29,6 @@ import {
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 
-/**
- * The repo logo, and nothing else: the notification type moved to the trailing
- * status column, where it can be scanned down the list rather than read at 11px
- * off an avatar corner. Falls back to the plain type icon when the notification
- * is not tied to a repo.
- */
 function NotificationSourceAvatar({
   notification,
   repo,
@@ -69,14 +63,10 @@ interface NotificationRowProps {
   selected: boolean;
   onSelect: () => void;
   onMarkRead: () => void;
-  /** Right-click menu action: flips this row between read and unread. */
   onToggleRead: () => void;
-  /** Right-click menu action: archives this row, or puts it back. */
   onToggleArchive: () => void;
-  /** Multi-select mode: the row shows a checkbox and clicks toggle it. */
   isSelecting: boolean;
   isChecked: boolean;
-  /** `extend` is a shift-click: select everything back to the anchor row. */
   onToggleCheck: (extend: boolean) => void;
 }
 
@@ -97,14 +87,9 @@ export function NotificationRow({
   const sourceLabel = repo ? repoDisplayLabel(repo) : undefined;
   const unread = !notification.read;
   const archived = notification.archivedAt !== undefined;
-  // Line one names the thing, line two says what happened to it. Falling back
-  // to the repo keeps a second line under subjects whose title carries no event
-  // phrase, so rows stay the same height down the list.
   const { subject, event } = splitNotificationTitle(notification);
   const detail = event ?? sourceLabel;
 
-  // Keyboard stepping (arrow keys in the inbox) must keep the selected row in
-  // view; nearest-block scrolling is a no-op when it is already visible.
   /* eslint-disable no-effect/no-event-handler --
      Scrolls the DOM row into view; selection can also move from a keyboard
      handler that lives on the list, so the row has no event of its own. */
@@ -113,10 +98,6 @@ export function NotificationRow({
   }, [selected]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Right-click opens the menu instead of selecting: `contextmenu` does not
-  // fire the row button's `onClick`, so the notification is neither opened nor
-  // marked read on the way in. Hover affordances (Dismiss) are untouched — the
-  // trigger only clones the row shell.
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -127,8 +108,6 @@ export function NotificationRow({
             selected ? "bg-muted" : "hover:bg-muted/40",
           )}
         >
-          {/* Outside the row button rather than inside it: a checkbox nested in
-          a button is not operable on its own. */}
           {isSelecting ? (
             <Checkbox
               checked={isChecked}

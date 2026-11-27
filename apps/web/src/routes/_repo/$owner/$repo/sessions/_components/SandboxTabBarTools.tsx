@@ -18,11 +18,9 @@ export function SandboxTabBarTools({
   showLabels,
   onToggleLabels,
 }: {
-  /** Absent where the sandbox runs no dev server (a project coordinator). */
   onNewPreview?: () => void;
   newPreviewDisabled: boolean;
   terminalPanel: TerminalPanelApi;
-  /** Desktop rail: tab labels under the icons. */
   showLabels: boolean;
   onToggleLabels: () => void;
 }) {

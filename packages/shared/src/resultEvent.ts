@@ -1,12 +1,5 @@
 import { z } from "zod";
 
-/**
- * Boundary parser for the Claude-shaped result event every provider runtime
- * writes at the end of a completion (see callback-src `buildClaudeShapedResult`).
- * Shared so the backend can denormalise usage columns at insert time and the
- * web can still parse legacy rows that predate those columns.
- */
-
 export interface ParsedResultEvent {
   costUsd: number;
   model: string;
@@ -16,13 +9,7 @@ export interface ParsedResultEvent {
   durationMs: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  /** Provider context window for this result, or 0 when the event omitted it. */
   contextWindow: number;
-  /**
-   * Tokens occupying the context window at the end of this result — last
-   * iteration when present, otherwise the request's usage totals. Not the
-   * sum of cache reads across the whole request/session.
-   */
   contextUsedTokens: number;
 }
 
@@ -53,10 +40,6 @@ const emptyTokenCounts = {
   cache_creation_input_tokens: 0,
 };
 
-// Boundary schema for the Claude Code result-event JSON. Every field carries a
-// `.catch` default matching EMPTY_PARSED, so a missing or mistyped value falls
-// back rather than failing the whole parse — the same tolerance the previous
-// typeof-guarded reads provided.
 const usageSchema = z
   .object({
     ...tokenCountFields,
@@ -87,8 +70,6 @@ const resultEventSchema = z.object({
   modelUsage: modelUsageSchema,
 });
 
-// JSON text → result event. Invalid JSON becomes a Zod issue rather than a
-// thrown SyntaxError, so callers get one failure path.
 const rawResultEventSchema = z
   .string()
   .transform((raw, ctx) => {
@@ -103,7 +84,6 @@ const rawResultEventSchema = z
 
 type ModelUsage = z.infer<typeof modelUsageSchema>;
 
-/** Finds the model with the highest cost from modelUsage object. */
 function getPrimaryModel(modelUsage: ModelUsage): string {
   let primaryModel = "-";
   let highestCost = -1;
@@ -113,7 +93,6 @@ function getPrimaryModel(modelUsage: ModelUsage): string {
       primaryModel = model;
     }
   }
-  // Fallback to first key if no cost data
   const keys = Object.keys(modelUsage);
   const first = keys[0];
   if (primaryModel === "-" && first !== undefined) {
@@ -168,8 +147,6 @@ export function tryParseResultEvent(
   if (!parsed.success) return null;
   const data = parsed.data;
   const model = getPrimaryModel(data.modelUsage);
-  // Keep the four token categories semantically distinct. Pure input (non-cached)
-  // must not be conflated with cache reads/creations; their pricing differs by ~10-25x.
   return {
     costUsd: data.total_cost_usd,
     model,

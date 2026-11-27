@@ -33,7 +33,6 @@ export function PublishRecoveryBanner({
   isSandboxActive,
 }: {
   sessionId: Id<"sessions">;
-  /** The chat's newest message. */
   newest: { _id: string; isSystemAlert?: boolean; errorDetail?: string } | undefined;
   isSandboxActive: boolean;
 }) {
@@ -51,7 +50,6 @@ export function PublishRecoveryBanner({
   const handleConfirm = (target: ForcePushTarget) => {
     setConfirmTarget(null);
     const key = forcePushOfferKey(newest._id, target);
-    // Marked requested before the mutation settles, so the button goes at once; a failure takes the mark back.
     if (requestedOffers.includes(key)) return;
     setRequestedOffers((keys) => [...keys, key]);
     forcePushBranch({ sessionId, ...(target.sessionRepoId !== undefined ? { sessionRepoId: target.sessionRepoId } : {}) }).catch(() => {

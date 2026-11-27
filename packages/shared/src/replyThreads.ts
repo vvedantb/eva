@@ -1,7 +1,6 @@
 import { EVA_MENTION_ID } from "./chatMessageRoute";
 import { tokenizedToDisplayText } from "./mentionText";
 
-/** Words of a thread's root the "Eva is replying in a thread" link shows. */
 const THREAD_PREVIEW_WORDS = 6;
 
 /**

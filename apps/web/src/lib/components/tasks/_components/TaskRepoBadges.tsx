@@ -11,7 +11,6 @@ import { SessionRepoBadges } from "@/routes/_repo/$owner/$repo/sessions/_compone
  */
 export function TaskRepoBadges({ task }: { task: Doc<"agentTasks"> }) {
   const multiRepo = (task.linkedRepoIds?.length ?? 0) > 0;
-  // The same cached query the task's sandbox reads (`useOwnedSession`).
   const owned = useQuery(
     api.sessions.getOwnedWithSeed,
     multiRepo ? { owner: { kind: "task", taskId: task._id } } : "skip",

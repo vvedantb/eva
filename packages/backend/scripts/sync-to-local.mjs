@@ -237,7 +237,6 @@ try {
   );
 }
 
-
 function quoteForShell(arg) {
   return `"${String(arg).replace(/"/g, '\\"')}"`;
 }
