@@ -3,9 +3,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
-import { toast } from "@vvedantb/ui";
 import { useState } from "react";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
+import { undoToast } from "@/lib/utils/undoToast";
 import {
   sessionMatchesPath,
   type RepoPathParts,
@@ -40,22 +40,22 @@ export function useArchiveSession() {
       await archiveSession({ sessionId: target.session._id });
       // Archiving stops a sandbox and closes a pull request, so it says so and
       // offers the way back: `unarchive` reopens the PR it closed.
-      toast.success("Session archived", {
-        id: "session-archive",
-        description: "The sandbox was stopped and any open PR closed.",
-        action: {
-          label: "Undo",
-          onClick: () => {
-            void unarchiveSession({ id: target.session._id })
-              .then(() => {
-                mutationSuccess("Session restored", "session-unarchive");
-              })
-              .catch(() => {
-                mutationError("Couldn't restore session", "session-unarchive");
-              });
-          },
+      undoToast(
+        "Session archived",
+        () => {
+          void unarchiveSession({ id: target.session._id })
+            .then(() => {
+              mutationSuccess("Session restored", "session-unarchive");
+            })
+            .catch(() => {
+              mutationError("Couldn't restore session", "session-unarchive");
+            });
         },
-      });
+        {
+          id: "session-archive",
+          description: "The sandbox was stopped and any open PR closed.",
+        },
+      );
       // Must be the exact route, not a substring: `includes` sent the user
       // away from session 123 whenever session 12 was archived, and matched
       // the same id under a different app.

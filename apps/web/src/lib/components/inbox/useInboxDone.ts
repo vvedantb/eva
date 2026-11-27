@@ -5,9 +5,9 @@ import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { toast } from "@vvedantb/ui";
 import { inboxDoneTarget } from "@eva/shared/inbox";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { undoToast } from "@/lib/utils/undoToast";
 
 export type InboxRow = FunctionReturnType<typeof api.inbox.list>[number];
 export type InboxListArgs = FunctionArgs<typeof api.inbox.list>;
@@ -57,29 +57,21 @@ export function useInboxDone(listArgs: InboxListArgs) {
         "Couldn't mark as done",
         "inbox-done",
       );
-      toast.success("Done", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            void done.then((undo) =>
-              catchMutationError(
-                undoDone({ chatId, ...undo }),
-                "Couldn't undo",
-                "inbox-undo",
-              ),
-            ),
-        },
-      });
+      undoToast("Done", () =>
+        void done.then((undo) =>
+          catchMutationError(
+            undoDone({ chatId, ...undo }),
+            "Couldn't undo",
+            "inbox-undo",
+          ),
+        ),
+      );
       return;
     }
     const ids = [target.notificationId];
     void catchMutationError(archiveMany({ ids }), "Couldn't mark as done", "inbox-done");
-    toast.success("Done", {
-      action: {
-        label: "Undo",
-        onClick: () =>
-          void catchMutationError(unarchiveMany({ ids }), "Couldn't undo", "inbox-undo"),
-      },
-    });
+    undoToast("Done", () =>
+      void catchMutationError(unarchiveMany({ ids }), "Couldn't undo", "inbox-undo"),
+    );
   };
 }

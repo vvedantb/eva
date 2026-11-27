@@ -5,7 +5,8 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { archiveCopy, readableServerError } from "@eva/shared";
 import { mutationError } from "@/lib/utils/mutationToast";
-import { toast, useRequestConfirm } from "@vvedantb/ui";
+import { useRequestConfirm } from "@vvedantb/ui";
+import { undoToast } from "@/lib/utils/undoToast";
 import { useProjectUnarchive } from "@/lib/components/projects/useProjectUnarchive";
 import type { ProjectArchiveTarget } from "./ProjectArchiveDialog";
 
@@ -63,15 +64,13 @@ export function useProjectArchive(
     );
     setIsArchiving(false);
     if (!archived) return;
-    toast.success(copy.archived, {
-      id: "project-archive",
-      action: {
-        label: "Undo",
-        onClick: () => {
-          void unarchive(next.ids);
-        },
+    undoToast(
+      copy.archived,
+      () => {
+        void unarchive(next.ids);
       },
-    });
+      { id: "project-archive" },
+    );
     setPending(null);
     onArchived();
   };

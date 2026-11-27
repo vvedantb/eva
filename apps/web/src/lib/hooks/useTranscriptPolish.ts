@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { toast } from "@vvedantb/ui";
+import { undoToast } from "@/lib/utils/undoToast";
 
 /** Below this a round-trip costs more than the polish is worth. */
 const MIN_POLISH_WORDS = 10;
@@ -93,11 +93,8 @@ export function useTranscriptPolish({
     if (latestValueRef.current !== raw) return;
 
     setInput(prefix + polished);
-    toast.success("Transcript polished", {
-      action: {
-        label: "Undo",
-        onClick: () => setInput(raw),
-      },
+    undoToast("Transcript polished", () => setInput(raw), {
+      allowInEditable: true,
     });
   };
 
