@@ -31,6 +31,8 @@ const messageValidator = v.object({
       v.object({
         url: v.union(v.string(), v.null()),
         contentType: v.union(v.string(), v.null()),
+        // Sandbox file name, null for captures stored before names were kept.
+        name: v.union(v.string(), v.null()),
       }),
     ),
   ),
@@ -194,6 +196,7 @@ async function resolveMessageUrls(
         media: mediaEntries?.map((entry) => ({
           url: entry.url,
           contentType: entry.contentType,
+          name: m.mediaNames?.[entry.id] ?? null,
         })),
         attachmentUrls: attachmentEntries
           ? attachmentEntries.map((entry) => entry.url)
@@ -559,6 +562,8 @@ export const updateLastInternal = internalMutation({
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+    /** File names of the new captures, merged into the message's names. */
+    mediaNames: messageFields.mediaNames,
     /** Set by public entry points (`screenshots:attachMedia`) to enforce access. */
     requesterUserId: v.optional(v.id("users")),
   },
@@ -586,6 +591,7 @@ export const updateLastInternal = internalMutation({
       activityLog?: string;
       variations?: (typeof variationValidator.type)[];
       mediaStorageIds?: Id<"_storage">[];
+      mediaNames?: Record<Id<"_storage">, string>;
     } = {};
     if (args.content !== undefined) patch.content = args.content;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
@@ -595,6 +601,9 @@ export const updateLastInternal = internalMutation({
     const mediaStorageIds = appendMediaStorageIds(target.mediaStorageIds, args);
     if (mediaStorageIds !== undefined) {
       patch.mediaStorageIds = mediaStorageIds;
+    }
+    if (args.mediaNames !== undefined) {
+      patch.mediaNames = { ...target.mediaNames, ...args.mediaNames };
     }
 
     await ctx.db.patch(target._id, patch);

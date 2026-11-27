@@ -49,7 +49,7 @@ So the user can watch live:
 If \`browser_start\` is unavailable, fall back to headless agent-browser and run \`agent-browser set viewport 1920 1080\`.
 
 ## Step 4 — Capture
-- Deliverables go to \`/tmp/repo/recordings/\` (video) and \`/tmp/repo/screenshots/\` (stills). Always use absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's.
+- Deliverables go to \`/tmp/repo/recordings/\` (video) and \`/tmp/repo/screenshots/\` (stills). Chat captions each capture with its file name, so name it for what it shows (e.g. \`empty-box-page.png\`, not \`shot1.png\`). Always use absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's.
 - Clear leftovers first, but keep the \`.posted/\` archive (captures already posted to chat, kept for reuse): \`mkdir -p /tmp/repo/recordings /tmp/repo/screenshots && find /tmp/repo/recordings /tmp/repo/screenshots -maxdepth 1 -type f -delete\`. Never \`rm -rf\` these folders.
 - Open the route from your plan and wait at least 5 seconds after each navigation for the page to render.
 - Default to video: \`agent-browser record start /tmp/repo/recordings/<name>.webm\`, walk through the changed UI, then \`agent-browser record stop\`. A few seconds after \`record start\`, run \`ls -la /tmp/repo/recordings/\` and confirm the .webm exists and is growing — ffmpeg writes it progressively, so a missing or 0-byte file means recording is broken (usually no ffmpeg). Do not retry-loop; fall back to screenshots.

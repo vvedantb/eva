@@ -1368,6 +1368,9 @@ export const messageFields = {
   // Supersedes imageStorageId/videoStorageId, which remain only for
   // pre-migration docs.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  // Sandbox file name of each capture, keyed by storage id. Chat shows it as
+  // the capture's caption (`mediaCaption`).
+  mediaNames: v.optional(v.record(v.id("_storage"), v.string())),
   // User-attached input images (pasted/dropped in the composer), stored via
   // Convex file storage. Delivered to the agent as files it can read.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),

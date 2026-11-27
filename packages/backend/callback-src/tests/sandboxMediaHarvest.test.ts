@@ -85,6 +85,10 @@ test("posts plain captures once and never follows a link", async () => {
     args: {
       parentId: "s1",
       mediaStorageIds: ["storage-1"],
+      // Directory order decides which duplicate uploads first.
+      mediaNames: {
+        "storage-1": expect.stringMatching(/^(first|retry)\.png$/),
+      },
       turnId: "turn-1",
     },
   });
