@@ -49,7 +49,8 @@ export function PrHeaderActions({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   refreshing: boolean;
-  onRefresh: () => void;  onChanged: () => void;
+  onRefresh: () => void;
+  onChanged: () => void;
 }) {
   const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
@@ -124,7 +125,8 @@ export function PrHeaderActions({
                 <IconStack2 size={14} aria-hidden />
                 Stack a new session
               </DropdownMenuItem>
-              <DropdownMenuSeparator />              <DropdownMenuItem
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
                 className="text-destructive"
                 disabled={closing}
                 onSelect={() =>

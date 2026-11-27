@@ -9,11 +9,14 @@ const HUNK_SEPARATOR_PX = 29;
 const BODY_PADDING_PX = 8;
 const LOOKAHEAD = "1000px 0px";
 
-interface DiffFileLazyBodyProps {  additions: number;
+interface DiffFileLazyBodyProps {
+  additions: number;
   deletions: number;
   contextLines: number;
   hunkCount: number;
-  diffView: DiffView;  scrollRoot: Element | null;  eager: boolean;
+  diffView: DiffView;
+  scrollRoot: Element | null;
+  eager: boolean;
   children: ReactNode;
 }
 

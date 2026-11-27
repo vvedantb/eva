@@ -14,9 +14,11 @@ import {
 import type { PrOverview } from "./_components/prOverviewMeta";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
-export type PrOverviewState =  | { status: "idle" }
+export type PrOverviewState =
+  | { status: "idle" }
   | { status: "loading" }
-  | { status: "error"; message: string }  | { status: "ready"; overview: PrOverview; refreshing: boolean };
+  | { status: "error"; message: string }
+  | { status: "ready"; overview: PrOverview; refreshing: boolean };
 
 /**
  * Loads the Overview payload through TanStack Query, so a PR opened before in
@@ -61,7 +63,8 @@ export function usePrOverview(
         overview: query.data,
         refreshing: query.isFetching || reload.isPending,
       };
-    }    if (query.isError) {
+    }
+    if (query.isError) {
       return {
         status: "error",
         message: prErrorMessage(query.error, "Couldn't load pull request"),
@@ -87,7 +90,8 @@ export function usePrCommits(
   repoId: Id<"githubRepos">,
   prNumber: number,
 ): {
-  commits: PrCommitsData["commits"] | undefined;  truncated: boolean;
+  commits: PrCommitsData["commits"] | undefined;
+  truncated: boolean;
   load: () => void;
   loading: boolean;
   error: string | null;

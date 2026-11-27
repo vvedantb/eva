@@ -38,15 +38,18 @@ export function ReviewDetailClient({
     ? githubPrUrl(owner, name, prNumber)
     : undefined;
 
-  const getHeader = useAction(api.github.getPullRequestHeader);  const headerQuery = useQuery(
+  const getHeader = useAction(api.github.getPullRequestHeader);
+  const headerQuery = useQuery(
     prHeaderQuery(getHeader, repoId, isValidPrNumber ? prNumber : undefined),
   );
-  const prHeader = headerQuery.data;  const { refresh, refreshing } = usePrRefresh(repoId, prNumber);
+  const prHeader = headerQuery.data;
+  const { refresh, refreshing } = usePrRefresh(repoId, prNumber);
   useEntityDocumentTitle(
     prHeader === undefined ? null : `#${prHeader.number} ${prHeader.title}`,
   );
 
-  const goToTab = (nextTab: string) => {    void navigate({
+  const goToTab = (nextTab: string) => {
+    void navigate({
       to: toInternalRepoHref(`${basePath}/reviews/${prNumber}/${nextTab}`),
       search: (prev) => prev,
     });
@@ -78,7 +81,8 @@ export function ReviewDetailClient({
       </div>
     );
 
-  return (    <PendingReviewCommentsProvider onOpenDiffsTab={() => goToTab("diffs")}>
+  return (
+    <PendingReviewCommentsProvider onOpenDiffsTab={() => goToTab("diffs")}>
       <ReviewTabsPanel
         repoId={repoId}
         prUrl={prUrl}

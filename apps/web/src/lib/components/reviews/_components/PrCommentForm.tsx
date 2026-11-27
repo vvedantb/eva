@@ -58,7 +58,8 @@ export function PrCommentForm({
           {prErrorMessage(post.error, "Couldn't post the comment")}
         </p>
       ) : null}
-      <div className="flex items-center justify-between gap-2">        <p className="text-xs text-muted-foreground">Posted as the eva app.</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">Posted as the eva app.</p>
         <Button
           size="sm"
           onClick={submit}

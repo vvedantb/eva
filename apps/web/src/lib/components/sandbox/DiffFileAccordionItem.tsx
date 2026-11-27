@@ -43,9 +43,13 @@ interface DiffFileAccordionItemProps {
   viewed: boolean;
   onViewedChange: (viewed: boolean) => void;
   wrapLines: boolean;
-  repoId: Id<"githubRepos">;  refs: { baseSha: string; headSha: string } | null;
+  repoId: Id<"githubRepos">;
+  refs: { baseSha: string; headSha: string } | null;
   /** `https://github.com/<owner>/<name>`, for the "View file" link. */
-  repoUrl: string;  viewRef: string;  scrollRoot: Element | null;  eager: boolean;
+  repoUrl: string;
+  viewRef: string;
+  scrollRoot: Element | null;
+  eager: boolean;
 }
 
 type FullFileState =
@@ -117,10 +121,12 @@ export function DiffFileAccordionItem({
     !entry.binary &&
     fullFile.status !== "ready";
 
-  return (    <AccordionItem
+  return (
+    <AccordionItem
       value={path}
       className="group/item overflow-clip rounded-lg border border-border bg-background last:border-b"
-    >      <ContextMenu>
+    >
+      <ContextMenu>
         <ContextMenuTrigger asChild>
           <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-background/95 pr-3 pl-3 backdrop-blur-sm group-data-[state=open]/item:border-b">
             <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">

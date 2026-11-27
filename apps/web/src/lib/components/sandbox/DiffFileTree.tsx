@@ -6,7 +6,12 @@ import type { GitStatus, GitStatusEntry } from "@pierre/trees";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import { TREE_UNSAFE_CSS, treeThemeVars } from "./treeTheme";
 
-interface DiffFileTreeProps {  files: string[];  statuses: Record<string, GitStatus>;  initialSelectedPath: string | null;  onSelect: (path: string) => void;  quiet?: boolean;
+interface DiffFileTreeProps {
+  files: string[];
+  statuses: Record<string, GitStatus>;
+  initialSelectedPath: string | null;
+  onSelect: (path: string) => void;
+  quiet?: boolean;
 }
 
 const TREE_SURFACE_VARS = { "--trees-bg-override": "transparent" };
@@ -43,7 +48,8 @@ export function DiffFileTree({
     flattenEmptyDirectories: true,
     unsafeCSS: TREE_UNSAFE_CSS,
     initialExpansion: "open",
-    initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],    onSelectionChange: (selectedPaths) => {
+    initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],
+    onSelectionChange: (selectedPaths) => {
       const path = selectedPaths[0];
       if (path && files.includes(path)) onSelect(path);
     },

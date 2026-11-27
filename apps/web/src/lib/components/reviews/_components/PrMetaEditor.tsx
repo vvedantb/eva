@@ -17,8 +17,10 @@ import {
 } from "@vvedantb/ui";
 import { IconCheck, IconPencil } from "@tabler/icons-react";
 
-export interface PrMetaOption {  value: string;
-  label: string;  adornment?: React.ReactNode;
+export interface PrMetaOption {
+  value: string;
+  label: string;
+  adornment?: React.ReactNode;
 }
 
 /**
@@ -44,10 +46,14 @@ export function PrMetaEditor({
   onOpen,
   onToggle,
   emptyMessage,
-}: {  title: string;
+}: {
+  title: string;
   selected: readonly string[];
-  options: readonly PrMetaOption[];  loading: boolean;
-  saving: boolean;  onOpen: () => void;  onToggle: (next: string[]) => void;
+  options: readonly PrMetaOption[];
+  loading: boolean;
+  saving: boolean;
+  onOpen: () => void;
+  onToggle: (next: string[]) => void;
   emptyMessage: string;
 }) {
   const [open, setOpen] = useState(false);

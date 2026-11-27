@@ -17,7 +17,6 @@ import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { NOTIFICATION_ICONS, toneColors } from "./notificationAppearance";
 
-/** The repo fields the leading mark reads. */
 export type NotificationRepo = { label: string; logoUrl?: string | null };
 
 /**
@@ -71,14 +70,10 @@ export function NotificationRow({
   const Glyph = NOTIFICATION_ICONS[appearance.icon];
   const tone = toneColors(appearance.tone, scheme);
   const archived = notification.archivedAt !== undefined;
-  // The row's own closures over the list's handlers: the list passes the same
-  // handlers to every row, so a row whose notification did not change keeps
-  // its drawing when the list draws more rows or the inbox redraws.
   const press = () => (selection ? selection.onToggle(notification) : onOpen(notification));
   const longPress = () => (selection ? selection.onToggle(notification) : onStartSelect(notification));
   const toggleRead = () => onToggleRead(notification);
   const toggleArchive = () => onToggleArchive(notification);
-  // The web menu items, their wording and icons. Archive takes the session menu's warning tone.
   const readAction: SwipeAction = unread
     ? { key: "read", label: "Mark as read", icon: IconMailOpened, onPress: toggleRead }
     : { key: "unread", label: "Mark as unread", icon: IconMail, onPress: toggleRead };
@@ -111,8 +106,6 @@ export function NotificationRow({
           {repo ? (
             <RepoMark repo={repo} />
           ) : (
-            // The web `NotificationIcon`: a bordered 32 avatar with the tone tint
-            // inside. The web `bg-surface-secondary` is `--muted`.
             <Avatar size={32} style={{ backgroundColor: EVA_THEME[scheme].muted }}>
               <AvatarFallback style={{ backgroundColor: tone.tint }}>
                 <Glyph size={16} color={tone.glyph} />
@@ -161,7 +154,6 @@ export function NotificationRow({
   );
 }
 
-/** The web `RepoLogo` at 28: the uploaded logo, else the repo initial on the muted fill. */
 function RepoMark({ repo }: { repo: NotificationRepo }) {
   const scheme = useScheme();
   return (

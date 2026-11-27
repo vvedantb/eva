@@ -29,7 +29,9 @@ function clampPreviewPct(pct: number): number {
 }
 
 interface ConsoleDockProps {
-  controller: ConsoleDockApi;  preview: ReactNode;  renderConsole: (visible: boolean) => ReactNode;
+  controller: ConsoleDockApi;
+  preview: ReactNode;
+  renderConsole: (visible: boolean) => ReactNode;
 }
 
 /**
@@ -68,7 +70,8 @@ export function ConsoleDock({
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
-    const committed = clampPreviewPct(rawPctRef.current);    if (previewRef.current) {
+    const committed = clampPreviewPct(rawPctRef.current);
+    if (previewRef.current) {
       previewRef.current.style.height = `${committed}%`;
     }
     setPreviewPct(committed);
@@ -84,7 +87,8 @@ export function ConsoleDock({
         ref={previewRef}
         className={cn(
           "min-h-0",
-          expanded ? "shrink-0 grow-0" : "flex-1",          dragging && "pointer-events-none",
+          expanded ? "shrink-0 grow-0" : "flex-1",
+          dragging && "pointer-events-none",
         )}
         style={expanded ? { height: `${previewPct}%` } : undefined}
       >
@@ -123,7 +127,8 @@ export function ConsoleDock({
       </button>
 
       <div
-        className={cn(          expanded ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "hidden",
+        className={cn(
+          expanded ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "hidden",
           dragging && "pointer-events-none",
         )}
       >

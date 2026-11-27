@@ -49,7 +49,6 @@ function RepoLayoutInner() {
           </div>
         </RepoGate>
       </MainContent>
-      {/* The host window already draws cursors; a second layer would double them. */}
       {IS_EMBEDDED ? null : <LiveCursors />}
     </RepoProvider>
   );

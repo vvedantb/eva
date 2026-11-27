@@ -31,10 +31,14 @@ import {
 } from "./_components/reviewTabMeta";
 
 interface ReviewTabsPanelProps {
-  repoId: Id<"githubRepos">;  prUrl?: string;
+  repoId: Id<"githubRepos">;
+  prUrl?: string;
   prNumber?: number;
   activeTab: ReviewTab;
-  onTabChange: (tab: ReviewTab) => void;  placeholder?: ReactNode;  refresh?: { run: () => void; running: boolean };  pullRequests?: {
+  onTabChange: (tab: ReviewTab) => void;
+  placeholder?: ReactNode;
+  refresh?: { run: () => void; running: boolean };
+  pullRequests?: {
     items: readonly ReviewPullRequest[];
     selectedId: Id<"pullRequests"> | undefined;
     onSelect: (id: Id<"pullRequests">) => void;
@@ -74,7 +78,9 @@ export function ReviewTabsPanel({
     prUrl ? { repoId, prUrl } : "skip",
   );
   const { state, reload } = usePrOverview(repoId, prNumber);
-  const overview = state.status === "ready" ? state.overview : null;  const [codeCommit, setCodeCommit] = useState<string | null>(null);  const [codeControlsSlot, setCodeControlsSlot] = useState<HTMLElement | null>(
+  const overview = state.status === "ready" ? state.overview : null;
+  const [codeCommit, setCodeCommit] = useState<string | null>(null);
+  const [codeControlsSlot, setCodeControlsSlot] = useState<HTMLElement | null>(
     null,
   );
 
@@ -92,7 +98,8 @@ export function ReviewTabsPanel({
     />
   );
 
-  return (    <WorkerPoolContextProvider
+  return (
+    <WorkerPoolContextProvider
       poolOptions={DIFF_POOL_OPTIONS}
       highlighterOptions={DIFF_HIGHLIGHTER_OPTIONS}
     >

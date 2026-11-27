@@ -37,7 +37,8 @@ describe("mergeBlocker", () => {
 
   test.each(FINISHED_STATUSES)(
     "a %s pull request reports no blocker at all",
-    (status) => {      expect(
+    (status) => {
+      expect(
         mergeBlocker(
           overview({ status, mergeable: false, mergeableState: "dirty" }),
         ),
@@ -45,14 +46,16 @@ describe("mergeBlocker", () => {
     },
   );
 
-  test("a draft outranks the conflicts underneath it", () => {    const blocker = mergeBlocker(
+  test("a draft outranks the conflicts underneath it", () => {
+    const blocker = mergeBlocker(
       overview({ draft: true, mergeable: false, mergeableState: "dirty" }),
     );
     expect(blocker?.kind).toBe("draft");
     expect(blocker?.remedy).toBeNull();
   });
 
-  test("unknown mergeability is reported as pending, never as a conflict", () => {    const blocker = mergeBlocker(
+  test("unknown mergeability is reported as pending, never as a conflict", () => {
+    const blocker = mergeBlocker(
       overview({ mergeable: null, mergeableState: "unknown" }),
     );
     expect(blocker?.kind).toBe("checking");
@@ -73,7 +76,8 @@ describe("mergeBlocker", () => {
     expect(blocker?.remedy?.prompt).toContain("release");
   });
 
-  test("an unmergeable branch with no known cause offers no remedy", () => {    const blocker = mergeBlocker(
+  test("an unmergeable branch with no known cause offers no remedy", () => {
+    const blocker = mergeBlocker(
       overview({ mergeable: false, mergeableState: "unstable" }),
     );
     expect(blocker?.kind).toBe("unmergeable");
@@ -98,7 +102,8 @@ describe("mergeBlocker", () => {
 describe("headerBlocker", () => {
   test.each(["draft", "checking"])(
     "%s stays out of the header",
-    (hiddenKind) => {      const source =
+    (hiddenKind) => {
+      const source =
         hiddenKind === "draft"
           ? overview({ draft: true })
           : overview({ mergeable: null });
@@ -142,7 +147,8 @@ describe("check roll-up", () => {
     });
   });
 
-  test("the worst outcome wins over any number of better ones", () => {    expect(
+  test("the worst outcome wins over any number of better ones", () => {
+    expect(
       checksOverallTone(
         countChecks([
           ...Array.from({ length: 20 }, () => check({})),

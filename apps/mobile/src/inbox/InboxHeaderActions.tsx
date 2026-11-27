@@ -14,7 +14,6 @@ export type InboxFilter = "all" | "unread" | "archived";
 const FILTERS: readonly InboxFilter[] = ["all", "unread", "archived"];
 const GROUPS: readonly InboxGroup[] = ["day", "repo", "type", "urgency"];
 
-/** The web `InboxFilterMenu` labels. */
 const FILTER_LABELS: Record<InboxFilter, string> = { all: "All", unread: "Unread", archived: "Archived" };
 const GROUP_LABELS: Record<InboxGroup, string> = { day: "Day", repo: "Repo", type: "Type", urgency: "Urgency" };
 
@@ -45,14 +44,12 @@ export function InboxHeaderActions({
   const foreground = EVA_THEME[scheme].foreground;
   const largerText = useLargerText();
   const [filterOpen, setFilterOpen] = useState(false);
-  // A new pick ticks; the sheet closes, as the web menu does.
   const pick = (changed: boolean, apply: () => void) => {
     if (changed) selectionHaptic();
     apply();
     setFilterOpen(false);
   };
   return (
-    // Round header buttons, as Back; the filter keeps its label on a pill of the same surface.
     <View className="flex-row items-center gap-2">
       {unreadCount > 0 ? (
         <HeaderIconButton label="Mark all as read" onPress={onMarkAllRead}>
@@ -72,7 +69,6 @@ export function InboxHeaderActions({
         style={headerButtonSurface(scheme)}
       >
         <IconFilter size={18} color={foreground} />
-        {/* The web button label is `text-xs` semibold with -0.01em tracking; 14 here, the phone floor for tappable text. */}
         <Text className="font-instrument-sans-semibold text-sm" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.14 }}>
           {FILTER_LABELS[filter]}
         </Text>
@@ -107,7 +103,6 @@ export function InboxHeaderActions({
   );
 }
 
-/** A group heading in the filter sheet: the web `DropdownMenuLabel` (capitals, wide tracking, muted), in line with the row text. */
 function FilterGroupLabel({ children }: { children: string }) {
   return (
     <SectionLabel uppercase className="px-4 pb-1 pt-2">

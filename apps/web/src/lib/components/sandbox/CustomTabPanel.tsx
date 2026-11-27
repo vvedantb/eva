@@ -26,7 +26,8 @@ interface CustomTabPanelProps {
   isActive: boolean;
   isForeground?: boolean;
   previewPort: number;
-  repoId: Id<"githubRepos">;  externalHref?: string;
+  repoId: Id<"githubRepos">;
+  externalHref?: string;
   wake?: SandboxWake;
 }
 
@@ -59,10 +60,13 @@ export function CustomTabPanel({
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<PanelState>("loading");
   const [error, setError] = useState<string | null>(null);
-  const [iframeKey, setIframeKey] = useState(0);  const [retryNonce, setRetryNonce] = useState(0);
+  const [iframeKey, setIframeKey] = useState(0);
+  const [retryNonce, setRetryNonce] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const attempts = useRef(0);  const generation = useRef(0);  const foregroundRef = useRef(isForeground);
+  const attempts = useRef(0);
+  const generation = useRef(0);
+  const foregroundRef = useRef(isForeground);
   useEffect(() => {
     foregroundRef.current = isForeground;
   }, [isForeground]);
@@ -76,7 +80,8 @@ export function CustomTabPanel({
 
   /* eslint-disable no-effect/no-adjust-state-on-prop-change --
      The reset also cancels the in-flight poll and bumps a generation counter,
-     so it has to happen as a side effect rather than during render. */  useEffect(() => {
+     so it has to happen as a side effect rather than during render. */
+  useEffect(() => {
     generation.current += 1;
     stopPolling();
     attempts.current = 0;
@@ -90,7 +95,8 @@ export function CustomTabPanel({
     stopPolling();
     if (!isActive || !sandboxId || !isForeground) {
       return stopPolling;
-    }    if (url !== null && state === "running") {
+    }
+    if (url !== null && state === "running") {
       return stopPolling;
     }
     if (state === "error") {

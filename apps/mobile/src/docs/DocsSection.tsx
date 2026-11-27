@@ -28,7 +28,6 @@ import { LIST_WINDOW } from "@/ui/listWindow";
 
 type DocRow = FunctionReturnType<typeof api.docs.list>[number];
 
-/** The web `ChatSourceBadge` icons, as the Sessions, Quick Tasks and Projects sections. */
 const SOURCE_ICONS: Record<ChatSourceKind, ComponentType<IconProps>> = {
   session: IconTerminal2,
   task: IconCode,
@@ -58,10 +57,8 @@ function DocList({ repoId }: { repoId: Id<"githubRepos"> }) {
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
   if (docs === undefined) return <DocPlaceholders />;
-  // PR recaps live under Reviews now — Documents is non-recap only (the web filter).
   const shown = docs.filter((doc) => doc.kind !== "pr-recap");
   if (shown.length === 0) {
-    // The web panel's copy; documents are made on the web, so it says where.
     return <EmptyState icon={IconFile} title="No documents yet" description="Create one on the web. It shows up here." />;
   }
   return (
@@ -142,7 +139,6 @@ export function ChatSourceBadge({ source }: { source: ChatSourceLabelFields }) {
   );
 }
 
-/** The doc fields the menu reads. */
 type DocMenuTarget = Pick<DocRow, "_id" | "title" | "source">;
 
 /**
@@ -191,7 +187,6 @@ export function useDocActions() {
           }}
         />
       </MenuSheet>
-      {/* The web "Delete Document" dialog. */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
@@ -222,7 +217,6 @@ export function useDocActions() {
   return { openSheet: (doc: DocMenuTarget) => setTarget(doc), dialogs };
 }
 
-/** While the docs load: rows shaped as `DocListRow`. */
 function DocPlaceholders() {
   return <SkeletonList label="Loading documents" count={8} renderRow={(row) => <SkeletonRow index={row} />} />;
 }

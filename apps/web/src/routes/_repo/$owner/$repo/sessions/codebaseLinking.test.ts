@@ -5,7 +5,6 @@ import {
   toggleLinkedCodebase,
 } from "./_utils";
 
-
 type Row = { _id: string; owner: string; name: string; rootDirectory?: string };
 
 const web: Row = {

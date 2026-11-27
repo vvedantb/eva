@@ -88,7 +88,8 @@ function PullRequestRow({
   selected,
   onSelect,
 }: {
-  pr: ReviewPullRequest;  repoLabel: string | undefined;
+  pr: ReviewPullRequest;
+  repoLabel: string | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {

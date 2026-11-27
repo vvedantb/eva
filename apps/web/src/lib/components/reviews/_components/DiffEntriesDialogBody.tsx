@@ -33,20 +33,25 @@ export function DiffEntriesDialogBody({
   entries: readonly DiffFileEntry[];
   additions?: number;
   deletions?: number;
-  changedFiles?: number;  truncatedNotice: ReactNode;
+  changedFiles?: number;
+  truncatedNotice: ReactNode;
 }) {
-  const { resolvedTheme } = useThemeMode();  const additions =
+  const { resolvedTheme } = useThemeMode();
+  const additions =
     additionsProp ?? entries.reduce((sum, entry) => sum + entry.additions, 0);
   const deletions =
     deletionsProp ?? entries.reduce((sum, entry) => sum + entry.deletions, 0);
-  const changedFiles = changedFilesProp ?? entries.length;  const fileIdPrefix = useId();  const [showContentSignal, setShowContentSignal] = useState(0);
+  const changedFiles = changedFilesProp ?? entries.length;
+  const fileIdPrefix = useId();
+  const [showContentSignal, setShowContentSignal] = useState(0);
   const paths = entries.map((entry) => entry.path);
   const statuses = Object.fromEntries(
     entries.map((entry): [string, GitStatus] => [entry.path, entry.status]),
   );
 
   const handleSelect = (path: string) => {
-    setShowContentSignal((n) => n + 1);    requestAnimationFrame(() => {
+    setShowContentSignal((n) => n + 1);
+    requestAnimationFrame(() => {
       document
         .getElementById(`${fileIdPrefix}-${paths.indexOf(path)}`)
         ?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -59,7 +64,8 @@ export function DiffEntriesDialogBody({
         "min-h-0 flex-1 space-y-3 overflow-y-auto",
         entries.length > 1 && "pl-3",
       )}
-    >      <NoPendingReviewComments>
+    >
+      <NoPendingReviewComments>
         <div className="space-y-3">
           {entries.map((entry, index) => (
             <ListEnter
@@ -113,7 +119,8 @@ export function DiffEntriesDialogBody({
   return (
     <DialogBody
       className={cn(
-        "flex flex-col gap-3",        entries.length > 1 && "h-[75dvh] overflow-hidden",
+        "flex flex-col gap-3",
+        entries.length > 1 && "h-[75dvh] overflow-hidden",
       )}
     >
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

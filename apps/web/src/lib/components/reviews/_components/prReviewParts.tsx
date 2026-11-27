@@ -10,7 +10,8 @@ export function PrDiffStat({
   className,
 }: {
   additions: number;
-  deletions: number;  hideZero?: boolean;
+  deletions: number;
+  hideZero?: boolean;
   className?: string;
 }) {
   return (

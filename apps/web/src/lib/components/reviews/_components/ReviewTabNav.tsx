@@ -15,9 +15,11 @@ export function ReviewTabNav({
   activeTab,
   onTabChange,
   controlsRef,
-}: {  tabs: readonly ReviewTab[];
+}: {
+  tabs: readonly ReviewTab[];
   activeTab: ReviewTab;
-  onTabChange: (tab: ReviewTab) => void;  controlsRef: (element: HTMLElement | null) => void;
+  onTabChange: (tab: ReviewTab) => void;
+  controlsRef: (element: HTMLElement | null) => void;
 }) {
   return (
     <nav
@@ -31,7 +33,8 @@ export function ReviewTabNav({
         }}
       >
         <TabsList
-          size="sm"          className="h-8 shrink-0 gap-0.5 p-0 shadow-none [&_.t-tab]:text-sm"
+          size="sm"
+          className="h-8 shrink-0 gap-0.5 p-0 shadow-none [&_.t-tab]:text-sm"
         >
           {tabs.map((tab) => (
             <TabsTrigger key={tab} value={tab}>

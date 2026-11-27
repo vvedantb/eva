@@ -1,7 +1,8 @@
 import type { BadgeProps } from "@vvedantb/ui";
 
 export function statusLabel(status: string): string {
-  if (status === "waiting_human") return "Needs reply";  if (status === "waiting_eva") return "Answered";
+  if (status === "waiting_human") return "Needs reply";
+  if (status === "waiting_eva") return "Answered";
   if (status === "resolved") return "Resolved";
   if (status === "cancelled") return "Cancelled";
   return "Open";

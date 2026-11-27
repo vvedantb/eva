@@ -2,7 +2,6 @@ import { isValidElement, type ReactNode } from "react";
 import { expect, test } from "bun:test";
 import { PreviewViewportFrame } from "./PreviewViewportFrame";
 
-
 const POINTER_ID = 7;
 
 class FakeHandle extends EventTarget {

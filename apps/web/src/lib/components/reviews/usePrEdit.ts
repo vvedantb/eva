@@ -29,7 +29,8 @@ export function usePrEdit(
   saving: boolean;
   error: string | null;
 } {
-  const updatePr = useAction(api.github.updatePullRequest);  const getOverview = useAction(api.github.getPullRequestOverview);
+  const updatePr = useAction(api.github.updatePullRequest);
+  const getOverview = useAction(api.github.getPullRequestOverview);
   const getHeader = useAction(api.github.getPullRequestHeader);
   const queryClient = useQueryClient();
 
@@ -45,7 +46,8 @@ export function usePrEdit(
       );
       queryClient.setQueryData(headerKey, (prev) =>
         prev === undefined ? prev : { ...prev, title },
-      );      void queryClient.invalidateQueries({ queryKey: ["pr", "list", repoId] });
+      );
+      void queryClient.invalidateQueries({ queryKey: ["pr", "list", repoId] });
       onSaved?.();
     },
   });

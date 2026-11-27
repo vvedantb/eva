@@ -95,7 +95,8 @@ export function SummaryMetaRows({
             </span>
           )}
           <PrMetaEditor
-            title="Reviewers"            selected={overview.requestedReviewers.map((r) => r.login)}
+            title="Reviewers"
+            selected={overview.requestedReviewers.map((r) => r.login)}
             options={userOptions}
             loading={edit.loading}
             saving={edit.savingReviewers}

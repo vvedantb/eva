@@ -21,9 +21,12 @@ export function KeepAlivePane({
   className,
   children,
 }: {
-  active: boolean;  discard?: boolean;  className: string;
+  active: boolean;
+  discard?: boolean;
+  className: string;
   children: ReactNode;
-}) {  const [visited, setVisited] = useState(active && !discard);
+}) {
+  const [visited, setVisited] = useState(active && !discard);
   if (discard) {
     if (visited) setVisited(false);
     return null;

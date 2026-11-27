@@ -92,13 +92,15 @@ function MergeAction({
 
   const canMerge = canMergePr(overview);
   const blocked = mergeBlocker(overview)?.detail ?? null;
-  const buttonLabel = mergeButtonLabel(overview);  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
+  const buttonLabel = mergeButtonLabel(overview);
+  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
   const methodLabel =
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
   const runMerge = async () => {
     if (merging) return;
-    setMerging(true);    try {
+    setMerging(true);
+    try {
       const result = await mergePr({
         repoId,
         prNumber: overview.number,
@@ -173,7 +175,8 @@ function MergeAction({
 
       <Dialog
         open={confirming}
-        onOpenChange={(open) => {          if (!merging) setConfirming(open);
+        onOpenChange={(open) => {
+          if (!merging) setConfirming(open);
         }}
       >
         <DialogContent>
@@ -283,8 +286,10 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const [confirming, setConfirming] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const start = async () => {    if (starting) return;
-    setStarting(true);    const request = revertSessionRequest(overview);
+  const start = async () => {
+    if (starting) return;
+    setStarting(true);
+    const request = revertSessionRequest(overview);
     try {
       const { numId } = await createSession({ repoId, ...request });
       await navigate({

@@ -36,7 +36,8 @@ export function PrComposer({
   onPosted,
 }: {
   repoId: Id<"githubRepos">;
-  prNumber: number;  isOpen: boolean;
+  prNumber: number;
+  isOpen: boolean;
   onPosted: () => void;
 }) {
   const review = usePendingReviewComments();

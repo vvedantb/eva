@@ -29,7 +29,8 @@ export function PrCommentCard({
 }: {
   authorLogin: string | null;
   authorAvatarUrl: string | null;
-  action?: string;  badge?: ReactNode;
+  action?: string;
+  badge?: ReactNode;
   at: string | null;
   htmlUrl: string;
   body: string;

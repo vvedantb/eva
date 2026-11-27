@@ -11,5 +11,4 @@ export function isSessionSidebarActive(session: {
 
 export { canSendSessionForReview } from "@eva/shared";
 
-
 export { getSessionReadOnlyMessage } from "@eva/shared";

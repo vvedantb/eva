@@ -35,7 +35,9 @@ const KIND_LABEL: Record<DiffFileKind, string> = {
   generated: "Generated",
 };
 
-interface DiffsToolbarProps {  size: DiffSize | null;  scopedCommit: { sha: string; headline: string } | null;
+interface DiffsToolbarProps {
+  size: DiffSize | null;
+  scopedCommit: { sha: string; headline: string } | null;
   onClearScope: () => void;
   diffView: DiffView;
   onDiffViewChange: (view: DiffView) => void;
@@ -244,7 +246,8 @@ function IconToggle({
           shape="rounded"
           variant="ghost"
           size="icon-sm"
-          aria-pressed={pressed}          aria-label={label}
+          aria-pressed={pressed}
+          aria-label={label}
           className={cn(pressed && "bg-muted text-foreground", className)}
           onClick={onPress}
         >

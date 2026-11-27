@@ -67,7 +67,6 @@ export function NeedsYouList({ rows }: { rows: NeedsYouRow[] | undefined }) {
   );
 }
 
-/** One row, as the web: title over the source chip and context, the action, the age. */
 function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
@@ -113,7 +112,6 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   );
 }
 
-/** The web row action, by group: Reply, Open PR, Reject + Approve, Retry. */
 function NeedsYouAction({ row, onReply }: { row: NeedsYouRow; onReply: () => void }) {
   const approve = useMutation(api.buildWorkflow.approveProjectTasks);
   const archive = useMutation(api.agentTasks.archive);

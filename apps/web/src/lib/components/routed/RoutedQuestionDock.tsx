@@ -72,7 +72,8 @@ function QuestionPager({
   threads: RoutedThread[];
   size: RoutedQuestionDockSize;
 }) {
-  const [currentId, setCurrentId] = useState<string>(threads[0]._id);  const [lastIndex, setLastIndex] = useState(0);
+  const [currentId, setCurrentId] = useState<string>(threads[0]._id);
+  const [lastIndex, setLastIndex] = useState(0);
   const foundIndex = threads.findIndex((thread) => thread._id === currentId);
   const index =
     foundIndex >= 0 ? foundIndex : Math.min(lastIndex, threads.length - 1);
@@ -113,7 +114,8 @@ function QuestionPager({
             </button>
           </div>
         ) : null}
-      </div>      <QuestionCard key={thread._id} thread={thread} size={size} />
+      </div>
+      <QuestionCard key={thread._id} thread={thread} size={size} />
     </div>
   );
 }
@@ -158,12 +160,14 @@ function QuestionCard({
   const reply = useMutation(api.routedThreads.reply);
   const resolve = useMutation(api.routedThreads.resolve);
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
+  const [sending, setSending] = useState(false);
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
   const teammates =
     me === undefined
       ? []
-      : thread.participants.filter((participant) => participant.userId !== me);  const briefing = messages?.find((message) => message.authorKind === "eva");
+      : thread.participants.filter((participant) => participant.userId !== me);
+  const briefing = messages?.find((message) => message.authorKind === "eva");
   const replies = messages?.filter((message) => message !== briefing) ?? [];
 
   const handleSend = async () => {
@@ -178,7 +182,9 @@ function QuestionCard({
         "routed-reply",
       );
       setDraft("");
-    } catch {    }    setSending(false);
+    } catch {
+    }
+    setSending(false);
   };
 
   const canSend = !sending && draft.trim().length > 0;
@@ -243,7 +249,8 @@ function QuestionCard({
           rows={1}
           aria-label="Your answer"
           placeholder="Your answer…"
-          className="max-h-32 min-h-7 flex-1 resize-none bg-transparent py-1 text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground"          onKeyDown={(event) => {
+          className="max-h-32 min-h-7 flex-1 resize-none bg-transparent py-1 text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground"
+          onKeyDown={(event) => {
             if (
               !isCoarsePointer &&
               event.key === "Enter" &&

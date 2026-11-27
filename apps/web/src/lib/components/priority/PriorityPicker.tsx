@@ -21,7 +21,6 @@ interface PriorityPickerProps {
   onChange: (priority: Priority | undefined) => void;
   compact?: boolean;
   className?: string;
-  /** Read-only: the value shows, the picker does not open. */
   disabled?: boolean;
 }
 
@@ -43,9 +42,6 @@ export function PriorityPicker({
           type="button"
           disabled={disabled}
           className={cn(
-            // `min-h-10` rather than a height: the trigger is ~26px
-            // tall, and callers that pass their own `h-*` (the quick-task
-            // option chips) must keep it from `sm` up.
             "inline-flex max-sm:min-h-10 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
             className,
           )}

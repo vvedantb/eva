@@ -39,7 +39,8 @@ export function ReviewHeader({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   refreshing: boolean;
-  onRefresh: () => void;  onChanged: () => void;
+  onRefresh: () => void;
+  onChanged: () => void;
   nav: ReactNode;
 }) {
   const state = statusMeta(overview.status, overview.draft);

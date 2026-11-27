@@ -29,9 +29,11 @@ export function ReviewTimelineTab({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   onOpenCommit: (sha: string) => void;
-}) {  const allCommits = usePrCommits(repoId, overview.number);
+}) {
+  const allCommits = usePrCommits(repoId, overview.number);
   const commits = allCommits.commits ?? overview.commits;
-  const events = buildPrTimeline({ ...overview, commits });  const rows = groupTimelineRows([...events].reverse());
+  const events = buildPrTimeline({ ...overview, commits });
+  const rows = groupTimelineRows([...events].reverse());
   const hiddenCommits = Math.max(0, overview.commitCount - commits.length);
   const canLoadCommits = allCommits.commits === undefined && hiddenCommits > 0;
 

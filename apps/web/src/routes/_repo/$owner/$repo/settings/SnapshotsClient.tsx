@@ -39,7 +39,6 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 
-
 function NoSnapshotConfigured() {
   return (
     <div className="rounded-surface bg-card">
