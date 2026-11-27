@@ -797,14 +797,6 @@ async function startRealAgentTurn(
   log("daemon: real turn started");
 }
 
-/**
- * Handles a drained `cancelRequested` flag from a claim response: disarms the
- * per-turn watchdog and asks the SDK query to interrupt the in-flight turn.
- * Idempotent — a stale flag with no active turn, or one arriving while a
- * cancel is already in flight, is ignored (logged once). The turn itself is
- * not torn down here; runDaemonMessagePump settles it once the interrupted
- * turn's result arrives (or the watchdog's cancel-settle timeout fires).
- */
 function handleCancelRequested(agentRunner: WarmRunner): void {
   if (supervisor.currentTurn === null) {
     log("daemon: cancelRequested with no active turn — ignored");
@@ -820,11 +812,6 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   });
 }
 
-/**
- * A real turn is live, so a pushed message joins it instead of starting one.
- * Not while it waits on a blocking question: only the card's answer may
- * resume it, so the steer waits and runs after the answer.
- */
 function canTakeSteer(): boolean {
   return (
     supervisor.phase === "running" &&
@@ -879,8 +866,6 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
-        // After the cancel: a steer that races a Stop is rejected and runs
-        // as the next queued turn instead.
         await deliverSteers(readSteers(claimed), async (text) => {
           if (!canTakeSteer()) return false;
           agentRunner.push(text, "next");
@@ -911,7 +896,6 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
           if (routed === "parked") wakeIdlePump?.();
         }
       } catch {
-        /* retry on next poll */
       }
       const turnInFlight = supervisor.hasWork;
       await sleep(
@@ -943,8 +927,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     }
 
     if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      // The claim watcher wakes this early when it parks a turn, so a claimed
-      // prompt no longer waits out the rest of the 50ms tick (~25ms average).
       await new Promise<void>((resolve) => {
         wakeIdlePump = resolve;
         setTimeout(resolve, PROMPT_POLL_INTERVAL_MS);
@@ -956,12 +938,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     const message = await agentRunner.waitMessage();
     if (message === null) {
       if (supervisor.isCancellationInFlight) {
-        // The SDK query's async iterable ended while we were waiting out an
-        // interrupted turn's tail. The server already finalized the
-        // user-facing turn when it drained the cancel, so exit like
-        // failTurnAndExit but WITHOUT posting a completion — one here could
-        // resolve the NEXT turn's workflow event instead of this
-        // already-settled one.
         await exitWithoutCompletion("pump ended while a cancel was settling");
         return;
       }
@@ -994,16 +970,8 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
 
     if (supervisor.isCancellationInFlight) {
       if (message.type !== "result") {
-        // Drop the interrupted turn's tail from user-visible streaming (no
-        // processRealtimeStdoutChunk) — the server already finalized the
-        // user-facing message for this turn. Background-agent bookkeeping
-        // above still ran unconditionally.
         continue;
       }
-      // The cancelled turn's result has arrived. Do not finalize or post a
-      // completion — the server already finalized this turn when it drained
-      // the cancel. Reset per-turn state and let the pump either pick up a
-      // parked turn (next loop iteration) or go idle.
       resetTurnState();
       finishClaimedTurn();
       supervisor.settleTurn();
@@ -1017,10 +985,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     }
 
     if (isZeroWorkTaskNotificationResult(message)) {
-      // A background task notification can finish immediately before the SDK
-      // starts processing the user prompt already pushed to this warm query.
-      // Keep the current turn and its placeholder alive; the subsequent
-      // assistant/result events belong to that prompt.
       log(
         "daemon: zero-work task notification result ignored; active turn preserved",
       );
@@ -1076,9 +1040,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
       );
       supervisor.settleTurn();
     }
-    // Leave any already-queued SDK messages in the pump. The next loop
-    // iteration will ensureSyntheticTurn() / handle them — draining here
-    // orphaned background-agent "report back" continuations (session 43).
 
     if (supervisor.pendingClaim !== null && supervisor.currentTurn === null) {
       const parked = supervisor.takeClaim();
@@ -1088,7 +1049,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
   }
 }
 
-/** Processes one SDK message through the streaming pipeline. */
 function handleDaemonMessage(
   message: DaemonMessage,
   output: string,
@@ -1123,11 +1083,6 @@ function handleDaemonMessage(
   return { output: nextOutput, isResult };
 }
 
-/**
- * Session-lifetime agent query pump. Turn boundaries are state changes (see
- * supervisor's running turn), not loop exits — the same query() serves every turn for the
- * life of the daemon.
- */
 function createWarmAgentRunner(
   sdk: Awaited<ReturnType<typeof loadSdk>>,
   options: ReturnType<typeof buildSdkOptions>,

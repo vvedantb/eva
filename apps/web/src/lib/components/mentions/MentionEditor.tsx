@@ -173,11 +173,6 @@ function withMentionEditorDefaults<TItem extends MentionItem>({
   };
 }
 
-/**
- * Inline AI completion keys. Returns true when the key was consumed. Sits after
- * the picker block so the picker keeps priority on Tab, and before history
- * recall so Escape reaches it.
- */
 function handleSuggestionKey(
   e: React.KeyboardEvent<HTMLDivElement>,
   active: boolean,
@@ -198,10 +193,6 @@ function handleSuggestionKey(
   return false;
 }
 
-/**
- * Message-history recall: Alt+Up/Down so plain arrows stay for caret movement
- * in multi-line drafts. Returns true when a history entry was applied.
- */
 function handleHistoryKey(
   e: React.KeyboardEvent<HTMLDivElement>,
   triggerOpen: boolean,

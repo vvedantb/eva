@@ -39,12 +39,7 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 
-/** Every command box on this page is a monospace, resizable textarea. */
 
-/**
- * Shown on the Status and Builds tabs when no snapshot config exists yet —
- * both tabs are empty until the Configuration tab has been filled in.
- */
 function NoSnapshotConfigured() {
   return (
     <div className="rounded-surface bg-card">
