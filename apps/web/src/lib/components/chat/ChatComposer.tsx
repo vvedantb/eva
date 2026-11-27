@@ -88,15 +88,15 @@ export interface ChatModelPicker {
   onAccountChange?: (accountId: string | null) => void;
   /**
    * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context).
-   * When provided, trait pills appear above the model list for capable models.
+   * Trait pills appear above the model list for capable models.
    */
-  displayTraits?: {
+  displayTraits: {
     effortLevel: ReasoningLevel | undefined;
     thinkingEnabled: boolean;
     use1mContext: boolean;
     fastMode: boolean;
   };
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+  onTraitsChange: (partial: Partial<StoredModelTraits>) => void;
 }
 
 interface ChatComposerProps {

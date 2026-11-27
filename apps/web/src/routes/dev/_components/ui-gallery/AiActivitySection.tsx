@@ -18,6 +18,7 @@ import {
   PromptInputSpeech,
   ProviderIcon,
   TraitsPanel,
+  type ModelPickerTraits,
 } from "@vvedantb/ui";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 import {
@@ -46,21 +47,21 @@ const TRAITS_CONFIG = {
   fastMode: true,
 };
 
+const GALLERY_TRAITS: ModelPickerTraits = {
+  config: TRAITS_CONFIG,
+  effortLevel: "high",
+  thinkingEnabled: true,
+  use1mContext: false,
+  fastMode: true,
+  getLevelLabel: (level) => level.charAt(0).toUpperCase() + level.slice(1),
+  onEffortLevelChange: noop,
+  onThinkingEnabledChange: noop,
+  onUse1mContextChange: noop,
+  onFastModeChange: noop,
+};
+
 function GalleryTraitsPanel() {
-  return (
-    <TraitsPanel
-      config={TRAITS_CONFIG}
-      effortLevel="high"
-      thinkingEnabled
-      use1mContext={false}
-      fastMode={false}
-      getLevelLabel={(level) => level.charAt(0).toUpperCase() + level.slice(1)}
-      onEffortLevelChange={noop}
-      onThinkingEnabledChange={noop}
-      onUse1mContextChange={noop}
-      onFastModeChange={noop}
-    />
-  );
+  return <TraitsPanel {...GALLERY_TRAITS} fastMode={false} />;
 }
 
 function ActivityGroup() {
@@ -115,8 +116,7 @@ function ModelGroup() {
           value="claude-opus"
           onValueChange={noop}
           options={MODEL_OPTIONS}
-          triggerSuffix="High"
-          showFastIcon
+          traits={GALLERY_TRAITS}
         />
       </GalleryItem>
       <GalleryItem label="PromptInputSettings (trigger; menu open state is internal)">

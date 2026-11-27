@@ -1,7 +1,7 @@
 import type { FunctionArgs } from "convex/server";
 import {
-  api,
   normalizeAIModel,
+  type api,
   type Doc,
   type StoredModelTraits,
 } from "@eva/backend";
