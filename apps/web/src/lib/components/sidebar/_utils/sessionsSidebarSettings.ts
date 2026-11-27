@@ -91,7 +91,6 @@ export function isSessionLayout(value: string): value is SessionLayout {
   return false;
 }
 
-
 /**
  * Normalises stored prefs. Builds a fresh object so stale keys from older
  * versions (for example `listMode`, which is no longer persisted) drop out.

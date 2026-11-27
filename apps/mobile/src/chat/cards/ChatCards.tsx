@@ -120,7 +120,6 @@ export function InlineCards({
   onOpenWebChat,
 }: {
   cards: readonly InlineCard[];
-  /** The row they sit in, so a page loads once the row is on screen. */
   rowKey: string;
   onReply?: (message: string) => void;
   onOpenWebChat: () => void;
@@ -171,7 +170,6 @@ const openInApp = (url: string) => {
   void WebBrowser.openBrowserAsync(url);
 };
 
-/** A panel part this app version cannot draw (a newer catalog): a card that opens the chat on the web, where it renders. */
 function OpenOnWebCard({ type, onPress }: { type: string; onPress: () => void }) {
   const theme = EVA_THEME[useScheme()];
   return (

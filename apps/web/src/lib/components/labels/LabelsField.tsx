@@ -41,8 +41,6 @@ export function LabelsField({
   const [search, setSearch] = useState("");
   const current = tags ?? [];
   const selected = new Set(current);
-  // Selected first, then the rest of the repo's labels — mirrors the picker
-  // order people expect from a checkbox list.
   const options = [
     ...current,
     ...allTags.filter((tag) => !selected.has(tag)),

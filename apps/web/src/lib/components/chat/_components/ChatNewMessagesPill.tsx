@@ -4,11 +4,6 @@ import { IconArrowUp, IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
 
-/**
- * One half of the split pill. The default variant gives the `primary` fill.
- * Overrides: scroll-button height and type, square inner corners, and no press
- * scale, because one half shrinking alone tears the pill apart.
- */
 const PILL_HALF =
   "h-7 px-0 text-xs font-medium tabular-nums active:scale-100 [&_svg]:size-3.5";
 

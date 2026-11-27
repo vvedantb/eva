@@ -60,12 +60,9 @@ export function ChatArtifactCard({ artifact }: { artifact: { _id: Id<"artifacts"
   );
 }
 
-/** The web preview's `h-[480px]`. */
 const ARTIFACT_PREVIEW_HEIGHT = 480;
-/** The web frame's `bg-white`: artifacts are written for a white page. */
 const ARTIFACT_PAGE_FILL = "#ffffff";
 
-/** The artifact on the whole screen: its name and Close above it, as the web's fullscreen card. */
 function ArtifactFullscreen({ artifact, onClose }: { artifact: { _id: Id<"artifacts">; name: string }; onClose: () => void }) {
   const theme = EVA_THEME[useScheme()];
   const insets = useSafeAreaInsets();
@@ -91,7 +88,6 @@ function ArtifactFullscreen({ artifact, onClose }: { artifact: { _id: Id<"artifa
   );
 }
 
-/** The live artifact: its signed URL (`artifacts.get`, resolved on first preview, as the web), then its page. */
 function ArtifactPreview({ artifact, height }: { artifact: { _id: Id<"artifacts">; name: string }; height: number }) {
   const withUrl = useQuery(api.artifacts.get, { id: artifact._id });
   if (withUrl === undefined) return <CenteredSpinner label="Loading artifact" />;
@@ -103,11 +99,6 @@ function ArtifactPreview({ artifact, height }: { artifact: { _id: Id<"artifacts"
   );
 }
 
-/**
- * The artifact's HTML in the sandboxed WebView, with the cowork bridge: the
- * shared shim (`buildArtifactSrcDoc`) and host (`useArtifactBridge`), so its
- * tool calls and saved state work as on the web.
- */
 function ArtifactPage({ artifactId, url, title, height }: { artifactId: Id<"artifacts">; url: string; title: string; height: number }) {
   const result = use(loadArtifactHtml(url));
   const page = useRef<HtmlViewHandle>(null);
@@ -156,7 +147,6 @@ export function AgentFeedbackCard({
       color={theme.foreground}
       mutedColor={theme.mutedForeground}
       action={
-        // A whole 44 square, as the message actions; the web's is a desktop `size-8`.
         <MessageAction
           icon={IconTrash}
           size="touch"

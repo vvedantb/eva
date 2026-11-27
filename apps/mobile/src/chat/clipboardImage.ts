@@ -2,14 +2,8 @@ import * as Clipboard from "expo-clipboard";
 import { useSyncExternalStore } from "react";
 import { AppState, Platform } from "react-native";
 
-// Whether the clipboard holds an image the composer can paste, for the
-// "Paste image" chip. `hasImageAsync` reads the clip's description only (its
-// MIME types), so Android shows no "pasted from your clipboard" notice; only
-// the paste itself reads the image.
 
 let available = false;
-// Set by a paste, so the same image is not offered again. Cleared when the
-// clipboard changes, or when the app comes back (an image copied in another app).
 let pasted = false;
 const listeners = new Set<() => void>();
 let stop: (() => void) | null = null;
@@ -26,7 +20,6 @@ const check = () => {
       available = next;
       emit();
     },
-    // No clipboard access (a web build without permission): no chip.
     () => undefined,
   );
 };
@@ -39,7 +32,6 @@ const recheck = () => {
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   if (!stop) {
-    // The web module has no clipboard events: its `addClipboardListener` throws.
     const clipboard = Platform.OS === "web" ? null : Clipboard.addClipboardListener(recheck);
     const appState = AppState.addEventListener("change", (state) => {
       if (state === "active") recheck();
@@ -74,7 +66,6 @@ export async function takeClipboardImage(): Promise<{ base64: string; mimeType: 
   available = false;
   emit();
   if (!image) return null;
-  // `data` is a data URI: `data:image/png;base64,...`.
   const comma = image.data.indexOf(",");
   return { base64: comma === -1 ? image.data : image.data.slice(comma + 1), mimeType: "image/png" };
 }

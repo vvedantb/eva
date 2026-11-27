@@ -30,7 +30,6 @@ import {
 export type { ComposerTaskStep };
 type TaskStatus = ComposerTaskStep["status"];
 
-/** Every status's look in one place; a new status fails the type check here. */
 const TASK_STATUS_STYLE: Record<
   TaskStatus,
   {

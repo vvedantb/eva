@@ -1,4 +1,3 @@
-
 /** Ordered lowest to highest; Jev answers with a position on this scale. */
 export const READINESS_LEVELS = [
   "too vague to start",

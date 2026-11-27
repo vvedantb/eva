@@ -1,6 +1,5 @@
 import { describeAlert, TRUSTED_ASSOCIATIONS, type RepoEvent } from "./events";
 
-
 /** Lines kept from the end of each failed job's log. */
 export const LOG_TAIL_LINES = 150;
 /** Hard cap on one message, so a runaway log never floods a chat. */

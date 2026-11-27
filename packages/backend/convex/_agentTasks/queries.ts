@@ -538,7 +538,6 @@ export const getStatusesByIds = authQuery({
   },
 });
 
-
 const OPEN_TASK_TITLE_LIMIT = 150;
 
 /**

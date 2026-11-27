@@ -43,7 +43,6 @@ import {
 
 type SessionLinkedFrom = RepoPathParts;
 
-
 interface SidebarSessionItemProps {
   href: string;
   title: string;

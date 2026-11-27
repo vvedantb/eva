@@ -4,7 +4,6 @@ import type {
   repoEventKindValidator,
 } from "../_validators/tableFields";
 
-
 export type RepoEventKind = Infer<typeof repoEventKindValidator>;
 export type AutomationTrigger = Infer<typeof automationTriggerValidator>;
 

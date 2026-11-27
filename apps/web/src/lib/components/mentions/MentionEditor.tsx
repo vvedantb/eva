@@ -50,10 +50,6 @@ import {
   viewportSize,
 } from "@vvedantb/ui";
 
-// The inline AI suggestion renders as an `::after` pseudo-element fed by
-// `data-suggestion`, mirroring how the placeholder uses `::before`. A pseudo-
-// element is invisible to `extractEditableText` and to the caret, so ghost text
-// never leaks into the editor value or the DOM-resync effect below.
 const DEFAULT_EDITOR_CLASS =
   "relative block w-full whitespace-pre-wrap wrap-break-word bg-transparent text-sm outline-hidden data-empty:before:pointer-events-none data-empty:before:select-none data-empty:before:absolute data-empty:before:text-muted-foreground/90 data-empty:before:content-[attr(data-placeholder)] data-suggestion:after:pointer-events-none data-suggestion:after:select-none data-suggestion:after:text-muted-foreground/50 data-suggestion:after:content-[attr(data-suggestion)]";
 
@@ -64,20 +60,9 @@ export interface MentionEditorHandle {
   tokenize: (text: string) => string;
   reset: () => void;
   focus: () => void;
-  /**
-   * The editor's root element. Callers that listen on `document` use it to ask
-   * whether this editor is the visible one — several composers stay mounted at
-   * once (see `composerVisibility.ts`).
-   */
   getElement: () => HTMLElement | null;
-  /** Append an @mention chip (and trailing space) to the current draft. */
   insertMention: (item: MentionItem) => void;
-  /** Append a /skill chip (and trailing space) to the current draft. */
   insertSkill: (item: SlashItem) => void;
-  /**
-   * Merge label→id maps from restored tokenized content (e.g. prompt stash)
-   * without wiping chips already in the live draft.
-   */
   addTokenMaps: (
     mentions: Map<string, string>,
     skills: Map<string, string>,
@@ -94,70 +79,30 @@ export interface MentionEditorProps<TItem extends MentionItem = MentionItem> {
   chipClassName?: string;
   skillChipClassName?: string;
   onEnterSubmit?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  /**
-   * Called when image files are pasted into the editor. When provided, pasted
-   * images are handed off here (as attachments) instead of being inserted as
-   * text; non-image clipboard content still pastes as plain text.
-   */
   onImageFiles?: (files: File[]) => void;
-  /**
-   * Called for large plain-text pastes. Return true when the paste was handled
-   * (e.g. attached as a file) so the editor skips inline insert.
-   */
   onLargeTextPaste?: (text: string) => boolean;
-  /**
-   * Called on Alt+ArrowUp / Alt+ArrowDown while the mention popup is closed.
-   * Return true if the navigation was handled (e.g. a history entry was
-   * applied) to suppress the browser default.
-   */
   onHistoryNavigate?: (direction: "up" | "down") => boolean;
-  /**
-   * Inline AI completion shown as dim ghost text after the caret. Tab accepts it
-   * (via `onAcceptSuggestion`), Escape dismisses it. Only rendered when the
-   * mention/skill picker is closed, which keeps Tab's existing meaning intact.
-   */
   suggestion?: string;
-  /** Called on Tab while a suggestion is showing. */
   onAcceptSuggestion?: () => void;
-  /** Called on Escape while a suggestion is showing. */
   onDismissSuggestion?: () => void;
   renderItem?: (item: TItem, isSelected: boolean) => ReactNode;
   renderSlashItem?: (item: SlashItem, isSelected: boolean) => ReactNode;
   filterSlashItem?: (item: SlashItem, query: string) => boolean;
   filterItem?: (item: TItem, query: string) => boolean;
   emptySlashContent?: ReactNode;
-  /**
-   * `caret` (default) puts a compact list next to the caret. `panel` renders a
-   * full-width sheet above the nearest `[data-mention-popup-anchor]` ancestor
-   * (the composer card).
-   */
   popupLayout?: MentionPopupLayout;
   mentionPopupTitle?: string;
   onMentionChipClick?: (id: string) => void;
   onSkillChipClick?: (id: string) => void;
-  /** Profile hover card on @mention chips in the editor (e.g. comment @people). */
   mentionChipHoverCard?: boolean;
-  /** Doc/PRD preview on @mention chips (e.g. task description). */
   renderMentionChipHoverCard?: (id: string) => ReactNode;
-  /** Skill preview on /skill chips. */
   renderSkillChipHoverCard?: (id: string) => ReactNode;
   dataSlot?: string;
   ariaLabel?: string;
   onBlur?: () => void;
-  /** When true, sets contentEditable to false and blocks all input. */
   disabled?: boolean;
   ref?: Ref<MentionEditorHandle>;
-  /**
-   * Seed the editor's mention label→id map on first render. Obtain from
-   * `tokenizedToEditable` when restoring persisted tokenized content.
-   * Initializer-only — changes after mount are ignored.
-   */
   initialMentionMap?: Map<string, string>;
-  /**
-   * Seed the editor's skill label→id map on first render. Obtain from
-   * `tokenizedToEditable` when restoring persisted tokenized content.
-   * Initializer-only — changes after mount are ignored.
-   */
   initialSkillMap?: Map<string, string>;
 }
 
@@ -200,7 +145,6 @@ function defaultRenderSlashItem(
   return renderRow("/", item);
 }
 
-/** The optional props `MentionEditor` gives a default, resolved in one place. */
 function withMentionEditorDefaults<TItem extends MentionItem>({
   slashItems = [],
   chipClassName = MENTION_CHIP_CLASS,

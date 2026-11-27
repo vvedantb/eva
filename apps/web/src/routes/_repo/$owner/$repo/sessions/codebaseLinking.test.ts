@@ -5,17 +5,6 @@ import {
   toggleLinkedCodebase,
 } from "./_utils";
 
-/**
- * The composer dropdown lists *apps*, one row per `rootDirectory`, but a linked
- * codebase is always the whole checkout — so several rows can stand for the
- * same `owner/name` and only one of them carries the checkbox.
- *
- * Every id-keyed shortcut here is a trap. A saved group stores the ids it was
- * saved with, which may be a sibling app's row, so a checkbox ticked from the
- * group and unticked by id would drop nothing from the selection and snap
- * straight back to ticked — an unremovable codebase, with the session then
- * cloning a repo the user tried to take out.
- */
 
 type Row = { _id: string; owner: string; name: string; rootDirectory?: string };
 

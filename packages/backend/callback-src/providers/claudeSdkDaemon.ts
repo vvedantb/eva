@@ -171,28 +171,8 @@ function endWatchedTurn(): void {
   turnActive = false;
 }
 
-/**
- * Sends a failure completion for the current turn (resolving the workflow's
- * awaitEvent so the UI stops spinning) and exits the process. Exiting abandons a
- * potentially wedged SDK query; the next turn's prewarm boots a fresh daemon.
- */
 async function failTurnAndExit(error: string): Promise<never> {
   log("daemon: failing turn — " + error);
-  // Durability BEFORE completion, exactly as finalizeTurn does it: success and
-  // durability are orthogonal. A turn that committed work (or left it dirty) and
-  // then failed still produced the user's work, and this process is about to
-  // exit — nothing else will publish it, so a VM death erases it. The server's
-  // own push stays gated on success: only this process knows the worktree state
-  // at its death, and a post-failure server push would race the next turn's
-  // daemon. Outside the try: persistTurnWork logs its own failures and never
-  // throws, and the completion below must post regardless.
-  //
-  // This also runs on the watchdog's wedged-SDK path, so it delays the failure
-  // completion. Every git step is a spawnSync with a timeout (20s, 60s for
-  // fetch/merge/push), giving a hard worst case around 12 minutes on a hung
-  // network and milliseconds in the normal already-published case. Past ~5
-  // minutes the server's stall watchdog finalizes the turn instead — the same
-  // outcome for the user, with the work published either way.
   persistTurnWork();
   try {
     await postClaimedTurnFailureCompletion({
@@ -200,67 +180,36 @@ async function failTurnAndExit(error: string): Promise<never> {
       activityLog: serializeSteps(S.accumulatedSteps),
     });
   } catch {
-    /* best-effort: exit regardless so the daemon does not wedge */
   }
-  // Only unlink markers this daemon still owns — a deposed daemon that
-  // deferred its fence exit through this failing turn would otherwise delete
-  // the rival's pidfile and take the healthy daemon down with it.
   cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
 }
 
-/**
- * Cleans up like failTurnAndExit (pid file + streaming loops) but WITHOUT
- * posting a completion mutation, then returns so the caller can let the
- * daemon shut down through runSdkDaemon's ordinary finally block instead of a
- * forced process.exit. Only used when the server already finalized the
- * user-facing turn itself (a drained cancel) — posting a completion here
- * could resolve the NEXT turn's workflow event instead of this
- * already-settled one.
- */
 async function exitWithoutCompletion(reason: string): Promise<void> {
   log("daemon: exiting without completion — " + reason);
-  // A cancelled turn can still have committed work, and this daemon is leaving
-  // for good. persistTurnWork only touches git — it posts no mutation — so it is
-  // safe on a turn the server has already finalized.
   persistTurnWork();
-  // Same ownership gate as failTurnAndExit: never delete a rival's pidfile.
   cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
 }
 
-/** Arms the per-turn watchdog interval for the daemon's lifetime. */
 function startTurnWatchdog(): void {
   const timer = setInterval(() => {
     const now = Date.now();
     if (supervisor.isCancellationInFlight) {
       if (now - turnCancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS) {
-        // The server already finalized this turn when it drained the
-        // cancel, so — like exitWithoutCompletion — do not post a completion
-        // here; it could resolve the NEXT turn's workflow event instead.
-        // Force-exit so prewarm respawns a clean daemon for whatever is next.
         log("daemon: cancelled turn did not settle in time — exiting");
-        // Same reasoning as exitWithoutCompletion: publish the cancelled turn's
-        // work (git only, no mutation) before this process disappears.
         persistTurnWork();
         process.exit(1);
       }
       return;
     }
     if (!turnActive) return;
-    // A turn paused on a blocking question emits no SDK messages by design —
-    // keep both timers fresh so the wait is never mistaken for a stalled turn.
     if (S.awaitingQuestionAnswer) {
       turnStartedAtMs = now;
       lastMessageAtMs = now;
       return;
     }
-    // The SDK emits nothing between a tool_use and its tool_result, so a
-    // long-running tool (Bash allows 10min; subagent Task calls longer) is
-    // indistinguishable from a hang by message silence alone: while a tool is
-    // in flight only the hard runtime cap
-    // applies, and the silence clock restarts once the tool result lands.
     if (S.inFlightToolUses > 0) {
       lastMessageAtMs = now;
     }
@@ -291,12 +240,6 @@ function startTurnWatchdog(): void {
   timer.unref?.();
 }
 
-/**
- * A queue-backed async iterable of user messages that BLOCKS when empty and
- * never returns. Feeding this as `query({ prompt })` keeps the underlying
- * `claude` subprocess + MCP + API connection warm across turns — each pushed
- * message starts a new turn (ended by a `result` message).
- */
 function createPromptStream(): {
   push: (text: string, priority?: "next") => void;
   iterable: AsyncIterable<SdkUserMessage>;
@@ -336,25 +279,15 @@ function createPromptStream(): {
   return { push, iterable };
 }
 
-/** Clears the per-turn accumulators so the next turn starts clean on the same query. */
 function resetTurnState(): void {
   resetDaemonTurnStreamingState();
   S.awaitingQuestionAnswer = false;
 }
 
-/** Reports one finished turn to the session workflow (mirrors the one-shot completion). */
 async function finalizeTurn(
   output: string,
   readUsage: () => Promise<ClaudeUsageResponseLike | null>,
 ): Promise<void> {
-  // Drain the buffered turn output into S.accumulatedSteps before building the
-  // completion payload — exactly like the one-shot path (index.ts) flushes after
-  // its attempt loop. processRealtimeStdoutChunk only runs the streaming
-  // side-effects (onStreamLine); it does NOT parse tool_use blocks into
-  // accumulatedSteps. Only flushStreaming -> parseStreamEvent -> claudeParseLine
-  // does that, and it runs on a 150ms interval, so without this synchronous
-  // drain the activityLog is read (and then resetTurnState-cleared) before the
-  // loop has parsed this turn's tool steps — yielding an empty "[]" activityLog.
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
   const activityLog = serializeFinalSteps(
@@ -370,18 +303,7 @@ async function finalizeTurn(
     resultEvent,
   });
   appendClaimedTurnCompletion(completionArgs);
-  // Final streaming reconcile BEFORE completion. The completion mutation
-  // finalizes the assistant message, after which the server clears the
-  // streaming row and may immediately dequeue the next queued turn — so this
-  // daemon must not write streaming state past that point. When this ran
-  // post-completion it landed after that clear and resurrected this turn's
-  // full reply text into the row, which the NEXT turn's placeholder rendered
-  // as its response until the real reply arrived (stale-reply bug).
-  // setFinalizingState (not plain flushStreaming, which would early-return on
-  // the already-drained buffer) pushes the now-complete steps and final text.
   if (await reconcileStreamingAndPersist()) return;
-  // Completion first, then media: attachMedia patches the assistant message
-  // that was just written.
   const completionSentAt = Date.now();
   await deliverCompletionWithMedia(completionArgs);
   finishClaimedTurn();
@@ -394,16 +316,8 @@ async function finalizeTurn(
       (Date.now() - completionSentAt) +
       "ms)",
   );
-  // Persist the Claude transcript to the volume for restart recovery. Runs
-  // AFTER completion so the ~5s synchronous transcript copy never delays the
-  // reply the user is waiting on. The sandbox stays warm between turns, so
-  // this only guards against a sandbox restart. accumulatedSteps is still
-  // populated (resetTurnState runs after this returns).
   const bookkeepingAt = Date.now();
   syncClaudeStateToPersist("daemon-turn");
-  // Detached after completion and transcript persistence: a degraded SDK
-  // control channel must not stall the next queued message or risk losing the
-  // persisted transcript. Capture still precedes report inside the helper.
   void captureAndReportClaudeUsage({
     readUsage,
     error: resultEvent?.isError ? resultEvent.result : undefined,
@@ -458,13 +372,6 @@ function shouldDropSubagentMessage(message: DaemonMessage): boolean {
   return settledSubagentToolUseIds.has(parentId);
 }
 
-/**
- * Synara-compatible mint gate: only open a synthetic turn for main-context
- * assistant/stream traffic, or messages routed under a recognised Agent/Task
- * tool_use id. Between-turn system/task/telemetry noise must not mint — a
- * background Bash exit would otherwise open an empty bubble that the watchdog
- * fails as "The assistant stopped responding".
- */
 function shouldMintSyntheticTurn(message: DaemonMessage): boolean {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
@@ -538,24 +445,16 @@ async function syncBackgroundAgentsToConvex(
       }),
     );
   } catch {
-    /* best-effort */
   }
 }
 
 let harnessCatalogReportStarted = false;
 
-/** Server-side caps on `/api/harness-skills/report`; exceeding any rejects the whole report. */
 const CATALOG_MAX_COMMANDS = 100;
 const CATALOG_MAX_NAME_LENGTH = 100;
 const CATALOG_MAX_DESCRIPTION_LENGTH = 2000;
 const CATALOG_MAX_ARGUMENT_HINT_LENGTH = 400;
 
-/**
- * Command names the SDK picked up from this checkout or the sandbox user's
- * settings (`.claude/skills` directories and `.claude/commands` markdown
- * files) rather than from the CLI build. The catalog row is global across
- * repos, so these must never be reported as built-ins.
- */
 function collectLocalCommandNames(): Set<string> {
   const names = new Set<string>();
   for (const root of [WORK_DIR, homedir()]) {
@@ -566,7 +465,6 @@ function collectLocalCommandNames(): Set<string> {
         if (entry.isDirectory()) names.add(entry.name);
       }
     } catch {
-      /* no skills dir */
     }
     try {
       for (const entry of readdirSync(root + "/.claude/commands", {
@@ -577,13 +475,11 @@ function collectLocalCommandNames(): Set<string> {
         }
       }
     } catch {
-      /* no commands dir */
     }
   }
   return names;
 }
 
-/** First non-empty line of a command description, within the server's length cap. */
 function catalogDescription(description: string): string {
   const firstLine = description
     .split("\n")
@@ -592,17 +488,6 @@ function catalogDescription(description: string): string {
   return (firstLine ?? "").slice(0, CATALOG_MAX_DESCRIPTION_LENGTH);
 }
 
-/**
- * Reports the built-in slash commands this sandbox's Claude CLI ships with, so
- * the composer's `/` picker tracks the installed build instead of a hardcoded
- * list. Goes to the HMAC-verified `/api/harness-skills/report` route: the row
- * is global, so only a sandbox Eva launched may write it — and commands the
- * SDK loaded from this repo's or the user's `.claude` directory are excluded
- * so one repo's skills never leak into every other repo's picker. Once per
- * daemon; the server drops the report when nothing changed. Best-effort — a
- * failure here must never touch the session, and an unsigned daemon just does
- * not report.
- */
 async function reportHarnessSkillCatalog(
   cliVersion: string,
   query: AgentQuery,
@@ -654,11 +539,6 @@ async function reportHarnessSkillCatalog(
   }
 }
 
-/**
- * The init system message is the only place the CLI version appears; the
- * command descriptions only come from `initializationResult()`. Fires once,
- * detached, as soon as the first init message lands on the warm query.
- */
 function noteHarnessInitMessage(
   message: DaemonMessage,
   query: AgentQuery,
@@ -745,11 +625,6 @@ function handleBackgroundTasksChanged(message: DaemonMessage): void {
       taskIds.push(taskId);
     }
   }
-  // Mark backgrounded idempotently from the full roster (markAgentsBackgrounded
-  // skips already-marked entries). Do NOT consume diffNewBackgroundTaskIds here:
-  // the parse layer owns that dedup set and diffs it to push the "Agent moved to
-  // background" notice step — consuming it first leaves that diff empty and
-  // the notice never renders.
   markAgentsBackgrounded(taskIds);
 }
 
@@ -763,10 +638,6 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   }
   const toolUseId = trimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
-    // Shell commands also arrive as tasks. They are not subagents: background
-    // shells have their own registry (`backgroundShells`), and a dev server
-    // run in the background never ends, so as an entry it held the chat queue
-    // for the full 2-hour cap.
     if (trimmedString(message.task_type) === "local_bash") {
       return;
     }
@@ -808,9 +679,6 @@ async function failSyntheticTurn(error: string): Promise<void> {
   }
   log("daemon: failing synthetic turn — " + error);
   const messageId = turn.messageId;
-  // Durability BEFORE completion, exactly as finalizeSyntheticTurn does it: a
-  // failed synthetic turn's committed work is still the user's work, and a
-  // synthetic turn has no workflow, so this is the only push it will ever get.
   persistTurnWork();
   try {
     await drainStreamingAndCompleteSteps();
@@ -827,7 +695,6 @@ async function failSyntheticTurn(error: string): Promise<void> {
       completionArgs,
     );
   } catch {
-    /* best-effort */
   }
   endWatchedTurn();
   resetTurnState();
@@ -842,9 +709,6 @@ async function ensureSyntheticTurn(): Promise<void> {
     const result = await callConvexWithRetry(
       "mutation",
       OPEN_SYNTHETIC_TURN_MUTATION ?? "",
-      // This daemon's own model, so the server stamps the synthetic reply's
-      // provider checkpoint from what actually ran the turn — the sticky
-      // composer pick can move to another provider while this turn is open.
       entityMutationArgs({ model: MODEL }),
     );
     const messageId = readSyntheticTurnMessageId(result);
@@ -854,7 +718,6 @@ async function ensureSyntheticTurn(): Promise<void> {
       return;
     }
     resetTurnState();
-    // A synthetic turn owns the heartbeat without occupying the claim slot.
     beginTurnOwnership("provider", syntheticLease);
     beginTurnCheckpoint();
     if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
@@ -898,23 +761,11 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
     completionArgs.pendingQuestion = S.pendingQuestionData;
   }
   appendCurrentTurnLease(completionArgs);
-  // Durability BEFORE completion, exactly as finalizeTurn does it: a synthetic
-  // turn has no workflow, so the server-side pushSandboxBranch step never runs
-  // for it and this is the ONLY push. Work committed here sat local for hours
-  // until the next real turn happened to push it. Ordering matters too — the
-  // completion may immediately dequeue the next message, and a VM death after
-  // that point erases anything not on origin (see turnPersist.ts).
   persistTurnWork();
-  // completeSyntheticTurn closes this turn server-side. sendTurnCompletion
-  // releases the lease first, so a later heartbeat answered `closed` is judged
-  // stale, not a takeover (session 225, 21 Sep 2026).
   await sendTurnCompletion(
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
     completionArgs,
   );
-  // Synthetic completion has an exact placeholder id. Target it explicitly:
-  // completeSyntheticTurn may dequeue another message before media finishes,
-  // so attaching to the latest message could put these captures on that turn.
   await uploadAndAttachSandboxMedia({ messageId });
   syncClaudeStateToPersist("daemon-synthetic-turn");
   endWatchedTurn();
@@ -929,9 +780,6 @@ async function startRealAgentTurn(
   turn: ClaimedTurn,
   agentRunner: WarmRunner,
 ): Promise<void> {
-  // Do not drain the agent pump here: buffered post-result / background-agent
-  // messages must stay queued so the main loop can open a synthetic turn (or
-  // attribute them into this real turn once it is live).
   resetTurnState();
   if (!supervisor.startTurn({ kind: "real" })) {
     log("daemon: claimed turn could not enter running state");

@@ -78,7 +78,6 @@ export function SandboxStatusClient() {
     );
   }
 
-
   return (
     <SettingsPage title="Sandbox status">
       <SettingsSection

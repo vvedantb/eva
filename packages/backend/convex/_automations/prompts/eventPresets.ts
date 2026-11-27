@@ -1,4 +1,3 @@
-
 export const CI_AUTOFIX_PROMPT = `CI failed on this chat's pull request. The failing checks and the tail of their logs are above.
 
 - Find the root cause from the logs before you change anything. Reproduce it locally where you can.

@@ -49,7 +49,9 @@ export interface ProjectCardMenuItemsProps {
   title: string;
   projectLead?: Id<"users">;
   currentUserId?: Id<"users">;
-  users?: User[];  href?: string;  showOpenInNewTab?: boolean;
+  users?: User[];
+  href?: string;
+  showOpenInNewTab?: boolean;
   branchName?: string;  leading?: ReactNode;
   onLeadChange: (value: string) => void;
   onEdit: () => void;  archived?: boolean;

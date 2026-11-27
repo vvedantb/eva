@@ -26,8 +26,6 @@ export async function prefetchSession(params: {
   if (numId === null) return;
   const repo = await prefetchRepo(params);
   if (!repo) return;
-  // Warm first, then read: `convex.query` reuses the warm subscription, so the
-  // result is not dropped and refetched between the two.
   const byNumId = { repoId: repo._id, numId };
   prewarm(api.sessions.getByNumId, byNumId);
   const session = await convex.query(api.sessions.getByNumId, byNumId);
@@ -43,8 +41,6 @@ export async function prefetchSession(params: {
   if (!chat) return;
   prewarm(api.queuedMessages.listByParent, { parentId: chat._id });
   prewarm(api.streaming.get, { entityId: chatStreamingEntityId(chat._id) });
-  // Tail first, then the live list anchored on it, in the order
-  // `useChatTranscript` asks for them.
   const tailArgs = transcriptTailArgs(chat._id);
   prewarm(api.messages.listByParent, tailArgs);
   const tail = await convex.query(api.messages.listByParent, tailArgs);

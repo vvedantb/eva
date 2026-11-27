@@ -18,7 +18,6 @@ export function CardSurface({ children, testID }: { children: ReactNode; testID?
   );
 }
 
-/** An answered card's one muted line: an icon and what happened. */
 function AnsweredRow({ icon: Icon, children, onPress }: { icon: typeof IconCheck; children: ReactNode; onPress?: () => void }) {
   const muted = EVA_THEME[useScheme()].mutedForeground;
   const row = (
@@ -37,7 +36,6 @@ function AnsweredRow({ icon: Icon, children, onPress }: { icon: typeof IconCheck
   );
 }
 
-/** The error a save or a choice threw, as the web cards show it. */
 function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
@@ -78,7 +76,6 @@ export function EnvVarRequestCard({
     setError(null);
     try {
       const { reply } = await answer();
-      // The card turns into its answered row once the query updates.
       setValue("");
       onReply(reply);
     } catch (cause) {
@@ -102,7 +99,6 @@ export function EnvVarRequestCard({
         value={value}
         onChangeText={setValue}
         editable={!disabled}
-        // Masked, and kept out of autofill, keyboards' learning and the clipboard suggestions.
         secureTextEntry
         autoComplete="off"
         autoCorrect={false}
@@ -177,7 +173,6 @@ export function SessionProposalCard({
     setSubmitting(true);
     setError(null);
     try {
-      // The card turns into its answered row once the query updates.
       await choose();
     } catch (cause) {
       setError(errorText(cause, "Could not save your choice."));

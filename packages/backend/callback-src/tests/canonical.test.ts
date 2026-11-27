@@ -317,7 +317,6 @@ test("parseToCanonical claude empty thinking_delta emits nothing", () => {
   expect(events).toEqual([]);
 });
 
-
 test("interleaved thinking inserts a paragraph break between text blocks in one message", () => {
   resetStateForTests();
   applyCanonicalEvents([

@@ -17,7 +17,6 @@ export function PrMergeConfetti({ owner }: { owner: PrOwnerRef }) {
   const [burst, setBurst] = useState(0);
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
 
-  // Compare each new snapshot with the last one this view saw.
   if (prs !== seen) {
     if (seen !== undefined && prs !== undefined && hasNewlyMergedPr(seen, prs)) {
       setBurst((count) => count + 1);

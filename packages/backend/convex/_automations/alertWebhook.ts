@@ -6,7 +6,6 @@ import { authMutation, authQuery, hasRepoAccess } from "../functions";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { automationTrigger } from "./systemAutomations";
 
-
 /** Route prefix in `http.ts`; the automation id follows it. */
 export const AXIOM_ALERT_PATH_PREFIX = "/api/alerts/axiom/";
 

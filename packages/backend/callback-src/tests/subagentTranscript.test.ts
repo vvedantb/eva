@@ -3,7 +3,6 @@ import { applyCanonicalEvents, parseToCanonical } from "../parse/canonical.js";
 import { toolCallToStep } from "../parse/toolSteps.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 
-
 afterEach(() => {
   resetStateForTests();
 });

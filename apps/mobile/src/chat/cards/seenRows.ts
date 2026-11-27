@@ -8,7 +8,6 @@ import type { ViewToken } from "react-native";
  * its state, until the list itself recycles the row.
  */
 export type SeenRows = {
-  /** For the list's `onViewableItemsChanged`. Stable: the list rejects a new one. */
   onViewableItemsChanged: (info: { viewableItems: ViewToken[] }) => void;
   subscribe: (listener: () => void) => () => void;
   has: (key: string) => boolean;

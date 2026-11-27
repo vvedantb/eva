@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { AlertEvent } from "./events";
 
-
 const MAX_TITLE_CHARS = 200;
 const MAX_TEXT_CHARS = 4_000;
 const MAX_MATCHED_EVENT_CHARS = 8_000;

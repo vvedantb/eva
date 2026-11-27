@@ -615,9 +615,6 @@ function AssistantTurn({
     turnModel,
     messageModel: message.model,
   });
-  // A panel and the prose that introduced it are two renderings of one answer,
-  // so the panel takes the slot and the prose moves behind a tab. Needs real
-  // prose to switch to, and a failed turn shows its error notice instead.
   const panelTabs =
     belowContent !== undefined &&
     turnErrorTitle === null &&
@@ -756,9 +753,6 @@ function AssistantTurnContent({
     <MessageContent
       className={cn(
         "py-2",
-        // The teammate bubble, mirrored onto Eva's side.
-        // `group-[.is-assistant]:w-fit` outranks the kit's own
-        // `group-[.is-assistant]:w-full`; a plain `w-fit` loses to it.
         bubble
           ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
           : "px-1",
@@ -912,8 +906,6 @@ function AssistantTurnOutcome({
           ) : (
             turnProse
           )}
-          {/* A stopped turn can hold no text at all; without this it reads as
-              an empty reply rather than a turn that was cut short. */}
           {message.stopped ? (
             <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <IconPlayerStop size={12} />

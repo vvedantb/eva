@@ -25,11 +25,9 @@ import { buildSubagentThread, isEmptySubagentThread } from "../subagentThread";
 /** A transcript message that holds some of this subagent's steps. */
 export interface SubagentSource {
   messageId: string;
-  /** The trimmed log from `listByParent`, shown until the full one loads. */
   activityLog: string;
 }
 
-/** Longest parent title kept whole; the breadcrumb leaf needs the room. */
 const PARENT_TITLE_MAX = 32;
 
 function shortTitle(title: string): string {
@@ -38,13 +36,6 @@ function shortTitle(title: string): string {
     : title;
 }
 
-/**
- * Untrimmed logs for the messages that hold this subagent's steps. The prompt
- * and its messages ride fields `listByParent` strips, so the view fetches them
- * only while it is open — uncached, so the subscription dies with the view.
- * Keyed by a joined id string so the compiler only rebuilds the query map
- * (and `useQueries` only resubscribes) when the set of messages changes.
- */
 function useFullActivityLogs(sources: ReadonlyArray<SubagentSource>): string[] {
   const idsKey = sources.map((source) => source.messageId).join(" ");
   const queries = Object.fromEntries(

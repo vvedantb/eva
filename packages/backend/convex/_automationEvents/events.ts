@@ -13,7 +13,6 @@ export {
   type RepoEventKind,
 } from "./labels";
 
-
 const repoRef = { owner: v.string(), name: v.string() };
 
 const alertFields = {
@@ -195,7 +194,6 @@ export function describeAlert(
     "```",
   ].join("\n");
 }
-
 
 const repositorySchema = z.object({
   name: z.string(),

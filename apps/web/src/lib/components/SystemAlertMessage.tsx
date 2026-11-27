@@ -18,12 +18,10 @@ import { cn } from "@eva/ui";
 interface SystemAlertMessageProps {
   content: string;
   errorDetail?: string;
-  /** "warning": the session kept running. Unset with detail: an error. */
   alertTone?: "warning";
   timestamp?: number;
 }
 
-/** Warning and error alerts get an icon and colour; plain dividers get none. */
 const TONES = {
   warning: {
     Icon: IconAlertTriangle,

@@ -17,12 +17,6 @@ import {
   type ScopeCheckTone,
 } from "@/lib/components/chat/_components/scopeCheckSummary";
 
-/**
- * Opaque tint plus its darkened text partner. The earlier pairing put
- * `--warning` / `--destructive` on a 12% wash of themselves, which measures
- * around 2:1 in light mode — the score was the least readable thing in the
- * turn. The `-strong` tokens clear WCAG AA on these backgrounds in both themes.
- */
 const TONE_CLASS: Record<ScopeCheckTone, string> = {
   clear: "bg-muted text-foreground",
   review: "bg-warning-bg text-warning-strong",

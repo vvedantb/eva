@@ -43,7 +43,6 @@ function matchesQuery(
   return false;
 }
 
-/** Sticky search field for plus-menu sublists (keeps typing out of Radix key handling). */
 function SubmenuSearch({
   value,
   onChange,

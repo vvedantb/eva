@@ -7,7 +7,6 @@ import {
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type { ProviderAttemptResult, ResultEvent } from "../types.js";
 
-
 const cleanAttempt: ProviderAttemptResult = {
   code: 0,
   terminatedBySignal: false,

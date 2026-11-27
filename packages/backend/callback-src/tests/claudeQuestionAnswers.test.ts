@@ -6,7 +6,6 @@ import {
   resetStateForTests,
 } from "../runtime/state.js";
 
-
 afterEach(() => {
   resetStateForTests();
 });
