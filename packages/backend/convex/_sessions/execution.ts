@@ -16,7 +16,7 @@ import {
   aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
-  previewAnnotationValidator,
+  type previewAnnotationValidator,
   reasoningLevelValidator,
   usesChatDaemon,
 } from "../validators";

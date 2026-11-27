@@ -1,4 +1,4 @@
-import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
+import { TURN_BACKSTOP_ERROR, TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import type { Id } from "../_generated/dataModel";
 import type {
   DatabaseReader,
@@ -12,7 +12,6 @@ import {
   normalizeAIModel,
   usesChatDaemon,
 } from "../validators";
-import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
 import { agentJobOwner, type AgentJobOwner } from "../_agentJobs/owner";

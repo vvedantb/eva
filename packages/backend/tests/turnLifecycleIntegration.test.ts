@@ -1,4 +1,4 @@
-import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
+import { TURN_BACKSTOP_ERROR, TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
@@ -18,7 +18,6 @@ import { loadSessionChat } from "../convex/_sessionChats/helpers";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
-import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,

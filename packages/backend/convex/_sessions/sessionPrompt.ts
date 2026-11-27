@@ -15,8 +15,7 @@ import {
   readHandoffHistory,
 } from "../_shared/modelHandoff";
 import { buildSessionBranchName } from "../_git/branchNames";
-import { sandboxOwnerKey } from "@eva/shared";
-import { taskPrUrl } from "@eva/shared";
+import { sandboxOwnerKey, taskPrUrl } from "@eva/shared";
 import { sessionOwner } from "./owner";
 import {
   formatProjectTaskTable,

@@ -4,7 +4,7 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
 import {
-  aiModelValidator,
+  type aiModelValidator,
   type ReasoningLevel,
 } from "../validators";
 import {
