@@ -6,6 +6,217 @@
  */
 export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
 (() => {
+  // preview-annotation-src/theme.ts
+  var BAR_SHADOW_BASE = "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px";
+  var TIP_SHADOW_BASE = "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.01) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.01) 0px 1.16px 1.5px 0px";
+  var LIGHT_THEME = {
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+    surface: "oklab(1 0 0 / 0.95)",
+    surfaceText: "oklch(0.2103 0 0)",
+    barShadow: \`\${BAR_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
+    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
+    tipRadius: "16px",
+    idleText: "oklch(0.5517 0 0)",
+    hoverBg: "oklab(0.9524 0 0 / 0.6)",
+    hoverText: "oklch(0.2103 0 0)",
+    activeBg: "oklch(0.94 0 0)",
+    activeText: "oklch(0.2103 0 0)",
+    badgeBg: "oklch(0.2103 0 0)",
+    badgeText: "oklch(0.9702 0 0)",
+    disc: "oklch(0.98 0 0)",
+    destructive: "oklch(0.6532 0.2335 25.74)",
+    border: "oklch(0.9 0 0)",
+    primary: "oklch(0.2103 0 0)",
+    primaryText: "oklch(0.9911 0 0)",
+    field: "oklch(0.9702 0 0)"
+  };
+  var DARK_THEME = {
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+    surface: "oklab(0.313316 0.000133276 -0.0054974 / 0.95)",
+    surfaceText: "oklch(0.9911 0 0)",
+    barShadow: \`\${BAR_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
+    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
+    tipRadius: "16px",
+    idleText: "rgb(159, 160, 162)",
+    hoverBg: "oklab(0.352463 0.000133812 -0.00533339 / 0.6)",
+    hoverText: "rgb(250, 250, 250)",
+    activeBg: "rgb(68, 69, 72)",
+    activeText: "oklch(0.9911 0 0)",
+    badgeBg: "rgb(250, 250, 250)",
+    badgeText: "rgb(34, 35, 37)",
+    disc: "rgb(48, 49, 52)",
+    destructive: "oklch(0.594 0.1973 24.63)",
+    border: "oklch(0.28 0 0)",
+    primary: "oklch(0.9911 0 0)",
+    primaryText: "oklch(0.2103 0 0)",
+    field: "oklch(0.12 0 0)"
+  };
+  var current = null;
+  function getTheme() {
+    if (current) return current;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? DARK_THEME : LIGHT_THEME;
+  }
+  function setTheme(theme) {
+    current = theme;
+  }
+  function applyTheme(host, theme) {
+    const vars = {
+      "--font": theme.fontFamily,
+      "--surface": theme.surface,
+      "--surface-text": theme.surfaceText,
+      "--bar-shadow": theme.barShadow,
+      "--tip-shadow": theme.tipShadow,
+      "--tip-radius": theme.tipRadius,
+      "--idle-text": theme.idleText,
+      "--hover-bg": theme.hoverBg,
+      "--hover-text": theme.hoverText,
+      "--active-bg": theme.activeBg,
+      "--active-text": theme.activeText,
+      "--badge-bg": theme.badgeBg,
+      "--badge-text": theme.badgeText,
+      "--disc": theme.disc,
+      "--destructive": theme.destructive,
+      "--border": theme.border,
+      "--primary": theme.primary,
+      "--primary-text": theme.primaryText,
+      "--field": theme.field
+    };
+    for (const [name, value] of Object.entries(vars)) {
+      host.style.setProperty(name, value);
+    }
+  }
+
+  // preview-annotation-src/commentCard.ts
+  var CARD_WIDTH_PX = 320;
+  var GUTTER_PX = 16;
+  var GAP_PX = 8;
+  var STYLES = \`
+:host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.4 var(--font); }
+.card { box-sizing: border-box; width: min(\${CARD_WIDTH_PX}px, calc(100vw - \${GUTTER_PX * 2}px)); padding: 12px; border-radius: var(--tip-radius); background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.chips { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--idle-text); min-width: 0; }
+.chip { flex: none; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--disc); }
+.chip.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--surface-text); }
+.text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+.a11y { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--idle-text); }
+textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--field); color: var(--surface-text); font: inherit; font-size: 14px; white-space: pre-wrap; resize: none; }
+textarea::placeholder { color: var(--idle-text); }
+textarea:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+button { all: unset; box-sizing: border-box; display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--idle-text); transition: transform 120ms ease; }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:active { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+button.primary { background: var(--primary); color: var(--primary-text); }
+button.primary:hover { background: var(--primary); opacity: 0.9; color: var(--primary-text); }
+button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+\`;
+  function span(className, text) {
+    const element = document.createElement("span");
+    element.className = className;
+    element.textContent = text;
+    return element;
+  }
+  function openSelectionCard({
+    info,
+    rect,
+    onCopy,
+    onCancel
+  }) {
+    const host = document.createElement("div");
+    host.setAttribute("data-eva-annotate-overlay", "1");
+    applyTheme(host, getTheme());
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = STYLES;
+    const card = document.createElement("div");
+    card.className = "card";
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    chips.appendChild(span("chip mono", info.chip));
+    if (info.reactName) chips.appendChild(span("chip", info.reactName));
+    if (info.text) {
+      chips.appendChild(
+        span("text", info.text.length > 60 ? \`\${info.text.slice(0, 57)}...\` : info.text)
+      );
+    }
+    card.appendChild(chips);
+    if (info.accessibility) {
+      const a11y = document.createElement("p");
+      a11y.className = "a11y";
+      a11y.textContent = info.accessibility;
+      card.appendChild(a11y);
+    }
+    const field = document.createElement("textarea");
+    field.placeholder = "What should Eva change?";
+    field.setAttribute("aria-label", "Note for Eva");
+    card.appendChild(field);
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "primary";
+    copy.textContent = "Copy for Eva";
+    actions.append(cancel, copy);
+    card.appendChild(actions);
+    shadow.append(style, card);
+    function reposition(next) {
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+      const maxLeft = window.innerWidth - width - GUTTER_PX;
+      const left = Math.min(Math.max(GUTTER_PX, next.left), Math.max(GUTTER_PX, maxLeft));
+      const below = next.top + next.height + GAP_PX;
+      const above = next.top - height - GAP_PX;
+      const fitsBelow = below + height <= window.innerHeight - GAP_PX;
+      const top = fitsBelow ? below : above >= GAP_PX ? above : Math.max(GAP_PX, window.innerHeight - height - GAP_PX);
+      host.style.left = \`\${left}px\`;
+      host.style.top = \`\${top}px\`;
+    }
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      host.remove();
+    }
+    function submit() {
+      if (done) return;
+      copy.disabled = true;
+      void onCopy(field.value.trim()).finally(finish);
+    }
+    cancel.addEventListener("click", () => {
+      finish();
+      onCancel();
+    });
+    copy.addEventListener("click", submit);
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      shadow.addEventListener(type, (event) => event.stopPropagation());
+    }
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finish();
+        onCancel();
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        submit();
+      }
+    });
+    document.documentElement.appendChild(host);
+    reposition(rect);
+    field.focus();
+    return {
+      reposition,
+      setHiddenForCapture(hidden) {
+        host.style.visibility = hidden ? "hidden" : "";
+      },
+      close: finish
+    };
+  }
+
   // ../shared/src/evaMark.ts
   var EVA_MARK_TOP_POINTS = "0,256 217,237 256,64 295,237 512,256";
   var EVA_MARK_BOTTOM_POINTS = "0,256 217,275 256,449 295,275 512,256";
@@ -60,43 +271,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     "sketch",
     "screenshot"
   ];
-  var BAR_SHADOW_BASE = "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px";
-  var TIP_SHADOW_BASE = "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.01) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.01) 0px 1.16px 1.5px 0px";
-  var LIGHT_THEME = {
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-    surface: "oklab(1 0 0 / 0.95)",
-    surfaceText: "oklch(0.2103 0 0)",
-    barShadow: \`\${BAR_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
-    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px\`,
-    tipRadius: "16px",
-    idleText: "oklch(0.5517 0 0)",
-    hoverBg: "oklab(0.9524 0 0 / 0.6)",
-    hoverText: "oklch(0.2103 0 0)",
-    activeBg: "oklch(0.94 0 0)",
-    activeText: "oklch(0.2103 0 0)",
-    badgeBg: "oklch(0.2103 0 0)",
-    badgeText: "oklch(0.9702 0 0)",
-    disc: "oklch(0.98 0 0)",
-    destructive: "oklch(0.6532 0.2335 25.74)"
-  };
-  var DARK_THEME = {
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-    surface: "oklab(0.313316 0.000133276 -0.0054974 / 0.95)",
-    surfaceText: "oklch(0.9911 0 0)",
-    barShadow: \`\${BAR_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
-    tipShadow: \`\${TIP_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px\`,
-    tipRadius: "16px",
-    idleText: "rgb(159, 160, 162)",
-    hoverBg: "oklab(0.352463 0.000133812 -0.00533339 / 0.6)",
-    hoverText: "rgb(250, 250, 250)",
-    activeBg: "rgb(68, 69, 72)",
-    activeText: "oklch(0.9911 0 0)",
-    badgeBg: "rgb(250, 250, 250)",
-    badgeText: "rgb(34, 35, 37)",
-    disc: "rgb(48, 49, 52)",
-    destructive: "oklch(0.594 0.1973 24.63)"
-  };
-  var STYLES = \`
+  var STYLES2 = \`
 :host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.3 var(--font); }
 .bar { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
@@ -189,7 +364,7 @@ svg.mark { width: 44px; height: 44px; }
     host.setAttribute("data-eva-annotate-overlay", "1");
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent = STYLES;
+    style.textContent = STYLES2;
     const bar = document.createElement("div");
     bar.className = "bar";
     bar.style.position = "relative";
@@ -350,30 +525,7 @@ svg.mark { width: 44px; height: 44px; }
       save();
     });
     window.addEventListener("resize", clampIntoView);
-    function applyTheme(theme) {
-      const vars = {
-        "--font": theme.fontFamily,
-        "--surface": theme.surface,
-        "--surface-text": theme.surfaceText,
-        "--bar-shadow": theme.barShadow,
-        "--tip-shadow": theme.tipShadow,
-        "--tip-radius": theme.tipRadius,
-        "--idle-text": theme.idleText,
-        "--hover-bg": theme.hoverBg,
-        "--hover-text": theme.hoverText,
-        "--active-bg": theme.activeBg,
-        "--active-text": theme.activeText,
-        "--badge-bg": theme.badgeBg,
-        "--badge-text": theme.badgeText,
-        "--disc": theme.disc,
-        "--destructive": theme.destructive
-      };
-      for (const [name, value] of Object.entries(vars)) {
-        host.style.setProperty(name, value);
-      }
-    }
-    const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
-    applyTheme(darkScheme.matches ? DARK_THEME : LIGHT_THEME);
+    applyTheme(host, getTheme());
     render();
     const size = 44;
     place(
@@ -396,7 +548,8 @@ svg.mark { width: 44px; height: 44px; }
         clampIntoView();
       },
       setTheme(theme) {
-        applyTheme(theme);
+        setTheme(theme);
+        applyTheme(host, theme);
       },
       setHiddenForCapture(hidden) {
         host.style.visibility = hidden ? "hidden" : "";
@@ -593,6 +746,7 @@ svg.mark { width: 44px; height: 44px; }
     let labelEl = null;
     let rectRaf = 0;
     let toolbar = null;
+    let selectionCard = null;
     function post(payload) {
       if (!parentOrigin) return;
       window.parent.postMessage(payload, parentOrigin);
@@ -615,23 +769,23 @@ svg.mark { width: 44px; height: 44px; }
     }
     function generateSelector(element) {
       const parts = [];
-      let current = element;
-      while (current && current !== document.body) {
-        let selector = current.tagName.toLowerCase();
-        if (current.id) {
-          selector += "#" + escapeCssIdent(current.id);
+      let current2 = element;
+      while (current2 && current2 !== document.body) {
+        let selector = current2.tagName.toLowerCase();
+        if (current2.id) {
+          selector += "#" + escapeCssIdent(current2.id);
           parts.unshift(selector);
           break;
         }
-        if (current.className && typeof current.className === "string") {
-          const classes = current.className.trim().split(/\\s+/).slice(0, 2);
+        if (current2.className && typeof current2.className === "string") {
+          const classes = current2.className.trim().split(/\\s+/).slice(0, 2);
           if (classes.length > 0 && classes[0]) {
             selector += "." + classes.map((c) => escapeCssIdent(c)).join(".");
           }
         }
-        const parentEl = current.parentElement;
+        const parentEl = current2.parentElement;
         if (parentEl) {
-          const currentElement = current;
+          const currentElement = current2;
           const siblings = [];
           for (let i = 0; i < parentEl.children.length; i++) {
             const child = parentEl.children.item(i);
@@ -645,7 +799,7 @@ svg.mark { width: 44px; height: 44px; }
           }
         }
         parts.unshift(selector);
-        current = parentEl;
+        current2 = parentEl;
       }
       return parts.join(" > ");
     }
@@ -665,9 +819,9 @@ svg.mark { width: 44px; height: 44px; }
           break;
         }
       }
-      let current = fiber;
-      while (current && names.length < 3) {
-        const typeVal = Reflect.get(current, "type");
+      let current2 = fiber;
+      while (current2 && names.length < 3) {
+        const typeVal = Reflect.get(current2, "type");
         if (typeof typeVal === "function") {
           const displayName = Reflect.get(typeVal, "displayName");
           const name = typeof displayName === "string" && displayName ? displayName : typeVal.name;
@@ -675,8 +829,8 @@ svg.mark { width: 44px; height: 44px; }
             names.push(name);
           }
         }
-        const next = Reflect.get(current, "return");
-        current = next && typeof next === "object" ? next : null;
+        const next = Reflect.get(current2, "return");
+        current2 = next && typeof next === "object" ? next : null;
       }
       return names;
     }
@@ -755,23 +909,23 @@ svg.mark { width: 44px; height: 44px; }
     }
     function buildFullPath(element) {
       const parts = [];
-      let current = element;
+      let current2 = element;
       let crossedShadow = false;
-      while (current && current.tagName.toLowerCase() !== "html") {
-        parts.unshift((crossedShadow ? "\\u27E8shadow\\u27E9 " : "") + pathSegment(current));
+      while (current2 && current2.tagName.toLowerCase() !== "html") {
+        parts.unshift((crossedShadow ? "\\u27E8shadow\\u27E9 " : "") + pathSegment(current2));
         crossedShadow = false;
-        const parent = current.parentElement;
+        const parent = current2.parentElement;
         if (parent) {
-          current = parent;
+          current2 = parent;
           continue;
         }
-        const root2 = current.getRootNode();
+        const root2 = current2.getRootNode();
         if (root2 instanceof ShadowRoot) {
-          current = root2.host;
+          current2 = root2.host;
           crossedShadow = true;
           continue;
         }
-        current = null;
+        current2 = null;
       }
       return parts.join(" > ");
     }
@@ -902,16 +1056,21 @@ svg.mark { width: 44px; height: 44px; }
       labelEl.style.top = labelTop + "px";
       labelEl.style.left = Math.max(0, rect.left) + "px";
     }
-    function chipLabel(el) {
+    function elementChip(el) {
       const tag = el.tagName.toLowerCase();
       const rawClass = el.classList.item(0);
       const stripped = rawClass ? stripClassHash(rawClass) : "";
       const cls = el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
+      return "<" + tag + cls + ">";
+    }
+    function chipLabel(el) {
       const react = collectReactNames(el);
       const reactPrefix = react[0] ? react[0] + " " : "";
-      return reactPrefix + "<" + tag + cls + ">";
+      return reactPrefix + elementChip(el);
     }
     function clearAll() {
+      selectionCard?.close();
+      selectionCard = null;
       selectedEl = null;
       paintBox(null, "", false);
     }
@@ -929,9 +1088,16 @@ svg.mark { width: 44px; height: 44px; }
         rectRaf = 0;
         if (!selectedEl || !document.contains(selectedEl)) {
           post({ type: "eva-preview-annotate-rect", rect: null });
+          selectionCard?.close();
           return;
         }
         const rect = selectedEl.getBoundingClientRect();
+        selectionCard?.reposition({
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height
+        });
         post({
           type: "eva-preview-annotate-rect",
           rect: {
@@ -968,10 +1134,27 @@ svg.mark { width: 44px; height: 44px; }
       const rect = target.getBoundingClientRect();
       paintBox(target, chipLabel(target), true);
       if (!embedded) {
-        void copyToClipboard(formatContextForClipboard(context)).then((ok) => {
-          toolbar?.update({ notice: ok ? "Element copied" : "Couldn't copy" });
+        selectionCard?.close();
+        selectionCard = openSelectionCard({
+          info: {
+            chip: elementChip(target),
+            reactName: context.reactComponents[0] ?? "",
+            text: context.textContent,
+            accessibility: context.accessibility
+          },
+          rect,
+          onCopy: (note) => copyToClipboard(formatContextForClipboard(context, note)).then(
+            (ok) => {
+              clearAll();
+              setMode(false);
+              toolbar?.update({
+                notice: ok ? "Copied for Eva" : "Couldn't copy"
+              });
+              return ok;
+            }
+          ),
+          onCancel: clearAll
         });
-        setMode(false);
         return;
       }
       post({
@@ -1420,6 +1603,7 @@ svg.mark { width: 44px; height: 44px; }
       if (overlay) overlay.style.display = overlayDisplayForCapture;
       if (labelEl) labelEl.style.display = labelDisplayForCapture;
       toolbar?.setHiddenForCapture(false);
+      selectionCard?.setHiddenForCapture(false);
     }
     let overlayDisplayForCapture = "";
     let labelDisplayForCapture = "";
@@ -1477,6 +1661,7 @@ svg.mark { width: 44px; height: 44px; }
       if (overlay) overlay.style.display = "none";
       if (labelEl) labelEl.style.display = "none";
       toolbar?.setHiddenForCapture(true);
+      selectionCard?.setHiddenForCapture(true);
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     function parseToolbarTheme(value) {
@@ -1500,7 +1685,11 @@ svg.mark { width: 44px; height: 44px; }
         badgeBg: read("badgeBg"),
         badgeText: read("badgeText"),
         disc: read("disc"),
-        destructive: read("destructive")
+        destructive: read("destructive"),
+        border: read("border"),
+        primary: read("primary"),
+        primaryText: read("primaryText"),
+        field: read("field")
       };
       return Object.values(theme).some((entry) => entry === "") ? null : theme;
     }
@@ -1511,12 +1700,13 @@ svg.mark { width: 44px; height: 44px; }
         () => false
       );
     }
-    function formatContextForClipboard(context) {
-      const lines = [
+    function formatContextForClipboard(context, note) {
+      const lines = note ? [\`Feedback: \${note}\`, ""] : [];
+      lines.push(
         \`Element: \${context.selector}\`,
         \`Page: \${context.pageUrl}\`,
         \`Path: \${context.fullPath}\`
-      ];
+      );
       if (context.reactComponents.length > 0) {
         lines.push(\`React: \${context.reactComponents.join(" > ")}\`);
       }
