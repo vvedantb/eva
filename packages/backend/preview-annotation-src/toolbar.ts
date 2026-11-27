@@ -16,12 +16,15 @@
  * `index.ts` (it needs the page-side state); `update` mirrors that state back.
  */
 
+import type { PreviewToolbarTheme as ToolbarTheme } from "@eva/shared/previewFrameMessages";
 import {
   EVA_MARK_BLUE,
   EVA_MARK_BOTTOM_POINTS,
   EVA_MARK_PURPLE,
   EVA_MARK_TOP_POINTS,
 } from "@eva/shared/evaMark";
+
+export type { ToolbarTheme };
 
 export interface ToolbarView {
   selecting: boolean;
@@ -49,6 +52,7 @@ export interface ToolbarActions {
 
 export interface Toolbar {
   update(patch: Partial<ToolbarView>): void;
+  setTheme(theme: ToolbarTheme): void;
   /** Hides the toolbar so a screenshot does not contain it. */
   setHiddenForCapture(hidden: boolean): void;
 }
@@ -57,25 +61,40 @@ type ToolName = keyof ToolbarActions;
 
 const STORAGE_KEY = "eva-preview-toolbar";
 const DRAG_THRESHOLD_PX = 4;
+const TIP_DELAY_MS = 300;
 const EDGE_PX = 8;
 const NOTICE_MS = 2500;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Tabler-style 24px stroke paths, one string of `d` values per shape. */
+/**
+ * The exact `@tabler/icons-react` outline paths the old Eva bar used
+ * (IconClick, IconMessages, IconPlayerPause, IconPencil, IconCamera), copied
+ * from the package: this script cannot import React components.
+ */
 const TOOL_ICONS: Record<ToolName, string[]> = {
   select: [
-    "M3 12h3M12 3v3M7.8 7.8L5.6 5.6M16.2 7.8l2.2-2.2M7.8 16.2l-2.2 2.2",
-    "M12 12l9 3l-4 2l-2 4l-3-9",
+    "M3 12l3 0",
+    "M12 3l0 3",
+    "M7.8 7.8l-2.2 -2.2",
+    "M16.2 7.8l2.2 -2.2",
+    "M7.8 16.2l-2.2 2.2",
+    "M12 12l9 3l-4 2l-2 4l-3 -9",
   ],
   comments: [
-    "M21 14l-3-3h-7a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v10",
-    "M14 15v2a1 1 0 0 1-1 1h-7l-3 3v-10a1 1 0 0 1 1-1h2",
+    "M21 14l-3 -3h-7a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v10",
+    "M14 15v2a1 1 0 0 1 -1 1h-7l-3 3v-10a1 1 0 0 1 1 -1h2",
   ],
-  freeze: ["M7 5h2v14H7z", "M15 5h2v14h-2z"],
-  sketch: ["M4 20h4l10.5-10.5a2.828 2.828 0 1 0-4-4L4 16v4", "M13.5 6.5l4 4"],
+  freeze: [
+    "M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12",
+    "M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12",
+  ],
+  sketch: [
+    "M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4",
+    "M13.5 6.5l4 4",
+  ],
   screenshot: [
-    "M5 7h1a2 2 0 0 0 2-2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-14a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2",
-    "M9 13a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
+    "M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2",
+    "M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0",
   ],
 };
 
@@ -95,22 +114,69 @@ const TOOL_ORDER: ToolName[] = [
   "screenshot",
 ];
 
+const BAR_SHADOW_BASE =
+  "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px";
+const TIP_SHADOW_BASE =
+  "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.01) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.01) 0px 1.16px 1.5px 0px";
+
+/**
+ * Direct link: no Eva to read tokens from, so these are Eva's own resolved
+ * values (measured from the app's light and dark themes with the probe in
+ * `previewToolbarTheme.ts`), picked by the page's colour scheme. Re-measure
+ * them if Eva's tokens change.
+ */
+const LIGHT_THEME: ToolbarTheme = {
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  surface: "oklab(1 0 0 / 0.95)",
+  surfaceText: "oklch(0.2103 0 0)",
+  barShadow: `${BAR_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px`,
+  tipShadow: `${TIP_SHADOW_BASE}, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px`,
+  tipRadius: "16px",
+  idleText: "oklch(0.5517 0 0)",
+  hoverBg: "oklab(0.9524 0 0 / 0.6)",
+  hoverText: "oklch(0.2103 0 0)",
+  activeBg: "oklch(0.94 0 0)",
+  activeText: "oklch(0.2103 0 0)",
+  badgeBg: "oklch(0.2103 0 0)",
+  badgeText: "oklch(0.9702 0 0)",
+  disc: "oklch(0.98 0 0)",
+};
+const DARK_THEME: ToolbarTheme = {
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  surface: "oklab(0.313316 0.000133276 -0.0054974 / 0.95)",
+  surfaceText: "oklch(0.9911 0 0)",
+  barShadow: `${BAR_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px`,
+  tipShadow: `${TIP_SHADOW_BASE}, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px`,
+  tipRadius: "16px",
+  idleText: "rgb(159, 160, 162)",
+  hoverBg: "oklab(0.352463 0.000133812 -0.00533339 / 0.6)",
+  hoverText: "rgb(250, 250, 250)",
+  activeBg: "rgb(68, 69, 72)",
+  activeText: "oklch(0.9911 0 0)",
+  badgeBg: "rgb(250, 250, 250)",
+  badgeText: "rgb(34, 35, 37)",
+  disc: "rgb(48, 49, 52)",
+};
+
+/** Sizes mirror the old bar: `p-1` pill, `size-8` buttons, `size-4` icons. */
 const STYLES = `
-:host { all: initial; position: fixed; z-index: 2147483647; font: 12px/1.3 ui-sans-serif, system-ui, sans-serif; }
-.bar { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(23, 24, 26, 0.96); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 20px rgba(0, 0, 0, 0.35); color: #e8e8ea; }
-button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; cursor: pointer; color: inherit; }
-button:hover { background: rgba(255, 255, 255, 0.1); }
-button:focus-visible { outline: 2px solid ${EVA_MARK_BLUE}; outline-offset: 1px; }
-button[aria-pressed="true"] { background: rgba(139, 63, 184, 0.35); color: #fff; }
-button:disabled { opacity: 0.5; cursor: default; }
-button[hidden], .tools[hidden], .notice[hidden], .badge[hidden] { display: none; }
-.handle { cursor: grab; touch-action: none; }
+:host { all: initial; position: fixed; z-index: 2147483647; font: 12px/1.3 var(--font); }
+.bar { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:active { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--active-bg); color: var(--active-text); }
+button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+button[hidden], .tools[hidden], .notice[hidden], .badge[hidden], .tip[hidden] { display: none; }
+.handle, .handle:hover { cursor: grab; touch-action: none; background: none; }
 .handle:active { cursor: grabbing; }
 .tools { display: flex; align-items: center; gap: 2px; }
-svg.icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-svg.mark { width: 28px; height: 28px; }
-.badge { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 999px; background: #fff; color: #17181a; font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; }
-.notice { padding: 0 10px 0 6px; white-space: nowrap; color: #c9c9cd; }
+svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.mark { width: 32px; height: 32px; }
+.badge { position: absolute; top: -2px; right: -2px; display: flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 999px; background: var(--badge-bg); color: var(--badge-text); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.notice { padding: 0 10px 0 6px; white-space: nowrap; color: var(--idle-text); }
+.tip { position: absolute; bottom: calc(100% + 8px); left: 0; padding: 6px 12px; border-radius: var(--tip-radius); background: var(--surface); color: var(--surface-text); box-shadow: var(--tip-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 12px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
 `;
 
 interface StoredToolbar {
@@ -163,7 +229,7 @@ function toolIcon(tool: ToolName): SVGElement {
 function evaMark(): SVGElement {
   const svg = svgElement("svg", { viewBox: "0 0 512 512", class: "mark" });
   svg.appendChild(
-    svgElement("circle", { cx: "256", cy: "256", r: "256", fill: "#17181a" }),
+    svgElement("circle", { cx: "256", cy: "256", r: "256", fill: "var(--disc)" }),
   );
   svg.appendChild(
     svgElement("polygon", {
@@ -211,6 +277,34 @@ export function mountToolbar(
 
   const bar = document.createElement("div");
   bar.className = "bar";
+  bar.style.position = "relative";
+
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  tip.hidden = true;
+  let tipTimer = 0;
+  // Same 300ms delay as Eva's tooltips; shown above the button, or below it
+  // when the toolbar sits at the top edge.
+  function showTip(button: HTMLElement, label: string): void {
+    window.clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => {
+      tip.textContent = label;
+      tip.style.left = `${button.offsetLeft + button.offsetWidth / 2}px`;
+      const above = host.getBoundingClientRect().top > 48;
+      tip.style.bottom = above ? "calc(100% + 8px)" : "auto";
+      tip.style.top = above ? "auto" : "calc(100% + 8px)";
+      tip.hidden = false;
+    }, TIP_DELAY_MS);
+  }
+  function hideTip(): void {
+    window.clearTimeout(tipTimer);
+    tip.hidden = true;
+  }
+  function withTip(button: HTMLElement, label: () => string): void {
+    button.addEventListener("pointerenter", () => showTip(button, label()));
+    button.addEventListener("pointerleave", hideTip);
+    button.addEventListener("pointerdown", hideTip);
+  }
 
   const handle = document.createElement("button");
   handle.type = "button";
@@ -224,7 +318,7 @@ export function mountToolbar(
   for (const tool of TOOL_ORDER) {
     const button = document.createElement("button");
     button.type = "button";
-    button.title = TOOL_LABELS[tool];
+    withTip(button, () => TOOL_LABELS[tool]);
     button.setAttribute("aria-label", TOOL_LABELS[tool]);
     button.appendChild(toolIcon(tool));
     if (tool === "comments") {
@@ -240,12 +334,15 @@ export function mountToolbar(
   notice.className = "notice";
   tools.appendChild(notice);
 
-  bar.append(handle, tools);
+  withTip(handle, () => (expanded ? "Collapse" : "Eva tools"));
+  bar.append(handle, tools, tip);
   shadow.append(style, bar);
 
   function render(): void {
-    handle.title = expanded ? "Collapse Eva toolbar" : "Open Eva toolbar";
-    handle.setAttribute("aria-label", handle.title);
+    handle.setAttribute(
+      "aria-label",
+      expanded ? "Collapse Eva toolbar" : "Open Eva toolbar",
+    );
     handle.setAttribute("aria-expanded", String(expanded));
     tools.hidden = !expanded;
     // A collapsed circle has no padding ring.
@@ -355,6 +452,30 @@ export function mountToolbar(
 
   window.addEventListener("resize", clampIntoView);
 
+  function applyTheme(theme: ToolbarTheme): void {
+    const vars: Record<string, string> = {
+      "--font": theme.fontFamily,
+      "--surface": theme.surface,
+      "--surface-text": theme.surfaceText,
+      "--bar-shadow": theme.barShadow,
+      "--tip-shadow": theme.tipShadow,
+      "--tip-radius": theme.tipRadius,
+      "--idle-text": theme.idleText,
+      "--hover-bg": theme.hoverBg,
+      "--hover-text": theme.hoverText,
+      "--active-bg": theme.activeBg,
+      "--active-text": theme.activeText,
+      "--badge-bg": theme.badgeBg,
+      "--badge-text": theme.badgeText,
+      "--disc": theme.disc,
+    };
+    for (const [name, value] of Object.entries(vars)) {
+      host.style.setProperty(name, value);
+    }
+  }
+  const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
+  applyTheme(darkScheme.matches ? DARK_THEME : LIGHT_THEME);
+
   render();
   const size = 32;
   place(
@@ -377,6 +498,9 @@ export function mountToolbar(
       }
       // Tools appearing or vanishing change the width.
       clampIntoView();
+    },
+    setTheme(theme) {
+      applyTheme(theme);
     },
     setHiddenForCapture(hidden) {
       host.style.visibility = hidden ? "hidden" : "";

@@ -4,6 +4,7 @@
 import { useEffect } from "react";
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
+import { readPreviewToolbarTheme } from "../_utils/previewToolbarTheme";
 
 export interface PreviewToolbarState {
   /** Omitted where there is no chat to send an annotation to. */
@@ -57,16 +58,27 @@ export function usePreviewToolbarBridge({
   } = state;
 
   useEffect(() => {
-    const message = {
-      type: PREVIEW_FRAME_MESSAGE.toolbarState,
-      selectEnabled,
-      commentsEnabled,
-      commentsActive,
-      commentCount,
-      sketchEnabled,
-      sketchActive,
-    };
-    postToFrame(iframeElement, message);
+    // Read fresh on every send: the theme is not a prop here.
+    function sendState() {
+      postToFrame(iframeElement, {
+        type: PREVIEW_FRAME_MESSAGE.toolbarState,
+        selectEnabled,
+        commentsEnabled,
+        commentsActive,
+        commentCount,
+        sketchEnabled,
+        sketchActive,
+        theme: readPreviewToolbarTheme(),
+      });
+    }
+    sendState();
+    // The theme provider switches light/dark by toggling a class on <html>,
+    // after this component's effects run, so watch the class itself.
+    const themeObserver = new MutationObserver(sendState);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     function onMessage(event: MessageEvent) {
       if (!isFromFrame(event, iframeElement)) return;
@@ -74,7 +86,7 @@ export function usePreviewToolbarBridge({
       const type = Reflect.get(event.data, "type");
       // A fresh page (first load, reload) starts without any state.
       if (type === PREVIEW_FRAME_MESSAGE.annotateReady) {
-        postToFrame(iframeElement, message);
+        sendState();
         return;
       }
       if (type !== PREVIEW_FRAME_MESSAGE.toolbarAction) return;
@@ -82,7 +94,10 @@ export function usePreviewToolbarBridge({
       if (isToolbarAction(action)) actions[action]();
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      themeObserver.disconnect();
+      window.removeEventListener("message", onMessage);
+    };
   }, [
     iframeElement,
     actions,

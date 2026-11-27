@@ -17,7 +17,7 @@
  */
 
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
-import { mountToolbar, type Toolbar } from "./toolbar";
+import { mountToolbar, type Toolbar, type ToolbarTheme } from "./toolbar";
 
 type Msg = typeof PREVIEW_FRAME_MESSAGE;
 
@@ -1577,6 +1577,32 @@ function evaPreviewAnnotationScript(): void {
       .finally(restoreCaptureChrome);
   }
 
+  /** Eva sends its resolved token colours; anything malformed is ignored. */
+  function parseToolbarTheme(value: unknown): ToolbarTheme | null {
+    if (typeof value !== "object" || value === null) return null;
+    const read = (key: string): string => {
+      const field = Reflect.get(value, key);
+      return typeof field === "string" ? field : "";
+    };
+    const theme: ToolbarTheme = {
+      fontFamily: read("fontFamily"),
+      surface: read("surface"),
+      surfaceText: read("surfaceText"),
+      barShadow: read("barShadow"),
+      tipShadow: read("tipShadow"),
+      tipRadius: read("tipRadius"),
+      idleText: read("idleText"),
+      hoverBg: read("hoverBg"),
+      hoverText: read("hoverText"),
+      activeBg: read("activeBg"),
+      activeText: read("activeText"),
+      badgeBg: read("badgeBg"),
+      badgeText: read("badgeText"),
+      disc: read("disc"),
+    };
+    return Object.values(theme).some((entry) => entry === "") ? null : theme;
+  }
+
   /** True inside Eva's iframe; false on a direct sandbox link. */
   const embedded = window !== window.top;
 
@@ -1650,6 +1676,8 @@ function evaPreviewAnnotationScript(): void {
       return;
     }
     if (type === ("eva-preview-toolbar-state" satisfies InboundType)) {
+      const theme = parseToolbarTheme(Reflect.get(data, "theme"));
+      if (theme) toolbar?.setTheme(theme);
       const count = Reflect.get(data, "commentCount");
       toolbar?.update({
         selectEnabled: Reflect.get(data, "selectEnabled") === true,
