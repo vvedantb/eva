@@ -2,11 +2,8 @@ import { useState } from "react";
 import { toast } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import {
-  MAX_CHAT_ATTACHMENTS,
-  MAX_CHAT_ATTACHMENT_BYTES,
-  chatAttachmentErrorMessage,
+  acceptAttachmentFiles,
   contentTypeForUpload,
-  isAllowedAttachmentFile,
   isImageContentType,
 } from "@/lib/components/attachments/attachmentMeta";
 import { useUploadBlobs } from "@/lib/components/attachments/useUploadBlobs";
@@ -27,8 +24,6 @@ export type TaskAttachment = {
   file: File | null;
 };
 
-type RejectionCode = "max_files" | "max_file_size" | "accept";
-
 /**
  * Attachment state for the quick task composer. Files are held locally and
  * uploaded on submit (matching the chat composer), so abandoning the modal
@@ -46,26 +41,11 @@ export function useTaskAttachments() {
   };
 
   const add = (files: File[]) => {
-    const rejections = new Set<RejectionCode>();
-    setAttachments((current) => {
-      const accepted: TaskAttachment[] = [];
-      for (const file of files) {
-        const meta = { mediaType: file.type, filename: file.name };
-        if (!isAllowedAttachmentFile(meta)) {
-          rejections.add("accept");
-          continue;
-        }
-        if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
-          rejections.add("max_file_size");
-          continue;
-        }
-        if (current.length + accepted.length >= MAX_CHAT_ATTACHMENTS) {
-          rejections.add("max_files");
-          continue;
-        }
+    const accepted = acceptAttachmentFiles(files, attachments.length).map(
+      (file): TaskAttachment => {
         // Only images need a preview URL; text attachments render as an icon.
         const isImage = isImageContentType(file.type);
-        accepted.push({
+        return {
           key: crypto.randomUUID(),
           name: file.name,
           contentType: file.type || null,
@@ -73,12 +53,11 @@ export function useTaskAttachments() {
           isObjectUrl: isImage,
           storageId: null,
           file,
-        });
-      }
-      return accepted.length > 0 ? [...current, ...accepted] : current;
-    });
-    for (const code of rejections) {
-      toast.error(chatAttachmentErrorMessage({ code }));
+        };
+      },
+    );
+    if (accepted.length > 0) {
+      setAttachments((current) => [...current, ...accepted]);
     }
   };
 

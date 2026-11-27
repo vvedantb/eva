@@ -29,7 +29,7 @@ import {
   runTraitFields,
 } from "./helpers";
 import { resolveNewTaskBaseBranch } from "../_agentTasks/resolveBaseBranch";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, MAX_CHAT_ATTACHMENTS } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
 import { seedNewTaskChat } from "./taskChatSeed";
@@ -249,6 +249,37 @@ export const updateStatus = authMutation({
     if (task.projectId) {
       await onProjectTasksChanged(ctx, task.projectId);
     }
+    return null;
+  },
+});
+
+/**
+ * Attaches files the user uploaded to an existing task, after the ones it has.
+ * The task keeps at most `MAX_CHAT_ATTACHMENTS` files, the same cap as create.
+ * The next run sends the files added since the last run (`taskRunTurn.ts`).
+ */
+export const addAttachments = authMutation({
+  args: {
+    taskId: v.id("agentTasks"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+      throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
+    const current = task.attachmentStorageIds ?? [];
+    const added = args.storageIds.filter((id) => !current.includes(id));
+    if (added.length === 0) return null;
+    if (current.length + added.length > MAX_CHAT_ATTACHMENTS)
+      throw new ConvexError(
+        `A task can have up to ${MAX_CHAT_ATTACHMENTS} files.`,
+      );
+    await ctx.db.patch(args.taskId, {
+      attachmentStorageIds: [...current, ...added],
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });
