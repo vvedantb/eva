@@ -60,7 +60,7 @@ export function FeedbackClient() {
           <EmptyState.Icon icon={IconThumbUp} size={24} />
           <EmptyState.Title>No feedback yet</EmptyState.Title>
           <EmptyState.Description>
-            Thumbs on Eva replies, and feedback Eva sends when a chat goes well
+            Thumbs on Eva replies and recaps, and feedback Eva sends when a chat goes well
             or badly, show up here.
           </EmptyState.Description>
         </EmptyState.Root>

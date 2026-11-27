@@ -1784,6 +1784,9 @@ export const feedbackFields = {
   repoId: v.optional(v.id("githubRepos")),
   // The assistant turn the feedback is about; absent if the chat had none yet.
   messageId: v.optional(v.id("messages")),
+  // The chat recap the user rated (`rateRecap`); set instead of `messageId`.
+  // The recap row is deleted on dismiss, so this id can dangle.
+  recapId: v.optional(v.id("chatRecaps")),
   // The user who rated, or the user whose chat the agent reported on.
   userId: v.id("users"),
   author: feedbackAuthorValidator,

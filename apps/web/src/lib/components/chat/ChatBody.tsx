@@ -660,7 +660,7 @@ function ChatBodyInner({
   });
   // "Since you've been gone": the server writes it when you return after a
   // long absence; it sits under the newest message, where the chat opens.
-  const { recap, dismiss: dismissRecap } = useChatRecap({
+  const { recap, dismiss: dismissRecap, rate: rateRecap } = useChatRecap({
     parentId: chatParentId,
     active: isRouteActive,
     messages: displayMessages,
@@ -672,6 +672,8 @@ function ChatBodyInner({
         kind={recap.kind}
         since={recap.since}
         text={recap.text}
+        rating={recap.rating}
+        onRate={rateRecap}
         repo={repo}
         onDismiss={dismissRecap}
       />

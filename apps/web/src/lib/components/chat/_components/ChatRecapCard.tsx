@@ -4,6 +4,10 @@ import { m } from "motion/react";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { recapTitle } from "@eva/shared/chatReadState";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
+import { ThumbsRating } from "@/lib/components/chat/feedback/ThumbsRating";
+
+const RATING_LABELS = { positive: "Helpful recap", negative: "Unhelpful recap" };
 
 /**
  * The user's recap of this chat (`useChatRecap`), under the newest message:
@@ -14,6 +18,8 @@ export function ChatRecapCard({
   kind,
   since,
   text,
+  rating,
+  onRate,
   repo,
   onDismiss,
 }: {
@@ -22,6 +28,9 @@ export function ChatRecapCard({
   since: number;
   /** Undefined while the model writes it. */
   text: string | undefined;
+  /** The viewer's thumbs on this recap. */
+  rating: { sentiment: FeedbackSentiment; comment: string | undefined } | undefined;
+  onRate: (sentiment: FeedbackSentiment | null, comment?: string) => Promise<unknown>;
   repo: ChatRepo;
   onDismiss: () => void;
 }) {
@@ -39,6 +48,14 @@ export function ChatRecapCard({
         <span className="text-xs text-muted-foreground">
           Visible only to you
         </span>
+        {text === undefined ? null : (
+          <ThumbsRating
+            onRate={onRate}
+            sentiment={rating?.sentiment}
+            comment={rating?.comment}
+            labels={RATING_LABELS}
+          />
+        )}
         <Button
           type="button"
           variant="ghost"
