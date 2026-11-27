@@ -338,6 +338,43 @@ describe("event run lifecycle", () => {
   );
 
   test(
+    "the push an automation made to a PR does not start another run",
+    async () => {
+      const { t, ids, install, runsOf } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        event: "pr_updated",
+      });
+      const queued = await t.run(async (ctx) => {
+        await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "success",
+          startedAt: 0,
+          acknowledged: false,
+          pushedSha: "evas-push",
+        });
+        return await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "queued",
+          startedAt: Date.now(),
+          acknowledged: false,
+          eventKind: "pr_updated",
+          headSha: "evas-push",
+        });
+      });
+      await t.mutation(internal.automations.startEventRun, {
+        runId: queued,
+        event: pushed("evas-push"),
+      });
+      const runs = await runsOf(automationId);
+      expect(runs.map((run) => run._id)).not.toContain(queued);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a busy automation keeps the event waiting, then gives up after a day",
     async () => {
       const { t, ids, install } = await fixture();

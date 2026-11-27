@@ -55,6 +55,7 @@ import type * as _automations_crud from "../_automations/crud.js";
 import type * as _automations_email from "../_automations/email.js";
 import type * as _automations_findings from "../_automations/findings.js";
 import type * as _automations_helpers from "../_automations/helpers.js";
+import type * as _automations_prComment from "../_automations/prComment.js";
 import type * as _automations_prompts_addTestCoverage from "../_automations/prompts/addTestCoverage.js";
 import type * as _automations_prompts_dailyStandup from "../_automations/prompts/dailyStandup.js";
 import type * as _automations_prompts_eventPresets from "../_automations/prompts/eventPresets.js";
@@ -654,6 +655,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/email": typeof _automations_email;
   "_automations/findings": typeof _automations_findings;
   "_automations/helpers": typeof _automations_helpers;
+  "_automations/prComment": typeof _automations_prComment;
   "_automations/prompts/addTestCoverage": typeof _automations_prompts_addTestCoverage;
   "_automations/prompts/dailyStandup": typeof _automations_prompts_dailyStandup;
   "_automations/prompts/eventPresets": typeof _automations_prompts_eventPresets;

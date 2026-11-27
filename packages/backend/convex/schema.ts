@@ -524,6 +524,7 @@ const schema = defineSchema({
     .index("by_automation_and_status", ["automationId", "status"])
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
+    .index("by_pushedSha", ["pushedSha"])
     .index("by_repo", ["repoId"])
     .index("by_sandbox", ["sandboxId"]),
 

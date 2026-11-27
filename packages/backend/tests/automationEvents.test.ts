@@ -24,6 +24,34 @@ const repository = { name: "eva", owner: { login: "acme" } };
 const human = { type: "User" };
 
 describe("parseRepoEvents", () => {
+  test("a PR push carries its branch only when the branch is in this repo", () => {
+    const pushed = (headRepo: string | null) =>
+      parseRepoEvents(
+        "pull_request",
+        JSON.stringify({
+          action: "synchronize",
+          pull_request: {
+            number: 9,
+            html_url: "https://github.com/acme/eva/pull/9",
+            title: "Add retry",
+            merged: false,
+            head: {
+              sha: "abc",
+              ref: "feature/retry",
+              repo: headRepo === null ? null : { full_name: headRepo },
+            },
+          },
+          repository,
+          sender: human,
+        }),
+      );
+    expect(pushed("Acme/Eva")).toEqual([
+      expect.objectContaining({ kind: "pr_updated", headBranch: "feature/retry" }),
+    ]);
+    expect(pushed("someone/eva")[0]).toMatchObject({ headBranch: undefined });
+    expect(pushed(null)[0]).toMatchObject({ headBranch: undefined });
+  });
+
   test("a failed check suite fans out to one ci_failed event per PR", () => {
     const events = parseRepoEvents(
       "check_suite",

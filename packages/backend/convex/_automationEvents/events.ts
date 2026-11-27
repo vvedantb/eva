@@ -75,6 +75,12 @@ export const repoEventValidator = v.union(
     title: v.string(),
     /** The PR's head commit when the webhook fired; Eva's check sits on it. */
     headSha: v.string(),
+    /**
+     * The PR's branch, when it lives in this repo and the PR is still open.
+     * Runs check it out and push edits to it. Fork PRs have none: Eva cannot
+     * push there, so they run on the default branch as before.
+     */
+    headBranch: v.optional(v.string()),
   }),
   v.object({ ...alertFields, ...repoRef }),
 );
@@ -195,6 +201,13 @@ function isPrEvent(event: RepoEvent): event is PrEvent {
  */
 export function prEventHeadSha(event: RepoEvent): string | undefined {
   return isPrEvent(event) ? event.headSha : undefined;
+}
+
+/** The open PR branch a run works on and pushes to, or none (see `headBranch`). */
+export function prEventHeadBranch(event: RepoEvent): string | undefined {
+  return isPrEvent(event) && event.kind !== "pr_merged"
+    ? event.headBranch
+    : undefined;
 }
 
 /**
@@ -343,7 +356,12 @@ const pullRequestSchema = z.object({
     html_url: z.string(),
     title: z.string(),
     merged: z.boolean().nullable().catch(null),
-    head: z.object({ sha: z.string() }),
+    head: z.object({
+      sha: z.string(),
+      ref: z.string(),
+      // Null when the fork was deleted.
+      repo: z.object({ full_name: z.string() }).nullable().catch(null),
+    }),
   }),
   repository: repositorySchema,
   sender: senderSchema,
@@ -566,6 +584,11 @@ function parseRepoEventsOrThrow(
         prNumber: pr.number,
         title: pr.title,
         headSha: pr.head.sha,
+        headBranch:
+          pr.head.repo?.full_name.toLowerCase() ===
+          `${repository.owner.login}/${repository.name}`.toLowerCase()
+            ? pr.head.ref
+            : undefined,
       };
       if (action === "opened") return [{ kind: "pr_opened", ...base }];
       if (action === "synchronize") return [{ kind: "pr_updated", ...base }];

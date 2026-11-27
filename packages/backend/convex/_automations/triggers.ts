@@ -13,6 +13,7 @@ import {
   describeRepoEvent,
   EVENT_RUN_MAX_WAIT_MS,
   EVENT_RUN_RETRY_MS,
+  prEventHeadBranch,
   repoEventValidator,
   withLatestHead,
 } from "../_automationEvents/events";
@@ -46,6 +47,28 @@ async function hasRunInFlight(
   return queued.some((run) => run.activeWorkflowId !== undefined);
 }
 
+export const recordPushedSha = internalMutation({
+  args: { runId: v.id("automationRuns"), pushedSha: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { runId, pushedSha }) => {
+    await ctx.db.patch(runId, { pushedSha });
+    return null;
+  },
+});
+
+/** Whether an automation run pushed this commit (see `pushedSha`). */
+async function isAutomationPush(
+  ctx: MutationCtx,
+  headSha: string | undefined,
+): Promise<boolean> {
+  if (headSha === undefined) return false;
+  const pusher = await ctx.db
+    .query("automationRuns")
+    .withIndex("by_pushedSha", (q) => q.eq("pushedSha", headSha))
+    .first();
+  return pusher !== null;
+}
+
 /**
  * Starts an automation's execution workflow, inserting a queued run unless an
  * event trigger already made one. Shared by the cron, "run now" and event
@@ -57,7 +80,12 @@ async function startAutomationRun(
   ctx: MutationCtx,
   storedAutomation: Doc<"automations">,
   repo: Doc<"githubRepos">,
-  event?: { runId: Id<"automationRuns">; context: string },
+  event?: {
+    runId: Id<"automationRuns">;
+    context: string;
+    /** The open PR's branch: the run checks it out and pushes edits to it. */
+    prBranch: string | undefined;
+  },
 ): Promise<void> {
   const automation = resolveAutomationDoc(storedAutomation);
   const runId =
@@ -95,6 +123,7 @@ async function startAutomationRun(
         userId: automation.createdBy,
         readOnly: automation.readOnly === true,
         actionsEnabled: automation.actionsEnabled === true,
+        prBranch: event?.prBranch,
       },
     ),
   );
@@ -164,6 +193,12 @@ export const startEventRun = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.status !== "queued") return null;
+    // An automation pushed this commit to the PR. Running on its own push
+    // would loop, so the event is dropped, with no run left in the history.
+    if (await isAutomationPush(ctx, run.headSha)) {
+      await ctx.db.delete(args.runId);
+      return null;
+    }
     const automation = await ctx.db.get(run.automationId);
     const repo = automation ? await ctx.db.get(automation.repoId) : null;
     if (!automation || !automation.enabled || !repo) {
@@ -195,9 +230,15 @@ export const startEventRun = internalMutation({
       return null;
     }
     // Pushes that landed during the debounce or the wait moved the run's head.
+    const prBranch = prEventHeadBranch(args.event);
+    const context = describeRepoEvent(withLatestHead(args.event, run.headSha));
     await startAutomationRun(ctx, automation, repo, {
       runId: args.runId,
-      context: describeRepoEvent(withLatestHead(args.event, run.headSha)),
+      context:
+        prBranch === undefined
+          ? context
+          : `${context}\nYou are on the PR's branch \`${prBranch}\`.${automation.readOnly === true ? "" : " Edits you commit are pushed to this PR."}`,
+      prBranch,
     });
     return null;
   },
