@@ -309,6 +309,40 @@ export const listThreadRoots = authQuery({
 });
 
 /**
+ * A chat's threads for the Replies tab list, latest reply first: each root's
+ * first words, its reply count and when it last got a reply.
+ */
+export const listThreadSummaries = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.array(
+    v.object({
+      rootId: v.id("messages"),
+      preview: v.string(),
+      replyCount: v.number(),
+      lastReplyAt: v.number(),
+      replierIds: v.array(v.id("users")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const roots = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_last_reply_at", (q) =>
+        q.eq("parentId", args.parentId).gt("lastReplyAt", 0),
+      )
+      .order("desc")
+      .take(MAX_THREAD_REPLIES);
+    return roots.map((root) => ({
+      rootId: root._id,
+      preview: threadRootPreview(root.content),
+      replyCount: root.replyCount ?? 0,
+      lastReplyAt: root.lastReplyAt ?? 0,
+      replierIds: root.replierIds ?? [],
+    }));
+  },
+});
+
+/**
  * The thread Eva's open turn answers in, or null when no turn is open or it
  * answers in the chat itself. The chat then shows "Eva is replying in a
  * thread" (or "has a question") with the root's first words instead of a
