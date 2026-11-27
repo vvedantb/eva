@@ -25,6 +25,7 @@ import {
   repoEventValidator,
   STALE_EVENT_RUN_MS,
   STALE_WAITING_RUN_MS,
+  triggerHasEvent,
   triggerMatchesEvent,
   prEventHeadSha,
   type RepoEvent,
@@ -255,8 +256,7 @@ export const receiveAlert = internalMutation({
     const id = ctx.db.normalizeId("automations", automationId);
     const stored = id === null ? null : await ctx.db.get(id);
     if (stored === null || stored.deletedAt !== undefined) return "not_found";
-    const trigger = automationTrigger(stored);
-    if (trigger.kind !== "event" || trigger.event !== "production_alert") {
+    if (!triggerHasEvent(automationTrigger(stored), "production_alert")) {
       return "not_found";
     }
     // Both sides are SHA-256 hex of the secret, so comparing them leaks
@@ -499,8 +499,9 @@ export const noteCiPassed = internalMutation({
         )
         .collect();
       for (const automation of automations) {
-        const trigger = automationTrigger(automation);
-        if (trigger.kind !== "event" || trigger.event !== "ci_failed") continue;
+        if (!triggerHasEvent(automationTrigger(automation), "ci_failed")) {
+          continue;
+        }
         const runs = await runsForTarget(ctx.db, automation._id, passed.prUrl);
         if (countCiAttempts(runs) === 0) continue;
         automationIds.push(automation._id);

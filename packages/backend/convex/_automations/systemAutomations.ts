@@ -1,5 +1,6 @@
 import type { Doc } from "../_generated/dataModel";
 import type { AutomationTrigger } from "../_automationEvents/events";
+import { normalizeTrigger } from "../_automationEvents/labels";
 import {
   ALERT_TO_TASK_PROMPT,
   CI_AUTOFIX_PROMPT,
@@ -145,7 +146,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "ci_failed" },
+    trigger: { kind: "event", events: ["ci_failed"] },
     action: "route_to_pr_chat",
   },
   {
@@ -157,7 +158,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "pr_feedback" },
+    trigger: { kind: "event", events: ["pr_feedback"] },
     action: "route_to_pr_chat",
   },
   {
@@ -169,7 +170,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "issue_labeled" },
+    trigger: { kind: "event", events: ["issue_labeled"] },
     action: "create_task",
   },
   {
@@ -181,7 +182,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "production_alert" },
+    trigger: { kind: "event", events: ["production_alert"] },
     action: "create_task",
   },
   {
@@ -211,8 +212,9 @@ export function automationTrigger(
 ): AutomationTrigger {
   const entry =
     doc.systemKey === undefined ? undefined : getSystemAutomation(doc.systemKey);
-  if (!entry) return doc.trigger ?? CRON;
-  return overlayTrigger(entry.trigger, doc.trigger);
+  const stored = doc.trigger === undefined ? undefined : normalizeTrigger(doc.trigger);
+  if (!entry) return stored ?? CRON;
+  return overlayTrigger(entry.trigger, stored);
 }
 
 /**
@@ -256,7 +258,10 @@ export function resolveAutomationDoc(
     description: entry.description,
     readOnly: entry.readOnly,
     actionsEnabled: entry.actionsEnabled,
-    trigger: overlayTrigger(entry.trigger, doc.trigger),
+    trigger: overlayTrigger(
+      entry.trigger,
+      doc.trigger === undefined ? undefined : normalizeTrigger(doc.trigger),
+    ),
   };
 }
 

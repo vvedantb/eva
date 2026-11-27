@@ -22,6 +22,11 @@ import {
   getSystemAutomation,
   resolveAutomationDoc,
 } from "./systemAutomations";
+import {
+  USER_REPO_EVENTS,
+  type AutomationTrigger,
+  type RepoEventKind,
+} from "../_automationEvents/labels";
 
 /** Return validator for a full automation document. */
 const automationDoc = v.object({
@@ -136,6 +141,24 @@ export const create = authMutation({
   },
 });
 
+function sameEvents(
+  a: ReadonlyArray<RepoEventKind>,
+  b: ReadonlyArray<RepoEventKind>,
+): boolean {
+  return a.length === b.length && a.every((event) => b.includes(event));
+}
+
+/** A user automation needs at least one event, all of them user-pickable. */
+function assertUserTrigger(trigger: AutomationTrigger): void {
+  if (trigger.kind !== "event") return;
+  if (trigger.events.length === 0) {
+    throw new Error("Switch on at least one event");
+  }
+  if (!trigger.events.every((event) => USER_REPO_EVENTS.includes(event))) {
+    throw new Error("That event is only for Eva's built-in automations");
+  }
+}
+
 /** Updates automation fields and syncs the cron schedule (re-registers or deletes as needed). */
 export const update = authMutation({
   args: {
@@ -190,10 +213,12 @@ export const update = authMutation({
           catalogTrigger.kind !== args.trigger.kind ||
           (catalogTrigger.kind === "event" &&
             args.trigger.kind === "event" &&
-            catalogTrigger.event !== args.trigger.event))
+            !sameEvents(catalogTrigger.events, args.trigger.events)))
       ) {
         throw new Error("A system automation's trigger is managed by eva");
       }
+    } else if (args.trigger !== undefined) {
+      assertUserTrigger(args.trigger);
     }
 
     // The changelog automation itself may keep (re-save) its own title.
