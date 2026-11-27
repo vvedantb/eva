@@ -476,7 +476,7 @@ export default function ChatScreen() {
             <>
               {recap && visible.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <RecapCard kind={recap.kind} text={recap.text} onDismiss={dismissRecap} />
+                  <RecapCard kind={recap.kind} since={recap.since} text={recap.text} onDismiss={dismissRecap} />
                 </View>
               ) : null}
               {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}

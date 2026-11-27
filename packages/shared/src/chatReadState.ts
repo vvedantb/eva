@@ -2,6 +2,7 @@ import { api } from "@eva/backend";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
+import dayjs from "./utils/dates";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
 // The open chat's read state, web and phone: it marks the chat read while it
@@ -182,8 +183,11 @@ export function useChatRecap({
   return { recap, dismiss };
 }
 
-/** The recap card's title for each kind. */
-export const RECAP_TITLE: Record<"away" | "full", string> = {
-  away: "Since you've been gone",
-  full: "Recap",
-};
+/**
+ * The recap card's title. An "away" recap says when the absence began
+ * ("Since you left 3 hours ago", "Since you left a week ago"); `since` is the
+ * last time the user saw the chat.
+ */
+export function recapTitle(kind: "away" | "full", since: number): string {
+  return kind === "away" ? `Since you left ${dayjs(since).fromNow()}` : "Recap";
+}

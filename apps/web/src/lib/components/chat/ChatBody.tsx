@@ -670,6 +670,7 @@ function ChatBodyInner({
     recap && repo && displayMessages.length > 0 ? (
       <ChatRecapCard
         kind={recap.kind}
+        since={recap.since}
         text={recap.text}
         repo={repo}
         onDismiss={dismissRecap}

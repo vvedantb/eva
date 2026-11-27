@@ -1,4 +1,4 @@
-import { RECAP_TITLE } from "@eva/shared/chatReadState";
+import { recapTitle } from "@eva/shared/chatReadState";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconX } from "@tabler/icons-react-native";
 import { Shimmer } from "@vvedantb/native-ui/ai";
@@ -12,13 +12,24 @@ import { useScheme } from "@/ui/theme";
  * "Recap" from Recap chat. Only this user sees it. The goal banner's surface: `bg-muted`,
  * radius 16. The × has a 44 point target.
  */
-export function RecapCard({ kind, text, onDismiss }: { kind: "away" | "full"; text: string | undefined; onDismiss: () => void }) {
+export function RecapCard({
+  kind,
+  since,
+  text,
+  onDismiss,
+}: {
+  kind: "away" | "full";
+  /** When the absence began (ms); only an "away" title shows it. */
+  since: number;
+  text: string | undefined;
+  onDismiss: () => void;
+}) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View className="gap-2 rounded-2xl p-3" style={{ backgroundColor: theme.muted }}>
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 font-instrument-sans-medium text-sm" style={{ fontWeight: "500", color: theme.foreground }}>
-          {RECAP_TITLE[kind]}
+          {recapTitle(kind, since)}
         </Text>
         <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
           Visible only to you
