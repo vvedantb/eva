@@ -5607,7 +5607,11 @@ async function attachChatMediaIfAny(uploaded, target2) {
   if (uploaded.length === 0) return;
   const mediaArgs = {
     parentId: ENTITY_ID ?? "",
-    mediaStorageIds: uploaded.map((item) => item.storageId)
+    mediaStorageIds: uploaded.map((item) => item.storageId),
+    // Chat captions each capture with its file name.
+    mediaNames: Object.fromEntries(
+      uploaded.map((item) => [item.storageId, item.fileName])
+    )
   };
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
   if (target2.turnId) mediaArgs.turnId = target2.turnId;

@@ -114,13 +114,20 @@ describe("message attachments and agent media", () => {
     expect(
       splitAgentMedia([
         { url: "https://a.test/r.mp4", contentType: "video/mp4" },
-        { url: "https://a.test/s.png", contentType: "image/png" },
+        {
+          url: "https://a.test/s.png",
+          contentType: "image/png",
+          name: "empty-box_page.png",
+        },
         { url: null, contentType: "image/png" },
-        { url: "https://a.test/u", contentType: null },
+        { url: "https://a.test/u", contentType: null, name: ".png" },
       ]),
     ).toEqual({
-      videos: ["https://a.test/r.mp4"],
-      images: ["https://a.test/s.png", "https://a.test/u"],
+      videos: [{ url: "https://a.test/r.mp4", caption: null }],
+      images: [
+        { url: "https://a.test/s.png", caption: "Empty box page" },
+        { url: "https://a.test/u", caption: null },
+      ],
     });
   });
 });

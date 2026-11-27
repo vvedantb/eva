@@ -662,6 +662,10 @@ async function attachChatMediaIfAny(
   const mediaArgs: JsonObject = {
     parentId: ENTITY_ID ?? "",
     mediaStorageIds: uploaded.map((item) => item.storageId),
+    // Chat captions each capture with its file name.
+    mediaNames: Object.fromEntries(
+      uploaded.map((item) => [item.storageId, item.fileName]),
+    ),
   };
   if (target.messageId) mediaArgs.messageId = target.messageId;
   if (target.turnId) mediaArgs.turnId = target.turnId;

@@ -429,6 +429,7 @@ export {
   messageAttachments,
   normalizeContentType,
   splitAgentMedia,
+  type AgentMediaItem,
   type AttachmentFileKind,
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
