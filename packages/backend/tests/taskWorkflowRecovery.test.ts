@@ -20,7 +20,6 @@ test("isSandboxNetworkIssue requires sandbox/snapshot marker plus network/status
 });
 
 test("isSandboxNetworkIssue ignores sandbox exec failures and base-branch fetch", () => {
-  // Agent command failures must not trigger infrastructure auto-retry.
   expect(isSandboxNetworkIssue("sandbox exec failed: command not found")).toBe(
     false,
   );

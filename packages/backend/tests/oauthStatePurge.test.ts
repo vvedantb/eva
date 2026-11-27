@@ -4,15 +4,7 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The OAuth state purge crons (2026-10-26) read `by_expires_at` with a range
- * instead of scanning with `.filter`. A flipped bound would delete the nonce
- * of every login still in flight, so the callback fails with "state expired".
- * Behavioural (convex-test): only the real index range shows which rows go.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const MINUTE_MS = 60_000;
 

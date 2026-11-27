@@ -24,16 +24,9 @@ import { defineTool, type EvaTool } from "../convex/mcp/registry";
 import { toolJsonResult } from "@vvedantb/server";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A project's coordinator and its child tasks (plan step 3 and 6.6): the ask
- * rules, the coordinator's automatic turns (idempotent, capped each hour), and
- * which MCP tools each side may use.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-coordinator";
 
-// Answers start task runs (workflows); keep their steps from running.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -112,22 +105,17 @@ describe("a child task's ask", () => {
     async () => {
       const f = await fixture();
       await ask(f, f.a, "Which API version?");
-      // Rule 5: one open ask for each task.
       await expect(ask(f, f.a, "And another?")).rejects.toThrow(
         /already has an open question/,
       );
-      // Rule 2: an ask wakes the coordinator, keyed by the ask.
       const [wake] = await wakes(f);
       expect(wake?.reason).toBe("ask");
       expect(wake?.text).toContain("Which API version?");
 
-      // Rule 1: the task stays in progress and waits for its coordinator.
       const waiting = await factsOf(f, f.a);
       expect(waiting?.status).toBe("in_progress");
       expect(waiting?.openAsk).toBe("coordinator");
 
-      // The coordinator had a turn after the ask and did not answer: a person
-      // must answer now.
       await f.t.run(async (ctx) => {
         await ctx.db.insert("sessions", {
           repoId: f.repoId,
@@ -156,7 +144,6 @@ describe("a child task's ask", () => {
         if (!task) throw new Error("task missing");
         return (await ensureTaskChat(ctx, task)).chat._id;
       });
-      // Rule 4: a person answers in the task chat.
       await f.asUser.mutation(api._sessions.execution.enqueueMessage, {
         chatId,
         message: "Use v2.",
@@ -165,7 +152,6 @@ describe("a child task's ask", () => {
       const [answered] = await reports(f);
       expect(answered?.state).toBe("answered");
       expect(answered?.answeredBy).toBe(f.userId);
-      // The answer starts the task's next run with the answer in its prompt.
       const run = await f.t.run((ctx) =>
         ctx.db
           .query("agentRuns")
@@ -174,7 +160,6 @@ describe("a child task's ask", () => {
       );
       expect(run?.note).toContain("Use v2.");
 
-      // The coordinator's answer arrives late: not sent, no second run.
       const outcome = await f.t.mutation(
         internal._projects.reports.answerAskAsCoordinator,
         {
@@ -206,7 +191,6 @@ describe("a child task's ask", () => {
         { taskId: f.b, projectId: f.projectId, userId: f.userId, message: "Also…" },
       );
       expect(again).toBe("none");
-      // Another project's coordinator cannot answer this task.
       const otherProject = await f.t.run((ctx) =>
         ctx.db.insert("projects", {
           repoId: f.repoId,
@@ -278,8 +262,6 @@ describe("a run that ended on its ask", () => {
         const leased = await ctx.db.get(turnId);
         return { runId, turnId, leaseGeneration: leased?.leaseGeneration ?? 0 };
       });
-      // The agent asks during the run, then stops without a commit: the
-      // commit gate reports a failure.
       await ask(f, f.a, "Which API version?");
       const sent = vi
         .spyOn(workflowManager, "sendEvent")
@@ -303,7 +285,6 @@ describe("a run that ended on its ask", () => {
       } finally {
         sent.mockRestore();
       }
-      // The workflow then completes the run as it does any success.
       await f.t.mutation(internal.taskWorkflow.completeRun, {
         runId,
         taskId: f.a,
@@ -324,11 +305,8 @@ describe("a run that ended on its ask", () => {
       expect(waiting.halted).toBeUndefined();
       expect(waiting.openAsk).toBe("coordinator");
       expect(projectTaskNeedsYou(waiting)).toBeUndefined();
-      // Only the ask woke the coordinator: no "failed" wake-up.
       expect((await wakes(f)).map((wake) => wake.reason)).toEqual(["ask"]);
 
-      // A person stops the waiting task: the ask closes and the task halts
-      // as stopped, so the scheduler does not restart it.
       await f.asUser.mutation(api.sessions.stopChatTurn, {
         target: { taskId: f.a },
       });
@@ -553,7 +531,6 @@ describe("project tool rules", () => {
         projectId: f.projectId,
         taskId: f.a,
       });
-      // A task run's token names the task itself.
       const runOwner = await resolve({ entityKind: "task", entityId: f.b });
       expect(projectCallerOf(runOwner ?? undefined)).toEqual({
         role: "child",

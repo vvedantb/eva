@@ -1,16 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 
-/**
- * Every case below is a title format the Convex backend actually writes, so a
- * change to one of those strings should break this file rather than quietly
- * push the boilerplate back onto line one of the inbox row.
- *
- * Sources: `githubWebhook.ts` (PR merged/closed), `_agentRuns/mutations.ts` and
- * `_taskWorkflow/runLifecycle.ts` (run outcomes), `_agentTasks/mutations.ts`
- * (assignment, completion, status moves), `taskComments.ts` / `docComments.ts`
- * (comments, mentions, replies).
- */
 describe("splitNotificationTitle", () => {
   test("lifts a quoted subject out and keeps both halves of the event", () => {
     expect(

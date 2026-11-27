@@ -32,7 +32,6 @@ export function useActionResult<T>(
     result: { status: "error", message: cause.message || fallback },
   });
 
-  // An effect because an action read has no query to subscribe to: one read per key.
   useEffect(() => {
     if (key === null) return;
     let live = true;
@@ -47,7 +46,6 @@ export function useActionResult<T>(
     return () => {
       live = false;
     };
-    // `key` names every input of `load`, which is a new closure each render.
     // oxlint-disable-next-line react/exhaustive-deps
   }, [key]);
 

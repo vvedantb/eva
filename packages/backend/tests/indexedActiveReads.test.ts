@@ -4,14 +4,7 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Bandwidth fix a1146b42 moved the sandbox sweeps from full scans plus a
- * filter onto status indexes. The failure mode is silent: a sweep that misses
- * a live sandbox leaks a VM.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|indexed-active-reads";
 

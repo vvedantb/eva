@@ -52,14 +52,11 @@ test("pg client refuses blocked hosts before any TCP connect", async () => {
     "postgresql://u:p@127.0.0.1:5432/db",
     "postgresql://u:p@localhost:5432/db",
     "postgresql://u:p@169.254.169.254:5432/db",
-    // pg lets a ?host= query param override the URL host.
     "postgresql://u:p@example.com:5432/db?host=10.0.0.1",
-    // Unix socket path.
     "postgresql://u:p@%2Fvar%2Frun%2Fpostgresql/db",
   ]) {
     expect(await connectError(url), url).toMatch(/not allowed/);
   }
-  // pg passes "[::1]" with brackets, so DNS fails closed.
   expect(await connectError("postgresql://u:p@[::1]:5432/db")).toMatch(
     /ENOTFOUND/,
   );

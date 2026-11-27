@@ -4,17 +4,7 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Manager Ave's run state machine (`_ave/threads.ts`, `_ave/run.ts`). One run
- * per thread; arrivals mid-run collapse into one rerun; every run write is
- * fenced on `runId` so a cancelled, reset or reclaimed run lands nowhere.
- * Scheduled runs are never executed here — only the state they are fenced on.
- */
 
-
-// Only `setTimeout` is faked, so the zero-delay run and watchdog convex-test
-// schedules never fire: the model call cannot succeed here, and its failure
-// path would overwrite the state under test.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -227,9 +217,7 @@ describe("wake-ups and watches", () => {
       expect(notification?.content).toContain(
         '[agent-notification] session "Fix the login bug" (vvedantb/eva) finished: completed',
       );
-      // Ave was already running, so the wake-up folds into one rerun.
       expect((await liveThread(f))?.rerunRequested).toBe(true);
-      // One-shot: the user's later turns in that chat do not wake Ave.
       const session = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
       expect(session?.watchedByAve).toBeUndefined();
     },
@@ -280,7 +268,6 @@ describe("wake-ups and watches", () => {
         child: { kind: "session", sessionId: f.sessionId, chatId: sideChatId },
         status: "completed",
       });
-      // The watch is one-shot, so re-arm it as Ave's next send would.
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
         sessionId: f.sessionId,
         aveThreadId: thread._id,
@@ -292,7 +279,6 @@ describe("wake-ups and watches", () => {
       const notifications = (await rows(f))
         .filter((r) => r.orchestratorNotification === true)
         .map((r) => r.content.split("\n\n")[1]);
-      // Without a chat id (sandbox-start failure) the Main chat is read.
       expect(notifications).toEqual(["Side chat fixed the bug.", "Main reply."]);
     },
     TIMEOUT_MS,
@@ -354,11 +340,9 @@ describe("wake-ups and watches", () => {
         (await rows(f)).filter((r) => r.orchestratorNotification === true)
           .length;
       await turnEnds();
-      // The user keeps chatting in that session: each turn end used to wake Ave.
       await turnEnds();
       await turnEnds();
       expect(await wakeUps()).toBe(1);
-      // Ave's next send re-arms the watch, so the following turn end wakes it.
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
         sessionId: f.sessionId,
         aveThreadId: thread._id,

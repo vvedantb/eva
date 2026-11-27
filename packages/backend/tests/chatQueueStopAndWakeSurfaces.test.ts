@@ -4,12 +4,7 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A session stop that settles (or fails) re-offers the chat queue.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 async function fixture() {
@@ -45,7 +40,6 @@ function scheduledDrains(t: TestConvex) {
 }
 
 describe("a stop that settles re-offers the queue", () => {
-  // Keeps scheduled drains from firing after the test finishes.
   beforeEach(() => {
     vi.useFakeTimers();
   });

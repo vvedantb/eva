@@ -45,7 +45,6 @@ describe("buildChangelogEmailHtml", () => {
   const html = buildChangelogEmailHtml({
     appUrl: "https://app.example.com/",
     changelog,
-    // Monday 19 Oct 2026, so the email covers 12–18 Oct (ISO week 42).
     publishedAt: Date.UTC(2026, 9, 19, 3),
     feedbackUrl: (f) =>
       `https://site.example/vote?vote=${f.vote}${"itemIndex" in f ? `&item=${f.itemIndex}` : ""}`,

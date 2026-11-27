@@ -20,7 +20,6 @@ describe("publishErrorNeedsForcePush", () => {
   test("matches the rewritten-branch refusal, including the workflow's prefixed form", () => {
     const raw = rewrittenBranchPublishError("feature/x");
     expect(publishErrorNeedsForcePush(raw)).toBe(true);
-    // sessionWorkflow prefixes the git error before storing it as errorDetail.
     expect(
       publishErrorNeedsForcePush(
         `Session completed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${raw}`,
@@ -65,15 +64,12 @@ describe("rewrittenBranchIsOwnHistory", () => {
   const foreignTip = "c".repeat(40);
 
   test("the remote tip the local branch once pointed at is the sandbox's own history", () => {
-    // reflog show --format=%H lists the newest entry first.
     expect(
       rewrittenBranchIsOwnHistory(`${oldTip}\n`, [rewrittenTip, oldTip]),
     ).toBe(true);
   });
 
   test("a remote tip the branch never held was pushed by someone else, however much it changed", () => {
-    // Quick task 220: 118 commits and 532 files landed on GitHub that the
-    // sandbox never fetched. That is concurrent work to merge, not a rewrite.
     expect(
       rewrittenBranchIsOwnHistory(foreignTip, [rewrittenTip, oldTip]),
     ).toBe(false);

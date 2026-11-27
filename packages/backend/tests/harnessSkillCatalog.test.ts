@@ -17,7 +17,6 @@ function command(
 
 describe("filterHarnessCommands", () => {
   it("keeps prompt skills the CLI adds without a code change here", () => {
-    // Denylist, not allowlist: a name nobody has heard of still lands.
     expect(
       filterHarnessCommands([command("loop"), command("brand-new-skill")]).map(
         (skill) => skill.name,
@@ -52,12 +51,10 @@ describe("filterHarnessCommands", () => {
   });
 
   it("rejects names that would break the chip token grammar", () => {
-    // 24 chars fits `evabuiltinskill_` + name in the 40-char id cap; 25 does not.
     expect(
       filterHarnessCommands([command("a".repeat(24))]).map((s) => s.name),
     ).toEqual(["a".repeat(24)]);
     expect(filterHarnessCommands([command("a".repeat(25))])).toEqual([]);
-    // Only lowercase letters, digits and dashes, starting with a letter.
     expect(filterHarnessCommands([command("Review")])).toEqual([]);
     expect(filterHarnessCommands([command("2fast")])).toEqual([]);
     expect(filterHarnessCommands([command("some_skill")])).toEqual([]);

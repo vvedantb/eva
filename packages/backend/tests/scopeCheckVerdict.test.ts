@@ -207,7 +207,6 @@ describe("summariseScopeCheck", () => {
       unrequestedProbability: 0.9,
       judged: [hunk(0.05, 0.1)],
     });
-    // Absent must not read as "the reply stayed silent" — nobody asked.
     expect(verdict.flagged[0].mentioned).toBeUndefined();
     expect("mentioned" in verdict.flagged[0]).toBe(false);
   });
@@ -299,14 +298,12 @@ describe("buildOverallDiff", () => {
     const result = buildOverallDiff(hunks);
     expect(result.clipped).toBe(true);
     expect(result.text.length).toBeLessThanOrEqual(MAX_OVERALL_DIFF_CHARS);
-    // Every surviving line is whole: no line was cut through the middle.
     for (const line of result.text.split("\n")) {
       expect([body, header, "--- src/a.ts"]).toContain(line);
     }
   });
 
   it("keeps a standard-size diff on Jev's default context", () => {
-    // 41k answered, 77k failed repeatably at the default ~32k tokens.
     expect(STANDARD_DIFF_CHARS).toBeLessThanOrEqual(41_000);
     const small = buildOverallDiff([
       diffHunk("src/a.ts", "@@ -1 +1 @@", "+one"),
@@ -325,7 +322,6 @@ describe("buildOverallDiff", () => {
   });
 
   it("keeps the long-context budget inside the long-state schema cap", () => {
-    // The prompt and JSON escaping ride on top of the diff text.
     expect(MAX_OVERALL_DIFF_CHARS * 1.5).toBeLessThanOrEqual(
       MAX_LONG_STATE_CHARS,
     );

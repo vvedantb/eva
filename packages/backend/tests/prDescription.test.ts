@@ -96,7 +96,6 @@ test("buildPrDescriptionPrompt asks for the template sections and forbids invent
     truncated: true,
   });
 
-  // Order matters: reviewers stop early, so evidence comes before details.
   const headings = ["Why", "Scope", "Verification", "Tradeoffs", "Blast radius", "ELI5"];
   const positions = headings.map((heading) => prompt.indexOf(`### ${heading}`));
   expect(positions.every((position) => position >= 0)).toBe(true);
@@ -122,11 +121,6 @@ test("buildPrDescriptionPrompt omits the intent block when there is none", () =>
   expect(prompt).not.toContain("truncated");
 });
 
-/**
- * The only unrequested-change check a quick task run gets: a run stamps no turn
- * diff, so the scope chip never judges it. This reader has the diff and the
- * task description together, which is what the run's own summary does not.
- */
 test("buildPrDescriptionPrompt leads Scope on unrequested visible changes", () => {
   const prompt = buildPrDescriptionPrompt({
     prTitle: "Eva: tabs",
@@ -139,10 +133,8 @@ test("buildPrDescriptionPrompt leads Scope on unrequested visible changes", () =
   });
 
   expect(prompt).toContain("Visible changes the Intent did not ask for");
-  // The concrete examples matter: "anything unrequested" reads as boilerplate.
   for (const cue of ["icon", "colour", "copy or labels", "Lead with these"]) {
     expect(prompt).toContain(cue);
   }
-  // Nothing to judge against without an Intent, so it must not guess.
   expect(prompt).toContain("when no Intent is given, skip (1)");
 });

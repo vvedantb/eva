@@ -16,7 +16,6 @@ type Call =
   | { port: "start"; args: SandboxTurnStartArgs }
   | { port: "enqueue"; args: SandboxTurnEnqueueArgs };
 
-/** Ports that record each call and settle only when the test says so. */
 function deferredPorts() {
   const calls: Call[] = [];
   const settles: Array<(error?: Error) => void> = [];
@@ -88,8 +87,6 @@ describe("sendSandboxTurn", () => {
       { message: "hello" },
       "start",
     );
-    // Both are in flight at once: the optimistic turn-open must apply before
-    // the user row round-trips.
     expect(calls.map((call) => call.port)).toEqual(["add", "start"]);
     settleAll();
     await sent;

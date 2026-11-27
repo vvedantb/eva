@@ -16,7 +16,6 @@ test("interactive Claude, Codex and Cursor models use persistent chat daemons", 
   expect(usesChatDaemon("claude:sonnet")).toBe(true);
   expect(usesChatDaemon("codex:gpt-5.6-sol")).toBe(true);
   expect(usesChatDaemon("cursor:gpt-6-astra")).toBe(true);
-  // Opencode has no warm daemon: its turns still push the prompt at launch.
   expect(usesChatDaemon("opencode:openai/gpt-6-astra")).toBe(false);
 });
 
@@ -72,7 +71,6 @@ test("Fast and 1M modes are opt-in", () => {
 });
 
 test("normalizeAIModel maps legacy cursor:composer-2 to composer-2.5", () => {
-  // Existing sessions stored composer-2; without this they fail to load.
   expect(normalizeAIModel("cursor:composer-2")).toBe("cursor:composer-2.5");
   expect(normalizeAIModel("cursor:composer-2.5")).toBe("cursor:composer-2.5");
 });
@@ -90,8 +88,6 @@ test("normalizeAIModel remaps retired cursor model ids", () => {
 });
 
 test("normalizeAIModel collapses reasoning-suffixed cursor ids to base models", () => {
-  // Effort moved to the traits menu with the SDK migration; suffixed ids are
-  // legacy persisted values.
   expect(normalizeAIModel("cursor:grok-4.7")).toBe("cursor:grok-4.7");
   expect(normalizeAIModel("cursor:grok-4.6")).toBe("cursor:grok-4.6");
   expect(normalizeAIModel("cursor:grok-4.6-low")).toBe("cursor:grok-4.6");
@@ -192,8 +188,6 @@ test("storedTraitsFromRepoDefaults maps repo config fields", () => {
   });
 });
 
-// The old `switch` rejected a repeated case at compile time; the alias Map
-// would let the last entry win silently, so pin uniqueness here.
 test("every model alias is listed once", () => {
   const aliases = AI_MODEL_ALIASES.flatMap(([, list]) => list);
   const repeated = aliases.filter((alias, i) => aliases.indexOf(alias) !== i);

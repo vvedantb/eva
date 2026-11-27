@@ -153,61 +153,23 @@ interface InlineCard {
 }
 
 interface ChatBodyProps {
-  /**
-   * The codebase this chat belongs to. Absent for Manager Ave, which has none:
-   * skills, the prompt stash and repo mentions switch off.
-   */
   repo?: ChatRepo;
-  /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
-  /**
-   * The same chat, typed as the id its messages hang off. Used to load the
-   * agent-composed UI panels (`render_ui`) and HTML pages (`render_html`)
-   * that belong to this transcript.
-   * Absent (Manager Ave): no panels are loaded.
-   */
   chatParentId?: ChatParentId;
-  /**
-   * Cached session shells stay mounted but hidden. False stops mark-read and
-   * the "NEW" divider anchor, so a hidden chat never clears its own dot.
-   */
   isRouteActive?: boolean;
   messages: ChatBodyMessage[];
-  /**
-   * True while the transcript query is still in flight. Panels collapse Convex's
-   * `undefined` into `[]`, so without this the empty state flashes before the
-   * turns arrive.
-   */
   isLoadingMessages?: boolean;
-  /**
-   * More history sits above `messages` (`useOlderTranscript`). Absent (Manager
-   * Ave): `messages` is the whole chat.
-   */
   hasOlderHistory?: boolean;
-  /** Loads the next step of older history. Must keep its identity. */
   onLoadOlderHistory?: () => void;
-  /**
-   * Loads older history until a row, or the whole chat, is in `messages`.
-   * Must keep its identity: rows receive it through the fork action.
-   */
   onReachHistory?: (target: TranscriptReach) => void;
-  /** A `onReachHistory` target is still loading (or still being searched). */
   isReachingHistory?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
-  /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
   queueLabel?: string;
-  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
   heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
-  /**
-   * A blocking AskUserQuestion awaiting the user (Agent SDK `canUseTool`). When
-   * set, its interactive card replaces the fire-and-forget `streamingPendingQuestion`
-   * path and the turn stays executing until {@link onAnswerBlockingQuestion} runs.
-   */
   blockingQuestion?: { toolUseId: string; payload: string };
-  /** Submits a structured answer for {@link blockingQuestion}, resuming the turn. */
   onAnswerBlockingQuestion?: (
     toolUseId: string,
     answers: Record<string, string>,
@@ -217,101 +179,39 @@ interface ChatBodyProps {
   isArchived?: boolean;
   placeholder: string;
   emptyStateTitle: string;
-  /**
-   * Second line of the empty state. Always passed explicitly by the panels —
-   * the library's default ("Start a conversation to see messages here")
-   * contradicts a chat whose sandbox is asleep.
-   */
   emptyStateDescription?: string;
-  /**
-   * Why the composer will not send, shown when the user presses Enter on a
-   * disabled composer instead of swallowing the keystroke.
-   */
   disabledReason?: string;
-  /**
-   * Wakes the sandbox. Set only when it is stopped and not already toggling;
-   * gives the empty state its button. Sending also wakes it (the message
-   * queues until Eva is up), so this is the explicit alternative.
-   */
   onStartSandbox?: () => void;
-  /** Model, account and trait controls. Absent: no picker (fixed model). */
   modelPicker?: ChatModelPicker;
-  /**
-   * Called with the tokenized content and any uploaded image attachment storage
-   * ids. Caller decides whether to send or enqueue.
-   */
   onSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
     options?: ChatSendOptions,
   ) => Promise<void>;
   onCancel: () => Promise<void>;
-  /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
-  /** Status chips (background agents, processes) on the skill suggestions' row. */
   composerChips?: React.ReactNode;
-  /**
-   * Live block at the end of the transcript (session sandbox startup). Takes
-   * the empty state's place when there are no messages yet.
-   */
   transcriptTail?: React.ReactNode;
-  /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
   underCardLeading?: React.ReactNode;
-  /**
-   * Draft seed to restore. When provided, the PromptInputProvider is seeded
-   * with the stored draft text and mention maps, and a ChatDraftSync child
-   * saves keystrokes back to Convex.
-   *
-   * IMPORTANT: only pass this once the draft query has resolved — the provider
-   * reads initialInput only at mount, so it must not mount before the data is
-   * available. Use `isDraftLoading` to render a placeholder while waiting.
-   */
   draft?: ChatDraftSeed;
-  /** localStorage-backed draft, for chats with no Convex draft row (Ave). */
   localDraft?: LocalChatDraft;
-  /**
-   * When true, renders a disabled placeholder in place of the real input while
-   * the draft query is in flight. This prevents the PromptInputProvider from
-   * mounting with an empty initial value before the persisted draft is known.
-   */
   isDraftLoading?: boolean;
-  /**
-   * When provided, file chips in assistant activity blocks become clickable and
-   * call this with the file's full path (sessions wire this to the File Viewer
-   * tab). Pass a stable callback — the activity renderer is memoised.
-   */
   onOpenFile?: (path: string) => void;
-  /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
   onViewDiff?: (repoRelativePath?: string) => void;
-  /** True when ephemeral diff review comments are queued for the next send. */
   hasPendingContext?: boolean;
-  /**
-   * Opens the Agents sandbox tab. Only sessions have one, so leaving this unset
-   * hides the sub-agent CTA row under assistant turns.
-   */
   onOpenAgentsTab?: () => void;
-  /** Entity-wide sub-agent lifecycle entries, for the CTA row's live status. */
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
-  /** False lets stranded "running" sub-agents read as stale, not live. */
   sandboxRunning?: boolean;
-  /** Sessions only: turn diff / restore actions on assistant messages. */
   turnCheckpoint?: TurnCheckpointContext;
   allowEmptySubmit?: boolean;
   afterMessage?: (messageId: string) => ReactNode;
-  /** Sessions: create a new chat from the transcript through this message. */
   onForkTranscript?: (input: {
     throughMessageId: string;
     title: string;
     prompt: string;
   }) => Promise<void>;
-  /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
   hideJumpRail?: boolean;
-  /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
-  /**
-   * Reply threads: opens a message's thread. Rows get the Reply action and the
-   * "N replies" row. Must keep its identity, like the fork handler.
-   */
   onOpenThread?: (messageId: string) => void;
 }
 
@@ -401,14 +301,6 @@ function ChatBodyInner({
       withSnapshots,
       sentWebMcp.map((item) => item.discovery),
     );
-    // Settlement is observed, not awaited: the composer only empties once this
-    // resolves, and holding the user's text on screen until the mutation
-    // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useChatSend's review comments: the pending context
-    // is consumed only once the send has actually succeeded, so a rejected send
-    // leaves the chips attached for the retry. And only the exact items that
-    // went into this prompt are dropped — `clear()` also threw away anything
-    // cited while the send was in flight, which was never sent.
     void onSend(withWebMcp, attachmentStorageIds, {
       draftContent: content,
     }).then(
@@ -418,11 +310,7 @@ function ChatBodyInner({
         for (const item of sentWebMcp) webmcp?.remove(item.id);
         for (const pr of sentPullRequests) pullRequests?.remove(pr.url);
       },
-      () => {
-        // The send handler already raised the failure toast (with the typed
-        // text behind "Restore draft"); the chips are all we own here, and they
-        // stay so the retry carries the same context.
-      },
+      () => {},
     );
   };
   const hasComposerContext =
@@ -431,41 +319,19 @@ function ChatBodyInner({
     (snapshots?.items.length ?? 0) > 0 ||
     (webmcp?.items.length ?? 0) > 0 ||
     (pullRequests?.items.length ?? 0) > 0;
-  // Sandbox start/stop/reconnect banners are always omitted. Simple view also
-  // hides remaining system alerts, diffs, and — since it has no Agents tab —
-  // the sub-agent CTA row. Quick task / project / session all render through
-  // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
-  // Experimental opt-in; off hides verdicts already stored on old turns too.
   const showScopeCheck =
     useQuery(api.auth.getExperimentalFlags)?.scopeCheck === true;
 
-  // Composer predictions read the chat only while it waits on the user and is
-  // on screen — hidden cached shells must not each spend a model call.
   const lastMessageId = messages.at(-1)?._id;
   const predictionTarget =
     chatParentId && isRouteActive && !isExecuting && lastMessageId
       ? { parentId: chatParentId, lastMessageId }
       : undefined;
 
-  // Opening a long chat used to commit every settled turn in one blocking
-  // render — ~1s of locked main thread on a heavy transcript. Only the last
-  // turn is ever in the viewport (ChatLastTurn pads it to `100cqh`), so the
-  // backlog above it renders one pass later, at transition priority.
-  //
-  // Deferring "the transcript has rows" rather than mount — a chat whose
-  // messages arrive after mount would otherwise have spent its deferred pass
-  // on the loading spinner and then commit the whole backlog in the render
-  // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
-  // Rows already there when the chat opens (or finishes loading) render in
-  // place; only rows that arrive later slide in. Fading the last turn in on
-  // every open read as a flicker. Deferred for the same reason as
-  // `backlogReady`: the render that first has rows still sees false.
   const rowsAnimateIn = useDeferredValue(!isLoadingMessages, false);
-  // Every user message, also those above the loaded history: the rail's
-  // ticks and up-arrow recall cover the whole chat. Reads only user rows.
   const userMessages = useHeldQuery(
     api.messages.listUserMessagesByParent,
     chatParentId && isRouteActive ? { parentId: chatParentId } : "skip",
@@ -484,8 +350,6 @@ function ChatBodyInner({
             > => ({ ...message, role: "user" }),
           )
       : [];
-  // Keyed on `displayMessages`, which keeps its identity while a turn streams,
-  // so the rail's observer is not rebuilt on every token.
   const jumpRailTicks = buildChatJumpRailTicks(
     [...unloadedUserMessages, ...displayMessages].map((message) => ({
       id: message._id,
@@ -495,35 +359,18 @@ function ChatBodyInner({
     })),
   );
 
-  // Streamed prose and the tool timeline arrive in the same Convex patch, but
-  // they cost wildly different amounts to render: the prose grows by a few
-  // characters, while the activity payload is a JSON blob capped at 600 KB
-  // that fans out into the timeline, the composer's todo badge, the sub-agent
-  // row and the question cards. Deferring the activity splits them across two
-  // passes — the text the user is reading commits at full priority, and the
-  // timeline re-renders at transition priority, where React can abandon a long
-  // render when the next token lands instead of holding the frame.
   const deferredStreamingActivity = useDeferredValue(streamingActivity);
 
   const lastMessage = displayMessages[displayMessages.length - 1];
-  // The oldest unfinished Working bubble owns the session-scoped streaming
-  // row — turns run FIFO, so a newer queued placeholder must not steal a
-  // still-streaming older turn's tokens (see findStreamingTargetMessage).
   const streamingTarget = findStreamingTargetMessage(displayMessages);
   const streamingTargetId = streamingTarget?._id;
-  // The coordinator chat spaces messages 20px, not 12: its hover toolbar
-  // sits on a bubble's top edge.
   const messageGap = assistantBubbles ? "gap-5" : "gap-3";
 
   const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
     string | null
   >(null);
-  // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
-  // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
   const [forkThroughId, setForkThroughId] = useState<string | null>(null);
-  // Built on the server while older history is not loaded: the prefix is
-  // every message up to the fork point.
   const serverForkPrefix = useQuery(
     api.messages.forkPrefixByParent,
     forkThroughId !== null && hasOlderHistory && chatParentId
@@ -542,14 +389,9 @@ function ChatBodyInner({
   const activePendingQuestion = questionDismissed
     ? null
     : parsePendingQuestion(pendingQuestionRaw);
-  // A blocking AskUserQuestion (Agent SDK) takes precedence over the
-  // fire-and-forget path: it keeps the turn paused until the user answers.
   const blockingQuestions = blockingQuestion
     ? parsePendingQuestion(blockingQuestion.payload)
     : null;
-  // Both question kinds render in the composer's slot, so the card stays put
-  // instead of scrolling with the conversation. Blocking wins: it holds the
-  // turn open and its answer resumes the run.
   const dockedQuestions = blockingQuestions ?? activePendingQuestion;
 
   const handleQuestionAnswer = async (answer: string) => {
@@ -557,8 +399,6 @@ function ChatBodyInner({
       setDismissedQuestionKey(pendingQuestionRaw);
     }
     setIsAnsweringQuestion(true);
-    // Reset is duplicated into the catch instead of using `finally`: React
-    // Compiler bails on the whole file when it meets a `finally` clause.
     try {
       await onSend(answer);
     } catch (error) {

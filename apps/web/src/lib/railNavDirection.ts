@@ -12,7 +12,6 @@
 export type NavDirection = "down" | "up";
 export type NavSource = "rail" | "nav";
 
-/** A click older than this did not start the navigation being transitioned. */
 const CLICK_WINDOW_MS = 1000;
 
 let pending: { source: NavSource; direction: NavDirection; at: number } | null =

@@ -6,17 +6,6 @@ import {
   resetStateForTests,
 } from "../runtime/state.js";
 
-/**
- * A blocking AskUserQuestion answers itself through `canUseTool`, so the SDK's
- * tool_result for it carries no text. Before the fix the empty-output guard in
- * `claudeToolCompleteResult` returned undefined for exactly that shape, the
- * parse emitted a bare `complete_tool`, and the options and the user's choice
- * never reached the step — the transcript kept only "Asked a question".
- *
- * These pin the provider end of that plumbing: the parked answers must ride out
- * on the completion result, exactly once, without changing what an ordinary
- * empty tool_result does.
- */
 
 afterEach(() => {
   resetStateForTests();
@@ -43,7 +32,6 @@ describe("claudeParseLine AskUserQuestion answers", () => {
         },
       },
     ]);
-    // Handed over, so a later result for the same id cannot re-attach them.
     expect(S.questionAnswers.has("toolu_q")).toBe(false);
   });
 

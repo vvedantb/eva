@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { sanitizeSeededApps } from "../convex/_repoSnapshots/sanitizeSeededApps";
 
 test("sanitizeSeededApps strips legacy warmupStatus from seeded app rows", () => {
-  // Older prod rows still carry warmup fields that break return validators.
   const sanitized = sanitizeSeededApps([
     {
       repoId: "mh7repo000000000000000001",

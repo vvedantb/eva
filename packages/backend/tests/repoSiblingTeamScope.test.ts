@@ -4,12 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Rows with the same GitHub owner/name are "siblings" (monorepo apps) that
- * share settings. A stranger's row for the same owner/name in another team
- * must not join the group, or the stranger could see the victim's apps.
- */
-
 const VICTIM = "clerk|sibling-victim";
 const STRANGER = "clerk|sibling-stranger";
 

@@ -3,8 +3,6 @@ import { z } from "zod";
 import { codeModeTools } from "../convex/_mcp/codeModeTools";
 import { defineTool } from "../convex/mcp/registry";
 
-// The QuickJS runtime itself (limits, deadline, OOM, call caps, error mapping)
-// is tested in @vvedantb/server. These tests cover Eva's wiring around it.
 describe("codeModeTools", () => {
   const readTool = defineTool({
     name: "list_widgets",

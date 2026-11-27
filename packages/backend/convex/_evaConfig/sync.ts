@@ -8,7 +8,6 @@ import { readFileAtRef } from "../_github/contents";
 import { EVA_CONFIG_PATH, EVA_MCP_PATH } from "./config";
 import { errorMessage } from "@vvedantb/server";
 
-/** `.eva/` files are small JSON; anything bigger is a mistake, not config. */
 const MAX_EVA_FILE_BYTES = 200_000;
 
 type GithubTarget = {
@@ -52,8 +51,6 @@ export const syncEvaConfig = internalAction({
       repoId: args.repoId,
     });
     if (!target) return null;
-    // Best-effort: a GitHub outage keeps the last synced cache instead of
-    // failing the caller (the snapshot build runs this as its first step).
     let files: [string | null, string | null];
     try {
       files = await Promise.all([

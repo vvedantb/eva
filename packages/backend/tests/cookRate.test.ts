@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 
-/** Mirrors getImpactStats cook-rate: done / (done + cancelled). */
 function cookRatePercent(done: number, cancelled: number): number {
   const tasksRan = done + cancelled;
   return tasksRan > 0 ? Math.round((done / tasksRan) * 100) : 0;

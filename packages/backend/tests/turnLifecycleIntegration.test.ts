@@ -50,7 +50,6 @@ async function createSessionFixture() {
       title: "Lifecycle test",
       status: "active",
     });
-    // A session's turn belongs to one of its chats.
     const chatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
@@ -123,7 +122,6 @@ describe("turn lifecycle integration", () => {
     expect(await claim()).toBe(1);
     expect(await renew(1)).toMatchObject({ status: "renewed" });
 
-    // A respawned daemon reclaims the same open turn.
     expect(await claim()).toBe(2);
 
     expect(await renew(1)).toEqual({
@@ -232,8 +230,6 @@ describe("turn lifecycle integration", () => {
 
     const stamped = await t.run(async (ctx) => await ctx.db.get(turnId));
     expect(stamped?.silentSince).toBeGreaterThan(0);
-    // A full lease was just written by the grace, so the renewal throttle
-    // would normally skip the write — the silent marker must override it.
     expect(stamped?.leaseExpiresAt).toBeGreaterThan(Date.now() + 60_000);
 
     const renewed = await t.run(async (ctx) => {
@@ -257,8 +253,6 @@ describe("turn lifecycle integration", () => {
       });
     });
 
-    // finalizeExpired schedules the one-shot stall retry; drain it inside the
-    // test so it never fires against a later test's database.
     vi.useFakeTimers();
     try {
       await t.mutation(internal.turns.finalizeExpired, {
@@ -279,12 +273,6 @@ describe("turn lifecycle integration", () => {
     expect(rows.placeholder?.content).toContain("Turn stalled");
   });
 
-  /**
-   * Grace is the only path that extends a lease without the daemon asking, so
-   * it is also the only one that could keep a wedged turn open forever. The
-   * `TURN_BACKSTOP_MS` backstop must win even while the probe still reports the process
-   * alive.
-   */
   test("grace closes a turn that passed the absolute backstop limit", async () => {
     const { t, turnId } = await createSessionFixture();
     await t.run(async (ctx) => {
@@ -302,15 +290,9 @@ describe("turn lifecycle integration", () => {
     expect(turn?.open).toBe(false);
     expect(turn?.state).toBe("error");
     expect(turn?.error).toBe(TURN_BACKSTOP_ERROR);
-    // No silent marker on a closed turn: nothing is waiting for it any more.
     expect(turn?.silentSince).toBeUndefined();
   });
 
-  /**
-   * The reconciler reads expired turns in a batch and mutates them one at a
-   * time; a daemon that renews in between must not be marked silent, or its
-   * next stall would start the 10-minute clock from a lie.
-   */
   test("graceExpired leaves a turn whose lease was renewed in the meantime", async () => {
     const { t, turnId } = await createSessionFixture();
     const before = await t.run(async (ctx) => {
@@ -329,11 +311,6 @@ describe("turn lifecycle integration", () => {
     expect(after?.open).toBe(true);
   });
 
-  /**
-   * `finalizeExpired` took a `sandboxStopped` boolean before the grace work
-   * split it into three causes. The user-visible alert is what tells a stopped
-   * VM apart from a dead agent process, so pin the mapping in both directions.
-   */
   test.each([
     {
       cause: "sandbox_stopped" as const,
@@ -397,8 +374,6 @@ describe("turn lifecycle integration", () => {
 });
 
 describe("a stale session chat turn torn down by the backstop", () => {
-  // Teardowns schedule the queue drain in its own mutation. Fake timers keep
-  // that job from firing after a test ends, against a closed database.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -406,7 +381,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
     vi.useRealTimers();
   });
 
-  /** Tears the fixture's turn down the way the `TURN_BACKSTOP_MS` backstop does. */
   async function tearDown(
     f: Awaited<ReturnType<typeof createSessionFixture>>,
     alertText: string,
@@ -428,8 +402,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
   }
 
   test("closes the turn it tears down", async () => {
-    // Both stall systems may fire; whichever is first must leave nothing for
-    // the other, or the chat gets a second stall alert.
     const f = await createSessionFixture();
     await tearDown(f, STALL_ALERT_TEXT);
     const turn = await f.t.run(async (ctx) => await ctx.db.get(f.turnId));
@@ -439,8 +411,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
   });
 
   test("keeps an open question and posts no alert", async () => {
-    // The question card renders only on the last message, so an alert after
-    // it would hide the question the user still has to answer.
     const f = await createSessionFixture();
     const payload = JSON.stringify({ questions: [{ question: "Which?" }] });
     await f.t.run(async (ctx) => {
@@ -466,8 +436,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
   });
 
   test("without a question still posts its alert", async () => {
-    // The question case skips the alert; that skip must not swallow the only
-    // sign a normal turn died.
     const f = await createSessionFixture();
     await f.t.run(async (ctx) => {
       await ctx.db.patch(f.placeholderMessageId, { content: "Working on it" });
@@ -530,8 +498,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
         ),
       ];
     });
-    // A task or project id is no chat: their chats are session chats. An
-    // interview turn lives on the project's session, never on the project.
     expect(kinds).toEqual([
       "sessionChat",
       null,
@@ -544,10 +510,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
   });
 });
 
-/**
- * Quick-task runs own a durable turn: the lease fences their heartbeats, and
- * the reconciler stops a stalled run through `cleanUpStaleRun`.
- */
 describe("quick-task run as a turn owner", () => {
   async function createRunTurnFixture() {
     const t = convexTest(schema, modules);
@@ -629,11 +591,6 @@ describe("quick-task run as a turn owner", () => {
   });
 });
 
-/**
- * Before parallel chats a session's chat turn was keyed by the session id. No
- * surface owns that id any more, so the watchdog must still close the turn, or
- * it stays open forever and fills `listExpired`'s batch.
- */
 describe("expired turns with no owning surface", () => {
   test("a lane-less turn keyed by a session id is closed", async () => {
     vi.useFakeTimers();
@@ -664,10 +621,6 @@ describe("expired turns with no owning surface", () => {
   });
 });
 
-/**
- * A one-shot agent on a chat row (the project interview) has a
- * lane, so its turn never reads as, or is superseded by, the chat's turn.
- */
 describe("lane turns stay apart from chat turns", () => {
   test("an interview turn is not the session's chat turn", async () => {
     const { t, sessionId, chatId } = await createSessionFixture();
@@ -690,7 +643,6 @@ describe("lane turns stay apart from chat turns", () => {
         hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
       };
     });
-    // Opening the lane turn did not supersede the chat turn.
     expect(result.chatTurnAfter).toBe(result.chatTurnId);
     expect(result.laneTurn?._id).toBe(result.laneTurnId);
     expect(result.laneTurn?.lane).toBe("interview");
@@ -698,11 +650,6 @@ describe("lane turns stay apart from chat turns", () => {
   });
 });
 
-/**
- * Heartbeats used to patch `leaseExpiresAt` on every 150ms flush, which was an
- * OCC storm against the overlapping heartbeat (fix c708f9ddd). A renewal now
- * writes only when the phase moved or the lease is more than half gone.
- */
 describe("turn lease renewal writes", () => {
   const now = 1_000_000;
   const durationMs = 120_000;

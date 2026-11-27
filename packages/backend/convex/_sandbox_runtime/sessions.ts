@@ -123,7 +123,6 @@ export async function startServicesWithRestoreAlert(
   return { port: services.port, devCommand: services.devCommand };
 }
 
-/** Per-app dev server overrides loaded from the githubRepos doc. */
 function devOverrides(
   repo: Doc<"githubRepos"> | null,
 ): { devPort?: number; devCommand?: string } | undefined {
@@ -133,12 +132,10 @@ function devOverrides(
   return { devPort: repo.devPort, devCommand: repo.devCommand };
 }
 
-/** Logs a session-scoped message with the sandbox/sessions prefix. */
 function logSession(message: string): void {
   console.log(`[sandbox][sessions] ${message}`);
 }
 
-/** Runs an async step with timing logs and error reporting. */
 async function runLoggedSessionStep<T>(
   label: string,
   details: string,

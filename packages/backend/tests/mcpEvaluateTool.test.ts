@@ -30,7 +30,6 @@ const scoreQ = {
   criteria: ["cosmetic", "minor", "major", "critical"],
 } as const;
 
-/** Shape of the JSON block the tool returns on success. */
 const toolPayload = z.object({
   model: z.string(),
   answers: z.record(
@@ -49,7 +48,6 @@ const toolPayload = z.object({
     .optional(),
 });
 
-/** Shape of an `execute` result block. */
 const executePayload = z.object({
   result: z.union([z.array(z.number()), z.string()]),
   calls: z.array(z.object({ name: z.string(), ok: z.boolean() })),
@@ -295,8 +293,6 @@ describe("evaluate tool", () => {
       calls += 1;
       return okOutcome();
     });
-    // The registry parses the raw shape before the handler runs, so a bad
-    // shape — including the per-question option cap — throws synchronously.
     expect(() =>
       tool.invoke(JSON.stringify({ state: 42, questions: { q: booleanQ } })),
     ).toThrow(z.ZodError);
@@ -310,7 +306,6 @@ describe("evaluate tool", () => {
         }),
       ),
     ).toThrow(z.ZodError);
-    // Cross-field caps live in the handler and come back as a tool error.
     const capped = await tool.invoke(
       JSON.stringify({
         state: "x".repeat(MAX_STATE_CHARS + 1),

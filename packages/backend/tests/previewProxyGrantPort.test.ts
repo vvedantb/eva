@@ -8,11 +8,6 @@ import {
 } from "../convex/previewGrantConfig";
 import { extractFunctionSource } from "./_helpers/previewProxySource";
 
-/**
- * A grant names the port it opens. The proxy used to ignore that claim, so a
- * grant minted for port 0 still worked and hid a broken /preview-auth link.
- * The proxy now accepts a grant only for its own public port.
- */
 const verifyGrantSource = extractFunctionSource("function verifyGrant(token) {");
 const b64urlToBufSource = extractFunctionSource("function b64urlToBuf(s) {");
 

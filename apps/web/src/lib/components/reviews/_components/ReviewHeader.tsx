@@ -39,9 +39,7 @@ export function ReviewHeader({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   refreshing: boolean;
-  onRefresh: () => void;
-  /** Re-reads the overview after an action changed the pull request on GitHub. */
-  onChanged: () => void;
+  onRefresh: () => void;  onChanged: () => void;
   nav: ReactNode;
 }) {
   const state = statusMeta(overview.status, overview.draft);

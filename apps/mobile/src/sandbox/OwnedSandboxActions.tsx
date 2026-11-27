@@ -30,12 +30,6 @@ type Owner =
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Task = NonNullable<FunctionReturnType<typeof api.agentTasks.get>>;
 
-/**
- * A task's or project's own sandbox, as the web pages drive it
- * (`useOwnedSession`, `useTaskDetailControls`): its session (made on the first
- * wake, `sessions.ensureOwned`), awake or not, a wake or sleep in flight, and
- * work it has not pushed (Commit & push, `sandbox.commitAndPushSandbox`).
- */
 function useOwnedSandbox(owner: Owner | null) {
   const owned = useQuery(api.sessions.getOwnedWithSeed, owner ? { owner } : "skip")
     ?.session;
@@ -58,7 +52,6 @@ function useOwnedSandbox(owner: Owner | null) {
       sandbox.isActive &&
       ((sync?.uncommittedFiles ?? 0) > 0 || (sync?.unpushedCommits ?? 0) > 0),
     wake: async () => {
-      // A task or project that never had a session gets one first, as the web's `ensureOwned`.
       if (owned) {
         sandbox.toggle("start");
         return;
@@ -87,8 +80,6 @@ function useOwnedSandbox(owner: Owner | null) {
   };
 }
 
-/** Opens a PR on the phone's PR screen in `repoId` when the URL names one, else in the browser. */
-/** The sandbox rows both pages share: wake (or retry) or sleep. */
 function SandboxRows({
   sandbox,
   canWake,
@@ -109,7 +100,6 @@ function SandboxRows({
           disabled={sandbox.isToggling}
           onPress={() => {
             close();
-            // Sleeping mid-turn leaves the turn hanging, as the web warns.
             if (agentActive) toast(MID_TURN_SLEEP_HINT);
             else sandbox.sleep();
           }}
@@ -129,7 +119,6 @@ function SandboxRows({
   );
 }
 
-/** The web `ResolveConfirmDialog`. */
 function ResolveDialog({
   open,
   onOpenChange,
@@ -173,7 +162,6 @@ export function useTaskGitActions({
   const createTaskPr = useAction(api.taskWorkflowActions.createTaskPr);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [resolving, setResolving] = useState(false);
-  // A project task's PR is its project's: the project page creates it, as the web.
   const canCreatePr =
     task.projectId === undefined &&
     taskCanCreatePr({ latestPrUrl: task.prUrl, runCount, hasActiveRun });

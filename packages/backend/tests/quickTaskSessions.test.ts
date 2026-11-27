@@ -7,13 +7,6 @@ import { openTurn } from "../convex/_chat/turnStore";
 import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * PR 1b: a quick task runs on one owned session. Guards the rules that keep
- * that session a single, hidden engine: one session per task, never listed
- * as a session, chat sends queue behind the task's run, and the migration
- * moves the task's sandbox and transcript onto it (and waits on busy tasks).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|quick-task-sessions";
 
@@ -43,7 +36,6 @@ async function fixture() {
 }
 
 describe("quick tasks on sessions", () => {
-  // Scheduled stops and drains stay queued instead of running after a test.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -146,8 +138,6 @@ describe("quick tasks on sessions", () => {
           }),
         );
 
-      // Cancelled between claim and attach: the claimed start fails at once
-      // instead of sitting in `starting`.
       const cancelledRunId = await newRun();
       await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
         sessionId,
@@ -168,7 +158,6 @@ describe("quick tasks on sessions", () => {
       if (!claim) throw new Error("claim refused");
       expect(claim.wasActive).toBe(false);
       expect(await status()).toBe("starting");
-      // A start in flight refuses a second claim: no unrecorded VM.
       expect(
         await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
           sessionId,
@@ -176,7 +165,6 @@ describe("quick tasks on sessions", () => {
         }),
       ).toBeNull();
 
-      // A stale attempt cannot attach.
       expect(
         await f.t.mutation(internal.sessions.attachTaskRunSandbox, {
           sessionId,

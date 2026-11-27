@@ -6,13 +6,6 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A recap run that starts on an existing recap only flips it to pending: the
- * summary, walkthrough and commit on show stay until the ready write replaces
- * them, so a failed run leaves the last good recap (and an honest stale banner)
- * instead of a "Generating…" placeholder. The ready write still keeps history.
- */
-
 const TIMEOUT_MS = 30_000;
 const PR_URL = "https://github.com/vvedantb/eva/pull/1";
 const STEPS = [{ title: "Core", summary: "The idea.", files: ["a.ts"] }];
@@ -20,8 +13,6 @@ const STEPS = [{ title: "Core", summary: "The idea.", files: ["a.ts"] }];
 test(
   "a started and then failed run keeps the recap, commit and model on show",
   async () => {
-    // Hold the workflow `startPrRecap` schedules: this test is about the doc
-    // writes, not the run, and a background run would race the assertions.
     vi.useFakeTimers();
     const t = convexTest(schema, modules);
     prosemirrorSync.register(t);
@@ -52,7 +43,6 @@ test(
       prRecapStatus: "ready",
     });
 
-    // The real start path: flips the doc to pending and starts the workflow.
     await t.mutation(internal.docs.startPrRecap, {
       repoId,
       userId,
@@ -77,7 +67,6 @@ test(
     expect(failed?.recapWalkthrough).toEqual(STEPS);
     expect(failed?.headSha).toBe("old");
     expect(failed?.prRecapStatus).toBe("error");
-    // The badge still names the run that wrote the recap on show.
     expect(failed?.prRecapModel).toBe("claude:sonnet");
     expect(failed?.fastMode).toBe(true);
 
@@ -100,9 +89,7 @@ test(
     expect(ready.doc?.content).toBe("## Summary\nSecond recap.");
     expect(ready.doc?.headSha).toBe("new");
     expect(ready.doc?.prRecapModel).toBe("claude:opus");
-    // A trait the new run did not set is cleared, not carried over.
     expect(ready.doc?.fastMode).toBeUndefined();
-    // The replaced recap went to history, even though its status was "error".
     expect(ready.versions.map((version) => version.content)).toEqual([
       "## Summary\nFirst recap.",
     ]);

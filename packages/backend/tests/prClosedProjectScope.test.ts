@@ -6,32 +6,12 @@ import schema from "../convex/schema";
 import { isSessionArchived } from "../convex/_sessions/archive";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Reported bug: closing a project's pull request wiped the project (fix
- * 51cdced9). One PR covers every task in a project, so the closed-PR webhook handler used
- * to walk `by_project` and force each task to done/cancelled — a single
- * "Close pull request" click on GitHub cancelled work that was still in
- * progress, and fanned a notification out per task. A close can be undone on
- * GitHub; the task statuses it overwrote cannot, so a project's own PR now
- * moves nothing: the project's status is derived from its tasks.
- *
- * Behavioural rather than source-level: the property that broke is what the
- * webhook leaves behind in the database, and the source-level rules that used
- * to guard this path silently went stale when the handler was restructured.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 const PROJECT_PR = "https://github.com/vvedantb/eva/pull/900";
 const QUICK_TASK_PR = "https://github.com/vvedantb/eva/pull/901";
 
-/**
- * A project of three tasks at three different points in its lifecycle, plus an
- * unrelated quick task. Ada subscribes to two of the project's tasks (so a
- * per-task fan-out would reach her twice), Bo to one, and Cy unsubscribed.
- */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -90,7 +70,7 @@ async function fixture() {
     await subscribe(building, ada);
     await subscribe(queued, bo);
     await ctx.db.insert("taskSubscribers", {
-      taskId: queued, // muted this project, so nothing should reach Cy
+      taskId: queued,
       userId: cy,
       subscribed: false,
       createdAt: now,
@@ -104,7 +84,6 @@ async function fixture() {
         status: "success" as const,
         logs: [],
       });
-    // The project's PR was opened by the task that ran first, not by all three.
     const shippedRun = await run(shipped);
     const quickRun = await run(quick);
     await ctx.db.insert("pullRequests", {
@@ -191,10 +170,6 @@ describe("a project's own (legacy) pull request ending", () => {
   }
 });
 
-/**
- * The quick-task half of the same handler, which does still follow the PR: one
- * task, one PR, and no sibling tasks to damage.
- */
 describe("a quick task's pull request", () => {
   test(
     "moves the task to done on merge without touching the project's tasks",
@@ -252,8 +227,6 @@ describe("a quick task's pull request", () => {
         merged: true,
       });
 
-      // A merged PR makes the task read-only: its session (and so its
-      // sandbox) is archived and starts the grace delete.
       const session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session && isSessionArchived(session)).toBe(true);
     },

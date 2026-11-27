@@ -109,7 +109,6 @@ describe("startBranchWatcher", () => {
   });
 
   it("installs no poll without a reportable entity", async () => {
-    // An arena run has no document to report the branch onto.
     stubEnv("ENTITY_ID_FIELD", "arenaId");
     stubEnv("ENTITY_ID", "a1");
     freshModules();

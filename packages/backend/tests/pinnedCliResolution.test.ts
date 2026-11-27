@@ -15,27 +15,14 @@ import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 import { resolvePinnedCliBinary } from "../callback-src/providers/claudeSdk.js";
 import { pinnedCliInstallCommand } from "../convex/_sandbox_runtime/launch";
 
-/**
- * Behavioural guard for session 197 (2026-09-26): a `claude update` in the
- * terminal put the pinned CLI in the user's npm prefix, behind the image's
- * stale copy on PATH. Launch saw the pin somewhere and skipped the fallback
- * install; the callback judged the PATH copy, found drift, had no fallback,
- * and ran the stale CLI. These tests rebuild that layout on disk and run the
- * real launch guard and callback resolver against it, so the two cannot drift
- * apart on which copy counts again.
- */
-
 const PACKAGE = "@anthropic-ai/claude-code";
 const STALE = "2.1.258";
 const PINNED = "2.1.283";
 
 let root = "";
 let npmLog = "";
-// The launch guard runs `node`. Under bun test, process.execPath is Bun, so
-// find node on the real PATH before the test replaces it.
 const nodeDir = dirname(Bun.which("node") ?? process.execPath);
 
-/** Lays out `<prefix>/bin/claude` plus its package manifest at `version`. */
 function installCli(prefix: string, version: string): string {
   const bin = join(prefix, "bin", "claude");
   mkdirSync(dirname(bin), { recursive: true });
@@ -55,8 +42,6 @@ const fallbackBin = (): string => join(fallbackPrefix(), "bin", "claude");
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "pinned-cli-"));
   npmLog = join(root, "npm.log");
-  // Stub npm: records its argv and performs the `install -g --prefix` layout
-  // for real, so the callback can then judge what launch installed.
   const stubs = join(root, "stubs");
   mkdirSync(stubs);
   writeFileSync(
@@ -71,8 +56,6 @@ beforeEach(() => {
     ].join("\n"),
   );
   chmodSync(join(stubs, "npm"), 0o755);
-  // Image copy first on PATH, the user's `claude update` copy behind it, then
-  // the stub npm ahead of the real node toolchain.
   stubEnv(
     "PATH",
     [

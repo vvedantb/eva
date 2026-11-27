@@ -1,15 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { condenseRunnerLogTail } from "../convex/_sandbox_runtime/launch";
 
-/** Mirrors RUNNER_LOG_TAIL_MAX_CHARS in launch.ts (module-private there). */
 const RUNNER_LOG_TAIL_CAP = 2_000;
 
-/**
- * Runner failures are quoted verbatim into the failed turn's assistant bubble.
- * A retrying daemon repeats one line dozens of times (an observed failure wrote
- * a 17.8KB bubble of identical heartbeat retries), so the tail is condensed
- * before it reaches chat.
- */
 describe("condenseRunnerLogTail", () => {
   test("collapses retries that differ only in their numbers", () => {
     const log = [
@@ -32,14 +25,11 @@ describe("condenseRunnerLogTail", () => {
   });
 
   test("collapses a repeated failure to a single counted line", () => {
-    // Lines differing only in their numbers are the same failure retrying, so
-    // 4000 of them must not survive as 4000 lines.
     const log = Array.from({ length: 4000 }, (_, i) => `line ${i} x`).join("\n");
     expect(condenseRunnerLogTail(log)).toBe("line 0 x (x4000)");
   });
 
   test("keeps the tail when genuinely distinct lines exceed the cap", () => {
-    // Distinct words, so nothing collapses and the cap has to do the work.
     const log = Array.from(
       { length: 600 },
       (_, i) => `step-${"ab".repeat((i % 7) + 1)}-${i} failed`,
@@ -58,7 +48,6 @@ describe("condenseRunnerLogTail", () => {
     ).toBe("clone https://x-access-token:***@github.com/a/b");
 
     const token = `ghs_${"a".repeat(40)}`;
-    // Clipping first would keep the token's last chars without its prefix.
     const log = `${token} ${"x".repeat(RUNNER_LOG_TAIL_CAP - 10)}`;
     expect(condenseRunnerLogTail(log)).not.toContain("aaaaa");
   });

@@ -11,7 +11,6 @@ import { useState } from "react";
  * The chat is pushed, so Back returns to the pull request.
  */
 export function useStartReviewSession(repoId: Id<"githubRepos">): {
-  /** `onStarted` runs before the chat opens, so a confirm can close and not wait behind it. */
   start: (request: { title: string; message: string; baseBranch: string }, onStarted?: () => void) => void;
   starting: boolean;
 } {

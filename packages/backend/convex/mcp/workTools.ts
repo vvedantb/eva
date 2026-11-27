@@ -35,7 +35,6 @@ const scheduledAtArg = z
     'When to run, as an ISO 8601 time with a zone, e.g. "2026-10-01T09:00:00Z". Must be in the future.',
   );
 
-/** Every backing mutation here returns null; parsing it proves the call landed. */
 const nullReply = z.null();
 
 /**
@@ -54,7 +53,6 @@ export function workTools(
   const { clerkUserId } = credentials;
   const { resolveEntityTarget } = entityAccess(ctx, credentials);
 
-  /** Resolves a ref to one chat of `kind`, taking a bare id as that kind. */
   async function resolveKind(
     kind: EntityKind,
     directId: string | undefined,
@@ -88,7 +86,6 @@ export function workTools(
     );
   }
 
-  /** Parses an ISO time to epoch ms, rejecting the past before the backend does. */
   function futureTime(
     iso: string,
   ): number | ReturnType<typeof toolErrorResult> {
@@ -102,15 +99,12 @@ export function workTools(
   }
 
   const taskInput = { taskId: taskIdArg, ...entityRefArgs };
-  // update_task and archive_task also take a task's number in the caller's
-  // project (`projectTaskRefArgs`), so a coordinator names "#3" directly.
   const projectTaskInput = {
     ...entityRefArgs,
     ...projectTaskRefArgs,
   };
   const caller = projectCallerOf(credentials.owner);
 
-  /** A task named by id, by its number in the caller's project, or by ref. */
   async function resolveTask(
     ref: EntityRef & { taskId?: string; taskNumber?: number },
   ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {

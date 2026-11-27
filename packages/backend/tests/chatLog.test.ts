@@ -11,12 +11,6 @@ import { recordTurnChange } from "../convex/chatLog";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The chat Log: append-only entries per session / quick task / project,
- * written by the agent (log_entry), the user (Add note) and Eva itself
- * (answered questions, turn commits).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|chat-log";
 const STRANGER_CLERK_ID = "clerk|chat-log-stranger";

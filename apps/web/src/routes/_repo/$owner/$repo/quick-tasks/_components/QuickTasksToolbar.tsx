@@ -80,7 +80,6 @@ const isTimeRange = (v: string): v is QuickTaskTimeRange =>
   QUICK_TASK_TIME_RANGES.some((range) => range === v);
 
 interface QuickTasksToolbarProps {
-  /** Active or Archived tasks; the Archived list has no Select or New Task. */
   listMode: ArchiveListMode;
   onListModeChange: (mode: ArchiveListMode) => void;
   view: QuickTaskView;

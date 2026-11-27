@@ -15,25 +15,7 @@ import { loadProjectTaskRows } from "./_projects/taskTable";
 import { latestTaskRun } from "./_projects/runSettings";
 import { isSessionArchived } from "./_sessions/archive";
 
-/**
- * The Inbox's "Needs you" rows (`@eva/shared/needsYou`): what waits for the
- * caller now, derived from live state. Projects show to everyone who can
- * open their repo (as the project's own task list does); quick tasks and
- * sessions show to the person who made them.
- *
- * - Questions: a project task's open ask the coordinator handed to a person,
- *   any blocking agent question (`pendingQuestions`) on an open turn, and an
- *   unread notification that asks for the caller in a chat: a teammate's
- *   `@`-mention, a routed question, an agent's `notify_user`
- *   (`isNeedsYouNotification`; posting in that chat reads it).
- * - To review: an open (not draft) PR of a project task, quick task or session.
- * - Triage: a project task no one approved yet.
- * - Failed: a project task whose retries are spent, or a quick task whose
- *   last run failed.
- */
-
 const needsYouRowValidator = v.object({
-  /** Stable per row: the group plus the entity it is about. */
   key: v.string(),
   group: v.union(
     v.literal("question"),
@@ -42,7 +24,6 @@ const needsYouRowValidator = v.object({
     v.literal("failed"),
   ),
   title: v.string(),
-  /** The second line: the question, the PR number, the task number. */
   detail: v.optional(v.string()),
   source: v.union(
     v.literal("project"),
@@ -53,18 +34,14 @@ const needsYouRowValidator = v.object({
   projectId: v.optional(v.id("projects")),
   taskId: v.optional(v.id("agentTasks")),
   prUrl: v.optional(v.string()),
-  /** The web page it opens. */
   href: v.optional(v.string()),
-  /** The chat the phone opens (`chats.get` target). */
   chatTarget: v.optional(v.string()),
   repoId: v.id("githubRepos"),
-  /** When it started to wait, for the row's age and the order. */
   at: v.number(),
 });
 
 type NeedsYouRow = typeof needsYouRowValidator.type;
 
-/** Most quick tasks and sessions of one person one repo reads per kind. */
 const PER_KIND_LIMIT = 100;
 
 export const list = authQuery({
@@ -103,14 +80,8 @@ async function repoRows(
   return [...projects, ...quickTasks, ...sessions, ...questions];
 }
 
-/** Most unread notifications the notification rows look through. */
 const NOTIFICATION_SCAN_LIMIT = 100;
 
-/**
- * The caller's unread notifications that ask for them in a chat, as
- * Questions. A row leaves once the caller posts in that chat
- * (`notifyChatMentions` reads it) or reads or archives it in Updates.
- */
 async function notificationRows(
   db: DatabaseReader,
   userId: Id<"users">,
@@ -155,7 +126,6 @@ async function notificationRows(
   return rows.filter((row) => row !== null);
 }
 
-/** Which kind of chat a notification's `chatTarget` names. */
 async function chatSource(
   db: DatabaseReader,
   chatTarget: string,
@@ -186,7 +156,6 @@ async function chatSource(
   return db.normalizeId("sessions", chatTarget) ? { kind: "session" } : null;
 }
 
-/** Each live project's child tasks that wait for a person. */
 async function projectRows(
   db: DatabaseReader,
   repo: Doc<"githubRepos">,
@@ -246,7 +215,6 @@ async function projectRows(
   return perProject.flat();
 }
 
-/** The caller's quick tasks with an open PR to review, or a failed last run. */
 async function quickTaskRows(
   db: DatabaseReader,
   repo: Doc<"githubRepos">,
@@ -320,7 +288,6 @@ async function quickTaskRows(
   });
 }
 
-/** The caller's live standalone sessions with an open PR to review. */
 async function sessionRows(
   db: DatabaseReader,
   repo: Doc<"githubRepos">,
@@ -358,12 +325,6 @@ async function sessionRows(
   });
 }
 
-/**
- * Blocking agent questions (`pendingQuestions`) on the repo's open chat
- * turns: only an open turn can hold one, so this reads one small range per
- * open turn. A session's or quick task's question goes to its maker; a
- * project's (coordinator or task chat) to everyone on the repo.
- */
 async function questionRows(
   db: DatabaseReader,
   repo: Doc<"githubRepos">,
@@ -453,7 +414,6 @@ async function questionRows(
   return perTurn.filter((row) => row !== null);
 }
 
-/** "#9003" from a GitHub PR URL, else the URL's last part. */
 function prLabel(prUrl: string): string {
   const number = prUrl.split("/").pop();
   return number ? `#${number}` : prUrl;

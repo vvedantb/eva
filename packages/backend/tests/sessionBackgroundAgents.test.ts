@@ -44,11 +44,6 @@ test("mergeBackgroundAgents upserts by toolUseId", () => {
   });
 });
 
-/**
- * Resuming an Agent via SendMessage mints a new tool_use id for the same task
- * id. The daemon that owned the first one may have died without settling it, so
- * that orphan would block the queue until the 2h cap.
- */
 test("a restart of the same task supersedes its orphaned running entry", () => {
   const merged = mergeBackgroundAgents(
     [
@@ -187,7 +182,6 @@ test("pruneSettledBackgroundAgents never drops unsettled entries and returns the
     }),
   );
 
-  // The prune migration skips the patch on reference equality.
   expect(pruneSettledBackgroundAgents(running)).toBe(running);
 });
 

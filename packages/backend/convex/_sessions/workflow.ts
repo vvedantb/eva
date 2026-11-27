@@ -85,18 +85,11 @@ import { errorMessage } from "@vvedantb/server";
 import { insertTurnFollowUp } from "../_messages/replies";
 import { isStandaloneSession, sessionOwnerTaskId } from "./owner";
 
-// --- Completion event ---
-
 export const sessionCompleteEvent = defineEvent({
   name: "sessionComplete",
   validator: workflowCompleteValidator,
 });
 
-/**
- * The `eva-design` reply contract. `variations` must be present and non-empty:
- * an all-optional schema matched a bare `{}` in an ordinary reply and turned it
- * into an empty Designs tab.
- */
 const designResultSchema = z.object({
   summary: z.string().optional(),
   variations: z
@@ -110,7 +103,6 @@ const designResultSchema = z.object({
     .min(1),
 });
 
-/** Parses the design-variations JSON a turn may end with. */
 function parseDesignResult(
   text: string | null,
 ): z.infer<typeof designResultSchema> | null {
@@ -120,7 +112,6 @@ function parseDesignResult(
   return parsed.success ? parsed.data : null;
 }
 
-/** Finalizes and clears an open synthetic-turn placeholder on chat hygiene paths. */
 async function finalizeOpenSyntheticTurn(
   ctx: MutationCtx,
   chatId: Id<"sessionChats">,
@@ -140,8 +131,6 @@ async function finalizeOpenSyntheticTurn(
   await ctx.db.patch(chatId, { syntheticTurnMessageId: undefined });
 }
 
-// --- Workflows ---
-
 /** Starts a session sandbox (clone + branch setup) as a durable workflow step. */
 export const sessionSandboxStartupWorkflow = workflow.define({
   args: {
@@ -153,9 +142,7 @@ export const sessionSandboxStartupWorkflow = workflow.define({
     branchName: v.string(),
     baseBranch: v.string(),
     repoId: v.id("githubRepos"),
-    /** True when the session has `sessionRepos` rows to clone as well. */
     hasLinkedRepos: v.optional(v.boolean()),
-    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
     startAttempt: v.optional(v.number()),
   },
   handler: async (step, args): Promise<void> => {
@@ -174,18 +161,10 @@ export const sessionSandboxStartupWorkflow = workflow.define({
 
     if (args.hasLinkedRepos !== true) return;
 
-    // startSessionSandbox armed `sandboxSetupPending` instead of clearing it
-    // (see `prepareSessionSandboxInternal`) specifically so this step could
-    // clone/install every linked repo before the first turn runs. Whatever
-    // happens below, the gate must still come off — a linked repo that never
-    // finishes must not wedge the session forever.
     const session = await step.runQuery(internal.sessions.getInternal, {
       id: args.sessionId,
     });
     if (!session?.sandboxId) {
-      // startSessionSandbox failed before a sandbox existed (or the user
-      // stopped mid-start) — nothing to provision, and no gate was armed for
-      // a sandbox that was never created.
       return;
     }
     const sandboxId = session.sandboxId;
@@ -231,23 +210,10 @@ export const sessionExecuteWorkflow = workflow.define({
     });
     const sessionId = data.sessionId;
 
-    // Daemon-pull dispatch: the prompt is NOT pushed from here. `startExecute`
-    // has already staged it in `session.pendingTurn` and scheduled a daemon to
-    // claim it; the warm daemon pulls it via `claimPendingTurn` in ~one poll,
-    // which is why we no longer probe/handoff/launch WITH a prompt here (doing
-    // so would double-execute the turn). This workflow's remaining job is to
-    // (a) make sure the sandbox is started (thawing cold/archived storage over
-    // durable steps) and a daemon is alive to do the claim, then (b) awaitEvent
-    // + run the unchanged post-turn bookkeeping (branch push, saveResult,
-    // deployment tracking).
     let sandboxId: string | null = null;
     let validatedSandboxId: string | null = null;
 
     if (data.sandboxId) {
-      // Bring an archived/stopped sandbox back to "started" via durable polling
-      // steps first, so a multi-minute cold-storage thaw doesn't blow the
-      // per-action 10-minute limit inside validateSandbox. Once started, the
-      // validate below hits its fast (echo) path.
       let started: Awaited<ReturnType<typeof ensureSandboxStartedSteps>>;
       try {
         started = await ensureSandboxStartedSteps(step, {
@@ -278,9 +244,6 @@ export const sessionExecuteWorkflow = workflow.define({
           {
             sandboxId: thawId,
             repoId: data.repoId,
-            // A just-created sandbox: startSessionSandbox provisions swap and
-            // Docker itself, and waiting on its Docker bootstrap here (2.8s
-            // p50, 14.6s p90) only delays the launch.
             skipDocker: data.sandboxSetupPending,
           },
           { retry: false },
@@ -317,7 +280,6 @@ export const sessionExecuteWorkflow = workflow.define({
     }
 
     if (sandboxId === null) {
-      // Unreachable: sandboxId is assigned on both branches above.
       throw new Error("sessionExecuteWorkflow: sandbox was not resolved");
     }
 
@@ -335,8 +297,6 @@ export const sessionExecuteWorkflow = workflow.define({
       sessionId,
     });
 
-    // A cancel can race with startExecute and wipe pendingTurn while a daemon
-    // workflow waits, so restage it before ensuring the warm process.
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.sessionWorkflow.ensurePendingTurn, {
         chatId: args.chatId,
@@ -346,7 +306,6 @@ export const sessionExecuteWorkflow = workflow.define({
       });
     }
 
-    // Persistent chat providers use prewarm + claimPendingTurn.
     if (usesChatDaemon(data.model)) {
       await step.runAction(internal.sandbox.prewarmSessionDaemon, {
         sandboxId,
@@ -364,14 +323,7 @@ export const sessionExecuteWorkflow = workflow.define({
         sessionPersistenceId: data.sessionPersistenceId,
       });
     } else {
-      // A failed launch must finalize the turn: without this catch the
-      // workflow dies after its step retries with no saveResult, leaving the
-      // empty placeholder (and the open turn) stuck on "Working…" until
-      // the `TURN_BACKSTOP_MS` backstop.
       try {
-        // One-shot providers push the prompt at launch, so hold it until the
-        // new sandbox is on the latest base (daemons get this from the
-        // claimPendingTurn gate). Read live: the gate may already be clear.
         if (data.sandboxSetupPending) {
           await step.runAction(internal.sessionWorkflow.waitForSessionSetup, {
             sessionId,
@@ -432,10 +384,6 @@ export const sessionExecuteWorkflow = workflow.define({
 
     const result = await step.awaitEvent(sessionCompleteEvent);
 
-    // Persist the assistant reply BEFORE publish. A hung/slow git push used to
-    // leave the UI on "Working…" forever even after the daemon had completed —
-    // streamed tokens may also be empty for short conversational-ish agent
-    // turns. Publish failures are patched onto the saved message below.
     await step.runMutation(internal.sessionWorkflow.saveResult, {
       chatId: args.chatId,
       turnId: args.turnId,
@@ -451,13 +399,6 @@ export const sessionExecuteWorkflow = workflow.define({
       afterShas: result.afterShas,
     });
 
-    // Eva owns publishing: the agent commits inside the sandbox but never
-    // pushes (see prompts.ts). Always attempt the push after a successful
-    // AGENT turn — matching project/task chat. Do NOT gate on
-    // `git status --porcelain`: after a proper commit the tree is clean, so
-    // that check skipped every publish and left commits stranded in the
-    // sandbox. pushBranchToOrigin itself skips when HEAD has no commits
-    // origin lacks, so chat-only turns publish nothing.
     let pushSucceeded = false;
     let pushedCommits = false;
     let branchPublished = false;
@@ -508,17 +449,6 @@ export const sessionExecuteWorkflow = workflow.define({
         },
       );
 
-      // The callback normally pushes before posting completion so the work is
-      // durable even if the sandbox dies immediately afterwards. In that path
-      // this workflow's redundant push reports `pushed: false`; recover a
-      // missing PR when it confirms the session branch already contains HEAD.
-      // A chat-only first turn has no remote session branch, so `published` is
-      // false and still avoids the old compare-404 alerts.
-      // A task's session never opens a session PR: the task owns its PRs.
-      // A quick task's chat push opens the task PR when the branch has none
-      // live, so a task worked on only through chat still gets one. The
-      // callback usually pushed already (`pushedCommits` false), so a turn
-      // that moved HEAD onto a published branch also counts.
       const turnCommitted =
         result.afterSha !== undefined && result.afterSha !== result.beforeSha;
       if (
@@ -564,19 +494,6 @@ export const sessionExecuteWorkflow = workflow.define({
       }
     }
 
-    // Multi-repo sessions and multi-repo tasks: one push + one draft PR per
-    // linked repo that has commits. Deliberately here and not in the
-    // callback's `persistTurnWork` (which pushes only WORK_DIR at turn end):
-    // PR creation needs the backend regardless, so keeping both halves of
-    // publishing in this workflow means one publish path to reason about and
-    // no `callback-src` rebuild. The trade-off is the callback's durability
-    // window — a linked repo's commits only reach origin once this step
-    // runs, whereas the primary's are pushed before completion is even posted.
-    // Not gated on the primary's `pushSucceeded`: a primary that failed to
-    // publish must not strand a linked repo's commits in the sandbox. A
-    // task's session publishes its linked repos too: the task owns its home
-    // repo's PR, and each linked repo's PR is the session's (by
-    // `sessionRepoId`), which the task's PR state reads.
     if (
       result.success &&
       (data.ownsPullRequests !== false || data.ownerTaskId !== undefined) &&
@@ -591,8 +508,6 @@ export const sessionExecuteWorkflow = workflow.define({
     }
   },
 });
-
-// --- Deployment tracking ---
 
 /** Queues deployment status polling for a session branch after a successful execute. */
 export const scheduleSessionDeploymentTracking = internalMutation({
@@ -626,8 +541,6 @@ export const scheduleSessionDeploymentTracking = internalMutation({
   },
 });
 
-// --- Supporting internal functions ---
-
 /**
  * Posts a non-streaming system alert into a chat (e.g. draft PR failure).
  * Session-level callers (PR webhooks, linked-repo setup) pass `sessionId` and
@@ -659,8 +572,6 @@ export const postSystemAlert = internalMutation({
       isSystemAlert: true,
       ...(args.errorDetail !== undefined && { errorDetail: args.errorDetail }),
     };
-    // A turn-level alert follows its turn into a thread; a session-level one
-    // stays in Main.
     if (args.chatId === undefined) {
       await ctx.db.insert("messages", { parentId: chatId, role: "assistant", ...alert });
     } else {
@@ -735,8 +646,6 @@ export const addAssistantPlaceholder = internalMutation({
     const chat = await ctx.db.get(args.chatId);
     if (!chat) throw new Error("Chat not found");
 
-    // Ignore system alerts (e.g. draft-PR failures) sitting on top — startExecute
-    // may already have staged an empty placeholder underneath them.
     await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.chatId,
       recentLimit: 10,
@@ -769,9 +678,7 @@ export const getSessionData = internalQuery({
     model: aiModelValidator,
     deploymentProjectName: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
-    /** startSessionSandbox still owns repo prep, swap and Docker. */
     sandboxSetupPending: v.boolean(),
     /**
      * False for a task's session: it pushes the task branch, but the draft PR

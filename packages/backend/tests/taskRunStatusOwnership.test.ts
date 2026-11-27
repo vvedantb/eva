@@ -5,13 +5,6 @@ import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A run owns its task's `in_progress` status and nothing else. A user who
- * moves the task mid-run (to done, cancelled or a review column) keeps that
- * choice: run completion, user cancel and the 2h watchdog only reset `in_progress`, and the
- * watchdog still times out the run instead of skipping the moved task.
- */
-
 const TIMEOUT_MS = 30_000;
 
 beforeEach(() => {

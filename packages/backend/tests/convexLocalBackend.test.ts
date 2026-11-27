@@ -35,8 +35,6 @@ describe("buildConvexBackgroundScriptBody", () => {
   it("only downloads when no valid planted binary exists", () => {
     const body = buildConvexBackgroundScriptBody("npx convex dev");
     const lines = body.split("\n");
-    // The download must be gated behind the planted-marker checks: a resume on
-    // a long-lived sandbox cannot afford a 58MB zip + ~250MB extract per boot.
     const neededAt = lines.findIndex((l) =>
       l.includes("needed = [d for d in dests if not planted(d)]"),
     );
@@ -53,9 +51,6 @@ describe("buildConvexBackgroundScriptBody", () => {
 
   it("plants only into real convex caches, never the cursor home", () => {
     const body = buildConvexBackgroundScriptBody("npx convex dev");
-    // Cursor runs the CLI in-process under the sandbox home now, so
-    // /tmp/cursor-home is not a convex cache — planting there leaked ~250MB
-    // per label onto a 32GB disk (fix c06518ab).
     expect(body).not.toContain("/tmp/cursor-home");
     expect(body).toContain("os.path.expanduser('~/.cache/convex/binaries')");
     expect(body).toContain("'/home/vercel-sandbox/.cache/convex/binaries'");
@@ -72,10 +67,8 @@ describe("buildConvexBackgroundScriptBody", () => {
     const command =
       "cd apps/eprocurement && CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=240 npx convex dev";
     const body = buildConvexBackgroundScriptBody(command);
-    // Command travels via heredoc into its own process group, verbatim.
     expect(body).toContain("<<'EVA_CONVEX_BG_CMD'");
     expect(body).toContain(`setsid bash -l "/tmp/eva-convex-bg-cmd-$$.sh"`);
-    // Health probe against the local backend, wedge-restart with a cap.
     expect(body).toContain(CONVEX_LOCAL_BACKEND_HEALTH_URL);
     expect(body).toContain("Unable to pull deployment config");
     expect(body).toContain("pkill -KILL -f '[c]onvex-local-backend'");
@@ -85,13 +78,6 @@ describe("buildConvexBackgroundScriptBody", () => {
   });
 });
 
-/**
- * This push is the only thing that puts a repo's functions on the snapshot's
- * local backend. Every way it can fail has to end the seed run, because the
- * alternative is worse than a red build: a green one whose snapshot boots a
- * backend with no functions on it, which every sandbox restored from that
- * snapshot then inherits (fix 2abf5bc5).
- */
 describe("buildConvexPostSeedPushLines", () => {
   const script = () => buildConvexPostSeedPushLines("/tmp/repo").join("\n");
 
@@ -107,7 +93,6 @@ describe("buildConvexPostSeedPushLines", () => {
   });
 
   it("never treats a missing config as nothing to do", () => {
-    // The warn-and-continue wording this replaced is the regression itself.
     expect(script()).not.toContain("nothing to push");
   });
 

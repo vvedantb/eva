@@ -17,24 +17,12 @@ import {
 } from "../convex/_sandbox_runtime/sandboxFiles";
 import { buildEnsureSwapScript } from "../convex/_sandbox_runtime/swap";
 
-/**
- * Prod 2026-11-09: a session resume died with
- * `reuseSessionSandbox.prepare: Status code 400 is not ok: The submitted
- * tarball could not be extracted`. Vercel `writeFiles` ships a tarball and
- * extracts it in the VM; the disk was full (an exec on the same VM logged
- * `No space left on device`), so every eva script write failed and the
- * session could never resume.
- */
-
-// The exact provider message from the incident.
 const EXTRACT_ERROR = new Error(
   "Status code 400 is not ok: The submitted tarball could not be extracted",
 );
 
 function fakeHandle(opts: {
-  /** One entry per writeFile call; `null` succeeds. */
   writeResults: Array<Error | null>;
-  /** Output of the reclaim exec. */
   reclaimOutput: string;
 }): { handle: SandboxHandle; execs: string[]; writes: string[] } {
   const execs: string[] = [];
@@ -92,7 +80,6 @@ describe("writeSandboxFile on a full disk", () => {
       "/tmp/eva-ensure-swap.sh",
       "/tmp/eva-ensure-swap.sh",
     ]);
-    // One inline exec: a full disk cannot take a script file.
     expect(execs).toEqual([buildReclaimDiskScript()]);
   });
 
@@ -110,8 +97,6 @@ describe("writeSandboxFile on a full disk", () => {
   });
 
   test("does not blame the disk when space is free", async () => {
-    // The same provider message can mean another extract failure (for example
-    // a permission problem). With free space, keep the original error.
     const { handle } = fakeHandle({
       writeResults: [EXTRACT_ERROR, EXTRACT_ERROR],
       reclaimOutput: FREED,

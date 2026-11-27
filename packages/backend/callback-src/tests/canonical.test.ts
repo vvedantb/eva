@@ -76,9 +76,6 @@ test("complete_tool merges result onto matching step", () => {
 
 test("append_text keeps distinct blocks separated in one response row", () => {
   resetStateForTests();
-  // Each append_text is a whole (non-streamed) assistant text block, so distinct
-  // blocks are separated by a paragraph break. With no tool between them they
-  // share one timeline response row.
   applyCanonicalEvents([{ kind: "append_text", text: "First reply." }]);
   applyCanonicalEvents([{ kind: "append_text", text: "Second reply." }]);
   expect(S.currentStreamedContent).toBe("First reply.\n\nSecond reply.");
@@ -93,7 +90,6 @@ test("append_text replaces streamed content on cumulative snapshots", () => {
   applyCanonicalEvents([{ kind: "append_text", text: "Hello" }]);
   applyCanonicalEvents([{ kind: "append_text", text: "Hello world" }]);
   expect(S.currentStreamedContent).toBe("Hello world");
-  // The snapshot adds only its unseen tail to the response row.
   expect(S.accumulatedSteps).toHaveLength(1);
   expect(S.accumulatedSteps[0]?.detail).toBe("Hello world");
   resetStateForTests();
@@ -118,7 +114,6 @@ test("text between tool runs lands as separate response rows in timeline order",
     ["file", undefined],
     ["response", "Found it."],
   ]);
-  // The first text row closed when the tool started; the tool closed itself.
   expect(S.accumulatedSteps[0]?.status).toBe("complete");
   expect(S.accumulatedSteps[1]?.status).toBe("complete");
   resetStateForTests();
@@ -151,7 +146,6 @@ test("serializeFinalSteps drops the response rows the final message repeats", ()
     serializeFinalSteps(steps, "First half.\n\nSecond half."),
   );
   expect(kept.map((s) => s.detail)).toEqual(["Let me look.", undefined, "hm"]);
-  // Subagent text has no `detail` and is never treated as an echo.
   const subagentText: ProgressStep = {
     type: "response",
     label: "Agent message",
@@ -162,7 +156,6 @@ test("serializeFinalSteps drops the response rows the final message repeats", ()
   expect(
     JSON.parse(serializeFinalSteps([subagentText], "Final answer.")),
   ).toHaveLength(1);
-  // No final text (a failed turn): every row stays.
   expect(JSON.parse(serializeFinalSteps(steps, ""))).toHaveLength(5);
 });
 
@@ -308,9 +301,6 @@ test("parsePriorStepForTest ignores transient activity rows", () => {
   ).toBe(null);
 });
 
-// With `thinking.display` omitted, current models stream thinking blocks with
-// empty text — nothing must reach the reasoning step (claudeSdk.ts asks for
-// summaries explicitly so real text arrives instead).
 test("parseToCanonical claude empty thinking_delta emits nothing", () => {
   resetStateForTests();
   const events = parseToCanonical(
@@ -327,11 +317,6 @@ test("parseToCanonical claude empty thinking_delta emits nothing", () => {
   expect(events).toEqual([]);
 });
 
-// Regression tests for the interleaved-thinking paragraph-break fix. With
-// interleaved thinking the model streams text → thinking → text inside one
-// message; consecutive text blocks used to clump ("design.Design settled.").
-// A paragraph break must land between distinct blocks/messages, but never
-// between deltas of the same block nor as a leading break on an empty buffer.
 
 test("interleaved thinking inserts a paragraph break between text blocks in one message", () => {
   resetStateForTests();
@@ -385,11 +370,9 @@ test("no leading paragraph break when the streamed buffer is empty", () => {
 
 test("an existing newline boundary is not doubled into a paragraph break", () => {
   resetStateForTests();
-  // Trailing newline on the buffer: no extra break added.
   applyCanonicalEvents([{ kind: "append_text", text: "Line one\n" }]);
   applyCanonicalEvents([{ kind: "append_text", text: "Line two" }]);
   expect(S.currentStreamedContent).toBe("Line one\nLine two");
-  // Leading newline on the next block: no extra break added.
   resetStateForTests();
   applyCanonicalEvents([{ kind: "append_text", text: "Line one" }]);
   applyCanonicalEvents([{ kind: "append_text", text: "\nLine two" }]);

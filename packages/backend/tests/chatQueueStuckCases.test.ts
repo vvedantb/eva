@@ -5,23 +5,14 @@ import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Cases where a queued chat message used to stay in "Queued" with nothing left
- * to send it: subagents orphaned by a stopped sandbox, a message sent while the
- * sandbox was stopping, and a provider account removed after the enqueue.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 const MINUTE_MS = 60 * 1000;
 
 async function fixture(options: {
   sandboxStatus: "active" | "closed" | "starting" | "stopping";
-  /** A subagent the dead VM never settled, started this long ago. */
   orphanAgentAgeMs?: number;
-  /** The queued message names an account that was deleted after the enqueue. */
   deletedAccount?: boolean;
 }) {
   const t = convexTest(schema, modules);
@@ -108,7 +99,6 @@ function scheduledDrains(t: TestConvex) {
 }
 
 describe("a queued message is not stranded", () => {
-  // Keeps scheduled sandbox starts from firing after the test finishes.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -163,7 +153,6 @@ describe("a queued message is not stranded", () => {
         sandboxStatus: "stopping",
       });
 
-      // The enqueue-time drain finds the sandbox mid-stop and waits.
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
         parentId: chatId,
       });
@@ -192,8 +181,6 @@ describe("a queued message is not stranded", () => {
         deletedAccount: true,
       });
 
-      // Used to throw, rolling back the caller and leaving the row at the
-      // front of the queue for every later drain to throw on again.
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
         parentId: chatId,
       });

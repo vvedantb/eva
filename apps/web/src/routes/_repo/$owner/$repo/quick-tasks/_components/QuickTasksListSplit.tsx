@@ -28,12 +28,10 @@ interface QuickTasksListSplitProps {
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
   selectedTaskId?: Id<"agentTasks">;
-  /** Resolve status of the numId in the URL; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
   detailTab?: TaskDetailTab;
   sandboxTab?: TaskRouteSandboxTab;
   navSurface: "detail" | "sandbox";
-  /** The Archived list: no drafts, no Run All, Unarchive in row menus. */
   archived?: boolean;
 }
 
@@ -87,8 +85,6 @@ export function QuickTasksListSplit({
           leftDefaultSize="33%"
           leftMinWidthPx={260}
           rightMinWidthPx={360}
-          // The detail pane is the point of this view, so it starts open —
-          // unlike the sidebar-style panels the other call sites use.
           defaultRightCollapsed={false}
           expandRightSignal={expandRightSignal}
           collapseRightSignal={collapseRightSignal}

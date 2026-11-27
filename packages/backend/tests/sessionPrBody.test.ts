@@ -1,14 +1,6 @@
 import { expect, test } from "bun:test";
 import { appendRelatedPrsSection, buildPrBody } from "../convex/prBody";
 
-/**
- * Multi-repo sessions open one draft PR per repo. Every PR body should point
- * at its siblings so a reviewer looking at one repo's PR can jump straight to
- * the matching PRs in linked repos — appendRelatedPrsSection is the pure piece
- * that adds that section, kept separate from buildPrBody so single-repo
- * sessions (the overwhelming majority) see byte-identical PR bodies.
- */
-
 test("no-op when there are no sibling PRs", () => {
   const body = buildPrBody(
     [{ heading: "Summary", content: "- did a thing" }],

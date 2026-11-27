@@ -4,7 +4,6 @@ import { internalAction } from "../_generated/server";
 import { sleep } from "../_shared/async";
 
 const POLL_INTERVAL_MS = 250;
-/** Below the 10-minute action ceiling. The gate also clears when setup fails. */
 const MAX_WAIT_MS = 8 * 60 * 1000;
 
 /**

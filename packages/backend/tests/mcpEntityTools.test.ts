@@ -7,20 +7,10 @@ import { findOpenTurn } from "../convex/_chat/turnStore";
 import { decideSandboxStartPlan } from "../convex/mcp/orchestratorDelivery";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The entity tools an orchestrator drives between sends: what exists
- * (list_entities), whether the preview VM is up (start_sandbox/stop_sandbox),
- * and what is still waiting behind a busy turn (cancel_queued_message).
- */
-
 
 const OWNER_CLERK_ID = "clerk|entity-tools-owner";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/701";
 
-/**
- * One repo the caller owns with a session, a quick task (plus the run holding
- * its PR) and a project, and a second repo owned by somebody else.
- */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -52,7 +42,6 @@ async function fixture() {
       updatedAt: now - 1_000,
       branchName: "eva/session-login",
     });
-    // The session's turn in flight.
     await ctx.db.insert("turns", {
       entityId: sessionId,
       streamingEntityId: String(sessionId),
@@ -83,7 +72,6 @@ async function fixture() {
       updatedAt: now - 2_000,
       createdBy: ownerUserId,
     });
-    // A quick task's sandbox is its owned session's (hidden from lists).
     const taskSessionId = await ctx.db.insert("sessions", {
       owner: { kind: "task", taskId },
       repoId,
@@ -185,18 +173,14 @@ describe("list_entities returns what the caller can already open", () => {
     const { entities } = await listFor(f);
     const byId = new Map(entities.map((entity) => [entity.id, entity]));
 
-    // A session's one status IS its sandbox status.
     expect(byId.get(f.sessionId)?.status).toBe("active");
     expect(byId.get(f.sessionId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.sessionId)?.isExecuting).toBe(true);
 
-    // A task tracks lifecycle and sandbox (its session's) separately.
     expect(byId.get(f.taskId)?.status).toBe("code_review");
     expect(byId.get(f.taskId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.taskId)?.isExecuting).toBe(false);
 
-    // A project reports its derived stage (no tasks: todo), and has never
-    // started a sandbox.
     expect(byId.get(f.projectId)?.status).toBe("todo");
     expect(byId.get(f.projectId)?.sandboxStatus).toBe("closed");
   });
@@ -231,13 +215,10 @@ describe("list_entities returns what the caller can already open", () => {
         (e) => e.id,
       ),
     ).toEqual([f.projectId]);
-    // The stored phase is not the filter any more.
     expect(
       (await listFor(f, { status: "in_progress", kind: "project" })).entities,
     ).toEqual([]);
 
-    // "active" is a session word. Tasks and projects never match it, rather
-    // than the filter being silently ignored for them.
     expect(
       (await listFor(f, { status: "active", kind: "task" })).entities,
     ).toEqual([]);
@@ -265,7 +246,6 @@ describe("list_entities returns what the caller can already open", () => {
 
     const ids = (await listFor(f)).entities.map((entity) => entity.id);
     expect(ids).toEqual([f.closedSessionId]);
-    // Also gone from the per-status path, which uses different indexes.
     expect((await listFor(f, { status: "code_review" })).entities).toEqual([]);
   });
 });
@@ -331,7 +311,6 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
 
   test("a session running a daemon continuation counts as executing", async () => {
     const f = await fixture();
-    // A `/loop` turn: an open row in `turns` with no workflow bound.
     const loopingSessionId = await f.t.run(async (ctx) => {
       const sessionId = await ctx.db.insert("sessions", {
         owner: { kind: "standalone" },
@@ -361,14 +340,12 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         id: loopingSessionId,
       }),
     ).toBe(true);
-    // And an idle session with neither is not.
     expect(
       await f.t.query(internal.mcp.queries.entityIsExecuting, {
         kind: "session",
         id: f.closedSessionId,
       }),
     ).toBe(false);
-    // The list agrees with the single-entity answer.
     const listed = (await listFor(f)).entities.find(
       (entity) => entity.id === loopingSessionId,
     );
@@ -433,7 +410,6 @@ describe("cancel_queued_message only touches the queue", () => {
     });
     expect(remaining.map((message) => message._id)).toEqual([f.queuedIds[1]]);
 
-    // The turn in flight is untouched — that is stop_agent's job, not this.
     const turn = await f.t.run(async (ctx) => findOpenTurn(ctx, f.sessionId));
     expect(turn?.workflowId).toBe("wf_session");
   });
@@ -470,7 +446,6 @@ describe("cancel_queued_message only touches the queue", () => {
       }),
     ).toEqual([]);
 
-    // And nothing was deleted on the way to being refused.
     const survivors = await f.t.run(async (ctx) =>
       ctx.db
         .query("queuedMessages")
@@ -481,12 +456,6 @@ describe("cancel_queued_message only touches the queue", () => {
   });
 });
 
-/**
- * 2026-09-24: asked "give me the link then?", a session answered that no link
- * existed and offered to merge the PR — its own sandbox was serving the work
- * the whole time. `get_preview_url` closes that gap, so what it needs to
- * answer has to travel with the resolved chat.
- */
 describe("get_preview_url can find the running app behind a chat", () => {
   async function resolve(
     f: Awaited<ReturnType<typeof fixture>>,
@@ -511,20 +480,16 @@ describe("get_preview_url can find the running app behind a chat", () => {
       await ctx.db.patch(f.taskSessionId, { sandboxId: "sbx_task" });
     });
 
-    // A session's own status is its sandbox's, and its port beats the repo's.
     const session = await resolve(f, "session", f.sessionId);
     expect(session?.sandboxStatus).toBe("active");
     expect(session?.sandboxId).toBe("sbx_session");
     expect(session?.devPort).toBe(5173);
 
-    // A task's sandbox is its session's; with no port of its own there, the
-    // repo default answers for it.
     const task = await resolve(f, "task", f.taskId);
     expect(task?.sandboxStatus).toBe("active");
     expect(task?.sandboxId).toBe("sbx_task");
     expect(task?.devPort).toBe(3000);
 
-    // A project that never started one reports closed rather than nothing.
     const project = await resolve(f, "project", f.projectId);
     expect(project?.sandboxStatus).toBe("closed");
     expect(project?.sandboxId).toBeUndefined();

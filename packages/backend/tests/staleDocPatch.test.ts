@@ -3,13 +3,6 @@ import { buildStaleDocPatch } from "../convex/_prRecapWorkflow/staleDoc";
 
 const NOW = 1_800_000_000_000;
 
-/**
- * Regression cover for the "recap stranded in pending" bug: handleStaleDoc
- * cancelled a timed-out recap workflow and cleared activeWorkflowId but left
- * prRecapStatus "pending". The panel hides Generate while pending, so a dead
- * run spun "Generating recap..." forever with no way to retry. A timed-out
- * pending recap must now land on a recoverable "error".
- */
 describe("buildStaleDocPatch", () => {
   test("flips a pending recap to a recoverable error", () => {
     const patch = buildStaleDocPatch({ prRecapStatus: "pending" }, NOW);
@@ -21,7 +14,6 @@ describe("buildStaleDocPatch", () => {
   });
 
   test("never re-errors a recap that already finished", () => {
-    // A ready recap that timed out on a later run must keep its result.
     expect(buildStaleDocPatch({ prRecapStatus: "ready" }, NOW)).toEqual({
       activeWorkflowId: undefined,
     });

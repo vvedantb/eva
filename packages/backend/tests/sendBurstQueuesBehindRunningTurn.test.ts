@@ -6,14 +6,6 @@ import schema from "../convex/schema";
 import { findOpenTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The composer picks send or queue from its own subscription, so a burst of
- * sends can all reach `startExecute` before it sees the first turn. Each one
- * used to start, so two turns ran at once. A send that lands behind a running
- * turn must queue instead, and its composer-stored user row must go (the
- * dequeue inserts its own).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|send-burst";
 const BURST_MESSAGE = "and also rename the button";
@@ -36,7 +28,6 @@ async function baseFixture() {
 type Fixture = Awaited<ReturnType<typeof baseFixture>>;
 type Row = { role: "user" | "assistant"; content: string; finished?: true };
 
-/** A session chat with a running turn and `rows` stored oldest first. */
 function busySessionChat(f: Fixture, rows: Row[]) {
   return f.t.run(async (ctx) => {
     const sessionId = await ctx.db.insert("sessions", {
@@ -131,8 +122,6 @@ describe("a send that lands behind a running turn", () => {
   test(
     "drops its row even when the first turn's placeholder is newer",
     async () => {
-      // Both composer rows land, then the first send's turn inserts its
-      // placeholder, so the burst row is no longer the chat's newest row.
       const f = await baseFixture();
       const chatId = await busySessionChat(f, [
         { role: "user", content: "fix the header" },

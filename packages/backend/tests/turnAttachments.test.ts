@@ -8,20 +8,10 @@ import {
   buildAttachmentPromptNote,
 } from "../convex/_sandbox_runtime/attachments";
 
-/**
- * Input attachments reach the agent as files on disk plus a prompt note naming
- * them. Every failure mode here is silent: the turn still runs, the agent just
- * never sees the screenshot the user pasted — or worse, is told to read a path
- * that was never written. Refactor 9cc9bbcc collapsed three copied daemon
- * implementations into `materializeTurnAttachments`, so a mistake in it now
- * costs Claude, Codex and Cursor at once.
- */
-
 type StubReply =
   | { status: number; contentType?: string; body?: string }
   | "network-error";
 
-/** Replies to the materialiser's downloads in order. Returns the URLs it asked for. */
 function stubFetch(replies: readonly StubReply[]): string[] {
   const requested: string[] = [];
   let next = 0;
@@ -45,7 +35,6 @@ function stubFetch(replies: readonly StubReply[]): string[] {
   return requested;
 }
 
-/** The materialiser writes to fixed `/tmp` paths, so each case starts clean. */
 function clearWrittenAttachments(): void {
   for (const name of readdirSync("/tmp")) {
     if (name.startsWith("eva-attachment-")) {
@@ -75,8 +64,6 @@ describe("materializeTurnAttachments", () => {
       { status: 200, contentType: "image/png", body: "screenshot-bytes" },
       { status: 200, contentType: "text/markdown", body: "# spec" },
     ]);
-    // The daemons pass their claimed turn straight through and then send
-    // `turn.prompt` to the provider, so the note has to be appended in place.
     const turn = {
       prompt: "Match this design.",
       attachmentUrls: ["https://example.test/a", "https://example.test/b"],
@@ -98,8 +85,6 @@ describe("materializeTurnAttachments", () => {
   });
 
   test("a failed download is skipped and the survivor keeps its own index", async () => {
-    // Naming by download count instead of attachment index would silently
-    // rename the survivor, and a second turn could then overwrite it.
     stubFetch([
       { status: 502 },
       { status: 200, contentType: "image/webp", body: "second" },
@@ -129,8 +114,6 @@ describe("materializeTurnAttachments", () => {
   });
 
   test("no note is appended when every download fails", async () => {
-    // A note listing files that were never written is worse than no note: the
-    // agent burns the turn reporting that it cannot read them.
     stubFetch([{ status: 404 }, "network-error"]);
     const turn = {
       prompt: "Nothing survives.",
@@ -145,14 +128,6 @@ describe("materializeTurnAttachments", () => {
   });
 });
 
-/**
- * The daemon path (`callback-src`) and the CLI launch path
- * (`convex/_sandbox_runtime/attachments.ts`) are separate bundles that cannot
- * import each other, so the filename scheme, extension table and note text are
- * duplicated by design. Drift means an attachment that works on a cold launch
- * disappears on the next turn of the same session — pinned here against the
- * launch path's own helpers rather than restated by hand.
- */
 describe("the daemon path matches the CLI launch path", () => {
   const MIME_TYPES = [
     "image/jpeg",
@@ -163,11 +138,9 @@ describe("the daemon path matches the CLI launch path", () => {
     "text/html",
     "text/markdown",
     "text/plain",
-    // Unknown image subtype: pasted screenshots used to arrive like this.
     "image/heic",
     "application/pdf",
     "",
-    // Parameters and casing come off the wire and must not reach the table.
     "IMAGE/PNG; charset=utf-8",
     "text/plain;charset=UTF-8",
   ];

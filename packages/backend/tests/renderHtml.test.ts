@@ -14,13 +14,6 @@ import {
   type RenderHtmlInput,
 } from "../convex/_mcp/renderHtmlTool";
 
-/**
- * `render_html` is a thin tool over storage, so what needs proving is the
- * boundary: the caps reach the agent as errors before anything is stored, the
- * bootstrap lands where the page cannot be pushed into quirks mode, and the
- * frame only acts on well-formed bridge messages.
- */
-
 const page = "<!doctype html><html><head><title>t</title></head><body>hi</body></html>";
 const context: HtmlRenderHostContext = {
   theme: "dark",
@@ -49,7 +42,6 @@ describe("render_html tool", () => {
 
   it("rejects a height outside the frame bounds", async () => {
     const { calls, instance } = tool("render123");
-    // `invoke` parses before it awaits anything, so a bad input throws at once.
     expect(() =>
       instance.invoke(
         JSON.stringify({
@@ -64,7 +56,6 @@ describe("render_html tool", () => {
 
   it("rejects a page over the byte cap, counting multi-byte characters", async () => {
     const { calls, instance } = tool("render123");
-    // Under the cap in characters, over it in UTF-8 bytes.
     const html = "é".repeat(HTML_RENDER_MAX_BYTES / 2 + 1);
     expect(() =>
       instance.invoke(JSON.stringify({ html, title: "Big", height: 320 })),

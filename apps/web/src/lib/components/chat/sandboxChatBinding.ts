@@ -55,9 +55,7 @@ export interface SandboxChatBinding {
   persistAccount: (id: Id<"userProviderAccounts"> | null) => Promise<unknown>;
   prewarm: () => Promise<unknown>;
   ports: SandboxTurnPorts;
-  /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
-  /** A quick task's first run, shown as the chat's opening turn. */
   firstRun?: {
     isInProgress: boolean;
     streaming: StreamingRow | undefined;

@@ -122,10 +122,6 @@ export function findEvaApp(
   );
 }
 
-// ---------------------------------------------------------------------------
-// MCP servers (display only — the sandbox callback reads the file itself)
-// ---------------------------------------------------------------------------
-
 const mcpServerSchema = z.union([
   z.object({
     type: z.enum(["http", "sse"]).optional(),
@@ -149,10 +145,6 @@ export type EvaMcpServerSummary = {
   target: string;
 };
 
-/**
- * Eva injects these itself; the sandbox callback drops repo entries with the
- * same name (`callback-src/evaMcp.ts` keeps its own copy — no shared import).
- */
 const RESERVED_MCP_SERVER_NAMES = new Set(["eva", "linear", "figma"]);
 
 /** Parses `.eva/mcp.json` into display summaries (no secrets resolved). */
@@ -181,11 +173,6 @@ export function parseEvaMcpSummary(
   return { ok: true, value: servers };
 }
 
-// ---------------------------------------------------------------------------
-// Fingerprints
-// ---------------------------------------------------------------------------
-
-/** djb2 — deterministic and dependency-free (isolates cannot use node:crypto). */
 function hashPayload(payload: string): string {
   let hash = 5381;
   for (let i = 0; i < payload.length; i++) {
@@ -241,10 +228,6 @@ export function evaAppFingerprints(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Draft from today's Convex fields (migration)
-// ---------------------------------------------------------------------------
-
 export type ConvexAppCommands = {
   rootDirectory?: string;
   devCommand?: string;
@@ -252,7 +235,6 @@ export type ConvexAppCommands = {
   startupCommands?: string[];
   backgroundCommands?: string[];
   stopCommands?: string[];
-  /** This app's own snapshot config commands, when it has one. */
   buildCommands?: string[];
   seedCommands?: string[];
 };

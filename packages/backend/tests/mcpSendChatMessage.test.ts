@@ -18,11 +18,6 @@ const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/665";
 const PROJECT_PR_URL = "https://github.com/vvedantb/eva/pull/666";
 
-/**
- * Owner with one of each chat surface — session, quick task (with the run that
- * opened its PR) and project — plus an unrelated user who owns nothing here.
- * Every surface takes numId 42 so the ambiguity a bare number carries is real.
- */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -67,7 +62,6 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    // A task's PR names the run that opened it.
     const runId = await ctx.db.insert("agentRuns", {
       taskId,
       status: "success",
@@ -138,7 +132,6 @@ describe("resolving the chat an MCP caller named", () => {
       { userId: f.ownerUserId, prUrl: sidePrUrl },
     );
     expect(resolved?.targetId).toBe(f.sessionId);
-    // The chat's own PR is still the one it reports.
     expect(resolved?.prUrl).toBe(PR_URL);
   });
 
@@ -194,7 +187,6 @@ describe("resolving the chat an MCP caller named", () => {
       );
       expect(resolved?.kind).toBe("project");
       expect(resolved?.targetId).toBe(f.projectId);
-      // A project reports its derived stage: no tasks yet, so todo.
       expect(resolved?.status).toBe("todo");
     }
   });
@@ -220,8 +212,6 @@ describe("resolving the chat an MCP caller named", () => {
 
   test("a Convex id is never mistaken for another table's row", async () => {
     const f = await fixture();
-    // The id belongs to a task, so a session-only search must miss rather than
-    // fall through to the task.
     expect(
       await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
         userId: f.ownerUserId,
@@ -256,8 +246,6 @@ describe("resolving the chat an MCP caller named", () => {
 
   test("a chat in a repo the caller cannot reach resolves to nothing", async () => {
     const f = await fixture();
-    // Named exactly right — the only thing missing is access, and the answer is
-    // the same null a bogus id gets, so no session is confirmed to exist.
     const resolved = await f.t.query(
       internal.mcp.queries.resolveChatTargetForUser,
       { userId: f.ownerUserId, id: f.strangerSessionId },
@@ -267,7 +255,6 @@ describe("resolving the chat an MCP caller named", () => {
 
   test("a numId is not enough on its own, and belongs to its own repo only", async () => {
     const f = await fixture();
-    // No kind: 42 names a session, a task and a project at once.
     expect(
       await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
         userId: f.ownerUserId,
@@ -319,7 +306,6 @@ describe("resolving the chat an MCP caller named", () => {
         id: f.sessionId,
       }),
     ).toBeNull();
-    // An archived task or project still resolves, like an archived session.
     for (const id of [f.taskId, f.projectId]) {
       expect(
         await f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
@@ -388,8 +374,6 @@ describe("PR links the tool accepts", () => {
 });
 
 describe("what a send does to the chat", () => {
-  // Every MCP send lands in one session chat: a session's (named or Main), or
-  // the one a task or project talks in on its session, resolved upstream.
   const BUSY = [false, true];
 
   test("an idle chat gets a user message and then a turn", () => {
@@ -457,9 +441,6 @@ describe("what a send does to the chat", () => {
   });
 
   test("no argument is sent that the chat mutations do not declare", () => {
-    // Sessions lost their plan/edit `mode` long ago, but the MCP send kept
-    // passing one. Convex rejects an argument no validator declares, so that
-    // leftover failed the whole send.
     const args = BUSY.flatMap((isBusy) =>
       buildChatMessageCalls({
         chatId: "x1",

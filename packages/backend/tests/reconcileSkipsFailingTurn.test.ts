@@ -7,7 +7,6 @@ import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
 
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 const poison = {
@@ -15,9 +14,6 @@ const poison = {
   throws: 0,
 };
 
-// Stands in for any mutation-level failure (in prod: a 16 MB read limit on an
-// unbounded `backgroundAgents` array) on exactly one turn.
-// Copied before mock.module patches the namespace, so the wrapper calls the real one.
 const actual = { ...StallWatchdog };
 mock.module("../convex/_chat/stallWatchdog", () => {
   return {
@@ -34,7 +30,6 @@ mock.module("../convex/_chat/stallWatchdog", () => {
   };
 });
 
-// Keeps the scheduled stall retry from firing after the test finishes.
 beforeEach(() => {
   vi.useFakeTimers();
   poison.throws = 0;
@@ -43,11 +38,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/**
- * The bug: `reconcile` let a throw from `finalizeExpired` escape. The batch is
- * ordered by lease expiry, so one turn that could not finalise blocked every
- * later expired turn on every watchdog cycle.
- */
 test(
   "reconcile still finalises later turns when an earlier one throws",
   async () => {
@@ -101,7 +91,6 @@ test(
         });
         return turnId;
       };
-      // The poisoned turn expired first, so it heads the reconcile batch.
       const now = Date.now();
       return {
         poisonedTurnId: await openExpiredTurn(1, now - 2000, poison.workflowId),

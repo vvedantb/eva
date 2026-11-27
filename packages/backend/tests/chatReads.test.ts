@@ -4,15 +4,8 @@ import { computeHasUnread, isOwnChat } from "../convex/chatReads";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The unread rule shared by the three chat list queries and `isUnread`. Only
- * "my" chats light up: owner, creator, project member, or a chat the user has
- * opened before (a read row exists). Teammates' chats stay quiet otherwise.
- */
-
 const TIMEOUT_MS = 30_000;
 
-/** Real ids keep the tests cast-free; nothing else touches the database. */
 async function twoUsers() {
   const t = convexTest(schema, modules);
   return t.run(async (ctx) => ({

@@ -24,8 +24,6 @@ import {
   loadProjectTaskRows,
 } from "../_projects/taskTable";
 
-// --- Turn config ---
-
 /**
  * Tools every session turn may use. Skill is required so the harness can invoke
  * Eva's system skills (eva-plan, eva-design, eva-ask, eva-capture, eva-audit, eva-grab-proof,
@@ -34,11 +32,6 @@ import {
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
 
-/**
- * Added to a turn's prompt while the session has more than one open chat.
- * Deliberately not a sibling summary (what the other chats are doing) — only
- * the one fact an agent sharing a working tree needs.
- */
 const PARALLEL_CHATS_NOTE =
   "Other chats in this session may edit this checkout at the same time. Do not revert changes you did not make.";
 
@@ -72,16 +65,10 @@ ${message}`;
  */
 export const PROJECT_SUMMARY_PROMPT_MAX_CHARS = 6_000;
 
-/** Joins the non-empty prompt blocks with a blank line. */
 function joinBlocks(...blocks: string[]): string {
   return blocks.filter((block) => block.trim() !== "").join("\n\n");
 }
 
-/**
- * What every coordinator and child task turn knows of its project: the
- * project context (its description) and the summary doc, capped at
- * `PROJECT_SUMMARY_PROMPT_MAX_CHARS`. Empty when neither is set.
- */
 async function projectBriefBlock(
   ctx: QueryCtx,
   project: Pick<Doc<"projects">, "description" | "summaryDocId">,
@@ -106,7 +93,6 @@ async function projectBriefBlock(
   );
 }
 
-/** What a child task knows of its place in the project and how it reports up. */
 const CHILD_TASK_RULES = `This task is one part of a project. The project's coordinator plans the work and other tasks run beside this one, each on its own branch and PR to main.
 - Do only this task. Keep your change safe to merge alone.
 - Read sibling tasks, docs and the summary with list_agents (scope "project"), list_eva_docs and list_artifacts (scope "project") and read_chat_log. Never change a sibling's work.
@@ -151,15 +137,6 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 - A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.
 - Keep the project summary current with update_project_summary: goal, launched, in progress, next, decisions, risks.`;
 
-/**
- * What the session's owner adds to a turn. A standalone session adds nothing.
- * A task's session leads with the task; a project child task's also carries
- * the project (`childTaskProjectBlock`). A project's session is its
- * coordinator: it leads with the coordinator rules, the project brief and the
- * live task table (`formatProjectTaskTable`). This is a snapshot when the
- * turn starts. The owner's PR is used: the owner owns it, the session has
- * none.
- */
 async function ownerPromptContext(
   ctx: QueryCtx,
   session: Doc<"sessions">,
@@ -218,7 +195,6 @@ export async function buildSessionPrompt(
     repo: Doc<"githubRepos">;
     user: Doc<"users"> | null;
     message: string;
-    /** Model this turn runs on; decides whether a handoff catch-up is needed. */
     model: string;
   },
 ): Promise<{ prompt: string; branchName: string }> {
@@ -240,11 +216,6 @@ export async function buildSessionPrompt(
   const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
   if (bareCommand !== null) return { prompt: bareCommand, branchName };
 
-  // Sibling repositories this sandbox's git credentials can read (owner is the
-  // session owner, whose access the credential helper mints tokens against).
-  // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
-  // in as a rotation handoff. Session plan.md / planContent is not injected —
-  // that was the old Plan/Build mode contract.
   const [readableRepos, linkedRepoRows, owner, history] = await Promise.all([
     listReadableSiblingRepos(ctx.db, session.userId, repo._id),
     ctx.db
@@ -259,8 +230,6 @@ export async function buildSessionPrompt(
     args.model,
     chat.provider,
   );
-  // A resumed provider session already holds the full instructions from an
-  // earlier turn. Re-sending ~3k tokens each message only slows the reply.
   const followUp = handoff.kind === "none" && hasDeliveredTurn(history);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
@@ -301,7 +270,6 @@ export async function buildSessionPrompt(
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
   }
-  // Last, so the catch-up block leads the whole prompt.
   prompt = await prependModelHandoffContext(ctx, chat._id, handoff, prompt);
   return { prompt, branchName };
 }

@@ -21,15 +21,8 @@ import {
   type RoutableNotification,
 } from "@eva/shared/notificationRouting";
 
-/** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
 
-/**
- * Notification types whose title does not name the task (e.g. "X mentioned you
- * in a comment", "X replied to your comment"). Only these get a contextLabel
- * second line on the card. Every other type already embeds the task title in
- * its own title, so a context line would just repeat it.
- */
 const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
@@ -53,11 +46,6 @@ export const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
  */
 export const HIGH_URGENCY_EMAIL_DELAY_MS = 60_000;
 
-/**
- * How many unread notifications to scan per user before filtering. Larger than
- * the display limit so impactful items (mentions, merges) are not buried under
- * a backlog of rows that are never emailed.
- */
 const DIGEST_SCAN_LIMIT = 200;
 
 /**
@@ -78,28 +66,18 @@ export async function createNotification(
     taskId?: Id<"agentTasks">;
     docId?: Id<"docs">;
     sessionId?: Id<"sessions">;
-    // Set by the comment paths (task comments, doc comments). Anchors the
-    // click-through to the exact comment rather than the top of the page.
     commentId?: Id<"taskComments"> | Id<"docComments">;
-    // Set by chat mentions: mention routing decides urgency afterwards and
-    // pushes then, so a `low` mention never buzzes the phone.
     routesUrgency?: boolean;
-    // Known at creation (comment mentions, agent `notify_user`): the modifier
-    // on top of the routing table (`@eva/shared/notificationRouting`).
     urgency?: Infer<typeof notificationUrgencyValidator>;
   },
 ): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
 
-  // Fetched once and shared: the href and the context label below are both
-  // derived from whichever entity the notification is about.
   const doc = params.docId ? await ctx.db.get(params.docId) : null;
   const task = params.taskId ? await ctx.db.get(params.taskId) : null;
   const project = params.projectId ? await ctx.db.get(params.projectId) : null;
   const session = params.sessionId ? await ctx.db.get(params.sessionId) : null;
 
-  // Notification links stay on-app: an href that is not an app path is
-  // dropped (and re-derived below when there is a repo).
   let href =
     params.href !== undefined && isInternalAppHref(params.href)
       ? params.href
@@ -108,9 +86,6 @@ export async function createNotification(
     const repo = await ctx.db.get(params.repoId);
     if (repo) {
       const baseHref = repoBasePath(repo);
-      // Detail routes are keyed by per-repo numId, not by Convex id — a Convex
-      // id in the path fails `parseRouteNumId` and renders "not found". An
-      // entity still awaiting numId backfill falls through to its section list.
       if (doc?.numId !== undefined) {
         href = `${baseHref}/docs/${doc.numId}/content`;
       } else if (project?.numId !== undefined && task?.numId !== undefined) {
@@ -127,15 +102,10 @@ export async function createNotification(
     }
   }
 
-  // Anchor the click-through to the comment that caused the notification. Done
-  // after href resolution so it covers both the derived href and one passed in
-  // by the caller.
   if (href && params.commentId) {
     href = withCommentAnchor(href, params.commentId);
   }
 
-  // Snapshot a human-readable context label for the notification card, but only
-  // for types whose title does not already name the entity.
   let contextLabel: string | undefined;
   if (CONTEXT_LABEL_TYPES.has(type)) {
     if (doc) {
@@ -148,7 +118,6 @@ export async function createNotification(
       contextLabel = session.title;
     }
   }
-  // Most specific chat first: a project task's own chat, not the project's.
   const chatTarget = task?._id ?? session?._id ?? project?._id;
   const notificationId = await ctx.db.insert("notifications", {
     userId: params.userId,
@@ -165,8 +134,6 @@ export async function createNotification(
     createdAt: Date.now(),
   });
 
-  // A routed chat mention is delivered once routing has judged it
-  // (`setUrgency`, `routeMentionFallback`).
   if (params.routesUrgency === true) return notificationId;
   const routable: RoutableNotification = {
     type,
@@ -177,8 +144,6 @@ export async function createNotification(
   if (notificationPushes(routable)) {
     await pushNotification(ctx, notificationId);
   }
-  // Instant-email types get one after a debounce. The send is skipped if the
-  // user reads it in-app first (see notificationEmail.ts).
   if (notificationEmail(routable) === "instant") {
     await ctx.scheduler.runAfter(
       params.urgency === "high"
@@ -191,7 +156,6 @@ export async function createNotification(
   return notificationId;
 }
 
-/** Pushes one notification row to the user's phone, opening its chat or the screen its link names. */
 async function pushNotification(
   ctx: MutationCtx,
   notificationId: Id<"notifications">,
@@ -202,8 +166,6 @@ async function pushNotification(
     userId: notification.userId,
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
-    // `target` opens a chat; otherwise the phone opens its own screen for
-    // `href` (with `repoId`), or the web. Older app builds read `target` only.
     data: notification.chatTarget
       ? { target: notification.chatTarget }
       : notification.href
@@ -256,8 +218,6 @@ const notificationValidator = v.object({
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
   chatTarget: v.optional(v.string()),
-  // Undefined = not yet routed (a mention whose routing action has not landed)
-  // or legacy; treated as normal everywhere it is read.
   urgency: v.optional(notificationUrgencyValidator),
 });
 
@@ -279,7 +239,6 @@ export const setUrgency = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const notification = await ctx.db.get(args.notificationId);
-    // Archived or deleted between creation and routing: nothing left to route.
     if (!notification) return null;
     await deliverRoutedMention(ctx, notification, args.urgency);
     return null;
@@ -298,14 +257,12 @@ export const routeMentionFallback = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const notification = await ctx.db.get(args.notificationId);
-    // Archived or deleted between creation and routing: nothing to deliver.
     if (!notification) return null;
     await deliverRoutedMention(ctx, notification, "high");
     return null;
   },
 });
 
-/** Stamps a routed chat mention's urgency, then pushes and emails as the table says. */
 async function deliverRoutedMention(
   ctx: MutationCtx,
   notification: Doc<"notifications">,
@@ -325,15 +282,8 @@ async function deliverRoutedMention(
   }
 }
 
-/** Max ids a single bulk notification mutation will accept. */
 const BULK_ID_LIMIT = 100;
 
-/**
- * The caller's own notifications, for a bulk mutation. Ids that belong to
- * somebody else (or no longer exist) are skipped rather than thrown on: the
- * same owner check `markAsRead` makes, applied per row, so one stale id in a
- * selection cannot fail the whole action.
- */
 async function ownedNotifications(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -517,7 +467,6 @@ export const unarchiveMany = authMutation({
     const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
     for (const n of owned) {
       if (n.archivedAt === undefined) continue;
-      // `undefined` removes the field, which is what "not archived" means.
       await ctx.db.patch(n._id, { archivedAt: undefined });
     }
     return null;
@@ -628,7 +577,6 @@ export const getUnreadEmailableForUser = internalQuery({
       )
       .order("desc")
       .take(DIGEST_SCAN_LIMIT);
-    // A digested row carries `emailedAt` too, so it is never sent again here.
     const relevant = unread.filter(
       (n) =>
         n.emailedAt === undefined && notificationEmail(n) === "instant",

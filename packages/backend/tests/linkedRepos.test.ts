@@ -118,9 +118,6 @@ describe("revertTargets", () => {
     ]);
   });
 
-  // Turns recorded before multi-repo checkpoints existed, and every
-  // single-repo session: `path: undefined` resolves to the primary's dir at
-  // exec time.
   test("falls back to the scalar beforeSha for the primary repo", () => {
     expect(revertTargets({ beforeSha: "aaa" })).toEqual([
       { path: undefined, sha: "aaa" },

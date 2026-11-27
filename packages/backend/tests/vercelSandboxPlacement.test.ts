@@ -5,13 +5,6 @@ import {
   sandboxPlacement,
 } from "../convex/_sandbox/vercelRegion";
 
-/**
- * After #899 moved sandboxes to cdg1, restoring a seed snapshot taken earlier
- * failed: "The snapshot is available in `iad1`, but this sandbox runs in
- * `cdg1`" (fix #900). A create from a snapshot must follow the snapshot, and a
- * sandbox outside SANDBOX_REGION cannot mount its region-pinned Drives.
- * Sandboxes are back in iad1 now, so cdg1 plays the old region.
- */
 const OLD_REGION = "cdg1";
 
 describe("sandboxPlacement", () => {
@@ -32,9 +25,7 @@ describe("sandboxPlacement", () => {
   test("an old snapshot outside the default region restores where it lives", () => {
     const placement = sandboxPlacement([OLD_REGION]);
     expect(placement.region).toBe(OLD_REGION);
-    // Drives live in SANDBOX_REGION only; mounting them would fail the create.
     expect(placement.mountDrives).toBe(false);
-    // Never list the chosen region as its own failover.
     expect(placement.failoverRegions).not.toContain(OLD_REGION);
   });
 

@@ -9,12 +9,6 @@ import {
   type CandidateProfile,
 } from "../convex/_routedThreads/participantPicking";
 
-/**
- * Who a routed question reaches is decided entirely by these functions, and
- * both ways they can be wrong are quiet: too generous and a question pings
- * half the team, too strict and it reaches nobody and the agent stalls.
- */
-
 function profile(
   name: string,
   parts: Partial<Pick<CandidateProfile, "headline" | "owns" | "askMeAbout">>,

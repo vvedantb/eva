@@ -6,15 +6,8 @@ import schema from "../convex/schema";
 import { ensureMainChat } from "../convex/_sessionChats/helpers";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Heavy sessions hold transcripts over the 16 MiB per-function read limit.
- * The Main chat backfill moves them in bounded pages across mutations, runs
- * sessions one at a time, and costs little on a rerun.
- */
-
 const TIMEOUT_MS = 30_000;
 
-/** ~0.9 MB per message, so a few of them exceed one 2 MiB page. */
 const BIG_CONTENT = "x".repeat(900_000);
 const HEAVY_MESSAGES = 6;
 

@@ -4,22 +4,10 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Reported bug: "Delete draft in the quick task modal doesn't work" (fix
- * 613e5d8cc): a removed draft came straight back on the next subscription
- * push and the button looked dead. A draft is unsent text, so `deleteDraft`
- * deletes the row (drafts are never archived).
- *
- * These run the real mutation against the real queries, because the property
- * that broke is behavioural: the draft must leave the list and the count.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|draft-delete";
 
-/** One repo the caller owns, holding two of their drafts. */
 async function fixture() {
   const t = convexTest(schema, modules);
   const repoId = await t.run(async (ctx) => {

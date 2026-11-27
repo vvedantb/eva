@@ -9,22 +9,11 @@ import {
   entityDaemonPaths,
 } from "../convex/_sandbox_runtime/daemonPaths";
 
-/**
- * Respawning a warm daemon is a kill followed by a relaunch ~1s later, and the
- * kill has to take the daemon's CHILDREN with it: the Claude Code CLI the SDK
- * spawns inherits the `flock -n -E 217` fd the runner was launched under, so an
- * orphaned child keeps the per-entity spawn lock held and the relaunch exits
- * 217 with nobody left polling claimPendingTurn. It also has to be synchronous
- * enough that the relaunch does not race the exit. Both properties live purely
- * in a generated shell string, so they are pinned here.
- */
 describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
   const cmd = buildKillEntityDaemonCmd("sessionId", "sess123");
 
   test("walks the tree by parent pid, never by command line", () => {
     expect(cmd).toContain('pgrep -P "$1"');
-    // `pgrep -f`/`pkill -f` match command lines, so they would match the
-    // `bash -lc` wrapper running this very snippet and kill the exec itself.
     expect(cmd).not.toContain("pgrep -f");
     expect(cmd).not.toContain("pkill -f");
     expect(cmd).not.toContain("pkill");
@@ -34,8 +23,6 @@ describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
     expect(cmd).toContain("TERM");
     expect(cmd).toContain("KILL");
     expect(cmd).toContain('kill -0 "$pid"');
-    // 15 polls x 0.2s == ~3s per pidfile, and at most two pidfiles are reaped,
-    // which has to fit inside the callers' 10s exec timeout.
     expect(cmd).toContain("seq 1 15");
     expect(cmd).toContain("sleep 0.2");
   });
@@ -79,27 +66,15 @@ const pidAlive = (pid: number): boolean => {
   }
 };
 
-/**
- * Whether a process is gone for the lock's purposes: no longer listed, or a
- * zombie. A zombie has closed its fds, so it no longer holds the flock; it
- * only waits for its new parent (the sandbox's init) to reap it, which under
- * CI load can lag the kill by a scheduler tick.
- */
 const processGone = (pid: number): boolean => {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    // The state is the field after the `(comm)`, which may itself hold spaces.
     return stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z");
   } catch {
     return !pidAlive(pid);
   }
 };
 
-/**
- * Waits up to `ms` for a signalled process to go. The relaunch runs ~1s after
- * the kill, so a child that is gone within that window never blocks it; a
- * child the kill missed is still there after it, and fails the test.
- */
 const goneWithin = async (pid: number, ms: number): Promise<boolean> => {
   for (let waited = 0; waited < ms; waited += 20) {
     if (processGone(pid)) return true;
@@ -115,7 +90,6 @@ const readPid = async (file: string): Promise<number> => {
       const pid = Number(readFileSync(file, "utf8").trim());
       if (pid > 0) return pid;
     } catch {
-      /* not written yet */
     }
   }
   return 0;
@@ -123,20 +97,11 @@ const readPid = async (file: string): Promise<number> => {
 
 const bashDescribe = hasShellTools() ? describe : describe.skip;
 
-/**
- * The unit assertions above cannot catch a snippet that is merely valid — e.g.
- * a `kill_tree` recursion that drops the signal argument, or a wait loop that
- * never escalates. So run the real command against a real two-level tree.
- */
 bashDescribe("the generated command kills a real process tree", () => {
   test("the daemon and its child are both dead once the command returns", async () => {
-    // A non-sessionId field so the run never touches the legacy
-    // /tmp/eva-daemon.pid of a daemon that may be live on this machine.
     const entityId = randomUUID();
     const paths = entityDaemonPaths("testEntityId", entityId);
     const dir = mkdtempSync(join(tmpdir(), "eva-kill-tree-"));
-    // Named for the real runner: `reap` only signals a pid whose argv still
-    // names run-design.mjs, so a generic script would be (correctly) spared.
     const script = join(dir, "run-design.mjs");
     const parentPidFile = join(dir, "parent.pid");
     const childPidFile = join(dir, "child.pid");
@@ -145,9 +110,6 @@ bashDescribe("the generated command kills a real process tree", () => {
       `echo $$ > ${parentPidFile}\nsleep 300 &\necho $! > ${childPidFile}\nwait\n`,
     );
 
-    // setsid so the tree's parent is init, not the test runner: node reaps its own
-    // children asynchronously, and a zombie still answers `kill -0`, which
-    // would push the wait loop to its SIGKILL fallback for the wrong reason.
     spawn("setsid", ["bash", script], {
       detached: true,
       stdio: "ignore",
@@ -173,8 +135,6 @@ bashDescribe("the generated command kills a real process tree", () => {
         pidAlive(parentPid),
         "the command returned before the daemon exited",
       ).toBe(false);
-      // The command waits for the daemon only; its child gets the same signal and
-      // goes a moment later, well inside the ~1s before the relaunch.
       expect(
         await goneWithin(childPid, 1_000),
         "the daemon's child outlived it and would keep the inherited flock fd held",
@@ -185,7 +145,6 @@ bashDescribe("the generated command kills a real process tree", () => {
           try {
             process.kill(pid, "SIGKILL");
           } catch {
-            /* already gone */
           }
         }
       }
@@ -194,11 +153,6 @@ bashDescribe("the generated command kills a real process tree", () => {
     }
   }, 20_000);
 
-  /**
-   * The counterpart: a pidfile that outlived a stop/resume names a pid the
-   * reboot handed to something else. Signalling it kills an innocent tree —
-   * on a resumed sandbox, most likely vite or the Convex backend.
-   */
   test("a pidfile whose pid was recycled by an unrelated process is spared", async () => {
     const entityId = randomUUID();
     const paths = entityDaemonPaths("testEntityId", entityId);
@@ -233,7 +187,6 @@ bashDescribe("the generated command kills a real process tree", () => {
         try {
           process.kill(bystanderPid, "SIGKILL");
         } catch {
-          /* already gone */
         }
       }
       rmSync(dir, { recursive: true, force: true });

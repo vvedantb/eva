@@ -65,8 +65,6 @@ export function ReplyThreadView({
   const streamingTargetId = thread
     ? findStreamingTargetMessage(thread.replies)?._id
     : undefined;
-  // Eva's question from a turn in this thread is answered here, not in the
-  // chat: a blocking one resumes her turn, a saved one goes as an @Eva reply.
   const threadTurn = useQuery(api.messages.openThreadTurn, {
     parentId: chatParentId,
   });
@@ -82,8 +80,6 @@ export function ReplyThreadView({
         replies: thread.replies,
       })
     : undefined;
-  // Escape from anywhere (focus often stays on the "N replies" link in the
-  // chat), unless something on top already took it (a menu, a dialog).
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -143,8 +139,6 @@ export function ReplyThreadView({
           title="This message is gone."
         />
       ) : (
-        // A plain scroll area: a thread is short, and the chat's stick-to-
-        // bottom container showed "Scroll to end" over three replies.
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-3 p-3 pt-6">
             {thread
@@ -191,10 +185,6 @@ export function ReplyThreadView({
   );
 }
 
-/**
- * The thread's bottom slot, as the chat's: Eva's open question takes the
- * composer's place until it is answered. A blocking one wins, as in the chat.
- */
 function ThreadDock({
   rootId,
   chatParentId,
@@ -208,7 +198,6 @@ function ThreadDock({
   blocking: { toolUseId: string; payload: string } | null;
   savedQuestionRaw: string | undefined;
 }) {
-  // The saved question just answered: hidden until Eva's reply moves on.
   const [answeredKey, setAnsweredKey] = useState<string | null>(null);
   const [isAnswering, setIsAnswering] = useState(false);
   const addReply = useMutation(api.sessionWorkflow.addReply);

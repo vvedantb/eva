@@ -5,15 +5,6 @@ import { sessionChatAdapter } from "../convex/_chat/surfaceAdapters";
 import type { Doc } from "../convex/_generated/dataModel";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A turn torn down with `sandboxStopped` closes its session, because the VM
- * that session was running is gone. Only an `active` session was running
- * that VM: a newer start (`starting`) or a stop in flight (`stopping`) owns
- * the status, and a late release must not close it. When the release does
- * close the session, its background processes are marked exited too, or the
- * chat panel keeps listing processes on a dead VM.
- */
-
 const TIMEOUT_MS = 30_000;
 
 type SessionStatus = Doc<"sessions">["status"];

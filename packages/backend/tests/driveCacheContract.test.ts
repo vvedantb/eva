@@ -8,11 +8,6 @@ import {
 } from "../convex/_sandbox/driveCache";
 import { snapshotPruneScript } from "../convex/_sandbox/snapshotPrune";
 
-/**
- * The setup script runs at create AND on every resume, so it must be
- * idempotent, never fail, and probe the mount instead of trusting the role:
- * a write-lock clash demotes a writer to a read-only snapshot.
- */
 describe("driveCacheSetupScript", () => {
   const script = driveCacheSetupScript();
 
@@ -27,7 +22,6 @@ describe("driveCacheSetupScript", () => {
     const overlayAt = script.indexOf("mount -t overlay");
     expect(probeAt).toBeGreaterThan(-1);
     expect(probeAt).toBeLessThan(bindAt);
-    // A read-only Drive gets an overlay, never a bind.
     expect(bindAt).toBeLessThan(overlayAt);
   });
 
@@ -40,15 +34,10 @@ describe("driveCacheSetupScript", () => {
   });
 
   test("chmod is not recursive", () => {
-    // A recursive chmod walks the whole warm package store on every create.
     expect(script).not.toMatch(/chmod\s+-R/);
   });
 });
 
-/**
- * The prune deletes local caches the Drive replaced. It must run after the
- * teardown unmounts the cache, or `rm` empties the Drive itself.
- */
 describe("snapshot prune never touches the Drive", () => {
   test("prune targets are local caches, never a mounted Drive", () => {
     const script = snapshotPruneScript();
@@ -59,7 +48,6 @@ describe("snapshot prune never touches the Drive", () => {
     lines.forEach((line, index) => {
       if (!line.includes("rm ")) return;
       expect(line).not.toContain(DRIVE_MOUNT_PATH);
-      // The cache root is only emptied while it is a plain local directory.
       if (line.includes(DRIVE_CACHE_ROOT)) {
         expect(lines[index - 1]).toBe(
           `if ! mountpoint -q ${DRIVE_CACHE_ROOT} 2>/dev/null; then`,

@@ -4,13 +4,6 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The `.eva/config.json` sync writes the file into the existing command fields
- * of every app row, so all current readers keep working. These hit the real
- * mutation: each app gets its own entry, a broken file keeps the last good
- * commands, and a deleted file hands the repo back to Convex.
- */
-
 const TIMEOUT_MS = 30_000;
 
 const CONFIG = JSON.stringify({
@@ -31,7 +24,6 @@ const CONFIG = JSON.stringify({
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    // Siblings are same owner/name AND same team, as every prod row has a team.
     const userId = await ctx.db.insert("users", { clerkId: "clerk|eva-config" });
     const teamId = await ctx.db.insert("teams", {
       name: "Team",
@@ -95,12 +87,8 @@ describe("applyEvaConfig", () => {
 
         const admin = await ctx.db.get(ids.admin);
         expect(admin?.startupCommands).toEqual(["admin-start"]);
-        // The file names no dev command for admin, so detection takes over.
         expect(admin?.devCommand).toBeUndefined();
 
-        // The monorepo root is not listed: its commands stay Convex-managed,
-        // but it is marked as part of a repo that has the file, so the setup
-        // prompt does not show for it.
         const root = await ctx.db.get(ids.root);
         expect(root?.startupCommands).toEqual(["root-old"]);
         expect(root?.evaConfig?.appListed).toBe(false);

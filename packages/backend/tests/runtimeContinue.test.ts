@@ -11,7 +11,6 @@ import { modules } from "./_helpers/convexModules";
 
 const TIMEOUT_MS = 30_000;
 
-/** A session chat whose newest turn is `prompt` → `reply`; returns its queue after one continue pass. */
 async function queueAfterTurn(prompt: string, reply: string, passes = 1) {
   const t = convexTest(schema, modules);
   return await t.run(async (ctx) => {

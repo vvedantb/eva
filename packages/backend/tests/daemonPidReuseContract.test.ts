@@ -10,20 +10,6 @@ import {
   entityDaemonPaths,
 } from "../convex/_sandbox_runtime/daemonPaths";
 
-/**
- * Session 238 (25 Sep 2026). The sandbox was stopped overnight and resumed at
- * 08:20. Everything under /tmp came back with it — the daemon pidfile, the
- * entity and opts markers, the callback fingerprint — but the VM had rebooted,
- * so pid allocation restarted from 1 and the resume's own services took the
- * range the dead daemon's pid sat in (daemon 1172; vite 986, Convex 1070/1089,
- * executor 1189). The alive-check's `kill -0` therefore passed against an
- * unrelated live process: `prewarmEntityDaemon` logged "already warm" 20+ times
- * over 45 minutes, no daemon ever existed to claim a turn, and three prompts
- * failed as "Turn stalled".
- *
- * The fix is an identity check, so the property to pin is exactly that: pid
- * liveness is necessary but never sufficient.
- */
 describe("the daemon alive-check proves identity, not just liveness", () => {
   const cmd = buildDaemonAliveCheckCmd("sessionId", "sess123", "fp1", "opts1");
 
@@ -64,7 +50,6 @@ const readPid = async (file: string): Promise<number> => {
       const pid = Number(readFileSync(file, "utf8").trim());
       if (pid > 0) return pid;
     } catch {
-      /* not written yet */
     }
   }
   return 0;
@@ -72,10 +57,6 @@ const readPid = async (file: string): Promise<number> => {
 
 const bashDescribe = hasShellTools() ? describe : describe.skip;
 
-/**
- * The assertions above only read the string. Run it against real processes:
- * the whole bug was a snippet that looked right and answered wrong.
- */
 bashDescribe("the generated alive-check against real processes", () => {
   type Fixture = {
     dir: string;
@@ -107,7 +88,6 @@ bashDescribe("the generated alive-check against real processes", () => {
       try {
         process.kill(fixture.pid, "SIGKILL");
       } catch {
-        /* already gone */
       }
     }
     rmSync(fixture.dir, { recursive: true, force: true });
@@ -131,10 +111,6 @@ bashDescribe("the generated alive-check against real processes", () => {
       { encoding: "utf8", timeout: 10_000 },
     ).trim();
 
-  // The fingerprint lives at the fixed /tmp/eva-callback-fp, which a real
-  // daemon on this machine owns, so the fixtures never write it. That is enough
-  // to tell the two cases apart: the pid branch is evaluated BEFORE the
-  // fingerprint, so only a pid that passes the identity gate reaches "stale".
   test("a live process that is not the runner reads cold", async () => {
     const fixture = await startFixture("vite.js");
     try {
@@ -162,16 +138,6 @@ bashDescribe("the generated alive-check against real processes", () => {
   }, 20_000);
 });
 
-/**
- * The same recycled pid, read by the stall watchdog. `verifySandboxLiveness`
- * treats a zero exit as "callback still running" and grants grace, so a probe
- * that accepts any live pid keeps a dead turn on "Working…" indefinitely
- * instead of letting `turns.finalizeExpired` settle it.
- *
- * The command hard-codes /tmp/run-design.*, which a real runner on this machine
- * may own, so each case rewrites those markers into its own temp dir. The
- * `run-design[.]mjs` argv pattern is untouched by the rewrite.
- */
 bashDescribe("the watchdog liveness probe against real processes", () => {
   type Fixture = { dir: string; pid: number };
 
@@ -194,7 +160,6 @@ bashDescribe("the watchdog liveness probe against real processes", () => {
       try {
         process.kill(fixture.pid, "SIGKILL");
       } catch {
-        /* already gone */
       }
     }
     rmSync(fixture.dir, { recursive: true, force: true });

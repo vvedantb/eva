@@ -6,20 +6,7 @@ import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { TURN_RUNNING_LEASE_MS } from "../convex/_chat/turnLease";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `claimPendingTurn` hands a staged prompt to the daemon AND takes the turn's
- * 2-minute running lease in the same mutation. A daemon that claims while it
- * is still finalizing the previous turn cannot heartbeat that lease, so two
- * minutes later the stall watchdog closes the turn and the prompt is gone with
- * an empty assistant bubble (fix b261c3394).
- *
- * The daemon therefore polls with `acceptTurn: false` until idle: cancel and
- * stop-task drains still have to happen on those polls — the daemon has no
- * other channel for an interrupt — while the prompt stays staged.
- */
 
-
-/** Loading the session-workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|daemon-poller";
 const MODEL = "claude:sonnet";
@@ -41,8 +28,6 @@ async function createStagedTurnFixture() {
       title: "Claim gate test",
       status: "active",
     });
-    // The daemon polls its chat row: the staged prompt and every signal
-    // (interrupt, task stops) live there, with no mirror table.
     const chatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
@@ -116,7 +101,6 @@ describe("a daemon only takes the running lease when it is idle", () => {
 
       expect(claim.prompt).toBeNull();
       const after = await readTurnState(t, { chatId, turnId });
-      // Still "staged" on generation 0: nothing acquired a lease it cannot renew.
       expect(after.state).toBe("staged");
       expect(after.leaseGeneration).toBe(0);
       expect(after.chatPendingPrompt).toBe(PROMPT);
@@ -127,8 +111,6 @@ describe("a daemon only takes the running lease when it is idle", () => {
   test(
     "a busy poll still drains the interrupt and stop-task signals",
     async () => {
-      // The daemon learns about a cancel only from this mutation, so gating the
-      // drain on the turn handover would strand a mid-turn interrupt forever.
       const { t, chatId, turnId } = await createStagedTurnFixture();
 
       const claim = await t.mutation(api._sessions.workflow.claimPendingTurn, {
@@ -167,7 +149,6 @@ describe("a daemon only takes the running lease when it is idle", () => {
       const after = await readTurnState(t, { chatId, turnId });
       expect(after.state).toBe("running");
       expect(after.leaseGeneration).toBe(1);
-      // Handed over exactly once — a second daemon must not re-execute it.
       expect(after.chatPendingPrompt).toBeUndefined();
       expect(after.leaseExpiresAt).toBeLessThanOrEqual(
         Date.now() + TURN_RUNNING_LEASE_MS,
@@ -179,9 +160,6 @@ describe("a daemon only takes the running lease when it is idle", () => {
   test(
     "a sandbox too old to send the flag still gets its turn",
     async () => {
-      // `acceptTurn` is optional and only `false` withholds: a deployed daemon
-      // that predates the flag keeps the previous behaviour rather than idling
-      // on a prompt it never claims.
       const { t, chatId, turnId } = await createStagedTurnFixture();
 
       const claim = await t.mutation(api._sessions.workflow.claimPendingTurn, {
@@ -197,11 +175,6 @@ describe("a daemon only takes the running lease when it is idle", () => {
   );
 });
 
-/**
- * Daemons launched before session chats (#922) poll with `sessionId` and no
- * `chatId`. Rejecting them threw an ArgumentValidationError on every 50ms poll
- * in prod; they now resolve to the session's Main chat.
- */
 describe("a daemon that predates session chats", () => {
   test(
     "claims the Main chat's turn by sessionId",
@@ -248,7 +221,6 @@ describe("a daemon that predates session chats", () => {
       );
 
       expect(claim.prompt).toBeNull();
-      // The poll stays read-only; the backfill creates the Main chat.
       const chats = await t.run(
         async (ctx) => await ctx.db.query("sessionChats").collect(),
       );

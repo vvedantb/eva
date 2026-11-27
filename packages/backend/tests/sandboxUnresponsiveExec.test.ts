@@ -14,19 +14,6 @@ import {
   isSandboxUnresponsiveError,
 } from "../convex/_sandbox_runtime/sandboxErrors";
 
-/**
- * Prod (2026-09-01, silver-strategic-buzzard): an OOM-wedged VM the provider
- * still reported `running` answered `echo 1` with exit 137, then stopped
- * answering execs at all. Both had to become "restart this VM" rather than
- * "the sandbox is gone" (fix 53b05d04a).
- *
- * sandboxErrorClassification.test.ts checks the classifier against
- * hand-built errors. This checks the half that test cannot: that `execHandle`
- * really produces those two error shapes, and that the stop+resume recovery
- * refuses a VM that is not running.
- */
-
-/** `execHandle` waits the server timeout plus a 15s client buffer. */
 const CLIENT_TIMEOUT_BUFFER_MS = 15_000;
 
 afterEach(() => {
@@ -39,8 +26,6 @@ function fakeHandle(options: {
 }): { handle: SandboxHandle; calls: string[] } {
   const calls: string[] = [];
   const state = options.state ?? "running";
-  // Anything this test does not deliberately allow is a fault, not a default:
-  // a recovery path that reached for it would be doing something unvouched.
   const outOfScope = (member: string): never => {
     throw new Error(`fake sandbox: ${member} is out of scope for this test`);
   };
@@ -81,7 +66,6 @@ describe("execHandle marks a wedged VM as unresponsive", () => {
   test("an exec that never answers rejects with the typed timeout", async () => {
     vi.useFakeTimers();
     const { handle } = fakeHandle({
-      // The prod shape: the VM accepts the exec and never replies.
       exec: () => new Promise<SandboxExecResult>(() => {}),
     });
 
@@ -96,7 +80,6 @@ describe("execHandle marks a wedged VM as unresponsive", () => {
     await settled;
 
     expect(caught).toBeInstanceOf(SandboxExecTimeoutError);
-    // The setup-retry matchers key on this exact wording.
     expect(caught?.message).toContain("Sandbox exec (5s) timed out after");
     expect(isSandboxUnresponsiveError(caught)).toBe(true);
   });
@@ -115,7 +98,6 @@ describe("execHandle marks a wedged VM as unresponsive", () => {
     );
 
     expect(caught).toBeInstanceOf(SandboxCommandFailedError);
-    // The classifier reads `.exitCode`; a message-only error would slip past it.
     expect(
       caught instanceof SandboxCommandFailedError ? caught.exitCode : undefined,
     ).toBe(137);
@@ -141,8 +123,6 @@ describe("execHandle marks a wedged VM as unresponsive", () => {
 });
 
 describe("the stop+resume recovery refuses a sandbox it did not wedge", () => {
-  // A stopped or mid-stop VM was stopped on purpose. Resuming it here would
-  // resurrect a sandbox the user just stopped — and bill for it.
   const notRunning: SandboxState[] = [
     "stopped",
     "archived",
@@ -157,8 +137,6 @@ describe("the stop+resume recovery refuses a sandbox it did not wedge", () => {
       await expect(restartUnresponsiveSandbox(handle)).rejects.toThrow(
         /not running/,
       );
-      // Recovery must read live state first and then stop, so a refusal has to
-      // happen before any lifecycle call.
       expect(calls).toEqual(["refresh"]);
     });
   }

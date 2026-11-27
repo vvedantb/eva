@@ -5,7 +5,6 @@ import {
 } from "../convex/githubPrivateKeyFormat";
 
 test("normalizePemKey expands escaped newlines from env paste", () => {
-  // Convex/env UIs often store PEM with literal \\n instead of real newlines.
   const normalized = normalizePemKey(
     "-----BEGIN PRIVATE KEY-----\\nABCD\\n-----END PRIVATE KEY-----\\n",
   );

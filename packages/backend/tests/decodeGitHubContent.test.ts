@@ -6,7 +6,6 @@ import {
 } from "../convex/_repoSkills/decodeGitHubContent";
 
 test("decodeGitHubContent decodes base64 without Node Buffer", () => {
-  // GitHub Contents API returns base64; Convex isolate has no Buffer.
   const text = "hello skills\n";
   const encoded = btoa(text);
   expect(decodeGitHubContent(encoded)).toBe(text);

@@ -36,9 +36,6 @@ export function SidebarMobileHeader({
         </Link>
       )}
       <Sidebar.MobileActions>
-        {/* Manager Ave's summon button lives here below `md`; the floating
-            launcher is desktop-only because it covers the composer's send
-            button on a phone. */}
         <AveHeaderButton />
         <Button
           shape="rounded"

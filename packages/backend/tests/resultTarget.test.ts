@@ -9,7 +9,6 @@ import {
   selectUsageLimitRetryUserMessage,
 } from "../convex/_sessions/resultTarget";
 
-/** Only the fields the decision reads; the real docs carry many more. */
 function reply(fields: {
   content?: string;
   isSystemAlert?: boolean;
@@ -115,12 +114,6 @@ describe("delayedPublishFailureError", () => {
   });
 });
 
-/**
- * A turn's result used to land on whatever the newest message was. A system
- * alert left over from an earlier turn (a draft-PR failure, say) sits exactly
- * there, so the reply the user was waiting on was written into the alert —
- * arriving with someone else's errorDetail attached (fix c9bad485).
- */
 describe("resultTargetMessage", () => {
   test("picks the newest assistant reply", () => {
     const newest = reply({ content: "" });
@@ -134,7 +127,6 @@ describe("resultTargetMessage", () => {
     expect(resultTargetMessage([alert, target])).toBe(target);
   });
 
-  /** Synthetic turns are Eva's own continuations, not the bubble in flight. */
   test("skips a synthetic turn", () => {
     const synthetic = reply({ isSyntheticTurn: true });
     const target = reply({ content: "" });
@@ -147,7 +139,6 @@ describe("resultTargetMessage", () => {
     expect(resultTargetMessage([user, target])).toBe(target);
   });
 
-  /** Writing into nothing beats writing into the wrong row. */
   test("returns nothing when every candidate is disqualified", () => {
     expect(
       resultTargetMessage([
@@ -162,11 +153,6 @@ describe("resultTargetMessage", () => {
   });
 });
 
-/**
- * The other half of the same bug: with an alert on top, the placeholder logic
- * staged a second bubble, and the one that did not receive the result stayed on
- * screen as a "Working…" row forever (fix a42c0d1f).
- */
 describe("orphanPlaceholderMessages", () => {
   test("returns the empty unfinished bubble the result did not land on", () => {
     const orphan = reply({ content: "" });
@@ -181,7 +167,6 @@ describe("orphanPlaceholderMessages", () => {
     expect(orphanPlaceholderMessages([target], target)).toEqual([]);
   });
 
-  /** Content is real output, however stale — deleting it loses an answer. */
   test("keeps a bubble that has content", () => {
     const target = reply({ content: "" });
     const answered = reply({ content: "an earlier answer" });

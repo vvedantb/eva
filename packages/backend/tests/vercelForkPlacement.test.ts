@@ -1,14 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { SANDBOX_REGION } from "../convex/_sandbox/vercelRegion";
 
-/**
- * Forking a session whose sandbox predates the move to cdg1 failed: "The
- * snapshot is available in `iad1`, but this sandbox runs in `cdg1`" (#995).
- * `create` skipped the region lookup for forks, so a fork always went to
- * SANDBOX_REGION. A fork restores from the source's current snapshot and must
- * follow that snapshot's region.
- */
-
 interface ForkOpts {
   region?: string;
   mounts?: object;
@@ -37,7 +29,6 @@ mock.module("@vercel/sandbox", () => ({
     },
     fork: async (opts: ForkOpts) => {
       sdk.forkOpts.push(opts);
-      // Stop here: the test only needs the placement fork was called with.
       throw new Error("fork stubbed");
     },
   },
@@ -84,7 +75,6 @@ beforeEach(() => {
 });
 
 describe("VercelSandboxClient.create with forkFrom", () => {
-  // Sandboxes are back in iad1, so cdg1 plays the old region.
   test("a fork of an old cdg1 sandbox runs in cdg1, without iad1 Drives", async () => {
     sdk.sourceSnapshotId = "snap-old";
     sdk.snapshotRegions.set("snap-old", ["cdg1"]);

@@ -288,7 +288,6 @@ describe("a session holding several pull requests", () => {
         prNumber: 700,
       });
       const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-      // The session's own PR stays the one its chrome links to.
       expect(session?.prUrl).toBe(PR_URL);
       expect(session?.prCount).toBe(2);
     },

@@ -4,16 +4,7 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The picker lists the viewer's own accounts alongside every teammate's shared
- * ones, and only `isOwn` tells them apart — `shared` cannot, because an own
- * account can be shared too. The clients default to an own account and never a
- * teammate's, so a wrong `isOwn` silently bills a teammate's credential for
- * every new session and quick task (fix 4b948b101).
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const OWNER_CLERK_ID = "clerk|account-owner";
 
@@ -59,8 +50,6 @@ async function fixture() {
     return {
       ownerUserId,
       ownPrivate: await account(ownerUserId, "claude", false),
-      // An own account that is also shared out: `shared` is true, but it still
-      // bills the viewer, so it stays own.
       ownShared: await account(ownerUserId, "codex", true),
       mateShared: await account(teammateUserId, "claude", true),
       matePrivate: await account(teammateUserId, "codex", false),
@@ -83,14 +72,11 @@ describe("provider account ownership", () => {
       expect(byId.get(f.ownPrivate)?.isOwn).toBe(true);
       expect(byId.get(f.ownShared)?.isOwn).toBe(true);
       expect(byId.get(f.mateShared)?.isOwn).toBe(false);
-      // A teammate's unshared account is not selectable at all.
       expect(byId.has(f.matePrivate)).toBe(false);
     },
     TIMEOUT_MS,
   );
 
-  // Own accounts come first so a caller scanning for the first provider match
-  // cannot land on a teammate's share.
   test(
     "listSelectable puts own accounts ahead of teammates' shares",
     async () => {
@@ -106,8 +92,6 @@ describe("provider account ownership", () => {
     TIMEOUT_MS,
   );
 
-  // The settings page list is owner-only, so every row there is own by
-  // definition — and editable and deletable because of it.
   test(
     "list returns only the viewer's own accounts",
     async () => {
@@ -121,8 +105,6 @@ describe("provider account ownership", () => {
     TIMEOUT_MS,
   );
 
-  // MCP sends used to run on the owner's own account (or Team) only; a
-  // teammate's shared account was unreachable from send_chat_message.
   test(
     "MCP picks a teammate's shared account by first name",
     async () => {
@@ -154,7 +136,6 @@ describe("provider account ownership", () => {
         ok: true,
         providerAccountId: null,
       });
-      // A teammate's account they did not share stays out of reach.
       expect((await resolve(String(f.matePrivate))).ok).toBe(false);
     },
     TIMEOUT_MS,

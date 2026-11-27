@@ -5,14 +5,6 @@ import schema from "../convex/schema";
 import { detachPendingQuestions } from "../convex/pendingQuestions";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Sessions 417 and 419 lost turns that asked a blocking question and then
- * waited for the user until the `TURN_BACKSTOP_MS` cap. The question must outlive the
- * turn: the daemon releases it after 10 minutes, and a turn torn down another
- * way (sandbox stop, timeout, stall) moves it onto the chat message, where
- * the after-turn question card renders and the answer resumes the agent.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|question-outlives-turn";
 const PAYLOAD = JSON.stringify({
@@ -123,8 +115,6 @@ describe("a blocking question outlives its turn", () => {
   test(
     "detach keeps the newest of several open questions",
     async () => {
-      // The newest row sits in the middle of index order, so taking the
-      // first or last row instead of the newest fails here.
       const f = await fixture();
       const newest = JSON.stringify({
         questions: [{ question: "Newest?", options: [{ label: "B" }] }],

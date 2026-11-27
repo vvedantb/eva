@@ -1015,7 +1015,6 @@ export const automationRunEmailValidator = v.object({
     v.literal("discarded"),
   ),
   subject: v.string(),
-  /** Markdown, or the changelog's JSON; rendered by `renderAutomationEmail`. */
   body: v.string(),
 });
 
@@ -1033,26 +1032,15 @@ export const automationRunFields = {
   activeWorkflowId: v.optional(v.string()),
   activityLog: v.optional(v.string()),
   findings: v.optional(v.array(automationFindingValidator)),
-  // Set when the automation emails its result; see automationRunEmailValidator.
   email: v.optional(automationRunEmailValidator),
-  // Event-triggered runs only. `eventKey` dedupes a burst of webhooks into one
-  // run; `targetUrl` is the PR or issue the event was about.
   eventKind: v.optional(repoEventKindValidator),
   eventKey: v.optional(v.string()),
   targetUrl: v.optional(v.string()),
-  // Review feedback: GitHub time of the newest comment this run delivered, so
-  // the next run sends only what came after it.
   eventCursor: v.optional(v.number()),
-  // Issue runs: the quick task created for the issue, so it is never re-made.
   createdTaskId: v.optional(v.id("agentTasks")),
-  // CI fix attempts stop counting toward the cap once the PR goes green.
   superseded: v.optional(v.boolean()),
 };
 
-// One row per (changelog run, user, item): the latest feedback from the email.
-// `itemIndex` is the item's position in the run's structured changelog and
-// takes "up" / "down"; no `itemIndex` is a rating of the whole email
-// ("love" / "ok" / "meh"). The HTTP route enforces that pairing.
 export const changelogVoteFields = {
   runId: v.id("automationRuns"),
   userId: v.id("users"),
@@ -1104,81 +1092,32 @@ export const messageFields = {
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
   parentId: chatParentIdValidator,
-  // Client-generated id (crypto.randomUUID) set when a user message is sent
-  // optimistically. Lets the client dedup its local pending row against the
-  // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
-  // System alerts that did not fail the session (it keeps running) render
-  // amber. Unset alerts with `errorDetail` render as errors.
   alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
-  // Assistant rows: the turn was stopped before it finished (Stop, a stall,
-  // a sandbox stop). Lets the chat say so instead of showing a bare bubble.
   stopped: v.optional(v.literal(true)),
-  // Assistant rows: why the turn failed, when the client needs to react to the
-  // class of failure (the usage-limit recovery banner). Only "rate_limit" is
-  // stamped today; unclassified failures leave it unset.
   errorType: v.optional(errorTypeValidator),
-  // Usage-limit failures: when the provider said the window resets (ms). Holds
-  // the chat's queue until just after it — see `findUsageLimitHold`.
   limitResetAt: v.optional(v.number()),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
-  // Agent-captured media (recordings/screenshots), in capture order.
-  // Supersedes imageStorageId/videoStorageId, which remain only for
-  // pre-migration docs.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  // User-attached input images (pasted/dropped in the composer), stored via
-  // Convex file storage. Delivered to the agent as files it can read.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   pendingQuestion: v.optional(v.string()),
-  // Convex-side guard only — synthetic continuations are rendered like normal
-  // turns; the UI does not read this flag.
   isSyntheticTurn: v.optional(v.boolean()),
-  // Snapshot of which credential powered this chat turn ("Team" or the
-  // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
-  // The account behind `credentialSourceLabel`; absent = Team (or a row from
-  // before this stamp). Lets a usage-limit hold release other accounts.
   credentialAccountId: v.optional(v.id("userProviderAccounts")),
-  // User rows: model chosen in the composer, snapshotted at send/dequeue so the
-  // chat can show a provider icon + tooltip later. Assistant rows: the provider
-  // checkpoint, stamped on successful completion — everything after the last
-  // checkpoint for a provider is what a cross-provider catch-up replays (see
-  // `_shared/modelHandoff.ts`).
   model: v.optional(aiModelValidator),
   reasoningLevel: v.optional(reasoningLevelValidator),
-  // User-role message injected via MCP (master session or user OAuth
-  // connector). Drives a "via MCP" badge in chat.
   sentViaOrchestrator: v.optional(v.boolean()),
-  // Legacy: wake-up rows in pre-rebuild Manager Ave sessions. No writer any
-  // more (Ave's notifications live in `aveMessages`); kept so archived Ave
-  // transcripts still render their "agent update" styling.
   orchestratorNotification: v.optional(v.boolean()),
-  // Turn checkpoint (assistant rows on session, quick-task and project chat):
-  // sandbox git HEAD when the turn started and after persistTurnWork
-  // committed/pushed at turn end. Equal shas mean the turn changed no code.
-  // Absent on turns from pre-checkpoint callback bundles and on task runs.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
-  // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
-  // filed under "/tmp/repo" and each linked repo under its workspace path.
-  // Supersede `beforeSha`/`afterSha` when present; single-repo sessions keep
-  // writing only the scalars.
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
-  // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
-  // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
-  // three chat surfaces; task runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
-  // Reply threads (coordinator chat): a reply carries its root message's id.
-  // Replies stay in the chat's rows (same `parentId`) so turns, recaps and
-  // watchdogs see them, but the transcript reads only rows without `replyTo`.
   replyTo: v.optional(v.id("messages")),
-  // Root rows: how many replies, when the last one landed, and up to
-  // `MAX_THREAD_REPLIERS` most recent distinct repliers (the avatars under it).
   replyCount: v.optional(v.number()),
   lastReplyAt: v.optional(v.number()),
   replierIds: v.optional(v.array(v.id("users"))),
@@ -1193,15 +1132,11 @@ export const messageFields = {
 export const aveThreadFields = {
   userId: v.id("users"),
   status: v.union(v.literal("idle"), v.literal("running")),
-  /** Fences a run: every run mutation no-ops unless it presents this id. */
   runId: v.optional(v.string()),
   runStartedAt: v.optional(v.number()),
-  /** The reply bubble the current run is writing into. */
   runMessageId: v.optional(v.id("aveMessages")),
-  /** Something arrived mid-run; start one follow-up run when this one ends. */
   rerunRequested: v.optional(v.boolean()),
   cancelRequested: v.optional(v.boolean()),
-  /** Last time the user had the chat on screen; a reply after it is unread. */
   readAt: v.optional(v.number()),
   archivedAt: v.optional(v.number()),
   updatedAt: v.number(),
@@ -1217,35 +1152,23 @@ export const aveMessageFields = {
   content: v.string(),
   timestamp: v.number(),
   finishedAt: v.optional(v.number()),
-  /** JSON `ActivityStep[]` — the tool steps the run took. */
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
   errorDetail: v.optional(v.string()),
-  /** Wake-up row inserted when a watched agent finishes. */
   orchestratorNotification: v.optional(v.boolean()),
-  /**
-   * Assistant rows: JSON `ResponseMessage[]` from the run (tool calls and
-   * capped results), replayed as model context on later runs.
-   */
   modelMessages: v.optional(v.string()),
 };
 
 export const queuedMessageFields = {
   parentId: chatParentIdValidator,
   content: v.string(),
-  /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
   createdAt: v.number(),
-  // Sort key for queue run order. Enqueue sets Date.now() (appends to the end);
-  // the reorder mutation rewrites this to 0-based positions. Optional so the
-  // field deploys without a migration; legacy rows without it sort first.
   order: v.optional(v.number()),
   userId: v.id("users"),
   model: v.optional(aiModelValidator),
-  // Carried alongside `model` so a queued message runs on the same user account
-  // that was selected when it was enqueued.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   reasoningLevel: v.optional(reasoningLevelValidator),
   thinkingEnabled: v.optional(v.boolean()),
@@ -1253,21 +1176,10 @@ export const queuedMessageFields = {
   fastMode: v.optional(v.boolean()),
   responseLength: v.optional(v.string()),
   interactionMode: v.optional(interactionModeValidator),
-  // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by migration. */
   orchestratorNotification: v.optional(v.boolean()),
-  // Same idea for a message the orchestrator sent to a BUSY child: without it
-  // the "via orchestrator" badge was lost on exactly the messages that had to
-  // queue (mirrors messageFields.sentViaOrchestrator).
   sentViaOrchestrator: v.optional(v.boolean()),
-  // The user pressed Steer and the running daemon injects this message into
-  // its live turn: "requested" waits for the daemon, "delivering" is handed
-  // over and waits for its ack. A turn that ends first sends it as the next
-  // queued turn (the row sits at the front). See `_chat/steer.ts`.
   steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
-  // A reply that @mentioned Eva in a thread: the reply row is already stored,
-  // so the dequeue skips the user row, and Eva's answer joins this thread.
   replyTo: v.optional(v.id("messages")),
 };
 
@@ -1296,10 +1208,6 @@ export const taskCommentFields = {
   createdAt: v.number(),
 };
 
-// One row per (target, user, emoji). Polymorphic within a task: `targetType`
-// + `targetId` identify what is reacted to (a comment or the description).
-// `targetId` is a string because it spans tables (commentId vs taskId), and is
-// never used with `db.get` — access is always gated by the real `taskId`.
 export const taskReactionFields = {
   taskId: v.id("agentTasks"),
   targetType: reactionTargetValidator,
@@ -1309,9 +1217,6 @@ export const taskReactionFields = {
   createdAt: v.number(),
 };
 
-// One row per (task, user). `subscribed: false` is a sticky opt-out tombstone —
-// it stops auto-subscribe triggers (commenting, being mentioned) from silently
-// re-adding a user who explicitly unsubscribed. Absence of a row = never involved.
 export const taskSubscriberFields = {
   taskId: v.id("agentTasks"),
   userId: v.id("users"),
@@ -1320,29 +1225,20 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
-// One row per (user, chat): when the user last saw it. "Read" is per user, so
-// it cannot live on the shared chat doc. `repoId` lets a list query load one
-// user's rows for one repo in a single indexed read.
 export const chatReadFields = {
   userId: v.id("users"),
   parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
-  /** Last time the chat was on screen, read or not (chat rows only; recaps). */
   lastVisitedAt: v.optional(v.number()),
 };
 
-// One row per (user, repo): when the user last opened the repo's Today page,
-// so a standup published after that shows as unread to them alone.
 export const standupReadFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
 };
 
-// One row per (user, chat): a recap only that user sees (see chatRecaps).
-// "away" covers what happened since they left; "full" is the whole chat, asked
-// for from the chat menu. `text` is unset while the model writes it.
 export const chatRecapKindValidator = v.union(
   v.literal("away"),
   v.literal("full"),
@@ -1351,24 +1247,11 @@ export const chatRecapFields = {
   userId: v.id("users"),
   parentId: chatParentIdValidator,
   kind: chatRecapKindValidator,
-  /** The read time the recap covers activity after. */
   since: v.number(),
   createdAt: v.number(),
   text: v.optional(v.string()),
 };
 
-// Per-sandbox bearer secret the in-sandbox git credential helper presents to
-// /api/git-credentials to receive a freshly minted GitHub App installation
-// token. One row per sandbox; rotated every time the helper is
-// reinstalled.
-// App-wide singleton settings (a single row). Currently holds the daily
-// sandbox auto-stop schedule: a wall-clock time + IANA timezone at which the
-// `sandboxAutoStop` cron stops every active sandbox so none are left running
-// overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
-// (the local date "YYYY-MM-DD" of the last occurrence that was swept).
-// Idle pause (`sandboxIdlePause` cron): `off` does nothing, `on` pauses idle
-// sandboxes. All three fields are
-// optional so existing rows need no migration; readers default to off / 5 / 20.
 export const sandboxIdlePauseModeValidator = v.union(
   v.literal("off"),
   v.literal("on"),
@@ -1382,27 +1265,16 @@ export const appSettingsFields = {
   sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
-  /**
-   * Settings of the earlier idle-stop sweep (2026-10-05), kept so rows saved
-   * before the sweeps were unified keep their behaviour. Read only as a
-   * fallback when `sandboxIdlePauseMode` is unset (`resolveIdleThresholds`);
-   * never written any more.
-   */
   sandboxIdleStopEnabled: v.optional(v.boolean()),
   sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
 /** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
 export const sandboxActivitySourceValidator = v.union(
-  /** A chat message was sent or a queued one landed. */
   v.literal("chat"),
-  /** The sandbox was started or woken. */
   v.literal("start"),
-  /** An Eva sandbox tab was on screen at sweep time. */
   v.literal("viewing"),
-  /** Eva's Preview / custom tab loaded or polled the preview URL. */
   v.literal("preview-tab"),
-  /** The preview page was on screen, or a non-browser client hit the proxy. */
   v.literal("preview-page"),
   v.literal("terminal"),
   v.literal("files"),
@@ -1412,38 +1284,21 @@ export type SandboxActivitySource = Infer<
   typeof sandboxActivitySourceValidator
 >;
 
-// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
-// its own table (not on the session/task/project doc) so the frequent, throttled
-// touches never join the write set of hot entity documents.
 export const sandboxActivityFields = {
-  // Task and project clocks removed: a sandbox is its session's.
   // schema-narrowing-ok: deleteLegacyOwnerSandboxActivity
   kind: v.literal("session"),
   entityId: v.string(),
-  /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
-  /** How the last interaction arrived. Unset on rows written before attribution. */
   lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
-  /** Who made it, when known (chat, preview, terminal…; not system wakes). */
   lastUserActivityUserId: v.optional(v.id("users")),
-  /** Last time an agent turn or run finished for this entity. */
   lastAgentFinishedAt: v.optional(v.number()),
 };
 
 export const sandboxGitCredentialsFields = {
   sandboxId: v.string(),
   installationId: v.number(),
-  // Every installation the sandbox may mint a token for. A multi-repo session
-  // clones repos from more than one GitHub App installation, so the helper's
-  // single `installationId` above is only the primary's. Absent on rows written
-  // before linked repos existed; readers fall back to `[installationId]`.
   installationIds: v.optional(v.array(v.number())),
   secret: v.string(),
-  // GitHub repository the sandbox was created for. /api/git-credentials grants
-  // the full installation token for this repository without the sandbox being
-  // bound to a session/task/project — snapshot seed-prep and ephemeral
-  // automation sandboxes never are. Optional: rows written before the pin lack
-  // it until the helper is next reinstalled (every create/resume rotates it).
   repoOwner: v.optional(v.string()),
   repoName: v.optional(v.string()),
   createdAt: v.number(),
@@ -1467,15 +1322,12 @@ export const chatSourceFields = {
  */
 export const chatLogEntryFields = {
   ...chatSourceFields,
-  // The chat's repo, for the repo Documents list. Absent only for a task with
-  // no repo of its own or through its project.
   repoId: v.optional(v.id("githubRepos")),
   kind: chatLogEntryKindValidator,
   author: chatLogAuthorValidator,
   title: v.string(),
   body: v.optional(v.string()),
   supersedesId: v.optional(v.id("chatLogEntries")),
-  // Assistant reply this entry came from (system change entries dedupe on it).
   messageId: v.optional(v.id("messages")),
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
@@ -1489,13 +1341,9 @@ export const chatLogEntryFields = {
  */
 export const feedbackFields = {
   ...chatSourceFields,
-  // The chat's message parent, so the transcript lists its rows in one query.
   parentId: messageFields.parentId,
-  // The chat's repo, for the repo filter. Absent for a task with no repo.
   repoId: v.optional(v.id("githubRepos")),
-  // The assistant turn the feedback is about; absent if the chat had none yet.
   messageId: v.optional(v.id("messages")),
-  // The user who rated, or the user whose chat the agent reported on.
   userId: v.id("users"),
   author: feedbackAuthorValidator,
   sentiment: feedbackSentimentValidator,
@@ -1509,16 +1357,10 @@ export const docFields = {
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
-  // Chat that created this doc (`create_eva_doc` from a sandbox token, or
-  // Save-as-document from a session plan). Manual New Document leaves these
-  // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
   ...chatSourceFields,
   title: v.string(),
   content: v.string(),
-  // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
-  // PR recaps wrote their walkthrough here before `recapWalkthrough`.
   html: v.optional(v.string()),
-  // PR recap walkthrough, rendered natively over the PR diff.
   recapWalkthrough: v.optional(v.array(recapWalkthroughStepValidator)),
   prUrl: v.optional(v.string()),
   prNumber: v.optional(v.number()),
@@ -1526,8 +1368,6 @@ export const docFields = {
   prRecapStatus: v.optional(prRecapStatusValidator),
   prRecapOrigin: v.optional(prRecapOriginValidator),
   prRecapError: v.optional(v.string()),
-  // Model and traits that produced the current recap. Written by `startPrRecap`
-  // on every run: shown in the panel badge and reused when revising.
   prRecapModel: v.optional(aiModelValidator),
   ...modelTraitsExecutionFields,
   pendingAgentCommentIds: v.optional(v.array(v.id("docComments"))),

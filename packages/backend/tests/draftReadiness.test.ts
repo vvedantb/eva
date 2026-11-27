@@ -6,13 +6,6 @@ import {
   READINESS_SIGNALS,
 } from "../convex/_agentTasks/readiness";
 
-/**
- * The banner is driven entirely by these two functions: the score decides
- * whether it appears at all, the missing list decides what it asks for. Both
- * fail silently if they drift — a wrong score just means the nudge never
- * fires, and a wrong list means it asks for something the draft already says.
- */
-
 describe("readinessScore", () => {
   test("spans 0 to 1 across the levels", () => {
     expect(readinessScore(0)).toBe(0);

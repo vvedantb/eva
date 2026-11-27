@@ -38,17 +38,11 @@ export interface SandboxChatSurface {
   repoId: Id<"githubRepos">;
   model: AIModel;
   isExecuting: boolean;
-  /** The chat cannot be written to at all — hides per-agent stop buttons. */
   isReadOnly: boolean;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
-  /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
   /** Claude's native `/goal` for this chat, mirrored by the daemon. */
   goal: AgentGoal | undefined;
-  /**
-   * Sends a harness slash command (e.g. `/goal clear`) as a normal chat
-   * message, verbatim. Undefined when the chat cannot be written to.
-   */
   sendCommand: ((command: string) => Promise<void>) | undefined;
 }
 
@@ -86,10 +80,6 @@ export function buildSandboxChatSurface({
   isExecuting: boolean;
   isReadOnly?: boolean;
   doc: SandboxChatOwnerDoc | null | undefined;
-  /**
-   * The viewer may move the chat onto another account. Task and project chat
-   * are owner-sticky; a read-only session cannot switch.
-   */
   canSwitchAccount: boolean;
   messages: UsageLimitRecoveryInputs["messages"] | undefined;
   accounts: UsageLimitRecoveryInputs["accounts"];

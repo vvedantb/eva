@@ -1,14 +1,6 @@
 import { expect, test } from "bun:test";
 import { latestReviewPerAuthor } from "../convex/_github/prOverview";
 
-/**
- * `reviews` (the sidebar's one-row-per-reviewer summary) was built by reusing
- * review *event* objects, which carry a `body` field for the conversation
- * timeline. Reused objects keep that field at runtime even though the
- * `PullRequestReview` return type omits it, so Convex's return validator
- * rejected the payload with "Object contains extra field `body`" in production
- * (fix for PR #698 and earlier hits on #694/#696).
- */
 test("latestReviewPerAuthor drops the review event body field", () => {
   const [review] = latestReviewPerAuthor([
     {

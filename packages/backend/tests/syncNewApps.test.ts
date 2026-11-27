@@ -4,12 +4,6 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * GitHub sync used to add every app it found in a monorepo, so an unwanted
- * app showed up after every sync. Sync now leaves unknown apps alone and
- * reports them; one the user unticks is added hidden and stays hidden.
- */
-
 const REPO = { owner: "a", name: "mono", installationId: 1, githubId: 42 };
 
 async function fixture() {

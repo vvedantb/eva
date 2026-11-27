@@ -14,16 +14,7 @@ import {
 } from "../convex/_mcp/previewTools";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The agent → live-preview WebMCP relay. Several Eva tabs can have one chat
- * open, so `claim` must elect exactly one executor, `complete` must only
- * accept that executor's answer, and the page-controlled payload must be
- * capped before it reaches the agent's context. These run the real mutations,
- * because the properties are behavioural (serialised status transitions).
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|preview-tool-calls";
 
@@ -44,8 +35,6 @@ async function fixture() {
       title: "WebMCP relay",
       status: "active",
     });
-    // A session's chat content lives on its Main chat; a token naming the
-    // session itself lands there too.
     const chatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
@@ -122,7 +111,6 @@ describe("previewToolCalls relay", () => {
           isMain: false,
         });
       });
-      // The MCP token of a parallel chat carries that chat's id.
       const sideCallId = await f.t.mutation(internal.previewToolCalls.create, {
         entityKind: "session",
         entityId: sideChatId,
@@ -223,7 +211,6 @@ describe("previewToolCalls relay", () => {
         }),
       ).toBe("pending");
       expect((await f.read())?.status).toBe("error");
-      // A late tab can no longer claim an expired row.
       expect(
         await f.asUser.mutation(api.previewToolCalls.claim, {
           id: f.callId,
@@ -277,7 +264,6 @@ describe("previewToolCalls relay", () => {
 describe("awaitPreviewToolCall", () => {
   const timing = { pollMs: 1, timeoutMs: 20 };
 
-  /** A relay whose row never finishes, as if no tab (or a hung tool) ran it. */
   async function relayStuckAt(status: "pending" | "claimed") {
     const f = await fixture();
     const stored = await f.read();

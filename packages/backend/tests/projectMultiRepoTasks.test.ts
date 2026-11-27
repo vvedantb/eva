@@ -9,14 +9,6 @@ import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { recordPullRequest } from "../convex/_pullRequests/store";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A project task across several repos, through the real Convex functions:
- * the coordinator's task with a linked repo gets one `sessionRepos` row on
- * its session, a repo the person cannot open is refused before anything is
- * written, and the task's PR state combines every repo's PR (merged only once
- * all merged).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|multi-repo-task";
 const OTHER_CLERK_ID = "clerk|multi-repo-task-other";
@@ -50,7 +42,6 @@ async function fixture() {
       installationId: 1,
       connectedBy: userId,
     });
-    // Only the other user can open it.
     const lockedRepoId = await ctx.db.insert("githubRepos", {
       owner: "someone",
       name: "private",
@@ -71,7 +62,6 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** One coordinator task in the home repo, linked to `api`; its session made. */
 async function multiRepoTask(f: Fixture) {
   const { taskIds } = await f.t.mutation(
     internal._projects.batches.createTasksFromCoordinator,
@@ -133,7 +123,6 @@ describe("a project task across several repos", () => {
       expect(rows.map((row) => [row.repoId, row.name, row.path])).toEqual([
         [f.apiRepoId, "api", "/tmp/workspace/api"],
       ]);
-      // Same branch as the task's own checkout.
       expect(rows[0].branchName).toBe(session?.branchName ?? "");
       expect(session?.linkedRepoCount).toBe(1);
     },
@@ -199,7 +188,6 @@ describe("a project task across several repos", () => {
       let task = await taskDoc(f, taskId);
       expect([task.prState, task.prCount]).toEqual(["open", 2]);
 
-      // The Review tab lists both, one per repo.
       const listed = await f.asUser.query(api.pullRequests.listForOwner, {
         owner: { kind: "task", taskId },
       });

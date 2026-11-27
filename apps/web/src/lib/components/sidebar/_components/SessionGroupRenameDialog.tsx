@@ -18,9 +18,7 @@ import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 interface SessionGroupRenameDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Any member of the group; the mutation finds the group from it. */
   sessionId: Id<"sessions">;
-  /** The group's current name; empty when it shows a session title instead. */
   name: string | undefined;
 }
 
@@ -41,7 +39,6 @@ export function SessionGroupRenameDialog({
         <DialogHeader>
           <DialogTitle>Rename group</DialogTitle>
         </DialogHeader>
-        {/* Content unmounts while closed, so the draft starts fresh each open. */}
         <RenameGroupForm
           sessionId={sessionId}
           name={name}

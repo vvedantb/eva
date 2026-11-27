@@ -22,7 +22,6 @@ test("buildReadableReposBlock lists every repo and clones the first one", () => 
   expect(block).toContain(
     "git clone https://github.com/vvedantb/eva.git /tmp/eva",
   );
-  // The helper mints contents-write tokens, so the block must say push works.
   expect(block).toContain("clone, fetch and push these repositories");
 });
 

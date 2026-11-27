@@ -5,19 +5,7 @@ import schema from "../convex/schema";
 import { BG_HEAL_MIN_INTERVAL_MS } from "../convex/sandboxHeal";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Prod (2026-09-01): the preview heal launched a session's background daemons
- * while the session lifecycle was still between early-ready and final-ready.
- * The lifecycle's own launch ~15s later killed those wrappers, orphaned their
- * children and truncated /tmp/bg-<i>.log. `claim` now refuses while the owning
- * session has `sandboxServicesPending` set (fix cf8a50f21).
- *
- * This runs the mutation, because the two properties that actually matter are
- * behavioural: the gate blocks, and it does NOT consume the interval slot.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const SANDBOX_ID = "sbx-preview-heal-gate";
 
@@ -46,7 +34,6 @@ async function seedSession(
   });
 }
 
-/** Heal stamps for one sandbox. An empty list means the slot is still free. */
 async function stampCount(t: ReturnType<typeof convexTest>): Promise<number> {
   return t.run(async (ctx) => {
     const stamps = await ctx.db.query("sandboxHealStamps").collect();
@@ -56,8 +43,6 @@ async function stampCount(t: ReturnType<typeof convexTest>): Promise<number> {
 
 describe("the preview heal waits for the session's own service launch", () => {
   test("the throttle interval stays in the 30-60s band", () => {
-    // The point is fewer execs (the poll fires every ~2s per open page)
-    // without letting a dead background daemon linger.
     expect(BG_HEAL_MIN_INTERVAL_MS).toBeGreaterThanOrEqual(30_000);
     expect(BG_HEAL_MIN_INTERVAL_MS).toBeLessThanOrEqual(60_000);
   });
@@ -73,7 +58,6 @@ describe("the preview heal waits for the session's own service launch", () => {
           sandboxId: SANDBOX_ID,
         }),
       ).toBe(false);
-      // Repeated polls (~2s each) must all be refused, not just the first.
       expect(
         await t.mutation(internal.sandboxHeal.claim, {
           sandboxId: SANDBOX_ID,
@@ -94,8 +78,6 @@ describe("the preview heal waits for the session's own service launch", () => {
           sandboxId: SANDBOX_ID,
         }),
       ).toBe(false);
-      // Stamping on a gated claim would make the next 45s of polls lose the
-      // rate-limit check instead, delaying the first real heal.
       expect(await stampCount(t)).toBe(0);
 
       await t.run(async (ctx) => {
@@ -129,7 +111,6 @@ describe("the preview heal waits for the session's own service launch", () => {
         }),
       ).toBe(false);
 
-      // Past the interval the slot frees up again.
       await t.run(async (ctx) => {
         const stamps = await ctx.db.query("sandboxHealStamps").collect();
         const stamp = stamps.find((row) => row.sandboxId === SANDBOX_ID);

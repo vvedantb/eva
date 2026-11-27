@@ -583,9 +583,6 @@ export const reconcile = internalAction({
           );
         }
       }
-      // One turn that cannot finalise must not starve the rest: the batch is
-      // ordered by lease expiry, so a throw here would block every later turn
-      // on every cycle.
       try {
         await ctx.runMutation(internal.turns.finalizeExpired, {
           turnId: turn.turnId,

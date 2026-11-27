@@ -22,7 +22,6 @@ afterEach(() => {
 });
 
 test("buildEvaDocUrl uses numeric doc id and monorepo app segment", () => {
-  // GitHub Eva links must use numId paths, not Convex document ids.
   expect(
     buildEvaDocUrl("evalucom", "carepulse-ts", 42, "content", "apps/web"),
   ).toBe("https://eva.example.com/evalucom/carepulse-ts/web/docs/42/content");

@@ -11,13 +11,6 @@ import {
 } from "@eva/shared/needsYou";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The Inbox's Needs you view: the shared rules that place a row in a group,
- * and `needsYou.list` over real rows (a project's Triage task, a quick task's
- * PR to review, a failed quick task, and someone else's quick task that must
- * not show).
- */
-
 const CLERK_ID = "clerk|needs-you";
 const OTHER_CLERK_ID = "clerk|needs-you-other";
 
@@ -36,7 +29,6 @@ describe("Needs you rules", () => {
     expect(
       needsYouGroupForQuickTask({ ...base, status: "code_review", prState: "open" }),
     ).toBe("review");
-    // A draft PR is not ready for review.
     expect(
       needsYouGroupForQuickTask({ ...base, status: "code_review", prState: "draft" }),
     ).toBeUndefined();
@@ -87,7 +79,6 @@ describe("needsYou.list", () => {
         createdAt: 0,
         updatedAt: 0,
       };
-      // A person's project task, not approved: Triage.
       await ctx.db.insert("agentTasks", {
         ...task,
         projectId,
@@ -97,7 +88,6 @@ describe("needsYou.list", () => {
         numId: 1,
         createdBy: otherUserId,
       });
-      // The caller's quick task with an open PR: To review.
       await ctx.db.insert("agentTasks", {
         ...task,
         title: "Fix login test",
@@ -107,7 +97,6 @@ describe("needsYou.list", () => {
         numId: 2,
         createdBy: userId,
       });
-      // The caller's quick task whose last run failed: Failed.
       const failedId = await ctx.db.insert("agentTasks", {
         ...task,
         title: "Seed script",
@@ -124,7 +113,6 @@ describe("needsYou.list", () => {
         finishedAt: 2,
         error: "Tests failed",
       });
-      // Someone else's quick task with an open PR: not the caller's to review.
       await ctx.db.insert("agentTasks", {
         ...task,
         title: "Someone else's PR",
@@ -148,7 +136,6 @@ describe("needsYou.list", () => {
     expect(byTitle.get("Seed script")?.group).toBe("failed");
     expect(byTitle.has("Someone else's PR")).toBe(false);
 
-    // A repo's inbox lists that repo only (here the one repo there is).
     const scoped = await t
       .withIdentity({ subject: CLERK_ID })
       .query(api.needsYou.list, { repoId });

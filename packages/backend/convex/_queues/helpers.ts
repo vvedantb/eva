@@ -428,7 +428,6 @@ export async function rollbackQueuedChatStart(
   }
 }
 
-/** Binds the entity's open turn to the workflow the queue just started. */
 async function bindOpenTurnWorkflow(
   ctx: MutationCtx,
   entityId: ChatTurnEntityId,

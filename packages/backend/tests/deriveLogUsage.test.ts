@@ -31,11 +31,6 @@ test("deriveLogUsage copies the result event into the usage columns", () => {
   });
 });
 
-/**
- * A missing or broken event must leave the columns unset — a zero costUsd
- * would make the row look priced and hide it from the backfill's
- * `costUsd === undefined` guard.
- */
 test("deriveLogUsage returns no columns for absent or unparseable events", () => {
   expect(deriveLogUsage(undefined)).toEqual({});
   expect(deriveLogUsage("")).toEqual({});

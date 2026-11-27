@@ -6,13 +6,11 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 type SessionChatTarget = {
   kind: "sessionChat";
   sessionId: Id<"sessions">;
-  /** Drafts are per chat tab, not per session. */
   chatId: Id<"sessionChats">;
 };
 
 export type ChatDraftTarget = SessionChatTarget;
 
-/** Seed bundle passed to ChatBody. */
 export type ChatDraftSeed = {
   target: ChatDraftTarget;
   initialDisplay: string;

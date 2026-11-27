@@ -27,11 +27,6 @@ describe("usageLimitResetText", () => {
   });
 });
 
-/**
- * The card leads with its own countdown, so the provider's wall-clock time is
- * shown as a parenthetical. Leaving "resets" or the brackets in would read
- * "Resets in 2h 10m (resets 12pm (UTC))".
- */
 describe("usageLimitResetClock", () => {
   test("drops the verb and the brackets", () => {
     expect(
@@ -54,12 +49,6 @@ describe("usageLimitResetClock", () => {
   });
 });
 
-/**
- * Every row in the card is a credential the retry will actually run on, so a
- * wrong list either offers the exhausted account back (which fails again), an
- * account for a provider this chat is not using, or spends the shared team
- * credential when a personal one would have done.
- */
 describe("usageLimitRetryCandidates", () => {
   const accounts = [
     { id: "acc_priya", provider: "claude", label: "Priya", isOwn: false },

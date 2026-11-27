@@ -8,7 +8,6 @@ import {
 } from "../convex/_sandbox/vercelEnvFile";
 
 test("renderEvaEnvFile escapes single quotes for shell sourcing", () => {
-  // Values like it's must become 'it'\''s' so `. .eva-env.sh` stays valid.
   expect(
     renderEvaEnvFile({
       FOO: "bar",
@@ -35,9 +34,7 @@ test("ensureEvaEnvInteractiveHookScript installs profile.d and bashrc hooks", ()
   expect(script).toContain(EVA_ENV_SOURCE_CMD);
   expect(script).toContain("# eva-sandbox-env");
   expect(script).toContain("/home/eva/.bashrc");
-  // vercel exec prefixes SOURCE_ENV with "; " — `do;` is invalid bash.
   expect(script).not.toMatch(/do\s*;/);
-  // Safe when concatenated the same way vercelProvider.exec does.
   const withSourcePrefix = `${EVA_ENV_SOURCE_CMD}; ${script}`;
   expect(withSourcePrefix).not.toMatch(/do\s*;/);
 });

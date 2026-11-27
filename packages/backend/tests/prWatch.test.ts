@@ -48,7 +48,6 @@ const remark: FeedbackItem = {
   line: 3,
 };
 
-/** A watch that has already seen `abc1234def`. */
 function seen(extra: Partial<PrWatch> = {}): PrWatch {
   return { ...newPrWatch(1_000), headSha: "abc1234def", ...extra };
 }
@@ -197,7 +196,6 @@ describe("evaluatePrWatch", () => {
     );
     expect(passedBaseline.changes).toEqual([]);
     expect(passedBaseline.next.passed).toBe(true);
-    // Later news is still reported against that baseline.
     const later = evaluatePrWatch(
       baseline.next,
       snapshot({

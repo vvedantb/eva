@@ -5,19 +5,11 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Tenant isolation for tasks, projects, runs and chats. Each public function
- * here took an id and acted on it with only a partial access check, so a
- * signed-in user could move, read or forge rows of a team they are not in,
- * or a teammate could read another member's private draft.
- */
-
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|tenant-owner";
 const MATE = "clerk|tenant-mate";
 const STRANGER = "clerk|tenant-stranger";
 
-// Mutations schedule tag generation and workflows; keep them from running.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -274,7 +266,6 @@ describe("public chat writes are the caller's own user turns", () => {
         }),
       ).rejects.toThrow("Only user messages");
 
-      // The web composer's failed-send bubble still lands.
       await f.owner.mutation(api.sessions.addMessage, {
         chatId: f.chatId,
         role: "assistant",

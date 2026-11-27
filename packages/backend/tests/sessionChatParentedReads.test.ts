@@ -5,20 +5,12 @@ import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Since sessions hold several chats, a session's messages hang off its
- * `sessionChats` rows, not the session id. Restore, title regeneration, the
- * sidebar preview, the seeded-restore alert and the scope check must all read
- * and write through the chat.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-reads";
 
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    // The scope check is opt-in per asker (a1f8918ed), so this user opts in.
     const userId = await ctx.db.insert("users", {
       clerkId: CLERK_ID,
       experimentalFlags: { scopeCheck: true },

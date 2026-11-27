@@ -6,18 +6,8 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Team, user and app-wide settings boundaries (re-applied from #767):
- * - a team never loses its last owner, by removal or by demotion;
- * - emails and the page someone is on go only to that user's teammates;
- * - app-wide sandbox schedules are for app admins only;
- * - presence rooms for docs and typing follow the entity's access rule, and a
- *   followed path is always app-internal.
- */
-
 const TIMEOUT_MS = 30_000;
 
-/** Two tenants: Ann (owner) and Ben on team A; Zed alone on team Z. */
 async function fixture() {
   const t = convexTest(schema, modules);
   presenceTest.register(t);
@@ -66,7 +56,6 @@ async function fixture() {
       role: "owner",
       joinedAt: 0,
     });
-    // Team A's repo, connected by Zed, who is not on team A.
     const repoA = await ctx.db.insert("githubRepos", {
       owner: "a",
       name: "app",

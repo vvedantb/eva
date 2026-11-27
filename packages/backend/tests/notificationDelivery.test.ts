@@ -12,17 +12,6 @@ import {
 import { modules } from "./_helpers/convexModules";
 import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 
-/**
- * Delivery per the routing table (`@eva/shared/notificationRouting`, plan
- * `notifications-v2-5.md` part C): comment mentions toast and email at once,
- * a chat mention routing could not judge still toasts, the digest never
- * repeats in the instant email and covers the weekend, Needs you shows routed
- * questions, and an edit that adds a mention notifies only the new person.
- */
-
-// convex-test ids look like `10000;users`, which the real token pattern
-// (`[a-z0-9_]{16,40}`) never matches. This reads any `@[Name](id)` token, as
-// coordinatorChatRouting.test.ts does.
 mock.module("../convex/_mentions/extractMentionedUserIds", () => ({
   extractMentionedUserIds: (
     ctx: {
@@ -182,7 +171,6 @@ describe("notification delivery", () => {
         {},
       ]);
       const { t, ids } = await fixture();
-      // An instant-email type the debounced send has not swept up yet.
       await t.run((ctx) =>
         ctx.db.insert("notifications", {
           userId: ids.adaId,
@@ -211,7 +199,6 @@ describe("notification delivery", () => {
   test(
     "Monday's digest includes Saturday's notification",
     async () => {
-      // Monday 23 November 2026, 08:00 UTC, and the Saturday before it.
       const monday = Date.UTC(2026, 10, 23, 8, 0, 0);
       const saturday = Date.UTC(2026, 10, 21, 14, 0, 0);
       expect(digestWindowStart(monday)).toBe(Date.UTC(2026, 10, 20, 8, 0, 0));

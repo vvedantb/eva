@@ -4,12 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Deleting a parallel chat and opening another must read "Chat 2" again (not
- * "Chat 3"), while `number` stays unique so old `?chat=N` links never point at
- * the new tab. A link to a deleted chat opens Main, and its messages go.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-tabs";
 
@@ -23,7 +17,6 @@ async function fixture() {
       installationId: 1,
       connectedBy: userId,
     });
-    // No sandbox, so closing a chat schedules no daemon kill.
     const sessionId = await ctx.db.insert("sessions", {
       owner: { kind: "standalone" },
       repoId,
@@ -46,7 +39,6 @@ async function fixture() {
 }
 
 describe("session chat tabs", () => {
-  // `remove` schedules the purge: fake timers hold it until a test drains it.
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 

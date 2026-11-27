@@ -33,10 +33,8 @@ export function withSessionChat<T>(
   return typeof chat === "string" ? run(chat) : chat().then(run);
 }
 
-// The session chat validators, with the chat id bound by the ports.
 type SessionAddArgs = FunctionArgs<typeof api.sessions.addMessage>;
 export type SandboxTurnAddArgs = Omit<SessionAddArgs, "chatId" | "role"> & {
-  /** Defaults to `user`. */
   role?: SessionAddArgs["role"];
 };
 export type SandboxTurnStartArgs = Omit<

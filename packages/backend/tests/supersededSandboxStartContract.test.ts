@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isSupersededStart } from "../convex/_sandbox/transitions";
 
-/**
- * Found on a live sandbox (#1064): a superseded start's writes were already
- * ignored, but its remaining steps still ran on the VM, and its dev-server
- * relaunch dropped every terminal the newer start had attached. Its abort
- * handler also stopped the VM the newer start was resuming.
- */
 describe("isSupersededStart", () => {
   test("an untokened start is never superseded", () => {
     expect(isSupersededStart(undefined, undefined)).toBe(false);

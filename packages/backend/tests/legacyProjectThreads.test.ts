@@ -5,13 +5,6 @@ import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `migrations:convertLegacyProjectThreads`: a project from before the
- * coordinator hands its old branch and PR to one new thread (open PR), or
- * closes its old review tasks (merged: done, closed: cancelled), and its
- * coordinator moves off the old branch.
- */
-
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -132,10 +125,8 @@ describe("convertLegacyProjectThreads", () => {
 
     expect(await statusOf(f.t, f.reviewA)).toBe("cancelled");
     expect(await statusOf(f.t, f.reviewB)).toBe("cancelled");
-    // Draft work stays in Triage for a person.
     expect(await statusOf(f.t, f.draft)).toBe("draft");
 
-    // A second run changes nothing.
     expect(await runMigration(f.t)).toEqual([]);
   });
 

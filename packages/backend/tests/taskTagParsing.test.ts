@@ -60,11 +60,6 @@ test("splits on newlines as well as commas", () => {
   ]);
 });
 
-/**
- * The tag generator asks Jev one boolean per tag, so the cut-off, the cap and
- * the ordering are decided here rather than by the model. A drifting
- * threshold would quietly re-tag every new task, so pin the boundary.
- */
 describe("selectTagsByProbability", () => {
   test("keeps tags at the threshold and drops anything under it", () => {
     expect(

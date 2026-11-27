@@ -18,7 +18,6 @@ function hasProject(
 }
 
 test("pickSandboxRepoId uses preferred web app when root lacks VERCEL_PROJECT_ID", async () => {
-  // Carepulse-shaped monorepo: shared automation on root, credentials on apps/web.
   const root: Repo = { _id: "root" };
   const web: Repo = { _id: "web", rootDirectory: "apps/web" };
   const eproc: Repo = { _id: "eproc", rootDirectory: "apps/eprocurement" };
@@ -47,7 +46,6 @@ test("pickSandboxRepoId keeps an app repo that already has VERCEL_PROJECT_ID", a
 
 test("pickSandboxRepoId falls back to any sibling app with VERCEL_PROJECT_ID", async () => {
   const root: Repo = { _id: "root" };
-  // Preferred web has no project id; eprocurement does.
   const web: Repo = { _id: "web", rootDirectory: "apps/web" };
   const eproc: Repo = { _id: "eproc", rootDirectory: "apps/eprocurement" };
 
@@ -70,8 +68,6 @@ test("pickSandboxRepoId falls back to workflow repo when no sibling has the key"
     hasProject(new Set()),
   );
 
-  // Preferred app (web) when nothing has VERCEL_PROJECT_ID — caller then fails
-  // with the clear "must be set on this app repo" error at credential resolve.
   expect(picked).toBe("web");
 });
 

@@ -6,13 +6,6 @@ import schema from "../convex/schema";
 import * as GithubAuth from "../convex/githubAuth";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The Reviews writes and reads that both the web and the phone review
- * screens call (apps/mobile has no wrapper: it calls these actions as the web
- * does). GitHub is faked at `getInstallationOctokit`, so each test checks what
- * would be sent to GitHub, and that a caller without the repo sends nothing.
- */
-
 const github = {
   list: vi.fn(),
   createReview: vi.fn(),
@@ -26,7 +19,6 @@ const github = {
   setLabels: vi.fn(),
   listCollaborators: vi.fn(),
   listLabelsForRepo: vi.fn(),
-  // No stack: the merge goes through `pulls.merge`.
   graphql: vi.fn(),
 };
 
@@ -61,7 +53,6 @@ const TIMEOUT_MS = 30_000;
 
 async function fixture() {
   const t = convexTest(schema, modules);
-  // Every write drops the cached overview.
   actionCache.register(t);
   const ids = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
@@ -291,7 +282,6 @@ describe("pull request review actions", () => {
         ],
       });
 
-      // Reviewers: GitHub has no set call, so the delta goes out as a removal and an addition.
       github.get.mockResolvedValue({ data: { requested_reviewers: [{ login: "octocat" }, { login: "hubot" }] } });
       await asUser.action(api.github.setPullRequestReviewers, { repoId: ids.repoId, prNumber: 12, logins: ["hubot", "monalisa"] });
       expect(github.removeRequestedReviewers).toHaveBeenCalledWith({ owner: "acme", repo: "widgets", pull_number: 12, reviewers: ["octocat"] });

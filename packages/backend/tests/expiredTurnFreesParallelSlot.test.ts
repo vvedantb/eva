@@ -9,10 +9,8 @@ import { MAX_PARALLEL_CHATS } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
 
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
-// Keeps the scheduled stall retry from firing after the test finishes.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -20,11 +18,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/**
- * The bug: `finalizeExpired` drained sibling chats before it closed the expired
- * turn. That turn still held a parallel-chat slot, so a sibling parked on the
- * cap stayed parked, and no later drain released it.
- */
 test(
   "an expired turn frees its parallel-chat slot before siblings drain",
   async () => {
@@ -70,7 +63,6 @@ test(
         });
         return turnId;
       };
-      // Every slot is taken; the first turn's lease has run out.
       const turnIds: Id<"turns">[] = [];
       for (let number = 1; number <= MAX_PARALLEL_CHATS; number++) {
         turnIds.push(await openChat(number));
@@ -104,7 +96,6 @@ test(
       turnId: expiredTurnId,
       cause: "process_dead",
     });
-    // The drain runs in its own scheduled mutation, after the close commits.
     vi.runOnlyPendingTimers();
     await t.finishInProgressScheduledFunctions();
 
@@ -126,7 +117,6 @@ test(
         .collect(),
     }));
     expect(after.expired?.open).toBe(false);
-    // The freed slot went to the parked sibling: its message started a turn.
     expect(after.queued).toHaveLength(0);
     expect(after.parkedTurns.filter((turn) => turn.open)).toHaveLength(1);
     expect(after.parkedMessages.map((message) => message.content)).toContain(

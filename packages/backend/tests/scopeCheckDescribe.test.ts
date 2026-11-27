@@ -32,10 +32,6 @@ describe("questions", () => {
   });
 });
 
-/**
- * The motivating case, hunk for hunk: a reviewer reading `IconAward →
- * IconTrophy` catches it, a reviewer reading `@@ -42,7 +42,9 @@` does not.
- */
 describe("changeDetail", () => {
   it("names the icon that replaced another", () => {
     const body = [

@@ -9,7 +9,6 @@ import {
 } from "../parse/claudeGoal.js";
 import type { JsonObject } from "../types.js";
 
-/** Root `<synthetic>` assistant frame, the shape `/goal` output arrives in. */
 function commandOutput(text: string): JsonObject {
   return {
     type: "assistant",
@@ -193,7 +192,6 @@ describe("turn helpers", () => {
         message: { model: "claude-opus-5", content: [] },
       }),
     ).toBe(true);
-    // A subagent frame is not the goal's own work.
     expect(
       isGoalWorkFrame({
         type: "assistant",

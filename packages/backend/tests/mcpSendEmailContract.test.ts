@@ -2,10 +2,8 @@ import { expect, test } from "bun:test";
 import { z } from "zod";
 import { sendEmailTool } from "../convex/_mcp/sendEmailTool";
 
-/** Shape of the JSON block the tool returns on success. */
 const sentPayload = z.object({ status: z.string(), to: z.string() });
 
-/** What the tool layer actually forwards to the injected action. */
 interface SeenCall {
   subject: string;
   body: string;
@@ -36,7 +34,6 @@ test("the tool forwards only a trimmed subject and body", async () => {
   expect(seen[0]?.subject).toBe("Report ready");
   expect(seen[0]?.body).toBe("# Done\n\nAll green.");
 
-  // A caller-supplied recipient is stripped at the boundary, not honoured.
   await tool.invoke(
     JSON.stringify({ subject: "x", body: "y", to: "evil@example.com" }),
   );

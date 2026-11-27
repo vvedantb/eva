@@ -12,7 +12,6 @@ import {
   type LegacyRedirect,
 } from "@/lib/numId";
 
-/** Derived from the query args so the entity list has one source of truth. */
 type RepoEntityType = FunctionArgs<
   typeof api.legacyIds.resolveNumId
 >["entityType"];

@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { extractFunctionSource } from "./_helpers/previewProxySource";
 
-/**
- * The grant is a five-minute bearer token. Eva mints a fresh one on every
- * preview load, so it often arrives while the session cookie is already
- * valid. The proxy used to let those requests through with the grant still in
- * the iframe URL, where apps copied it into shareable links.
- */
 const authorizeSource = extractFunctionSource(
   "function authorize(clientReq, clientRes) {",
 );

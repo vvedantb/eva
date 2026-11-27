@@ -7,13 +7,6 @@ import {
   type PrState,
 } from "../convex/_pullRequests/store";
 
-/**
- * Pure rules behind many-PRs-per-owner: how an owner's rows roll up into the
- * summary list rows draw, when the owner counts as finished, and which owner a
- * PR opened outside Eva's own flow belongs to.
- */
-
-/** The fields the roll-up reads; `createdAt` follows the PR number. */
 function row(
   prNumber: number,
   state: PrState,

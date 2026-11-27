@@ -9,13 +9,7 @@ import {
 } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Runs and one-shot agents run on durable turns: completions carry the lease
- * fence and a stale fence is dropped.
- */
 
-
-/** Loading the workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|fence-args";
 const MODEL = "claude:sonnet";
@@ -51,11 +45,6 @@ async function createFixture() {
   return { t, ...ids };
 }
 
-/**
- * A quick-task run's completion carries its lease. A superseded lease is
- * dropped before the run is marked finalizing, so an old callback cannot end
- * a newer run's turn.
- */
 test(
   "a run completion from a superseded lease is ignored",
   async () => {
@@ -105,7 +94,6 @@ test(
   TIMEOUT_MS,
 );
 
-/** One-shot agents open their turn already leased and close it on completion. */
 test(
   "a one-shot agent turn opens leased and closes on a current completion",
   async () => {

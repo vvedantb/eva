@@ -10,15 +10,7 @@ import {
 } from "../convex/_taskWorkflow/usageLimitReset";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A chat's queue now waits for two things besides a running turn: a sleeping
- * sandbox (which the queue wakes, so the ready drain can send) and a usage
- * limit the newest turn hit (which holds same-provider messages until just
- * after the reset).
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -153,7 +145,6 @@ async function fixture(options: {
   sandboxStatus: "active" | "closed";
   queuedModel: "claude:sonnet" | "codex:gpt-5.6";
   hitLimit: boolean;
-  /** The failed turn ran on the owner's own account; the queue is on Team. */
   limitOnOwnAccount?: boolean;
 }) {
   const t = convexTest(schema, modules);
@@ -246,7 +237,6 @@ function scheduledResumes(t: ReturnType<typeof convexTest>) {
 }
 
 describe("a quiet drain", () => {
-  // Keeps the scheduled sandbox start from firing after the test finishes.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -288,7 +278,6 @@ describe("a quiet drain", () => {
       });
 
       expect(await queueLength(t, chatId)).toBe(1);
-      // Held, so the sandbox is not woken just to sit idle until the reset.
       const session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session?.status).toBe("closed");
       const resumes = await scheduledResumes(t);
@@ -313,7 +302,6 @@ describe("a quiet drain", () => {
         parentId: chatId,
       });
 
-      // Not held: it goes on to wake the sandbox so the message can send.
       const session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session?.status).toBe("starting");
       expect(await scheduledResumes(t)).toHaveLength(0);
@@ -344,7 +332,6 @@ describe("a quiet drain", () => {
 });
 
 describe("a Stop", () => {
-  // Keeps the scheduled sandbox start from firing after the test finishes.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -367,7 +354,6 @@ describe("a Stop", () => {
         parentId: chatId,
       });
 
-      // Held: the sandbox is not even woken for it.
       expect(await queueLength(t, chatId)).toBe(1);
       let session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session?.status).toBe("closed");
@@ -384,7 +370,6 @@ describe("a Stop", () => {
         .withIdentity({ subject: "clerk|runner" })
         .mutation(api.queuedMessages.steer, { id: queuedId });
 
-      // Released: the drain goes on to wake the sandbox so it can send.
       const chat = await t.run((ctx) => ctx.db.get(chatId));
       expect(chat?.queueHeldAt).toBeUndefined();
       session = await t.run((ctx) => ctx.db.get(sessionId));

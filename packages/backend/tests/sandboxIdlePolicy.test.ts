@@ -10,14 +10,6 @@ import {
   shouldTouchActivity,
 } from "../convex/_sandbox/idlePolicy";
 
-/**
- * The idle-pause rule, Amp-orb style: pause once BOTH the agent grace (since
- * the last turn finished) and the interaction grace (since the last human
- * touch) have elapsed, and nothing is busy or present right now. A wrong
- * decision here either bills an idle VM for hours or pulls a sandbox out from
- * under someone mid-use, so every branch is pinned.
- */
-
 const MIN = 60_000;
 const NOW = 1_700_000_000_000;
 const thresholds = { afterAgentMs: 5 * MIN, afterInteractionMs: 20 * MIN };

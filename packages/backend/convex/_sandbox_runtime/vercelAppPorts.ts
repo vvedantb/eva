@@ -1,17 +1,5 @@
 "use node";
 
-/**
- * Vercel app Preview port map.
- *
- * Public auth proxy is always on 3000 (in the fixed 4-slot expose set).
- * 54321 stays free for local Supabase Kong. The app listens on the UI/logical
- * port when that is not 3000; when the UI port is 3000 the app listens on
- * 13000 so the proxy can own the public slot.
- *
- * Launch uses `pnpm|yarn|npm exec next|vite -p <listen>` (Eva-side only) so
- * hardcoded `next dev -p …` in customer package.json cannot steal the wrong port.
- */
-
 import { z } from "zod";
 import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import type { SandboxHandle } from "../_sandbox/provider";
@@ -35,7 +23,6 @@ function isUsablePort(port: number): boolean {
   return Number.isInteger(port) && port > 0 && port <= 65535;
 }
 
-/** Absolute shell path to the package root, defaulting to the workspace root. */
 function packageDirShell(rootDir: string): string {
   const workspaceRoot = workspaceDirShell();
   return rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
@@ -52,7 +39,6 @@ export function vercelAppListenPort(logicalPort: number): number {
   if (logical === VERCEL_PREVIEW_PROXY_PORT) {
     return VERCEL_APP_INTERNAL_PORT;
   }
-  // Desktop/editor/supabase public slots are never app listen ports.
   if (
     logical === DESKTOP_PORT ||
     logical === EDITOR_PORT ||
@@ -82,7 +68,6 @@ export async function detectVercelDevFramework(
     if ("next" in deps) return "next";
     if ("vite" in deps) return "vite";
   } catch {
-    // fall through
   }
   return "unknown";
 }
@@ -116,7 +101,6 @@ export function vercelForcedFrameworkDevCommand(
   return null;
 }
 
-/** Rewrite PORT=… in a fallback launch command to the Vercel listen port. */
 function withListenPortInCommand(
   devCommand: string,
   listenPort: number,
