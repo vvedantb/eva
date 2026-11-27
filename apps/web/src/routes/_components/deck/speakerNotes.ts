@@ -404,7 +404,7 @@ So let's start with Eva, cos it's the biggest bit.`,
 It starts with an empty repository on 11 January.
 → First session on 24 January, first quick task on 1 February, so about two weeks from nothing to usable.
 Those are from Eva's records of the first ones actually created, which is why they're later than the week-one dates, cos those are when the code landed.
-→ Then in July the work moves to the cloud, which is the fix for the laptop problem I started with, and in August Eva starts opening its own work.
+→ Then in March the work moves to the cloud, which is the fix for the laptop problem I started with, and in August Eva starts opening its own work.
 → And the line just keeps running to today, cos it's still going.
 So that's how we got from an empty repository to most of how we build software.`,
 
@@ -419,7 +419,7 @@ But those sixteen people didn't all turn up at once, and the timing's interestin
   "a04-adoption": `So nobody announced Eva to the team; people just started using it once it got easy enough.
 This is sessions started per month this year.
 The early months are small, and June's a genuine zero, not missing data.
-→ Then from July it lights up, which is when the work moved to the cloud.
+→ Then from July it lights up, which is when workspaces moved to Vercel and started in under a second.
 From July, monthly sessions roughly tripled, and they've kept climbing since.
 November's only up to this week, and it leaves out the old quick tasks we moved into sessions on 11 November, cos counting those would make the bar look much bigger than it really is.
 And I'm calling out the June gap on purpose, cos being upfront about it is what makes the rest believable.`,
@@ -431,15 +431,14 @@ Three things changed, and none of them's typing speed.
 → And third, what a person actually does: you used to write every line, and now you direct the work and guard the bits that are hard to undo.
 That third one matters most, cos it's what makes the other two safe.
 So Eva was built to remove the wait between someone needing something and it being built.
-So what does that look like for the person actually using it?`,
+And behind all that sits the first big platform decision.`,
 
   "a07-how": `So here's the whole loop.
 → You describe it in a chat, Eva builds it in its own cloud workspace with a live preview, and you try it, ask for changes, and it goes live when you're happy.
 It's all in a browser tab, so nothing to install, no ticket and no handover.
 The preview's the bit that matters, cos it's the first point a non-developer can judge the work themselves.
 → And there's four ways in: sessions, quick tasks, projects and automations.
-So you pick by the size of the job, not by whether you're technical.
-And behind all that sits the first big platform decision.`,
+So you pick by the size of the job, not by whether you're technical.`,
 
   "annual-e02-carepulse": `So CarePulse kept shipping all year, most of it raised and built through Eva, and everything here went into main, quarter by quarter.
 → December to February: notes on the AQP list, including Sussex, eProcurement evaluation and the moderation view, a run of fixes for evaluators, and the sandbox setup so the team could work in the cloud.
@@ -559,7 +558,8 @@ But simple by default doesn't mean everyone's stuck with it.`,
 It needs heavy AI usage, so it wasn't feasible at the time, and it can be looked at again when there's spare usage.
 → Documents: one place in Eva for PRDs and other docs, kept beside the work.
 That one needs more work before it pays off.
-→ So parked isn't dropped, the idea just waits for the right time.`,
+→ So parked isn't dropped, the idea just waits for the right time.
+So where's all of this heading?`,
 
   "annual-g03-skills": `So without guidance the agent invents its own way every time, and you end up with five different styles in one codebase.
 So I wrote CarePulse skills the agent reads before it touches that part of the code.
@@ -579,7 +579,8 @@ That's not built yet, but the first one's queued: Lauren's "no comments" skill, 
 → Today, an automation writes a stand-up for each app every day: what merged into main, so what actually went live, and what's new in the app.
 That's been running since August.
 → And in progress, I'm rebuilding it as a live dashboard, not once a day: what needs you, what's in progress, and what's merged.
-So the business team gets a much better view of where every project's at, without having to ask anyone.`,
+So the business team gets a much better view of where every project's at, without having to ask anyone.
+So that's the product; what did the year actually teach me?`,
 
   "annual-g06-understanding": `So AI's taken away the coding, but not the understanding, and it shouldn't.
 These are four CarePulse changes from the last few months, what each looked like versus what it actually took.
@@ -668,7 +669,7 @@ Some of that was bolted on fast, and chapter three is where that bill came due.`
 
   "annual-b06-q3": `So chapter three, July to September, was the clean-up: finding the slop that had piled up and making the product dependable.
 → July was almost all the sandbox cutover.
-That's the cloud move from the start, every job in its own workspace, and we swapped the engine under all of them, which I'll take apart phase by phase later.
+We'd been in the cloud since March; this swapped the engine under every workspace, from Daytona to Vercel, which I'll take apart phase by phase later.
 → August: durable turns, so a long run survives an interruption instead of stalling, plus security work and the design system the interface now sits on.
 → And September: multi-repo sessions, and decision models for classifying work at scale.
 So a lot of this quarter was identifying slop and clearing it, not adding new things.`,
