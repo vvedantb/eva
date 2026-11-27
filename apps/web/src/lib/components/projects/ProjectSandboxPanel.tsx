@@ -5,7 +5,8 @@ import { IconChecklist, IconMessages } from "@tabler/icons-react";
 import { useQueryState } from "nuqs";
 import { ReplyThreadList } from "@/lib/components/chat/replies/ReplyThreadList";
 import { ReplyThreadView } from "@/lib/components/chat/replies/ReplyThreadView";
-import { replyThreadParser } from "@/lib/search-params";
+import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
+import { messageLinkParser, replyThreadParser } from "@/lib/search-params";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -133,6 +134,12 @@ export function ProjectSandboxPanel({
 }: ProjectSandboxPanelProps) {
   // The Replies tab always shows: the thread list, or the open `?thread=`.
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
+  // ↑ and ↓ in a thread also point the chat at that message (`?message=`),
+  // which scrolls it into view.
+  const [, setLinkedMessage] = useQueryState(
+    MESSAGE_LINK_PARAM,
+    messageLinkParser,
+  );
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
@@ -306,7 +313,10 @@ export function ProjectSandboxPanel({
                   repo={{ id: repoId, basePath }}
                   model={chatBinding.model}
                   isOpen={activeTab === "replies"}
-                  onOpen={(rootId) => void setThreadId(rootId)}
+                  onOpen={(rootId) => {
+                    void setThreadId(rootId);
+                    void setLinkedMessage(rootId);
+                  }}
                   onClose={onCloseThread}
                 />
               ) : (
