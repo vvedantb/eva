@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { checkRunBody } from "../convex/_automations/checkRun";
 import { parseAxiomAlert } from "../convex/_automationEvents/axiomAlert";
 import {
   describeAlert,
@@ -204,8 +205,9 @@ describe("triggers", () => {
       prUrl: "https://github.com/acme/eva/pull/1",
       prNumber: 1,
       title: "t",
+      headSha: "abc",
     };
-    const updated = { kind: "pr_updated", ...pr, headSha: "abc" } as const;
+    const updated = { kind: "pr_updated", ...pr } as const;
     const opened = { kind: "pr_opened", ...pr } as const;
     const onUpdated = { kind: "event", event: "pr_updated" } as const;
     const onOpened = { kind: "event", event: "pr_opened" } as const;
@@ -385,5 +387,30 @@ describe("axiom alerts", () => {
     expect(repoEventKey({ ...result.alert, owner: "acme", name: "eva" })).toBe(
       "axiom:CabI3w142069etTgd0",
     );
+  });
+});
+
+describe("Eva check run", () => {
+  const run = { title: "PR review", prUrl: undefined, resultSummary: undefined };
+
+  test("a failed run is neutral, so it never turns the PR red", () => {
+    const body = checkRunBody(
+      { ...run, status: "error", error: "Sandbox did not start" },
+      undefined,
+    );
+    expect(body).toEqual({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Run failed", summary: "Sandbox did not start" },
+    });
+  });
+
+  test("a running run is in progress and links to Eva", () => {
+    const body = checkRunBody(
+      { ...run, status: "running", error: undefined },
+      "https://eva.test/a",
+    );
+    expect(body.status).toBe("in_progress");
+    expect(body.output.summary).toContain("[Open in Eva](https://eva.test/a)");
   });
 });

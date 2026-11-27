@@ -77,6 +77,17 @@ export function buildEvaArenaUrl(
   return `${repoUrl(repoOwner, repoName, rootDirectory)}/testing-arena/${docNumId}/${arenaTab}`;
 }
 
+/** Builds a link to an automation's tab (path uses per-repo numId). */
+export function buildEvaAutomationUrl(
+  repoOwner: string,
+  repoName: string,
+  automationNumId: number,
+  automationTab: "latest" | "run-history" | "settings",
+  rootDirectory?: string,
+): string {
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/automations/${automationNumId}/${automationTab}`;
+}
+
 /** Builds a link to a PR under Reviews (keyed by GitHub PR number). */
 export function buildEvaReviewUrl(
   repoOwner: string,

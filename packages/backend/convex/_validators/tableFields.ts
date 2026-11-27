@@ -1261,6 +1261,10 @@ export const automationRunFields = {
   createdTaskId: v.optional(v.id("agentTasks")),
   // CI fix attempts stop counting toward the cap once the PR goes green.
   superseded: v.optional(v.boolean()),
+  // PR open, push and merge runs: the newest head commit the run covers, and
+  // the GitHub check run Eva shows on it (see `_automations/checkRun.ts`).
+  headSha: v.optional(v.string()),
+  checkRunId: v.optional(v.number()),
 };
 
 // One row per (changelog run, user, item): the latest feedback from the email.

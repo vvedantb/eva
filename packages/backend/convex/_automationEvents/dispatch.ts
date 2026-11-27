@@ -26,11 +26,13 @@ import {
   STALE_EVENT_RUN_MS,
   STALE_WAITING_RUN_MS,
   triggerMatchesEvent,
+  prEventHeadSha,
   type RepoEvent,
 } from "./events";
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
 import { isTerminalRunStatus } from "../_automations/runStatus";
+import { syncCheckRunLater } from "../_automations/checkRun";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 import { chatEntityKindValidator } from "../_validators/enums";
 
@@ -78,9 +80,15 @@ async function shouldQueue(
       q.eq("automationId", automation._id).eq("eventKey", eventKey),
     )
     .collect();
-  // A run still waiting out its debounce absorbs this webhook. One already
+  // A run still waiting out its debounce absorbs this webhook, and takes its
+  // head commit so the run and its check cover the newest push. One already
   // claimed (`running`) does not: it may have fetched before this happened.
-  if (sameKey.some((run) => run.status === "queued")) return false;
+  const waiting = sameKey.find((run) => run.status === "queued");
+  if (waiting !== undefined) {
+    const headSha = prEventHeadSha(event);
+    if (headSha !== undefined) await ctx.db.patch(waiting._id, { headSha });
+    return false;
+  }
   // One task per monitor per window, whatever became of the last one.
   if (event.kind === "production_alert") {
     const since = Date.now() - ALERT_DEDUPE_WINDOW_MS;
@@ -193,6 +201,7 @@ async function queueEventRun(
     eventKind: event.kind,
     eventKey,
     targetUrl: repoEventTargetUrl(event),
+    headSha: prEventHeadSha(event),
   });
   const debounce = EVENT_DEBOUNCE_MS[event.kind];
   await ctx.scheduler.runAfter(
@@ -277,6 +286,7 @@ export const expireEventRun = internalMutation({
       error: "Timed out before it finished",
       finishedAt: Date.now(),
     });
+    await syncCheckRunLater(ctx, run);
     return null;
   },
 });

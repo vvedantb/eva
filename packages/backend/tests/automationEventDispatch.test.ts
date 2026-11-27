@@ -37,6 +37,16 @@ const ciFailed = (headSha: string, prNumber = 7): RepoEvent => ({
   headSha,
 });
 
+const pushed = (headSha: string): RepoEvent => ({
+  kind: "pr_updated",
+  owner: "acme",
+  name: "eva",
+  prUrl: PR_URL,
+  prNumber: 7,
+  title: "Add retry",
+  headSha,
+});
+
 const feedback: RepoEvent = {
   kind: "pr_feedback",
   owner: "acme",
@@ -126,6 +136,22 @@ async function fixture() {
 }
 
 describe("event dispatch", () => {
+  test(
+    "pushes during the debounce fold into one run on the newest commit",
+    async () => {
+      const { install, ids, runsOf, dispatch } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        event: "pr_updated",
+      });
+      await dispatch(pushed("first"));
+      await dispatch(pushed("second"));
+      const runs = await runsOf(automationId);
+      expect(runs.map((run) => run.headSha)).toEqual(["second"]);
+    },
+    TIMEOUT_MS,
+  );
+
   test(
     "a preset installed on several apps fires once, on the PR's own app",
     async () => {
@@ -345,7 +371,7 @@ describe("event run lifecycle", () => {
       for (const runId of [fresh, stale]) {
         await t.mutation(internal.automations.startEventRun, {
           runId,
-          context: "PR merged",
+          event: pushed("abc"),
         });
       }
       const [waiting, gaveUp] = await t.run(async (ctx) => [

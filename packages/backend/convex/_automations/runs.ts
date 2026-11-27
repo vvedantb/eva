@@ -19,6 +19,7 @@ import { automationAction } from "./systemAutomations";
 import { queueRunEmail } from "./email";
 import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
 import { stopAgentJob } from "../_agentJobs/slot";
+import { syncCheckRunLater } from "./checkRun";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
 export const listRuns = authQuery({
@@ -194,6 +195,7 @@ export const updateRunStatus = internalMutation({
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);
+    await syncCheckRunLater(ctx, current);
 
     // Findings land unranked and possibly duplicating open work. Triage runs
     // out of band so the run finishes at the same speed either way.
@@ -300,6 +302,7 @@ export const cancelRun = authMutation({
       finishedAt: Date.now(),
       activeWorkflowId: undefined,
     });
+    await syncCheckRunLater(ctx, run);
     return null;
   },
 });

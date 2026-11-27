@@ -10,9 +10,13 @@ import {
   getAutomationWithAccess,
 } from "./helpers";
 import {
+  describeRepoEvent,
   EVENT_RUN_MAX_WAIT_MS,
   EVENT_RUN_RETRY_MS,
+  repoEventValidator,
+  withLatestHead,
 } from "../_automationEvents/events";
+import { syncCheckRunLater } from "./checkRun";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 import { startAgentJob } from "../_agentJobs/slot";
 
@@ -154,7 +158,7 @@ export const runNow = authMutation({
  * busy it retries every few minutes, never stacking a second sandbox.
  */
 export const startEventRun = internalMutation({
-  args: { runId: v.id("automationRuns"), context: v.string() },
+  args: { runId: v.id("automationRuns"), event: repoEventValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
@@ -167,6 +171,7 @@ export const startEventRun = internalMutation({
         error: "Automation is disabled or its repo is gone",
         finishedAt: Date.now(),
       });
+      await syncCheckRunLater(ctx, run);
       return null;
     }
     // Busy: wait for the current run rather than drop the event, so a burst
@@ -178,6 +183,7 @@ export const startEventRun = internalMutation({
           error: "Skipped: the automation stayed busy for a day",
           finishedAt: Date.now(),
         });
+        await syncCheckRunLater(ctx, run);
         return null;
       }
       await ctx.scheduler.runAfter(
@@ -187,9 +193,10 @@ export const startEventRun = internalMutation({
       );
       return null;
     }
+    // Pushes that landed during the debounce or the wait moved the run's head.
     await startAutomationRun(ctx, automation, repo, {
       runId: args.runId,
-      context: args.context,
+      context: describeRepoEvent(withLatestHead(args.event, run.headSha)),
     });
     return null;
   },
