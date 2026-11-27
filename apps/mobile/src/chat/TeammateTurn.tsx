@@ -39,9 +39,7 @@ export function TeammateBubble({
   joinsNext,
   children,
 }: {
-  /** The sender's profile; undefined while it loads. */
   sender: { firstName?: string; lastName?: string; fullName?: string } | undefined;
-  /** The next row is this sender's bubble too: it takes the avatar (the web `joinsNext`). */
   joinsNext: boolean;
   children: ReactNode;
 }) {
@@ -55,14 +53,12 @@ export function TeammateBubble({
 /** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with the rail's `IconEva`. */
 export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
   return (
-    // The tab bar's Eva mark, in the text colour.
     <SideBubble avatar={<IconEva size={16} />} joinsNext={joinsNext} className="max-w-[70%]">
       {children}
     </SideBubble>
   );
 }
 
-/** Only a run's last bubble shows the avatar and squares its corner against it; the rest keep its 16 of space. */
 function SideBubble({
   avatar,
   joinsNext,
@@ -80,7 +76,6 @@ function SideBubble({
       <View className="size-4">{joinsNext ? null : avatar}</View>
       <MessageContent
         bubble="tint"
-        // The kit pads only a user message (`px-4 py-3`); Eva's reply needs the same.
         className="shrink px-4 py-3"
         style={joinsNext ? { backgroundColor: theme.secondary } : { backgroundColor: theme.secondary, borderBottomLeftRadius: 0 }}
       >

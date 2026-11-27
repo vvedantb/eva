@@ -291,7 +291,6 @@ export interface StackVerdict {
 export function stackVerdict(stack: PrStack): StackVerdict {
   const targets = stackMergeTargets(stack);
   if (targets.length === 0) {
-    // This PR is merged, but entries above it may still be open.
     const openAbove = stack.entries.filter(
       (entry) => entry.status === "open",
     ).length;

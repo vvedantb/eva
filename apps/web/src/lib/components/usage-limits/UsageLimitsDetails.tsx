@@ -8,15 +8,8 @@ import { UsageProviderSection } from "./UsageProviderSection";
 import { ListEnter, Spinner } from "@vvedantb/ui";
 
 interface UsageLimitsDetailsProps {
-  /** Every credential the viewer can run on, in the query's order. */
   entries: readonly UsageAccountEntry[];
-  /**
-   * One instant for the whole card, shared with the chip that opens it — both
-   * read the same minute clock, so they cannot disagree by a tick, and an open
-   * card's countdown ticks along with it.
-   */
   now: number;
-  /** True while the refresh that opening the card started is in flight. */
   refreshing: boolean;
 }
 
@@ -49,7 +42,6 @@ export function UsageLimitsDetails({
     <div className="divide-y">
       <div className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-3">
         <p className="font-medium text-xs">Plan usage</p>
-        {/* Fixed slot keeps the header height steady as the spinner comes and goes. */}
         <span
           className="flex size-8 items-center justify-center"
           aria-live="polite"

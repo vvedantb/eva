@@ -78,7 +78,6 @@ export function SubagentThreadView({
   agent: SubagentView;
   parentTitle: string;
   sources: ReadonlyArray<SubagentSource>;
-  /** The running turn's streaming payload, when it holds this subagent. */
   liveActivity: string | undefined;
   canStop: boolean;
   onRequestStop: RequestAgentStop;
@@ -96,7 +95,6 @@ export function SubagentThreadView({
   );
   const running = subagentTone(agent.status) === "active";
   const lastBlock = thread.blocks.at(-1);
-  // Older runs and non-Claude agents never recorded the prompt or messages.
   const onlyToolCalls =
     !running &&
     thread.prompt === undefined &&

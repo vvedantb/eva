@@ -37,7 +37,6 @@ type Aggregated = NonNullable<ReturnType<typeof aggregateUsage>>;
 
 const META = { fontSize: 12, lineHeight: 16 };
 
-/** The web `Intl` compact figures ("950", "1.2K", "110K", "1.5M"), without relying on Hermes `Intl`. */
 function compactTokens(value: number): string {
   const units: [number, string][] = [
     [1e9, "B"],
@@ -53,12 +52,10 @@ function compactTokens(value: number): string {
   return String(Math.round(value));
 }
 
-/** "45.3%", as the web `percent` format (at most one decimal). */
 function percent(ratio: number): string {
   return `${Number((ratio * 100).toFixed(1))}%`;
 }
 
-/** The logs a chat's context meter reads: the web session header reads the chat, a task's the task, a project's every project log. */
 function useChatUsage(chat: Chat, skip: boolean): Aggregated | null {
   const entityId = chat.task ? chat.task.id : chat.project ? undefined : chat.parentId;
   const entityLogs = useQuery(api.logs.getByEntityId, !skip && entityId ? { repoId: chat.repoId, entityId } : "skip");
@@ -80,7 +77,6 @@ export function UsageButton({ chat }: { chat: Chat }) {
   const [open, setOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refreshAll = useAction(api.usageLimitsActions.refreshAll);
-  // Opening reads every account again, as opening the web card does; a second open while one runs does not.
   const openSheet = async () => {
     setOpen(true);
     if (refreshing) return;
@@ -108,7 +104,6 @@ export function UsageButton({ chat }: { chat: Chat }) {
         accessibilityHint="Opens context and plan usage"
         onPress={() => void openSheet()}
         hitSlop={4}
-        // Flat on the header rail (`HeaderRail`), as the web trough's buttons.
         className="h-11 flex-row items-center gap-1.5 rounded-full px-3 active:opacity-70"
       >
         <Text className="font-instrument-sans-medium" style={{ ...META, color, fontWeight: "500", fontVariant: ["tabular-nums"] }}>
@@ -121,7 +116,6 @@ export function UsageButton({ chat }: { chat: Chat }) {
   );
 }
 
-/** The web meter's ring: a 25% track and the used arc from 12 o'clock. */
 function ContextRing({ ratio, color }: { ratio: number; color: string }) {
   const radius = 10;
   const circumference = 2 * Math.PI * radius;
@@ -159,7 +153,6 @@ function UsageSheet({
   refreshing: boolean;
 }) {
   const now = useNow(60_000);
-  // Read only while the sheet is open.
   const entries = useQuery(api.usageLimits.getForViewer, open ? { repoId: chat.repoId, now } : "skip");
 
   return (
@@ -204,7 +197,6 @@ function Muted({ children }: { children: ReactNode }) {
   );
 }
 
-/** A row of label and figure, the figure in tabular numerals. */
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   const theme = EVA_THEME[useScheme()];
   return (
@@ -239,7 +231,6 @@ export function useToneColor(): (tone: UsageTone) => { text: string; fill: strin
         : { text: theme.mutedForeground, fill: theme.primary };
 }
 
-/** The web context card: used of the window and its bar, the token rows, what is left, and the total cost. */
 function ContextCard({ usage }: { usage: Aggregated }) {
   const theme = EVA_THEME[useScheme()];
   const { maxTokens, usedTokens } = usage;
@@ -285,7 +276,6 @@ function ContextCard({ usage }: { usage: Aggregated }) {
   );
 }
 
-/** The web plan-usage card: per account its heading and windows (or why there are none), then when it was read. */
 function PlanUsage({ entries, now }: { entries: readonly UsageAccountEntry[]; now: number }) {
   const theme = EVA_THEME[useScheme()];
   const toneColor = useToneColor();

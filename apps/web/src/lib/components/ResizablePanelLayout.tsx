@@ -97,7 +97,6 @@ export function ResizablePanelLayout({
     leftDefaultSize,
     DEFAULT_RIGHT_PANEL_SIZE,
   );
-  // Where the user last dragged the handle.
   const {
     initialSize: initialRightSize,
     savedSize: savedRightSize,
@@ -239,9 +238,6 @@ export function ResizablePanelLayout({
   };
 
   const handleLayoutChanged = (layout: Layout) => {
-    // A rail-width snap — or the in-between strip a group resize can leave — is
-    // not a dragged width. Persisting it would make the next expand restore to
-    // tens of pixels instead of the last real split.
     if (railMinSizePx > 0 && groupWidthPxRef.current > 0) {
       const pct = panelPercentage(layout, "right");
       if (pct !== null) {
@@ -263,9 +259,6 @@ export function ResizablePanelLayout({
     const panelRest = { opacity: 1, y: "0%" };
     const panelExit = { opacity: 0, y: "8%" };
 
-    // One pane at a time: the visible pane owns the full height. The switcher
-    // is the way back — the desktop collapse control lives on the sandbox rail,
-    // which is not on screen while the right pane is showing.
     return (
       <div className="flex h-full max-sm:min-h-0 flex-col">
         <MobilePaneSwitcher
@@ -277,9 +270,6 @@ export function ResizablePanelLayout({
             }
           }}
         />
-        {/* The right pane is an absolute overlay rather than a flex sibling so
-            that its exit animation cannot momentarily split the height with the
-            reappearing left pane. */}
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div
             className={
@@ -310,15 +300,6 @@ export function ResizablePanelLayout({
   const hideSeparator = rightCollapsed && rightCollapsedSizePx === 0;
 
   return (
-    // No `id`: the library keeps one global registry of mounted groups and
-    // resolves every lookup — imperative resize/collapse, the rendered
-    // flexGrow, the layout-change listener — to the *first* group with that id.
-    // Passing `storageKey` gave all three kept-alive session shells the id
-    // `sandbox-collapsed`, so the visible session drove the oldest hidden one:
-    // its 0px group turned a 44px collapse into 0% and the rail vanished, and
-    // expanding back was a no-op. The library's `useId` fallback is unique per
-    // instance, which is what a group id is for; only the *panel* ids have to
-    // be stable, and those stay explicit.
     <Group
       orientation="horizontal"
       className="h-full"
@@ -332,9 +313,6 @@ export function ResizablePanelLayout({
       >
         {leftPanel(ctx)}
       </Panel>
-      {/* z-10 so the grip sits above adjacent pane content. The sandbox rail
-          uses z-20 so a collapsed-rail click hits the toggle instead of
-          starting a drag. */}
       <Separator
         className={cn(
           "group/separator w-px transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none",
@@ -358,10 +336,6 @@ export function ResizablePanelLayout({
         collapsedSize={rightCollapsedSizePx}
         defaultSize={rightDefaultSize}
         minSize={rightMinWidthPx}
-        // Keep the rail at 44px (and an expanded sandbox at its dragged pixels)
-        // when the group width changes. The default relative behaviour turns a
-        // collapsed percentage into a wider strip, which is what made the
-        // toggle disagree with the panel.
         groupResizeBehavior={
           rightCollapsedSizePx > 0 ? "preserve-pixel-size" : undefined
         }

@@ -32,10 +32,8 @@ export function sessionMenuActions(session: {
   branchName?: string;
   prUrl?: string;
   simpleView: boolean;
-  /** A row in a linked-session group (the web `inGroup`). */
   inGroup?: boolean;
   prState?: PrState;
-  /** The awake sandbox has uncommitted files or unpushed commits (the web Commit & push button shows then, simple view too). */
   hasUnpushedWork?: boolean;
 }): SessionMenuAction[][] {
   const showGit = !session.simpleView;

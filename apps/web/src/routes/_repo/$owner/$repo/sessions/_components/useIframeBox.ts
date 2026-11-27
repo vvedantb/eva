@@ -1,4 +1,3 @@
-// useLayoutEffect: tracks the iframe's box so portalled overlays sit on it.
 import { useLayoutEffect, useState } from "react";
 
 export interface IframeBox {

@@ -237,7 +237,6 @@ function readSyntheticResult(output: string): SyntheticResult {
         }
       }
     } catch {
-      /* skip malformed lines */
     }
   }
   found.assistantText = assistantParts.join("");
@@ -322,7 +321,6 @@ export function extractResultEvent(output: string): ResultEvent | null {
           }
         }
       } catch {
-        /* skip malformed lines */
       }
     }
     if (!finalText) return null;
@@ -355,7 +353,6 @@ export function extractResultEvent(output: string): ResultEvent | null {
         };
       }
     } catch {
-      /* skip malformed lines */
     }
   }
   return resultEvent;

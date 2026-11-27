@@ -50,9 +50,6 @@ export function ScopeCheckChip({
       <HoverCardTrigger asChild>
         <span
           className={cn(
-            // 10px was below the size at which these hues stay legible even
-            // once the contrast is fixed, so the chip reads at 11px like the
-            // hunk rows it opens.
             "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-2xs font-medium leading-none tabular-nums",
             TONE_CLASS[tone],
           )}
@@ -106,10 +103,6 @@ function FlaggedHunkRow({
   hunk: ScopeCheckHunk;
   onViewDiff?: (repoRelativePath?: string) => void;
 }) {
-  // What changed, then where — a file path and an `@@` header are unreadable
-  // to the designer or PM this row exists for. The path stays as the title so
-  // a developer can still get at it, and as the fallback for rows judged
-  // before the plain-English pass existed.
   const body = (
     <>
       <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">

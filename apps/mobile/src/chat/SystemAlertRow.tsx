@@ -10,7 +10,6 @@ import { useScheme } from "@/ui/theme";
 
 type Tone = { Icon: typeof IconAlertTriangle; color: "warning" | "destructive"; action: string; title: string };
 
-/** Warning and error alerts get an icon and colour; a plain divider gets none (the web `SystemAlertMessage`). */
 const TONES: { warning: Tone; error: Tone } = {
   warning: { Icon: IconAlertTriangle, color: "warning", action: "View details", title: "Sandbox Warning" },
   error: { Icon: IconAlertCircle, color: "destructive", action: "View error", title: "Sandbox Error" },

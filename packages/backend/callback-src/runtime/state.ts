@@ -76,7 +76,6 @@ function parsePriorAnswers(
   return Object.keys(answers).length > 0 ? answers : undefined;
 }
 
-/** Copies the structured payload fields (output, edits, todos, …) in key order. */
 function addPriorStepPayload(step: ProgressStep, value: JsonObject): void {
   const output = parsePriorOutput(value.output);
   if (output) step.output = output;

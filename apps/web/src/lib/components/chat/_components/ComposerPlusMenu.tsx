@@ -95,10 +95,8 @@ interface DataMenuItem {
 
 interface ComposerPlusMenuProps {
   dataItems: DataMenuItem[];
-  /** Same `/` entries the editor's slash picker shows. */
   skillItems: SlashItem[];
   mentionRef: RefObject<MentionTextareaHandle | null>;
-  /** Circular muted plus, matching the compact ChatGPT-style composer. */
   compact?: boolean;
 }
 

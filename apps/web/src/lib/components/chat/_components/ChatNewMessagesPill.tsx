@@ -27,9 +27,7 @@ export function ChatNewMessagesPill({
   onJump,
 }: {
   count: number;
-  /** The divider is above the viewport and not seen yet. */
   visible: boolean;
-  /** Scroll the divider into view. The parent marks it seen. */
   onJump: () => void;
 }) {
   const [dismissed, setDismissed] = useState(false);
@@ -40,8 +38,6 @@ export function ChatNewMessagesPill({
       <AnimatePresence>
         {visible && !dismissed ? (
           <m.div
-            // Drops from, and lifts back toward, the top edge it points at:
-            // the same path in both directions (mirror of the scroll button).
             initial={{ opacity: 0, y: -8, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.94 }}

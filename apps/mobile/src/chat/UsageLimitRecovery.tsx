@@ -45,7 +45,6 @@ export function UsageLimitRecoveryCard({
   working,
 }: {
   chat: Chat;
-  /** The failed reply's text, which carries the reset hint. */
   failure: string;
   accounts: readonly PickerAccount[];
   switchAccount: (providerAccountId: AccountId | null) => Promise<void>;
@@ -54,7 +53,6 @@ export function UsageLimitRecoveryCard({
   const theme = EVA_THEME[useScheme()];
   const [inFlightKey, setInFlightKey] = useState<string | null>(null);
   const retryLastTurn = useMutation(api.sessionWorkflow.retryLastTurnWithAccount);
-  // One-minute clock, as the web card and the usage sheet, so the query is shared.
   const now = useNow(60_000);
   const entries = useQuery(api.usageLimits.getForViewer, { repoId: chat.repoId, now });
 
@@ -67,8 +65,6 @@ export function UsageLimitRecoveryCard({
   const retry = (candidate: UsageLimitRetryCandidate<AccountId>) => {
     if (!chatId) return;
     setInFlightKey(candidate.key);
-    // The switch has to finish first, or the new daemon would still run the spent account.
-    // Chained, not try / finally, which React Compiler cannot compile.
     switchAccount(candidate.accountId)
       .then(() => retryLastTurn({ chatId, providerAccountId: candidate.accountId }))
       .catch(() => toast.error(USAGE_LIMIT_RETRY_FAILED))
@@ -96,7 +92,6 @@ export function UsageLimitRecoveryCard({
         </Text>
       ) : (
         <View className="gap-1">
-          {/* The web shows this beside the title on wide screens only; the phone puts it over the rows. */}
           <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
             {USAGE_LIMIT_RETRY_HINT}
           </Text>
@@ -122,7 +117,6 @@ export function UsageLimitRecoveryCard({
   );
 }
 
-/** The web `UsageLimitAccountOption`: who, how much is used, and "Retry here". 48 high for a thumb. */
 function AccountRow({
   candidate,
   entry,

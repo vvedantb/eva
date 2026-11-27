@@ -1,11 +1,7 @@
 import type { MentionItem } from "./mentionComposer";
 
-// Eva's skill suggestion chips over the composer (both apps): when a draft is
-// worth asking `skillSuggestions.suggest` about, and which answers to show.
-
 /** How long the draft must sit still before Eva asks Jev about it. */
 export const SUGGEST_IDLE_MS = 700;
-/** Below this a draft is a greeting, not a request worth ranking skills for. */
 const SUGGEST_MIN_CHARS = 16;
 /** Jev spreads probability across every option; a long list dilutes each one. */
 export const SUGGEST_MIN_PROBABILITY = 0.15;
@@ -52,7 +48,6 @@ export function pickSkillSuggestions(
     if (ctx.dismissed.has(suggestion.id)) continue;
     const item = ctx.skillItems.find((skill) => skill.id === suggestion.id);
     if (!item) continue;
-    // Already in the draft — offering to add it again is noise.
     if (lowerText.includes(`/${item.label.toLowerCase()}`)) continue;
     picked.push(item);
   }

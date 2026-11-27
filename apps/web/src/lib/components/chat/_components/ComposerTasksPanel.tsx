@@ -124,12 +124,7 @@ function TaskStepRow({ step }: { readonly step: ComposerTaskStep }) {
 }
 
 interface ComposerTasksPanelProps {
-  /** Task-list rows for the live turn. Empty hides the panel. */
   steps: readonly ComposerTaskStep[];
-  /**
-   * Identifies the turn the steps belong to. Dismissal is scoped to it, so a
-   * new turn brings the panel back. Undefined means "no live turn": no panel.
-   */
   turnId?: string;
 }
 
@@ -154,9 +149,6 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
           exit={{ opacity: 0, y: 8 }}
           transition={tokenTransition.base}
         >
-          {/* Flush above the input card. The dock in ComposerStash owns the inset, so
-              this fills its column; the squared bottom matches QueuedMessagesPanel so
-              the stack reads as one surface. */}
           <Collapsible open={expanded} onOpenChange={setExpanded}>
             <div className="flex items-center gap-1 px-3 py-1.5">
               <CollapsibleTrigger asChild>
@@ -165,7 +157,6 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
                   aria-expanded={expanded}
                   aria-label={label}
                   className="motion-press flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-xs leading-none text-muted-foreground hover:text-foreground active:scale-[0.98]"
-                  // Keep composer focus when toggling from the input.
                   onPointerDown={(event) => event.preventDefault()}
                 >
                   <IconListCheck aria-hidden className="size-3.5 shrink-0" />

@@ -33,9 +33,7 @@ export function ThreadFindBar({
   onActiveChange,
   onClose,
 }: {
-  /** Each message's text (`collectThreadFindDocuments`), oldest first. */
   documents: readonly ThreadFindDocument[];
-  /** A message's index in the list's `data` (newest first), or -1. */
   rowIndex: (messageId: string) => number;
   /** The message of the active match, or null when nothing matches. */
   onActiveChange: (messageId: string | null) => void;
@@ -51,8 +49,6 @@ export function ThreadFindBar({
   const matchCount = matches.length;
   const safeIndex = matchCount === 0 ? -1 : Math.min(Math.max(activeIndex, 0), matchCount - 1);
   const hasQuery = normalizeFindQuery(query).length > 0;
-  // Android back closes the bar before it leaves the chat, as it closes a sheet first. An effect:
-  // the hardware back button is a subscription outside React.
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       onClose();
@@ -61,12 +57,10 @@ export function ThreadFindBar({
     return () => subscription.remove();
   }, [onClose]);
 
-  /** Marks the match at `index` and brings its message into view. */
   const jumpTo = (list: readonly ThreadFindMatch[], index: number) => {
     const match = resolveThreadFindJump(list, index);
     onActiveChange(match?.messageId ?? null);
     const row = match ? rowIndex(match.messageId) : -1;
-    // The message's top at the top of the list (the inverted list's far edge), so a long reply opens at its text, not its cards.
     if (row >= 0) scrollRef.current?.scrollToIndex?.({ index: row, animated: !reduceMotion, viewPosition: 1 });
   };
 
@@ -95,7 +89,6 @@ export function ThreadFindBar({
         autoFocus
         autoCorrect={false}
         autoCapitalize="none"
-        // Return steps to the next match and keeps the keyboard, as the web Enter.
         submitBehavior="submit"
         onSubmitEditing={() => step("next")}
         maxLength={FIND_QUERY_MAX_LENGTH}
@@ -119,7 +112,6 @@ export function ThreadFindBar({
   );
 }
 
-/** The web `size-7` ghost icon button, at the phone's 44 target. */
 function FindButton({
   icon: Icon,
   label,

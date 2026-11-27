@@ -20,24 +20,20 @@ import type { SandboxCommandTab } from "@/lib/components/sandbox/sandboxPaletteC
 import type { SandboxTabDescriptor } from "./SandboxTabTrigger";
 
 interface BuildSandboxTabDescriptorsArgs {
-  /** Always-visible base tabs, already filtered to the enabled set. */
   baseTabs: ReadonlyArray<SandboxCommandTab>;
   showBrowserActivity: boolean;
   showEditorTab: boolean;
   showComputerTab: boolean;
   showFilesTab: boolean;
   showAgentsTab: boolean;
-  /** True while any sub-agent is running — pulses the Agents tab dot. */
   hasRunningAgents: boolean;
   showPrdTab: boolean;
   hasPrdContent: boolean;
   showDesignsTab: boolean;
   hasDesignsContent: boolean;
   showArtifactsTab: boolean;
-  /** Artifacts in this chat; `undefined` while the query is still loading. */
   artifactCount: number | undefined;
   showDocumentsTab: boolean;
-  /** Documents in this chat; `undefined` while the query is still loading. */
   documentCount: number | undefined;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }

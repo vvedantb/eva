@@ -202,7 +202,6 @@ export function cleanOwnedDaemonMarkers(params: {
     try {
       unlinkSync(path);
     } catch {
-      /* ignore */
     }
   }
 }
