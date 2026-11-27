@@ -12,6 +12,8 @@ import type {
 import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { appendReviewCommentsToPrompt } from "@eva/shared";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
+import { usePreviewViewport } from "@/lib/contexts/PreviewViewportContext";
+import { appendPreviewViewportToPrompt } from "@/lib/components/sandbox/previewViewportPrompt";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { readableSendError } from "./chatBodyUtils";
 import type { ChatSendOptions } from "./ChatBody";
@@ -125,6 +127,7 @@ export function useChatSend({
   queuesSends: boolean;
 }) {
   const review = usePendingReviewComments();
+  const previewViewport = usePreviewViewport();
   const setDraft = useMutation(api.drafts.set);
 
   // The composer clears optimistically, so a failed send's prompt only exists
@@ -165,8 +168,16 @@ export function useChatSend({
     // Hoisted out of the `try`: React Compiler bails on the whole file when it
     // meets expression-level control flow inside one (vvedantb/no-value-block-in-try).
     const expected = isExecuting || queuesSends ? "queue" : "start";
+    const typed = appendReviewCommentsToPrompt(content, sentComments);
+    // The agent also learns the preview's custom size; the chat keeps showing
+    // what the user wrote. Harness commands go verbatim, so they get no note.
+    const message =
+      options?.skipReviewComments === true
+        ? typed
+        : appendPreviewViewportToPrompt(typed, previewViewport);
     const input = {
-      message: appendReviewCommentsToPrompt(content, sentComments),
+      message,
+      displayContent: message === typed ? undefined : typed,
       attachmentStorageIds,
       sourceProposedPlanId: options?.sourceProposedPlanId,
     };
