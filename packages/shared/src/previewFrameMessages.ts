@@ -70,4 +70,11 @@ export interface PreviewToolbarTheme {
   disc: string;
   /** `text-destructive`, the close X. */
   destructive: string;
+  /** `border-border`, the selection card's outlines. */
+  border: string;
+  /** `bg-primary` and `text-primary-foreground`, the card's main button. */
+  primary: string;
+  primaryText: string;
+  /** `bg-background`, the card's text field. */
+  field: string;
 }
