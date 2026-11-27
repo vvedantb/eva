@@ -2,6 +2,8 @@ import { api } from "@eva/backend";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
+import { groupChatFeedback, type FeedbackSentiment } from "./chatFeedback";
+import dayjs from "./utils/dates";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
 // The open chat's read state, web and phone: it marks the chat read while it
@@ -166,24 +168,53 @@ export function useChatRecap({
   active: boolean;
   messages: ReadonlyArray<{ timestamp: number } & ChatUserAttribution>;
   currentUserId: string | undefined;
-}): { recap: { kind: "away" | "full"; text: string | undefined } | null; dismiss: () => void } {
+}): {
+  recap: {
+    kind: "away" | "full";
+    since: number;
+    text: string | undefined;
+    /** The viewer's thumbs on this recap (`feedback.rateRecap`). */
+    rating: { sentiment: FeedbackSentiment; comment: string | undefined } | undefined;
+  } | null;
+  dismiss: () => void;
+  /** Sets the recap's thumbs; `null` clears it. */
+  rate: (sentiment: FeedbackSentiment | null, comment?: string) => Promise<null>;
+} {
   const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");
   const dismissRecap = useMutation(api.chatRecaps.dismiss);
+  const rateRecap = useMutation(api.feedback.rateRecap);
+  const feedbackRows = useQuery(api.feedback.listForChat, active && parentId !== undefined ? { parentId } : "skip");
   const answered =
     row != null &&
     messages.some(
       (message) =>
         message.role === "user" && message.timestamp > row.createdAt && !isOtherUserChatMessage(message, currentUserId),
     );
-  const recap = row == null || answered ? null : { kind: row.kind, text: row.text };
+  const mine = row ? groupChatFeedback(feedbackRows ?? [], currentUserId).mineByRecapId.get(row._id) : undefined;
+  const recap =
+    row == null || answered
+      ? null
+      : {
+          kind: row.kind,
+          since: row.since,
+          text: row.text,
+          rating: mine ? { sentiment: mine.sentiment, comment: mine.comment } : undefined,
+        };
   const dismiss = () => {
     if (row) void dismissRecap({ recapId: row._id });
   };
-  return { recap, dismiss };
+  const rate = async (sentiment: FeedbackSentiment | null, comment?: string): Promise<null> => {
+    if (row) await rateRecap({ recapId: row._id, sentiment, ...(comment !== undefined ? { comment } : {}) });
+    return null;
+  };
+  return { recap, dismiss, rate };
 }
 
-/** The recap card's title for each kind. */
-export const RECAP_TITLE: Record<"away" | "full", string> = {
-  away: "Since you've been gone",
-  full: "Recap",
-};
+/**
+ * The recap card's title. An "away" recap says when the absence began
+ * ("Since you left 3 hours ago", "Since you left a week ago"); `since` is the
+ * last time the user saw the chat.
+ */
+export function recapTitle(kind: "away" | "full", since: number): string {
+  return kind === "away" ? `Since you left ${dayjs(since).fromNow()}` : "Recap";
+}

@@ -159,7 +159,7 @@ export default function ChatScreen() {
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   const me = useQuery(api.auth.me, {});
   // "Since you've been gone", as the web: written when you return after a long absence, under the newest message.
-  const { recap, dismiss: dismissRecap } = useChatRecap({
+  const { recap, dismiss: dismissRecap, rate: rateRecap } = useChatRecap({
     parentId,
     active: focused && appActive,
     messages: messages ?? [],
@@ -476,7 +476,11 @@ export default function ChatScreen() {
             <>
               {recap && visible.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <RecapCard kind={recap.kind} text={recap.text} onDismiss={dismissRecap} />
+                  <RecapCard kind={recap.kind} since={recap.since}
+                    text={recap.text}
+                    rating={recap.rating?.sentiment}
+                    onRate={(next) => rateRecap(next).catch(() => toast.error("Couldn't save your rating"))}
+                    onDismiss={dismissRecap} />
                 </View>
               ) : null}
               {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}
