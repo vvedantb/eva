@@ -1,0 +1,243 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Sessions with a board view: all screens and flows</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1320px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:16px;max-width:1180px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.wide{grid-column:1 / -1}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:12px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
+.num{width:22px;height:22px;border-radius:11px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none;font-size:12px}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12px;margin-top:1px}
+.app{display:flex;height:340px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#222326;position:relative}
+.app.tall{height:400px}
+.rail{width:40px;background:#1b1c1f;display:flex;flex-direction:column;align-items:center;gap:7px;padding:9px 0;flex:none}
+.ri{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#8b8f96;font-size:11px;position:relative}
+.ri.on{background:#34353b;color:#fff}
+.side{width:230px;padding:9px 7px;display:flex;flex-direction:column;gap:2px;flex:none}
+.sideh{display:flex;align-items:center;font-weight:600;font-size:13px;padding:2px 6px 7px;gap:6px}
+.sp{flex:1}.muted{color:#8b8f96;font-weight:400}
+.seg{display:flex;background:#2a2b30;border-radius:9px;padding:2px;font-size:11px}
+.seg span{flex:1;text-align:center;padding:3px 8px;border-radius:7px;color:#8b8f96}.seg span.on{background:#3a3b41;color:#e6e7e9}
+.grp{font-size:11px;color:#8b8f96;padding:6px 8px 3px;display:flex;align-items:center;gap:6px}
+.av{width:14px;height:14px;border-radius:7px;background:#3a3b41;display:inline-grid;place-items:center;font-size:8px;color:#c9cbcf;flex:none}
+.row{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;font-size:12px;position:relative}
+.row.on{background:#2e2f34}
+.row .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:4px;flex:none;background:#6b6f76}
+.st{font-size:9.5px;border-radius:5px;padding:0 5px;flex:none;white-space:nowrap}
+.st.rev{background:#3b2f14;color:#f0c674}.st.prog{background:#2f2a4a;color:#c4b5fd}.st.todo{background:#33343a;color:#a7aab0}.st.done{background:#173322;color:#6ee7a0}.st.biz{background:#1e3346;color:#93c5fd}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px 12px}
+.mh{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:nowrap}
+.mh .t{font-size:14px;font-weight:600}
+.btn{background:#2a2b30;border-radius:8px;padding:3px 9px;font-size:11px;white-space:nowrap}
+.btn.pri{background:#e6e7e9;color:#18191c;font-weight:600}
+.pick{background:#2a2b30;border-radius:8px;padding:3px 9px;font-size:11px;display:flex;gap:5px;align-items:center;white-space:nowrap}
+.board{display:flex;gap:6px;flex:1;min-height:0}
+.col{flex:1;background:#26272b;border-radius:9px;padding:6px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.colh{font-size:10.5px;color:#a7aab0}
+.card{background:#2e2f34;border-radius:7px;padding:6px 7px;font-size:11px;display:flex;flex-direction:column;gap:2px;position:relative}
+.card .m{font-size:9.5px;color:#8b8f96;display:flex;gap:5px;align-items:center}
+.card.sel{box-shadow:inset 0 0 0 1.5px #e6e7e9}
+.chat{flex:1;display:flex;flex-direction:column;gap:8px;font-size:11.5px}
+.me{align-self:flex-end;background:#2f2a4a;border-radius:11px;padding:6px 9px;max-width:80%}
+.comp{margin-top:auto;background:#2a2b30;border-radius:12px;padding:8px 10px;color:#6b6f76;font-size:11px}
+.panel{width:220px;background:#2a2b30;border-radius:12px;margin:8px;padding:10px;font-size:11px;color:#8b8f96;flex:none}
+.chip{display:inline-flex;gap:5px;align-items:center;background:#2a2b30;border-radius:8px;padding:3px 8px;font-size:10.5px;white-space:nowrap}
+.menu{position:absolute;background:#2a2b30;border:1px solid #3a3b41;border-radius:10px;padding:5px;font-size:11px;box-shadow:0 10px 30px #0009;z-index:4;width:180px}
+.mi{padding:4px 8px;border-radius:6px;display:flex;gap:7px;align-items:center}
+.mi.on{background:#34353b}
+.mi .c{margin-left:auto;color:#8b8f96;font-size:10px}
+.sepl{height:1px;background:#3a3b41;margin:4px 2px}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:420px;background:#26272b;border:1px solid #3a3b41;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:9px;box-shadow:0 20px 50px #000a;z-index:5}
+.inp{background:#2e2f34;border-radius:9px;padding:8px 10px;color:#c9cbcf;font-size:11.5px}
+.inp.big{min-height:70px}
+.opt{display:flex;gap:8px;align-items:center;font-size:11px;color:#c9cbcf;flex-wrap:wrap}
+.tog{width:26px;height:15px;border-radius:8px;background:#3a3b41;position:relative;flex:none}
+.tog.on{background:#7c5cf0}.tog::after{content:"";position:absolute;width:11px;height:11px;border-radius:6px;background:#fff;top:2px;left:2px}.tog.on::after{left:13px}
+.dim{position:absolute;inset:0;background:#0008;z-index:3}
+.bulk{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#2e2f34;border:1px solid #3a3b41;border-radius:12px;padding:6px 8px;display:flex;gap:6px;align-items:center;font-size:11px;box-shadow:0 10px 30px #0009;z-index:4}
+.hit{outline:2px solid #f0b35a;outline-offset:2px;border-radius:7px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:6}
+.gone{opacity:.35;text-decoration:line-through}
+.note{margin-top:8px;font-size:11.5px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.phone{width:200px;height:380px;border:1px solid #2e2f34;border-radius:22px;background:#141517;padding:10px;display:flex;flex-direction:column;gap:6px;flex:none}
+.prow{background:#222326;border-radius:9px;padding:6px 8px;font-size:11px;display:flex;flex-direction:column;gap:2px}
+.prow .m{font-size:9.5px;color:#8b8f96}
+.tabs{display:flex;justify-content:space-around;margin-top:auto;font-size:9.5px;color:#8b8f96;border-top:1px solid #2e2f34;padding-top:6px}
+.tabs span.on{color:#e6e7e9}
+</style></head><body>
+<h1>Sessions with a board view: every new screen and flow</h1>
+<p class="lead">The Quick Tasks page goes. Sessions stays in the rail and gains a second view: <b>List</b> (today's sidebar, your sessions across repos) and <b>Board</b> (status columns for one repo or app, everyone's sessions that are on the board). A quick task becomes "a session on the board". Every session opens the same page.</p>
+<div class="grid">
+
+<!-- 1 -->
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">Repo navigation: Quick Tasks is gone.</div><div class="see">The repo's left nav keeps Projects, Documents, Reviews, Testing Arena, Stats. Old /quick-tasks links redirect to the board or the session.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri">▣</div><div class="ri on" style="margin-top:auto">C</div></div>
+    <div class="side">
+      <div class="sideh"><span class="av">C</span>CarePulse</div>
+      <div class="grp">Ship</div>
+      <div class="row"><span class="t">▦ Projects</span></div>
+      <div class="row gone"><span class="t">☰ Quick Tasks</span></div>
+      <div class="grp">Test</div>
+      <div class="row"><span class="t">Documents</span></div><div class="row"><span class="t">Reviews</span></div><div class="row"><span class="t">Testing Arena</span></div>
+      <div class="grp">More</div><div class="row"><span class="t">Stats</span></div>
+    </div>
+    <div class="main"><div class="muted" style="margin:auto">Project / repo pages as today</div></div>
+  </div>
+  <div class="note">Projects still live under the repo: a project is Eva plus many sessions.</div>
+</div>
+
+<!-- 2 -->
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">Sessions in the rail, List view (default for devs).</div><div class="see">Unchanged list of your sessions across repos. Rows on the board show their status.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div><div class="ri" style="margin-top:auto">C</div></div>
+    <div class="side">
+      <div class="sideh">Sessions<span class="sp"></span><span class="seg"><span class="on">List</span><span>Board</span></span></div>
+      <div class="seg" style="margin:0 4px 6px"><span class="on">Active</span><span>Archived</span></div>
+      <div class="grp"><span class="av">E</span>Eva</div>
+      <div class="row on"><span class="dot" style="background:#7c5cf0"></span><span class="t">Inbox one list</span></div>
+      <div class="row"><span class="dot"></span><span class="t">Fix flaky login test</span><span class="st rev">Code review</span></div>
+      <div class="row"><span class="dot"></span><span class="t">Preview: new checkout</span></div>
+      <div class="grp"><span class="av">C</span>CarePulse</div>
+      <div class="row"><span class="dot"></span><span class="t">NH provider homepage</span><span class="st prog">In progress</span></div>
+      <div class="row"><span class="dot"></span><span class="t">AQP list: CQC column</span></div>
+    </div>
+    <div class="main"><div class="mh"><span class="t">Inbox one list</span><span class="muted">#412</span><span class="sp"></span><span class="chip">Off the board ▾</span></div><div class="chat"><div class="me">Make the Inbox one list.</div><div>Done. PR #1555 is open.</div><div class="comp">Message…</div></div></div>
+  </div>
+  <div class="note"><b>New:</b> the List / Board switch, and a status pill on rows that are on the board.</div>
+</div>
+
+<!-- 3 -->
+<div class="step wide">
+  <div class="sh"><div class="num">3</div><div><div class="do">Sessions → Board view (default for the business team).</div><div class="see">Status columns for one repo or app, everyone's sessions that are on the board. The picker remembers your last choice. Filters as today: Mine, Created by, Reviewer. Sessions off the board never show here.</div></div></div>
+  <div class="app tall">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div><div class="ri" style="margin-top:auto">C</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Sessions</span><span class="seg" style="width:120px"><span>List</span><span class="on">Board</span></span><span class="pick hit" style="position:relative"><span class="av">C</span>carepulse-ts · web ▾<span class="tag" style="top:-14px;left:0">repo / app</span></span><span class="pick">Everyone ▾</span><span class="pick">Reviewer ▾</span><span class="sp"></span><span class="btn">Drafts 2</span><span class="btn">Select</span><span class="btn pri">+ New</span></div>
+      <div class="board">
+        <div class="col"><div class="colh">To do 2</div><div class="card">Export KPIs to CSV<div class="m">#88 · Priya · scheduled Mon 9:00</div></div><div class="card">Rename "Basket" to "Cart"<div class="m">#91 · Sam</div></div></div>
+        <div class="col"><div class="colh">In progress 1</div><div class="card">NH provider homepage<div class="m">#96 · Priya · working</div></div></div>
+        <div class="col"><div class="colh">Code review 2</div><div class="card">Fix flaky login test<div class="m">#77 · Vedant · PR #9010</div></div><div class="card">Provider email source<div class="m">#101 · Sam · PR #9012</div></div></div>
+        <div class="col"><div class="colh">Business review 1</div><div class="card">Questionnaire pass/fail<div class="m">#84 · Priya</div></div></div>
+        <div class="col"><div class="colh">Done 3</div><div class="card">CQC rating column<div class="m">#79 · merged</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">The board is per repo (or one app of a monorepo), because the business team works on one product at a time. "All repos" is the first option in the picker for anyone who wants everything.</div>
+</div>
+
+<!-- 4 -->
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">"+ New": one form for both groups.</div><div class="see">Prompt first, as today. "On the board" is on when you start from the Board, off when you start from the List. Save keeps a draft; Save and Run starts it.</div></div></div>
+  <div class="app">
+    <div class="dim"></div>
+    <div class="modal">
+      <div class="inp big">Export the monthly KPIs to CSV from the admin page.</div>
+      <div class="opt"><span class="pick"><span class="av">C</span>carepulse-ts · web ▾</span><span class="pick">Opus · High ▾</span></div>
+      <div class="opt"><span class="tog on"></span>On the board as <span class="st todo">To do</span> ▾ <span class="sp"></span><span class="pick">Reviewer ▾</span></div>
+      <div class="opt"><span class="pick">Schedule ▾</span><span class="sp"></span><span class="btn">Save</span><span class="btn pri">Save and Run</span></div>
+    </div>
+  </div>
+  <div class="note">Replaces both "New session" and "New Task". Drafts are sessions saved without a run (the board's Drafts list).</div>
+</div>
+
+<!-- 5 -->
+<div class="step">
+  <div class="sh"><div class="num">5</div><div><div class="do">The session page, opened from either view.</div><div class="see">Same chat and right panel as today. The header shows status and reviewer for sessions on the board, and "Off the board" for the rest.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="muted">Board ›</span><span class="t">NH provider homepage</span><span class="muted">#96</span><span class="sp"></span><span class="chip"><span class="st prog">In progress</span>▾</span><span class="chip">Reviewer: Vedant</span><span class="chip">⋯</span></div>
+      <div class="chat"><div class="me">Add the provider homepage with the CQC rating.</div><div>Started. Preview is on the right.</div><div class="me">Move the rating above the address.</div><div>Done.</div><div class="comp">Message…</div></div>
+    </div>
+    <div class="panel">Preview /providers/123</div>
+  </div>
+  <div class="note">Business flow unchanged: New → Save and Run → chat → set <b>Code review</b>. A merged PR moves the session to <b>Done</b>.</div>
+</div>
+
+<!-- 6 -->
+<div class="step">
+  <div class="sh"><div class="num">6</div><div><div class="do">A developer puts a session on the board.</div><div class="see">Click "Off the board" and pick a status, or "Mark ready", which sets Code review. "Remove from board" takes it off again.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Inbox one list</span><span class="muted">#412</span><span class="sp"></span><span class="chip hit" style="position:relative">Off the board ▾<span class="tag" style="top:-14px;right:-4px">click</span></span><span class="btn">Mark ready</span></div>
+      <div class="chat"><div class="me">Make the Inbox one list.</div><div>Done. PR #1555 is open.</div><div class="comp">Message…</div></div>
+      <div class="menu" style="top:40px;right:250px"><div class="mi">Add to board as…</div><div class="sepl"></div><div class="mi"><span class="st todo">To do</span></div><div class="mi"><span class="st prog">In progress</span></div><div class="mi on"><span class="st rev">Code review</span></div><div class="mi"><span class="st biz">Business review</span></div></div>
+    </div>
+    <div class="panel">Preview / Files / PR</div>
+  </div>
+  <div class="note">Testing sessions just stay off the board.</div>
+</div>
+
+<!-- 7 -->
+<div class="step">
+  <div class="sh"><div class="num">7</div><div><div class="do">Bulk run and schedule on the Board.</div><div class="see">"Select" → tick cards → Run, Schedule, Set status, Assign reviewer. Same actions as the Quick Tasks bulk bar today.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Sessions</span><span class="seg" style="width:110px"><span>List</span><span class="on">Board</span></span><span class="sp"></span><span class="btn">Done</span></div>
+      <div class="board">
+        <div class="col"><div class="colh">To do 3</div><div class="card sel">☑ Export KPIs to CSV<div class="m">#88</div></div><div class="card sel">☑ Rename "Basket"<div class="m">#91</div></div><div class="card">☐ Add audit log<div class="m">#92</div></div></div>
+        <div class="col"><div class="colh">In progress 1</div><div class="card">NH provider homepage<div class="m">#96</div></div></div>
+        <div class="col"><div class="colh">Code review 2</div><div class="card">Fix flaky login<div class="m">#77</div></div></div>
+      </div>
+      <div class="bulk">2 selected<span class="btn pri">Run</span><span class="btn">Schedule</span><span class="btn">Status ▾</span><span class="btn">Reviewer ▾</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 8 -->
+<div class="step">
+  <div class="sh"><div class="num">8</div><div><div class="do">Session menu: Fork, group and project.</div><div class="see">Fork and group work as today. New: "Add to project", which replaces both "group quick tasks into a project" and "promote a session".</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="side">
+      <div class="sideh">Sessions<span class="sp"></span><span class="seg"><span class="on">List</span><span>Board</span></span></div>
+      <div class="grp"><span class="av">E</span>Eva</div>
+      <div class="row on"><span class="dot"></span><span class="t">Inbox one list</span><span class="muted">⋯</span></div>
+      <div class="row"><span class="dot"></span><span class="t">Fix flaky login test</span></div>
+      <div class="menu" style="top:70px;left:230px"><div class="mi">Rename</div><div class="mi">Fork session</div><div class="mi">Group with…</div><div class="mi on">Add to project…</div><div class="mi">Add to board…</div><div class="sepl"></div><div class="mi">Archive</div></div>
+    </div>
+    <div class="main"></div>
+  </div>
+  <div class="note">A session in a project shows under that project (Eva's task tabs) and on the board if it has a status.</div>
+</div>
+
+<!-- 9 -->
+<div class="step wide">
+  <div class="sh"><div class="num">9</div><div><div class="do">Phone: one Sessions tab with List and Board.</div><div class="see">The Quick Tasks screen goes. The Board shows one status at a time (swipe between columns) for the picked repo or app.</div></div></div>
+  <div style="display:flex;gap:18px">
+    <div class="phone">
+      <div style="font-weight:600">Sessions</div>
+      <div class="seg"><span class="on">List</span><span>Board</span></div>
+      <div class="prow">Inbox one list<div class="m">Eva · 2m</div></div>
+      <div class="prow">Fix flaky login test<div class="m">Eva · <span class="st rev">Code review</span></div></div>
+      <div class="prow">NH provider homepage<div class="m">CarePulse · <span class="st prog">In progress</span></div></div>
+      <div class="tabs"><span>Home</span><span>Inbox</span><span class="on">Sessions</span><span>Projects</span></div>
+    </div>
+    <div class="phone">
+      <div style="font-weight:600">Sessions</div>
+      <div class="seg"><span>List</span><span class="on">Board</span></div>
+      <div class="pick" style="align-self:flex-start"><span class="av">C</span>carepulse-ts · web ▾</div>
+      <div class="seg" style="font-size:9.5px"><span>To do 2</span><span>In progress 1</span><span class="on">Review 2</span></div>
+      <div class="prow">Fix flaky login test<div class="m">#77 · Vedant · PR #9010</div></div>
+      <div class="prow">Provider email source<div class="m">#101 · Sam · PR #9012</div></div>
+      <div class="tabs"><span>Home</span><span>Inbox</span><span class="on">Sessions</span><span>Projects</span></div>
+    </div>
+    <div style="flex:1;font-size:12px;color:#c9cbcf;padding:10px">
+      <b style="color:#e6e7e9">What stays</b><br>Sessions list across repos · status columns, drafts, schedule, bulk run, business review · Fork, groups · testing sessions · projects.<br><br>
+      <b style="color:#e6e7e9">What changes</b><br>No Quick Tasks page: the board is a view of Sessions · one "+ New" form · one page and one number per session · "Off the board" / status chip in the header · "Mark ready" can put a session in Code review · "Add to project" from any session · /quick-tasks/N redirects.
+    </div>
+  </div>
+</div>
+
+</div>
+</body></html>

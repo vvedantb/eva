@@ -1,0 +1,204 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>App-level Board, Dev column, groups as projects</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1320px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:16px;max-width:1180px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.wide{grid-column:1 / -1}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:12px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
+.num{width:22px;height:22px;border-radius:11px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none;font-size:12px}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12px;margin-top:1px}
+.app{display:flex;height:340px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#222326;position:relative}
+.app.tall{height:380px}
+.rail{width:40px;background:#1b1c1f;display:flex;flex-direction:column;align-items:center;gap:7px;padding:9px 0;flex:none}
+.ri{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#8b8f96;font-size:11px}
+.ri.on{background:#34353b;color:#fff}
+.side{width:210px;padding:9px 7px;display:flex;flex-direction:column;gap:2px;flex:none}
+.sideh{display:flex;align-items:center;font-weight:600;font-size:13px;padding:2px 6px 7px;gap:6px}
+.sp{flex:1}.muted{color:#8b8f96;font-weight:400}
+.seg{display:flex;background:#2a2b30;border-radius:9px;padding:2px;font-size:11px}
+.seg span{flex:1;text-align:center;padding:3px 8px;border-radius:7px;color:#8b8f96}.seg span.on{background:#3a3b41;color:#e6e7e9}
+.grp{font-size:11px;color:#8b8f96;padding:6px 8px 3px;display:flex;align-items:center;gap:6px}
+.av{width:14px;height:14px;border-radius:7px;background:#3a3b41;display:inline-grid;place-items:center;font-size:8px;color:#c9cbcf;flex:none}
+.row{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;font-size:12px;position:relative}
+.row.on{background:#2e2f34}
+.row .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:4px;flex:none;background:#6b6f76}
+.cb{width:11px;height:11px;border-radius:3px;border:1.5px solid #8b8f96;flex:none}.cb.on{background:#e6e7e9;border-color:#e6e7e9}
+.st{font-size:9.5px;border-radius:5px;padding:0 5px;flex:none;white-space:nowrap}
+.st.dev{background:#2a2b30;color:#a7aab0;border:1px dashed #4a4c52}.st.rev{background:#3b2f14;color:#f0c674}.st.prog{background:#2f2a4a;color:#c4b5fd}.st.todo{background:#33343a;color:#a7aab0}.st.done{background:#173322;color:#6ee7a0}.st.biz{background:#1e3346;color:#93c5fd}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px 12px}
+.mh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mh .t{font-size:14px;font-weight:600}
+.btn{background:#2a2b30;border-radius:8px;padding:3px 9px;font-size:11px;white-space:nowrap}
+.btn.pri{background:#e6e7e9;color:#18191c;font-weight:600}
+.pick{background:#2a2b30;border-radius:8px;padding:3px 9px;font-size:11px;white-space:nowrap}
+.board{display:flex;gap:6px;flex:1;min-height:0}
+.col{flex:1;background:#26272b;border-radius:9px;padding:6px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.col.slim{flex:0 0 34px;align-items:center;padding:6px 2px;cursor:pointer}
+.col.slim .v{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;color:#a7aab0;margin-top:4px}
+.col.devx{background:#232428;border:1px dashed #3a3b41}
+.colh{font-size:10.5px;color:#a7aab0;display:flex;gap:4px}
+.card{background:#2e2f34;border-radius:7px;padding:6px 7px;font-size:11px;display:flex;flex-direction:column;gap:2px}
+.card .m{font-size:9.5px;color:#8b8f96}
+.chat{flex:1;display:flex;flex-direction:column;gap:8px;font-size:11.5px}
+.me{align-self:flex-end;background:#2f2a4a;border-radius:11px;padding:6px 9px;max-width:80%}
+.comp{margin-top:auto;background:#2a2b30;border-radius:12px;padding:8px 10px;color:#6b6f76;font-size:11px}
+.panel{width:200px;background:#2a2b30;border-radius:12px;margin:8px;padding:10px;font-size:11px;color:#8b8f96;flex:none}
+.chip{display:inline-flex;gap:5px;align-items:center;background:#2a2b30;border-radius:8px;padding:3px 8px;font-size:10.5px;white-space:nowrap}
+.menu{position:absolute;background:#2a2b30;border:1px solid #3a3b41;border-radius:10px;padding:5px;font-size:11px;box-shadow:0 10px 30px #0009;z-index:4;width:185px}
+.mi{padding:4px 8px;border-radius:6px;display:flex;gap:7px;align-items:center}.mi.on{background:#34353b}
+.sepl{height:1px;background:#3a3b41;margin:4px 2px}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:400px;background:#26272b;border:1px solid #3a3b41;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:9px;box-shadow:0 20px 50px #000a;z-index:5}
+.inp{background:#2e2f34;border-radius:9px;padding:8px 10px;color:#c9cbcf;font-size:11.5px}
+.inp.big{min-height:60px}
+.opt{display:flex;gap:8px;align-items:center;font-size:11px;color:#c9cbcf}
+.dim{position:absolute;inset:0;background:#0008;z-index:3}
+.hit{outline:2px solid #f0b35a;outline-offset:2px;border-radius:7px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:6}
+.gone{opacity:.35;text-decoration:line-through}
+.note{margin-top:8px;font-size:11.5px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.tabsrow{display:flex;gap:4px;margin-bottom:8px;font-size:11px}
+.tab{padding:3px 9px;border-radius:7px;color:#8b8f96}.tab.on{background:#2e2f34;color:#e6e7e9}
+.phone{width:190px;height:340px;border:1px solid #2e2f34;border-radius:22px;background:#141517;padding:10px;display:flex;flex-direction:column;gap:6px;flex:none}
+.prow{background:#222326;border-radius:9px;padding:6px 8px;font-size:11px;display:flex;flex-direction:column;gap:2px}
+.prow .m{font-size:9.5px;color:#8b8f96}
+.ptabs{display:flex;justify-content:space-around;margin-top:auto;font-size:9.5px;color:#8b8f96;border-top:1px solid #2e2f34;padding-top:6px}
+.ptabs span.on{color:#e6e7e9}
+</style></head><body>
+<h1>Version B: Board at app level, a Dev column, groups become projects</h1>
+<p class="lead">The Quick Tasks page stays where it is, renamed <b>Board</b>; its cards are sessions. The Sessions rail stays a plain list (no switch). Every session always has a status: new dev sessions start in <b>Dev</b>, a column that is collapsed by default so business work is not crowded. Session groups go away; grouping sessions makes a <b>project</b>.</p>
+<div class="grid">
+
+<div class="step wide">
+  <div class="sh"><div class="num">1</div><div><div class="do">Business opens the app's Board (where Quick Tasks is today).</div><div class="see">Same place, same columns, New, Drafts, Select. The Dev column is a slim strip with a count; business can ignore it.</div></div></div>
+  <div class="app tall">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri">▣</div><div class="ri on" style="margin-top:auto">C</div></div>
+    <div class="side">
+      <div class="sideh"><span class="av">C</span>CarePulse · web</div>
+      <div class="grp">Ship</div>
+      <div class="row"><span class="t">▦ Projects</span></div>
+      <div class="row on hit"><span class="t">☰ Board</span><span class="tag" style="top:-12px;right:0">was Quick Tasks</span></div>
+      <div class="grp">Test</div><div class="row"><span class="t">Documents</span></div><div class="row"><span class="t">Reviews</span></div>
+    </div>
+    <div class="main">
+      <div class="mh"><span class="t">Board</span><span class="pick">Everyone ▾</span><span class="pick">Reviewer ▾</span><span class="sp"></span><span class="btn">Drafts 2</span><span class="btn">Select</span><span class="btn pri">+ New</span></div>
+      <div class="board">
+        <div class="col slim devx"><span class="muted" style="font-size:10px">6</span><span class="v">Dev ›</span></div>
+        <div class="col"><div class="colh">To do <span class="muted">2</span></div><div class="card">Export KPIs to CSV<div class="m">#88 · Priya · Mon 9:00</div></div><div class="card">Rename "Basket" to "Cart"<div class="m">#91 · Sam</div></div></div>
+        <div class="col"><div class="colh">In progress <span class="muted">1</span></div><div class="card">NH provider homepage<div class="m">#96 · Priya · working</div></div></div>
+        <div class="col"><div class="colh">Code review <span class="muted">2</span></div><div class="card">Fix flaky login test<div class="m">#77 · Vedant · PR #9010</div></div><div class="card">Provider email source<div class="m">#101 · Sam · PR #9012</div></div></div>
+        <div class="col"><div class="colh">Business review <span class="muted">1</span></div><div class="card">Questionnaire pass/fail<div class="m">#84 · Priya</div></div></div>
+        <div class="col"><div class="colh">Done <span class="muted">3</span></div><div class="card">CQC rating column<div class="m">#79 · merged</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">No repo picker: the page belongs to one app, like Projects. Business never has to learn the word "session".</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">A developer expands Dev on the Board.</div><div class="see">Click the strip: it opens like any column. The choice is remembered per person.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri">▣</div><div class="ri on" style="margin-top:auto">E</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Board</span><span class="sp"></span><span class="btn pri">+ New</span></div>
+      <div class="board">
+        <div class="col devx"><div class="colh">Dev <span class="muted">6</span> ‹</div><div class="card">Inbox one list<div class="m">#412 · Vedant · PR #1555</div></div><div class="card">Preview: new checkout<div class="m">#418 · testing</div></div><div class="card">Chart colours<div class="m">#420 · Vedant</div></div></div>
+        <div class="col"><div class="colh">To do 2</div><div class="card">Export KPIs<div class="m">#88</div></div></div>
+        <div class="col"><div class="colh">Code review 2</div><div class="card">Fix flaky login<div class="m">#77</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Dev replaces "off the board": every session has a status, so there is no hidden state to explain.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">Sessions rail: today's list, plus status pills.</div><div class="see">No List/Board switch. Dev sessions show no pill (Dev is the default); others show theirs.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div><div class="ri" style="margin-top:auto">C</div></div>
+    <div class="side" style="width:240px">
+      <div class="sideh">Sessions<span class="sp"></span><span class="muted">⚙</span></div>
+      <div class="seg" style="margin:0 4px 6px"><span class="on">Active</span><span>Archived</span></div>
+      <div class="grp"><span class="av">E</span>Eva</div>
+      <div class="row on"><span class="dot" style="background:#7c5cf0"></span><span class="t">Inbox one list</span></div>
+      <div class="row"><span class="dot"></span><span class="t">Fix flaky login test</span><span class="st rev">Code review</span></div>
+      <div class="row"><span class="dot"></span><span class="t">Preview: new checkout</span></div>
+      <div class="grp"><span class="av">C</span>CarePulse</div>
+      <div class="row"><span class="dot"></span><span class="t">NH provider homepage</span><span class="st prog">In progress</span></div>
+    </div>
+    <div class="main"><div class="mh"><span class="t">Inbox one list</span><span class="muted">#412</span><span class="sp"></span><span class="chip"><span class="st dev">Dev</span>▾</span><span class="btn">Mark ready</span></div><div class="chat"><div class="me">Make the Inbox one list.</div><div>Done. PR #1555 is open.</div><div class="comp">Message…</div></div></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">"+ New": one form. Where you start sets the status.</div><div class="see">From the Board: To do. From the Sessions rail: Dev. You can change it in the form.</div></div></div>
+  <div class="app">
+    <div class="dim"></div>
+    <div class="modal">
+      <div class="inp big">Export the monthly KPIs to CSV from the admin page.</div>
+      <div class="opt"><span class="pick">carepulse-ts · web ▾</span><span class="pick">Opus · High ▾</span><span class="sp"></span><span class="pick">Status: <span class="st todo">To do</span> ▾</span></div>
+      <div class="opt"><span class="pick">Reviewer ▾</span><span class="pick">Schedule ▾</span><span class="sp"></span><span class="btn">Save</span><span class="btn pri">Save and Run</span></div>
+    </div>
+  </div>
+  <div class="note">Replaces "New session" and "New Task". Save keeps a draft (the Drafts list).</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">5</div><div><div class="do">Session page: status in the header; Mark ready → Code review.</div><div class="see">The same page from the Board or the rail. A merged PR moves it to Done.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Inbox one list</span><span class="muted">#412</span><span class="sp"></span><span class="chip"><span class="st dev">Dev</span>▾</span><span class="btn hit" style="position:relative">Mark ready<span class="tag" style="top:-13px;right:0">→ Code review</span></span><span class="chip">⋯</span></div>
+      <div class="chat"><div class="me">Make the Inbox one list.</div><div>Done. PR #1555 is open.</div><div class="comp">Message…</div></div>
+    </div>
+    <div class="panel">Preview / Files / PR</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">6</div><div><div class="do">Group sessions → a project (no more session groups).</div><div class="see">Select sessions in the rail (or let an agent do it), then "Group into project". Each session becomes a task of the new project, keeping its chat, branch and PR.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="side" style="width:240px">
+      <div class="sideh">Sessions<span class="sp"></span><span class="muted">3 selected</span></div>
+      <div class="grp"><span class="av">E</span>Eva</div>
+      <div class="row on"><span class="cb on"></span><span class="t">Inbox one list</span></div>
+      <div class="row on"><span class="cb on"></span><span class="t">Inbox: phone rows</span></div>
+      <div class="grp"><span class="av">C</span>CarePulse</div>
+      <div class="row on"><span class="cb on"></span><span class="t">Inbox API for providers</span></div>
+      <div class="row"><span class="cb"></span><span class="t">AQP list: CQC column</span></div>
+    </div>
+    <div class="main">
+      <div class="menu" style="position:static;width:200px;margin:30px auto 0"><div class="mi on">Group into project…</div><div class="mi">Mark ready</div><div class="mi">Set status ▸</div><div class="sepl"></div><div class="mi">Archive</div></div>
+    </div>
+  </div>
+  <div class="note"><b>Removes:</b> session groups, sibling badges and the group header. Sessions in other repos are fine: project tasks already work across repos.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">7</div><div><div class="do">The new project: Eva plus the grouped sessions as task tabs.</div><div class="see">Eva gets a one-line summary of the three sessions and stays quiet until you ask her something.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri">▣</div><div class="ri on" style="margin-top:auto">E</div></div>
+    <div class="main">
+      <div class="tabsrow"><span class="tab">Eva</span><span class="tab on">#412 Inbox one list</span><span class="tab">#413 Inbox: phone</span><span class="tab">#97 Providers API</span><span class="tab">+</span></div>
+      <div class="chat"><div class="me">Make the Inbox one list.</div><div>Done. PR #1555 is open.</div><div class="comp">Message…</div></div>
+    </div>
+    <div class="panel">Tasks<br><br>Code review · #412<br>Dev · #413<br>Dev · #97 (carepulse)</div>
+  </div>
+  <div class="note">Open questions: does a grouped session keep its sidebar row (yes, under its project), and does an agent that starts sessions in other repos make a project automatically?</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">8</div><div><div class="do">Phone: Sessions list and the app's Board.</div><div class="see">Sessions tab as today with pills; the Board lives under the app, one column at a time, Dev collapsed.</div></div></div>
+  <div style="display:flex;gap:14px">
+    <div class="phone"><div style="font-weight:600">Sessions</div><div class="prow">Inbox one list<div class="m">Eva · Dev</div></div><div class="prow">Fix flaky login<div class="m">Eva · <span class="st rev">Code review</span></div></div><div class="prow">NH provider homepage<div class="m">CarePulse · <span class="st prog">In progress</span></div></div><div class="ptabs"><span>Home</span><span>Inbox</span><span class="on">Sessions</span><span>Apps</span></div></div>
+    <div class="phone"><div style="font-weight:600">CarePulse · Board</div><div class="seg" style="font-size:9.5px"><span>Dev 6</span><span class="on">To do 2</span><span>Review 2</span></div><div class="prow">Export KPIs to CSV<div class="m">#88 · Priya</div></div><div class="prow">Rename "Basket"<div class="m">#91 · Sam</div></div><div class="ptabs"><span>Home</span><span>Inbox</span><span>Sessions</span><span class="on">Apps</span></div></div>
+  </div>
+</div>
+
+</div>
+</body></html>
