@@ -241,11 +241,6 @@ function toSuggestionKind(markName: string): SuggestionKind | null {
   return null;
 }
 
-/**
- * Accept/reject commands dispatch with a `skip` flag so the interceptor does
- * not re-track the resolution itself (the suggester may still be in suggesting
- * mode when accepting their own change).
- */
 function dispatchSkip(editor: Editor): (tr: Transaction) => void {
   return (tr) =>
     editor.view.dispatch(tr.setMeta(suggestChangesKey, { skip: true }));

@@ -508,12 +508,6 @@ describe("collectQuestionSteps", () => {
   });
 });
 
-/**
- * The bug this covers: quick task chat locked its composer whenever the
- * sandbox was not marked active, and a quick task's first run only marks it
- * active once the run winds down. Now nothing but an account swap locks it:
- * a sleeping sandbox or a usage limit queues the message instead.
- */
 describe("sandboxComposerState", () => {
   const base = {
     isSandboxActive: true,
@@ -569,11 +563,6 @@ describe("sandboxComposerState", () => {
   });
 });
 
-/**
- * The composer, the subagent thread, the Agents roster and the design panel
- * used to each derive "is a turn running" from different inputs, so one chat
- * could read as working in one place and idle in another. They share this.
- */
 describe("isChatTurnExecuting", () => {
   const working = withIds([user("u1"), placeholder("a1")]);
   const settled = withIds([user("u1"), finished("a1")]);

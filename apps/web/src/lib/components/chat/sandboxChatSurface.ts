@@ -85,10 +85,6 @@ export function buildSandboxChatSurface({
   resolveAccountId: UsageLimitRecoveryInputs["resolveAccountId"];
   switchProviderAccount: UsageLimitRecoveryInputs["onSwitchAccount"];
   isSandboxActive: boolean;
-  /**
-   * Must skip the pending review comments: a slash command has to reach the
-   * harness verbatim. Undefined when the chat cannot be written to.
-   */
   sendCommand: SandboxChatSurface["sendCommand"];
 }): SandboxChatSurface {
   return {
