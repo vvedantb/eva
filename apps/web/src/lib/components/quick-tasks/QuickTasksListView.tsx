@@ -245,13 +245,14 @@ export function QuickTasksListView({
                                   name={task.title}
                                   index={index}
                                   parent={status}
-                                  className="pb-1.5"
+                                  className="pb-1"
                                 >
                                   <ListEnter
                                     index={index}
                                     firstPaint={firstPaint.current}
                                   >
                                     <QuickTaskCard
+                                      layout="row"
                                       id={task._id}
                                       title={task.title}
                                       description={task.description}
