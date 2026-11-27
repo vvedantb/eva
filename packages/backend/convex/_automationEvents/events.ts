@@ -64,18 +64,16 @@ export const repoEventValidator = v.union(
     body: v.string(),
   }),
   v.object({
-    kind: v.union(v.literal("pr_opened"), v.literal("pr_merged")),
+    kind: v.union(
+      v.literal("pr_opened"),
+      v.literal("pr_merged"),
+      v.literal("pr_updated"),
+    ),
     ...repoRef,
     prUrl: v.string(),
     prNumber: v.number(),
     title: v.string(),
-  }),
-  v.object({
-    kind: v.literal("pr_updated"),
-    ...repoRef,
-    prUrl: v.string(),
-    prNumber: v.number(),
-    title: v.string(),
+    /** The PR's head commit when the webhook fired; Eva's check sits on it. */
     headSha: v.string(),
   }),
   v.object({ ...alertFields, ...repoRef }),
@@ -178,6 +176,40 @@ export function triggerMatchesEvent(
   return wanted === event.label.trim().toLowerCase();
 }
 
+type PrEvent = Extract<
+  RepoEvent,
+  { kind: "pr_opened" | "pr_merged" | "pr_updated" }
+>;
+
+function isPrEvent(event: RepoEvent): event is PrEvent {
+  return (
+    event.kind === "pr_opened" ||
+    event.kind === "pr_merged" ||
+    event.kind === "pr_updated"
+  );
+}
+
+/**
+ * The commit an Eva check run goes on. Only PR open, push and merge events
+ * have one; CI and review events belong to the presets, which post no check.
+ */
+export function prEventHeadSha(event: RepoEvent): string | undefined {
+  return isPrEvent(event) ? event.headSha : undefined;
+}
+
+/**
+ * The event with the newest head a queued run absorbed, so a burst of pushes
+ * describes the last commit, not the first.
+ */
+export function withLatestHead(
+  event: RepoEvent,
+  headSha: string | undefined,
+): RepoEvent {
+  return isPrEvent(event) && headSha !== undefined
+    ? { ...event, headSha }
+    : event;
+}
+
 /** Plain-text event block appended to a `run` automation's prompt. */
 export function describeRepoEvent(event: RepoEvent): string {
   const repo = `${event.owner}/${event.name}`;
@@ -189,11 +221,11 @@ export function describeRepoEvent(event: RepoEvent): string {
     case "issue_labeled":
       return `Issue ${event.issueUrl} was labelled "${event.label}".\nTitle: ${event.title}\n\n${event.body}`;
     case "pr_opened":
-      return `PR opened: ${event.prUrl} — ${event.title}`;
+      return `PR opened: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
     case "pr_merged":
-      return `PR merged: ${event.prUrl} — ${event.title}`;
+      return `PR merged: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
     case "pr_updated":
-      return `PR updated: ${event.prUrl} — ${event.title}\nNew head commit: ${event.headSha}`;
+      return `PR updated: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
     case "production_alert":
       return describeAlert(event);
   }
@@ -311,7 +343,7 @@ const pullRequestSchema = z.object({
     html_url: z.string(),
     title: z.string(),
     merged: z.boolean().nullable().catch(null),
-    head: z.object({ sha: z.string() }).nullable().catch(null),
+    head: z.object({ sha: z.string() }),
   }),
   repository: repositorySchema,
   sender: senderSchema,
@@ -533,11 +565,10 @@ function parseRepoEventsOrThrow(
         prUrl: pr.html_url,
         prNumber: pr.number,
         title: pr.title,
+        headSha: pr.head.sha,
       };
       if (action === "opened") return [{ kind: "pr_opened", ...base }];
-      if (action === "synchronize" && pr.head !== null) {
-        return [{ kind: "pr_updated", ...base, headSha: pr.head.sha }];
-      }
+      if (action === "synchronize") return [{ kind: "pr_updated", ...base }];
       if (action === "closed" && pr.merged === true) {
         return [{ kind: "pr_merged", ...base }];
       }

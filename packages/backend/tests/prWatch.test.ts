@@ -302,7 +302,7 @@ describe("prWatchUrls", () => {
       prWatchUrls(
         [
           { kind: "pr_feedback", ...base },
-          { kind: "pr_opened", ...base, title: "x" },
+          { kind: "pr_opened", ...base, title: "x", headSha: "abc" },
         ],
         { kind: "check_suite", prUrls: [PR_URL, OTHER_URL] },
       ),
