@@ -1,6 +1,6 @@
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { api, normalizeAIModel } from "@eva/backend";
+import { api, normalizeAIModel, triggerHasEvent } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
 import { AutomationCronField } from "./AutomationCronField";
@@ -62,21 +62,24 @@ export function SystemAutomationSettings({
           title="Trigger"
           description={describeTrigger(trigger)}
           bodyVariant={
-            trigger.event === "issue_labeled" ||
-            trigger.event === "production_alert"
+            triggerHasEvent(trigger, "issue_labeled") ||
+            triggerHasEvent(trigger, "production_alert")
               ? "form"
               : "compact"
           }
           bodyClassName={
-            trigger.event === "production_alert" ? "grid gap-5" : undefined
+            triggerHasEvent(trigger, "production_alert")
+              ? "grid gap-5"
+              : undefined
           }
         >
-          {trigger.event === "issue_labeled" ? (
+          {trigger.kind === "event" &&
+          triggerHasEvent(trigger, "issue_labeled") ? (
             <IssueLabelField
               trigger={trigger}
               onChange={(next) => commit({ trigger: next })}
             />
-          ) : trigger.event === "production_alert" ? (
+          ) : triggerHasEvent(trigger, "production_alert") ? (
             <AlertWebhookFields automationId={automation._id} />
           ) : (
             <p className="text-sm text-muted-foreground">

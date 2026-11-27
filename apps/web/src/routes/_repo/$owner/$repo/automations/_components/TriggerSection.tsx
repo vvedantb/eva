@@ -4,25 +4,24 @@ import {
   REPO_EVENT_LABELS,
   USER_REPO_EVENTS,
   type AutomationTrigger,
+  type RepoEventKind,
 } from "@eva/backend";
 import { CRON_TRIGGER, capitalise } from "./trigger";
 import {
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Switch,
   Tabs,
   TabsList,
   TabsTrigger,
   SettingsField,
   SettingsSection,
+  SettingsToggleRow,
 } from "@vvedantb/ui";
 
 /**
  * Trigger picker for a user automation: its cron schedule (rendered by the
- * caller as `schedule`) or a repo event. Saves on change, like the switches.
+ * caller as `schedule`) or repo events, one switch each. Any switched-on event
+ * starts a run. Saves on change, like the other switches.
  */
 export function TriggerSection({
   trigger,
@@ -33,8 +32,6 @@ export function TriggerSection({
   onChange: (next: AutomationTrigger) => void;
   schedule: React.ReactNode;
 }) {
-  const eventFieldId = useId();
-
   return (
     <>
       <SettingsSection
@@ -42,7 +39,7 @@ export function TriggerSection({
         description={
           trigger.kind === "cron"
             ? "Runs on a schedule."
-            : "Runs each time the event happens in this repo."
+            : "Runs each time one of these events happens in this repo."
         }
         bodyVariant="compact"
         bodyClassName="grid gap-5"
@@ -53,7 +50,7 @@ export function TriggerSection({
             if (value === trigger.kind) return;
             onChange(
               value === "event"
-                ? { kind: "event", event: "pr_merged" }
+                ? { kind: "event", events: ["pr_merged"] }
                 : CRON_TRIGGER,
             );
           }}
@@ -63,36 +60,57 @@ export function TriggerSection({
             <TabsTrigger value="event">Event</TabsTrigger>
           </TabsList>
         </Tabs>
-        {trigger.kind === "event" ? (
-          <>
-            <SettingsField label="When" htmlFor={eventFieldId}>
-              <Select
-                value={trigger.event}
-                onValueChange={(value) => {
-                  const event = USER_REPO_EVENTS.find((e) => e === value);
-                  if (event !== undefined) onChange({ kind: "event", event });
-                }}
-              >
-                <SelectTrigger id={eventFieldId}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {USER_REPO_EVENTS.map((event) => (
-                    <SelectItem key={event} value={event}>
-                      {capitalise(REPO_EVENT_LABELS[event])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsField>
-            {trigger.event === "issue_labeled" ? (
-              <IssueLabelField trigger={trigger} onChange={onChange} />
-            ) : null}
-          </>
+        {trigger.kind === "event" &&
+        trigger.events.includes("issue_labeled") ? (
+          <IssueLabelField trigger={trigger} onChange={onChange} />
         ) : null}
       </SettingsSection>
+      {trigger.kind === "event" ? (
+        <EventSwitches trigger={trigger} onChange={onChange} />
+      ) : null}
       {trigger.kind === "cron" ? schedule : null}
     </>
+  );
+}
+
+/** One switch per event. The last one on stays on: an event trigger needs one. */
+function EventSwitches({
+  trigger,
+  onChange,
+}: {
+  trigger: Extract<AutomationTrigger, { kind: "event" }>;
+  onChange: (next: AutomationTrigger) => void;
+}) {
+  const toggle = (event: RepoEventKind, on: boolean) =>
+    onChange({
+      ...trigger,
+      events: on
+        ? USER_REPO_EVENTS.filter(
+            (e) => e === event || trigger.events.includes(e),
+          )
+        : trigger.events.filter((e) => e !== event),
+    });
+  return (
+    <SettingsSection title="Runs when" bodyVariant="list">
+      {USER_REPO_EVENTS.map((event) => {
+        const on = trigger.events.includes(event);
+        const title = capitalise(REPO_EVENT_LABELS[event]);
+        return (
+          <SettingsToggleRow
+            key={event}
+            title={title}
+            action={
+              <Switch
+                checked={on}
+                disabled={on && trigger.events.length === 1}
+                onCheckedChange={(next) => toggle(event, next)}
+                aria-label={title}
+              />
+            }
+          />
+        );
+      })}
+    </SettingsSection>
   );
 }
 

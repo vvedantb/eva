@@ -8,8 +8,11 @@ import {
 export {
   DEFAULT_ISSUE_LABEL,
   REPO_EVENT_LABELS,
+  normalizeTrigger,
+  triggerHasEvent,
   type AutomationTrigger,
   type RepoEventKind,
+  type StoredAutomationTrigger,
 } from "./labels";
 
 /**
@@ -168,15 +171,8 @@ export function triggerMatchesEvent(
   event: RepoEvent,
 ): boolean {
   if (trigger === undefined || trigger.kind !== "event") return false;
-  // `pr_opened_or_updated` is a trigger choice only: GitHub reports the first
-  // push as `opened` and later ones as `synchronize`, so it takes both events.
-  if (
-    trigger.event === "pr_opened_or_updated" &&
-    (event.kind === "pr_opened" || event.kind === "pr_updated")
-  ) {
-    return true;
-  }
-  if (trigger.event !== event.kind) return false;
+  // Any switched-on event fires the automation.
+  if (!trigger.events.includes(event.kind)) return false;
   if (event.kind !== "issue_labeled") return true;
   const wanted = (trigger.label ?? DEFAULT_ISSUE_LABEL).trim().toLowerCase();
   return wanted === event.label.trim().toLowerCase();

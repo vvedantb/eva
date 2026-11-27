@@ -3,6 +3,7 @@ import { checkRunBody } from "../convex/_automations/checkRun";
 import { parseAxiomAlert } from "../convex/_automationEvents/axiomAlert";
 import {
   describeAlert,
+  normalizeTrigger,
   parseRepoEvents,
   repoEventKey,
   triggerMatchesEvent,
@@ -214,11 +215,11 @@ describe("triggers", () => {
 
   test("issue triggers match the default label case-insensitively", () => {
     expect(
-      triggerMatchesEvent({ kind: "event", event: "issue_labeled" }, labelled),
+      triggerMatchesEvent({ kind: "event", events: ["issue_labeled"] }, labelled),
     ).toBe(true);
     expect(
       triggerMatchesEvent(
-        { kind: "event", event: "issue_labeled", label: "eva:web" },
+        { kind: "event", events: ["issue_labeled"], label: "eva:web" },
         labelled,
       ),
     ).toBe(false);
@@ -226,7 +227,7 @@ describe("triggers", () => {
     expect(triggerMatchesEvent(undefined, labelled)).toBe(false);
   });
 
-  test("pr_opened_or_updated matches both PR events; the single triggers match one each", () => {
+  test("a trigger fires on any of its switched-on events", () => {
     const pr = {
       owner: "acme",
       name: "eva",
@@ -237,14 +238,26 @@ describe("triggers", () => {
     };
     const updated = { kind: "pr_updated", ...pr } as const;
     const opened = { kind: "pr_opened", ...pr } as const;
-    const onUpdated = { kind: "event", event: "pr_updated" } as const;
-    const onOpened = { kind: "event", event: "pr_opened" } as const;
-    const onBoth = { kind: "event", event: "pr_opened_or_updated" } as const;
+    const onUpdated: AutomationTrigger = { kind: "event", events: ["pr_updated"] };
+    const onOpened: AutomationTrigger = { kind: "event", events: ["pr_opened"] };
+    const onBoth: AutomationTrigger = {
+      kind: "event",
+      events: ["pr_opened", "pr_updated"],
+    };
     expect(triggerMatchesEvent(onBoth, opened)).toBe(true);
     expect(triggerMatchesEvent(onBoth, updated)).toBe(true);
     expect(triggerMatchesEvent(onUpdated, opened)).toBe(false);
     expect(triggerMatchesEvent(onUpdated, updated)).toBe(true);
     expect(triggerMatchesEvent(onOpened, updated)).toBe(false);
+  });
+
+  test("a legacy single-event trigger reads as its events list", () => {
+    expect(
+      normalizeTrigger({ kind: "event", event: "pr_opened_or_updated" }),
+    ).toEqual({ kind: "event", events: ["pr_opened", "pr_updated"] });
+    expect(
+      normalizeTrigger({ kind: "event", event: "issue_labeled", label: "x" }),
+    ).toEqual({ kind: "event", events: ["issue_labeled"], label: "x" });
   });
 
   test("CI keys are per commit so a new push is a new attempt", () => {
@@ -278,7 +291,7 @@ describe("cron registration", () => {
     expect(automationCronspec(row({ enabled: false }))).toBeNull();
     expect(
       automationCronspec(
-        row({ trigger: { kind: "event", event: "pr_merged" } }),
+        row({ trigger: { kind: "event", events: ["pr_merged"] } }),
       ),
     ).toBeNull();
   });
@@ -287,11 +300,11 @@ describe("cron registration", () => {
     const install = row({
       systemKey: "issue-to-task",
       // A tampered event is ignored: the catalog owns it.
-      trigger: { kind: "event", event: "pr_merged", label: "eva:web" },
+      trigger: { kind: "event", events: ["pr_merged"], label: "eva:web" },
     });
     expect(automationTrigger(install)).toEqual({
       kind: "event",
-      event: "issue_labeled",
+      events: ["issue_labeled"],
       label: "eva:web",
     });
     expect(automationCronspec(install)).toBeNull();

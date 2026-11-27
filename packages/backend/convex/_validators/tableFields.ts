@@ -1164,21 +1164,33 @@ export const repoEventKindValidator = v.union(
   v.literal("pr_opened"),
   v.literal("pr_merged"),
   v.literal("pr_updated"),
-  // Trigger choice only: matches both `pr_opened` and `pr_updated` events.
-  v.literal("pr_opened_or_updated"),
   v.literal("production_alert"),
 );
 
-/** What starts an automation: its cron schedule, or a repo event. */
+/**
+ * What starts an automation: its cron schedule, or repo events. Any one of
+ * `events` starts a run (OR).
+ */
 export const automationTriggerValidator = v.union(
   v.object({ kind: v.literal("cron") }),
   v.object({
     kind: v.literal("event"),
-    event: repoEventKindValidator,
+    events: v.array(repoEventKindValidator),
     // `issue_labeled` only: the label that fires it (defaults to "eva").
     label: v.optional(v.string()),
   }),
 );
+
+/**
+ * The single-event trigger stored before `events`. Temporary: once
+ * `dataMigrations:migrateEventTriggers` has run, narrow `automations.trigger`
+ * to `automationTriggerValidator` and delete this and `normalizeTrigger`.
+ */
+export const legacyEventTriggerValidator = v.object({
+  kind: v.literal("event"),
+  event: v.union(repoEventKindValidator, v.literal("pr_opened_or_updated")),
+  label: v.optional(v.string()),
+});
 
 export const automationFields = {
   ...entityNumIdFields,
@@ -1189,7 +1201,9 @@ export const automationFields = {
   cronSchedule: v.string(),
   // Missing means `{ kind: "cron" }`, so rows from before event triggers
   // keep their schedule without a migration.
-  trigger: v.optional(automationTriggerValidator),
+  trigger: v.optional(
+    v.union(automationTriggerValidator, legacyEventTriggerValidator),
+  ),
   model: v.optional(aiModelValidator),
   // The account runs bill to: the creator's own, or a teammate's shared one.
   // Missing means the team credential.

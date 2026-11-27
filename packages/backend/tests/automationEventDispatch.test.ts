@@ -104,7 +104,7 @@ async function fixture() {
   const install = (
     repoId: Id<"githubRepos">,
     systemKey: string | undefined,
-    trigger: { kind: "event"; event: RepoEvent["kind"] },
+    trigger: { kind: "event"; events: Array<RepoEvent["kind"]> },
   ) =>
     t.run((ctx) =>
       ctx.db.insert("automations", {
@@ -142,7 +142,7 @@ describe("event dispatch", () => {
       const { install, ids, runsOf, dispatch } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_updated",
+        events: ["pr_updated"],
       });
       await dispatch(pushed("first"));
       await dispatch(pushed("second"));
@@ -158,11 +158,11 @@ describe("event dispatch", () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const onRoot = await install(ids.rootRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       const onApp = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
 
       await dispatch(ciFailed("sha1"));
@@ -179,11 +179,11 @@ describe("event dispatch", () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const a = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       const b = await install(ids.appRepoId, undefined, {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       await dispatch(labelled);
       expect(await runsOf(a)).toHaveLength(1);
@@ -198,7 +198,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const responder = await install(ids.appRepoId, "review-responder", {
         kind: "event",
-        event: "pr_feedback",
+        events: ["pr_feedback"],
       });
 
       await dispatch(feedback);
@@ -223,7 +223,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const toTask = await install(ids.rootRepoId, "issue-to-task", {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       await dispatch(labelled);
       const [run] = await runsOf(toTask);
@@ -250,7 +250,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const fixer = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       // Three fixes and the "stopping here" note, all delivered.
       await t.run(async (ctx) => {
@@ -287,7 +287,7 @@ describe("event dispatch", () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const fixer = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       await dispatch(ciFailed("x", 99));
       expect(await runsOf(fixer)).toHaveLength(0);
@@ -303,7 +303,7 @@ describe("event run lifecycle", () => {
       const { t, ids, install } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_merged",
+        events: ["pr_merged"],
       });
       const [stuck, withWorkflow] = await t.run(async (ctx) => [
         await ctx.db.insert("automationRuns", {
@@ -343,7 +343,7 @@ describe("event run lifecycle", () => {
       const { t, ids, install, runsOf } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_updated",
+        events: ["pr_updated"],
       });
       const queued = await t.run(async (ctx) => {
         await ctx.db.insert("automationRuns", {
@@ -381,7 +381,7 @@ describe("event run lifecycle", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_updated",
+        events: ["pr_updated"],
       });
       // The automation is mid-run, so the queued run waits instead of starting.
       await t.run(async (ctx) => {
@@ -418,7 +418,7 @@ describe("event run lifecycle", () => {
       const { t, ids, install } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_merged",
+        events: ["pr_merged"],
       });
       const [fresh, stale] = await t.run(async (ctx) => {
         await ctx.db.insert("automationRuns", {
@@ -476,7 +476,7 @@ describe("alert webhook", () => {
     const automationId = await fx.install(
       fx.ids.rootRepoId,
       "axiom-alert-to-task",
-      { kind: "event", event: "production_alert" },
+      { kind: "event", events: ["production_alert"] },
     );
     const secretHash = await sha256Hex("s3cret");
     await fx.t.run((ctx) =>
@@ -515,7 +515,7 @@ describe("alert webhook", () => {
       const { t, ids, install, secretHash, receive } = await alertFixture();
       const other = await install(ids.rootRepoId, "issue-to-task", {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       expect(
         await t.mutation(internal._automationEvents.dispatch.receiveAlert, {
@@ -664,9 +664,9 @@ describe("pure helpers", () => {
     "presets collapse across apps; user automations never do",
     async () => {
       const { ids, install } = await fixture();
-      const trigger = { kind: "event", event: "ci_failed" } satisfies {
-        kind: "event";
-        event: RepoEvent["kind"];
+      const trigger: { kind: "event"; events: Array<RepoEvent["kind"]> } = {
+        kind: "event",
+        events: ["ci_failed"],
       };
       const p1 = await install(ids.rootRepoId, "ci-autofix", trigger);
       const p2 = await install(ids.appRepoId, "ci-autofix", trigger);
