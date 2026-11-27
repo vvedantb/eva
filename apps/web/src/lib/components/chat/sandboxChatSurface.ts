@@ -41,7 +41,6 @@ export interface SandboxChatSurface {
   isReadOnly: boolean;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
-  /** Claude's native `/goal` for this chat, mirrored by the daemon. */
   goal: AgentGoal | undefined;
   sendCommand: ((command: string) => Promise<void>) | undefined;
 }

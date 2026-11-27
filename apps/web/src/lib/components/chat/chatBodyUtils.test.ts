@@ -599,7 +599,6 @@ describe("isChatTurnExecuting", () => {
   });
 
   test("an open turn runs before its bubble lands", () => {
-    // A synthetic continuation opens a turn before its bubble lands.
     expect(
       isChatTurnExecuting({ status: turnFor("a2"), messages: settled }),
     ).toBe(true);
@@ -609,7 +608,6 @@ describe("isChatTurnExecuting", () => {
   });
 
   test("a stale open status ends once its bubble has finished", () => {
-    // The server closes the turn and finishes its bubble in one mutation.
     expect(
       isChatTurnExecuting({ status: turnFor("a1"), messages: settled }),
     ).toBe(false);

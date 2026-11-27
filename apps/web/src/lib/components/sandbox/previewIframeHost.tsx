@@ -509,7 +509,8 @@ interface PreviewAnchorProps {
   src: string | undefined;
   epoch: number;
   logicalSize: { width: number; height: number } | null;
-  role: PreviewAnchorRole;  miniPlayer?: PreviewMiniPlayerSource;
+  role: PreviewAnchorRole;
+  miniPlayer?: PreviewMiniPlayerSource;
   onElement?: (el: HTMLIFrameElement | null) => void;
 }
 

@@ -231,7 +231,6 @@ export function ProjectSandboxPanel({
             collapsed={collapsed}
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
-            // A task tab's rail holds its own tabs only.
             enabledTabs={taskSelected ? [] : enabledTabs}
             leadingTabs={
               taskSelected

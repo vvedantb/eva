@@ -86,7 +86,6 @@ let exitWithError = false;
 let threadTotalUsage: JsonObject | null = null;
 let turnStartUsage: JsonObject | null = null;
 
-
 function stringField(value: JsonValue | undefined, field: string): string {
   const object = asJsonObject(value);
   return typeof object[field] === "string" ? object[field] : "";

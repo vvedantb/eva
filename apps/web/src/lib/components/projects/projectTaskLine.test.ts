@@ -8,7 +8,6 @@ import {
   type SummarizableProjectTaskRow,
 } from "@eva/shared/projectView";
 
-
 const view = (
   displayStatus: ProjectTaskView["displayStatus"],
   needsYou?: ProjectTaskView["needsYou"],

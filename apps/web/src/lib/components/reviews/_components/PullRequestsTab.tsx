@@ -27,7 +27,6 @@ export type ReviewPullRequest = FunctionReturnType<
   typeof api.pullRequests.listForOwner
 >[number];
 
-
 const ROW_ICON_BUTTON_CLASS = cn(
   LIST_ROW_CONTROL_CLASS,
   "shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground",

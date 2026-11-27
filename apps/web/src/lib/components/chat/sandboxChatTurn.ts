@@ -49,7 +49,6 @@ export type SandboxTurnEnqueueArgs = Omit<
 /** Start fields passed apart from the composer settings. */
 export interface SandboxTurnStartExtras {
   attachmentStorageIds?: Id<"_storage">[];
-  /** The proposed plan this turn implements. */
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 

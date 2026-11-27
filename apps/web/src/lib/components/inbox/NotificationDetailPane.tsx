@@ -16,7 +16,6 @@ function NotificationPagePreview({ href }: { href: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
   const [booted, setBooted] = useState(false);
-  // The src only seeds the first document; later hrefs arrive via postMessage.
   const [initialHref] = useState(href);
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --

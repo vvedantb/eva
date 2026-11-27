@@ -257,7 +257,6 @@ function ThreadDock({
   );
 }
 
-/** The reply field: people and data mentions, plus @Eva to bring her in. */
 function ReplyComposer({
   rootId,
   model,
@@ -296,7 +295,6 @@ function ReplyComposer({
         onValueChange={setText}
         onEnterSubmit={handleSubmit}
         placeholder="Reply…"
-        // A reply wakes Eva only when it @mentions her (projects v2, decision 2).
         extraPeopleItems={[EVA_MENTION_ITEM]}
         className="min-h-8 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0"
       />

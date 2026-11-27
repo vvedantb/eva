@@ -16,7 +16,6 @@ import {
   pickToolCallId,
 } from "./toolResultCapture.js";
 
-
 type StepExtra = Partial<Omit<ProgressStep, "type" | "label" | "status">>;
 
 function stringOrUndefined(value: JsonValue | undefined): string | undefined {

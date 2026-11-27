@@ -1,6 +1,5 @@
 import type { JsonObject, JsonValue } from "./types.js";
 
-
 /** True for plain JSON objects (not null, not arrays). */
 export function isJsonObject(
   value: JsonValue | undefined,

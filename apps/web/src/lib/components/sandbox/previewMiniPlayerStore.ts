@@ -6,13 +6,17 @@ type PreviewMiniPlayerMode = "auto" | "manual";
 /** What the pane knows and the host does not: where the preview belongs. */
 export interface PreviewMiniPlayerSource {
   owner: SandboxOwner;
-  sandboxId: string;  returnTo: string;
+  sandboxId: string;
+  returnTo: string;
   title: string;
 }
 
-export interface PreviewMiniPlayerTarget extends PreviewMiniPlayerSource {  entryKey: string;  group: string;
+export interface PreviewMiniPlayerTarget extends PreviewMiniPlayerSource {
+  entryKey: string;
+  group: string;
   src: string;
-  epoch: number;  logicalSize?: { width: number; height: number };
+  epoch: number;
+  logicalSize?: { width: number; height: number };
 }
 
 export interface PreviewMiniPlayerEntry extends PreviewMiniPlayerTarget {

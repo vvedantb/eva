@@ -28,7 +28,6 @@ export interface PhaseStyle {
   icon: typeof IconCircle;
 }
 
-/** To Do: matches the quick-task To Do column. */
 const todoStyle: PhaseStyle = {
   bg: "bg-secondary",
   cardBg: "bg-secondary/40",
@@ -49,7 +48,6 @@ const inProgressStyle: PhaseStyle = {
   icon: IconClock,
 };
 
-/** The code-review purple, for Triage. */
 const triageStyle: PhaseStyle = {
   bg: "bg-status-code-review-bg",
   cardBg: "bg-status-code-review-subtle/40",

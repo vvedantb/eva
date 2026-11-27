@@ -905,7 +905,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
       return;
     }
 
-    // Skip history recall when the mention picker is open.
     if (handleHistoryKey(e, trigger.isOpen, onHistoryNavigate)) return;
 
     handleEnterSubmitKey(e, onEnterSubmit);

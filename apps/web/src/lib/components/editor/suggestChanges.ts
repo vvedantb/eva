@@ -62,8 +62,6 @@ const Modification = Mark.create({
             ? {}
             : { "data-id": JSON.stringify(attributes.id) },
       },
-      // These persist via ProseMirror JSON (synced); they are not rendered to
-      // the DOM because the library reads them off the mark attrs directly.
       type: { default: null, rendered: false },
       attrName: { default: null, rendered: false },
       previousValue: { default: null, rendered: false },
@@ -81,7 +79,6 @@ const Modification = Mark.create({
   },
 });
 
-/** insertion/deletion share an identical spec apart from name/tag/excludes. */
 function createInlineSuggestionMark(config: {
   name: SuggestionKind;
   tag: "ins" | "del";
@@ -112,7 +109,6 @@ function createInlineSuggestionMark(config: {
   });
 }
 
-/** Reads a suggestion id from a `data-id` attribute (stored JSON-encoded). */
 function parseDataId(element: HTMLElement): SuggestionId | null {
   const raw = element.getAttribute("data-id");
   if (raw === null) return null;
@@ -126,7 +122,6 @@ function parseDataId(element: HTMLElement): SuggestionId | null {
 }
 
 export interface SuggestChangesKitOptions {
-  /** Resolves the current user id, used to attribute new suggestions. */
   getUserId: () => string | null;
 }
 

@@ -77,8 +77,6 @@ export function ProjectsListView({
         if (!visiblePhases.has(phase)) return [];
         const cfg = projectStageConfig[phase];
         const items = projectsByPhase[phase] ?? [];
-        // Shift-click spans this section only — the visible order of the group
-        // the click landed in, not the whole flattened list.
         const sectionIds = items.map((p) => p._id);
         const Icon = cfg.icon;
 

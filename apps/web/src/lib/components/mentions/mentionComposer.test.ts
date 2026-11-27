@@ -58,7 +58,6 @@ describe("accepting a pick and sending it", () => {
       skillMap: new Map([["eva-capture", skillId]]),
     });
     expect(wire).toBe(`ask @[Ada Lovelace](${ADA}) /[eva-capture](${skillId})`);
-    // And back: what a restored stash or draft hands the editor.
     expect(tokenizedToEditable(wire)).toEqual({
       displayText: "ask @Ada Lovelace /eva-capture",
       mentionMap: new Map([["Ada Lovelace", ADA]]),

@@ -39,7 +39,6 @@ const PAGE_TOKEN_SOURCE: Partial<Record<string, string>> = {
   "--destructive-foreground": "--danger-foreground",
 };
 
-/** Eva's live theme tokens, as complete CSS values, for the page's `:root`. */
 function readHostContext(theme: HtmlRenderAppearance): HtmlRenderHostContext {
   const style = getComputedStyle(document.documentElement);
   const variables: Record<string, string> = {};
@@ -149,8 +148,6 @@ function HtmlPage({
         className="block size-full border-0"
         style={{ colorScheme: resolvedTheme }}
       />
-      {/* Always shown: the pointer over a cross-document iframe gives the
-          parent no hover, so a hover-revealed control never appears. */}
       <Button
         size="icon"
         variant="secondary"

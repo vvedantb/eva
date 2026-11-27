@@ -48,7 +48,6 @@ export function ProjectTasksPanel({
     projectId,
     archived: true,
   });
-  // An archived project is read-only: no new tasks.
   const isArchived =
     useQuery(api.projects.get, { id: projectId })?.archivedAt !== undefined;
   const projectSegment = entityPathSegment({ numId: projectNumId });

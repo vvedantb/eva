@@ -52,7 +52,6 @@ export function useProjectTaskExpand({
   prUrl,
   onShowReview,
 }: {
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   prUrl: string | undefined;
   onShowReview: () => void;
@@ -207,13 +206,11 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /** The pane on screen; null while Details is active. */
   paneTab: "preview" | "browser" | "review" | null;
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;
   isSandboxStarting: boolean;
   autoWakeEligible: boolean;
-  /** False while the panel is collapsed. */
   onScreen: boolean;
 }) {
   const panes = useSandboxPanes({
@@ -253,16 +250,13 @@ function ProjectTaskSandboxPanes({
           prUrl={prUrl}
           agentBrowsingAt={viewState?.agentBrowsingAt}
           onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          // Backend starts the app in the Console tmux session after startup.
           runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
           onAnnotationSubmit={submitAnnotation}
-          // Only the pane on screen holds the presence beacon or auto-wakes.
           presenceEnabled={visible}
           onScreen={visible}
-          // The project task's full page has no mini-player either.
           miniPlayer={undefined}
           viewState={viewState}
         />

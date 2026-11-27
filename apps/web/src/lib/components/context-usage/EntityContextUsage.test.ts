@@ -102,7 +102,6 @@ test("aggregateUsage prefers the window the result event reports", () => {
           cache_read_input_tokens: 3,
           cache_creation_input_tokens: 4,
         },
-        // Same model as the catalogue's 200k entry, but running 1M mode.
         modelUsage: {
           "claude-opus-4-6": { costUSD: 2, contextWindow: 1_000_000 },
         },

@@ -10,7 +10,6 @@ import {
 } from "@eva/shared";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 
-
 const project = (
   title: string,
   created: number,

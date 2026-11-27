@@ -49,15 +49,11 @@ interface ProjectsTimelineProps {
   onZoomChange: (zoom: number) => void;
 }
 
-// status.color is only used by the sidebar dot fallback (we supply a stage
-// icon instead), but GanttFeature requires it, so map stages to their bar colour.
 function stageStatus(stage: ProjectStage): GanttStatus {
   const { label, barColor } = projectStageConfig[stage];
   return { id: stage, name: label, color: barColor };
 }
 
-/** Lives inside GanttProvider so it can read scrollToToday from context and
- *  hand it to the toolbar, which renders outside the provider. */
 function GanttTodayBridge({
   targetRef,
 }: {
