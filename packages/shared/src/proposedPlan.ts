@@ -1,7 +1,3 @@
-// A session's proposed plans (the agent's plan-mode proposals), web and phone:
-// which plan a message carries, and the plan markdown as a title, a preview,
-// an export and the prompt that implements it.
-
 import type { Id } from "@eva/backend";
 
 export type ProposedPlanRow = {
@@ -19,7 +15,6 @@ export function findLatestProposedPlan(
   proposedPlans: ReadonlyArray<ProposedPlanRow>,
 ): ProposedPlanRow | null {
   if (proposedPlans.length === 0) return null;
-  // A copy and `sort`, as `toSorted` is missing in some Hermes release builds.
   return [...proposedPlans].sort(
     (left, right) =>
       right.updatedAt - left.updatedAt ||

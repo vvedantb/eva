@@ -37,7 +37,6 @@ import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 export function InboxClient({
   repoId,
 }: {
-  /** A repo's inbox: Needs you shows that repo only. */
   repoId?: Id<"githubRepos">;
 } = {}) {
   const navigate = useNavigate();
@@ -70,18 +69,12 @@ export function InboxClient({
         ? notifications.filter((n) => !n.read)
         : notifications;
 
-  // Selection is scoped to what is on screen: the rendered order defines both
-  // "select all" and a shift-click range, and rows that leave the list have
-  // their selection pruned inside the hook.
   const { isSelecting, selectedIds, start, toggle, selectAll, clear, exit } =
     useInboxSelection((filtered ?? []).map((n) => n._id));
   const checkedIds = (filtered ?? [])
     .filter((n) => selectedIds.has(n._id))
     .map((n) => n._id);
 
-  // Resolved against the full list, not `filtered`: selecting an unread row on
-  // the Unread tab marks it read (removing it from the tab), and the detail
-  // pane must keep showing it rather than blanking out.
   const selected = notifications?.find((n) => n._id === selectedId);
   const selectedRepo =
     selected?.repoId !== undefined ? repoById.get(selected.repoId) : undefined;
@@ -93,9 +86,6 @@ export function InboxClient({
     setSelectedId(n._id);
   };
 
-  // Right-click toggle. Deliberately leaves selection alone: marking the open
-  // notification unread should not close the detail pane, and re-reading it
-  // only happens when the row is clicked again.
   const handleToggleRead = (n: Notification) => {
     if (n.read) markUnread(n._id);
     else markRead(n._id);
@@ -106,9 +96,6 @@ export function InboxClient({
     else archive([n._id]);
   };
 
-  // Every bulk action leaves selection mode: the rows it acted on have just
-  // moved or changed, so holding the selection open would leave the bar
-  // counting a list the user no longer has in front of them.
   const runBulk = (action: (ids: Id<"notifications">[]) => void) => {
     const ids = checkedIds;
     exit();
@@ -116,16 +103,11 @@ export function InboxClient({
   };
 
   const handleOpen = (n: Notification) => {
-    // Split rather than passed whole: a comment notification's href carries
-    // `?comment=<id>`, and the router resolves `to` as a pathname only.
     if (n.href && isInternalAppHref(n.href)) {
       navigate(hrefToNavigateOptions(n.href));
     }
   };
 
-  // Linear-style keys: arrows step the list, Enter opens the linked entity,
-  // `x` checks the focused row while selecting, and Escape backs out of
-  // selection mode first and the selected row second. Skipped while typing.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (view !== "updates") return;
@@ -202,8 +184,6 @@ export function InboxClient({
     );
   }
 
-  // The header sits inside the left pane rather than above both panes, so the
-  // detail pane (and the divider between them) runs the full viewport height.
   return (
     <div className="flex-1 h-full min-h-0 overflow-hidden animate-in fade-in duration-300">
       <ResizablePanelLayout
@@ -211,13 +191,10 @@ export function InboxClient({
         leftDefaultSize="40%"
         leftMinWidthPx={300}
         rightMinWidthPx={360}
-        // The detail pane is the point of this view, so it starts open.
         defaultRightCollapsed={false}
         leftPanel={() => (
-          // `relative`: the floating bulk bar anchors to this pane, not the page.
           <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
             {header}
-            {/* Region divider between the header and the notification list. */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
               <InboxListPane
                 notifications={filtered}

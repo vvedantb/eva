@@ -17,7 +17,6 @@ import { useScheme } from "@/ui/theme";
  */
 export function GoalBanner({ chatId, target }: { chatId: Id<"sessionChats"> | undefined; target: string }) {
   const theme = EVA_THEME[useScheme()];
-  // The same subscription as the background agents chip.
   const sessionChat = useQuery(api.sessionChats.get, chatId ? { chatId } : "skip");
   const send = useMutation(api.chats.send);
   const [clearing, setClearing] = useState(false);
@@ -26,14 +25,12 @@ export function GoalBanner({ chatId, target }: { chatId: Id<"sessionChats"> | un
 
   const clear = () => {
     setClearing(true);
-    // Chained, not try / finally, which React Compiler cannot compile.
     send({ target, message: CLEAR_GOAL_COMMAND, attachmentStorageIds: [] })
       .catch(() => toast.error("Couldn't send your message"))
       .then(() => setClearing(false));
   };
 
   return (
-    // The usage-limit card's surface: `bg-muted`, radius 16, 12 in from the thread.
     <View className="mx-3 mb-2 flex-row items-start gap-2.5 rounded-2xl p-3" style={{ backgroundColor: theme.muted }}>
       <View className="mt-0.5">
         <IconTargetArrow size={18} color={theme.mutedForeground} />

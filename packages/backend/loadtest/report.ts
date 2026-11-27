@@ -98,7 +98,6 @@ byP.forEach((t, i) => {
 });
 const testFor = (name: string, scale: number) => tests.find((t) => t.name === name && t.scale === scale);
 
-
 function compact(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "–";
   if (n >= 1e6) return `${Number((n / 1e6).toFixed(1))}M`;
@@ -121,7 +120,6 @@ function pFmt(p: number): string {
   if (Number.isNaN(p)) return "–";
   return p < 0.001 ? "<0.001" : p.toFixed(3);
 }
-
 
 const W = 300;
 const H = 170;
@@ -188,7 +186,6 @@ function miniChart(title: string, unit: string, series: Array<{ run: Run; points
   return `<figure class="mini"><figcaption>${esc(title)} <span class="unit">${esc(unit)}</span></figcaption>${parts.join("")}</figure>`;
 }
 
-
 function pointsFor(name: string, run: Run, metric: "docs" | "time"): Array<Point> {
   return scales.flatMap((scale): Array<Point> => {
     const s = get(run, scale, name);
@@ -249,7 +246,6 @@ function dumbbell(): string {
   parts.push(`<text class="tick" x="${FAIL_X}" y="20" text-anchor="middle">failed</text></svg>`);
   return parts.join("");
 }
-
 
 function statsTable(): string {
   const head = `<tr><th>Query</th><th>Scale</th><th class="num">Docs read<br>before → after</th><th class="num">Median ms before<br>(95% CI)</th><th class="num">Median ms after<br>(95% CI)</th><th class="num">Speed-up</th><th class="num">p (Holm)</th><th class="num">Cliff's δ</th><th>Status</th></tr>`;

@@ -84,8 +84,6 @@ export const handleStaleSessionChat = internalMutation({
   },
 });
 
-
-
 /** Cancels a stale evaluation workflow and marks it as timed out or fix error. */
 export const handleStaleEvaluation = internalMutation({
   args: {

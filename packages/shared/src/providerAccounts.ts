@@ -1,17 +1,10 @@
 import type { AIProvider, Id } from "@eva/backend";
 
-/**
- * The model picker's provider accounts (the user's own, and teammates' shared
- * ones), as the web and phone pickers list them. Pure, so both apps pick the
- * same default.
- */
-
 /** One account row of the picker. */
 export interface PickerAccount {
   id: Id<"userProviderAccounts">;
   provider: AIProvider;
   label: string;
-  /** Owned by whoever the run bills to, not a teammate's shared account. */
   isOwn: boolean;
 }
 
@@ -28,7 +21,6 @@ export function toPickerAccounts(
     updatedAt: number;
   }>,
 ): PickerAccount[] {
-  // A copy, as `toSorted` is missing in some Hermes release builds.
   return [...accounts]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map((account) => ({ id: account._id, provider: account.provider, label: account.label, isOwn: account.isOwn }));

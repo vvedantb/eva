@@ -4,7 +4,6 @@ import { DIGEST_CRON } from "./_notifications/digestWindow";
 
 const crons = cronJobs();
 
-// Send the unread-notification digest at 08:00 UTC on weekdays (Mon-Fri).
 crons.cron(
   "daily notification digest",
   DIGEST_CRON,
@@ -12,9 +11,6 @@ crons.cron(
   {},
 );
 
-// Check every 15 minutes whether the configured daily sandbox auto-stop time
-// has been reached and, if so, stop every active sandbox. The action itself is
-// a no-op when auto-stop is disabled or already ran for today's occurrence.
 crons.interval(
   "sandbox auto-stop sweep",
   { minutes: 15 },
@@ -22,8 +18,6 @@ crons.interval(
   {},
 );
 
-// Pause sandboxes nobody is using (agent finished + no interaction for the
-// configured grace). A no-op while `appSettings.sandboxIdlePauseMode` is off.
 crons.interval(
   "sandbox idle pause sweep",
   { minutes: 5 },
@@ -31,8 +25,6 @@ crons.interval(
   {},
 );
 
-// Stop VMs that a background job woke after Stop while every owner row is
-// `closed` (the Vercel SDK resumes on any exec). Same mode gate as idle pause.
 crons.interval(
   "sandbox leak sweep",
   { minutes: 10 },
@@ -40,10 +32,6 @@ crons.interval(
   {},
 );
 
-// Rescan supported skill roots on every connected codebase once a day at 04:00
-// UTC. Push webhooks also trigger an immediate sync when the base branch changes
-// skills; this cron is the backup when push events are not subscribed or a sync
-// fails.
 crons.cron(
   "repo skills github sync",
   "0 4 * * *",
@@ -51,10 +39,6 @@ crons.cron(
   {},
 );
 
-// Truth-sync eva's "active" sandbox statuses against the provider. Vercel
-// stops VMs on its own (session-timeout cap, platform stops) with no webhook;
-// without this, a session page left open showed "active" + a dead Preview
-// until the next page-mount prewarm happened to probe it.
 crons.interval(
   "stale active sandbox reconcile",
   { minutes: 5 },
@@ -69,8 +53,6 @@ crons.interval(
   {},
 );
 
-// Drop GitHub authorize-hop nonces nobody came back with. They expire after 10
-// minutes regardless; this only stops the table growing.
 crons.interval(
   "github oauth state purge",
   { hours: 1 },
@@ -85,8 +67,6 @@ crons.interval(
   {},
 );
 
-// Safety net: delete sandboxes for archived sessions / done|cancelled tasks
-// whose 48h grace has elapsed (or never got a grace schedule).
 crons.cron(
   "dead sandbox sweep",
   "0 3 * * 0",
@@ -94,9 +74,6 @@ crons.cron(
   {},
 );
 
-// Orphan snapshots (left by deleted or replaced sandboxes) bill Snapshot
-// Storage until deleted. Runs after the dead sandbox sweep, and keeps anything
-// created or restored in the last 7 days.
 crons.cron(
   "orphan snapshot purge",
   "30 3 * * 0",

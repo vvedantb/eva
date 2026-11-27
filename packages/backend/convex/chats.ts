@@ -29,15 +29,6 @@ import {
   reasoningLevelValidator,
 } from "./validators";
 
-/**
- * Chat actions both clients call: open a chat by one string `target` (a
- * session chat, quick task or project; see `_mobile/chatTarget.ts`), send,
- * stop, pick a model, start a session and archive one. Each runs its whole
- * decision here, once, so the web and the phone cannot drift. The phone uses
- * all of them; the web moves onto them one action at a time. `mobile.*` keeps
- * the old names as aliases for installed APKs.
- */
-
 /** One chat by target, for the chat screen. Null when missing or not allowed. */
 export const get = authQuery({
   args: { target: v.string() },
@@ -51,7 +42,6 @@ export const get = authQuery({
   },
 });
 
-/** Resolves a target the caller may write to (repo access), or throws. */
 async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
   const resolved = await resolveMobileChat(ctx.db, target);
   if (!resolved) throw new Error("Chat not found");
@@ -81,7 +71,6 @@ export const send = authMutation({
     const { attachmentStorageIds } = args;
     switch (entity.kind) {
       case "session":
-        // A reply in a session chat runs on that chat's sticky picks.
         await sendStickyChatMessage(ctx, {
           context: entity.context,
           model: normalizeAIModel(chat.model),
@@ -92,8 +81,6 @@ export const send = authMutation({
         return null;
       case "task":
       case "project":
-        // A task's or project's first send creates its session chat; later
-        // sends resolve as that session chat directly (`resolveMobileChat`).
         await sendOwnerChatMessage(ctx, {
           entity,
           userId: ctx.userId,
@@ -105,7 +92,6 @@ export const send = authMutation({
   },
 });
 
-/** The composer traits a pick may set, as the web traits menu. */
 const traitArgs = {
   reasoningLevel: v.optional(reasoningLevelValidator),
   thinkingEnabled: v.optional(v.boolean()),
@@ -139,7 +125,6 @@ export const setModel = authMutation({
         return null;
       case "task":
       case "project": {
-        // The pick lands on the owner's session chat, created on first need.
         const context = await ensureOwnerChat(ctx, entity);
         if (model !== undefined) await setSessionChatModel(ctx, context, model);
         await setSessionChatTraits(ctx, context.chat._id, traits);
@@ -166,7 +151,6 @@ export const stop = authMutation({
         await stopTask(ctx, entity.task);
         return null;
       case "project": {
-        // No session chat yet: nothing runs, and stopping never creates one.
         const found = await findWorkChat(ctx.db, entity);
         if (found) await stopChat(ctx, found);
         return null;
@@ -185,17 +169,14 @@ export const start = authMutation({
   args: {
     repoId: v.id("githubRepos"),
     prompt: v.string(),
-    /** The session title; a fork passes `forkThreadTitle`. Default: generated from the prompt, as on the web. */
     title: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     model: v.optional(aiModelValidator),
     ...traitArgs,
-    /** The model picker's account, as the web landing sends it: null is Team; absent is the user's default. */
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
     baseBranch: v.optional(v.string()),
-    /** "Stack a new session" on a pull request: the session's PR joins that PR's stack, as the web composer sends. */
     stackOnPrNumber: v.optional(v.number()),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
@@ -209,8 +190,6 @@ export const start = authMutation({
     return await createSession(ctx, {
       ...args,
       message: prompt,
-      // `createSession` needs a model to queue the first message; the web
-      // composer sends the same normalised repo default.
       model: args.model ?? normalizeAIModel(repo.defaultModel),
     });
   },

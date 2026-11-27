@@ -7,10 +7,6 @@ import {
 const LEGACY_PREFIX = "conductor:";
 const CURRENT_PREFIX = "eva:";
 
-/**
- * Moves every `conductor:*` entry in one store to its `eva:*` equivalent.
- * Returns the number of entries moved.
- */
 function migrateStore(store: Storage): number {
   const legacyKeys: string[] = [];
   for (let index = 0; index < store.length; index += 1) {

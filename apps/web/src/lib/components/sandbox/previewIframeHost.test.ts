@@ -15,14 +15,6 @@ import {
   type PreviewMiniPlayerTarget,
 } from "./previewMiniPlayerStore";
 
-/**
- * Preview iframes outlive the router so route changes do not reload the app
- * under development, and each sandbox:port keeps resolution meta so a
- * remounting panel can skip the loading overlay. That cache has to die with
- * its sandbox: kept too long it seeds a dead URL, and dropped too eagerly it
- * takes another sandbox's live preview down with it.
- */
-
 function meta(url: string) {
   return {
     previewInfo: { url, port: 3000 },
@@ -78,11 +70,6 @@ describe("preview meta cache", () => {
   });
 });
 
-/**
- * The floating mini-player shows one of the hosted iframes, so dropping a
- * sandbox's iframes must take the window (and any pending float) with them —
- * a mini-player over a dead document would be a frozen screenshot.
- */
 describe("dropping a sandbox and the mini-player", () => {
   function miniPlayer(sandboxId: string): PreviewMiniPlayerTarget {
     return {

@@ -1,11 +1,6 @@
 import { tokenizedToEditable } from "./mentionText";
 import { stripReviewCommentBlocks } from "./reviewCommentBlocks";
 
-/**
- * The queue panel above a sandbox chat's composer (messages sent while Eva is
- * busy, waiting to run after the current turn), on the web and the phone.
- */
-
 /** The panel's heading when nothing but a running turn holds the queue. */
 export const QUEUE_PANEL_LABEL = "Queued";
 
@@ -23,7 +18,6 @@ export function queuePanelLabel({
   isExecuting: boolean;
   queuedCount: number;
   isSandboxActive: boolean;
-  /** Time left on a usage limit that holds queued messages ("2h 28m"); undefined when none is held. */
   heldResetIn?: string;
 }): string | undefined {
   if (isExecuting || queuedCount === 0) return undefined;

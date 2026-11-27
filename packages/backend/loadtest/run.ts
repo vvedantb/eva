@@ -37,7 +37,6 @@ const WARMUP = Number(flags.warmup);
 const ONLY = flags.only ? new Set(flags.only.split(",")) : null;
 const cases = CASES.filter((c) => !ONLY || ONLY.has(c.name));
 
-
 const logEntrySchema = z.object({
   kind: z.string(),
   udfType: z.string().nullish(),
@@ -156,7 +155,6 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
   process.stdout.write("\n");
   return [...results.values()];
 }
-
 
 async function main() {
   fs.mkdirSync(WORK_DIR, { recursive: true });

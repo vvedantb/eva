@@ -457,11 +457,6 @@ export const startExecute = authMutation({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    // In a project task waiting on its question, this message is the answer
-    // and starts the task's next run (`routePersonChatMessage`). The user row
-    // is already stored (the client sends addMessage first).
-    // In a coordinator chat, a message for teammates only is a quiet
-    // comment: stored, no turn ("posted").
     const routed = await routePersonChatMessage(ctx, {
       context,
       userId: ctx.userId,
@@ -486,9 +481,6 @@ export const startExecute = authMutation({
       }
     }
 
-    // A send that lands behind this chat's own running turn queues too: a
-    // burst of sends can all reach here before the composer sees the first
-    // turn, and starting each one ran two turns at once.
     const chatBusy =
       (await hasOpenChatTurn(ctx.db, chat._id)) ||
       chat.pendingTurn !== undefined;
@@ -540,21 +532,10 @@ export const prewarmDaemon = authMutation({
     const { chat, session } = context;
     const sandboxId = session.sandboxId;
     if (!sandboxId) return null;
-    // Never prewarm a stopped/stopping session. prewarmSessionDaemon execs on
-    // the sandbox, and on Vercel any exec lazily resumes a stopped VM (SDK
-    // withResume) — resurrecting a sandbox the user stopped, invisibly (the
-    // session status stays "closed"). A closed session keeps its sandboxId, so
-    // without this guard merely opening its page wakes the VM behind the
-    // user's back.
     if (isSandboxClosingStatus(session.status)) return null;
     if (chat.archived === true) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    // Match the turn path's launch options so the first real message does not
-    // immediately optsmismatch-kill this daemon (which races with
-    // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
-    // must go through `launchTraitsFromStored` — the same normalisation the
-    // composer applies — because the send path omits defaults.
     const credentialOwnerUserId = await sessionAccountHolder(
       ctx.db,
       session,
@@ -659,9 +640,6 @@ export const getDaemonPrewarmData = internalQuery({
         chat.providerAccountId,
       ),
       model: normalizedModel,
-      // Normalised here, not in the caller: the traits must be exactly what the
-      // composer sends (defaults omitted) or the prewarm's opts sig differs from
-      // the turn path's and kills the warm daemon.
       ...launchTraitsFromStored(normalizedModel, {
         reasoningLevel: chat.lastReasoningLevel,
         thinkingEnabled: chat.lastThinkingEnabled,
@@ -679,10 +657,8 @@ export const enqueueMessage = authMutation({
   args: {
     chatId: v.id("sessionChats"),
     message: v.string(),
-    /** Compact chat-display text when `message` is a rich agent prompt. */
     displayContent: v.optional(v.string()),
     ...turnSettingsArgs,
-    /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -727,7 +703,6 @@ export const enqueueMessage = authMutation({
  */
 export const addReply = authMutation({
   args: {
-    // A plain string: the chat renders optimistic rows under client-minted ids.
     rootId: v.string(),
     content: v.string(),
     ...turnSettingsArgs,
@@ -739,7 +714,6 @@ export const addReply = authMutation({
     const targetId = ctx.db.normalizeId("messages", args.rootId);
     const target = targetId ? await ctx.db.get(targetId) : null;
     if (!target) throw new Error("This message cannot take replies yet");
-    // A reply to a reply joins the same thread.
     const root =
       target.replyTo === undefined ? target : await ctx.db.get(target.replyTo);
     if (!root) throw new Error("Message not found");
@@ -789,7 +763,6 @@ export const addReply = authMutation({
         context,
         userId: ctx.userId,
         content: threadReplyPrompt(root, content),
-        // The queue panel shows the reply, not the whole thread prompt.
         displayContent: content,
         settings,
         replyTo: root._id,
@@ -817,7 +790,6 @@ export async function sendSessionChatMessage(
   },
 ): Promise<void> {
   const { chat } = params.context;
-  // A person's message reopens a coordinator chat an old phase-based close archived.
   const session = await reviveCoordinatorSession(ctx, params.context.session);
   await touchUserActivity(ctx, sessionActivityRef(session), {
     source: "chat",
@@ -828,8 +800,6 @@ export async function sendSessionChatMessage(
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
   });
-  // A project task waiting on its question takes this as the answer; a
-  // coordinator-chat message for teammates only is stored as a quiet comment.
   const routed = await routePersonChatMessage(ctx, {
     context: params.context,
     userId: params.userId,
@@ -838,10 +808,6 @@ export async function sendSessionChatMessage(
   });
   if (routed !== "continue") return;
   await enqueueChatMessage(ctx, params);
-  // Sends at once when the chat is idle. Otherwise the queue waits: behind
-  // the running turn, for a usage-limit reset, for a free parallel-chat
-  // slot, or for Eva to wake — a sleeping sandbox is woken here and its
-  // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
 }
 
@@ -947,8 +913,6 @@ export async function cancelChatExecution(
       if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
         await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
       } else if (session.sandboxId) {
-        // One-shot providers run under the sandbox-wide /tmp/run-design.pid,
-        // not a per-chat daemon pidfile, so only the process kill stops them.
         await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
           sandboxId: session.sandboxId,
           repoId: session.repoId,

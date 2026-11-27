@@ -7,8 +7,6 @@ import { api } from "@eva/backend";
 import { clientEnv } from "@/env/client";
 import { convexDeploymentUrl } from "@/lib/convexDeploymentUrl";
 
-// The proxy builds the query string, so `port=3000` arrives as text. Each
-// field falls back to empty so a bad link shows the error, not a crash.
 const searchSchema = z.object({
   sandbox: z.string().catch(""),
   repo: z.string().catch(""),
@@ -32,7 +30,6 @@ const convex = new ConvexHttpClient(
   convexDeploymentUrl(clientEnv.VITE_CONVEX_URL, window.location.origin),
 );
 
-/** Mints the grant and returns the URL to send the browser to. */
 async function mintGrantUrl(token: string): Promise<string> {
   const path = returnPath(search.return);
   if (path === null || !search.repo || !search.sandbox || !search.port) {

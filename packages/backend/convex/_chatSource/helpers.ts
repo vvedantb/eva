@@ -226,7 +226,6 @@ async function summariseSession(
   cache: RepoCache,
 ): Promise<ChatSourceSummary> {
   const session = await ctx.db.get(sessionId);
-  // An archived task or project still links; only a deleted session hides.
   if (!session || isEntityDeleted(session)) return null;
   return summarise(
     "session",

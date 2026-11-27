@@ -69,22 +69,16 @@ async function shouldQueue(
       q.eq("automationId", automation._id).eq("eventKey", eventKey),
     )
     .collect();
-  // A run still waiting out its debounce absorbs this webhook. One already
-  // claimed (`running`) does not: it may have fetched before this happened.
   if (sameKey.some((run) => run.status === "queued")) return false;
-  // One task per monitor per window, whatever became of the last one.
   if (event.kind === "production_alert") {
     const since = Date.now() - ALERT_DEDUPE_WINDOW_MS;
     return !sameKey.some((run) => run.startedAt >= since);
   }
-  // One task per issue, however often the label comes and goes, and whether
-  // or not the run that made it finished cleanly.
   if (event.kind === "issue_labeled") {
     return !sameKey.some(
       (run) => run.createdTaskId !== undefined || run.status === "running",
     );
   }
-  // The same commit failing twice (a re-run) is still one attempt.
   if (
     event.kind === "ci_failed" &&
     sameKey.some((run) => run.status === "running" || run.status === "success")
@@ -97,7 +91,6 @@ async function shouldQueue(
   if (chat === null) return false;
   if (event.kind === "ci_failed") {
     const runs = await runsForTarget(ctx.db, automation._id, event.prUrl);
-    // Attempt MAX + 1 is the one-off "stopping here" note, then silence.
     return countCiAttempts(runs) <= MAX_CI_FIX_ATTEMPTS;
   }
   return true;
@@ -161,10 +154,6 @@ export const dispatch = internalMutation({
   },
 });
 
-/**
- * Queues one automation's run for an event, unless dedupe says the event is
- * already covered. The flush action handles it after the event's debounce.
- */
 async function queueEventRun(
   ctx: MutationCtx,
   automation: Doc<"automations">,
@@ -191,8 +180,6 @@ async function queueEventRun(
     internal._automationEvents.flush.flush,
     { runId, event },
   );
-  // Backstop: a flush that dies mid-way must not leave the run queued,
-  // which would block this PR, issue or monitor for good.
   await ctx.scheduler.runAfter(
     debounce +
       (automationAction(automation) === "run"
@@ -231,8 +218,6 @@ export const receiveAlert = internalMutation({
     if (trigger.kind !== "event" || trigger.event !== "production_alert") {
       return "not_found";
     }
-    // Both sides are SHA-256 hex of the secret, so comparing them leaks
-    // nothing a timing attack could use.
     if (
       secretHash === null ||
       stored.alertSecretHash === undefined ||
@@ -240,8 +225,6 @@ export const receiveAlert = internalMutation({
     ) {
       return "unauthorized";
     }
-    // A switched-off automation still answers, so Axiom's test send passes;
-    // it simply does nothing.
     if (alert === null || !stored.enabled) return "ignored";
     const repo = await ctx.db.get(stored.repoId);
     if (repo === null) return "not_found";
@@ -305,8 +288,6 @@ export const settleEventRun = internalMutation({
     const run = await ctx.db.get(runId);
     if (!run) return null;
     if (isTerminalRunStatus(run.status)) {
-      // Expired or cancelled first: keep that outcome, but still advance the
-      // cursor so the next webhook does not redo this work.
       if (eventCursor !== undefined) await ctx.db.patch(runId, { eventCursor });
       return null;
     }
@@ -345,11 +326,8 @@ export const getFlushContext = internalQuery({
       runStartedAt: v.number(),
       chat: v.union(v.null(), prChatValidator),
       clerkUserId: v.union(v.null(), v.string()),
-      /** CI fix messages already sent since the PR was last green. */
       ciAttempts: v.number(),
-      /** GitHub time of the newest review comment already delivered. */
       feedbackCursor: v.union(v.null(), v.number()),
-      /** Another run for this PR is mid-flush; wait for its cursor. */
       siblingRunning: v.boolean(),
     }),
   ),

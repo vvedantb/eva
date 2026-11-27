@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { getCurrentUserId } from "./_auth/currentUser";
 
-/** Longest stack kept: Android Java stacks run to a few KB. */
 const MAX_STACK = 6_000;
 
 /**

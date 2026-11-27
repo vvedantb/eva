@@ -73,7 +73,6 @@ if (values["include-env"] && values["sandbox-env"]) {
   fail("Pass --include-env or --sandbox-env, not both.");
 }
 
-
 const appName = values.app ?? (appNames.length === 1 ? appNames[0] : undefined);
 if (appName === undefined) {
   fail(`Pass --app with one of: ${appNames.join(", ")}`);
@@ -85,7 +84,6 @@ const appDir = join(rootDir, APPS[appName]);
 if (!existsSync(appDir)) {
   fail(`App directory not found: ${appDir}`);
 }
-
 
 function readSourceKey() {
   if (values["deploy-key-file"] !== undefined) {
@@ -123,7 +121,6 @@ if (!/^(dev|prod):[^|]+$/.test(keyPrefix)) {
   );
 }
 const sourceName = keyPrefix.slice(keyPrefix.indexOf(":") + 1);
-
 
 function readJsonFile(path) {
   try {

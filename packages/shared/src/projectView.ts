@@ -80,16 +80,10 @@ export interface ProjectTaskRow {
   status: Doc<"agentTasks">["status"];
   prState?: Doc<"agentTasks">["prState"];
   approvedAt?: number;
-  /** A Triage approval handed it to the coordinator (`withCoordinator`). */
   handedToCoordinatorAt?: number;
   run?: Doc<"agentTasks">["run"];
   coordinatorRetries?: number;
-  /** A task in a repo the caller cannot access: only status fields are set. */
   locked?: boolean;
-  /**
-   * The server's facts for the task (`listByProject`): the usage limit and
-   * open ask the row alone does not carry.
-   */
   facts?: ProjectTaskFacts;
 }
 
@@ -153,7 +147,6 @@ export interface ProjectTaskView {
   displayStatus: ProjectTaskDisplayStatus;
   needsYou: NeedsYouReason | undefined;
   waitingForCoordinator: boolean;
-  /** Handed to the coordinator by a Triage approval; not started yet. */
   withCoordinator?: boolean;
 }
 
@@ -261,11 +254,8 @@ export interface SummarizableProjectTaskRow {
   phaseLabel?: string;
   prUrl?: string;
   prState?: Doc<"agentTasks">["prState"];
-  /** The open task the coordinator added this Triage item to. */
   mergedIntoTaskId?: string;
-  /** Archived on its own: listed under Archived (`projectTaskStatusSections`). */
   archivedAt?: number;
-  /** A multi-repo task's PRs, one per repo (`listByProject`). */
   repoPrs?: ReadonlyArray<{
     prUrl: string;
     prState: NonNullable<Doc<"agentTasks">["prState"]>;
@@ -280,7 +270,6 @@ export function prShortLabel(prUrl: string): string {
   return prUrl.split(/[?#]/)[0].split("/").filter(Boolean).pop() ?? prUrl;
 }
 
-/** The one reason a row shows, by its display status. */
 function projectTaskReason(
   row: SummarizableProjectTaskRow,
   view: ProjectTaskView,
@@ -337,13 +326,9 @@ export function projectTaskSummaryLine(
   extra: {
     notes: ProjectTaskNotes | undefined;
     failed: boolean;
-    /** Who added a Triage task, by first name, once known. */
     authorName: string | undefined;
-    /** Set only when the task's repo differs from the project's home repo. */
     otherRepoLabel: string | undefined;
-    /** The task number of a task, by id: names a merged item's target. */
     numIdOf?: (taskId: string) => number | undefined;
-    /** The task is open as a chat tab beside Eva (web). */
     open?: boolean;
   },
 ): string {
@@ -450,7 +435,6 @@ export interface SectionableProjectTaskRow extends ProjectTaskRow {
   lastRunStartedAt?: number;
 }
 
-/** A task archived on its own: Archived, waiting for no one. */
 function archivedTaskView(row: ProjectTaskRow): ProjectTaskView {
   return {
     ...projectTaskView(row, false),

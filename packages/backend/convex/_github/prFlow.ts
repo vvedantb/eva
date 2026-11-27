@@ -58,7 +58,6 @@ export const createSessionPr = action({
     ]);
     let prUrl = sessionRepoPullRequest(sessionPrs, undefined)?.prUrl;
     if (prUrl === undefined) {
-      // Recovery for sessions that pushed commits before auto-draft existed.
       const created = await ctx.runAction(
         internal.github.createDraftSessionPr,
         {

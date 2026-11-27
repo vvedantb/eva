@@ -10,7 +10,6 @@ import { QuoteCard } from "@/chat/Quotes";
 import type { ComposerPick } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
-/** The web `MENTION_CHIP_CLASS`: the fixed mention blue, `text-xs font-medium`, `rounded-full`. */
 function useChipColors() {
   const theme = EVA_THEME[useScheme()];
   return { background: theme.mention, self: theme.mentionSelf, foreground: theme.mentionForeground };
@@ -18,7 +17,6 @@ function useChipColors() {
 
 const CHIP_TEXT = { fontSize: 12, lineHeight: 16, fontWeight: "500" } as const;
 
-/** A composer chip is tappable, so its label is `text-sm` (14 / 20), the phone floor, not the web `text-xs`. */
 const TAPPABLE_CHIP_TEXT = { ...CHIP_TEXT, fontSize: 14, lineHeight: 20 } as const;
 
 function chipText(kind: MentionChipKind, label: string): string {
@@ -70,7 +68,6 @@ export function MessageMarkdown({ content }: { content: string }) {
             style={{
               ...CHIP_TEXT,
               color: colors.foreground,
-              // A mention of the reader is a stronger fill, as the web.
               backgroundColor: chip.kind === "at" && chip.id === currentUserId ? colors.self : colors.background,
               borderRadius: 999,
             }}

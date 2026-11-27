@@ -3,14 +3,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { resolveUserDisplayFirstName } from "./defaults";
 import { listTeammateUserIds } from "./sharing";
 
-/**
- * Building the list of accounts a user may run on. Lives here rather than in
- * `userProviderAccounts.ts` because the plan-usage query needs exactly the same
- * list — a popover that listed a different set of credentials from the picker
- * would be showing headroom for accounts the user cannot spend.
- */
-
-/** The masked stand-in for a credential value. Never the real one. */
 const MASKED_CREDENTIAL_VALUE = "••••••";
 
 /**
@@ -33,7 +25,6 @@ export async function listAccountsFor(
       .collect(),
   ]);
   const displayName = ownName ?? "Personal";
-  // Teammates repeat across rows, so resolve each name once.
   const usedByIds = [
     ...new Set(
       rows.flatMap((row) =>

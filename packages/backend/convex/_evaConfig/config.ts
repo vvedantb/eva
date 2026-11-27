@@ -141,7 +141,6 @@ const mcpFileTextSchema = jsonText(
 export type EvaMcpServerSummary = {
   name: string;
   kind: "http" | "stdio";
-  /** URL for http servers, the command line for stdio servers. */
   target: string;
 };
 

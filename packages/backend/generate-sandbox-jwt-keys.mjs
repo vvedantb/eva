@@ -1,6 +1,5 @@
 import { createEs256KeyPair } from "./scripts/sandbox-env.mjs";
 
-
 const { privateJwk, publicJwk } = await createEs256KeyPair("sandbox-1");
 
 console.log("");

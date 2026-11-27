@@ -4,14 +4,8 @@ import { internalQuery } from "./_generated/server";
 import { assertMessageParentAccess, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 
-/** The tail says what comes next; older turns only add cost. */
 const PREDICTION_CONTEXT_MESSAGE_LIMIT = 30;
 
-/**
- * True when the agent's turn is over and the chat waits on the user. A running,
- * failed or question-asking turn gets no prediction: the next step is not a
- * free-form message there.
- */
 function waitsOnUser(message: Doc<"messages">): boolean {
   return (
     message.role === "assistant" &&

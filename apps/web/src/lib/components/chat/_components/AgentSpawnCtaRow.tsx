@@ -21,7 +21,6 @@ export interface AgentSpawnSummary {
   live: boolean;
 }
 
-/** Counts a roster into the flat shape the row renders. */
 function summariseSubagents(
   roster: ReadonlyArray<SubagentView>,
 ): AgentSpawnSummary {
@@ -89,7 +88,6 @@ export function AgentSpawnCtaRow({
   const lead = live
     ? `Kicked off ${count} subagent${plural}`
     : `Ran ${count} subagent${plural}`;
-  // One steady in-flight presentation: only settled states differentiate.
   const status = live
     ? working > 0
       ? `${working} working`
@@ -97,7 +95,6 @@ export function AgentSpawnCtaRow({
     : failed > 0
       ? `${failed} failed`
       : "completed";
-  // Eva has no `info` colour token, so a live batch borrows `primary`.
   const dotClass = live
     ? "bg-primary"
     : failed > 0

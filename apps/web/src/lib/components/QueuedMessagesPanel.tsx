@@ -47,15 +47,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-/** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
 interface QueuedMessageItem<TId extends string> {
   id: TId;
   content: string;
   model?: string;
   reasoningLevel?: string;
-  /** Who queued it: a shared chat's queue mixes several teammates' prompts. */
   userId?: Id<"users">;
-  /** Steer pressed: the running agent is taking this message into its turn. */
   steering?: boolean;
 }
 
@@ -65,13 +62,10 @@ interface QueuedMessagesPanelProps<TId extends string> {
   renderContent?: (content: string) => React.ReactNode;
   onEdit?: (id: TId, content: string) => Promise<void>;
   onDelete?: (id: TId) => Promise<void>;
-  /** When provided, items become reorderable; receives the new top-to-bottom id order. */
   onReorder?: (orderedIds: TId[]) => Promise<void>;
-  /** When provided, each item gets a Steer button: send it now and redirect the agent. */
   onSteer?: (id: TId) => Promise<void>;
 }
 
-/** Tooltip copy for a queued row's model + effort snapshot. */
 function queueModelTooltip(
   model: string,
   reasoningLevel: string | undefined,
@@ -82,7 +76,6 @@ function queueModelTooltip(
   return `${modelLabel} · ${getReasoningLevelLabel(reasoningLevel)}`;
 }
 
-/** Left-rail drag handle: provider icon (with model/effort tooltip) or legacy dot. */
 function QueueRowHandle({
   item,
   draggable,
@@ -95,7 +88,6 @@ function QueueRowHandle({
   listeners: ReturnType<typeof useSortable>["listeners"];
 }) {
   const dragProps = draggable ? { ...attributes, ...listeners } : {};
-  // Share one line-box with the text (`leading-4` / 16px) so the mark sits centered.
   const buttonClass = draggable
     ? "inline-flex size-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm border-0 bg-transparent p-0"
     : "inline-flex size-4 shrink-0 items-center justify-center border-0 bg-transparent p-0";
@@ -134,7 +126,6 @@ function QueueRowHandle({
   );
 }
 
-/** A single sortable queue row (provider handle + 2-line text + actions). */
 function SortableQueuedItem<TId extends string>({
   item,
   index,
@@ -175,9 +166,6 @@ function SortableQueuedItem<TId extends string>({
       className={isDragging ? "opacity-50" : undefined}
     >
       <div className="flex items-center gap-2.5">
-        {/* Author then model, reading left to right as "who asked, on what".
-            Fixed box because `UserInitials` renders nothing until the profile
-            query resolves, which would otherwise shift the row. */}
         {item.userId ? (
           <span className="flex size-4 shrink-0 items-center justify-center">
             <UserInitials userId={item.userId} hideLastSeen />
@@ -197,8 +185,6 @@ function SortableQueuedItem<TId extends string>({
             Steering…
           </span>
         ) : (
-          /* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
-            touch by itself; only the tap target still needs growing here. */
           <QueueItemActions className="items-center max-sm:[&>button]:size-10">
             {onSteerClick ? (
               <QueueItemAction
@@ -288,9 +274,6 @@ export function QueuedMessagesPanel<TId extends string>({
     setDraftContent(editingItem?.content ?? "");
   }
 
-  // A lone distance-armed `PointerSensor` competes with the vertical scroll the
-  // finger is also describing, so the browser claims the gesture and reordering
-  // a queued message by touch never starts. The house hook arms touch on a hold.
   const sensors = useDragSensors({ sortable: true });
 
   const draggable = Boolean(onReorder) && items.length > 1;
@@ -333,9 +316,6 @@ export function QueuedMessagesPanel<TId extends string>({
             exit={{ opacity: 0, y: 8 }}
             transition={tokenTransition.base}
           >
-            {/* Flush above the composer: fills the dock column in ComposerStash,
-                which owns the inset, with a square bottom so it blends into the
-                input card (mirrors underCardLeading below). */}
             <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
               <QueueSection defaultOpen>
                 <QueueSectionTrigger>
@@ -405,10 +385,6 @@ export function QueuedMessagesPanel<TId extends string>({
           <DialogHeader>
             <DialogTitle>Edit queued message</DialogTitle>
           </DialogHeader>
-          {/* A queued message is usually a whole follow-up prompt, so show a
-              dozen lines before scrolling. The dialog is a flex column under
-              max-h-[90vh], so a short viewport shrinks this rather than pushing
-              the buttons off screen. */}
           <Textarea
             value={draftContent}
             onChange={(event) => setDraftContent(event.target.value)}

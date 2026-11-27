@@ -384,8 +384,6 @@ export const runBackgroundCommands = internalAction({
     if (!cached) return { ran: false, commandCount: 0, errors: [] };
 
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Background daemons run on every boot, so the checked-out branch's own
-    // `.eva/config.json` entry wins over the cached default-branch commands.
     const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
     const commands = branch?.background ?? cached.backgroundCommands;
 
@@ -603,7 +601,6 @@ export const watchConvexReadiness = internalAction({
       throw e;
     }
     const logPaths = convexIndexes.map((i) => `/tmp/bg-${i}.log`);
-    // One short exec per poll: ready only when every Convex log has the line.
     const probeCmd = [
       "ok=yes",
       ...logPaths.map(
@@ -636,7 +633,6 @@ export const watchConvexReadiness = internalAction({
           );
           return null;
         }
-        // Transient exec failures (resume races, stream closes) — keep polling.
         console.log(
           `[sandbox] watchConvexReadiness: probe failed, retrying: ${errorMessage(e, "probe failed")}`,
         );
@@ -661,7 +657,6 @@ export const watchConvexReadiness = internalAction({
         10,
       );
     } catch {
-      // Tail is best-effort context only.
     }
     const detail =
       `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${redactSecrets(logTail)}`.slice(
@@ -705,20 +700,6 @@ interface PreviewUrlRequest {
   repoId: Id<"githubRepos">;
 }
 
-/**
- * Builds a signed preview URL for a sandbox port, optionally checking
- * readiness. Access is the caller's job: the public action below gates on the
- * signed-in identity plus the sandbox↔repo binding, and the MCP path resolves
- * the chat as its user first, so the sandbox id it passes came off a document
- * that user can already read. `subject` is who the short-lived grant is minted
- * for.
- *
- * `customTabPort` serves a user-defined tab (e.g. Supabase Studio on 54323).
- * Vercel exposes only four ports and the proxy owns the public one, so tabs do
- * not get their own proxy: `port` stays the app's Preview port (same proxy
- * target, no clobbering) and the URL points at the proxy's `/__tab/<port>/`
- * prefix, which forwards to that in-sandbox port.
- */
 async function buildPreviewUrl(
   ctx: ActionCtx,
   args: PreviewUrlRequest,
@@ -726,7 +707,6 @@ async function buildPreviewUrl(
 ): Promise<{ url: string; port: number; ready: boolean }> {
   const customTabPort = args.customTabPort;
   if (customTabPort !== undefined) {
-    // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
     const reserved =
       customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
       customTabPort === DESKTOP_PORT ||
@@ -744,13 +724,8 @@ async function buildPreviewUrl(
   }
   const responsePort = customTabPort ?? args.port;
 
-  // getSandboxHandle resolves (and validates) the repo's Vercel credentials,
-  // throwing before it touches the sandbox if they are missing.
   const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-  // Services listen on internal ports and the auth proxy owns the exposed
-  // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
-  // the upstream service port for readiness, not the proxy port.
   const upstreamPort =
     args.port === DESKTOP_PORT
       ? VERCEL_DESKTOP_INTERNAL_PORT
@@ -760,11 +735,6 @@ async function buildPreviewUrl(
 
   let ready = true;
   if (args.checkReady) {
-    // Ordering rules live in `pollPreviewReadiness`; this only binds them to
-    // this sandbox. Background daemons (e.g. `npx convex dev`) only relaunch
-    // on sandbox start/resume, so a dead one leaves Preview loading a
-    // frontend with a dead backend until the heal restarts it.
-    // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
     const poll = await pollPreviewReadiness(
       {
         sandboxRunning: handle.state === "running",
@@ -783,7 +753,6 @@ async function buildPreviewUrl(
             onlyRestartDead: true,
           });
         },
-        // A custom tab's readiness is its own port, not the app's dev server.
         probeReady: () =>
           probePreviewReady(handle, customTabPort ?? upstreamPort),
         scheduleRecovery: async () => {
@@ -808,9 +777,6 @@ async function buildPreviewUrl(
     }
     ready = poll.ready;
   } else if (customTabPort === undefined && handle.state === "running") {
-    // No readiness wait (the `/p` link's fast path), so nothing would notice a
-    // dead dev server. Queue the same recovery the readiness poll uses; it
-    // does nothing when the port already answers, and never delays the link.
     await ctx.scheduler.runAfter(
       0,
       internal.sandbox.ensureSessionPreviewServices,
@@ -822,22 +788,10 @@ async function buildPreviewUrl(
     );
   }
 
-  // Always front the service with the in-sandbox auth proxy so open-in-new-tab
-  // is gated the same way for Preview, Computer, and Editor.
-  //
-  // Vercel exposes a fixed 4-port set. Map:
-  //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
-  //   editor  → proxy on 8080  (upstream 18080)
-  //   desktop → proxy on 6080  (upstream 16080)
   const previewPublicJwk = getPreviewGrantPublicJwk();
   const fixedVercelProxyPort = previewProxyPort(args.port);
-  // Public route port: on Vercel app/dev previews this is always 3000, never
-  // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
   let previewPort = fixedVercelProxyPort;
-  // Same upstream mapping used for the readiness probe above.
   const proxyTargetPort = upstreamPort;
-  // The proxy fronts the app, so a custom tab gates it on the sandbox being
-  // up rather than on `ready` (which describes the tab's own port).
   const proxyUsable =
     customTabPort === undefined ? ready : handle.state === "running";
   if (proxyUsable) {
@@ -851,7 +805,6 @@ async function buildPreviewUrl(
           repoId: args.repoId,
           webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
-          // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort,
           sessionSecret: previewSessionSecret(
             args.sandboxId,
@@ -866,10 +819,6 @@ async function buildPreviewUrl(
       console.warn(
         `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
       );
-      // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
-      // If the reserved proxy port fails to start while a preview grant
-      // key is configured, silently falling back to the unproxied service
-      // port would serve with no auth gate at all. Fail loudly instead.
       if (previewPublicJwk) {
         throw new Error(
           `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
@@ -882,21 +831,15 @@ async function buildPreviewUrl(
   const parsedUrl = new URL(signedPreview.url);
   parsedUrl.protocol = "https:";
 
-  // Append a fresh short-lived grant so the in-app iframe (and the authed
-  // user's "open in new tab") loads without a login round-trip. The proxy
-  // exchanges it for a session cookie on first load. Only when gating is
-  // configured — otherwise the URL stays a plain proxied URL.
   if (previewPublicJwk && proxyUsable) {
     const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
-      // Grant must match AUTH_PORT (public proxy on Vercel app previews).
       port: fixedVercelProxyPort,
       sub: subject,
     });
     parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
   }
 
-  // Custom tabs are served by the same proxy under its per-port prefix.
   if (customTabPort !== undefined) {
     parsedUrl.pathname = `${PREVIEW_TAB_PREFIX}/${customTabPort}/`;
   }
@@ -915,9 +858,6 @@ export const getPreviewUrl = action({
       throw new Error("Not authenticated");
     }
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    // A Preview/custom-tab open is a human interaction for the idle-pause
-    // sweep. Readiness polls repeat every 3s, but the touch is throttled
-    // server-side so the steady state is read-only.
     if (args.checkReady || args.navigationSync) {
       await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
         sandboxId: args.sandboxId,
@@ -944,7 +884,6 @@ export const previewUrlForAuthorizedSandbox = internalAction({
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
 
-/** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
   return (
     isSandboxNetworkIssue(message) ||
@@ -1142,10 +1081,6 @@ export const fetchBaseBranch = internalAction({
       },
     );
     if (!result.fetched) {
-      // Deleted `eva/automation-*` refs and never-pushed task branches are
-      // expected. Returning here keeps Convex from recording status=failure
-      // plus an Uncaught SandboxCommandFailedError. Checkout/setup already
-      // falls back to local snapshot refs via resolveBaseTarget.
       console.warn(
         `[sandbox] fetchBaseBranch: remote ref ${args.baseBranch} is gone; continuing with local snapshot refs`,
       );
@@ -1195,8 +1130,6 @@ export const pushSandboxBranch = internalAction({
     branchName: v.string(),
     repoId: v.id("githubRepos"),
   },
-  // `pushed` records whether this action moved the ref. `published` also
-  // recognises a matching remote branch written by the pre-completion callback.
   returns: v.object({ pushed: v.boolean(), published: v.boolean() }),
   handler: async (
     ctx,
@@ -1215,8 +1148,6 @@ export const pushSandboxBranch = internalAction({
       console.error(
         `[sandbox][execution] pushSandboxBranch failed sandbox=${args.sandboxId} repo=${args.repoOwner}/${args.repoName} branch=${args.branchName}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      // Rethrow so callers can surface the failure and preserve the sandbox for
-      // recovery. Swallowing here made every caller's error handling dead code.
       throw error;
     }
   },
@@ -1282,7 +1213,6 @@ export const commitAndPushSandbox = action({
         target.repoName,
       );
     } catch (error) {
-      // Production redacts plain Error messages; the reason is the point here.
       throw new ConvexError(errorMessage(error, "Couldn't push the branch"));
     }
     await ctx.runMutation(internal.sandboxGit.setSandboxGitStateInternal, {

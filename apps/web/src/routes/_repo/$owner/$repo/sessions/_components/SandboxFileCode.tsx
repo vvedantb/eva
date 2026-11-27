@@ -7,13 +7,8 @@ import { DIFF_THEMES } from "@/lib/components/sandbox/diffWorkerPool";
 
 /** Everything both the read-only and the editable surface need. */
 export interface SandboxFileSurfaceProps {
-  /** Repo-relative path — `@pierre/diffs` infers the language from it. */
   name: string;
   contents: string;
-  /**
-   * Highlight cache identity. Must change whenever `contents` does, or the
-   * component re-renders the previous file's tokens.
-   */
   cacheKey: string;
   wrap: boolean;
   resolvedTheme: ThemeTypes;
@@ -33,7 +28,6 @@ export function sandboxFileOptions({
   "wrap" | "resolvedTheme"
 >): FileOptions<undefined, undefined> {
   return {
-    // The panel header owns the path, the toolbar and the edit controls.
     disableFileHeader: true,
     theme: DIFF_THEMES,
     themeType: resolvedTheme,

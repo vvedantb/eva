@@ -37,28 +37,13 @@ import type {
 } from "./opencodeSdkTypes.js";
 
 const SDK_PACKAGE = "@opencode-ai/sdk";
-/**
- * Kept in lockstep with OPENCODE_VERSION in `convex/snapshotActions.ts`: the
- * SDK is a generated client for one server release, and npm has shipped a
- * launcher with no matching platform package before (1.18.17).
- */
 const SDK_VERSION = "1.18.16";
-/** ESM entry for the client half only — `dist/index.js` also pulls in the
- * server spawner (and its cross-spawn dep), which we never use. */
 const SDK_ENTRY_RELPATH = "/dist/client.js";
 
-/** Poll the server for turn completion once the event stream goes this quiet. */
 const IDLE_PROBE_AFTER_MS = 60_000;
-/** Minimum spacing between status polls while the stream stays quiet. */
 const IDLE_PROBE_INTERVAL_MS = 15_000;
-/** Consecutive idle status polls required before declaring the turn over. */
 const IDLE_PROBE_STREAK = 2;
 
-/**
- * Imports the opencode SDK version this adapter was generated against. The
- * client is generated for one server release, so a drifted global install is
- * worse than no install: see resolvePinnedSdkEntry.
- */
 async function loadOpencodeSdk(): Promise<OpencodeSdkModule> {
   const mod: OpencodeSdkModule = await import(
     resolvePinnedSdkEntry({
@@ -96,9 +81,7 @@ export function splitOpencodeModel(raw: string): {
  * JSONL the CLI used to print.
  */
 export type PartEmitState = {
-  /** Text/reasoning characters already forwarded, per part id. */
   emittedTextLength: Map<string, number>;
-  /** Last tool status forwarded, per part id. */
   emittedToolStatus: Map<string, string>;
 };
 
@@ -124,8 +107,6 @@ export function opencodePartToCliLine(
   state: PartEmitState,
 ): string | null {
   if (part.type === "text" || part.type === "reasoning") {
-    // Text and reasoning parts are cumulative on the wire while the canonical
-    // layer appends; forward only what was added since the last update.
     const emitted = state.emittedTextLength.get(part.id) ?? 0;
     if (part.text.length <= emitted) return null;
     const delta = part.text.slice(emitted);
@@ -137,8 +118,6 @@ export function opencodePartToCliLine(
     });
   }
   if (part.type === "tool") {
-    // A tool part is re-sent on every mutation; emit once per status so the
-    // parser pushes one step and completes it exactly once.
     if (state.emittedToolStatus.get(part.id) === part.state.status) return null;
     state.emittedToolStatus.set(part.id, part.state.status);
     return JSON.stringify({
@@ -211,7 +190,6 @@ export function readTurnUsage(info: OpencodeAssistantMessage): TurnUsage {
   };
 }
 
-/** Concatenated assistant prose — the turn's user-visible result text. */
 function readMessageText(parts: OpencodePart[]): string {
   let text = "";
   for (const part of parts) {
@@ -220,7 +198,6 @@ function readMessageText(parts: OpencodePart[]): string {
   return text;
 }
 
-/** Describes a non-2xx envelope using whatever detail the server returned. */
 function resultFailure<TData>(result: OpencodeResult<TData>): string {
   return (
     opencodeErrorMessage(result.error) ||
@@ -253,8 +230,6 @@ export async function ensureEvaMcpServers(
       return;
     }
     const known = status.data;
-    // Each add is a full remote connect; in parallel eva + linear measured
-    // ~1.5s instead of ~2.5s serially.
     await Promise.all(
       configured
         .filter(([name]) => !known[name])
@@ -297,7 +272,6 @@ export async function ensureEvaMcpServers(
   }
 }
 
-/** Turns a non-2xx envelope into a thrown error with the server's message. */
 function requireData<TData>(
   result: OpencodeResult<TData>,
   what: string,
@@ -336,11 +310,6 @@ export async function runOpencodeSdkAttempt(
   }));
 
   let attemptOutput = "";
-  // Two clocks, deliberately: `lastEventAt` counts real stream silence and
-  // drives the idle probe, while `watchdogClock` is also refreshed by in-flight
-  // tools so a long silent tool is never killed. Sharing one would make the
-  // tool exemption suppress the very probe that recovers a dropped stream
-  // during that tool.
   let lastEventAt = Date.now();
   let watchdogClock = Date.now();
   let timedOutForNoOutput = false;
@@ -349,21 +318,14 @@ export async function runOpencodeSdkAttempt(
   let resultIsError = false;
   let attemptErrorMessage = "";
 
-  // The SDK import (~40ms) overlaps the health probe or a cold server start.
   const [sdk, baseUrl] = await Promise.all([
     loadOpencodeSdk(),
     ensureOpencodeServer(),
   ]);
   const client: OpencodeClientLike = sdk.createOpencodeClient({
     baseUrl,
-    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
-    // Opencode can edit outside cwd in a multi-repo session; if not, set
-    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
-    // rebuild needed.
     directory: AGENT_CWD,
   });
-  // Registration overlaps session setup and the event subscription; it only
-  // has to land before the prompt. Never throws (best-effort by design).
   const mcpRegistered = ensureEvaMcpServers(client);
 
   const persistSessionId = (sessionId: string): void => {
@@ -389,10 +351,6 @@ export async function runOpencodeSdkAttempt(
     return created.id;
   };
 
-  // Resume self-heal (the CLI passed `-s <id>` blind): a session id from before
-  // this migration, or one lost with a wiped runtime home, is unknown to the
-  // server. Degrade to a single fresh session — one context reset beats every
-  // future turn in that chat failing.
   let sessionId = "";
   if (sessionMode.mode === "resume" && sessionMode.sessionId) {
     const existing = await client.session.get({
@@ -450,23 +408,10 @@ export async function runOpencodeSdkAttempt(
 
   const abortTurn = (): void => {
     client.session.abort({ path: { id: sessionId } }).catch(() => {
-      /* session already finished */
     });
     markTerminal();
   };
 
-  /**
-   * Recovery for events lost while the SSE connection was down. undici drops a
-   * response body that goes 300s without bytes, so a long silent tool can end
-   * the stream mid-turn; the SDK's SSE client reconnects within seconds, but
-   * the server does not replay what was missed. If it reports the session idle
-   * while we are still waiting, the turn really is over.
-   *
-   * Gated on having seen at least one event for this session: before the first
-   * one we cannot distinguish "the server has not marked the session busy yet"
-   * from "the turn finished", and concluding the latter would truncate a turn
-   * whose model is simply slow to first token.
-   */
   const probeSessionIdle = async (): Promise<void> => {
     if (idleProbeInFlight || terminalReached || !sawSessionEvent) return;
     idleProbeInFlight = true;
@@ -487,7 +432,6 @@ export async function runOpencodeSdkAttempt(
         markTerminal();
       }
     } catch {
-      /* transient probe failure — the watchdog remains the backstop */
     } finally {
       idleProbeInFlight = false;
     }
@@ -495,9 +439,6 @@ export async function runOpencodeSdkAttempt(
 
   const healthTimer = setInterval(() => {
     const now = Date.now();
-    // The turn is settled but the interval outlives it until `finally` clears
-    // it — the final message fetch still runs in between, and firing a timeout
-    // there would flip a successful turn to a failure.
     if (terminalReached) return;
     if (S.fatalHeartbeatErrorMessage) {
       attemptErrorMessage = S.fatalHeartbeatErrorMessage;
@@ -510,10 +451,6 @@ export async function runOpencodeSdkAttempt(
       abortTurn();
       return;
     }
-    // No events arrive between a tool's running and completed updates, so a
-    // long silent tool (10-minute bash, subagent run) is indistinguishable from
-    // a hang by event silence alone: while a tool is in flight only the hard
-    // runtime cap applies.
     if (S.inFlightToolUses > 0) {
       watchdogClock = now;
     }
@@ -564,18 +501,11 @@ export async function runOpencodeSdkAttempt(
   };
 
   try {
-    // Subscribe before prompting: the server has no event replay, so a
-    // subscription opened after the prompt loses the turn's opening events.
     const events = await client.event.subscribe({ signal: streamAbort.signal });
     const consumed = consumeEvents(events.stream);
     consumed.catch(() => {
-      /* surfaced by the terminal race below */
     });
 
-    // promptAsync answers 204 with no body, so acceptance is the absence of an
-    // error rather than the presence of data. Without this check a rejected
-    // prompt (bad model id, deleted session) would silently wait for events
-    // that never come.
     await mcpRegistered;
     const accepted = await client.session.promptAsync({
       path: { id: sessionId },
@@ -589,18 +519,12 @@ export async function runOpencodeSdkAttempt(
         "opencode session.promptAsync failed: " + resultFailure(accepted),
       );
     }
-    // Both clocks start from prompt acceptance, not from server-manager setup:
-    // a cold `opencode serve` start must not eat into the turn's silence budget.
     lastEventAt = Date.now();
     watchdogClock = lastEventAt;
 
     await Promise.race([terminal, consumed]);
     markTerminal();
 
-    // Authoritative final state, independent of anything an SSE reconnect
-    // dropped: re-read the settled assistant message, replay parts the stream
-    // never delivered (the emit dedupe keeps already-sent ones out), and take
-    // usage and result text from it.
     const finalMessage = assistantMessageId
       ? await client.session.message({
           path: { id: sessionId, messageID: assistantMessageId },

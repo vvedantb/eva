@@ -31,7 +31,6 @@ interface SandboxFileTreeProps {
   isRefreshing: boolean;
   onRefresh: () => void;
   onSelectFile: (relPath: string) => void;
-  /** Repo root folder name shown in the toolbar; falls back to "Files". */
   rootLabel?: string;
   /** Which side of the viewer this tree currently sits on. */
   side: "left" | "right";
@@ -39,22 +38,14 @@ interface SandboxFileTreeProps {
   onToggleSide: () => void;
 }
 
-/** Shared so the four toolbar icon buttons cannot drift apart. */
 const TOOLBAR_BUTTON_CLASS =
   "max-sm:hit-target size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground";
 
-/**
- * Every ancestor directory of `paths` as canonical Pierre directory IDs
- * (trailing `/`). `@pierre/trees` exposes no bulk expand/collapse, and the
- * model can only enumerate *visible* rows, so the toolbar toggle derives the
- * full directory set from the file list instead.
- */
 function collectDirectoryPaths(paths: string[]): string[] {
   const directories = new Set<string>();
   for (const path of paths) {
     const segments = path.split("/");
     let prefix = "";
-    // The last segment is the file itself, so stop one short.
     for (const segment of segments.slice(0, -1)) {
       prefix += `${segment}/`;
       directories.add(prefix);
@@ -81,8 +72,6 @@ export function SandboxFileTree({
   onToggleSide,
 }: SandboxFileTreeProps) {
   const { resolvedTheme } = useThemeMode();
-  // Mirrors the toggle's own actions only: `initialExpansion: 1` means the
-  // tree starts shallow, so "expand all" is the first available action.
   const [expanded, setExpanded] = useState(false);
 
   const { model } = useFileTree({
@@ -96,15 +85,12 @@ export function SandboxFileTree({
     initialSelectedPaths: selectedPath ? [selectedPath] : [],
     onSelectionChange: (selectedPaths) => {
       const path = selectedPaths[0];
-      // Pierre directory IDs always end with `/`; list is files-only.
       if (path && !path.endsWith("/")) {
         onSelectFile(path);
       }
     },
   });
 
-  // Keep highlight + scroll in sync when `?file=` changes while mounted
-  // (chat chip). Re-setting the same path is a nuqs no-op — no loop.
   /* eslint-disable no-effect/no-event-handler --
      Drives the tree library imperatively (select + scroll) when `?file=`
      changes, including from a chat chip in another subtree. */
@@ -123,8 +109,6 @@ export function SandboxFileTree({
     for (const directoryPath of collectDirectoryPaths(paths)) {
       const item = model.getItem(directoryPath);
       if (!item) continue;
-      // `in` narrows the handle union — only directory handles can expand.
-      // Flattened directory chains have no own handle and are skipped above.
       if (!("expand" in item)) continue;
       if (next) {
         item.expand();
@@ -135,7 +119,6 @@ export function SandboxFileTree({
     setExpanded(next);
   };
 
-  // The button names where the tree is going, not where it is.
   const moveSideLabel =
     side === "left"
       ? "Move file list to the right"

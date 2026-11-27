@@ -42,9 +42,7 @@ type RunDoc = NonNullable<
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
-  /** The task's chat, once it exists: the header menu's Recap chat. */
   chatId?: Id<"sessionChats">;
-  /** Main run or chat turn: `useTaskAgentActive`. */
   isAgentActive: boolean;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
@@ -58,8 +56,7 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
-  /** The task's sandbox checkout (a quick task's lives on its session). */
-  sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
+  sandbox:Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
@@ -76,8 +73,6 @@ const TASK_FOOTER_LAYOUT = {
     iconSize: 16,
     root: "flex shrink-0 items-center gap-1.5 sm:gap-2",
     row: "flex shrink-0 items-center gap-1.5 sm:gap-2",
-    // The chat header track, as on session and project headers; Run stays
-    // outside it as the filled primary action.
     actions: CHAT_HEADER_ACTIONS_CLASS,
   },
   footer: {
@@ -98,8 +93,6 @@ const TASK_FOOTER_LAYOUT = {
   }
 >;
 
-// `todo` only offers a first run; once it has run, the sandbox toggle takes
-// its place (`canStartSandbox` covers that case).
 function getShowRunButton({
   task,
   status,

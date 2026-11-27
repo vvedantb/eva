@@ -41,15 +41,8 @@ import {
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
 
-/**
- * Past this many tabs the inactive mobile labels collapse to icon-only (label
- * moves to a tooltip). Desktop is icon-only until the reader turns labels on.
- */
 const MAX_LABELLED_TABS = 6;
 
-// Editor and Computer are appended by `buildSandboxTabDescriptors` when the
-// surface enables them. Browser is first-class (sessions) for watching agent
-// Chrome.
 const allTabs: ReadonlyArray<SandboxCommandTab> = [
   {
     value: "preview",
@@ -62,41 +55,25 @@ const allTabs: ReadonlyArray<SandboxCommandTab> = [
 ];
 
 interface SandboxTabBarProps {
-  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
-  /** Absent where the sandbox runs no dev server (a project coordinator). */
   onNewPreview?: () => void;
   newPreviewDisabled?: boolean;
   showPrdTab?: boolean;
-  /** When true, shows a content indicator on the Plan tab. */
   hasPrdContent?: boolean;
   showDesignsTab?: boolean;
-  /** When true, shows a content indicator on the Designs tab. */
   hasDesignsContent?: boolean;
-  /** Shows the Artifacts tab (session / task / project sandbox chats). */
   showArtifactsTab?: boolean;
-  /** Artifacts in this chat — badged on the tab. Undefined while loading. */
   artifactCount?: number;
-  /** Shows the Documents tab (session / task / project sandbox chats). */
   showDocumentsTab?: boolean;
-  /** Documents in this chat — badged on the tab. Undefined while loading. */
   documentCount?: number;
-  /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
-  /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
   showAgentsTab?: boolean;
-  /** True while any sub-agent is running — pulses the Agents tab dot. */
   hasRunningAgents?: boolean;
-  /** Subset of base tabs to render. Defaults to all four. */
   enabledTabs?: ReadonlyArray<SandboxTab>;
-  /** User-defined tabs for this app; expected pre-filtered to enabled ones. */
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
-  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
   leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
-  /** When set (and fresh), shows a pulse on the Browser tab. */
   agentBrowsingAt?: number;
-  /** When false, view hotkeys are inert (inactive cached session shells). */
   hotkeysEnabled?: boolean;
   /**
    * Extra classes on the bar itself. Sessions pass the chat-header padding so
