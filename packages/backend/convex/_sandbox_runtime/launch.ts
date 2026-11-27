@@ -359,11 +359,7 @@ function ensureProviderCliAvailable(
  * providerPrep gate until the provider SIGTERM-killed it at the exec timeout,
  * which surfaced in chat as "Sandbox command failed with exit code 143".
  * agent-browser availability is eventually-consistent instead — a session
- * without browser tooling still chats and edits code. agentation-mcp is
- * deliberately NOT installed here: it exists for the preview annotation
- * widget and its better-sqlite3 build needs gcc/make, which a bare image may
- * lack — that
- * compile is what blew the old synchronous install past its timeout.
+ * without browser tooling still chats and edits code.
  *
  * Nothing in here may throw: losing the SDK-fallback directory or the browser
  * CLI degrades a launch, but killing the chat turn is strictly worse.

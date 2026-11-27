@@ -107,7 +107,6 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "^6.1.0",
     "@vvedantb/redline": "0.1.1",
-    "agentation": "^3.0.2",
     "oxc-transform-react": "^0.145.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "^4.3.3",
