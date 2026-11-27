@@ -35,3 +35,11 @@ export const USER_REPO_EVENTS: ReadonlyArray<RepoEventKind> = [
   "pr_opened_or_updated",
   "issue_labeled",
 ];
+
+/**
+ * Only a scheduled automation can run by hand. An event automation's prompt
+ * works on the PR or issue its event names, and a manual run has none.
+ */
+export function canRunByHand(trigger: AutomationTrigger | undefined): boolean {
+  return trigger?.kind !== "event";
+}

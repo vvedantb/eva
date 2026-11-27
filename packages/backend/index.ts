@@ -20,6 +20,7 @@ export {
 } from "./convex/_queues/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
+  canRunByHand,
   DEFAULT_ISSUE_LABEL,
   REPO_EVENT_LABELS,
   USER_REPO_EVENTS,
