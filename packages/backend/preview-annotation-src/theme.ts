@@ -38,6 +38,11 @@ export const LIGHT_THEME: ToolbarTheme = {
   primary: "oklch(0.2103 0 0)",
   primaryText: "oklch(0.9911 0 0)",
   field: "oklch(0.9702 0 0)",
+  popover: "oklch(1 0 0)",
+  muted: "oklch(0.9524 0 0)",
+  warning: "oklch(0.7819 0.159 72.33)",
+  tabTrack: "oklch(0.94 0 0)",
+  tabPill: "oklch(1 0 0)",
 };
 export const DARK_THEME: ToolbarTheme = {
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -55,10 +60,15 @@ export const DARK_THEME: ToolbarTheme = {
   badgeText: "rgb(34, 35, 37)",
   disc: "rgb(48, 49, 52)",
   destructive: "oklch(0.594 0.1973 24.63)",
-  border: "oklch(0.28 0 0)",
+  border: "rgb(78, 79, 82)",
   primary: "oklch(0.9911 0 0)",
   primaryText: "oklch(0.2103 0 0)",
-  field: "oklch(0.12 0 0)",
+  field: "rgb(34, 35, 37)",
+  popover: "rgb(48, 49, 52)",
+  muted: "rgb(58, 59, 62)",
+  warning: "oklch(0.8203 0.1392 76.34)",
+  tabTrack: "rgb(48, 49, 52)",
+  tabPill: "rgb(68, 69, 72)",
 };
 
 let current: ToolbarTheme | null = null;
@@ -97,6 +107,11 @@ export function applyTheme(host: HTMLElement, theme: ToolbarTheme): void {
     "--primary": theme.primary,
     "--primary-text": theme.primaryText,
     "--field": theme.field,
+    "--popover": theme.popover,
+    "--muted": theme.muted,
+    "--warning": theme.warning,
+    "--tab-track": theme.tabTrack,
+    "--tab-pill": theme.tabPill,
   };
   for (const [name, value] of Object.entries(vars)) {
     host.style.setProperty(name, value);

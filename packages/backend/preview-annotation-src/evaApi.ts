@@ -11,6 +11,8 @@
 export interface EvaSession {
   token: string;
   site: string;
+  /** The chat's address in the Eva app, or "" when unknown. */
+  view: string;
 }
 
 export interface EvaComment {
@@ -26,10 +28,8 @@ export interface EvaComment {
 
 export interface EvaCommentInput {
   feedback: string;
-  element: string;
-  selector: string;
-  pagePath: string;
-  details: string;
+  /** The element context the injected script captured; Eva builds the prompt. */
+  context: object;
 }
 
 const SESSION_PATH = "/__eva_preview_proxy/eva-comments";
@@ -53,7 +53,7 @@ export async function loadEvaSession(): Promise<EvaSession | null> {
     const data: unknown = await response.json();
     const token = str(data, "token");
     const site = str(data, "site");
-    return token && site ? { token, site } : null;
+    return token && site ? { token, site, view: str(data, "view") } : null;
   } catch {
     return null;
   }

@@ -15,6 +15,7 @@ import {
 } from "./previewGrantConfig";
 import { assertActionSandboxAccess } from "./functions";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 
 /**
@@ -117,7 +118,7 @@ export async function signPreviewGrant(params: {
   port: number;
   sub: string;
   /** Preview comments token and the Convex site URL it works against. */
-  comments?: { token: string; site: string };
+  comments?: { token: string; site: string; view: string };
 }): Promise<string> {
   const privateJwk = readPrivateJwk();
   const kid = typeof privateJwk.kid === "string" ? privateJwk.kid : "preview-1";
@@ -128,7 +129,11 @@ export async function signPreviewGrant(params: {
     sandboxId: params.sandboxId,
     port: params.port,
     ...(params.comments
-      ? { ct: params.comments.token, site: params.comments.site }
+      ? {
+          ct: params.comments.token,
+          site: params.comments.site,
+          view: params.comments.view,
+        }
       : {}),
   })
     .setProtectedHeader({ alg: "ES256", kid })
@@ -190,10 +195,13 @@ export const mintPreviewGrant = action({
       repoId: repo._id,
       sandboxId: args.sandboxId,
     });
+    const webUrl = tryGetEvaBaseUrl();
     const comments =
       site && commentsTarget
         ? {
             site,
+            // Where "View in chat" goes; empty when Eva's URL is unknown.
+            view: webUrl && commentsTarget.webPath ? webUrl + commentsTarget.webPath : "",
             token: await signPreviewCommentsToken({
               userId: commentsTarget.userId,
               chatId: commentsTarget.chatId,

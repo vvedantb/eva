@@ -884,6 +884,22 @@ function evaPreviewAnnotationScript(): void {
     paintBox(target, chipLabel(target), false);
   }
 
+  /** `prop: value; prop: value` as pairs, for the card's details. */
+  function styleLines(summary: string): { prop: string; value: string }[] {
+    const out: { prop: string; value: string }[] = [];
+    for (const entry of summary.split("; ")) {
+      const separator = entry.indexOf(": ");
+      const prop = separator === -1 ? entry : entry.slice(0, separator);
+      if (prop) {
+        out.push({
+          prop,
+          value: separator === -1 ? "" : entry.slice(separator + 2),
+        });
+      }
+    }
+    return out;
+  }
+
   /** A picked element is done: clear it and tell the toolbar what happened. */
   function finishSelection(notice: string): void {
     clearAll();
@@ -919,6 +935,8 @@ function evaPreviewAnnotationScript(): void {
           reactName: context.reactComponents[0] ?? "",
           text: context.textContent,
           accessibility: context.accessibility,
+          html: context.outerHTML,
+          styles: styleLines(context.stylesSummary),
         },
         rect,
         submitLabel: session ? "Send to Eva" : "Copy for Eva",
@@ -926,13 +944,7 @@ function evaPreviewAnnotationScript(): void {
         onSubmit: async (note) => {
           if (session) {
             try {
-              await sendComment(session, {
-                feedback: note,
-                element: elementChip(target),
-                selector: context.selector,
-                pagePath: context.pagePath,
-                details: formatContextForClipboard(context, ""),
-              });
+              await sendComment(session, { feedback: note, context });
             } catch (error) {
               return error instanceof Error ? error.message : "Couldn't send";
             }
@@ -1676,6 +1688,11 @@ function evaPreviewAnnotationScript(): void {
       primary: read("primary"),
       primaryText: read("primaryText"),
       field: read("field"),
+      popover: read("popover"),
+      muted: read("muted"),
+      warning: read("warning"),
+      tabTrack: read("tabTrack"),
+      tabPill: read("tabPill"),
     };
     return Object.values(theme).some((entry) => entry === "") ? null : theme;
   }

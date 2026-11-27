@@ -7,6 +7,7 @@ import { getUserDisplayName } from "@eva/shared/taskDetail";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { sendChatMessage } from "./chats";
+import { resolveMobileChat } from "./_mobile/chatTarget";
 import { findMainChat, getSessionChatWithAccess } from "./_sessionChats/helpers";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -252,7 +253,12 @@ export const setResolved = authMutation({
 export const linkTarget = authQuery({
   args: { repoId: v.id("githubRepos"), sandboxId: v.string() },
   returns: v.union(
-    v.object({ userId: v.id("users"), chatId: v.id("sessionChats") }),
+    v.object({
+      userId: v.id("users"),
+      chatId: v.id("sessionChats"),
+      /** The chat's path in the Eva web app, for "View in chat". */
+      webPath: v.string(),
+    }),
     v.null(),
   ),
   handler: async (ctx, args) => {
@@ -263,7 +269,13 @@ export const linkTarget = authQuery({
       .first();
     if (!session || session.repoId !== args.repoId) return null;
     const chat = await findMainChat(ctx.db, session._id);
-    return chat ? { userId: ctx.userId, chatId: chat._id } : null;
+    if (!chat) return null;
+    const resolved = await resolveMobileChat(ctx.db, String(chat._id));
+    return {
+      userId: ctx.userId,
+      chatId: chat._id,
+      webPath: resolved?.chat.webPath ?? "",
+    };
   },
 });
 
@@ -290,30 +302,25 @@ export const sendForUser = internalMutation({
     userId: v.id("users"),
     chatId: v.id("sessionChats"),
     feedback: v.string(),
-    /** `<tag.class>` of the element. */
-    element: v.string(),
-    selector: v.string(),
-    pagePath: v.string(),
-    /** The element's context, as the page formatted it. */
-    details: v.string(),
+    /** The agent prompt, built from the element context. */
+    prompt: v.string(),
+    ref: v.object({
+      element: v.string(),
+      pagePath: v.string(),
+      selector: v.optional(v.string()),
+    }),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const feedback = args.feedback.trim();
     if (!feedback) throw new Error("Write a note first");
-    const ref = {
-      element: args.element,
-      pagePath: args.pagePath,
-      selector: args.selector,
-    };
-    const full = `${feedback}\n\n---\n**Preview annotation**\n- Page: \`${args.pagePath}\`\n- Element: \`${args.element}\`\n- Selector: \`${args.selector}\`\n\n${args.details}`;
     return sendChatMessage(
       { ...ctx, userId: args.userId },
       {
         target: String(args.chatId),
-        message: full,
-        displayContent: buildAnnotationDisplay(feedback, ref),
-        annotation: ref,
+        message: args.prompt,
+        displayContent: buildAnnotationDisplay(feedback, args.ref),
+        annotation: args.ref,
       },
     );
   },

@@ -5,6 +5,11 @@ import { z } from "zod";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import {
+  annotationRef,
+  buildAnnotationPrompt,
+  parseAnnotationContext,
+} from "@eva/shared/previewAnnotationContext";
 import { verifyPreviewCommentsToken } from "./previewGrant";
 
 /**
@@ -16,10 +21,7 @@ import { verifyPreviewCommentsToken } from "./previewGrant";
 
 const sendBody = z.object({
   feedback: z.string().max(4_000),
-  element: z.string().max(300),
-  selector: z.string().max(1_000),
-  pagePath: z.string().max(1_000),
-  details: z.string().max(12_000),
+  context: z.object({}).loose(),
 });
 const resolveBody = z.object({ id: z.string(), resolved: z.boolean() });
 
@@ -57,10 +59,16 @@ export const handle = internalAction({
       const raw: unknown = JSON.parse(args.body || "{}");
       if (args.op === "send") {
         const body = sendBody.parse(raw);
+        // The same context object the Eva page gets from the injected script,
+        // read and turned into a prompt by the same shared code.
+        const context = parseAnnotationContext(body.context);
+        if (!context) return fail(400, "Invalid request");
         await ctx.runMutation(internal.previewComments.sendForUser, {
           userId,
           chatId,
-          ...body,
+          feedback: body.feedback,
+          prompt: buildAnnotationPrompt(body.feedback, context),
+          ref: annotationRef(context),
         });
         return { status: 200, json: JSON.stringify({ ok: true }) };
       }
