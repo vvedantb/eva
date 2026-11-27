@@ -1191,6 +1191,9 @@ export const automationFields = {
   // keep their schedule without a migration.
   trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
+  // The account runs bill to: the creator's own, or a teammate's shared one.
+  // Missing means the team credential.
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),
