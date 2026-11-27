@@ -2,6 +2,7 @@
 
 import type { PrOwnerRef } from "@eva/backend";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
@@ -26,10 +27,10 @@ export function ViewPrsChip({ owner }: { owner: PrOwnerRef }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={COMPOSER_CHIP_CLASS}>
+        <Button variant="ghost" className={COMPOSER_CHIP_CLASS}>
           <IconGitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
           {prs.length === 1 ? "View PR" : "View PRs"}
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
         <PrActionsSubmenus variant="dropdown" prs={prs} />

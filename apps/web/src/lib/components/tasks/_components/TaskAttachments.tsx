@@ -6,6 +6,7 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
 import {
+  Button,
   tokenTransition,
   useRequestConfirm,
   ListEnter,
@@ -135,15 +136,16 @@ export function TaskAttachments({
       </AnimatePresence>
       {readOnly ? null : (
         <div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={addFiles.isUploading}
             onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 -mx-2 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
+            className="-mx-2 h-auto gap-1.5 rounded-control px-2 py-1 text-xs font-normal text-muted-foreground hover:bg-muted/80 hover:text-foreground disabled:opacity-60"
           >
             <IconPaperclip size={14} />
             <span>{addFiles.isUploading ? "Uploading…" : "Attach files"}</span>
-          </button>
+          </Button>
           <input
             ref={inputRef}
             type="file"

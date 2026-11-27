@@ -6,7 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
+import { Button, HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 
 const MENTION_LIMIT = 8;
@@ -35,15 +35,15 @@ function MentionsList({ onNavigate }: { onNavigate: () => void }) {
         const href = mention.href;
         return (
           <li key={mention._id}>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               disabled={href === undefined || !isInternalAppHref(href)}
               onClick={() => {
                 if (href === undefined || !isInternalAppHref(href)) return;
                 onNavigate();
                 navigate(hrefToNavigateOptions(href));
               }}
-              className="flex w-full min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-segment disabled:cursor-default"
+              className="flex h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0.5 rounded-control px-2 py-1.5 text-left font-normal whitespace-normal hover:bg-segment disabled:cursor-default"
             >
               <span className="flex min-w-0 items-baseline justify-between gap-2">
                 <span data-pii className="truncate text-xs font-medium text-foreground">
@@ -58,7 +58,7 @@ function MentionsList({ onNavigate }: { onNavigate: () => void }) {
                   {mention.message ?? mention.contextLabel}
                 </span>
               ) : null}
-            </button>
+            </Button>
           </li>
         );
       })}

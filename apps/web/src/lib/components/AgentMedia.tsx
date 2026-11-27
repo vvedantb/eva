@@ -6,7 +6,7 @@ import {
   type AgentMediaItem,
   type ResolvedMediaEntry,
 } from "@eva/shared";
-import { ImageLightbox } from "@vvedantb/ui";
+import { Button, ImageLightbox } from "@vvedantb/ui";
 import { cn } from "@eva/ui";
 
 /** A resolved capture: `url` is null when the stored blob is gone. */
@@ -76,10 +76,10 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
             )}
           >
             <MediaCaption caption={image.caption} />
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => setLightboxIndex(index)}
-              className="block max-w-full motion-press active:scale-[0.99]"
+              className="block h-auto max-w-full rounded-none p-0 font-normal hover:bg-transparent motion-press active:scale-[0.99]"
             >
               <img
                 src={image.url}
@@ -92,7 +92,7 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
                   "rounded-surface block h-auto max-h-96 w-auto max-w-full cursor-pointer transition-opacity hover:opacity-90",
                 )}
               />
-            </button>
+            </Button>
           </figure>
         ))}
       </div>
