@@ -22,13 +22,11 @@ export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
   canRunByHand,
   DEFAULT_ISSUE_LABEL,
-  normalizeTrigger,
   REPO_EVENT_LABELS,
   triggerHasEvent,
   USER_REPO_EVENTS,
   type AutomationTrigger,
   type RepoEventKind,
-  type StoredAutomationTrigger,
 } from "./convex/_automationEvents/labels";
 export {
   INCOMPLETE_PR_RECAP_MESSAGE,

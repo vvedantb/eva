@@ -10,7 +10,6 @@ import { joinThread } from "./_messages/threadParticipants";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
 import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
 import { backfilledCloseTimes } from "./_agentTasks/closeTimes";
-import { normalizeTrigger } from "./_automationEvents/labels";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -195,22 +194,5 @@ export const backfillTaskCloseTimes = dataMigrations.define({
   migrateOne: async (ctx, task) => {
     if (task.projectId === undefined) return;
     return (await backfilledCloseTimes(ctx, task)) ?? undefined;
-  },
-});
-
-/**
- * Rewrites single-event automation triggers to the `events` list. Safe to
- * re-run. Run once after the deploy, then narrow `automations.trigger`:
- *
- *   npx convex run dataMigrations:migrateEventTriggers --prod
- */
-export const migrateEventTriggers = dataMigrations.define({
-  table: "automations",
-  migrateOne: async (_ctx, automation) => {
-    if (automation.trigger === undefined || automation.trigger.kind !== "event") {
-      return;
-    }
-    if ("events" in automation.trigger) return;
-    return { trigger: normalizeTrigger(automation.trigger) };
   },
 });

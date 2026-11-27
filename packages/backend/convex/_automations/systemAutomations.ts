@@ -1,6 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
 import type { AutomationTrigger } from "../_automationEvents/events";
-import { normalizeTrigger } from "../_automationEvents/labels";
 import {
   ALERT_TO_TASK_PROMPT,
   CI_AUTOFIX_PROMPT,
@@ -212,9 +211,8 @@ export function automationTrigger(
 ): AutomationTrigger {
   const entry =
     doc.systemKey === undefined ? undefined : getSystemAutomation(doc.systemKey);
-  const stored = doc.trigger === undefined ? undefined : normalizeTrigger(doc.trigger);
-  if (!entry) return stored ?? CRON;
-  return overlayTrigger(entry.trigger, stored);
+  if (!entry) return doc.trigger ?? CRON;
+  return overlayTrigger(entry.trigger, doc.trigger);
 }
 
 /**
@@ -258,10 +256,7 @@ export function resolveAutomationDoc(
     description: entry.description,
     readOnly: entry.readOnly,
     actionsEnabled: entry.actionsEnabled,
-    trigger: overlayTrigger(
-      entry.trigger,
-      doc.trigger === undefined ? undefined : normalizeTrigger(doc.trigger),
-    ),
+    trigger: overlayTrigger(entry.trigger, doc.trigger),
   };
 }
 
