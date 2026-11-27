@@ -95,7 +95,7 @@ export interface ChatTurnSendOptions extends ChatSendOptions {
 }
 
 /**
- * Send / queue / cancel for one chat: a session chat tab, a quick task or a
+ * Send / queue / cancel for one chat: a session's chat, a quick task or a
  * project. The surface hands over its mutations (`ports`) and settings; the
  * prompt, the optimistic queue-or-start guess and the failure toast live here
  * only. The server makes the real queue-or-start decision (`chats.send`).

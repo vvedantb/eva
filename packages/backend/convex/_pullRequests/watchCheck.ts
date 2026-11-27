@@ -235,7 +235,6 @@ export const check = internalAction({
           clerkUserId: target.clerkUserId,
           kind: target.kind,
           id: target.id,
-          ...(target.chat === undefined ? {} : { chat: target.chat }),
           message: buildPrWatchMessage({
             prNumber: claimed.prNumber,
             prUrl: claimed.prUrl,

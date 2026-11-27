@@ -57,9 +57,8 @@ import {
   type ChatTurnEntityId,
 } from "../_chat/turnStore";
 import {
-  listLiveSessionChats,
+  findMainChat,
   loadSessionChat,
-  sessionChatHasFreeSlot,
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
@@ -103,7 +102,7 @@ type ChatQueueGuardResult<TPrepared> =
  * below never calls `ctx.db.patch`/`ctx.db.insert` on the entity table
  * itself.
  */
-/** Chat surfaces the queue serves; a session queues per chat tab. */
+/** Chat surfaces the queue serves: a session's chat. */
 type ChatQueueId = Id<"sessionChats">;
 
 type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
@@ -113,12 +112,6 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
     entity: TEntity,
     ctx: MutationCtx,
   ) => boolean | Promise<boolean>;
-  /**
-   * Whether the surface may start a turn right now even though it is idle.
-   * Session chats share a per-session cap on concurrently running chats
-   * (`MAX_PARALLEL_CHATS`); task and project chats have no such limit.
-   */
-  hasCapacity: (ctx: MutationCtx, entity: TEntity) => Promise<boolean>;
   /** The sandbox owner's id for the idle-pause activity clock (a chat's session). */
   activityParentId: (entity: TEntity, id: TId) => string;
   /**
@@ -227,9 +220,6 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<boolean> {
   if (await config.hasActiveWorkflow(entity, ctx)) {
-    return true;
-  }
-  if (!(await config.hasCapacity(ctx, entity))) {
     return true;
   }
   if (
@@ -575,9 +565,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
 > = {
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
   hasActiveWorkflow: ({ chat }, ctx) => hasOpenChatTurn(ctx.db, chat._id),
-  // One slot check for both the send path and the dequeue, so the cap cannot
-  // drift between them.
-  hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),
   activityParentId: ({ session }) => String(session._id),
   sandboxState: ({ session }) => sandboxStateFromStatus(session.status),
   wakeSandbox: (ctx, { session }) => requestSessionSandboxStart(ctx, session),
@@ -599,12 +586,9 @@ const sessionChatQueueConfig: ChatQueueConfig<
       model: next.model,
       changePolicy: "owner-pool",
     }),
-  prepareGuard: async (ctx, { session, chat }, next, providerAccountId) => {
+  prepareGuard: async (ctx, { session }, next, providerAccountId) => {
     if (!next.model) {
       return { ok: false, error: "Error: Failed to start queued message." };
-    }
-    if (chat.archived === true) {
-      return { ok: false, error: "Error: This chat is closed." };
     }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) {
@@ -773,11 +757,9 @@ const sessionChatQueueConfig: ChatQueueConfig<
 };
 
 /**
- * The drain every session-chat turn ending calls. Drains the chat that just
- * finished first (its own queue has priority on the slot it just freed), then
- * offers the remaining slots to sibling chats with queued messages — the only
- * place a message parked by the parallel-chat cap is released. Returns whether
- * the finished chat started a turn.
+ * The drain every session-chat turn ending calls: the chat that just finished
+ * (its trigger as given), or the session's chat when no chat finished (a
+ * quiet drain, e.g. the sandbox came up). Returns whether a turn started.
  */
 export async function drainSessionChatQueues(
   ctx: MutationCtx,
@@ -785,28 +767,24 @@ export async function drainSessionChatQueues(
   finishedChatId?: Id<"sessionChats">,
   trigger: "turn-ended" | "quiet" = "turn-ended",
 ): Promise<boolean> {
-  let started = false;
   if (finishedChatId !== undefined) {
-    started = await startNextQueuedChatMessage(
+    return await startNextQueuedChatMessage(
       ctx,
       finishedChatId,
       sessionChatQueueConfig,
       trigger,
     );
   }
-  const siblings = await listLiveSessionChats(ctx.db, sessionId);
-  for (const chat of siblings) {
-    if (chat._id === finishedChatId) continue;
-    // Siblings are never "the turn that ended": a quiet drain cannot wake a
-    // watching master with a spurious completion.
-    await startNextQueuedChatMessage(
-      ctx,
-      chat._id,
-      sessionChatQueueConfig,
-      "quiet",
-    );
-  }
-  return started;
+  const chat = await findMainChat(ctx.db, sessionId);
+  if (!chat) return false;
+  // Not "the turn that ended": a quiet drain cannot wake a watching master
+  // with a spurious completion.
+  return await startNextQueuedChatMessage(
+    ctx,
+    chat._id,
+    sessionChatQueueConfig,
+    "quiet",
+  );
 }
 
 /**

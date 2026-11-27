@@ -104,7 +104,7 @@ const OWNER_TITLE: Record<SandboxChatBinding["ownerLabel"], string> = {
 };
 
 /**
- * The sandbox chat for a session chat tab, a quick task, a project task or a
+ * The sandbox chat for a session, a quick task, a project task or a
  * project. The owner only supplies a binding (and a session its slots); the
  * transcript, send rule, failure toasts, queue gate, account handoff,
  * blocking question, empty state and read-only rules are the same for all.

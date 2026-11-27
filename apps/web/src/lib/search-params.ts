@@ -427,15 +427,6 @@ export const pullRequestListStateParser = parseAsStringLiteral(PR_LIST_STATES)
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
 
 /**
- * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
- * Absent means Main, so every pre-existing session link still opens Main. A
- * query param rather than a path segment because the chat axis is orthogonal
- * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
- * `$numId`, and nesting one inside the other would break every existing link.
- */
-export const chatParser = parseAsInteger.withOptions(tabOptions);
-
-/**
  * Subagent child thread open over a sandbox chat (`?subagent=<toolUseId>`).
  * Pushes history so Back returns to the parent chat. Not `?agent`: that key
  * signs in the agent user.

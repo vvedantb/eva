@@ -94,7 +94,6 @@ export {
   EDITOR_PORT,
   previewProxyPort,
 } from "./sandboxPorts";
-export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
 export { isAgentBrowsingActive } from "./agentBrowsing";
 export {
@@ -342,7 +341,6 @@ export {
   SANDBOX_CHAT_COPY,
   sandboxChatEmptyState,
   sandboxComposerState,
-  waitingForSlotLabel,
 } from "./sandboxComposer";
 export {
   QUEUE_PANEL_LABEL,

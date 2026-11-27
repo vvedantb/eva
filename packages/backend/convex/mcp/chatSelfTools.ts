@@ -793,9 +793,6 @@ The watch ends when the PR merges or closes, when you call unwatch_pull_request,
           {
             kind: target.kind,
             id: target.targetId,
-            ...(target.kind === "session" && credentials.chatId !== undefined
-              ? { sessionChatId: credentials.chatId }
-              : {}),
             ...(url === undefined ? {} : { prUrl: url }),
           },
         );

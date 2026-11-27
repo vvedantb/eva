@@ -83,11 +83,6 @@ describe("quick tasks on sessions", () => {
       expect(
         await f.asUser.query(api.sessions.countActive, { repoId: f.repoId }),
       ).toBe(0);
-      await expect(
-        f.asUser.mutation(api._sessionChats.mutations.create, {
-          sessionId: first.sessionId,
-        }),
-      ).rejects.toThrow("A task's session cannot open another chat.");
     },
     TIMEOUT_MS,
   );

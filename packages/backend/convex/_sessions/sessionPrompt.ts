@@ -14,7 +14,6 @@ import {
   prependModelHandoffContext,
   readHandoffHistory,
 } from "../_shared/modelHandoff";
-import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "@eva/shared";
@@ -33,14 +32,6 @@ import {
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
-
-/**
- * Added to a turn's prompt while the session has more than one open chat.
- * Deliberately not a sibling summary (what the other chats are doing) — only
- * the one fact an agent sharing a working tree needs.
- */
-const PARALLEL_CHATS_NOTE =
-  "Other chats in this session may edit this checkout at the same time. Do not revert changes you did not make.";
 
 type TaskContextFields = Pick<
   Doc<"agentTasks">,
@@ -223,12 +214,11 @@ export async function buildSessionPrompt(
   },
 ): Promise<{ prompt: string; branchName: string }> {
   const { session, chat, repo, user } = args;
-  const [liveChats, { resolvedMessage, prefixBlock }] = await Promise.all([
-    listLiveSessionChats(ctx.db, session._id),
-    resolveMessageTokens(ctx, args.message, session.repoId),
-  ]);
-  const parallelNote =
-    liveChats.length > 1 ? `\n\n${PARALLEL_CHATS_NOTE}` : "";
+  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
+    ctx,
+    args.message,
+    session.repoId,
+  );
   const rootDirectory = repo.rootDirectory ?? "";
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
@@ -297,7 +287,6 @@ export async function buildSessionPrompt(
       prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   });
-  prompt = `${prompt}${parallelNote}`;
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
   }

@@ -20,7 +20,7 @@ import {
   openChatEntityIdsFor,
   sessionIsExecuting,
 } from "./_chat/turnProjection";
-import { listLiveSessionChats } from "./_sessionChats/helpers";
+import { findMainChat } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
 import { sessionOwner } from "./_sessions/owner";
@@ -348,15 +348,13 @@ async function inspectSession(
 ): Promise<Candidate | null> {
   const session = await ctx.db.get(sessionId);
   if (!session) return null;
-  // A session's turns, staged prompts and queues live on its chats, so any
-  // live chat with work keeps the sandbox awake.
-  const chats = await listLiveSessionChats(ctx.db, sessionId);
-  let chatBusy = false;
-  for (const chat of chats) {
-    if (chat.pendingTurn !== undefined) chatBusy = true;
-    else if (await hasPendingWork(ctx, String(chat._id))) chatBusy = true;
-    if (chatBusy) break;
-  }
+  // A session's turns, staged prompts and queues live on its chat, so a
+  // chat with work keeps the sandbox awake.
+  const chat = await findMainChat(ctx.db, sessionId);
+  const chatBusy =
+    chat !== null &&
+    (chat.pendingTurn !== undefined ||
+      (await hasPendingWork(ctx, String(chat._id))));
   const busy =
     sessionIsExecuting(
       session,

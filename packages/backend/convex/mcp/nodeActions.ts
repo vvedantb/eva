@@ -755,29 +755,21 @@ const projectDocSchema = z.object({
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
   chatId: z.string(),
-  title: z.string(),
-  number: z.number(),
   lastModel: z.string().optional(),
 });
 
-/** One row of `sessionChats:listForSession`, as much as the fleet tools read. */
-const sessionChatRowSchema = z.object({
-  _id: z.string(),
-  title: z.string(),
-  number: z.number(),
-  isMain: z.boolean(),
-  archived: z.boolean().optional(),
-  lastModel: z.string().optional(),
-});
+/** `sessionChats:resolveForSession`, as much as the fleet tools read. */
+const sessionChatRowSchema = z
+  .object({ _id: z.string(), lastModel: z.string().optional() })
+  .nullable();
 
-/** A session's open chats; its transcript is the Main chat's. */
-async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
-  const rows = z.array(sessionChatRowSchema).parse(
-    await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
+/** A session's one chat (Main); null before it exists. */
+async function loadSessionChatAsUser(clerkUserId: string, sessionId: string) {
+  return sessionChatRowSchema.parse(
+    await runAsUser("query", clerkUserId, "sessionChats:resolveForSession", {
       sessionId,
     }),
   );
-  return rows.filter((row) => row.archived !== true);
 }
 
 /** Slim projection of a `sessions` document. */
@@ -1057,27 +1049,23 @@ export const orchestratorGetAgentState = internalAction({
     // of the sentence below.
     const rawDoc = await readChatDocAsUser(clerkUserId, kind, id);
 
-    // A session's transcript is its Main chat's (parallel chats keep their
-    // own); a task's or project's is the chat it talks in on its session
-    // (none before it first chatted). The streaming row is that chat's too.
+    // A session's transcript is its chat's; a task's or project's is the chat
+    // it talks in on its session (none before it first chatted). The
+    // streaming row is that chat's too.
     // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
     // daemon `/loop` continuations included.
     const ownedRead =
       kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
     const owned = ownedRead?.session;
-    const [sessionChats, isExecuting, pullRequests] = await Promise.all([
+    const [ownChat, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
-        ? loadSessionChatsAsUser(clerkUserId, id)
+        ? loadSessionChatAsUser(clerkUserId, id)
         : owned
-          ? loadSessionChatsAsUser(clerkUserId, owned.sessionId)
-          : [],
+          ? loadSessionChatAsUser(clerkUserId, owned.sessionId)
+          : null,
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
       ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
     ]);
-    const ownChat =
-      kind === "session"
-        ? (sessionChats.find((chat) => chat.isMain) ?? sessionChats[0])
-        : sessionChats.find((chat) => chat._id === owned?.chatId);
     const transcriptParentId =
       kind === "session" ? (ownChat?._id ?? id) : owned?.chatId;
 
@@ -1344,8 +1332,6 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
-    /** Session only: which chat (number or exact title). Absent = Main. */
-    chat: v.optional(v.string()),
     /** The caller's own chat: a daemon must not message the chat it runs in. */
     excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
@@ -1369,8 +1355,6 @@ export const orchestratorSendMessage = internalAction({
       v.literal("posted"),
     ),
     model: v.string(),
-    /** Session only: the chat the message landed in. */
-    chat: v.optional(v.object({ title: v.string(), number: v.number() })),
   }),
   handler: async (
     ctx,
@@ -1380,7 +1364,6 @@ export const orchestratorSendMessage = internalAction({
       id,
       message,
       model,
-      chat,
       excludeChatId,
       aveThreadId,
       sentViaOrchestrator,
@@ -1389,30 +1372,19 @@ export const orchestratorSendMessage = internalAction({
   ): Promise<{
     delivered: "started" | "queued" | "posted";
     model: string;
-    chat?: { title: string; number: number };
   }> => {
-    // A task or project chats in a chat of its session, so its message is
+    // A task or project chats in its session's chat, so its message is
     // delivered there; the Ave watch below stays on the task or project.
+    // From here on `targetId` is that chat.
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
-    // A session message lands in one of its chats: the named one, else Main;
-    // a task's or project's lands in its own chat. From here on `targetId` is
-    // that chat.
-    const chatName = delivery.chatId ?? chat;
     const rawDoc = await runAsUser(
       "query",
       clerkUserId,
       "sessionChats:resolveDeliveryChat",
-      {
-        sessionId: delivery.sessionId,
-        ...(chatName !== undefined ? { chat: chatName } : {}),
-      },
+      { sessionId: delivery.sessionId },
     );
     if (rawDoc === null) {
-      throw new Error(
-        chat === undefined
-          ? `No session ${id} found, or you do not have access.`
-          : `Session ${id} has no open chat named "${chat}".`,
-      );
+      throw new Error(`No session ${id} found, or you do not have access.`);
     }
     const deliveryChat = deliveryChatSchema.parse(rawDoc);
     if (deliveryChat.chatId === excludeChatId) {
@@ -1447,13 +1419,7 @@ export const orchestratorSendMessage = internalAction({
     );
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
-    return {
-      delivered,
-      model: sendModel,
-      ...(kind === "session"
-        ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
-        : {}),
-    };
+    return { delivered, model: sendModel };
   },
 });
 
@@ -1466,7 +1432,7 @@ export const orchestratorStopAgent = internalAction({
   returns: v.null(),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     if (kind === "session") {
-      // Every chat of the session: a stop means the whole agent goes quiet.
+      // The session's chat: a stop means the agent goes quiet.
       await runAsUser(
         "mutation",
         clerkUserId,

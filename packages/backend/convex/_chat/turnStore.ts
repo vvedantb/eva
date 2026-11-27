@@ -55,19 +55,6 @@ export type TurnEntityId = Doc<"turns">["entityId"];
 /** Chat entities that own durable turns. */
 export type ChatTurnEntityId = Id<"sessionChats"> | Id<"sessions">;
 
-/** Open turns across every chat of a session (the parallel-chat cap reads this). */
-export async function listOpenSessionTurns(
-  ctx: QueryCtx,
-  sessionId: Id<"sessions">,
-): Promise<Doc<"turns">[]> {
-  return await ctx.db
-    .query("turns")
-    .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", sessionId).eq("open", true),
-    )
-    .collect();
-}
-
 /** The entity's open turn. */
 export async function findOpenTurn(
   ctx: QueryCtx,

@@ -257,7 +257,7 @@ const schema = defineSchema({
     // (soft-deletes) its session, so the next use creates a fresh one.
     .index("by_owner_task", ["owner.taskId", "deletedAt"])
     .index("by_owner_project", ["owner.projectId"]),
-  // Chat threads inside a session (Main + parallel chats). See
+  // A session's chat (its Main chat; one per session). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])

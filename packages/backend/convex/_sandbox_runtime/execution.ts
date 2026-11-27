@@ -2105,7 +2105,6 @@ export const prewarmSessionDaemon = internalAction({
     });
     const skipPrewarm =
       context === null ||
-      context.chat.archived === true ||
       isSandboxClosingStatus(context.session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,

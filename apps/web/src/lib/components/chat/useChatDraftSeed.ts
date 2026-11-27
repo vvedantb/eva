@@ -7,7 +7,7 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 type SessionChatTarget = {
   kind: "sessionChat";
   sessionId: Id<"sessions">;
-  /** Drafts are per chat tab, not per session. */
+  /** Drafts are per chat (a project task tab has its own). */
   chatId: Id<"sessionChats">;
 };
 

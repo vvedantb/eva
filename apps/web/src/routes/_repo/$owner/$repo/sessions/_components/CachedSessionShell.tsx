@@ -2,8 +2,6 @@
 
 import { useDeferredValue, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryState } from "nuqs";
-import { chatParser } from "@/lib/search-params";
 import { RepoProvider, RepoGate, useRepo } from "@/lib/contexts/RepoContext";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
@@ -87,28 +85,6 @@ function CachedSessionShellInner({
   }, [isActiveRoute, urlSandboxTab]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
-  // `?chat=N` picks the chat tab. Frozen the same way as the sandbox tab:
-  // only the visible shell follows the URL, so a hidden session keeps the
-  // chat it was left on. Render-phase sync, like the layout's cache promotion.
-  const [urlChat] = useQueryState("chat", chatParser);
-  const [chatNumber, setChatNumber] = useState(urlChat);
-  if (isActiveRoute && chatNumber !== urlChat) {
-    setChatNumber(urlChat);
-  }
-  // Written through the (stable) router, not the nuqs setter: that setter
-  // changes identity on every navigation, and this handler is a prop of the
-  // whole session tree, so it re-rendered every cached shell on each switch.
-  const onChatChange = (number: number | null) => {
-    void navigate({
-      to: ".",
-      // Main is the absent param, so plain session links keep opening Main.
-      search: (prev) => ({
-        ...prev,
-        chat: number === null || number === 1 ? undefined : number,
-      }),
-    });
-  };
-
   // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
   // `basePath`. `navigate({ to })` matches the route tree before the
   // history rewrite, so `/owner/repo/app/sessions/…` is a miss on
@@ -177,8 +153,6 @@ function CachedSessionShellInner({
         {(sessionDoc) => (
           <SessionDetailClient
             sessionId={sessionDoc._id}
-            chatNumber={chatNumber}
-            onChatChange={onChatChange}
             activeSandboxTab={sandboxTab}
             onSandboxTabChange={onSandboxTabChange}
             onOpenFile={openFile}

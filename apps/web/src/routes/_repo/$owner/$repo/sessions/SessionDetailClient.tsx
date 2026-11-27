@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
-import type { Doc, Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { sandboxAutoWakeEligible } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -14,7 +14,6 @@ import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLa
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import { withMutationToast } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAgentBrowsingAutoSwitch,
@@ -23,8 +22,6 @@ import {
 
 export function SessionDetailClient({
   sessionId,
-  chatNumber,
-  onChatChange,
   activeSandboxTab,
   onSandboxTabChange,
   onOpenFile,
@@ -32,9 +29,6 @@ export function SessionDetailClient({
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
-  /** Chat tab from the URL (`?chat=N`); null means Main. */
-  chatNumber: number | null;
-  onChatChange: (number: number | null) => void;
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeSandboxTab: string;
   onSandboxTabChange: (tab: string) => void;
@@ -57,24 +51,11 @@ export function SessionDetailClient({
     api.sessions.get,
     isRouteActive ? { id: sessionId } : "skip",
   );
-  // The session's chats: Main plus any parallel chats. The URL picks one;
-  // a missing or closed number falls back to Main server-side.
-  const chats = useHeldQuery(
-    api.sessionChats.listForSession,
-    isRouteActive ? { sessionId } : "skip",
-  );
-  // Held per session, not per chat number: a tab switch keeps the old chat
-  // painted until the new one resolves instead of unmounting the page.
+  // The session's one chat (Main); null until a legacy session gets it.
   const activeChat = useHeldQuery(
     api.sessionChats.resolveForSession,
-    isRouteActive
-      ? { sessionId, ...(chatNumber !== null ? { number: chatNumber } : {}) }
-      : "skip",
-    sessionId,
-  );
-  const chatStatuses = useHeldQuery(
-    api.turns.listSessionChatStatuses,
     isRouteActive ? { sessionId } : "skip",
+    sessionId,
   );
   const chatId = activeChat?._id;
   // Names the browser tab. Gated on `isRouteActive`: up to three session shells
@@ -84,14 +65,11 @@ export function SessionDetailClient({
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const ensureMainChat = useMutation(api.sessionChats.ensureMain);
-  const createChat = useMutation(api.sessionChats.create);
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
   // A session created before chats existed has no Main chat row yet; opening
   // it is what creates one (and moves its transcript onto it). Keyed on the
-  // boolean so it fires once per empty result, not on every chats update.
-  const needsMainChat =
-    isRouteActive && chats !== undefined && chats.length === 0;
+  // boolean so it fires once per empty result, not on every chat update.
+  const needsMainChat = isRouteActive && activeChat === null;
   /* eslint-disable no-effect/no-event-handler --
      The missing Main chat is a server-side fact about a legacy session that
      only the live query reveals; there is no click to hang this on. */
@@ -201,30 +179,6 @@ export function SessionDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  const handleCreateChat = async () => {
-    if (isCreatingChat) return;
-    setIsCreatingChat(true);
-    // Built above the `try`: a conditional inside it trips the compiler lint.
-    const createArgs = { sessionId, ...(chatId ? { fromChatId: chatId } : {}) };
-    try {
-      const created = await withMutationToast(
-        createChat(createArgs),
-        "New chat opened",
-        "Couldn't open a new chat",
-        "session-chat-create",
-      );
-      onChatChange(created.number);
-    } catch {
-      setIsCreatingChat(false);
-      return;
-    }
-    setIsCreatingChat(false);
-  };
-
-  const handleSelectChat = (chat: Doc<"sessionChats">) => {
-    onChatChange(chat.number);
-  };
-
   useAgentBrowsingAutoSwitch(
     session?.agentBrowsingAt,
     () => {
@@ -255,16 +209,9 @@ export function SessionDetailClient({
 
   const chatPanel = (
     <ChatPanel
-      // One mount per chat: composer draft, attachments and local state must
-      // not carry over to another tab.
       key={activeChat._id}
       session={session}
       chat={activeChat}
-      chats={chats ?? []}
-      chatStatuses={chatStatuses ?? []}
-      onSelectChat={handleSelectChat}
-      onCreateChat={() => void handleCreateChat()}
-      isCreatingChat={isCreatingChat}
       sandboxStartupActivity={sandboxStartupActivity}
       isSandboxActive={isSandboxActive}
       isSandboxToggling={isSandboxStarting || isSandboxStopping}

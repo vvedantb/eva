@@ -1885,7 +1885,7 @@ export const draftFields = {
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
-  // One draft per session chat tab; `sessionId` stays for the index and repo scope.
+  // One draft per session chat; `sessionId` stays for the index and repo scope.
   chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),

@@ -27,7 +27,7 @@ import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import {
   ensureMainChat,
-  listLiveSessionChats,
+  findMainChat,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import {
@@ -292,10 +292,10 @@ export async function requestSessionSandboxStop(
   if (!session) return;
   const { stopReason } = options;
 
-  // Stopping kills every chat's paused turn, so a blocking AskUserQuestion
-  // can never be claimed — move them onto the chat message so the card stays.
-  const chats = await listLiveSessionChats(ctx.db, sessionId);
-  for (const chat of chats) {
+  // Stopping kills the chat's paused turn, so a blocking AskUserQuestion
+  // can never be claimed — move it onto the chat message so the card stays.
+  const chat = await findMainChat(ctx.db, sessionId);
+  if (chat) {
     await detachPendingQuestions(
       ctx.db,
       sessionChatStreamingEntityId(chat._id),
@@ -350,8 +350,7 @@ export async function requestSessionSandboxStop(
     sandboxStartupEntityId({ kind: "session", sessionId }),
   );
 
-  for (const chat of chats) {
-    if (!chat.syntheticTurnMessageId) continue;
+  if (chat?.syntheticTurnMessageId) {
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const syntheticMessage = await ctx.db.get(chat.syntheticTurnMessageId);
     if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
@@ -617,16 +616,14 @@ export const sandboxReady = internalMutation({
       // Fresh boot / resume — prior VM processes are gone.
       await markAllRunningExited(ctx.db, args.sessionId);
       // Subagents died with the old VM, so settle any the dead daemons never
-      // reported terminal — they gate each chat's message queue (see
+      // reported terminal — they gate the chat's message queue (see
       // `runningBackgroundAgents`) and nothing else would ever clear them.
-      for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
-        const settledAgents = settleOrphanedBackgroundAgents(
-          chat.backgroundAgents,
-          Date.now(),
-        );
-        if (settledAgents) {
-          await ctx.db.patch(chat._id, { backgroundAgents: settledAgents });
-        }
+      const settledAgents = settleOrphanedBackgroundAgents(
+        mainChat.backgroundAgents,
+        Date.now(),
+      );
+      if (settledAgents) {
+        await ctx.db.patch(mainChat._id, { backgroundAgents: settledAgents });
       }
       const content = args.resumeFellBack
         ? "Previous sandbox expired — started a fresh one. Uncommitted changes from the old sandbox are gone."

@@ -86,10 +86,9 @@ export function prWatchUrls(
 }
 
 /** A new watch: only what happens from now on is reported. */
-export function newPrWatch(now: number, sessionChatId?: PrWatch["sessionChatId"]): PrWatch {
+export function newPrWatch(now: number): PrWatch {
   return {
     startedAt: now,
-    ...(sessionChatId === undefined ? {} : { sessionChatId }),
     failedChecks: [],
     passed: false,
     conflicting: false,
@@ -170,9 +169,6 @@ export function evaluatePrWatch(
     changes: reported,
     next: {
       startedAt: watch.startedAt,
-      ...(watch.sessionChatId === undefined
-        ? {}
-        : { sessionChatId: watch.sessionChatId }),
       headSha: snapshot.headSha,
       failedChecks,
       passed,

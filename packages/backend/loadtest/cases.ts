@@ -78,9 +78,7 @@ export const CASES: ReadonlyArray<QueryCase> = [
   // subscribe to for the focal (heavy) chat.
   q("sessions.getByNumId", "session open", api.sessions.getByNumId, (r) => ({ repoId: r.repoId, numId: 1 })),
   q("sessions.get", "session open", api.sessions.get, (r) => ({ id: r.sessionId })),
-  q("sessionChats.listForSession", "session open", api.sessionChats.listForSession, (r) => ({ sessionId: r.sessionId })),
   q("sessionChats.resolveForSession", "session open", api.sessionChats.resolveForSession, (r) => ({ sessionId: r.sessionId })),
-  q("turns.listSessionChatStatuses", "session open", api.turns.listSessionChatStatuses, (r) => ({ sessionId: r.sessionId })),
   q("turns.getChatStatus", "session open", api.turns.getChatStatus, (r) => ({ entityId: r.mainChatId })),
   q("queuedMessages.listByParent", "session open", api.queuedMessages.listByParent, (r) => ({ parentId: r.mainChatId })),
   q("streaming.get", "session open", api.streaming.get, (r) => ({ entityId: r.mainChatId })),

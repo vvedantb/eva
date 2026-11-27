@@ -6,7 +6,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess } from "../functions";
-import { listSessionChats } from "../_sessionChats/helpers";
+import { findMainChat } from "../_sessionChats/helpers";
 import { entityVisible } from "../numId";
 import { createNotification } from "../notifications";
 import {
@@ -62,7 +62,7 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
 
 /**
  * The `pendingQuestions.entityId` values one named chat covers. A session's
- * questions are keyed by its chats, so naming the session fans out to them.
+ * questions are keyed by its chat.
  */
 async function questionEntityIds(
   ctx: QueryCtx,
@@ -70,8 +70,8 @@ async function questionEntityIds(
 ): Promise<string[]> {
   const sessionId = ctx.db.normalizeId("sessions", entityId);
   if (!sessionId) return [entityId];
-  const chats = await listSessionChats(ctx.db, sessionId);
-  return chats.map((chat) => String(chat._id));
+  const chat = await findMainChat(ctx.db, sessionId);
+  return chat ? [String(chat._id)] : [];
 }
 
 /** A chat's repo. A project's child task inherits its project's repo. */

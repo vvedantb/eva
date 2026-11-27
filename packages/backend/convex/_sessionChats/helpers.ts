@@ -1,5 +1,4 @@
 import { getConvexSize, v } from "convex/values";
-import { MAX_PARALLEL_CHATS } from "@eva/shared";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
@@ -60,7 +59,7 @@ export async function getSessionChatWithAccess(
   return context;
 }
 
-/** Every chat of a session, archived ones included, in creation order. */
+/** Every chat row of a session (only Main once `deleteExtraSessionChats` has run); for deletes. */
 export async function listSessionChats(
   db: DatabaseReader,
   sessionId: Id<"sessions">,
@@ -69,15 +68,6 @@ export async function listSessionChats(
     .query("sessionChats")
     .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
     .collect();
-}
-
-/** The chats a user can still type into (Main plus open parallel chats). */
-export async function listLiveSessionChats(
-  db: DatabaseReader,
-  sessionId: Id<"sessions">,
-): Promise<Doc<"sessionChats">[]> {
-  const chats = await listSessionChats(db, sessionId);
-  return chats.filter((chat) => chat.archived !== true);
 }
 
 export async function findMainChat(
@@ -118,43 +108,6 @@ export async function resolveDaemonChatId(
   return mainChat?._id ?? null;
 }
 
-/** The chat a session-level link (`?chat=N`) resolves to. */
-export async function findChatByNumber(
-  db: DatabaseReader,
-  sessionId: Id<"sessions">,
-  number: number,
-): Promise<Doc<"sessionChats"> | null> {
-  return await db
-    .query("sessionChats")
-    .withIndex("by_session_and_number", (q) =>
-      q.eq("sessionId", sessionId).eq("number", number),
-    )
-    .first();
-}
-
-/**
- * Whether this chat may take one of the session's `MAX_PARALLEL_CHATS` run
- * slots. One indexed read over the session's open turns. The chat's own open
- * turn never counts: at send time the new turn supersedes it, and at dequeue
- * time the chat is idle so any open turn of its own is a leftover.
- * A task's run is a chat turn and counts as one.
- */
-export async function sessionChatHasFreeSlot(
-  db: DatabaseReader,
-  context: SessionChatContext,
-): Promise<boolean> {
-  const openTurns = await db
-    .query("turns")
-    .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", context.session._id).eq("open", true),
-    )
-    .collect();
-  const siblingsRunning = openTurns.filter(
-    (turn) => turn.entityId !== String(context.chat._id),
-  ).length;
-  return siblingsRunning < MAX_PARALLEL_CHATS;
-}
-
 /** What `sessionChatPersistenceId` returns, for return validators. */
 export const sessionChatPersistenceIdValidator = v.union(
   v.id("sessions"),
@@ -167,7 +120,7 @@ export const sessionChatPersistenceIdValidator = v.union(
  * The id Claude's transcript is derived from (`sessionClaudeUuid`). A
  * backfilled Main chat keeps the session's seed, and a migrated quick task's
  * or project's chat its old owner's, so it resumes the conversation Claude
- * already holds; every other chat is its own transcript.
+ * already holds; a newer chat is its own transcript.
  */
 export function sessionChatPersistenceId(
   chat: Doc<"sessionChats">,
@@ -406,49 +359,5 @@ export async function ensureMainChat(
       { from: session._id, chatId: chat._id },
     );
   }
-  return chat;
-}
-
-/**
- * Opens another chat in a session. Settings are inherited from `inheritFrom`
- * (the chat the user pressed `+` on) so the new tab starts on the model and
- * account they were already using; the session's Main chat is the fallback
- * for server callers with no active chat.
- */
-export async function createSessionChat(
-  ctx: MutationCtx,
-  params: {
-    session: Doc<"sessions">;
-    createdBy: Id<"users">;
-    title?: string;
-    inheritFrom?: ChatSettingsSource;
-  },
-): Promise<Doc<"sessionChats">> {
-  const { session } = params;
-  const chats = await listSessionChats(ctx.db, session._id);
-  // `number` stays unique for `?chat=N` links; the default title reuses the
-  // lowest label no open tab holds, so open/close/open reads "Chat 2" again.
-  const number = chats.reduce((max, chat) => Math.max(max, chat.number), 0) + 1;
-  const source: ChatSettingsSource =
-    params.inheritFrom ?? chats.find((chat) => chat.isMain) ?? {};
-  const openTitles = new Set(
-    chats.filter((chat) => chat.archived !== true).map((chat) => chat.title),
-  );
-  let label = 2;
-  while (openTitles.has(`Chat ${label}`)) label += 1;
-  const title = params.title?.trim() || `Chat ${label}`;
-  const chatId = await ctx.db.insert("sessionChats", {
-    sessionId: session._id,
-    repoId: session.repoId,
-    userId: session.userId,
-    title,
-    number,
-    isMain: false,
-    createdBy: params.createdBy,
-    updatedAt: Date.now(),
-    ...copyChatSettings(source),
-  });
-  const chat = await ctx.db.get(chatId);
-  if (!chat) throw new Error("Chat was not created");
   return chat;
 }

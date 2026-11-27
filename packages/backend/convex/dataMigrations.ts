@@ -10,6 +10,7 @@ import { joinThread } from "./_messages/threadParticipants";
 import { teamMentionRecipients } from "./_mentions/mentionRecipients";
 import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
 import { backfilledCloseTimes } from "./_agentTasks/closeTimes";
+import { extraChatToDelete } from "./_migrations/deleteExtraSessionChats";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -196,3 +197,40 @@ export const backfillTaskCloseTimes = dataMigrations.define({
     return (await backfilledCloseTimes(ctx, task)) ?? undefined;
   },
 });
+
+/**
+ * One chat per session: schedules the purge of every chat a session opened
+ * beside its Main chat (`purgeExtraSessionChat`). A chat with an open turn is
+ * skipped and logged; rerun once it has ended.
+ */
+export const deleteExtraSessionChatRows = dataMigrations.define({
+  table: "sessionChats",
+  migrateOne: async (ctx, chat) => {
+    if (!(await extraChatToDelete(ctx, chat))) return;
+    await ctx.scheduler.runAfter(
+      0,
+      internal._migrations.deleteExtraSessionChats.purgeExtraSessionChat,
+      { chatId: chat._id },
+    );
+  },
+});
+
+/** A PR watch no longer names a session chat: it wakes the session's one chat. */
+export const clearPrWatchSessionChat = dataMigrations.define({
+  table: "pullRequests",
+  migrateOne: (_ctx, row) => {
+    if (row.watch?.sessionChatId === undefined) return;
+    const { sessionChatId: _dropped, ...watch } = row.watch;
+    return { watch };
+  },
+});
+
+/**
+ * Run once after the deploy that removes parallel chats:
+ *
+ *   npx convex run dataMigrations:deleteExtraSessionChats --prod
+ */
+export const deleteExtraSessionChats = dataMigrations.runner([
+  internal.dataMigrations.deleteExtraSessionChatRows,
+  internal.dataMigrations.clearPrWatchSessionChat,
+]);

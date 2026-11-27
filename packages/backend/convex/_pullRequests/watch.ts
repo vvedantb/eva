@@ -163,8 +163,6 @@ export const startWatch = internalMutation({
   args: {
     kind: chatEntityKindValidator,
     id: v.string(),
-    /** Session only: the calling chat inside the session. */
-    sessionChatId: v.optional(v.string()),
     prUrl: v.optional(v.string()),
   },
   returns: watchReplyValidator,
@@ -193,11 +191,7 @@ export const startWatch = internalMutation({
         error: `Pull request #${row.prNumber} is ${row.state}; there is nothing to watch.`,
       };
     }
-    const sessionChatId =
-      owner.kind === "session" && args.sessionChatId !== undefined
-        ? (ctx.db.normalizeId("sessionChats", args.sessionChatId) ?? undefined)
-        : undefined;
-    const fresh = newPrWatch(Date.now(), sessionChatId);
+    const fresh = newPrWatch(Date.now());
     if (row.watch === undefined) {
       await setPullRequestWatch(ctx, row._id, fresh);
       // Read the baseline now, so what is already true is never reported.
@@ -207,11 +201,10 @@ export const startWatch = internalMutation({
         { pullRequestId: row._id, checkAt: fresh.startedAt },
       );
     } else {
-      await setPullRequestWatch(ctx, row._id, {
-        ...row.watch,
-        sessionChatId: fresh.sessionChatId,
-        commentWakes: 0,
-      });
+      // The chat a session watch woke is gone with parallel chats
+      // (`deleteExtraSessionChats` clears old values).
+      const { sessionChatId: _dropped, ...kept } = row.watch;
+      await setPullRequestWatch(ctx, row._id, { ...kept, commentWakes: 0 });
     }
     return { ok: true, prUrl: row.prUrl, prNumber: row.prNumber };
   },
@@ -243,16 +236,14 @@ export const stopWatchForChat = internalMutation({
 
 /**
  * Where a wake goes, or null when nobody should be woken: the chat was
- * archived or deleted, or the session chat that asked was closed.
+ * archived or deleted.
  */
 async function wakeTarget(
   ctx: MutationCtx,
   row: Doc<"pullRequests">,
-  watch: NonNullable<Doc<"pullRequests">["watch"]>,
 ): Promise<{
   kind: "session" | "task" | "project";
   id: string;
-  chat?: string;
   clerkUserId: string;
 } | null> {
   const owner = row.owner;
@@ -264,20 +255,9 @@ async function wakeTarget(
     if (!session || isSessionArchived(session) || isEntityDeleted(session)) {
       return null;
     }
-    let chat: string | undefined;
-    if (watch.sessionChatId !== undefined) {
-      const chatDoc = await ctx.db.get(watch.sessionChatId);
-      if (!chatDoc || chatDoc.archived === true) return null;
-      chat = String(chatDoc.number);
-    }
     const clerkUserId = await clerkIdOf(session.userId);
     if (clerkUserId === null) return null;
-    return {
-      kind: "session",
-      id: session._id,
-      ...(chat === undefined ? {} : { chat }),
-      clerkUserId,
-    };
+    return { kind: "session", id: session._id, clerkUserId };
   }
   if (owner.kind === "task") {
     const task = await ctx.db.get(owner.taskId);
@@ -330,7 +310,7 @@ export const claimCheck = internalMutation({
       watch.headSha === undefined && checkAt === watch.startedAt;
     if (!debounced && !baseline) return null;
     const repo = await ctx.db.get(row.repoId);
-    const target = await wakeTarget(ctx, row, watch);
+    const target = await wakeTarget(ctx, row);
     if (!isLivePrState(row.state) || repo === null || target === null) {
       await setPullRequestWatch(ctx, row._id, undefined);
       return null;
@@ -373,11 +353,9 @@ export const recordCheck = internalMutation({
       await setPullRequestWatch(ctx, row._id, undefined);
       return null;
     }
-    // A check scheduled while this one ran stays scheduled; re-aiming to
-    // another session chat meanwhile wins too.
+    // A check scheduled while this one ran stays scheduled.
     const stored = {
       ...next,
-      sessionChatId: current.sessionChatId,
       ...(current.checkAt === undefined ? {} : { checkAt: current.checkAt }),
     };
     await setPullRequestWatch(ctx, row._id, stored);
