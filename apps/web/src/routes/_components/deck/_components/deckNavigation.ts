@@ -14,6 +14,20 @@ interface DeckState {
   direction: number;
 }
 
+/** Wait before an auto-playing build starts, so the slide's entrance lands first. */
+const AUTO_FIRST_MS = 1100;
+/** Gap between auto-played build steps. */
+const AUTO_STEP_MS = 1500;
+
+/**
+ * How long to wait before auto-playing the build step after `step`. The stage
+ * and the presenter preview both run this clock, so they stay in time even when
+ * the other window's timers are throttled (a hidden or covered window).
+ */
+export function autoStepDelay(entry: DeckSlide, step: number): number {
+  return entry.autoMs?.[step] ?? (step === 0 ? AUTO_FIRST_MS : AUTO_STEP_MS);
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
