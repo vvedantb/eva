@@ -37,13 +37,21 @@ pnpm design:check
 pnpm lint
 ```
 
-5. **Tests** (web + backend `bun test`, script tests; CI runs the same command):
+5. **Preview parity** (only when the preview toolbar, comment card or comments drawer changed; needs the web dev server and `agent-browser`, so CI skips it):
+
+```bash
+pnpm preview:parity
+```
+
+   It compares Eva's `AnnotationCommentCard` and `PreviewCommentsDrawer` with the copies the proxy injects into a direct sandbox link. If only the colours moved, `pnpm preview:parity --write-theme` re-measures Eva's tokens and rewrites `themeFallback.generated.ts`.
+
+6. **Tests** (web + backend `bun test`, script tests; CI runs the same command):
 
 ```bash
 pnpm test
 ```
 
-6. **Commit hygiene** (manual — hooks are off):
+7. **Commit hygiene** (manual — hooks are off):
    - No `Co-authored-by: Cursor` / `Made-with: Cursor` in commit messages
    - No stray lone `@` line in the message (PowerShell here-string leak)
 

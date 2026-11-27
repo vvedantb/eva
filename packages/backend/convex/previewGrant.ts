@@ -4,8 +4,10 @@ import { createHmac } from "node:crypto";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
-import { importJWK, SignJWT, type JWK } from "jose";
+import { importJWK, jwtVerify, SignJWT, type JWK } from "jose";
 import {
+  PREVIEW_COMMENTS_AUDIENCE,
+  PREVIEW_COMMENTS_TTL_SECONDS,
   PREVIEW_GRANT_AUDIENCE,
   PREVIEW_GRANT_ISSUER,
   PREVIEW_GRANT_PARAM,
@@ -13,6 +15,7 @@ import {
 } from "./previewGrantConfig";
 import { assertActionSandboxAccess } from "./functions";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 
 /**
@@ -58,18 +61,81 @@ export function previewSessionSecret(sandboxId: string, port: number): string {
     .digest("hex");
 }
 
+/**
+ * Signs the token a direct sandbox link uses for preview comments. It names
+ * one user and one chat, is signed with the grant key (the sandbox holds only
+ * the public half) and carries its own audience, so a grant cannot stand in.
+ */
+export async function signPreviewCommentsToken(params: {
+  userId: string;
+  chatId: string;
+  sandboxId: string;
+}): Promise<string> {
+  const privateJwk = readPrivateJwk();
+  const kid = typeof privateJwk.kid === "string" ? privateJwk.kid : "preview-1";
+  const key = await importJWK(privateJwk, "ES256");
+  const now = Math.floor(Date.now() / 1000);
+  return await new SignJWT({
+    chatId: params.chatId,
+    sandboxId: params.sandboxId,
+  })
+    .setProtectedHeader({ alg: "ES256", kid })
+    .setSubject(params.userId)
+    .setIssuer(PREVIEW_GRANT_ISSUER)
+    .setAudience(PREVIEW_COMMENTS_AUDIENCE)
+    .setIssuedAt(now)
+    .setExpirationTime(now + PREVIEW_COMMENTS_TTL_SECONDS)
+    .sign(key);
+}
+
+/** The user and chat a valid preview comments token names, or null. */
+export async function verifyPreviewCommentsToken(
+  token: string,
+): Promise<{ userId: string; chatId: string; sandboxId: string } | null> {
+  try {
+    const key = await importJWK(getPreviewGrantPublicJwk(), "ES256");
+    const { payload } = await jwtVerify(token, key, {
+      issuer: PREVIEW_GRANT_ISSUER,
+      audience: PREVIEW_COMMENTS_AUDIENCE,
+    });
+    const { sub, chatId, sandboxId } = payload;
+    if (
+      typeof sub !== "string" ||
+      typeof chatId !== "string" ||
+      typeof sandboxId !== "string"
+    ) {
+      return null;
+    }
+    return { userId: sub, chatId, sandboxId };
+  } catch {
+    return null;
+  }
+}
+
 /** Signs a short-lived ES256 preview grant bound to a specific sandbox + port. */
 export async function signPreviewGrant(params: {
   sandboxId: string;
   port: number;
   sub: string;
+  /** Preview comments token and the Convex site URL it works against. */
+  comments?: { token: string; site: string; view: string };
 }): Promise<string> {
   const privateJwk = readPrivateJwk();
   const kid = typeof privateJwk.kid === "string" ? privateJwk.kid : "preview-1";
   const key = await importJWK(privateJwk, "ES256");
   const now = Math.floor(Date.now() / 1000);
 
-  return await new SignJWT({ sandboxId: params.sandboxId, port: params.port })
+  return await new SignJWT({
+    sandboxId: params.sandboxId,
+    port: params.port,
+    ...(params.comments
+      ? {
+          ct: params.comments.token,
+          site: params.comments.site,
+          view: params.comments.view,
+        }
+      : {}),
+  })
     .setProtectedHeader({ alg: "ES256", kid })
     .setSubject(params.sub)
     .setIssuer(PREVIEW_GRANT_ISSUER)
@@ -121,10 +187,33 @@ export const mintPreviewGrant = action({
 
     const handle = await getSandboxHandle(ctx, repo._id, args.sandboxId);
     const preview = await handle.previewUrl(args.port);
+    // A link to a sandbox that has a chat also carries a token for that
+    // chat's preview comments. The proxy keeps it in a cookie the page reads
+    // through the proxy, never in the URL.
+    const site = process.env.CONVEX_SITE_URL;
+    const commentsTarget = await ctx.runQuery(api.previewComments.linkTarget, {
+      repoId: repo._id,
+      sandboxId: args.sandboxId,
+    });
+    const webUrl = tryGetEvaBaseUrl();
+    const comments =
+      site && commentsTarget
+        ? {
+            site,
+            // Where "View in chat" goes; empty when Eva's URL is unknown.
+            view: webUrl && commentsTarget.webPath ? webUrl + commentsTarget.webPath : "",
+            token: await signPreviewCommentsToken({
+              userId: commentsTarget.userId,
+              chatId: commentsTarget.chatId,
+              sandboxId: args.sandboxId,
+            }),
+          }
+        : undefined;
     const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
       port: args.port,
       sub: identity.subject,
+      comments,
     });
 
     // Parse against a placeholder base, then copy only the path parts: the

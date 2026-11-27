@@ -16,9 +16,7 @@ function probe(className: string, text = "x"): HTMLElement {
  * strings below are in the source. Call again when the theme changes.
  */
 export function readPreviewToolbarTheme(): PreviewToolbarTheme {
-  const surface = probe(
-    "bg-popover/95 text-popover-foreground smooth-shadow-ring-lg",
-  );
+  const surface = probe("bg-popover/95 text-foreground smooth-shadow-ring-lg");
   const tip = probe(
     "bg-popover/95 text-popover-foreground smooth-shadow-ring-md rounded-surface text-xs",
   );
@@ -28,7 +26,49 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
   const badge = probe("bg-foreground text-background");
   const disc = probe("bg-card");
   const destructive = probe("text-destructive");
-  const probes = [surface, tip, idle, hover, active, badge, disc, destructive];
+  const border = probe("border border-border");
+  const primary = probe("bg-primary text-primary-foreground");
+  const field = probe("bg-background");
+  const popover = probe("bg-popover");
+  const muted = probe("bg-muted");
+  const warning = probe("text-warning");
+  // A real <textarea>: element rules in globals.css change its border.
+  const input = document.createElement("textarea");
+  input.className = "border border-input";
+  input.style.cssText = "position:fixed;left:-9999px;top:0;pointer-events:none";
+  const focus = document.createElement("textarea");
+  focus.className = "border border-ring/50";
+  focus.style.cssText = input.style.cssText;
+  const secondary = probe("text-secondary-foreground");
+  // The segmented tabs use the trough `--default` in light, `--surface-card`
+  // in dark, and the pill `--segment` (globals.css `.tabs-segmented`).
+  const tabTrack = probe("");
+  tabTrack.style.backgroundColor = document.documentElement.classList.contains("dark")
+    ? "var(--surface-card)"
+    : "var(--default)";
+  const tabPill = probe("");
+  tabPill.style.backgroundColor = "var(--segment)";
+  const probes = [
+    surface,
+    tip,
+    idle,
+    hover,
+    active,
+    badge,
+    disc,
+    destructive,
+    border,
+    primary,
+    field,
+    popover,
+    muted,
+    warning,
+    tabTrack,
+    tabPill,
+    input,
+    focus,
+    secondary,
+  ];
   document.body.append(...probes);
   try {
     const surfaceStyle = getComputedStyle(surface);
@@ -51,6 +91,18 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
       badgeText: badgeStyle.color,
       disc: getComputedStyle(disc).backgroundColor,
       destructive: getComputedStyle(destructive).color,
+      border: getComputedStyle(border).borderTopColor,
+      primary: getComputedStyle(primary).backgroundColor,
+      primaryText: getComputedStyle(primary).color,
+      field: getComputedStyle(field).backgroundColor,
+      popover: getComputedStyle(popover).backgroundColor,
+      muted: getComputedStyle(muted).backgroundColor,
+      warning: getComputedStyle(warning).color,
+      inputBorder: getComputedStyle(input).borderTopColor,
+      focusBorder: getComputedStyle(focus).borderTopColor,
+      secondaryText: getComputedStyle(secondary).color,
+      tabTrack: getComputedStyle(tabTrack).backgroundColor,
+      tabPill: getComputedStyle(tabPill).backgroundColor,
     };
   } finally {
     for (const element of probes) element.remove();

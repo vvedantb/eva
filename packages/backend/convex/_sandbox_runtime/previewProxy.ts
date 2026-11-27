@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v41";
+const SCRIPT_VERSION = "stream-v44";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -174,6 +174,10 @@ const targetPort = Number(process.env.EVA_PREVIEW_TARGET_PORT || "0");
 const proxyPort = Number(process.env.EVA_PREVIEW_PROXY_PORT || "0");
 const healthPath = "/__eva_preview_proxy/health";
 const html2canvasPath = "/__eva_preview_proxy/html2canvas.js";
+// The preview-comments token of a direct link: the grant carries it, the proxy
+// keeps it in an HttpOnly cookie, and the in-page toolbar reads it from here.
+const commentsPath = "/__eva_preview_proxy/eva-comments";
+const COMMENTS_COOKIE = "__eva_preview_comments";
 // The on-screen ping (idle pause) is served from here and posts to the next
 // path; see visibilityPingScript. A same-origin file passes any 'self' CSP
 // (code-server's webviews, apps with a <meta> CSP) where an inline one may not.
@@ -485,10 +489,25 @@ function authorize(clientReq, clientRes) {
           sub: typeof claims.sub === "string" ? claims.sub : "",
           exp: now + SESSION_TTL_SECONDS,
         });
-        headers["set-cookie"] =
-          SESSION_COOKIE + "=" + token +
+        const cookieAttrs =
           "; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=" +
           String(SESSION_TTL_SECONDS);
+        const setCookies = [SESSION_COOKIE + "=" + token + cookieAttrs];
+        // Only a verified grant reaches here, so these claims came from Eva.
+        if (typeof claims.ct === "string" && typeof claims.site === "string") {
+          setCookies.push(
+            COMMENTS_COOKIE + "=" +
+              bufToB64url(
+                Buffer.from(JSON.stringify({
+                  token: claims.ct,
+                  site: claims.site,
+                  view: typeof claims.view === "string" ? claims.view : "",
+                })),
+              ) +
+              cookieAttrs,
+          );
+        }
+        headers["set-cookie"] = setCookies;
       }
       clientRes.writeHead(302, headers);
       clientRes.end();
@@ -1213,6 +1232,21 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
   }
 
   if (!authorize(clientReq, clientRes)) return;
+  if (path.split("?")[0] === commentsPath) {
+    // The page cannot read the HttpOnly cookie, so the proxy hands it over.
+    const stored = parseCookies(clientReq.headers["cookie"])[COMMENTS_COOKIE];
+    if (!stored) {
+      clientRes.writeHead(404, { "cache-control": "no-store" });
+      clientRes.end();
+      return;
+    }
+    clientRes.writeHead(200, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+    });
+    clientRes.end(b64urlToBuf(stored).toString("utf8"));
+    return;
+  }
   if (path.split("?")[0] === activityScriptPath) {
     clientRes.writeHead(200, {
       "content-type": "application/javascript; charset=utf-8",

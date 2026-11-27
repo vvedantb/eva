@@ -17,7 +17,16 @@
  */
 
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
-import { mountToolbar, type Toolbar, type ToolbarTheme } from "./toolbar";
+import { openSelectionCard, type SelectionCard } from "./commentCard";
+import { openCommentsDrawer, type CommentsDrawer } from "./commentsDrawer";
+import {
+  listComments,
+  loadEvaSession,
+  sendComment,
+  type EvaSession,
+} from "./evaApi";
+import type { ToolbarTheme } from "./theme";
+import { mountToolbar, type Toolbar } from "./toolbar";
 
 type Msg = typeof PREVIEW_FRAME_MESSAGE;
 
@@ -371,6 +380,11 @@ function evaPreviewAnnotationScript(): void {
   let labelEl: HTMLDivElement | null = null;
   let rectRaf = 0;
   let toolbar: Toolbar | null = null;
+  /** Direct link only: the note card for the picked element. */
+  let selectionCard: SelectionCard | null = null;
+  /** Direct link only: set when the proxy handed over a preview-comments token. */
+  let evaSession: EvaSession | null = null;
+  let commentsDrawer: CommentsDrawer | null = null;
 
   function post(
     payload:
@@ -791,7 +805,8 @@ function evaPreviewAnnotationScript(): void {
     labelEl.style.left = Math.max(0, rect.left) + "px";
   }
 
-  function chipLabel(el: Element): string {
+  /** `<tag.firstClass>`, without the React name `chipLabel` puts in front. */
+  function elementChip(el: Element): string {
     const tag = el.tagName.toLowerCase();
     const rawClass = el.classList.item(0);
     // Fall back to the raw class when the strip consumes all of it (a class
@@ -799,12 +814,18 @@ function evaPreviewAnnotationScript(): void {
     const stripped = rawClass ? stripClassHash(rawClass) : "";
     const cls =
       el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
+    return "<" + tag + cls + ">";
+  }
+
+  function chipLabel(el: Element): string {
     const react = collectReactNames(el);
     const reactPrefix = react[0] ? react[0] + " " : "";
-    return reactPrefix + "<" + tag + cls + ">";
+    return reactPrefix + elementChip(el);
   }
 
   function clearAll(): void {
+    selectionCard?.close();
+    selectionCard = null;
     selectedEl = null;
     paintBox(null, "", false);
   }
@@ -824,9 +845,16 @@ function evaPreviewAnnotationScript(): void {
       rectRaf = 0;
       if (!selectedEl || !document.contains(selectedEl)) {
         post({ type: "eva-preview-annotate-rect", rect: null });
+        selectionCard?.close();
         return;
       }
       const rect = selectedEl.getBoundingClientRect();
+      selectionCard?.reposition({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
       post({
         type: "eva-preview-annotate-rect",
         rect: {
@@ -856,6 +884,29 @@ function evaPreviewAnnotationScript(): void {
     paintBox(target, chipLabel(target), false);
   }
 
+  /** `prop: value; prop: value` as pairs, for the card's details. */
+  function styleLines(summary: string): { prop: string; value: string }[] {
+    const out: { prop: string; value: string }[] = [];
+    for (const entry of summary.split("; ")) {
+      const separator = entry.indexOf(": ");
+      const prop = separator === -1 ? entry : entry.slice(0, separator);
+      if (prop) {
+        out.push({
+          prop,
+          value: separator === -1 ? "" : entry.slice(separator + 2),
+        });
+      }
+    }
+    return out;
+  }
+
+  /** A picked element is done: clear it and tell the toolbar what happened. */
+  function finishSelection(notice: string): void {
+    clearAll();
+    setMode(false);
+    toolbar?.update({ notice });
+  }
+
   function onClick(event: MouseEvent): void {
     if (!modeActive) return;
     const target = event.target;
@@ -874,12 +925,41 @@ function evaPreviewAnnotationScript(): void {
     const rect = target.getBoundingClientRect();
     paintBox(target, chipLabel(target), true);
     if (!embedded) {
-      // No Eva to take the annotation: hand the element's context to the
-      // clipboard, so it can be pasted into a chat or an issue.
-      void copyToClipboard(formatContextForClipboard(context)).then((ok) => {
-        toolbar?.update({ notice: ok ? "Element copied" : "Couldn't copy" });
+      // No Eva to take the annotation: a card takes the note and copies it
+      // with the element's context, to paste into a chat or an issue.
+      selectionCard?.close();
+      const session = evaSession;
+      selectionCard = openSelectionCard({
+        info: {
+          chip: elementChip(target),
+          reactName: context.reactComponents[0] ?? "",
+          text: context.textContent,
+          accessibility: context.accessibility,
+          html: context.outerHTML,
+          styles: styleLines(context.stylesSummary),
+        },
+        rect,
+        submitLabel: session ? "Send to Eva" : "Copy for Eva",
+        requireNote: session !== null,
+        onSubmit: async (note) => {
+          if (session) {
+            try {
+              await sendComment(session, { feedback: note, context });
+            } catch (error) {
+              return error instanceof Error ? error.message : "Couldn't send";
+            }
+            finishSelection("Sent to Eva");
+            return null;
+          }
+          const ok = await copyToClipboard(
+            formatContextForClipboard(context, note),
+          );
+          if (!ok) return "Couldn't copy";
+          finishSelection("Copied for Eva");
+          return null;
+        },
+        onCancel: clearAll,
       });
-      setMode(false);
       return;
     }
     post({
@@ -1510,6 +1590,8 @@ function evaPreviewAnnotationScript(): void {
     if (overlay) overlay.style.display = overlayDisplayForCapture;
     if (labelEl) labelEl.style.display = labelDisplayForCapture;
     toolbar?.setHiddenForCapture(false);
+    selectionCard?.setHiddenForCapture(false);
+    commentsDrawer?.setHiddenForCapture(false);
   }
 
   let overlayDisplayForCapture = "";
@@ -1571,6 +1653,8 @@ function evaPreviewAnnotationScript(): void {
     if (overlay) overlay.style.display = "none";
     if (labelEl) labelEl.style.display = "none";
     toolbar?.setHiddenForCapture(true);
+    selectionCard?.setHiddenForCapture(true);
+    commentsDrawer?.setHiddenForCapture(true);
     return loadHtml2Canvas()
       .then(renderViewportCanvas)
       .then((canvas) => canvas.toDataURL("image/png"))
@@ -1600,6 +1684,18 @@ function evaPreviewAnnotationScript(): void {
       badgeText: read("badgeText"),
       disc: read("disc"),
       destructive: read("destructive"),
+      border: read("border"),
+      primary: read("primary"),
+      primaryText: read("primaryText"),
+      field: read("field"),
+      popover: read("popover"),
+      muted: read("muted"),
+      warning: read("warning"),
+      inputBorder: read("inputBorder"),
+      focusBorder: read("focusBorder"),
+      secondaryText: read("secondaryText"),
+      tabTrack: read("tabTrack"),
+      tabPill: read("tabPill"),
     };
     return Object.values(theme).some((entry) => entry === "") ? null : theme;
   }
@@ -1615,12 +1711,16 @@ function evaPreviewAnnotationScript(): void {
   }
 
   /** Short, paste-ready summary of a picked element for a direct link. */
-  function formatContextForClipboard(context: EvaAnnotationContext): string {
-    const lines = [
+  function formatContextForClipboard(
+    context: EvaAnnotationContext,
+    note: string,
+  ): string {
+    const lines = note ? [`Feedback: ${note}`, ""] : [];
+    lines.push(
       `Element: ${context.selector}`,
       `Page: ${context.pageUrl}`,
       `Path: ${context.fullPath}`,
-    ];
+    );
     if (context.reactComponents.length > 0) {
       lines.push(`React: ${context.reactComponents.join(" > ")}`);
     }
@@ -1811,8 +1911,28 @@ function evaPreviewAnnotationScript(): void {
             setMode(!modeActive);
           }
         },
-        comments: () =>
-          post({ type: "eva-preview-toolbar-action", action: "comments" }),
+        comments: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "comments" });
+            return;
+          }
+          if (commentsDrawer) {
+            commentsDrawer.close();
+            commentsDrawer = null;
+            toolbar?.update({ commentsActive: false });
+            return;
+          }
+          if (!evaSession) return;
+          commentsDrawer = openCommentsDrawer({
+            session: evaSession,
+            onClose: () => {
+              commentsDrawer = null;
+              toolbar?.update({ commentsActive: false });
+            },
+            onCount: (commentCount) => toolbar?.update({ commentCount }),
+          });
+          toolbar?.update({ commentsActive: true });
+        },
         freeze: () => setFrozen(!frozen),
         sketch: () =>
           post({ type: "eva-preview-toolbar-action", action: "sketch" }),
@@ -1828,6 +1948,24 @@ function evaPreviewAnnotationScript(): void {
       // only the ones that need no parent are shown.
       { selectEnabled: !embedded },
     );
+  }
+
+  // Direct link: the proxy may hold a token for this sandbox's chat. With it
+  // the Comments button, the drawer and "Send to Eva" appear.
+  if (ownsToolbar && !embedded) {
+    void loadEvaSession().then(async (session) => {
+      if (!session) return;
+      evaSession = session;
+      toolbar?.update({ commentsEnabled: true });
+      try {
+        const existing = await listComments(session);
+        toolbar?.update({
+          commentCount: existing.filter((c) => c.resolved === null).length,
+        });
+      } catch {
+        // The drawer shows the failure when it is opened.
+      }
+    });
   }
 
   post({ type: "eva-preview-annotate-ready" });
