@@ -25,6 +25,7 @@ import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
 import { Route as DevLandingDemosRouteImport } from './routes/dev/landing-demos'
+import { Route as DevPreviewParityRouteImport } from './routes/dev/preview-parity'
 import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
 import { Route as SlidesIndexRouteImport } from './routes/slides/index'
 import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
@@ -227,6 +228,11 @@ const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
 const DevLandingDemosRoute = DevLandingDemosRouteImport.update({
   id: '/dev/landing-demos',
   path: '/dev/landing-demos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevPreviewParityRoute = DevPreviewParityRouteImport.update({
+  id: '/dev/preview-parity',
+  path: '/dev/preview-parity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
@@ -975,6 +981,7 @@ export interface FileRoutesByFullPath {
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/preview-parity': typeof DevPreviewParityRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1115,6 +1122,7 @@ export interface FileRoutesByTo {
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/preview-parity': typeof DevPreviewParityRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1235,6 +1243,7 @@ export interface FileRoutesById {
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/preview-parity': typeof DevPreviewParityRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
@@ -1378,6 +1387,7 @@ export interface FileRouteTypes {
     | '/whats-new'
     | '/dev/feature-previews'
     | '/dev/landing-demos'
+    | '/dev/preview-parity'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1518,6 +1528,7 @@ export interface FileRouteTypes {
     | '/whats-new'
     | '/dev/feature-previews'
     | '/dev/landing-demos'
+    | '/dev/preview-parity'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1637,6 +1648,7 @@ export interface FileRouteTypes {
     | '/_global/whats-new'
     | '/dev/feature-previews'
     | '/dev/landing-demos'
+    | '/dev/preview-parity'
     | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
@@ -1771,6 +1783,7 @@ export interface RootRouteChildren {
   AgentCallbackRoute: typeof AgentCallbackRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   DevLandingDemosRoute: typeof DevLandingDemosRoute
+  DevPreviewParityRoute: typeof DevPreviewParityRoute
   DevUiGalleryRoute: typeof DevUiGalleryRoute
   SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
   SlidesBeeRoute: typeof SlidesBeeRoute
@@ -1892,6 +1905,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/landing-demos'
       fullPath: '/dev/landing-demos'
       preLoaderRoute: typeof DevLandingDemosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/preview-parity': {
+      id: '/dev/preview-parity'
+      path: '/dev/preview-parity'
+      fullPath: '/dev/preview-parity'
+      preLoaderRoute: typeof DevPreviewParityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/ui-gallery': {
@@ -3432,6 +3452,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentCallbackRoute: AgentCallbackRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   DevLandingDemosRoute: DevLandingDemosRoute,
+  DevPreviewParityRoute: DevPreviewParityRoute,
   DevUiGalleryRoute: DevUiGalleryRoute,
   SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
   SlidesBeeRoute: SlidesBeeRoute,

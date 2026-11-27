@@ -7,6 +7,7 @@ import {
 } from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
+import { registerPreviewCommentRoutes } from "./previewCommentsHttp";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
@@ -38,6 +39,7 @@ import {
 } from "./mcp/native";
 
 const http = httpRouter();
+registerPreviewCommentRoutes(http);
 
 /** Verifies the EVA deploy key from the request Authorization header. */
 function verifyDeployKey(request: Request): boolean {
