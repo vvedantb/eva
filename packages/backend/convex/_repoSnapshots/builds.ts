@@ -106,7 +106,7 @@ export const getBuild = authQuery({
   },
 });
 
-/** Cron-triggered handler that starts a new snapshot build if none is currently running. */
+/** Cron-triggered handler that starts a new snapshot build if none is currently running. Hidden apps are skipped. */
 export const triggerScheduledBuild = internalMutation({
   args: {
     repoSnapshotId: v.id("repoSnapshots"),
@@ -119,6 +119,12 @@ export const triggerScheduledBuild = internalMutation({
   handler: async (ctx, args) => {
     const config = await ctx.db.get(args.repoSnapshotId);
     if (!config) return null;
+
+    // A hidden app is not offered for sessions, so nothing would use its
+    // snapshot. Skip the nightly build; `disableRetries` is the operator's
+    // debugging entry point and still builds.
+    const repo = await ctx.db.get(config.repoId);
+    if (repo?.hidden === true && args.disableRetries !== true) return null;
 
     const runningBuild = await ctx.db
       .query("snapshotBuilds")
