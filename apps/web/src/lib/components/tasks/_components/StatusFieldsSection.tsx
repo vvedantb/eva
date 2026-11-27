@@ -7,7 +7,13 @@ import type { Doc, Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
-import { FieldsSection } from "@/lib/components/fields/FieldsSection";
+import {
+  FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
+  FieldsSection,
+} from "@/lib/components/fields/FieldsSection";
+import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useTaskChatBinding } from "../TaskSandboxChatPanel";
 import { LabelsField } from "@/lib/components/labels/LabelsField";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
@@ -97,7 +103,7 @@ export function StatusFieldsSection({
           disabled={readOnly}
         />
 
-        {/* No model row: a task runs on the model in its chat's composer. */}
+        <TaskModelRow taskId={taskId} disabled={readOnly} />
 
         <BaseBranchRow
           taskId={taskId}
@@ -138,6 +144,42 @@ export function StatusFieldsSection({
           onCreated={(id) => updateTask({ id: taskId, projectId: id })}
         />
       </FieldsSection>
+    </div>
+  );
+}
+
+/**
+ * The model, traits and account the task runs on. It is the task chat's own
+ * pick (`useTaskChatBinding`), so this row and the chat composer always
+ * agree. Before the first run the row shows the chat seed; a pick creates
+ * the task's session and chat (no sandbox start) and stores it there.
+ */
+function TaskModelRow({
+  taskId,
+  disabled,
+}: {
+  taskId: Id<"agentTasks">;
+  disabled: boolean;
+}) {
+  const binding = useTaskChatBinding(taskId);
+  return (
+    <div className={FIELD_ROW_CLASS}>
+      <ModelSelectWithTraits
+        value={binding.model}
+        options={binding.modelOptions}
+        onValueChange={binding.setModel}
+        accounts={binding.accounts}
+        accountId={binding.providerAccountId ?? null}
+        onAccountChange={(next) =>
+          void binding.switchProviderAccount(
+            binding.resolveAccountId(next) ?? null,
+          )
+        }
+        traits={binding.displayTraits}
+        onTraitsChange={binding.onTraitsChange}
+        disabled={disabled || binding.isSwitchingAccount}
+        className={`px-0 ${FIELD_TEXT_CLASS}`}
+      />
     </div>
   );
 }
