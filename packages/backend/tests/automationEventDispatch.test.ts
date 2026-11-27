@@ -362,6 +362,7 @@ describe("event run lifecycle", () => {
           acknowledged: false,
           eventKind: "pr_updated",
           headSha: "evas-push",
+          headShas: ["evas-push"],
         });
       });
       await t.mutation(internal.automations.startEventRun, {
@@ -370,6 +371,43 @@ describe("event run lifecycle", () => {
       });
       const runs = await runsOf(automationId);
       expect(runs.map((run) => run._id)).not.toContain(queued);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a person's push stays queued even when an automation pushes on top",
+    async () => {
+      const { t, ids, install, runsOf, dispatch } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        event: "pr_updated",
+      });
+      // The automation is mid-run, so the queued run waits instead of starting.
+      await t.run(async (ctx) => {
+        await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "running",
+          startedAt: Date.now(),
+          acknowledged: false,
+          activeWorkflowId: "busy",
+          pushedSha: "evas-push",
+        });
+      });
+      await dispatch(pushed("persons-push"));
+      await dispatch(pushed("evas-push"));
+      const queued = (await runsOf(automationId)).find(
+        (run) => run.status === "queued",
+      );
+      if (queued === undefined) throw new Error("no queued run");
+      expect(queued.headShas).toEqual(["persons-push", "evas-push"]);
+      await t.mutation(internal.automations.startEventRun, {
+        runId: queued._id,
+        event: pushed("persons-push"),
+      });
+      const after = await t.run((ctx) => ctx.db.get(queued._id));
+      expect(after?.status).toBe("queued");
     },
     TIMEOUT_MS,
   );
