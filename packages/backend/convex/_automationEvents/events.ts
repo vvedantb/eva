@@ -8,11 +8,9 @@ import {
 export {
   DEFAULT_ISSUE_LABEL,
   REPO_EVENT_LABELS,
-  normalizeTrigger,
   triggerHasEvent,
   type AutomationTrigger,
   type RepoEventKind,
-  type StoredAutomationTrigger,
 } from "./labels";
 
 /**

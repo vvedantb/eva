@@ -1,7 +1,6 @@
 import type { Infer } from "convex/values";
 import type {
   automationTriggerValidator,
-  legacyEventTriggerValidator,
   repoEventKindValidator,
 } from "../_validators/tableFields";
 
@@ -12,27 +11,6 @@ import type {
 
 export type RepoEventKind = Infer<typeof repoEventKindValidator>;
 export type AutomationTrigger = Infer<typeof automationTriggerValidator>;
-/** A trigger as stored: the current shape, or the legacy single event. */
-export type StoredAutomationTrigger =
-  | AutomationTrigger
-  | Infer<typeof legacyEventTriggerValidator>;
-
-/**
- * A stored trigger in the current shape. Temporary: delete with
- * `legacyEventTriggerValidator` once `migrateEventTriggers` has run.
- */
-export function normalizeTrigger(
-  stored: StoredAutomationTrigger,
-): AutomationTrigger {
-  if (stored.kind === "cron" || "events" in stored) return stored;
-  const events: RepoEventKind[] =
-    stored.event === "pr_opened_or_updated"
-      ? ["pr_opened", "pr_updated"]
-      : [stored.event];
-  return stored.label === undefined
-    ? { kind: "event", events }
-    : { kind: "event", events, label: stored.label };
-}
 
 /** Whether the trigger fires on this event. */
 export function triggerHasEvent(
@@ -69,7 +47,7 @@ export const USER_REPO_EVENTS: ReadonlyArray<RepoEventKind> = [
  * works on the PR or issue its event names, and a manual run has none.
  */
 export function canRunByHand(
-  trigger: StoredAutomationTrigger | undefined,
+  trigger: AutomationTrigger | undefined,
 ): boolean {
   return trigger?.kind !== "event";
 }

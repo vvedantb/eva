@@ -1,9 +1,7 @@
 import {
   DEFAULT_ISSUE_LABEL,
-  normalizeTrigger,
   REPO_EVENT_LABELS,
   type AutomationTrigger,
-  type StoredAutomationTrigger,
 } from "@eva/backend";
 import cronstrue from "cronstrue";
 
@@ -15,8 +13,8 @@ export { canRunByHand } from "@eva/backend";
 export const CRON_TRIGGER: AutomationTrigger = { kind: "cron" };
 
 /** A row's trigger; rows from before event triggers run on their schedule. */
-export function automationTriggerOf(automation: { trigger?: StoredAutomationTrigger }): AutomationTrigger {
-  return automation.trigger === undefined ? CRON_TRIGGER : normalizeTrigger(automation.trigger);
+export function automationTriggerOf(automation: { trigger?: AutomationTrigger }): AutomationTrigger {
+  return automation.trigger ?? CRON_TRIGGER;
 }
 
 /** "Runs when a PR is opened or a commit is pushed to a PR", or null for a schedule. */
@@ -72,7 +70,7 @@ export function describeCron(utcExpression: string): { valid: true; text: string
 }
 
 /** When an automation runs, in words: its event, else its schedule (or the raw cron when it cannot be read). */
-export function automationWhenText(automation: { trigger?: StoredAutomationTrigger; cronSchedule: string }): string {
+export function automationWhenText(automation: { trigger?: AutomationTrigger; cronSchedule: string }): string {
   const event = describeTrigger(automationTriggerOf(automation));
   if (event) return event;
   const cron = describeCron(automation.cronSchedule);

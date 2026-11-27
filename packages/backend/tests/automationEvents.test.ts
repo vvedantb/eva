@@ -3,7 +3,6 @@ import { checkRunBody } from "../convex/_automations/checkRun";
 import { parseAxiomAlert } from "../convex/_automationEvents/axiomAlert";
 import {
   describeAlert,
-  normalizeTrigger,
   parseRepoEvents,
   repoEventKey,
   triggerMatchesEvent,
@@ -249,15 +248,6 @@ describe("triggers", () => {
     expect(triggerMatchesEvent(onUpdated, opened)).toBe(false);
     expect(triggerMatchesEvent(onUpdated, updated)).toBe(true);
     expect(triggerMatchesEvent(onOpened, updated)).toBe(false);
-  });
-
-  test("a legacy single-event trigger reads as its events list", () => {
-    expect(
-      normalizeTrigger({ kind: "event", event: "pr_opened_or_updated" }),
-    ).toEqual({ kind: "event", events: ["pr_opened", "pr_updated"] });
-    expect(
-      normalizeTrigger({ kind: "event", event: "issue_labeled", label: "x" }),
-    ).toEqual({ kind: "event", events: ["issue_labeled"], label: "x" });
   });
 
   test("CI keys are per commit so a new push is a new attempt", () => {

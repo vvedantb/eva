@@ -1181,16 +1181,6 @@ export const automationTriggerValidator = v.union(
   }),
 );
 
-/**
- * The single-event trigger stored before `events`. Temporary: once
- * `dataMigrations:migrateEventTriggers` has run, narrow `automations.trigger`
- * to `automationTriggerValidator` and delete this and `normalizeTrigger`.
- */
-export const legacyEventTriggerValidator = v.object({
-  kind: v.literal("event"),
-  event: v.union(repoEventKindValidator, v.literal("pr_opened_or_updated")),
-  label: v.optional(v.string()),
-});
 
 export const automationFields = {
   ...entityNumIdFields,
@@ -1201,9 +1191,7 @@ export const automationFields = {
   cronSchedule: v.string(),
   // Missing means `{ kind: "cron" }`, so rows from before event triggers
   // keep their schedule without a migration.
-  trigger: v.optional(
-    v.union(automationTriggerValidator, legacyEventTriggerValidator),
-  ),
+  trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
   // The account runs bill to: the creator's own, or a teammate's shared one.
   // Missing means the team credential.
