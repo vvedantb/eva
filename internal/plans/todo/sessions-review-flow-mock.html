@@ -1,0 +1,194 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Review flow: private sessions, one reviewer, Waiting for you</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1320px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:16px;max-width:1180px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.wide{grid-column:1 / -1}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:12px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
+.num{width:22px;height:22px;border-radius:11px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none;font-size:12px}
+.who{font-size:10px;font-weight:700;border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.who.v{background:#2f2a4a;color:#c4b5fd}.who.p{background:#1e3346;color:#93c5fd}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12px;margin-top:1px}
+.app{display:flex;height:300px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#222326;position:relative}
+.rail{width:40px;background:#1b1c1f;display:flex;flex-direction:column;align-items:center;gap:7px;padding:9px 0;flex:none}
+.ri{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#8b8f96;font-size:11px;position:relative}
+.ri.on{background:#34353b;color:#fff}
+.badge{position:absolute;right:-3px;bottom:-3px;background:#e6e7e9;color:#18191c;font-size:8px;font-weight:700;border-radius:6px;padding:0 3px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px 12px}
+.mh{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.mh .t{font-size:14px;font-weight:600}
+.sp{flex:1}.muted{color:#8b8f96;font-weight:400}
+.chip{display:inline-flex;gap:5px;align-items:center;background:#2a2b30;border-radius:8px;padding:3px 8px;font-size:10.5px;white-space:nowrap}
+.st{font-size:9.5px;border-radius:5px;padding:1px 6px;white-space:nowrap}
+.st.priv{background:#2a2b30;color:#a7aab0;border:1px solid #3a3b41}.st.rev{background:#3b2f14;color:#f0c674}.st.prog{background:#2f2a4a;color:#c4b5fd}.st.todo{background:#33343a;color:#a7aab0}.st.done{background:#173322;color:#6ee7a0}.st.wait{background:#3a1f22;color:#f4a3a8}.st.ok{background:#173322;color:#6ee7a0}
+.btn{background:#2a2b30;border-radius:8px;padding:3px 9px;font-size:11px;white-space:nowrap}
+.btn.pri{background:#e6e7e9;color:#18191c;font-weight:600}
+.chat{flex:1;display:flex;flex-direction:column;gap:7px;font-size:11.5px;min-height:0}
+.me{align-self:flex-end;background:#2f2a4a;border-radius:11px;padding:6px 9px;max-width:80%}
+.them{background:#2c2d32;border-radius:11px;padding:6px 9px;max-width:80%}
+.sys{font-size:10.5px;color:#8b8f96;text-align:center}
+.mention{background:#60a5fa2e;color:#93c5fd;border-radius:99px;padding:0 5px}
+.comp{background:#2a2b30;border-radius:12px;padding:8px 10px;color:#c9cbcf;font-size:11px}
+.suggest{display:flex;align-items:center;gap:7px;background:#26272b;border:1px solid #3a3b41;border-radius:10px;padding:6px 8px;font-size:11px;margin-bottom:6px}
+.board{display:flex;gap:6px;flex:1;min-height:0}
+.col{flex:1;background:#26272b;border-radius:9px;padding:6px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.colh{font-size:10.5px;color:#a7aab0}
+.card{background:#2e2f34;border-radius:7px;padding:6px 7px;font-size:11px;display:flex;flex-direction:column;gap:3px}
+.card .m{font-size:9.5px;color:#8b8f96;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.inbox{flex:1;display:flex;flex-direction:column;gap:4px;padding:10px 12px;font-size:11.5px}
+.gh{font-size:10.5px;color:#8b8f96;margin-top:4px}
+.ir{background:#26272b;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}
+.ir .m{font-size:10px;color:#8b8f96}
+.side{width:220px;padding:9px 7px;display:flex;flex-direction:column;gap:2px;flex:none}
+.sideh{display:flex;align-items:center;font-weight:600;font-size:13px;padding:2px 6px 7px;gap:6px}
+.seg{display:flex;background:#2a2b30;border-radius:9px;padding:2px;font-size:11px}
+.seg span{flex:1;text-align:center;padding:3px 8px;border-radius:7px;color:#8b8f96}.seg span.on{background:#3a3b41;color:#e6e7e9}
+.row{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:7px;font-size:12px}
+.row.on{background:#2e2f34}
+.row .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grp{font-size:11px;color:#8b8f96;padding:6px 8px 3px}
+.lock{font-size:10px;color:#8b8f96}
+.hit{outline:2px solid #f0b35a;outline-offset:2px;border-radius:7px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:6}
+.note{margin-top:8px;font-size:11.5px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.flow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;margin-top:4px}
+.arrow{color:#8b8f96}
+</style></head><body>
+<h1>Review flow: private by default, one reviewer, "Waiting for you"</h1>
+<p class="lead">A session is private to its maker until they ask someone to review it. Statuses: <span class="st todo">To do</span> <span class="st prog">In progress</span> <span class="st rev">In review</span> <span class="st done">Done</span>. "Waiting for you" is not a column: it is how a session shows to the one person it waits on (Inbox, a badge, a filter). Vedant (dev) asks Priya (business) to review.</p>
+<div class="flow"><span class="st priv">Private</span><span class="arrow">→ @Priya, Request review →</span><span class="st rev">In review · Priya</span><span class="arrow">→ Request changes →</span><span class="st prog">In progress · changes requested</span><span class="arrow">→ Request review again →</span><span class="st rev">In review</span><span class="arrow">→ Approve →</span><span class="st ok">Approved</span><span class="arrow">→ PR merges →</span><span class="st done">Done</span></div>
+<p class="lead" style="margin-top:6px">Solo dev work skips review: <span class="st priv">Private</span> → PR merges → <span class="st done">Done</span> (stays private).</p>
+<div class="grid">
+
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">A new session is private.<span class="who v">Vedant</span></div><div class="see">Only Vedant sees it, in his Sessions list. It is not on the Board. The header says Private.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="side">
+      <div class="sideh">Sessions<span class="sp"></span><span class="seg" style="width:100px"><span class="on">List</span><span>Board</span></span></div>
+      <div class="grp">Eva</div>
+      <div class="row on"><span class="t">NH provider homepage</span><span class="lock">Private</span></div>
+      <div class="row"><span class="t">Fix flaky login test</span><span class="lock">Private</span></div>
+    </div>
+    <div class="main">
+      <div class="mh"><span class="t">NH provider homepage</span><span class="muted">#96</span><span class="sp"></span><span class="chip"><span class="st priv">Private</span></span><span class="btn">Request review</span></div>
+      <div class="chat"><div class="me">Add the provider homepage with the CQC rating.</div><div class="them">Done. Preview is on the right; PR #9020 is open.</div></div>
+      <div class="comp">Message…</div>
+    </div>
+  </div>
+  <div class="note">Private replaces "off the board" and the Dev column: private sessions never reach the Board.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">He mentions Priya: a one-tap suggestion appears.<span class="who v">Vedant</span></div><div class="see">Mentioning someone in a private session offers "Request review from Priya?". "Just mention" sends the message only (and shares the session with her, read-only).</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">NH provider homepage</span><span class="muted">#96</span><span class="sp"></span><span class="chip"><span class="st priv">Private</span></span></div>
+      <div class="chat"><div class="me">Add the provider homepage with the CQC rating.</div><div class="them">Done. Preview is on the right; PR #9020 is open.</div></div>
+      <div class="suggest hit" style="position:relative">Request review from <b>Priya</b>?<span class="sp"></span><span class="btn pri">Request review</span><span class="btn">Just mention</span><span class="tag" style="top:-13px;left:4px">appears on @mention</span></div>
+      <div class="comp"><span class="mention">@Priya</span> can you check the homepage layout?</div>
+    </div>
+  </div>
+  <div class="note">The header's "Request review" button does the same with a person picker, for when there is nothing to say.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">In review: on the Board, and "Waiting for you" for Priya.<span class="who p">Priya</span></div><div class="see">The card moves to In review with her name. Her Inbox gets it under Waiting on you; the card shows "Waiting for you" only to her.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂<span class="badge">1</span></div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Sessions</span><span class="seg" style="width:100px"><span>List</span><span class="on">Board</span></span><span class="chip">carepulse-ts · web ▾</span><span class="chip">Waiting for me</span></div>
+      <div class="board">
+        <div class="col"><div class="colh">To do 1</div><div class="card">Export KPIs<div class="m">#88 · Sam</div></div></div>
+        <div class="col"><div class="colh">In progress 1</div><div class="card">Rename "Basket"<div class="m">#91 · Sam</div></div></div>
+        <div class="col"><div class="colh">In review 2</div><div class="card hit">NH provider homepage<div class="m">#96 · Vedant → <span class="st wait">Waiting for you</span></div></div><div class="card">Provider email source<div class="m">#101 · Sam → Vedant</div></div></div>
+        <div class="col"><div class="colh">Done 3</div><div class="card">CQC rating column<div class="m">#79 · merged</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Everyone else sees "Vedant → Priya" on the card. Only sessions that were shared for review (or created on the Board) are here.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">Priya opens it: Approve or Request changes.<span class="who p">Priya</span></div><div class="see">The header shows the reviewer's two actions. Request changes asks for a short note.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">NH provider homepage</span><span class="muted">#96</span><span class="sp"></span><span class="chip"><span class="st rev">In review · you</span></span><span class="btn pri">Approve</span><span class="btn hit" style="position:relative">Request changes<span class="tag" style="top:-13px;right:0">click</span></span></div>
+      <div class="chat"><div class="me" style="align-self:flex-start;background:#2c2d32">Add the provider homepage with the CQC rating.</div><div class="sys">Vedant asked Priya to review · 2:10 PM</div></div>
+      <div class="comp">Move the rating above the address, it is easy to miss.</div>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">5</div><div><div class="do">Changes requested: now it waits for Vedant.<span class="who v">Vedant</span></div><div class="see">Back to In progress with a "Changes requested" mark. Vedant's Inbox: Waiting on you. Priya sees "Waiting for Vedant".</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂<span class="badge">1</span></div><div class="ri on">▣</div></div>
+    <div class="inbox" style="flex:0 0 250px;border-right:1px solid #2e2f34">
+      <div style="font-weight:600">Inbox</div>
+      <div class="gh">Waiting on you</div>
+      <div class="ir">NH provider homepage<div class="m">Priya requested changes · 2m</div></div>
+      <div class="gh">New since you looked</div>
+      <div class="ir">Fix flaky login<div class="m">PR merged · 1h</div></div>
+    </div>
+    <div class="main">
+      <div class="mh"><span class="t">NH provider homepage</span><span class="sp"></span><span class="chip"><span class="st prog">In progress</span><span class="st wait">Changes requested</span></span><span class="btn pri">Request review again</span></div>
+      <div class="chat"><div class="sys">Priya requested changes · 2:31 PM</div><div class="them" style="background:#1e3346">Move the rating above the address, it is easy to miss.</div><div class="me">Done, moved it.</div></div>
+      <div class="comp">Message…</div>
+    </div>
+  </div>
+  <div class="note"><b>For Priya</b> the card stays on the Board in In progress, marked "Waiting for Vedant". It is not in her Inbox; it comes back when he asks again.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">6</div><div><div class="do">Approved, then the PR merges: Done.<span class="who p">Priya</span><span class="who v">Vedant</span></div><div class="see">Approve marks it "Approved · waiting for merge" in In review. Merging the PR (Vedant, or Eva on his say) moves it to Done.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Sessions</span><span class="seg" style="width:100px"><span>List</span><span class="on">Board</span></span></div>
+      <div class="board">
+        <div class="col"><div class="colh">In progress 1</div><div class="card">Rename "Basket"<div class="m">#91 · Sam</div></div></div>
+        <div class="col"><div class="colh">In review 2</div><div class="card">NH provider homepage<div class="m">#96 · <span class="st ok">Approved</span> · waiting for merge</div></div><div class="card">Provider email source<div class="m">#101 · Sam → Vedant</div></div></div>
+        <div class="col"><div class="colh">Done 4</div><div class="card">NH provider homepage<div class="m">#96 · merged · 4:05 PM</div></div><div class="card">CQC rating column<div class="m">#79 · merged</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">An approved session is "Waiting for Vedant" (to merge) in his Inbox until the PR merges.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">7</div><div><div class="do">Reminder after 3 days.<span class="who p">Priya</span></div><div class="see">If a review waits 3 days, the Inbox item comes back to the top as unread, with a push and email (by her notification settings). Then every 3 days.</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂<span class="badge">1</span></div><div class="ri">▣</div></div>
+    <div class="inbox">
+      <div style="font-weight:600">Inbox</div>
+      <div class="gh">Waiting on you</div>
+      <div class="ir">NH provider homepage<div class="m">Vedant asked you to review · waiting 3 days</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">8</div><div><div class="do">Business-made session (from "+ New" on the Board).<span class="who p">Priya</span></div><div class="see">Open question: is it private too, or on the Board in To do / In progress straight away so the team sees it? (Today's quick tasks are visible to everyone.)</div></div></div>
+  <div class="app">
+    <div class="rail"><div class="ri">✦</div><div class="ri">⌂</div><div class="ri on">▣</div></div>
+    <div class="main">
+      <div class="mh"><span class="t">Sessions</span><span class="seg" style="width:100px"><span>List</span><span class="on">Board</span></span><span class="sp"></span><span class="btn pri">+ New</span></div>
+      <div class="board">
+        <div class="col"><div class="colh">To do 2</div><div class="card hit">Export KPIs to CSV<div class="m">#88 · Priya · visible to team?</div></div></div>
+        <div class="col"><div class="colh">In progress 1</div><div class="card">Rename "Basket"<div class="m">#91 · Sam</div></div></div>
+        <div class="col"><div class="colh">In review 1</div><div class="card">Provider email source<div class="m">#101 · Sam → Vedant</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body></html>
