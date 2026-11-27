@@ -598,7 +598,6 @@ import type * as validators from "../validators.js";
 import type * as workProfiles from "../workProfiles.js";
 import type * as workflowManager from "../workflowManager.js";
 import type * as workflowWatchdog from "../workflowWatchdog.js";
-import type * as zzProofSeed from "../zzProofSeed.js";
 
 import type {
   ApiFromModules,
@@ -1197,7 +1196,6 @@ declare const fullApi: ApiFromModules<{
   workProfiles: typeof workProfiles;
   workflowManager: typeof workflowManager;
   workflowWatchdog: typeof workflowWatchdog;
-  zzProofSeed: typeof zzProofSeed;
 }>;
 
 /**
