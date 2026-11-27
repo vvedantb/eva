@@ -34,9 +34,6 @@ async function queueAfterTurn(prompt: string, reply: string, passes = 1) {
       sessionId,
       repoId,
       userId: userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     await ctx.db.insert("messages", {
       parentId: taskId,

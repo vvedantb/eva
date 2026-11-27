@@ -261,7 +261,6 @@ const schema = defineSchema({
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
-    .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
   // sessionDaemonStates table removed. schema-narrowing-ok: clearLegacyFields
   // Extra repos cloned into a session's sandbox beside the primary (which stays

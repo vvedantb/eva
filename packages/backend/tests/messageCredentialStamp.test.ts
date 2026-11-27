@@ -43,9 +43,6 @@ async function seed(t: ReturnType<typeof convexTest>) {
       sessionId,
       repoId,
       userId: ownerId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const account = {
       provider: "claude" as const,

@@ -133,9 +133,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId: ownerId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const docId = await ctx.db.insert("docs", {
       repoId,

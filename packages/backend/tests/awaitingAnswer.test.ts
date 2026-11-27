@@ -34,9 +34,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     await ctx.db.insert("turns", {
       entityId: chatId,

@@ -188,9 +188,6 @@ async function fixture(options: {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     if (options.hitLimit) {
       await ctx.db.insert("messages", {

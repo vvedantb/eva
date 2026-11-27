@@ -52,9 +52,6 @@ async function createSessionFixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const placeholderMessageId = await ctx.db.insert("messages", {
       parentId: chatId,

@@ -500,8 +500,7 @@ export const prOriginValidator = v.union(
  */
 export const prWatchValidator = v.object({
   startedAt: v.number(),
-  /** Session only: the chat that asked, which every wake goes to. */
-  sessionChatId: v.optional(v.id("sessionChats")),
+  // `sessionChatId` removed: a session has one chat. schema-narrowing-ok: deleteExtraSessionChats
   /** Head commit the check fields below describe. Unset until first read. */
   headSha: v.optional(v.string()),
   /** Names of the checks already reported as failed on `headSha`. */
@@ -562,23 +561,18 @@ const prSummaryFields = {
 };
 
 /**
- * One chat thread inside a session. The session owns the sandbox, branch,
- * PR and preview; the chat owns the transcript, the warm daemon, the open
- * turn and the model settings. Every session has a Main chat (number 1);
- * further chats run in parallel on the same checkout, each with its own
- * daemon and provider transcript (`sessionClaudeUuid(chat._id)`).
+ * A session's one chat (its Main chat). The session owns the sandbox,
+ * branch, PR and preview; the chat owns the transcript, the warm daemon, the
+ * open turn and the model settings (`sessionClaudeUuid` keys its provider
+ * transcript).
  */
 export const sessionChatFields = {
   sessionId: v.id("sessions"),
   repoId: v.id("githubRepos"),
   /** Session owner, mirrored so the 50ms daemon claim poll skips the repo access read. */
   userId: v.id("users"),
-  title: v.string(),
-  /** Per-session sequence; 1 is Main. Stable for links (`?chat=2`). */
-  number: v.number(),
-  isMain: v.boolean(),
-  /** Closed by the user. Main can never be archived. */
-  archived: v.optional(v.boolean()),
+  // `title`, `number`, `isMain`, `archived` removed: a session has one chat.
+  // schema-narrowing-ok: deleteExtraSessionChats
   createdBy: v.optional(v.id("users")),
   updatedAt: v.optional(v.number()),
   // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots

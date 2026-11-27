@@ -43,9 +43,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Chat 2",
-      number: 2,
-      isMain: false,
     });
     const messageId = await ctx.db.insert("messages", {
       parentId: chatId,

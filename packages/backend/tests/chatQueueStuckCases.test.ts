@@ -58,9 +58,6 @@ async function fixture(options: {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       ...(options.orphanAgentAgeMs !== undefined
         ? {
             backgroundAgents: [

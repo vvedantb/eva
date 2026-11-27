@@ -348,9 +348,6 @@ describe("chat log", () => {
           sessionId: f.sessionId,
           repoId: session.repoId,
           userId: session.userId,
-          title: "Chat 2",
-          number: 2,
-          isMain: false,
         });
         const messageId = await ctx.db.insert("messages", {
           parentId: chatId,

@@ -75,9 +75,6 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       sessionId,
       repoId,
       userId: ownerUserId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: "claude:sonnet",
     });
     return {

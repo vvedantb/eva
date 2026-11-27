@@ -35,8 +35,8 @@ import { findMainChat } from "./_sessionChats/helpers";
  * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`), or
  *   on a reopen after `RECAP_REVISIT_MS` with nothing new.
  * `textGen.generateChatRecap` writes the text. A
- * project's coordinator (its Main chat) covers every chat in the project's
- * session plus each child task's Main chat in the task's own session, and
+ * project's coordinator (its chat) covers that chat plus each child task's
+ * chat in the task's own session, and
  * names the task chats as chips. One row per (user, chat); a new absence replaces
  * it, Dismiss deletes it.
  */
@@ -222,7 +222,7 @@ async function recapChats(
   const chatId = ctx.db.normalizeId("sessionChats", parentId);
   const chat = chatId ? await ctx.db.get(chatId) : null;
   const session = chat ? await ctx.db.get(chat.sessionId) : null;
-  if (!chat || !session || !chat.isMain || session.owner.kind !== "project") {
+  if (!chat || !session || session.owner.kind !== "project") {
     return { chats: [{ parentId, label: "This chat" }], taskIds: [] };
   }
   const chats: RecapChat[] = [{ parentId: chat._id, label: "Project chat" }];

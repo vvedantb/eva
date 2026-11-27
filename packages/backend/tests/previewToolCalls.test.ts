@@ -50,9 +50,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     return { sessionId, chatId };
   });

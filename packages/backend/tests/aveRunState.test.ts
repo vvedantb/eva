@@ -287,7 +287,7 @@ describe("wake-ups and watches", () => {
   );
 
   test(
-    "a session wake-up quotes the reply of the chat whose turn ended",
+    "a session wake-up quotes its chat's reply",
     async () => {
       const f = await fixture();
       await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
@@ -297,21 +297,13 @@ describe("wake-ups and watches", () => {
         sessionId: f.sessionId,
         aveThreadId: thread._id,
       });
-      const { mainChatId, sideChatId } = await f.t.run(async (ctx) => {
-        const chat = (title: string, number: number) =>
-          ctx.db.insert("sessionChats", {
-            sessionId: f.sessionId,
-            repoId: f.repoId,
-            userId: f.ownerUserId,
-            title,
-            number,
-            isMain: number === 1,
-          });
-        return {
-          mainChatId: await chat("Main", 1),
-          sideChatId: await chat("Side", 2),
-        };
-      });
+      const mainChatId = await f.t.run(async (ctx) =>
+        ctx.db.insert("sessionChats", {
+          sessionId: f.sessionId,
+          repoId: f.repoId,
+          userId: f.ownerUserId,
+        }),
+      );
       await f.t.run(async (ctx) => {
         await ctx.db.insert("messages", {
           parentId: mainChatId,
@@ -319,15 +311,9 @@ describe("wake-ups and watches", () => {
           content: "Main reply.",
           timestamp: Date.now(),
         });
-        await ctx.db.insert("messages", {
-          parentId: sideChatId,
-          role: "assistant",
-          content: "Side chat fixed the bug.",
-          timestamp: Date.now(),
-        });
       });
       await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
-        child: { kind: "session", sessionId: f.sessionId, chatId: sideChatId },
+        child: { kind: "session", sessionId: f.sessionId, chatId: mainChatId },
         status: "completed",
       });
       // The watch is one-shot, so re-arm it as Ave's next send would.
@@ -343,7 +329,7 @@ describe("wake-ups and watches", () => {
         .filter((r) => r.orchestratorNotification === true)
         .map((r) => r.content.split("\n\n")[1]);
       // Without a chat id (sandbox-start failure) the Main chat is read.
-      expect(notifications).toEqual(["Side chat fixed the bug.", "Main reply."]);
+      expect(notifications).toEqual(["Main reply.", "Main reply."]);
     },
     TIMEOUT_MS,
   );

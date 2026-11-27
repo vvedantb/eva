@@ -206,7 +206,6 @@ import type * as _migrations_backfillNumIds from "../_migrations/backfillNumIds.
 import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/backfillQueuedMessageOrder.js";
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
-import type * as _migrations_deleteExtraSessionChats from "../_migrations/deleteExtraSessionChats.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_handTriageToEva from "../_migrations/handTriageToEva.js";
@@ -805,7 +804,6 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillQueuedMessageOrder": typeof _migrations_backfillQueuedMessageOrder;
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
-  "_migrations/deleteExtraSessionChats": typeof _migrations_deleteExtraSessionChats;
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/handTriageToEva": typeof _migrations_handTriageToEva;
