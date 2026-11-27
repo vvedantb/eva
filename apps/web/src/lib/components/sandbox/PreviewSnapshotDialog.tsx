@@ -27,10 +27,7 @@ export function PreviewSnapshotDialog({
   onOpenChange: (open: boolean) => void;
   onAddToChat?: (snapshot: PreviewSnapshot) => void;
 }) {
-  if (!snapshot) return null;
-  // The review dialog is the only human control on this path, so it renders the
-  // exact selection formatSnapshotPrompt sends — never a shorter preview of it.
-  const selected = selectSnapshotForPrompt(snapshot);
+  if (!snapshot) return null;  const selected = selectSnapshotForPrompt(snapshot);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

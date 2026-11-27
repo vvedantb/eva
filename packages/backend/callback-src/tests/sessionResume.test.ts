@@ -11,8 +11,6 @@ import {
   vi,
 } from "bun:test";
 
-// Runtime homes live under /tmp and die with the sandbox; persist dirs survive
-// it. Both point into one throwaway root so the test never touches /home/eva.
 const sandbox = { root: mkdtempSync(join(tmpdir(), "session-resume-")) };
 
 const original = { ...(await import("../config.js")) };
@@ -79,7 +77,6 @@ const providers = [
   },
 ];
 
-/** A sandbox restart: /tmp is gone and the process state starts empty. */
 function restartSandbox(): void {
   rmSync(sandbox.root + "/runtime", { recursive: true, force: true });
   resetStateForTests();

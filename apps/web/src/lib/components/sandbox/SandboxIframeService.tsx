@@ -35,12 +35,6 @@ export interface StartResult {
   logs?: string;
 }
 
-/**
- * Formats a failed start into a user-facing message, appending sandbox logs
- * when the action returned any. A helper rather than an inline ternary because
- * React Compiler bails on a whole file when a conditional or nullish-coalescing
- * expression sits inside a try/catch, and this runs after the start await.
- */
 function startErrorMessage(
   result: { message?: string; logs?: string },
   fallback: string,
@@ -50,38 +44,12 @@ function startErrorMessage(
   return `${message}\n\nLogs:\n${result.logs}`;
 }
 
-interface SandboxIframeServiceProps {
-  /** sessionStorage namespace for caching the resolved iframe URL. */
-  cacheNamespace: string;
+interface SandboxIframeServiceProps {  cacheNamespace: string;
   cacheKey: string;
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
-  port: number;
-  /** Caller-bound Convex action to start the service. */
-  startAction: () => Promise<StartResult>;
-  /** Caller-bound Convex action to stop the service. */
-  stopAction: () => Promise<unknown>;
-  /** Optional URL transform applied after preview URL resolves. */
-  transformUrl?: (url: string) => string;
-  /** Optional side-effect when the service becomes ready (e.g. launch chrome). */
-  onReady?: (url: string) => void;
-  /** Run startAction before accepting an already-ready port. */
-  ensureStartedBeforeReady?: boolean;
-  /** Maximum poll attempts before declaring failure. */
-  maxAttempts: number;
-  /** Tabler icon shown in the inactive / idle empty states. */
-  icon: ComponentType<{ className?: string }>;
-  /** Shown when the sandbox itself isn't running. */
-  inactiveLabel: string;
-  /** Shown when the service is idle (sandbox up, service stopped). */
-  idleLabel: string;
-  /** Label for the start button. */
-  startLabel: string;
-  /** Label shown beside the spinner during startup. */
-  startingLabel: string;
-  /** Error prefix used when polling exhausts max attempts. */
-  pollFailedError: string;
+  port: number;  startAction: () => Promise<StartResult>;  stopAction: () => Promise<unknown>;  transformUrl?: (url: string) => string;  onReady?: (url: string) => void;  ensureStartedBeforeReady?: boolean;  maxAttempts: number;  icon: ComponentType<{ className?: string }>;  inactiveLabel: string;  idleLabel: string;  startLabel: string;  startingLabel: string;  pollFailedError: string;
   /** Generic error fallback when the start action throws. */
   startFailedError: string;
   /** Generic error fallback when polling throws. */

@@ -76,10 +76,6 @@ test("codex sets toolUseId, file_change files, and failed isError", () => {
 
 test("cursor pairs call_id, unwraps result envelopes, and dedups transitions", () => {
   applyFixture("cursor-sdk-events.jsonl", "cursor");
-  // 3 tools despite duplicate running/completed events and a
-  // terminal-without-running error (pushed then completed). The stream also
-  // carries a thinking event, which now lands as its own reasoning step, and
-  // reply text, which lands as a response step.
   const toolSteps = S.accumulatedSteps.filter(
     (s) => s.type !== "reasoning" && s.type !== "response",
   );
@@ -124,8 +120,6 @@ test("opencode captures output, exit, error, and durationMs", () => {
 });
 
 test("every provider redacts secrets and tail-caps tool output", () => {
-  // Fake token in the GitHub shape. It sits at the tail, so it survives the
-  // cap and only redaction can remove it.
   const token = "ghp_" + "A".repeat(36);
   const raw = "x".repeat(3000) + "\npushed with GH_TOKEN=" + token;
   const streams: [string, JsonObject[]][] = [
@@ -230,9 +224,6 @@ test("every provider redacts secrets and tail-caps tool output", () => {
 });
 
 test("a wrong-typed field never costs a sibling field", () => {
-  // Provider streams are unstable, so every field is read on its own: a bad
-  // `old_string` still leaves the `oldText` alias usable, and a bad `exit`
-  // still lets the next alias supply the code.
   expect(extractClaudeEdits({ old_string: 1, new_string: "b" })).toBe(
     undefined,
   );
@@ -261,7 +252,6 @@ test("malformed payloads fall back instead of throwing", () => {
   expect(probeOpencodeStateResult({ time: { start: 5, end: 1 } })).toBe(
     undefined,
   );
-  // Empty strings stay empty details rather than dropping out of the payload.
   expect(toolCallToStep("Glob", { pattern: "" }).detail).toBe("");
   expect(toolCallToStep("Glob", { pattern: 3 }).detail).toBe(undefined);
 });

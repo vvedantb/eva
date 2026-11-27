@@ -29,7 +29,6 @@ import {
 } from "@/lib/components/editor/suggestChanges";
 import { DOC_SIDE_PANEL_CLASS } from "./docSidePanel";
 
-/** 24px beside a pointer, a full 40px tap target below `sm`. */
 const PANEL_ACTION_CLASS = "h-6 px-1.5 text-xs max-sm:h-10 max-sm:px-3";
 
 const KIND_LABEL: Record<SuggestionInfo["kind"], string> = {
@@ -248,7 +247,6 @@ function authorName(
   return "Unknown";
 }
 
-/** Matches a Convex users-table id (mirrors the guard in user-initials.tsx). */
 const USER_ID_PATTERN = /^[a-z0-9_]{16,40}$/;
 
 function isUserId(id: string): id is Id<"users"> {

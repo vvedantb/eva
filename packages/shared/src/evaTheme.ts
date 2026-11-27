@@ -13,8 +13,6 @@ const light = {
   mutedForeground: "#646567",
   accent: "#f4f4f5",
   accentForeground: "#18181b",
-  // @mention chips: a fixed blue, readable on any bubble and accent
-  // (globals.css `--mention*`). `mentionSelf` marks a mention of the reader.
   mention: "#2563eb1f",
   mentionForeground: "#1d4ed8",
   mentionSelf: "#2563eb38",
@@ -35,15 +33,14 @@ const light = {
   border: "#dddedf",
   input: "#dddedf",
   ring: "#09090b",
-  // The muted categorical ramp (`--cat-1` … `--cat-8`): repo tiles, tab groups.
-  cat1: "#486aa8", // blue
-  cat2: "#7860aa", // violet
-  cat3: "#367a76", // teal
-  cat4: "#966c2a", // amber
-  cat5: "#a05264", // rose
-  cat6: "#3e7a54", // emerald
-  cat7: "#387096", // sky
-  cat8: "#a2603e", // orange
+  cat1: "#486aa8",
+  cat2: "#7860aa",
+  cat3: "#367a76",
+  cat4: "#966c2a",
+  cat5: "#a05264",
+  cat6: "#3e7a54",
+  cat7: "#387096",
+  cat8: "#a2603e",
 } as const;
 
 const dark = {
@@ -81,35 +78,30 @@ const dark = {
   border: "#242424",
   input: "#242424",
   ring: "#fafafa",
-  // The muted categorical ramp (`--cat-1` … `--cat-8`): repo tiles, tab groups.
-  cat1: "#8aa5d6", // blue
-  cat2: "#aa98d6", // violet
-  cat3: "#78b0ac", // teal
-  cat4: "#caa060", // amber
-  cat5: "#d28e9e", // rose
-  cat6: "#7eb290", // emerald
-  cat7: "#80acc8", // sky
-  cat8: "#d49876", // orange
+  cat1: "#8aa5d6",
+  cat2: "#aa98d6",
+  cat3: "#78b0ac",
+  cat4: "#caa060",
+  cat5: "#d28e9e",
+  cat6: "#7eb290",
+  cat7: "#80acc8",
+  cat8: "#d49876",
 } as const;
 
-/**
- * The web Neutral theme (`.dark.neutral`): the dark palette with greyer
- * surfaces. Status and accent colours stay dark's.
- */
 const neutral = {
   ...dark,
-  background: "#222325", // 34 35 37
+  background: "#222325",
   foreground: "#fafafa",
-  card: "#303134", // 48 49 52
+  card: "#303134",
   popover: "#303134",
   popoverForeground: "#fafafa",
-  secondary: "#444548", // 68 69 72
+  secondary: "#444548",
   secondaryForeground: "#fcfcfc",
   segmentActive: "#444548",
-  muted: "#3a3b3e", // 58 59 62
+  muted: "#3a3b3e",
   mutedForeground: "#9fa0a2",
   destructiveForeground: "#fcfcfc",
-  border: "#4e4f52", // 78 79 82
+  border: "#4e4f52",
   input: "#4e4f52",
 } as const;
 

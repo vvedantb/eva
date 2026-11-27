@@ -158,7 +158,6 @@ describe("opencodeToolToStep", () => {
 
 describe("cursorSdkToolToStep", () => {
   const cases: [string, JsonObject, ProgressStep][] = [
-    // Known SDK kinds.
     ["read", { path: LONG_PATH }, read()],
     [
       "write",
@@ -179,7 +178,6 @@ describe("cursorSdkToolToStep", () => {
     ["updateTodos", {}, tool("Updating tasks...")],
     ["mcp", { server: "linear" }, tool("Using MCP linear...")],
     ["mcp", { serverName: "linear" }, tool("Using MCP linear...")],
-    // Keyword fallback for renamed / unknown tools.
     ["readFileV2", { path: LONG_PATH }, read()],
     ["createFile", { path: LONG_PATH }, write()],
     [
@@ -192,7 +190,6 @@ describe("cursorSdkToolToStep", () => {
     ["runTerminal", { cmd: "ls" }, bash("ls", "ls")],
     ["urlFetch", { url: "https://x.dev" }, webFetch("https://x.dev")],
     ["webFetch", { url: "https://x.dev" }, webFetch("https://x.dev")],
-    // "webSearch" also contains "search"; it must not read as a code search.
     ["webSearch", { query: "foo" }, webSearch("foo")],
     ["updatePlan", {}, tool("Updating tasks...")],
     ["mcpCall", {}, tool("Using MCP tool...")],

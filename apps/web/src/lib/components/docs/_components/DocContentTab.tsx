@@ -191,16 +191,8 @@ export function DocContentTab({
   }, [editor]);
   /* eslint-enable no-effect/no-external-store-subscription */
 
-  /**
-   * Snapshot the current document as a version. Shared by the idle timer and
-   * the status line's Retry, so a failed snapshot is recoverable without
-   * touching the text again.
-   */
   const runSaveVersion = () => {
     if (!editor) return;
-    // Only the edits this snapshot covers are settled by it. Edits typed while
-    // it is in flight stay counted, keep the line on "Unsaved version", and
-    // the idle timer they re-armed saves them next.
     const editsCovered = editCountRef.current;
     setDocSaveState({ status: "saving" });
     saveVersion({
@@ -222,14 +214,11 @@ export function DocContentTab({
       .catch(() => setDocSaveState({ status: "error" }));
   };
 
-  // The transaction listener is registered once per editor; the ref lets it
-  // reach the current save closure without re-registering on every render.
   const saveVersionRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     saveVersionRef.current = runSaveVersion;
   }, [runSaveVersion]);
 
-  // Version snapshot tracking
   useEffect(() => {
     if (!editor) return;
 
@@ -267,7 +256,6 @@ export function DocContentTab({
     };
   }, [editor, doc._id, touchDraft]);
 
-  // Reflect open/active anchors as highlights in the document.
   useEffect(() => {
     if (!editor) return;
     setCommentHighlightState(editor, { openAnchorIds, activeAnchorId });

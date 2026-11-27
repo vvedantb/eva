@@ -359,18 +359,10 @@ export function summarizeDiffSize(
   return { total, byKind };
 }
 
-/** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, "");
 }
 
-/*
- * Hunk-body classification: a leading `-`/`+` is always a real change. The
- * `---`/`+++` file markers only occur in the patch header, which
- * `ignoreWhitespaceInPatch` copies straight through before it ever reaches a
- * hunk, so excluding them here would silently swallow genuine edits to lines
- * whose own content starts with `-`/`+` (`---`, `--brand: red;`, `++i`).
- */
 function isMinusLine(line: string): boolean {
   return line.startsWith("-");
 }
@@ -379,12 +371,6 @@ function isPlusLine(line: string): boolean {
   return line.startsWith("+");
 }
 
-/**
- * Pair deleted/added lines that differ only by whitespace and turn those
- * pairs into context. Unmatched +/- lines stay as real changes — the same
- * idea as `git diff --ignore-all-space`, applied to an already-fetched
- * unified patch so the GitHub PR payload does not need a second fetch.
- */
 function filterHunkLines(lines: string[]): {
   lines: string[];
   hasChanges: boolean;
@@ -488,9 +474,6 @@ export function applyIgnoreWhitespace(
 ): DiffFileEntry[] {
   return entries.flatMap((entry) => {
     if (entry.binary || !entry.hasHunks) return [entry];
-    // A file whose every hunk was whitespace-only filters down to a header-only
-    // patch. GitHub drops such files from the list entirely; keeping them would
-    // render a "nothing to diff" body and inflate the toolbar's file count.
     return buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch)).filter(
       (filtered) => filtered.hasHunks,
     );

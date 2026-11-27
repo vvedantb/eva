@@ -55,10 +55,8 @@ test("enforceStepBudget strips heavy fields oldest-first under budget", () => {
   enforceStepBudget(steps);
   const encoded = JSON.stringify(steps);
   expect(encoded.length).toBeLessThanOrEqual(STEP_FIELD_CAPS.jsonBytes);
-  // Labels always survive
   expect(steps.every((s) => typeof s.label === "string")).toBe(true);
   expect(steps[0]?.command).toBe("echo one");
-  // Two old outputs are enough to fit; the newest output and the edit stay.
   expect(steps[0]?.output).toBeUndefined();
   expect(steps[1]?.output).toBeUndefined();
   expect(steps[2]?.output?.text).toBe(fat);

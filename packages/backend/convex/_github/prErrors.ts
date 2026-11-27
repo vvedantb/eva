@@ -1,11 +1,3 @@
-/**
- * Classifies the two pull-request failures Eva has to treat as non-failures.
- *
- * Both predicates match on message text because the errors reach us from three
- * different layers — our own compare check, Octokit's validation errors, and
- * GitHub's prose — so there is no status code that identifies them all.
- */
-
 import { errorMessage } from "@vvedantb/server";
 
 /**

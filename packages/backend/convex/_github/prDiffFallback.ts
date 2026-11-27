@@ -1,12 +1,3 @@
-/**
- * Fallback for pull-request diffs GitHub refuses to serve as unified-diff text.
- *
- * Past ~300 files GitHub answers `pulls.get` (diff media type) with HTTP 406,
- * so we rebuild the same unified-diff shape from paginated `pulls.listFiles`
- * patches. These helpers are the pure string logic behind that fallback, split
- * out from the `"use node"` action file so they can be unit tested directly.
- */
-
 /** One `pulls.listFiles` entry — the fields we need to rebuild a diff section. */
 export type PrListFile = {
   filename: string;
@@ -57,8 +48,6 @@ export function listFileToUnifiedDiff(file: PrListFile): string {
   if (file.patch !== undefined && file.patch.length > 0) {
     lines.push(file.patch);
   } else {
-    // Binary blobs and individually oversized files omit `patch` — keep the
-    // path in the tree so the Diffs tab still lists them.
     lines.push(`Binary files a/${oldPath} and b/${file.filename} differ`);
   }
 

@@ -37,7 +37,6 @@ import { RepoLogo } from "@/ui/RepoLogo";
 import { rememberRepo, repoName, RepoSheet, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
-/** The new-session prompt draft per repo (tokenized), kept on the device. */
 const newSessionDrafts = persistedStore<string | null>("newSessionDraft", null, jsonParser(z.string()));
 
 /**
@@ -64,14 +63,9 @@ export default function NewSessionScreen() {
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const [pickingRepo, setPickingRepo] = useState(false);
   const [sending, setSending] = useState(false);
-  // The web landing: model and traits start from the repo defaults, a pick
-  // overrides them; the base branch re-seeds to each repo's own default
-  // (`useBaseBranchState`), so it is kept with the repo it was picked for.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
-  // The web landing's account: undefined follows the user's own account for
-  // the model's provider (else Team), a pick holds; null is Team.
   const [pickedAccount, setPickedAccount] = useState<Id<"userProviderAccounts"> | null | undefined>(undefined);
   const accounts = toPickerAccounts(useQuery(api.userProviderAccounts.listSelectable, {}) ?? []);
   const lastRepoId = useLastRepoId();
@@ -82,7 +76,6 @@ export default function NewSessionScreen() {
 
   const model = pickedModel ?? normalizeAIModel(repo?.defaultModel);
   const traits: StoredModelTraits = { ...(repo ? storedTraitsFromRepoDefaults(repo) : {}), ...pickedTraits };
-  // The stack belongs to the repo it was opened for.
   const stack =
     repo !== undefined && repo._id === repoParam && stackBase !== undefined && Number.isInteger(Number(stackOn))
       ? { prNumber: Number(stackOn), base: stackBase }
@@ -91,7 +84,6 @@ export default function NewSessionScreen() {
     repo && pickedBranch?.repoId === repo._id
       ? pickedBranch.branch
       : (stack?.base ?? repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
-  // Picking another branch abandons the stack: the session's PR would no longer sit on that pull request.
   const stackOnPrNumber = stack !== null && baseBranch === stack.base ? stack.prNumber : undefined;
   // The prompt draft is kept per repo on the device, as the web's `new-session-composer`;
   // model and traits start from the repo defaults each visit, as on the web.
@@ -116,7 +108,6 @@ export default function NewSessionScreen() {
     }
     setSending(true);
     try {
-      // The resolved traits (model defaults included), as the web snapshots them.
       const display = resolveTraitsForDisplay(model, traits);
       const { sessionId } = await startSession({
         repoId: repo._id,
@@ -144,16 +135,10 @@ export default function NewSessionScreen() {
       {repos === undefined ? (
         <CenteredSpinner label="Loading repos" />
       ) : repos.length === 0 ? (
-        // As the new quick task screen.
         <EmptyState icon={IconBrandGithub} title="No repos" description="Connect a repo on the web. It shows up here." />
       ) : (
-        // The kit's keyboard view: the column shrinks to the space above the
-        // keyboard, so the centred composer moves up with it. The composer's own
-        // lift measures it within the column and so never sees the keyboard.
         <KeyboardAvoidingView style={{ flex: 1 }}>
-        {/* The web landing at 390: `p-4` in a column 10 short of the right edge. */}
         <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
-          {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (logo or GitHub mark, name underlined at 30%). */}
           <View className="flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               {firstName ? `${firstName}, what are we building for` : "What are we building for"}
@@ -163,12 +148,9 @@ export default function NewSessionScreen() {
               accessibilityLabel={`Repo: ${repo ? repoName(repo) : "none"}`}
               accessibilityState={{ expanded: pickingRepo }}
               onPress={() => setPickingRepo(true)}
-              // The headline keeps its 28 line; the slop makes the target 44.
               hitSlop={{ top: 8, bottom: 8 }}
-              // `max-w-full` and a shrinking name: a long repo name (GitHub allows 100 characters) truncates on its own line.
               className="max-w-full flex-row items-center gap-1.5 active:opacity-70"
             >
-              {/* The web `CodebasesPicker`: the logo at 28, else the GitHub mark. */}
               <RepoLogo logoUrl={repo?.logoUrl} size={28} fallback={<IconBrandGithub size={28} color={muted} />} />
               <Text
                 numberOfLines={1}
@@ -248,7 +230,6 @@ export default function NewSessionScreen() {
                       traits={traits}
                       onModelChange={(next) => {
                         setPickedModel(next);
-                        // An explicit account survives a switch within its provider, as the web.
                         if (pickedAccount !== undefined) setPickedAccount(carriedAccountForProvider(accounts, pickedAccount, getAIModelProvider(next)));
                       }}
                       account={{ accounts, value: providerAccountId, onChange: setPickedAccount }}

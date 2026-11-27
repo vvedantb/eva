@@ -4,7 +4,6 @@ import type { FunctionArgs } from "convex/server";
 import { useEffect, useState } from "react";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
-/** Heartbeat for an on-screen chat; well under the 30-minute away recap. */
 const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
 
 /** A chat whose read state is kept (a session chat, task or project). */

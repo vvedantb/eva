@@ -1244,15 +1244,10 @@ async function prepareSessionSandboxInternal(
     };
   } catch (setupError) {
     const setupMessage = errorMessage(setupError, "setup failed");
-    // Early-ready already unlocked chat on this VM. Deleting/closing here is
-    // what nuked tomato-* mid-conversation when startup commands timed out.
     if (earlyReadyEmitted) {
       console.warn(
         `[sandbox][sessions] post-ready setup failed for ${handle.id}; keeping sandbox (session already active): ${setupMessage}`,
       );
-      // Setup failed after early-ready gated the turn — release the gate so the
-      // queued first turn still runs (against baked deps) rather than hanging
-      // forever behind a flag that will never clear.
       await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
         sessionId: args.sessionId,
       });
@@ -1260,7 +1255,6 @@ async function prepareSessionSandboxInternal(
         sessionId: args.sessionId,
         error: setupMessage,
       });
-      // Best-effort: still put the app server in Console if we got that far.
       if (resolvedDevCommand !== undefined && resolvedDevPort !== undefined) {
         try {
           await launchPreviewDevServer(
@@ -1315,7 +1309,6 @@ export const performForcePushBranch = internalAction({
     repoOwner: v.string(),
     repoName: v.string(),
     branchName: v.string(),
-    /** When set, force-push this linked repo's clone instead of the primary. */
     sessionRepoId: v.optional(v.id("sessionRepos")),
   },
   returns: v.null(),
@@ -1377,15 +1370,7 @@ export const startSessionSandbox = internalAction({
     branchName: v.string(),
     baseBranch: v.string(),
     repoId: v.optional(v.id("githubRepos")),
-    /**
-     * True when the session also has `sessionRepos` rows to clone into
-     * `/tmp/workspace`. This action does not clone them: it arms
-     * `sandboxSetupPending` and leaves it armed so the caller —
-     * `sessionSandboxStartupWorkflow` — can run `prepareLinkedRepo` per row
-     * and clear the gate once every row has been attempted.
-     */
     hasLinkedRepos: v.optional(v.boolean()),
-    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
     startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
@@ -1397,8 +1382,6 @@ export const startSessionSandbox = internalAction({
       if (!args.repoId) {
         throw new Error("repoId is required for startSessionSandbox");
       }
-      // User may have clicked Stop after this action was scheduled. Abort before
-      // any resume:true / create — otherwise we wake a VM the UI already left.
       const sessionBefore = await ctx.runQuery(internal.sessions.getInternal, {
         id: args.sessionId,
       });
@@ -1448,16 +1431,10 @@ export const startSessionSandbox = internalAction({
       );
     } catch (e) {
       const stopId = args.existingSandboxId;
-      // A Stop that raced this Start. The resume may have briefly woken the VM,
-      // so still stop it (idempotent with finalizeStopSandbox), but leave the
-      // session status to the stop flow's markSandboxClosed — do NOT mark a
-      // start error, or Eva shows a false "Sandbox Error" and the row can stick
-      // in `stopping` while the two paths fight over status.
       if (e instanceof SandboxStartAbortedError) {
         console.log(
           `[sandbox][sessions] startSessionSandbox aborted by stop sessionId=${args.sessionId}: ${e.message}`,
         );
-        // Superseded, not stopped: the newer start is using this VM.
         const superseded = isSupersededStart(
           (
             await ctx.runQuery(internal.sessions.getInternal, {
@@ -1484,8 +1461,6 @@ export const startSessionSandbox = internalAction({
       console.error(
         `[sandbox][sessions] startSessionSandbox failed after ${formatDurationMsShort(Date.now() - actionStartedAt)} (${actionDetails}): ${failMessage}`,
       );
-      // Safety net: early-ready already flipped the session active with a live
-      // sandbox. Never stop/close that — the user may already be mid-chat.
       const sessionAfter = await ctx.runQuery(internal.sessions.getInternal, {
         id: args.sessionId,
       });
@@ -1497,9 +1472,6 @@ export const startSessionSandbox = internalAction({
         console.warn(
           `[sandbox][sessions] startSessionSandbox failed after early-ready; keeping active sessionId=${args.sessionId} sandboxId=${sessionAfter.sandboxId}: ${failMessage}`,
         );
-        // Final-ready never ran, so the Preview-heal gate armed at early-ready
-        // would stay armed for the life of this sandbox and permanently
-        // suppress background-daemon healing on it.
         await ctx.runMutation(internal.sessions.clearSandboxServicesPending, {
           sessionId: args.sessionId,
         });
@@ -1509,14 +1481,10 @@ export const startSessionSandbox = internalAction({
         });
         return null;
       }
-      // A newer start took over (Start pressed again) and may be resuming
-      // this same VM: stopping it here would kill that start mid-resume.
-      // `sandboxError` below ignores this stale attempt anyway.
       const superseded = isSupersededStart(
         sessionAfter?.sandboxStartAttempt,
         args.startAttempt,
       );
-      // No early-ready — stop any id we were asked to reuse and mark closed.
       if (args.repoId && stopId && !superseded) {
         try {
           await ctx.runAction(internal.sandbox.stopSandbox, {

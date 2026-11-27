@@ -67,7 +67,6 @@ export default function NewQuickTaskScreen() {
   const lastRepoId = useLastRepoId();
   const first =
     repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.find((candidate) => candidate._id === lastRepoId) ?? repos?.[0];
-  // The linked draft, once the repo's drafts are in; a removed one opens a blank form.
   const linkedDrafts = useQuery(api.agentTasks.listDrafts, params.draftId && first ? { repoId: first._id } : "skip");
   const initialDraft = linkedDrafts?.find((draft) => draft._id === params.draftId);
   if (repos === undefined || (params.draftId && first && linkedDrafts === undefined)) {
@@ -112,30 +111,24 @@ function NewQuickTaskForm({
   const drafts = useQuery(api.agentTasks.listDrafts, repoArgs);
   const navigation = useNavigation();
 
-  // The one prompt: the task's description, and its title once the server takes the first line.
   const [prompt, setPrompt] = useState(initialDraft ? draftPrompt(initialDraft) : "");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
   const [tags, setTags] = useState<string[]>(initialDraft?.tags ?? []);
   const attachments = useAttachments();
-  // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
   const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(
     initialDraft ? { id: initialDraft.projectId } : null,
   );
   const projectId = pickedProject ? pickedProject.id : projects?.find((candidate) => candidate._id === projectParam)?._id;
   const setProjectId = (id: Id<"projects"> | undefined) => setPickedProject({ id });
-  // As the new-session screen: model and traits start from the repo defaults
-  // and a pick overrides them; the base branch is kept with its repo.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(
     initialDraft?.baseBranch ? { repoId: initialRepo._id, branch: initialDraft.baseBranch } : null,
   );
-  // Which button is saving, for its spinner; null when idle.
   const [saving, setSaving] = useState<"save" | "run" | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(initialDraft?._id ?? null);
 
-  // A task in a project takes the project's base branch (web `useEffectiveProject`).
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");
   const model = pickedModel ?? normalizeAIModel(repo.defaultModel);
   const traits: StoredModelTraits = { ...storedTraitsFromRepoDefaults(repo), ...pickedTraits };
@@ -144,7 +137,6 @@ function NewQuickTaskForm({
   const branchLocked = projectId !== undefined;
   const displayBranch = branchLocked ? (project?.baseBranch ?? repoBranch) : baseBranch;
 
-  // The fields a draft keeps (the web `handleClose`), or null when there is nothing to keep.
   const draftToSave =
     saving === null && prompt.trim()
       ? {
@@ -155,10 +147,6 @@ function NewQuickTaskForm({
           projectId,
         }
       : null;
-  // Leaving by any way (the header back, Android back, a swipe) saves the
-  // draft, as the web dialog saves on close. An effect, because leaving is a
-  // navigation event outside React. Create skips it: `saving` is set while
-  // the task is made.
   useEffect(
     () =>
       navigation.addListener("beforeRemove", () => {
@@ -167,19 +155,16 @@ function NewQuickTaskForm({
     [navigation, draftToSave, saveDraft],
   );
 
-  // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...(tasks ?? []).flatMap((task) => task.tags ?? [])])].sort();
   const canSubmit = saving === null && prompt.trim().length > 0 && displayBranch.length > 0;
 
   const changeRepo = (repoId: Id<"githubRepos">) => {
     setPicked(repoId);
     rememberRepo(repoId);
-    // A project belongs to one repo, and so does a draft: the next save starts a new one there.
     setProjectId(undefined);
     setActiveDraftId(null);
   };
 
-  // The web `loadDraft`: its fields into the form; Create then promotes it.
   const loadDraft = (draft: QuickTaskDraft) => {
     setPrompt(draftPrompt(draft));
     setPickedBranch(draft.baseBranch ? { repoId: repo._id, branch: draft.baseBranch } : null);
@@ -221,7 +206,6 @@ function NewQuickTaskForm({
       run,
     };
     try {
-      // As the web: a loaded draft becomes the task (the draft keeps its project; priority is not a draft field).
       if (activeDraftId) await activateDraft({ id: activeDraftId, ...fields });
       else await createQuickTask({ repoId: repo._id, ...fields, projectId, priority });
       leave();
@@ -233,11 +217,9 @@ function NewQuickTaskForm({
 
   return (
     <Screen onBack={leave}>
-      {/* The kit's: it pads frame by frame with the keyboard (`KeyboardControllerProvider`). */}
       <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
           <RepoPicker repos={repos} value={repo} onChange={changeRepo} />
-          {/* Web: one borderless prompt, min 160 high. */}
           <TextInput
             value={prompt}
             onChangeText={setPrompt}
@@ -257,7 +239,6 @@ function NewQuickTaskForm({
               ))}
             </Attachments>
           ) : null}
-          {/* Web: the chips wrap `gap-1.5`, in its order. */}
           <View className="flex-row flex-wrap items-center gap-1.5 pt-2">
             <AttachButton attachments={attachments} />
             <PriorityChip value={priority} onChange={setPriority} />
@@ -285,7 +266,6 @@ function NewQuickTaskForm({
             <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
           </View>
         </ScrollView>
-        {/* Web footer: the Drafts menu on the start side, Save and Save and Run on the end. */}
         <View className="flex-row items-center gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
           <DraftsMenu
             drafts={drafts}
@@ -310,7 +290,6 @@ function NewQuickTaskForm({
   );
 }
 
-/** The stack header ("New Quick Task", back) over the screen body. */
 function Screen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   return (
     <View className="flex-1">

@@ -181,7 +181,6 @@ function LandingMockComposer() {
   );
 }
 
-/** Static PR divider — mirrors `SystemAlertMessage` without Tooltip (landing is unauthenticated). */
 function LandingMockSystemAlert() {
   return (
     <div className="flex items-center gap-3 py-1">

@@ -143,7 +143,6 @@ export const getImpactStats = authQuery({
             )
             .collect();
 
-    // Skip older tasks' runs: agentRuns carry large logs.
     const tasksNeedingRuns = allTasks.filter((task) => task.status !== "draft");
     const runsByTaskId = new Map<
       string,
@@ -179,7 +178,6 @@ export const getImpactStats = authQuery({
       }),
     );
 
-    /** Middle value of `values`, averaging the two middles when even. */
     function median(values: number[]): number | undefined {
       if (values.length === 0) return undefined;
       const sorted = [...values].sort((a, b) => a - b);
@@ -189,7 +187,6 @@ export const getImpactStats = authQuery({
         : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
     }
 
-    /** Computes stats for sessions/tasks/runs starting from an optional timestamp. */
     function computeStats(from: number | undefined) {
       const prUrls = new Set<string>();
       const sessionPrUrls = new Set<string>();
@@ -209,8 +206,6 @@ export const getImpactStats = authQuery({
       }
       let done = 0;
       let cancelled = 0;
-      // Denominator for the first-try rate: a done task with no runs never
-      // took a "try", so counting it would deflate the rate.
       let doneWithRuns = 0;
       let firstTryTasks = 0;
       let agentWorkMs = 0;
@@ -253,7 +248,6 @@ export const getImpactStats = authQuery({
         if (p.prUrl) prUrls.add(p.prUrl);
       }
       const tasksRan = done + cancelled;
-      // Cook rate: finished successfully vs finished at all (done/merged + cancelled).
       const rate = tasksRan > 0 ? Math.round((done / tasksRan) * 100) : 0;
       return {
         prsShipped: prUrls.size,
@@ -273,7 +267,6 @@ export const getImpactStats = authQuery({
             ? Math.round((firstTryTasks / doneWithRuns) * 100)
             : 0,
         agentWorkMs,
-        /** Raw counters kept out of the response, used to derive prev rates. */
         internal: { doneWithRuns, firstTryTasks },
       };
     }
@@ -281,8 +274,6 @@ export const getImpactStats = authQuery({
     const { internal: currentInternal, ...current } = computeStats(startTime);
 
     if (startTime !== undefined && args.previousStartTime !== undefined) {
-      // computeStats is cumulative from a timestamp, so the previous period is
-      // the wider window minus the current one — see the subtractions below.
       const prev = computeStats(args.previousStartTime);
       const prevTasksCompleted = prev.tasksCompleted - current.tasksCompleted;
       const prevTasksRan = prev.tasksRan - current.tasksRan;
@@ -365,7 +356,6 @@ export const getActivityTimeline = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     startTime: v.number(),
-    /** Right edge of the chart — the last bucket is the one containing it. */
     endTime: v.number(),
     bucketSizeMs: v.number(),
   },
@@ -406,7 +396,6 @@ export const getActivityTimeline = authQuery({
       };
       activeUsersByBucket[t] = new Set<Id<"users">>();
     }
-    /** Maps a timestamp to its corresponding bucket start time. */
     const getBucket = (timestamp: number) => {
       const bucketStart =
         Math.floor((timestamp - args.startTime) / args.bucketSizeMs) *
@@ -459,8 +448,6 @@ export const getActivityTimeline = authQuery({
         if (buckets[bucket]) buckets[bucket].prsShipped++;
       }
     }
-    // Sessions in the window fill the buckets; active sessions of any age
-    // name the users whose last-seen time is plotted.
     const [windowSessions, activeSessions] = await Promise.all([
       ctx.db
         .query("sessions")
@@ -611,8 +598,6 @@ export const getLeaderboard = authQuery({
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
     const startTime = args.startTime;
-    // Only the window is read. Tasks come back in `updatedAt` order, so put
-    // them back in `by_repo` (creation) order: it decides ties in the top 5.
     const filteredTasks =
       startTime === undefined
         ? await ctx.db
@@ -682,7 +667,6 @@ export const getLeaderboard = authQuery({
     const leaderboard = userStatEntries
       .map(([userId, stats], i) => {
         const user = leaderboardUsers[i];
-        // Unchanged rule: only users with a linked Clerk account are listed.
         if (!user?.clerkId) return null;
         return {
           userId,

@@ -76,9 +76,6 @@ export function DocRecapViewer({
     (c) => !c.parentId && c.resolvedAt === undefined,
   ).length;
   const [copied, setCopied] = useState(false);
-  // Arriving from a comment notification opens the panel the comment lives in;
-  // a plain visit still starts closed. Lazy initial state rather than an effect
-  // — the panel is open on the first paint, so nothing flashes shut.
   const commentAnchorId = useCommentAnchorId();
   const [commentsOpen, setCommentsOpen] = useState(
     () => commentAnchorId !== null,
@@ -117,7 +114,6 @@ export function DocRecapViewer({
   /* eslint-disable no-effect/no-event-handler --
      Redirects a legacy URL the user can arrive at from a bookmark or a link, so
      the trigger is the route itself rather than anything clicked here. */
-  // Legacy `/html` and `/content` on recap docs → `/recap` and `/summary`.
   useEffect(() => {
     if (activeTab === viewTab) return;
     const segment = entityPathSegment(doc);

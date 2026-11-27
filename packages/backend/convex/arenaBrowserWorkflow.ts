@@ -40,8 +40,6 @@ export const arenaBrowserWorkflow = workflow.define({
     branchName: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
-    // Outside the try so the finally can tear the sandbox down even when
-    // prepare throws part-way through.
     let sandboxId: string | undefined;
     let sandboxRepoId: Id<"githubRepos"> | undefined;
     try {
@@ -87,7 +85,6 @@ export const arenaBrowserWorkflow = workflow.define({
           rootDirInstruction: data.rootDirInstruction,
         }),
         userId: args.userId,
-        // Same callback and event as the code review: one report, one agent turn.
         completionMutation: "evaluationWorkflow:handleCompletion",
         entityIdField: "reportId",
         model: "sonnet",
@@ -123,8 +120,6 @@ export const arenaBrowserWorkflow = workflow.define({
       });
       throw error;
     } finally {
-      // Ephemeral sandbox: nothing references it once results are saved.
-      // Best-effort — a failed delete must not fail the workflow.
       if (sandboxId && sandboxRepoId) {
         try {
           await step.runAction(internal.sandbox.deleteSandbox, {
@@ -337,7 +332,6 @@ type StartBrowserRunParams = {
   pr?: { number: number; headSha: string };
 };
 
-/** Inserts a browser report and starts its workflow. Shared by manual and PR runs. */
 async function startBrowserRun(
   ctx: MutationCtx,
   params: StartBrowserRunParams,
@@ -439,7 +433,6 @@ export const startPrRuns = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Monorepos have one githubRepos row per app, each with its own docs.
     const repos = await findReposByOwnerAndName(ctx.db, args);
 
     for (const repo of repos) {

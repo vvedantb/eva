@@ -13,16 +13,9 @@ import type { JsonValue } from "../types.js";
 const LEASE: TurnLeaseIdentity = { turnId: "turn-1", leaseGeneration: 3 };
 
 beforeEach(() => {
-  // Ownership transitions clear the terminal fence, so this resets the module.
   endTurnOwnership();
 });
 
-/**
- * `noteHeartbeatResponse` is the only thing that stops a superseded daemon from
- * writing over its successor: the server answers a fenced heartbeat with a
- * terminal lease, and the daemon has to recognise it in every response shape it
- * can arrive in (HMAC endpoint JSON string, mutation envelope, bare object).
- */
 describe("noteHeartbeatResponse", () => {
   beforeEach(() => {
     beginTurnOwnership("claim", LEASE);
@@ -121,13 +114,6 @@ describe("noteHeartbeatResponse", () => {
   });
 });
 
-/**
- * Session 225 (21 Sep 2026): the daemon completed a synthetic turn, a heartbeat
- * that was still in flight under that turn's lease came back `terminal: closed`,
- * and the daemon treated it as a takeover — exiting 400ms after it had minted
- * the next synthetic turn, which then stalled with nobody heartbeating it. A
- * verdict only counts for the lease this process still holds.
- */
 describe("noteHeartbeatResponse after the lease was released", () => {
   const closed: JsonValue = { lease: { status: "terminal", reason: "closed" } };
 
@@ -165,10 +151,6 @@ describe("noteHeartbeatResponse after the lease was released", () => {
   });
 });
 
-/**
- * A terminal lease exits the process; the latch keeps a 10s heartbeat tick and
- * a 150ms flush tick from scheduling two exits for the same fence.
- */
 describe("decideTurnLeaseExit", () => {
   test("keeps running while no terminal lease has landed", () => {
     expect(

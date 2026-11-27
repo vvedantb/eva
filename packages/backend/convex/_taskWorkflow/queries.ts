@@ -39,13 +39,11 @@ const MONTH_NAMES = [
   "December",
 ];
 
-/** Formats a timestamp as a UK-style "DD Month YYYY" date (UTC, deterministic). */
 function formatCommentDate(timestamp: number): string {
   const date = new Date(timestamp);
   return `${date.getUTCDate()} ${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
-/** Resolves a human-readable name for a comment author, falling back to "Reviewer". */
 function userDisplayName(user: Doc<"users"> | null): string {
   if (!user) return "Reviewer";
   if (user.fullName?.trim()) return user.fullName.trim();
@@ -54,7 +52,6 @@ function userDisplayName(user: Doc<"users"> | null): string {
   return user.email ?? "Reviewer";
 }
 
-/** Fetches a task's comments as PR change-request lines, oldest first. */
 async function getChangeRequestContents(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
@@ -68,7 +65,6 @@ async function getChangeRequestContents(
     .map((c) => c.content);
 }
 
-/** The linked repos of the task's session (`sessionRepos`); none before it exists. */
 async function listSessionRepos(
   ctx: QueryCtx,
   sessionId: Id<"sessions"> | undefined,
@@ -87,7 +83,6 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
-    /** The task's own session: its sandbox is the one the run reuses. */
     ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
@@ -99,11 +94,7 @@ export const getTaskData = internalQuery({
     branchName: v.string(),
     taskTitle: v.string(),
     taskDescription: v.optional(v.string()),
-    // Files the user attached when creating the task; materialized into the
-    // sandbox at launch so the agent can read them.
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    // Trait overrides for the run, already reduced to the non-default ones so
-    // the runner falls back to each model's own behaviour otherwise.
     traits: v.object({
       reasoningLevel: v.optional(reasoningLevelValidator),
       thinkingEnabled: v.optional(v.boolean()),
@@ -114,7 +105,6 @@ export const getTaskData = internalQuery({
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
     devCommand: v.optional(v.string()),
-    /** The task's session clones other repos too (`sessionRepos`). */
     hasLinkedRepos: v.boolean(),
   }),
   handler: async (ctx, args) => {
@@ -125,8 +115,6 @@ export const getTaskData = internalQuery({
         .query("taskComments")
         .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
         .collect(),
-      // Only surface comments the last successful run hasn't already
-      // addressed (see the cutoff below).
       ctx.db
         .query("agentRuns")
         .withIndex("by_task_and_status", (q) =>
@@ -155,8 +143,6 @@ export const getTaskData = internalQuery({
     };
 
     let projectContext: { title: string; description?: string } | undefined;
-    // A child task's run carries the same project half its chat turns do:
-    // its place in the project and the brief.
     let projectBlock = "";
     if (args.projectId) {
       const project = await ctx.db.get(args.projectId);
@@ -170,18 +156,12 @@ export const getTaskData = internalQuery({
         projectBlock = await childTaskProjectBlock(ctx, project);
       }
     }
-    // The coordinator's retry note or the answer to the task's question.
     const runNote = (await ctx.db.get(args.runId))?.note?.trim() ?? "";
 
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
     );
 
-    // Only surface comments the last successful run hasn't already addressed,
-    // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
-    // latest successful run's startedAt (not finishedAt), so comments added
-    // while that run was in-flight still carry over. Failed/errored runs are
-    // NOT cutoffs — their comments stay unaddressed for the next retry.
     const latestSuccessfulRun = successfulRuns.reduce<Doc<"agentRuns"> | null>(
       (latest, run) => {
         if (run.startedAt === undefined) return latest;
@@ -197,8 +177,6 @@ export const getTaskData = internalQuery({
       null,
     );
     const latestSuccessStartedAt = latestSuccessfulRun?.startedAt;
-    // Surface what the last successful run accomplished so a "Make changes"
-    // re-run has continuity instead of rediscovering prior work from scratch.
     const previousRunSummary =
       latestSuccessfulRun?.resultSummary?.trim() || undefined;
     const relevantComments =
@@ -210,7 +188,6 @@ export const getTaskData = internalQuery({
       (a, b) => a.createdAt - b.createdAt,
     );
 
-    // Resolve author names once for the comments we are about to surface.
     const uniqueAuthorIds = [
       ...new Set(
         sortedComments
@@ -226,10 +203,6 @@ export const getTaskData = internalQuery({
       authorNameById.set(id, userDisplayName(authors[index]));
     });
 
-    // Resolve any `@` mention tokens (matching how the task description is
-    // prepared), then keep the raw resolved text for the commit subject
-    // separate from the author/date-annotated text shown to the agent — the
-    // annotation must not leak into the edit commit message.
     const changeRequests = await Promise.all(
       sortedComments.map(async (c) => {
         const author = c.authorId
@@ -248,8 +221,6 @@ export const getTaskData = internalQuery({
 
     const rootDirectory = repo.rootDirectory ?? "";
 
-    // Sibling repositories this sandbox's git credentials can read (owner is
-    // the task owner, whose access the credential helper mints tokens against).
     const readableRepos = await listReadableSiblingRepos(
       ctx.db,
       task.createdBy,
@@ -368,8 +339,6 @@ export const getTaskPrCreationData = internalQuery({
     );
     const latestRun = sortedRuns[0] ?? null;
     const branchName = taskBranchName(task);
-    // Only a live PR blocks a new one: after a merge or close, new commits on
-    // the branch need a fresh PR.
     const livePr = await findLivePullRequestOnBranch(
       ctx.db,
       repo._id,

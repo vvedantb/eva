@@ -44,11 +44,6 @@ export function syncProviderStateToPersist(reason: string): void {
   syncClaudeStateToPersist(reason);
 }
 
-/**
- * Claude always runs via the Agent SDK. Chat entities with CLAIM_MUTATION enter
- * the persistent daemon earlier in index.ts; job runs and daemon fallbacks land
- * here on the one-shot SDK runner.
- */
 async function runClaudeAttempt(sessionMode: SessionMode) {
   return await runClaudeSdkAttempt(sessionMode);
 }
@@ -57,16 +52,10 @@ async function runCodexAttempt(sessionMode: SessionMode) {
   return await runCodexSdkAttempt(sessionMode);
 }
 
-/**
- * OpenCode runs via the opencode SDK against the sandbox's `opencode serve`
- * process (one shot per turn). The CLI binary is still required — it is what
- * serves.
- */
 async function runOpencodeAttempt(sessionMode: SessionMode) {
   return await runOpencodeSdkAttempt(sessionMode);
 }
 
-/** Cursor runs via the Cursor SDK (local agent in-process, one shot per turn). */
 async function runCursorAttempt(sessionMode: SessionMode) {
   if (!process.env.CURSOR_API_KEY?.trim()) {
     throw new Error(

@@ -13,9 +13,7 @@ import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 const CAPTURE_TIMEOUT_MS = 20_000;
 
 interface PreviewSnapshotOptions {
-  iframeElement: HTMLIFrameElement | null;
-  /** Opens the dialog with this snapshot instead of capturing (demo / tests). */
-  seedSnapshot?: PreviewSnapshot;
+  iframeElement: HTMLIFrameElement | null;  seedSnapshot?: PreviewSnapshot;
 }
 
 /**

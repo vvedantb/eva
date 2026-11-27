@@ -84,18 +84,6 @@ export function claimedTurnLifecycleStatus(): "idle" | "active" {
     : "idle";
 }
 
-/**
- * Whether a just-claimed prompt should be parked for the run loop instead of
- * discarded. New daemons pass acceptTurn=false until idle, so claimPendingTurn
- * leaves pendingTurn intact and this park path should not see a follow-up.
- * Old sandboxes still acquire the 2-minute running lease on every claim, so
- * discard is only safe for a same-turn restage of the prompt already in flight.
- *
- * A follow-up send during post-completion bookkeeping is a different turn:
- * finishClaimedTurn has already dropped the old lease, so the lease mismatch
- * parks it. Discarding it left the new lease with nobody heartbeating it: the
- * session-65 stall (exactly 2 minutes, generation 1, no result log).
- */
 function shouldParkClaimedTurn(input: {
   hasActiveRealTurn: boolean;
   isCancellationInFlight: boolean;
@@ -121,7 +109,6 @@ export function routeClaimedTurn(input: {
   turn: ClaimedTurn;
   hasActiveRealTurn: boolean;
   isCancellationInFlight: boolean;
-  /** Parks `turn` for the run loop; false when the park slot is taken. */
   park: () => boolean;
   logPrefix: string;
 }): "parked" | "duplicate" | "discarded" {

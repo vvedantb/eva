@@ -1,18 +1,4 @@
 // @ts-check
-/**
- * SAFE cleanup for the migration tooling. This runs against the REAL eva /
- * Evalucom Vercel project, so it must NEVER touch resources it did not create:
- *
- *  - Sandboxes: deletes ONLY those tagged `managedBy: "eva-migration-tooling"`
- *    (set by managed-image-spike.mjs). Untagged sandboxes are left alone.
- *  - Snapshots: NOT deleted by default (they have no tags in the API, so they
- *    can't be safely filtered, and the seeded snapshot is usually the deliverable).
- *    Pass explicit ids via CLEANUP_SNAPSHOT_IDS="snap_a,snap_b" to delete specific ones.
- *
- * Usage:
- *   node cleanup.mjs                      # delete only tooling-tagged sandboxes
- *   CLEANUP_SNAPSHOT_IDS=snap_x node cleanup.mjs   # + delete those specific snapshots
- */
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 
 const CREDS = {

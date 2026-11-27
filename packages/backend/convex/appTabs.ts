@@ -24,10 +24,6 @@ export const list = authQuery({
   },
 });
 
-/**
- * Validates a display name for a custom tab. Rejects empty / reserved /
- * duplicate slugs within the app (case-insensitive via the slug).
- */
 function assertUniqueAppTabSlug(
   name: string,
   existing: ReadonlyArray<Doc<"appTabs">>,

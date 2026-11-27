@@ -223,8 +223,6 @@ export function DocCommentThread({
   );
 }
 
-/** Resolves a comment author's display name, accounting for the query's
- *  loading (undefined) and not-found (null) states. */
 function authorDisplayName(
   user: FunctionReturnType<typeof api.users.get> | undefined,
 ): string {
@@ -241,7 +239,6 @@ function authorDisplayName(
 
 function DocCommentItem({ comment }: { comment: DocComment }) {
   const isDeleted = comment.deletedAt !== undefined;
-  // Cached query — dedupes with the UserInitials avatar's own users.get fetch.
   const author = useQuery(
     api.users.get,
     comment.authorId ? { id: comment.authorId } : "skip",

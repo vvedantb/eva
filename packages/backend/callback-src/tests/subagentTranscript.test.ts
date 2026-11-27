@@ -3,11 +3,6 @@ import { applyCanonicalEvents, parseToCanonical } from "../parse/canonical.js";
 import { toolCallToStep } from "../parse/toolSteps.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 
-/**
- * With `forwardSubagentText` the SDK sends a subagent's own text and thinking
- * under `parent_tool_use_id`. They feed the subagent's child thread view and
- * must never reach the parent's reply or reasoning.
- */
 
 afterEach(() => {
   resetStateForTests();

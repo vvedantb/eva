@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { afterAll, expect, mock, test } from "bun:test";
 import type { ConvexCallType, JsonObject, JsonValue } from "../types.js";
 
-// The harvest scans `<WORK_DIR>/screenshots`; point it at a scratch checkout.
 const WORK_DIR = mkdtempSync(join(tmpdir(), "eva-media-harvest-"));
 const realConfig = { ...(await import("../config.js")) };
 mock.module("../config.js", () => ({
@@ -28,7 +27,6 @@ const network: {
   mutations: { path: string; args: JsonObject }[];
 } = { uploads: [], mutations: [] };
 
-// Only the network is faked: the upload URL, the upload POST, the attach.
 const realClient = { ...(await import("../http/convexClient.js")) };
 mock.module("../http/convexClient.js", () => ({
   ...realClient,
@@ -59,11 +57,6 @@ afterAll(() => {
   rmSync(WORK_DIR, { recursive: true, force: true });
 });
 
-/**
- * The agent (or a prompt injection) controls the screenshots folder. A link
- * there must not post a secret file to chat; a plain capture posts once and is
- * archived so the next turn does not post it again.
- */
 test("posts plain captures once and never follows a link", async () => {
   const shots = join(WORK_DIR, "screenshots");
   const outside = join(WORK_DIR, "outside");
@@ -78,7 +71,6 @@ test("posts plain captures once and never follows a link", async () => {
 
   await uploadAndAttachSandboxMedia({ turnId: "turn-1" });
 
-  // Byte-identical captures upload once.
   expect(network.uploads).toEqual(["frame"]);
   expect(network.mutations.at(-1)).toEqual({
     path: "screenshots:attachMedia",

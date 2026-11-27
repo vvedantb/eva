@@ -13,16 +13,8 @@ import type { JsonObject, JsonValue } from "../types.js";
 import { log } from "../utils.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
-/**
- * The warm daemon's view of Claude's native `/goal`, mirrored onto the chat
- * doc through UPDATE_GOAL_MUTATION. Starts unknown (`undefined`) on every
- * daemon boot: a goal stored before a restart stays shown until the next goal
- * frame, and `/goal clear` replies "No goal set", which then still writes the
- * clear (an in-memory `null` here would dedupe it away).
- */
 let goal: ClaudeGoal | null | undefined;
 let modelWorkedThisTurn = false;
-/** Size of the SDK's latest `background_tasks_changed` roster (agents + shells). */
 let backgroundTaskCount = 0;
 
 /** Writes run one at a time, so a quick set → complete cannot land reversed. */
