@@ -34,7 +34,8 @@ export function ScheduleDatesPopover({
           <IconCalendarPlus size={14} />
           Set dates
         </Button>
-      </PopoverTrigger>      <PopoverContent className="w-auto max-sm:overflow-x-auto p-0" align="end">
+      </PopoverTrigger>
+      <PopoverContent className="w-auto max-sm:overflow-x-auto p-0" align="end">
         <Calendar
           mode="range"
           numberOfMonths={2}

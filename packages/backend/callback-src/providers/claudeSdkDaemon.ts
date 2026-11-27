@@ -1214,10 +1214,6 @@ export async function runSdkDaemon(): Promise<void> {
   });
   startStreamingLoops();
 
-  // bootWarmDaemon refreshed the GitHub token alongside the preflight, so it
-  // lands before buildSdkOptions copies process.env (the CLI's tool shells
-  // inherit `GH_TOKEN` from it).
-  // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
   const sdk = await loadSdk();
   const options = buildSdkOptions(sessionMode);
@@ -1232,9 +1228,6 @@ export async function runSdkDaemon(): Promise<void> {
       ")",
   );
 
-  // Daemon-pull: the claim watcher polls claimPendingTurn every 50ms while the
-  // agent pump consumes the session-lifetime SDK stream (including synthetic
-  // continuations between real turns).
   log("daemon: warm query() live, claim watcher started");
   startTurnWatchdog();
   startClaimWatcher(agentRunner);
@@ -1244,13 +1237,8 @@ export async function runSdkDaemon(): Promise<void> {
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
     log("daemon: query failed — " + messageText);
-    // Durability BEFORE completion, as failTurnAndExit does it: the SDK stream
-    // died under a turn that may have committed work, and this daemon is
-    // shutting down through the finally block below.
     persistTurnWork();
     try {
-      // Not postClaimedTurnFailureCompletion: the stream can die on a
-      // synthetic turn or while idle, where no claim owns the turn.
       const completionArgs = entityMutationArgs({
         success: false,
         result: null,
@@ -1260,12 +1248,8 @@ export async function runSdkDaemon(): Promise<void> {
       appendCurrentTurnLease(completionArgs);
       await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
     } catch {
-      /* ignore */
     }
   } finally {
-    // Only tear down markers this daemon still owns — after a fence
-    // deposition a rival owns them (fence exits bypass this via
-    // process.exit, but an SDK failure can reach here deposed).
     cleanOwnedMarkers(daemonPaths);
     await stopStreamingLoops();
   }

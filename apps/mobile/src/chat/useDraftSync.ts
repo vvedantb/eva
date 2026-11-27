@@ -13,20 +13,12 @@ type SaveDraft = (args: {
   content: string;
 }) => Promise<null>;
 
-/** One key per target, for the per-target sync state. */
 function targetKey(target: DraftTarget): string {
   return target.kind === "sessionChat"
     ? `sessionChat:${target.chatId}`
     : `taskComment:${target.taskId}:${target.parentCommentId ?? ""}`;
 }
 
-/**
- * Per target: the contents this client put on the server or took from it (the
- * echo guard), the last content saved, and the one save in flight with the
- * newest content waiting behind it. Module scope, not component state: there is
- * one composer per target, and a late echo must still be recognised after the
- * screen remounts.
- */
 type DraftSync = {
   ownSaves: string[];
   lastSaved: string | null;
@@ -48,18 +40,15 @@ function syncFor(key: string): DraftSync {
   return created;
 }
 
-/** Sends the newest waiting content, one save at a time, so fast typing coalesces (the web's `useSingleFlight`). */
 async function flush(sync: DraftSync, save: SaveDraft, target: DraftTarget) {
   sync.inFlight = true;
   while (sync.next !== null) {
     const content = sync.next;
     sync.next = null;
     try {
-      // One at a time on purpose: a later save must not land before an earlier one.
       // eslint-disable-next-line no-await-in-loop
       await save({ target, content });
     } catch {
-      // Offline or signed out: the next edit saves again.
     }
   }
   sync.inFlight = false;

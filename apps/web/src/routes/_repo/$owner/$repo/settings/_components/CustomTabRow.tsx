@@ -19,7 +19,6 @@ import {
 
 interface CustomTabRowProps {
   tab: Doc<"appTabs">;
-  /** Slugs already used by other tabs in this app (includes this tab's slug). */
   takenSlugs: ReadonlySet<string>;
 }
 
@@ -103,7 +102,6 @@ export function CustomTabRow({ tab, takenSlugs }: CustomTabRowProps) {
   };
 
   return (
-    // A row inside the tabs list section, so the section owns the border.
     <div className="space-y-1 px-3 py-2.5">
       {/* Name / icon / port / switch / delete is ~350px of minimum width, so
           below `sm` the icon+port+controls group takes its own row (`basis-full`)

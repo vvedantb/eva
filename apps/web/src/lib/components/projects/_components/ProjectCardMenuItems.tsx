@@ -52,9 +52,11 @@ export interface ProjectCardMenuItemsProps {
   users?: User[];
   href?: string;
   showOpenInNewTab?: boolean;
-  branchName?: string;  leading?: ReactNode;
+  branchName?: string;
+  leading?: ReactNode;
   onLeadChange: (value: string) => void;
-  onEdit: () => void;  archived?: boolean;
+  onEdit: () => void;
+  archived?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
 }

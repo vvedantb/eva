@@ -10,13 +10,11 @@ import type { ModelPick } from "@/chat/ModelChip";
 /** An open chat (`mobile.getChat`). */
 export type Chat = NonNullable<FunctionReturnType<typeof api.chats.get>>;
 
-/** Shows a pick on the open chat at once (`mobile.getChat`), before the server has it. */
 function patchChat(store: OptimisticLocalStore, target: string, patch: (chat: Chat) => Partial<Chat>) {
   const current = store.getQuery(api.chats.get, { target });
   if (current) store.setQuery(api.chats.get, { target }, { ...current, ...patch(current) });
 }
 
-/** The traits a pick set over the ones the chat had. */
 function mergeTraits(
   current: Chat["traits"],
   pick: { reasoningLevel?: Chat["traits"]["effortLevel"]; thinkingEnabled?: boolean; use1mContext?: boolean; fastMode?: boolean },
@@ -58,7 +56,6 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   if (!chat) return { pick: undefined, switching, switchAccount: undefined };
   const { session, task, project } = chat;
   const sessionChatId = session?.chatId ?? task?.sessionChatId ?? project?.sessionChatId;
-  // The chat to save an account on, created for a task or project on first need.
   const resolveChatId = async (): Promise<Id<"sessionChats"> | undefined> => {
     if (sessionChatId) return sessionChatId;
     if (task) return (await ensureOwned({ owner: { kind: "task", taskId: task.id } })).chatId;
@@ -77,8 +74,6 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
     }).catch(failed);
   };
 
-  // The switch the usage-limit card waits on before it retries; it rejects when the switch fails.
-  // Chained, not try / finally, which React Compiler cannot compile.
   const switchAccount = (providerAccountId: Id<"userProviderAccounts"> | null): Promise<void> => {
     setSwitching(true);
     return resolveChatId()
@@ -99,7 +94,6 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
     switchAccount(providerAccountId).catch(() => toast.error("Couldn't switch the account"));
   };
   const accounts = sessionAccounts ?? taskAccounts ?? ownAccounts;
-  // The web lets only a task's or project's owner change its account.
   const canChangeAccount = chat.accountOwnerId === undefined || chat.accountOwnerId === me;
 
   const pick: Omit<ModelPick, "repoId"> = {

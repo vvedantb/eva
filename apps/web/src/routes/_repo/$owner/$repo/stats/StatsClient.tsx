@@ -34,7 +34,6 @@ import {
 } from "@tabler/icons-react";
 import { useLoadedFade } from "@/lib/hooks/useLoadedFade";
 
-/** Stats aggregates by day, so the hourly "24h" range is not offered here. */
 const STATS_RANGES = ["7d", "30d", "90d", "all"] as const;
 
 /** Hours we credit back to a human for each task the agent completed. */

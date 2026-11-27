@@ -11,9 +11,11 @@ import {
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 
-interface TimelineSidebarMetaProps {  counts?: ProjectStatus["counts"];
+interface TimelineSidebarMetaProps {
+  counts?: ProjectStatus["counts"];
   lead?: Id<"users">;
-  members?: Id<"users">[];  fallbackUserId: Id<"users">;
+  members?: Id<"users">[];
+  fallbackUserId: Id<"users">;
 }
 
 const MAX_AVATARS = 2;

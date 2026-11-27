@@ -14,7 +14,9 @@ import { FIELD_TEXT_CLASS } from "@/lib/components/fields/FieldsSection";
 
 interface ProjectTagsPopoverProps {
   tags: string[] | undefined;
-  onUpdate: (tags: string[]) => void;  className?: string;  disabled?: boolean;
+  onUpdate: (tags: string[]) => void;
+  className?: string;
+  disabled?: boolean;
 }
 
 export function ProjectTagsPopover({

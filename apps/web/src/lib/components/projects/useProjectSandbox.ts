@@ -60,7 +60,8 @@ export function useProjectSandbox(projectId: Id<"projects">) {
       }
     });
 
-  return {    projectSession,
+  return {
+    projectSession,
     sandbox,
     isSandboxActive,
     isSandboxStarting: lifecycle.isStarting,

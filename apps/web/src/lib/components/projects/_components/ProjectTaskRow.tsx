@@ -104,7 +104,8 @@ export function ProjectTaskRow({
   readOnly,
 }: {
   task: ProjectTaskListRow;
-  view: ProjectTaskView;  open?: boolean;
+  view: ProjectTaskView;
+  open?: boolean;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
@@ -163,7 +164,8 @@ export function ProjectTaskRow({
       }}
       aria-label={task.title}
       selected={open}
-      accentClassName={open ? "bg-primary" : undefined}      className={open ? "ring-0" : FLAT_ROW_CLASS}
+      accentClassName={open ? "bg-primary" : undefined}
+      className={open ? "ring-0" : FLAT_ROW_CLASS}
       contentClassName={FLAT_ROW_CONTENT_CLASS}
     >
       <ProjectFlatRowBody

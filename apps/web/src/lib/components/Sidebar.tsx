@@ -37,10 +37,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
  * rail tiles, the panel content and the mobile header content.
  */
 export function Sidebar({ children }: { children: ReactNode }) {
-  // The rail follows the pending location, so its pill answers a click at
-  // once. The side panel follows the resolved one: it changes with the page
-  // when the route has loaded, inside the same view transition, rather than
-  // ahead of it (the panel used to swap before the rail slide started).
   const { pathname: pendingPathname } = useLocation();
   const pathname = useRouterState({
     select: (s) => s.resolvedLocation?.pathname ?? s.location.pathname,
@@ -50,18 +46,11 @@ export function Sidebar({ children }: { children: ReactNode }) {
   const {
     collapsed,
     setCollapsed,
-    // Context-owned so the "select something from the sidebar" landing pages
-    // can open the drawer from their empty state (`OpenNavigationButton`).
     mobileOpen,
     setMobileOpen,
     setSessionsNavMode,
   } = useSidebar();
   const { pageTitle } = usePageTitle();
-  // Entity pages (a session, a project, a pull request) title themselves with
-  // a breadcrumb rather than a string, so `pageTitle` is empty there and the
-  // header used to fall back to the logo — no "where am I" on a phone. The
-  // route's section label (the same `staticData.title` the browser tab uses)
-  // fills that gap; the logo is only for routes that declare neither.
   const routeTitle = useMatches({
     select: (matches) =>
       matches.reduce<string>(
@@ -70,11 +59,9 @@ export function Sidebar({ children }: { children: ReactNode }) {
       ),
   });
   const mobileHeaderTitle = pageTitle || routeTitle;
-  // The package shell uses the `md` breakpoint.
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const closeMobileSidebar = () => setMobileOpen(false);
-  // A route change closes the drawer (the package leaves this to the app).
   const [prevPathname, setPrevPathname] = useState(pathname);
   if (pathname !== prevPathname) {
     setPrevPathname(pathname);
@@ -86,8 +73,6 @@ export function Sidebar({ children }: { children: ReactNode }) {
     setCollapsed(!collapsed);
   });
   const simpleView = useSimpleView();
-  // The pathname owns the context sidebar mode; a user pick only overrides it
-  // on the page where it was made, so navigating re-derives it.
   const [modeOverride, setModeOverride] = useState<{
     pathname: string;
     mode: ContextSidebarMode;
@@ -108,7 +93,6 @@ export function Sidebar({ children }: { children: ReactNode }) {
   const route = parseSidebarRepoRoute(pathname);
   const { owner, repoName, appName, isRepoRoute } = route;
 
-  // Experimental Chrome tabs replace the sessions second column (rail only).
   const useChromeSessionTabs = useChromeSessionTabsActive(pathname);
   const flags = getSidebarPanelFlags({
     pathname,
@@ -144,7 +128,6 @@ export function Sidebar({ children }: { children: ReactNode }) {
       variant="rail"
       scroll="document"
       resizable={SIDEBAR_RESIZE}
-      // Collapsed, or a route with no side panel: the content sits next to the rail.
       panelHidden={collapsed || !showSidePanel}
       className="bg-app-shell"
     >
@@ -154,7 +137,6 @@ export function Sidebar({ children }: { children: ReactNode }) {
         mobileOpen={mobileOpen}
         onMobileOpenChange={setMobileOpen}
         collapsed={collapsed}
-        // Global pages are rail only, except Sessions (grouped cross-repo list).
         panelHidden={!showSidePanel}
       >
         <SidebarMobileHeader

@@ -16,7 +16,6 @@ type SeededAppResult = {
   seededSnapshotName: string | null;
 };
 
-/** A per-app entry counts as seeded by explicit status, or (legacy rows) by name. */
 function isSeededEntry(a: SeededAppResult): boolean {
   return a.status ? a.status === "seeded" : a.seededSnapshotName !== null;
 }
@@ -205,7 +204,6 @@ export function BuildStatusBadge({
   );
 }
 
-/** Build type badge: "Base image" (foundation only) vs "Seeded" (boots + seeds DB). */
 function BuildKindBadge({ kind }: { kind?: "base" | "seeded" }) {
   if (!kind) {
     return <span className="text-muted-foreground">&mdash;</span>;
@@ -224,14 +222,12 @@ function BuildKindBadge({ kind }: { kind?: "base" | "seeded" }) {
   );
 }
 
-/** Compact per-build seeding summary: seeded/total, coloured by completeness. */
 function SeededSummary({ seededApps }: { seededApps?: SeededAppResult[] }) {
   if (!seededApps || seededApps.length === 0) {
     return <span className="text-muted-foreground">&mdash;</span>;
   }
   const total = seededApps.length;
   const seeded = seededApps.filter(isSeededEntry).length;
-  // Still seeding: show a spinner with progress so far.
   if (seededApps.some((a) => a.status === "running")) {
     return (
       <span className="inline-flex items-center gap-1 text-blue-500">

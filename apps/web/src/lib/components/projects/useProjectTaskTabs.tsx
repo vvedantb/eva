@@ -62,7 +62,13 @@ function tasksSearchValue(list: ReadonlyArray<number>) {
   return list.length === 1 ? list[0] : list.join(",");
 }
 
-export interface ProjectTaskTabs {  numIds: number[];  selected: number | null;  open: (numId: number) => void;  select: (numId: number | null) => void;  close: (numId: number) => void;  showTab: (tab: ProjectTaskTab) => void;
+export interface ProjectTaskTabs {
+  numIds: number[];
+  selected: number | null;
+  open: (numId: number) => void;
+  select: (numId: number | null) => void;
+  close: (numId: number) => void;
+  showTab: (tab: ProjectTaskTab) => void;
 }
 
 /**
@@ -78,7 +84,9 @@ export function useProjectTaskTabs({
   onShowPanel,
 }: {
   basePath: string;
-  projectPathSegment: string | null;  sandboxTab: ProjectSandboxTab;  onShowPanel: () => void;
+  projectPathSegment: string | null;
+  sandboxTab: ProjectSandboxTab;
+  onShowPanel: () => void;
 }): ProjectTaskTabs {
   const navigate = useNavigate();
   const [params, setParams] = useQueryStates({
@@ -86,7 +94,8 @@ export function useProjectTaskTabs({
     task: projectPanelTaskParser,
   });
   const selected = params.task;
-  const numIds = projectTaskTabList(params.tasks, selected);  const [coordinatorTab, setCoordinatorTab] = useState<ProjectSandboxTab>(
+  const numIds = projectTaskTabList(params.tasks, selected);
+  const [coordinatorTab, setCoordinatorTab] = useState<ProjectSandboxTab>(
     PROJECT_DEFAULT_SANDBOX_TAB,
   );
 
@@ -150,7 +159,8 @@ export function useProjectTaskTabs({
 /** One task tab: its row and whether the task works now. */
 export interface ProjectTaskTabRow {
   numId: number;
-  row: ProjectTaskListRow;  running: boolean;
+  row: ProjectTaskListRow;
+  running: boolean;
 }
 
 /**
@@ -191,7 +201,9 @@ export function useProjectTaskTabRows(
     return row ? [{ numId, row, running: working.has(row._id) }] : [];
   });
   return {
-    rows,    selectedRow:
-      tabs.selected === null ? undefined : byNumId.get(tabs.selected),    selectedLoading: tabs.selected !== null && loading,
+    rows,
+    selectedRow:
+      tabs.selected === null ? undefined : byNumId.get(tabs.selected),
+    selectedLoading: tabs.selected !== null && loading,
   };
 }

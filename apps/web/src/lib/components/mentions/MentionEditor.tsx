@@ -235,12 +235,6 @@ function handleEnterSubmitKey(
   }
 }
 
-/**
- * ARIA 1.2 combobox state: the editor is the input, the picker is the popup it
- * controls, and `aria-activedescendant` is how a screen reader is told which
- * row ArrowUp/ArrowDown moved to — the picker rows keep DOM focus out of it
- * entirely. Without these the popup opened silently.
- */
 function editorAriaState({
   showPopup,
   listboxId,
@@ -281,7 +275,6 @@ interface ChipHoverCardOptions {
   renderSkillChipHoverCard: ((id: string) => ReactNode) | undefined;
 }
 
-/** Hover state, timers and mouse handlers for the chip hover card. */
 function useChipHoverCard({
   mentionMap,
   skillMap,
@@ -434,10 +427,6 @@ function useChipHoverCard({
   };
 }
 
-/**
- * Keeps the open chip hover card pinned to its chip, clears the hover timers
- * on unmount, and renders the card into a portal.
- */
 function useChipHoverCardLayer(
   hover: ReturnType<typeof useChipHoverCard>,
   {
@@ -584,18 +573,9 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     onMentionChipClick !== undefined || onSkillChipClick !== undefined;
   const isPanel = popupLayout === "panel";
   const editorRef = useRef<HTMLDivElement>(null);
-  /**
-   * The listbox this combobox controls. One id is enough: the slash popup and
-   * the mention popup are two `key`s of the same slot and only one trigger can
-   * be open at a time.
-   */
   const listboxId = useId();
   const [trigger, setTrigger] = useState<TriggerState>(CLOSED_TRIGGER);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  /**
-   * The chip the last accept inserted, so the trigger scan can tell it apart
-   * from a trigger the user is still typing. See `isInsertedTokenTrigger`.
-   */
   const insertedTokenRef = useRef<InsertedToken | null>(null);
   const [popupPlacement, setPopupPlacement] =
     useState<MentionPopupPlacement | null>(null);
@@ -634,9 +614,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     const el = editorRef.current;
     if (!el) return;
     const domText = normalizeMentionText(extractEditableText(el));
-    // A pasted/typed link URL leaves DOM text already equal to `value`, so also
-    // re-render when the link count is out of sync — this links a fresh URL
-    // exactly once, then stays stable during normal editing.
     const linkCount = el.querySelectorAll("[data-link-url]").length;
     if (domText !== value || linkCount !== countLinkUrls(value)) {
       el.innerHTML = renderEditorChipHtml(
@@ -709,8 +686,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     [mentionMap, skillMap, value, onValueChange],
   );
 
-  // Full filtered lists — popup scrolls; do not cap (callers need every
-  // doc/skill/person available, not an alphabetical first-N subset).
   const activeSlashItems = filterMentionItems(
     slashItems,
     trigger.query,
@@ -778,9 +753,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
       slashItems.length > 0 || emptySlashContent !== undefined,
     );
     const next: TriggerState | null = found ? { isOpen: true, ...found } : null;
-    // Released only once the chip stops being there — a healthy accept leaves no
-    // trigger at all for a pass or two, so releasing on that would drop the
-    // guard before the keystroke it exists to catch.
     const inserted = insertedTokenRef.current;
     if (
       inserted !== null &&
@@ -788,8 +760,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     ) {
       insertedTokenRef.current = null;
     }
-    // The chip the last accept inserted is not a trigger the user is typing,
-    // even when it reads like one because its trailing space was lost.
     const isChipEcho =
       next !== null &&
       isInsertedTokenTrigger(value, next.startIndex, insertedTokenRef.current);
@@ -868,11 +838,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     }
   };
 
-  /**
-   * Arrow/Enter/Tab/Escape from the editor while the picker is open. The caret
-   * never leaves the editor — the picker has nothing focusable in it — so this
-   * is the only path that navigates the list.
-   */
   const handlePickerKeyDown = (
     e: React.KeyboardEvent<HTMLElement>,
   ): boolean => {
@@ -958,7 +923,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     renderSkillChipHoverCard,
   });
 
-  /** A link favicon that 404s hides itself (`.markdown-link-icon[data-failed]`). */
   const hideFailedFavicon = (e: React.SyntheticEvent<HTMLDivElement>) => {
     if (e.target instanceof HTMLImageElement) e.target.dataset.failed = "true";
   };
@@ -967,8 +931,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     const target = e.target;
     if (!(target instanceof Element)) return;
 
-    // Links open externally and are always clickable, independent of the
-    // mention/skill click handlers.
     const link = target.closest("[data-link-url]");
     if (link instanceof HTMLElement) {
       const url = link.dataset.linkUrl;
@@ -1009,8 +971,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    // Hand pasted image files to the attachment handler instead of inserting
-    // them as text. Only images are intercepted; other files fall through.
     if (onImageFiles) {
       const imageFiles: File[] = [];
       for (const item of e.clipboardData.items) {
@@ -1030,9 +990,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
       e.preventDefault();
       return;
     }
-    // Keep plain-text-only paste (strip HTML), but join the browser undo stack.
-    // Manual range.insertNode bypasses undo, so Ctrl+Z undid prior typing
-    // instead of the paste.
     e.preventDefault();
     if (plainText.length === 0) return;
     if (document.execCommand("insertText", false, plainText)) {
@@ -1060,8 +1017,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
 
   const popupTitle = trigger.kind === "slash" ? "Skills" : mentionPopupTitle;
 
-  // The row the arrow keys are on, named for `aria-activedescendant`. Only the
-  // popup that is actually rendered has one.
   const activeItem = showPopup ? popupItems[selectedIndex] : undefined;
 
   const sharedPopupProps = {
@@ -1104,7 +1059,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         data-suggestion={suggestion}
         contentEditable={!disabled}
         suppressContentEditableWarning
-        /* ARIA 1.2 combobox — see `editorAriaState`. */
         role="combobox"
         aria-multiline="true"
         aria-haspopup="listbox"
@@ -1119,9 +1073,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         })}
         className={cn(
           DEFAULT_EDITOR_CLASS,
-          // `role="combobox"` opts into the base-layer pointer cursor meant for
-          // pickers. This one is typed into, so put the caret back — while
-          // leaving a disabled editor on the base `not-allowed`.
           disabled ? undefined : "cursor-text",
           className,
         )}
@@ -1138,10 +1089,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         onBlur={disabled ? undefined : handleBlur}
         onPaste={disabled ? undefined : handlePaste}
       />
-      {/* `AnimatePresence` is portalled unconditionally, with the popup as its
-          conditional child: gating the portal on `pickerPopup` would unmount the
-          presence boundary in the same commit that removes the popup, and the
-          exit animation would never run. */}
       {typeof document !== "undefined"
         ? createPortal(
             <AnimatePresence>{pickerPopup}</AnimatePresence>,

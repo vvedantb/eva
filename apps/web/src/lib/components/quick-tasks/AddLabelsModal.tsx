@@ -64,7 +64,8 @@ export function AddLabelsModal({
 
   const handleAdd = async () => {
     if (newLabels.length === 0) return;
-    setIsLoading(true);    const successMessage = `Added labels to ${count} task${count === 1 ? "" : "s"}`;
+    setIsLoading(true);
+    const successMessage = `Added labels to ${count} task${count === 1 ? "" : "s"}`;
     try {
       await withMutationToast(
         Promise.all(

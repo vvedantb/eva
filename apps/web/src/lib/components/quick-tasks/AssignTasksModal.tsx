@@ -71,7 +71,8 @@ export function AssignTasksModal({
   };
 
   const handleAssign = async (userId: Id<"users">) => {
-    setIsLoading(true);    const successMessage = `Assigned ${count} task${count === 1 ? "" : "s"}`;
+    setIsLoading(true);
+    const successMessage = `Assigned ${count} task${count === 1 ? "" : "s"}`;
     try {
       await withMutationToast(
         Promise.all(

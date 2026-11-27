@@ -8,7 +8,8 @@ import { ProjectStageCounts } from "@/lib/components/projects/ProjectStageCounts
 
 interface TimelineBarProps {
   name: string;
-  stage: ProjectStage;  counts?: ProjectStatus["counts"];
+  stage: ProjectStage;
+  counts?: ProjectStatus["counts"];
 }
 
 /**

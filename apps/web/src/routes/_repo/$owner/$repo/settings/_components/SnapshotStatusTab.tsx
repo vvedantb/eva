@@ -16,7 +16,6 @@ type SeededApps = FunctionReturnType<
   typeof api.repoSnapshots.getSeededAppStatus
 >;
 
-/** Derives the build/seed state shown on the Status tab. */
 function getSnapshotBuildStatus(
   snapshot: Snapshot,
   builds: Builds | undefined,
@@ -25,14 +24,9 @@ function getSnapshotBuildStatus(
   const isRunning =
     builds && builds.length > 0 && builds[0].status === "running";
   const lastBuild = builds && builds.length > 0 ? builds[0] : null;
-  // Base image is marked success before Step 5 seeding runs, so "in progress"
-  // must also cover an ongoing seed (any app still in the "running" state).
   const isSeeding = (lastBuild?.seededApps ?? []).some(
     (a) => a.status === "running",
   );
-  // The build now produces a single seeded snapshot shared by every app in the
-  // repo, so the per-app rows all carry the same seededSnapshotName. Take the
-  // first seeded entry as the one shared snapshot.
   const sharedSeededSnapshotName =
     seededApps?.find((app) => app.seededSnapshotName !== null)
       ?.seededSnapshotName ?? null;
@@ -163,7 +157,6 @@ function CurrentStatusGrid({
   snapshot: Snapshot;
   lastBuild: Build | null;
 }) {
-  // Snapshots build from the repo's default branch (the branch `.eva/` syncs from).
   const { repo } = useRepo();
   return (
     <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 sm:gap-4">

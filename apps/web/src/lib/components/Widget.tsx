@@ -2,16 +2,11 @@ import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 
 interface WidgetProps {
-  /** Section heading on the canvas above the card. */
   title?: ReactNode;
-  /** Short supporting copy under the title. */
   subtitle?: ReactNode;
-  /** Header content aligned to the right (filters, legends, menus). */
   actions?: ReactNode;
   children: ReactNode;
-  /** Classes for the outer section. */
   className?: string;
-  /** Classes for the card. */
   contentClassName?: string;
 }
 
