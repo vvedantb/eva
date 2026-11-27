@@ -1267,6 +1267,9 @@ export const automationRunFields = {
   // PR open, push and merge runs: the newest head commit the run covers, and
   // the GitHub check run Eva shows on it (see `_automations/checkRun.ts`).
   headSha: v.optional(v.string()),
+  // Every head commit a queued run absorbed, oldest first. The run is dropped
+  // only when an automation pushed all of them (see `startEventRun`).
+  headShas: v.optional(v.array(v.string())),
   checkRunId: v.optional(v.number()),
   // PR branch runs: the commit the run pushed to the PR, so the push event it
   // fires does not start another run (see `startEventRun`).

@@ -57,17 +57,25 @@ export const recordPushedSha = internalMutation({
   },
 });
 
-/** Whether an automation run pushed this commit (see `pushedSha`). */
-async function isAutomationPush(
+/**
+ * Whether automation runs pushed every commit a queued run absorbed (see
+ * `pushedSha`). One push by a person keeps the run: it runs on the newest
+ * head, which holds that push and the automation's commits on top.
+ */
+async function onlyAutomationPushes(
   ctx: MutationCtx,
-  headSha: string | undefined,
+  headShas: ReadonlyArray<string> | undefined,
 ): Promise<boolean> {
-  if (headSha === undefined) return false;
-  const pusher = await ctx.db
-    .query("automationRuns")
-    .withIndex("by_pushedSha", (q) => q.eq("pushedSha", headSha))
-    .first();
-  return pusher !== null;
+  if (headShas === undefined || headShas.length === 0) return false;
+  const pushers = await Promise.all(
+    headShas.map((headSha) =>
+      ctx.db
+        .query("automationRuns")
+        .withIndex("by_pushedSha", (q) => q.eq("pushedSha", headSha))
+        .first(),
+    ),
+  );
+  return pushers.every((pusher) => pusher !== null);
 }
 
 /**
@@ -207,9 +215,9 @@ export const startEventRun = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.status !== "queued") return null;
-    // An automation pushed this commit to the PR. Running on its own push
-    // would loop, so the event is dropped, with no run left in the history.
-    if (await isAutomationPush(ctx, run.headSha)) {
+    // Automations pushed every commit this run would cover. Running on their
+    // own pushes would loop, so the run is dropped, with no history entry.
+    if (await onlyAutomationPushes(ctx, run.headShas)) {
       await ctx.db.delete(args.runId);
       return null;
     }

@@ -36,6 +36,10 @@ import { syncCheckRunLater } from "../_automations/checkRun";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 import { chatEntityKindValidator } from "../_validators/enums";
 
+function headShaList(headSha: string | undefined): string[] | undefined {
+  return headSha === undefined ? undefined : [headSha];
+}
+
 /** Every run an automation made for one PR or issue. */
 async function runsForTarget(
   db: DatabaseReader,
@@ -86,7 +90,12 @@ async function shouldQueue(
   const waiting = sameKey.find((run) => run.status === "queued");
   if (waiting !== undefined) {
     const headSha = prEventHeadSha(event);
-    if (headSha !== undefined) await ctx.db.patch(waiting._id, { headSha });
+    if (headSha !== undefined) {
+      await ctx.db.patch(waiting._id, {
+        headSha,
+        headShas: [...(waiting.headShas ?? []), headSha],
+      });
+    }
     return false;
   }
   // One task per monitor per window, whatever became of the last one.
@@ -202,6 +211,7 @@ async function queueEventRun(
     eventKey,
     targetUrl: repoEventTargetUrl(event),
     headSha: prEventHeadSha(event),
+    headShas: headShaList(prEventHeadSha(event)),
   });
   const debounce = EVENT_DEBOUNCE_MS[event.kind];
   await ctx.scheduler.runAfter(
