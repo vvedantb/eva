@@ -524,6 +524,8 @@ import type * as prRecapWorkflow from "../prRecapWorkflow.js";
 import type * as presence from "../presence.js";
 import type * as presentations from "../presentations.js";
 import type * as previewComments from "../previewComments.js";
+import type * as previewCommentsHttp from "../previewCommentsHttp.js";
+import type * as previewCommentsNode from "../previewCommentsNode.js";
 import type * as previewGrant from "../previewGrant.js";
 import type * as previewGrantConfig from "../previewGrantConfig.js";
 import type * as previewToolCalls from "../previewToolCalls.js";
@@ -1124,6 +1126,8 @@ declare const fullApi: ApiFromModules<{
   presence: typeof presence;
   presentations: typeof presentations;
   previewComments: typeof previewComments;
+  previewCommentsHttp: typeof previewCommentsHttp;
+  previewCommentsNode: typeof previewCommentsNode;
   previewGrant: typeof previewGrant;
   previewGrantConfig: typeof previewGrantConfig;
   previewToolCalls: typeof previewToolCalls;

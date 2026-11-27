@@ -49,6 +49,8 @@ const STYLES = `
 textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--field); color: var(--surface-text); font: inherit; font-size: 14px; white-space: pre-wrap; resize: none; }
 textarea::placeholder { color: var(--idle-text); }
 textarea:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+.error { margin: 8px 0 0; font-size: 12px; color: var(--destructive); }
+.error[hidden] { display: none; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 button { all: unset; box-sizing: border-box; display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--idle-text); transition: transform 120ms ease; }
 button:hover { background: var(--hover-bg); color: var(--hover-text); }
@@ -69,13 +71,19 @@ function span(className: string, text: string): HTMLSpanElement {
 export function openSelectionCard({
   info,
   rect,
-  onCopy,
+  submitLabel,
+  requireNote,
+  onSubmit,
   onCancel,
 }: {
   info: SelectionCardInfo;
   rect: Rect;
-  /** Resolves true when the copy worked. The card closes either way. */
-  onCopy: (note: string) => Promise<boolean>;
+  /** "Send to Eva" with a session, "Copy for Eva" without one. */
+  submitLabel: string;
+  /** A send needs a note; a copy works with none. */
+  requireNote: boolean;
+  /** Resolves null when done (the card closes), or a message to show. */
+  onSubmit: (note: string) => Promise<string | null>;
   onCancel: () => void;
 }): SelectionCard {
   const host = document.createElement("div");
@@ -119,9 +127,17 @@ export function openSelectionCard({
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "primary";
-  copy.textContent = "Copy for Eva";
+  copy.textContent = submitLabel;
   actions.append(cancel, copy);
-  card.appendChild(actions);
+  const error = document.createElement("p");
+  error.className = "error";
+  error.hidden = true;
+  card.append(error, actions);
+  const syncEnabled = (): void => {
+    copy.disabled = requireNote && field.value.trim() === "";
+  };
+  syncEnabled();
+  field.addEventListener("input", syncEnabled);
   shadow.append(style, card);
 
   function reposition(next: Rect): void {
@@ -149,9 +165,18 @@ export function openSelectionCard({
     host.remove();
   }
   function submit(): void {
-    if (done) return;
+    if (done || copy.disabled) return;
     copy.disabled = true;
-    void onCopy(field.value.trim()).finally(finish);
+    error.hidden = true;
+    void onSubmit(field.value.trim()).then((message) => {
+      if (message === null) {
+        finish();
+        return;
+      }
+      error.textContent = message;
+      error.hidden = false;
+      syncEnabled();
+    });
   }
   cancel.addEventListener("click", () => {
     finish();

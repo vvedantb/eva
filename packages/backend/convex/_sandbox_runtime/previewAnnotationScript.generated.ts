@@ -101,6 +101,8 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
 textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--field); color: var(--surface-text); font: inherit; font-size: 14px; white-space: pre-wrap; resize: none; }
 textarea::placeholder { color: var(--idle-text); }
 textarea:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+.error { margin: 8px 0 0; font-size: 12px; color: var(--destructive); }
+.error[hidden] { display: none; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 button { all: unset; box-sizing: border-box; display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--idle-text); transition: transform 120ms ease; }
 button:hover { background: var(--hover-bg); color: var(--hover-text); }
@@ -119,7 +121,9 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
   function openSelectionCard({
     info,
     rect,
-    onCopy,
+    submitLabel,
+    requireNote,
+    onSubmit,
     onCancel
   }) {
     const host = document.createElement("div");
@@ -158,9 +162,17 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "primary";
-    copy.textContent = "Copy for Eva";
+    copy.textContent = submitLabel;
     actions.append(cancel, copy);
-    card.appendChild(actions);
+    const error = document.createElement("p");
+    error.className = "error";
+    error.hidden = true;
+    card.append(error, actions);
+    const syncEnabled = () => {
+      copy.disabled = requireNote && field.value.trim() === "";
+    };
+    syncEnabled();
+    field.addEventListener("input", syncEnabled);
     shadow.append(style, card);
     function reposition(next) {
       const width = card.offsetWidth;
@@ -181,9 +193,18 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
       host.remove();
     }
     function submit() {
-      if (done) return;
+      if (done || copy.disabled) return;
       copy.disabled = true;
-      void onCopy(field.value.trim()).finally(finish);
+      error.hidden = true;
+      void onSubmit(field.value.trim()).then((message) => {
+        if (message === null) {
+          finish();
+          return;
+        }
+        error.textContent = message;
+        error.hidden = false;
+        syncEnabled();
+      });
     }
     cancel.addEventListener("click", () => {
       finish();
@@ -214,6 +235,303 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
         host.style.visibility = hidden ? "hidden" : "";
       },
       close: finish
+    };
+  }
+
+  // preview-annotation-src/evaApi.ts
+  var SESSION_PATH = "/__eva_preview_proxy/eva-comments";
+  function str(value, key) {
+    if (typeof value !== "object" || value === null) return "";
+    const field = Reflect.get(value, key);
+    return typeof field === "string" ? field : "";
+  }
+  function num(value, key) {
+    if (typeof value !== "object" || value === null) return 0;
+    const field = Reflect.get(value, key);
+    return typeof field === "number" ? field : 0;
+  }
+  async function loadEvaSession() {
+    try {
+      const response = await fetch(SESSION_PATH, { credentials: "same-origin" });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const token = str(data, "token");
+      const site = str(data, "site");
+      return token && site ? { token, site } : null;
+    } catch {
+      return null;
+    }
+  }
+  async function call(session, op, body) {
+    const response = await fetch(\`\${session.site}/preview-comments/\${op}\`, {
+      method: "POST",
+      headers: {
+        authorization: \`Bearer \${session.token}\`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(str(data, "error") || "Eva could not be reached");
+    }
+    return data;
+  }
+  function parseComment(raw) {
+    const kind = str(raw, "kind");
+    if (kind !== "message" && kind !== "queued") return null;
+    const reply = typeof raw === "object" && raw ? Reflect.get(raw, "reply") : null;
+    const resolved = typeof raw === "object" && raw ? Reflect.get(raw, "resolved") : null;
+    return {
+      kind,
+      id: str(raw, "id"),
+      feedback: str(raw, "feedback"),
+      element: str(raw, "element"),
+      pagePath: str(raw, "pagePath"),
+      timestamp: num(raw, "timestamp"),
+      reply: reply ? { status: str(reply, "status"), excerpt: str(reply, "excerpt") } : null,
+      resolved: resolved ? { at: num(resolved, "at"), byName: str(resolved, "byName") } : null
+    };
+  }
+  async function listComments(session) {
+    const data = await call(session, "list", {});
+    const raw = typeof data === "object" && data ? Reflect.get(data, "comments") : null;
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+      const comment = parseComment(item);
+      if (comment) out.push(comment);
+    }
+    return out;
+  }
+  async function sendComment(session, input) {
+    await call(session, "send", input);
+  }
+  async function setCommentResolved(session, id, resolved) {
+    await call(session, "resolve", { id, resolved });
+  }
+
+  // preview-annotation-src/commentsDrawer.ts
+  var POLL_MS = 4e3;
+  var WIDTH_PX = 380;
+  var INSET_PX = 8;
+  var STYLES2 = \`
+:host { all: initial; position: fixed; z-index: 2147483647; top: \${INSET_PX}px; right: \${INSET_PX}px; bottom: \${INSET_PX}px; font: 14px/1.4 var(--font); }
+.drawer { box-sizing: border-box; display: flex; flex-direction: column; width: min(\${WIDTH_PX}px, calc(100vw - \${INSET_PX * 2}px)); height: 100%; overflow: hidden; border-radius: var(--tip-radius); background: var(--field); color: var(--surface-text); box-shadow: var(--bar-shadow); }
+.head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; font-weight: 500; }
+.filters { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 12px 6px; }
+.seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover-bg); }
+.seg button { height: 26px; padding: 0 10px; font-size: 12px; }
+.list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.empty { padding: 24px 12px; text-align: center; color: var(--idle-text); }
+.item { padding: 10px; border-radius: var(--tip-radius); background: var(--disc); box-shadow: 0 0 0 1px var(--border); }
+.item.done { opacity: 0.7; }
+.meta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--idle-text); }
+.chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--field); color: var(--surface-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.time { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+.feedback { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: var(--hover-bg); font-size: 12px; color: var(--idle-text); }
+.reply b { display: block; margin-bottom: 2px; font-weight: 500; color: var(--surface-text); }
+.reply p { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.note { margin: 8px 0 0; font-size: 11px; color: var(--idle-text); }
+.row { display: flex; margin-top: 8px; }
+button { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; height: 28px; padding: 0 10px; border-radius: 999px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--idle-text); }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+button[aria-pressed="true"] { background: var(--active-bg); color: var(--active-text); }
+button.icon { width: 28px; padding: 0; }
+svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+\`;
+  function ago(timestamp) {
+    const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1e3));
+    if (seconds < 60) return "now";
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return \`\${minutes}m\`;
+    const hours = Math.round(minutes / 60);
+    return hours < 24 ? \`\${hours}h\` : \`\${Math.round(hours / 24)}d\`;
+  }
+  function pathOnly(path) {
+    const pathname = path.split(/[?#]/)[0] ?? "/";
+    return pathname.length > 1 ? pathname.replace(/\\/+\$/, "") : pathname;
+  }
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== void 0) node.textContent = text;
+    return node;
+  }
+  function openCommentsDrawer({
+    session,
+    onClose,
+    onCount
+  }) {
+    const host = document.createElement("div");
+    host.setAttribute("data-eva-annotate-overlay", "1");
+    applyTheme(host, getTheme());
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = el("style", "");
+    style.textContent = STYLES2;
+    let comments = [];
+    let loaded = false;
+    let scope = "page";
+    let status = "open";
+    const drawer = el("div", "drawer");
+    const head = el("div", "head");
+    head.appendChild(el("span", "", "Comments"));
+    const closeButton = el("button", "icon");
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close comments");
+    closeButton.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
+    head.appendChild(closeButton);
+    const filters = el("div", "filters");
+    const list = el("div", "list");
+    drawer.append(head, filters, list);
+    shadow.append(style, drawer);
+    function segment(label, options, current2, pick) {
+      const group = el("div", "seg");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", label);
+      for (const option of options) {
+        const button = el("button", "", option.text);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(option.value === current2));
+        button.addEventListener("click", () => pick(option.value));
+        group.appendChild(button);
+      }
+      return group;
+    }
+    function card(comment) {
+      const item = el("div", comment.resolved ? "item done" : "item");
+      const meta = el("div", "meta");
+      meta.append(el("span", "chip", comment.element), el("span", "time", ago(comment.timestamp)));
+      item.append(meta, el("p", "feedback", comment.feedback));
+      if (comment.kind === "queued") {
+        item.appendChild(el("p", "note", "Queued, sends when Eva finishes"));
+        return item;
+      }
+      const reply = comment.reply;
+      if (reply && (reply.status === "working" || reply.status === "done")) {
+        const box = el("div", "reply");
+        box.appendChild(el("b", "", "Eva"));
+        box.appendChild(
+          el("p", "", reply.status === "working" ? "Working\\u2026" : reply.excerpt)
+        );
+        item.appendChild(box);
+      }
+      if (comment.resolved) {
+        item.appendChild(
+          el(
+            "p",
+            "note",
+            \`Resolved by \${comment.resolved.byName} \\xB7 \${ago(comment.resolved.at)}\`
+          )
+        );
+      }
+      const row = el("div", "row");
+      const toggle = el("button", "", comment.resolved ? "Reopen" : "Resolve");
+      toggle.type = "button";
+      toggle.addEventListener("click", () => {
+        toggle.disabled = true;
+        void setCommentResolved(session, comment.id, !comment.resolved).then(refresh).catch(() => {
+        });
+      });
+      row.appendChild(toggle);
+      item.appendChild(row);
+      return item;
+    }
+    function render() {
+      const here = pathOnly(window.location.pathname + window.location.search);
+      const isDone = (c) => c.resolved !== null;
+      const inScope = (c) => scope === "all" || pathOnly(c.pagePath) === here;
+      const inStatus = (c) => isDone(c) === (status === "resolved");
+      const withStatus = comments.filter(inStatus);
+      const withScope = comments.filter(inScope);
+      const resolvedCount = withScope.filter(isDone).length;
+      const onPage = withStatus.filter((c) => pathOnly(c.pagePath) === here).length;
+      filters.replaceChildren(
+        segment(
+          "Which pages",
+          [
+            { value: "page", text: \`On this page (\${onPage})\` },
+            { value: "all", text: \`All comments (\${withStatus.length})\` }
+          ],
+          scope,
+          (value) => {
+            scope = value;
+            render();
+          }
+        ),
+        segment(
+          "Open or resolved",
+          [
+            { value: "open", text: \`Open (\${withScope.length - resolvedCount})\` },
+            { value: "resolved", text: \`Resolved (\${resolvedCount})\` }
+          ],
+          status,
+          (value) => {
+            status = value;
+            render();
+          }
+        )
+      );
+      const shown = withStatus.filter(inScope);
+      if (!loaded) {
+        list.replaceChildren(el("p", "empty", "Loading\\u2026"));
+      } else if (shown.length === 0) {
+        list.replaceChildren(
+          el(
+            "p",
+            "empty",
+            status === "resolved" ? "No resolved comments." : scope === "page" ? "No open comments on this page. Use Select element to add one." : "No open comments. Use Select element to add one."
+          )
+        );
+      } else {
+        list.replaceChildren(...shown.map(card));
+      }
+      onCount(comments.filter((c) => !isDone(c)).length);
+    }
+    function refresh() {
+      return listComments(session).then(
+        (next) => {
+          comments = next;
+          loaded = true;
+          render();
+        },
+        () => {
+          loaded = true;
+          render();
+        }
+      );
+    }
+    let closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      window.clearInterval(timer);
+      host.remove();
+    }
+    closeButton.addEventListener("click", () => {
+      close();
+      onClose();
+    });
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      shadow.addEventListener(type, (event) => event.stopPropagation());
+    }
+    shadow.addEventListener("keydown", (event) => {
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
+        close();
+        onClose();
+      }
+    });
+    document.documentElement.appendChild(host);
+    render();
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), POLL_MS);
+    return {
+      setHiddenForCapture(hidden) {
+        host.style.visibility = hidden ? "hidden" : "";
+      },
+      close
     };
   }
 
@@ -271,7 +589,7 @@ button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
     "sketch",
     "screenshot"
   ];
-  var STYLES2 = \`
+  var STYLES3 = \`
 :host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.3 var(--font); }
 .bar { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
@@ -364,7 +682,7 @@ svg.mark { width: 44px; height: 44px; }
     host.setAttribute("data-eva-annotate-overlay", "1");
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent = STYLES2;
+    style.textContent = STYLES3;
     const bar = document.createElement("div");
     bar.className = "bar";
     bar.style.position = "relative";
@@ -747,6 +1065,8 @@ svg.mark { width: 44px; height: 44px; }
     let rectRaf = 0;
     let toolbar = null;
     let selectionCard = null;
+    let evaSession = null;
+    let commentsDrawer = null;
     function post(payload) {
       if (!parentOrigin) return;
       window.parent.postMessage(payload, parentOrigin);
@@ -1056,17 +1376,17 @@ svg.mark { width: 44px; height: 44px; }
       labelEl.style.top = labelTop + "px";
       labelEl.style.left = Math.max(0, rect.left) + "px";
     }
-    function elementChip(el) {
-      const tag = el.tagName.toLowerCase();
-      const rawClass = el.classList.item(0);
+    function elementChip(el2) {
+      const tag = el2.tagName.toLowerCase();
+      const rawClass = el2.classList.item(0);
       const stripped = rawClass ? stripClassHash(rawClass) : "";
-      const cls = el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
+      const cls = el2 instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
       return "<" + tag + cls + ">";
     }
-    function chipLabel(el) {
-      const react = collectReactNames(el);
+    function chipLabel(el2) {
+      const react = collectReactNames(el2);
       const reactPrefix = react[0] ? react[0] + " " : "";
-      return reactPrefix + elementChip(el);
+      return reactPrefix + elementChip(el2);
     }
     function clearAll() {
       selectionCard?.close();
@@ -1120,6 +1440,11 @@ svg.mark { width: 44px; height: 44px; }
       if (selectedEl) return;
       paintBox(target, chipLabel(target), false);
     }
+    function finishSelection(notice) {
+      clearAll();
+      setMode(false);
+      toolbar?.update({ notice });
+    }
     function onClick(event) {
       if (!modeActive) return;
       const target = event.target;
@@ -1135,6 +1460,7 @@ svg.mark { width: 44px; height: 44px; }
       paintBox(target, chipLabel(target), true);
       if (!embedded) {
         selectionCard?.close();
+        const session = evaSession;
         selectionCard = openSelectionCard({
           info: {
             chip: elementChip(target),
@@ -1143,16 +1469,31 @@ svg.mark { width: 44px; height: 44px; }
             accessibility: context.accessibility
           },
           rect,
-          onCopy: (note) => copyToClipboard(formatContextForClipboard(context, note)).then(
-            (ok) => {
-              clearAll();
-              setMode(false);
-              toolbar?.update({
-                notice: ok ? "Copied for Eva" : "Couldn't copy"
-              });
-              return ok;
+          submitLabel: session ? "Send to Eva" : "Copy for Eva",
+          requireNote: session !== null,
+          onSubmit: async (note) => {
+            if (session) {
+              try {
+                await sendComment(session, {
+                  feedback: note,
+                  element: elementChip(target),
+                  selector: context.selector,
+                  pagePath: context.pagePath,
+                  details: formatContextForClipboard(context, "")
+                });
+              } catch (error) {
+                return error instanceof Error ? error.message : "Couldn't send";
+              }
+              finishSelection("Sent to Eva");
+              return null;
             }
-          ),
+            const ok = await copyToClipboard(
+              formatContextForClipboard(context, note)
+            );
+            if (!ok) return "Couldn't copy";
+            finishSelection("Copied for Eva");
+            return null;
+          },
           onCancel: clearAll
         });
         return;
@@ -1604,6 +1945,7 @@ svg.mark { width: 44px; height: 44px; }
       if (labelEl) labelEl.style.display = labelDisplayForCapture;
       toolbar?.setHiddenForCapture(false);
       selectionCard?.setHiddenForCapture(false);
+      commentsDrawer?.setHiddenForCapture(false);
     }
     let overlayDisplayForCapture = "";
     let labelDisplayForCapture = "";
@@ -1662,6 +2004,7 @@ svg.mark { width: 44px; height: 44px; }
       if (labelEl) labelEl.style.display = "none";
       toolbar?.setHiddenForCapture(true);
       selectionCard?.setHiddenForCapture(true);
+      commentsDrawer?.setHiddenForCapture(true);
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     function parseToolbarTheme(value) {
@@ -1862,7 +2205,28 @@ svg.mark { width: 44px; height: 44px; }
               setMode(!modeActive);
             }
           },
-          comments: () => post({ type: "eva-preview-toolbar-action", action: "comments" }),
+          comments: () => {
+            if (embedded) {
+              post({ type: "eva-preview-toolbar-action", action: "comments" });
+              return;
+            }
+            if (commentsDrawer) {
+              commentsDrawer.close();
+              commentsDrawer = null;
+              toolbar?.update({ commentsActive: false });
+              return;
+            }
+            if (!evaSession) return;
+            commentsDrawer = openCommentsDrawer({
+              session: evaSession,
+              onClose: () => {
+                commentsDrawer = null;
+                toolbar?.update({ commentsActive: false });
+              },
+              onCount: (commentCount) => toolbar?.update({ commentCount })
+            });
+            toolbar?.update({ commentsActive: true });
+          },
           freeze: () => setFrozen(!frozen),
           sketch: () => post({ type: "eva-preview-toolbar-action", action: "sketch" }),
           screenshot: () => {
@@ -1877,6 +2241,20 @@ svg.mark { width: 44px; height: 44px; }
         // only the ones that need no parent are shown.
         { selectEnabled: !embedded }
       );
+    }
+    if (ownsToolbar && !embedded) {
+      void loadEvaSession().then(async (session) => {
+        if (!session) return;
+        evaSession = session;
+        toolbar?.update({ commentsEnabled: true });
+        try {
+          const existing = await listComments(session);
+          toolbar?.update({
+            commentCount: existing.filter((c) => c.resolved === null).length
+          });
+        } catch {
+        }
+      });
     }
     post({ type: "eva-preview-annotate-ready" });
   }
