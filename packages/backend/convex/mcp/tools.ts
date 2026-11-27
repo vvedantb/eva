@@ -1114,19 +1114,11 @@ In a project coordinator chat the batch joins this project (do not pass projectT
 
 Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.
 
-A session holds parallel chats that share one checkout. The message lands in its "Main" chat unless "chat" names another one by number or title.
-
 Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done with it so the VM does not keep running.`,
       mutating: true,
       input: {
         message: z.string().describe("The message to post into the chat."),
         ...entityRefArgs,
-        chat: z
-          .string()
-          .optional()
-          .describe(
-            'Sessions only: which chat inside the session, by number ("2") or exact title. Omit for the Main chat.',
-          ),
         model: z
           .enum(MCP_CLAUDE_MODELS)
           .optional()
@@ -1137,16 +1129,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           "Omit to keep the account that chat runs on now.",
         ),
       },
-      handler: async ({ message, model, chat, account, ...ref }) => {
+      handler: async ({ message, model, account, ...ref }) => {
         if (message.trim().length === 0) {
           return toolErrorResult("message cannot be empty.");
-        }
-        if (
-          chat !== undefined &&
-          ref.kind !== undefined &&
-          ref.kind !== "session"
-        ) {
-          return toolErrorResult('"chat" only applies to sessions.');
         }
 
         const { userId } = await getContext();
@@ -1193,14 +1178,11 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           if (answer !== null) return answer;
         }
 
-        // A session daemon may message a sibling chat of its own session, but
-        // never the chat it is running in.
+        // A daemon never messages the chat it is running in.
         if (entityId !== undefined && target.targetId === entityId) {
-          if (target.kind !== "session" || chat === undefined) {
-            return toolErrorResult(
-              "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-            );
-          }
+          return toolErrorResult(
+            "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+          );
         }
 
         const result = await ctx.runAction(
@@ -1212,9 +1194,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             message,
             model,
             account,
-            ...(target.kind === "session" && chat !== undefined
-              ? { chat }
-              : {}),
             ...(credentials.chatId !== undefined
               ? { excludeChatId: credentials.chatId }
               : {}),
@@ -1235,7 +1214,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
         return toolJsonResult({
           ...entitySummary(target),
-          ...(result.chat !== undefined ? { chat: result.chat } : {}),
           delivered: result.delivered,
           model: result.model,
         });

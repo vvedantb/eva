@@ -21,7 +21,6 @@ import {
   SANDBOX_CHAT_COPY,
   sandboxChatEmptyState,
   sandboxComposerState,
-  waitingForSlotLabel,
   type SessionMenuAction,
   tokenizedToDisplayText,
   turnErrorTitle,
@@ -82,7 +81,6 @@ import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFo
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader, type MenuEntry } from "@/chat/ChatHeader";
 import { ThreadFindBar } from "@/chat/ThreadFindBar";
-import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
@@ -169,9 +167,6 @@ export default function ChatScreen() {
   });
   // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
-  // The session's running chats and this chat's queue: a send parked while every run slot is taken.
-  const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
-  const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
   // Eva's open turn answers in a reply thread: no running state here, a status line opens the thread.
   const threadTurn = useQuery(
     api.messages.openThreadTurn,
@@ -240,12 +235,6 @@ export default function ChatScreen() {
   // The web rule: a finished reply ends a stale open turn, so Stop never sticks.
   const working = isChatTurnExecuting({ status: turn, messages });
   const { canReply } = chat;
-  // Queued here while the session's run slots are all taken: the server parked the send.
-  const waitingForSlot = waitingForSlotLabel({
-    isExecuting: working,
-    queuedCount: queued?.length ?? 0,
-    runningChatCount: runningChats?.length ?? 0,
-  });
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
   const empty = sandboxChatEmptyState({
     isSandboxActive: sandboxAwake,
@@ -438,7 +427,6 @@ export default function ChatScreen() {
         }
       />
       <SandboxErrorBanner sandbox={sandbox} />
-      {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
       {sessionActions.dialogs}
       <Conversation>
         {findOpen ? (
@@ -495,11 +483,6 @@ export default function ChatScreen() {
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <Shimmer>Working…</Shimmer>
-                </View>
-              ) : null}
-              {waitingForSlot !== undefined ? (
-                <View className={`pt-3 ${THREAD_INSET}`}>
-                  <Shimmer>{waitingForSlot}</Shimmer>
                 </View>
               ) : null}
               {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}

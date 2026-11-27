@@ -768,8 +768,7 @@ export const entityIsExecuting = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { kind, id }) => {
     if (kind === "session") {
-      // One chat of a session: only its own turn counts, so parallel chats
-      // run side by side (a busy sibling does not queue this one).
+      // A session chat id: its own turn.
       const chatId = ctx.db.normalizeId("sessionChats", id);
       if (chatId) return await hasOpenChatTurn(ctx.db, chatId);
       const sessionId = ctx.db.normalizeId("sessions", id);

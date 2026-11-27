@@ -82,7 +82,7 @@ export async function resolveTarget(
     const chatId = target.chatId;
     return {
       repoId,
-      // One draft per chat tab: each tab is its own composer.
+      // One draft per chat: each chat is its own composer.
       findExisting: async () => {
         const rows = await db
           .query("drafts")

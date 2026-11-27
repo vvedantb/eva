@@ -21,8 +21,8 @@ interface SessionChatHeaderArgs {
   session: Doc<"sessions">;
   /** The chat tab shown — context usage is per chat, like its transcript. */
   chatId: Id<"sessionChats">;
-  /** Any chat of the session holds a turn — blocks Fork session. */
-  isAnyChatExecuting: boolean;
+  /** The chat holds a turn — blocks Fork session. */
+  isExecuting: boolean;
   messageCount: number;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
@@ -47,7 +47,7 @@ export function useSessionChatHeader({
   repoId,
   session,
   chatId,
-  isAnyChatExecuting,
+  isExecuting,
   messageCount,
   isSandboxActive,
   isSandboxToggling,
@@ -106,7 +106,7 @@ export function useSessionChatHeader({
       />
       <SessionHeaderMenu
         session={session}
-        isExecuting={isAnyChatExecuting}
+        isExecuting={isExecuting}
         chatId={chatId}
         canRecap={messageCount > 0}
         onOpenReviewModal={canSendForReview ? onOpenReviewModal : undefined}

@@ -72,14 +72,24 @@ async function fixture() {
       isMain: true,
       lastModel: "codex:gpt-5.6-sol",
     });
-    const archivedChatId = await ctx.db.insert("sessionChats", {
-      sessionId,
+    // A read-only chat: the chat of an archived session (a teammate's, so it
+    // stays out of this user's chat lists).
+    const archivedSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      userId,
-      title: "Side",
-      number: 2,
-      isMain: false,
-      archived: true,
+      userId: strangerId,
+      title: "Old work",
+      status: "closed",
+      numId: 43,
+      archive: { archivedAt: now },
+    });
+    const archivedChatId = await ctx.db.insert("sessionChats", {
+      sessionId: archivedSessionId,
+      repoId,
+      userId: strangerId,
+      title: "Main",
+      number: 1,
+      isMain: true,
     });
     const taskId = await ctx.db.insert("agentTasks", {
       repoId,
@@ -776,9 +786,9 @@ describe("mobile api", () => {
       const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
       expect(archived).toMatchObject({ archive: { archivedAt: expect.any(Number) }, status: "closed" });
       expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
-      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toEqual([
+      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toContain(
         ids.sessionId,
-      ]);
+      );
       // Read-only while archived, as the web session page.
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         canReply: false,

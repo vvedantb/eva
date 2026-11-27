@@ -107,25 +107,13 @@ describe("previewToolCalls relay", () => {
   );
 
   test(
-    "the session-wide preview pane sees calls filed under any of its chats",
+    "the session-wide preview pane sees calls filed under its chat",
     async () => {
       const f = await fixture();
-      const sideChatId = await f.t.run(async (ctx) => {
-        const session = await ctx.db.get(f.sessionId);
-        if (!session) throw new Error("fixture: session missing");
-        return await ctx.db.insert("sessionChats", {
-          sessionId: f.sessionId,
-          repoId: session.repoId,
-          userId: session.userId,
-          title: "Side",
-          number: 2,
-          isMain: false,
-        });
-      });
-      // The MCP token of a parallel chat carries that chat's id.
+      // A sandbox token carries the chat's id.
       const sideCallId = await f.t.mutation(internal.previewToolCalls.create, {
         entityKind: "session",
-        entityId: sideChatId,
+        entityId: f.chatId,
         kind: "list",
       });
       const pending = await f.asUser.query(api.previewToolCalls.listPending, {

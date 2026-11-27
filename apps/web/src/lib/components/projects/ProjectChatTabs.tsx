@@ -5,11 +5,11 @@ import {
   ChatTab,
   ChatTabAddButton,
   ChatTabStrip,
-} from "@/routes/_repo/$owner/$repo/sessions/_components/ChatTabsBar";
+} from "./ChatTabs";
 import type { ProjectTaskTabRow } from "./useProjectTaskTabs";
 
 /**
- * The project's chat tabs, as a session's: Eva (the coordinator) first and
+ * The project's chat tabs: Eva (the coordinator) first and
  * never closed, then the open task tabs, each with ✕ and the running mark
  * while its task works, then `+` (New task: Eva's tab with her composer
  * focused, `onAskEva`). An archived project has no `+`.

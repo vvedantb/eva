@@ -1691,9 +1691,7 @@ export const handleCompletion = authMutation({
     await recordCompletionLog(ctx, {
       entityType: "session",
       entityId: String(chat._id),
-      entityTitle: chat.isMain
-        ? session.title
-        : `${session.title} · ${chat.title}`,
+      entityTitle: session.title,
       repoId: session.repoId,
       rawResultEvent: args.rawResultEvent,
     });

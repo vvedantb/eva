@@ -151,10 +151,10 @@ export const isEntitySandboxStopRequested = internalQuery({
     const isStopped = (status: string | undefined) =>
       status === "stopping" || status === "closed";
     if (args.entityTable === "sessionChats") {
-      // A chat shares its session's sandbox; a closed chat needs no daemon.
+      // A chat shares its session's sandbox.
       const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
       const chat = chatId ? await ctx.db.get(chatId) : null;
-      if (!chat || chat.archived === true) return true;
+      if (!chat) return true;
       const session = await ctx.db.get(chat.sessionId);
       return !session || isStopped(session.status);
     }

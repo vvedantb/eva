@@ -2,7 +2,6 @@ import { api, type Doc } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { toast } from "@vvedantb/ui";
-import { waitingForSlotLabel } from "@eva/shared";
 import { proposedPlanForMessage } from "@eva/shared/proposedPlan";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -13,10 +12,7 @@ import { newSessionSettings } from "@/lib/components/chat/sandboxChatBinding";
 import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { ProposedPlanCard } from "./_components/ProposedPlanCard";
-import {
-  SessionChatFrame,
-  type ChatTurnStatus,
-} from "./_components/SessionChatFrame";
+import { SessionChatFrame } from "./_components/SessionChatFrame";
 import { useSessionPlanImplementation } from "./_components/useSessionPlanImplementation";
 import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 import { useSessionChatBinding } from "./_components/useSessionChatBinding";
@@ -24,15 +20,8 @@ import { useSessionChatBinding } from "./_components/useSessionChatBinding";
 interface ChatPanelProps {
   /** The session row; the header "…" menu reads its fields. */
   session: Doc<"sessions">;
-  /** The chat tab this panel shows; the transcript, turn and model are its own. */
+  /** The session's chat; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
-  /** Every live chat of the session, for the tab strip. */
-  chats: Doc<"sessionChats">[];
-  /** Open turns across the session's chats (tab dots + the slot-wait caption). */
-  chatStatuses: ChatTurnStatus[];
-  onSelectChat: (chat: Doc<"sessionChats">) => void;
-  onCreateChat: () => void;
-  isCreatingChat: boolean;
   sandboxStartupActivity?: string;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
@@ -55,19 +44,14 @@ interface ChatPanelProps {
 }
 
 /**
- * A session chat tab: the shared sandbox chat (`SandboxChatPanel`) on a
- * session binding, plus what only a session has — its header, chat tabs,
+ * A session's chat: the shared sandbox chat (`SandboxChatPanel`) on a
+ * session binding, plus what only a session has — its header,
  * read-only banner, proposed plans, fork, checkpoints, publish recovery and
  * background processes.
  */
 export function ChatPanel({
   session,
   chat,
-  chats,
-  chatStatuses,
-  onSelectChat,
-  onCreateChat,
-  isCreatingChat,
   sandboxStartupActivity,
   isSandboxActive,
   isSandboxToggling,
@@ -124,8 +108,6 @@ export function ChatPanel({
     isSavingDoc,
   } = useSessionPlanDocument(sessionId);
   const capturedPlans = proposedPlans ?? [];
-  const runningChatCount = new Set(chatStatuses.map((status) => status.chatId))
-    .size;
 
   return (
     <SandboxChatPanel
@@ -147,11 +129,6 @@ export function ChatPanel({
           session={session}
           chatId={chat._id}
           state={state}
-          chats={chats}
-          chatStatuses={chatStatuses}
-          onSelectChat={onSelectChat}
-          onCreateChat={onCreateChat}
-          isCreatingChat={isCreatingChat}
           isSandboxActive={isSandboxActive}
           isSandboxToggling={isSandboxToggling}
           onSandboxToggle={onSandboxToggle}
@@ -176,15 +153,6 @@ export function ChatPanel({
             isRouteActive={isRouteActive}
           />
         )
-      }
-      // Queued on this chat while the session's run slots are all taken: the
-      // server parked the send instead of starting it (`sendSessionChatMessage`).
-      transcriptTail={(state) =>
-        waitingForSlotLabel({
-          isExecuting: state.isExecuting,
-          queuedCount: state.queuedCount,
-          runningChatCount,
-        })
       }
       afterMessage={(messageId, state) => {
         // Only plans captured on a message render in the transcript, so a

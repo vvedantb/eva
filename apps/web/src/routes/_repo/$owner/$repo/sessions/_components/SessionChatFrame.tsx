@@ -1,5 +1,4 @@
-import type { api, Doc, Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import type { Doc, Id } from "@eva/backend";
 import { useState, type ReactNode } from "react";
 import { toast, useRequestConfirm } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -7,21 +6,16 @@ import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import type { SandboxChatState } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
 import { getSessionReadOnlyMessage } from "../_utils/sessionReadOnly";
-import { ChatTabsBar } from "./ChatTabsBar";
 import { useSessionChatHeader } from "./SessionChatHeader";
 import {
   SessionReviewModal,
   useSendSessionForReview,
 } from "./SessionReviewModal";
 
-export type ChatTurnStatus = FunctionReturnType<
-  typeof api.turns.listSessionChatStatuses
->[number];
-
 /**
  * The session page around its chat (`SandboxChatPanel` `frame`): header
- * (switcher, usage, commit & push, wake / sleep, menu), the read-only banner
- * and the chat tabs. A component, not a helper, because its header hook reads
+ * (switcher, usage, commit & push, wake / sleep, menu) and the read-only
+ * banner. A component, not a helper, because its header hook reads
  * the session's start error.
  */
 export function SessionChatFrame({
@@ -29,11 +23,6 @@ export function SessionChatFrame({
   session,
   chatId,
   state,
-  chats,
-  chatStatuses,
-  onSelectChat,
-  onCreateChat,
-  isCreatingChat,
   isSandboxActive,
   isSandboxToggling,
   onSandboxToggle,
@@ -44,12 +33,6 @@ export function SessionChatFrame({
   session: Doc<"sessions">;
   chatId: Id<"sessionChats">;
   state: SandboxChatState;
-  chats: Doc<"sessionChats">[];
-  /** Open turns across the session's chats (tab dots, Fork session gate). */
-  chatStatuses: ChatTurnStatus[];
-  onSelectChat: (chat: Doc<"sessionChats">) => void;
-  onCreateChat: () => void;
-  isCreatingChat: boolean;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
   onSandboxToggle: (action: "start" | "stop") => void;
@@ -61,14 +44,11 @@ export function SessionChatFrame({
   const [showReviewModal, setShowReviewModal] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(sessionId);
-  const runningChatIds = new Set<string>(
-    chatStatuses.map((status) => status.chatId),
-  );
   const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
     session,
     chatId,
-    isAnyChatExecuting: runningChatIds.size > 0,
+    isExecuting: state.isExecuting,
     messageCount: state.messages?.length ?? 0,
     isSandboxActive,
     isSandboxToggling,
@@ -98,17 +78,6 @@ export function SessionChatFrame({
       })}
       headerLeft={headerLeft}
       headerRight={headerRight}
-      tabs={
-        <ChatTabsBar
-          chats={chats}
-          activeChatId={chatId}
-          runningChatIds={runningChatIds}
-          onSelect={onSelectChat}
-          onCreate={onCreateChat}
-          isReadOnly={isArchived}
-          isCreating={isCreatingChat}
-        />
-      }
     >
       {children}
       <SessionReviewModal

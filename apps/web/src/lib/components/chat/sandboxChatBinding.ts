@@ -26,7 +26,7 @@ import {
 
 /**
  * Everything that differs between the chats on the shared sandbox panel: a
- * session chat tab, a quick task (its owned session's Main chat), a project
+ * session's chat, a quick task (its owned session's Main chat), a project
  * task or a project. Each builds one (`useSessionChatBinding`,
  * `useTaskChatBinding`, `useProjectChatBinding`); the shared panel and
  * annotation send do the rest.

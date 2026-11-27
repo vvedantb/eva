@@ -111,12 +111,6 @@ describe("projects on sessions", () => {
         owner: { kind: "project", projectId: f.projectId },
         branchName: buildProjectBranchName(f.projectId),
       });
-      // Owned sessions refuse session-only actions; a user cannot open more chats.
-      await expect(
-        f.asUser.mutation(api.sessionChats.create, {
-          sessionId: first.sessionId,
-        }),
-      ).rejects.toThrow("A project's session cannot open another chat.");
     },
     TIMEOUT_MS,
   );

@@ -68,9 +68,8 @@ import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
   getSessionChatWithAccess,
-  listLiveSessionChats,
+  findMainChat,
   loadSessionChat,
-  sessionChatHasFreeSlot,
   sessionChatPersistenceId,
   sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
@@ -106,7 +105,7 @@ const sendOutcomeValidator = v.union(
   v.literal("posted"),
 );
 
-/** The idle-pause clock belongs to the sandbox, which every chat of a session shares. */
+/** The idle-pause clock belongs to the sandbox, which the session's chat uses. */
 function sessionActivityRef(session: Doc<"sessions">) {
   return { kind: "session" as const, entityId: String(session._id) };
 }
@@ -348,9 +347,6 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
-    // A task run or the parallel-chat cap holds the slot: no restage, the
-    // stall alert stays and the user resends.
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;
@@ -410,11 +406,6 @@ export const retryLastTurnWithAccount = authMutation({
     ) {
       throw new Error("A turn is already running");
     }
-    // Same gate as a send: a task run or the parallel-chat cap holds the slot.
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
-      throw new Error("The sandbox is busy. Try again when it finishes.");
-    }
-
     const recent = await ctx.db
       .query("messages")
       .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
@@ -465,7 +456,7 @@ export const retryLastTurnWithAccount = authMutation({
 });
 
 /**
- * Fired when a chat tab opens: boot its daemon ahead of the user's first
+ * Fired when a session's chat opens: boot its daemon ahead of the user's first
  * message so that message is warm instead of paying a ~20s cold respawn.
  * No-op unless the session already has a sandbox and uses a daemon provider.
  * Best-effort and cheap to call repeatedly (the action skips if already warm).
@@ -486,7 +477,6 @@ export const prewarmDaemon = authMutation({
     // without this guard merely opening its page wakes the VM behind the
     // user's back.
     if (isSandboxClosingStatus(session.status)) return null;
-    if (chat.archived === true) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     // Match the turn path's launch options so the first real message does not
@@ -580,11 +570,7 @@ export const getDaemonPrewarmData = internalQuery({
     if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      !session.sandboxId ||
-      isSandboxClosingStatus(session.status) ||
-      chat.archived === true
-    ) {
+    if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
     const normalizedModel = normalizeAIModel(chat.lastModel);
@@ -639,7 +625,6 @@ export const sendFromMcp = internalMutation({
     const chatId = ctx.db.normalizeId("sessionChats", args.chatId);
     if (!chatId) throw new Error("Chat not found");
     const context = await getSessionChatWithAccess(ctx.db, chatId, user._id);
-    if (context.chat.archived === true) throw new Error("This chat is closed");
     return await sendSessionChatMessage(ctx, {
       context,
       userId: user._id,
@@ -681,7 +666,6 @@ export const addReply = authMutation({
     if (!chatId) throw new Error("Replies work in session chats only");
     const context = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
     const { chat, session } = context;
-    if (chat.archived === true) throw new Error("This chat is closed");
 
     const replyId = await ctx.db.insert("messages", {
       parentId: root.parentId,
@@ -963,7 +947,7 @@ export async function cancelChatExecution(
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }
 
-/** Stops every chat of a session at once (the fleet `stop_agent` tool). */
+/** Stops a session's chat (the fleet `stop_agent` tool). */
 export const cancelSessionExecution = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
@@ -972,7 +956,8 @@ export const cancelSessionExecution = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
+    const chat = await findMainChat(ctx.db, session._id);
+    if (chat) {
       await cancelChatExecution(ctx, { chat, session }, { holdQueue: true });
     }
     return null;

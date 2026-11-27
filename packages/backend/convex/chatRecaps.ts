@@ -225,16 +225,7 @@ async function recapChats(
   if (!chat || !session || !chat.isMain || session.owner.kind !== "project") {
     return { chats: [{ parentId, label: "This chat" }], taskIds: [] };
   }
-  const sessionChats = await ctx.db
-    .query("sessionChats")
-    .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-    .collect();
-  const chats: RecapChat[] = sessionChats
-    .filter((row) => row.archived !== true)
-    .map((row) => ({
-      parentId: row._id,
-      label: row.isMain ? "Project chat" : row.title,
-    }));
+  const chats: RecapChat[] = [{ parentId: chat._id, label: "Project chat" }];
   const taskIds: Id<"agentTasks">[] = [];
   const childTasks = await listProjectTasks(ctx.db, session.owner.projectId);
   const childChats = await Promise.all(

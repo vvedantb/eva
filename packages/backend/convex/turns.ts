@@ -38,7 +38,6 @@ import {
   closeTurn,
   findOpenTurn,
   graceExpiredTurnLease,
-  listOpenSessionTurns,
   openTurn,
   renewTurnLease,
   type ChatTurnEntityId,
@@ -147,35 +146,6 @@ export const getSessionStatus = authQuery({
   returns: v.union(chatTurnStatusValidator, v.null()),
   handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
     await readChatStatus(ctx, ctx.userId, args.sessionId),
-});
-
-/**
- * Open chat turns across one session, for the tab strip's running dots and
- * the "waiting for a free slot" caption. One indexed read per session, not
- * one status subscription per tab.
- */
-export const listSessionChatStatuses = authQuery({
-  args: { sessionId: v.id("sessions") },
-  returns: v.array(
-    v.object({
-      chatId: v.id("sessionChats"),
-      turnId: v.id("turns"),
-      state: turnStateValidator,
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
-    const turns = await listOpenSessionTurns(ctx, args.sessionId);
-    const statuses = [];
-    for (const turn of turns) {
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (!chatId) continue;
-      statuses.push({ chatId, turnId: turn._id, state: turn.state });
-    }
-    return statuses;
-  },
 });
 
 const leaseIdentityValidator = v.object({
