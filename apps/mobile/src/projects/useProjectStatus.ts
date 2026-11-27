@@ -9,12 +9,8 @@ import {
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 
-// The web `useProjectStatus.ts` on the phone: the same queries, the same
-// shared rules (`@eva/shared/projectView`), so both apps show one status.
-
 export type ProjectTaskListRow = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 
-/** The tasks whose latest run failed, of the rows the caller can open. The home repo is the access scope. */
 function useFailedTaskIds(
   repoId: Id<"githubRepos">,
   rows: ReadonlyArray<ProjectTaskListRow> | undefined,

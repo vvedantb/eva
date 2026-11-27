@@ -97,12 +97,6 @@ type QuickTaskDraft = FunctionReturnType<
   typeof api.agentTasks.listDrafts
 >[number];
 
-/**
- * Convex treats an empty array and an absent field differently, so empty lists
- * are sent as undefined. Written as a helper rather than an inline ternary
- * because React Compiler bails on a whole file when a conditional expression
- * sits inside a try/catch, and one of the call sites has to run post-await.
- */
 function undefinedIfEmpty<T>(items: T[]): T[] | undefined {
   return items.length > 0 ? items : undefined;
 }
@@ -113,18 +107,12 @@ interface QuickTaskModalProps {
   projectId?: Id<"projects">;
   users?: User[];
   projects?: Project[];
-  allTags?: string[];
-  /** Pre-load this draft when the modal opens via a deep link. */
-  initialDraft?: QuickTaskDraft;
+  allTags?: string[];  initialDraft?: QuickTaskDraft;
 }
 
 type Repo = ReturnType<typeof useRepo>["repo"];
 type RequestConfirm = ReturnType<typeof useRequestConfirm>["request"];
 
-/**
- * Seed the mention/skill maps from the initial draft's tokenized prompt
- * so that @-mention and /skill chips render correctly on deep-link open.
- */
 function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
   return initialDraft
     ? tokenizedToEditable(draftPrompt(initialDraft))
@@ -134,7 +122,6 @@ function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
       };
 }
 
-/** The repo's saved drafts, and a delete that drops them optimistically. */
 function useQuickTaskDrafts(repoId: Repo["_id"]) {
   const removeDraft = useMutation(api.agentTasks.deleteDraft).withOptimisticUpdate(
     (localStore, args) => {
@@ -157,10 +144,6 @@ function useQuickTaskDrafts(repoId: Repo["_id"]) {
   return { removeDraft, drafts };
 }
 
-/**
- * Loads the files already saved on the open draft, so reopening it keeps them.
- * Returns the setter so a form reset can forget which draft was hydrated.
- */
 function useDraftAttachmentHydration(
   activeDraftId: Id<"agentTasks"> | null,
   attachments: ReturnType<typeof useTaskAttachments>,
@@ -172,25 +155,15 @@ function useDraftAttachmentHydration(
   const [hydratedDraftId, setHydratedDraftId] =
     useState<Id<"agentTasks"> | null>(null);
   if (activeDraftId && draftAttachments && hydratedDraftId !== activeDraftId) {
-    setHydratedDraftId(activeDraftId);
-    // An empty draft never clears files the user just attached.
-    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
+    setHydratedDraftId(activeDraftId);    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
   }
   return setHydratedDraftId;
 }
 
-/**
- * Model, traits and provider account picks. Unpicked fields follow the repo
- * defaults live (like useNewSessionComposerState), so a repo switch or a
- * default change never leaves a stale copy behind.
- */
 function useModelAndAccount(repo: Repo) {
   const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
   const defaultTraits = storedTraitsFromRepoDefaults(repo);
-  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
-  // Absent traits fall back to each model's own defaults, so an untouched menu
-  // sends nothing and the task runs exactly as it does today.
-  const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
+  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);  const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
     {},
   );
   const model = pickedModel ?? defaultModel;
@@ -205,10 +178,6 @@ function useModelAndAccount(repo: Repo) {
     resolveId: resolveAccountId,
     ready: accountsReady,
   } = useProviderAccounts();
-
-  // Once accounts load, default to the creator's own account for the selected
-  // model provider (Team when none match), leaving an existing pick that still
-  // resolves alone. Adjust during render.
   if (accountsReady && !accountDefaulted) {
     if (!accounts.some((account) => account.id === providerAccountId)) {
       setProviderAccountId(defaultProviderAccountId(accounts, model));
@@ -231,7 +200,6 @@ function useModelAndAccount(repo: Repo) {
   };
 }
 
-/** A task inside a project inherits the project's base branch. */
 function useEffectiveProject(
   effectiveProjectId: Id<"projects"> | undefined,
   defaultBranch: string | undefined,
@@ -265,9 +233,7 @@ function VoiceInputButton({
           type="button"
           size="icon"
           variant={isListening && !isConnecting ? "destructive" : "secondary"}
-          onClick={onToggle}
-          // Clickable while connecting: the click cancels.
-          disabled={isLoading || isPolishing}
+          onClick={onToggle}          disabled={isLoading || isPolishing}
           className="h-8 w-8"
           aria-label={
             isPolishing
@@ -496,12 +462,7 @@ function DraftRow({
         </div>
       </div>
     );
-  }
-  // A row with its own delete control cannot be one big `<button>`, and
-  // `role="button"` on a div means hand-rolled key handling — so this follows
-  // `<ListRow>`: a stretched native button supplies the role and the keyboard,
-  // and the delete control sits above it.
-  return (
+  }  return (
     <div className="group relative flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
       <button
         type="button"
@@ -590,10 +551,7 @@ export function QuickTaskModal({
     baseBranch,
     setBaseBranch,
     repoDefaultBranch: defaultBranch,
-  } = useBaseBranchState(initialDraft?.baseBranch);
-  // The one prompt: the task's description, and its title once the server
-  // takes the first line (`createQuickTask`).
-  const [description, setDescription] = useState(() =>
+  } = useBaseBranchState(initialDraft?.baseBranch);  const [description, setDescription] = useState(() =>
     initialDraft ? tokenizedToEditable(draftPrompt(initialDraft)).displayText : "",
   );
   const [isLoading, setIsLoading] = useState(false);
@@ -654,9 +612,6 @@ export function QuickTaskModal({
     accounts,
     resolveAccountId,
   } = useModelAndAccount(repo);
-
-  // Drop-target highlight for the description pane. Depth-counted because
-  // dragleave also fires when the pointer crosses onto a child of the pane.
   const [isDragOver, setIsDragOver] = useState(false);
   const dragEnterDepth = useRef(0);
 
@@ -706,19 +661,11 @@ export function QuickTaskModal({
     onClose();
   };
 
-  /**
-   * "Save" files the task in To Do (a project's Triage); "Save and Run"
-   * (`run`) starts it, or approves a project task for its scheduler.
-   */
   const handleSubmit = async (run: boolean) => {
     if (!canSubmit) return;
 
     const taskDescription = getDescription();
-    const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;
-    // Built before the try, and the post-await one via undefinedIfEmpty: React
-    // Compiler bails on the whole file when a conditional, logical or
-    // nullish-coalescing expression sits inside a try/catch.
-    const taskAccountId = resolveAccountId(providerAccountId) ?? null;
+    const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;    const taskAccountId = resolveAccountId(providerAccountId) ?? null;
     const taskTags = undefinedIfEmpty(selectedTags);
     const taskTraits = toRunTraitArgs(traits);
     setIsLoading(true);
@@ -776,10 +723,7 @@ export function QuickTaskModal({
     setBaseBranch(draft.baseBranch ?? defaultBranch);
     setActiveDraftId(draft._id);
     setSelectedProjectId(draft.projectId ?? projectId);
-    setSelectedTags(draft.tags ?? []);
-    // The loaded text has not been judged; the previous draft's verdict must
-    // not carry over onto it.
-    readiness.reset();
+    setSelectedTags(draft.tags ?? []);    readiness.reset();
   };
 
   const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
@@ -832,10 +776,7 @@ export function QuickTaskModal({
         }}
       >
         <DialogContent
-          className="max-w-3xl gap-0 p-0"
-          // Radix focuses the first focusable element (a header button); the
-          // prompt is what the person types into, so it takes focus instead.
-          onOpenAutoFocus={(event) => {
+          className="max-w-3xl gap-0 p-0"          onOpenAutoFocus={(event) => {
             event.preventDefault();
             editorRef.current?.focus();
           }}
@@ -863,10 +804,7 @@ export function QuickTaskModal({
               e.preventDefault();
               attachments.add(dropped);
             }}
-          >
-            {/* `dvh`, not `vh`: mobile browser chrome makes `50vh` taller than
-                half the visible area, which pushes the modal footer offscreen. */}
-            <div className="scrollbar px-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
+          >            <div className="scrollbar px-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
               <DescriptionMentionEditor
                 ref={editorRef}
                 value={description}

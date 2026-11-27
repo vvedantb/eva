@@ -83,8 +83,6 @@ export const sweepDeadSandboxes = internalMutation({
     for (const session of page.page) {
       if (!session.sandboxId) continue;
       if (!isSessionArchived(session)) continue;
-      // Normal sweeps wait for closed (stop finished). skipGrace one-offs
-      // also clear stopping/active leftovers that still bill for snapshots.
       if (!skipGrace && session.status !== "closed") continue;
       if (
         !skipGrace &&

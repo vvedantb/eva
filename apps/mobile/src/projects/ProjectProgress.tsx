@@ -6,7 +6,6 @@ import { Text, View } from "react-native";
 import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
-/** The display statuses a project's counts show, in task list order; empty ones are left out. */
 function shownStatuses(status: Pick<ProjectStatus, "counts">) {
   return PROJECT_TASK_DISPLAY_STATUSES.filter((displayStatus) => status.counts[displayStatus] > 0);
 }

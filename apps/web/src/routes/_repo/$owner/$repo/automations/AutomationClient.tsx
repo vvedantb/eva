@@ -98,7 +98,6 @@ export function AutomationClient({
         </div>
       }
       headerRight={
-        // Event presets act on a PR or issue, so there is nothing to run by hand.
         automation.systemKey !== undefined &&
         automationTriggerOf(automation).kind === "event" ? null : (
           <Button
@@ -244,7 +243,6 @@ function SettingsForm({
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
   const { options: modelOptions } = useAvailableAiModels(repoId, model);
 
-  // Persist a single field change and confirm with one deduped toast.
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
   ) =>

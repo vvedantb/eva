@@ -17,11 +17,8 @@ export const upsertForSandbox = internalMutation({
   args: {
     sandboxId: v.string(),
     installationId: v.number(),
-    // Every installation the sandbox may mint a token for, primary included.
-    // Absent (or primary-only) for an ordinary single-repo session.
     installationIds: v.optional(v.array(v.number())),
     secret: v.string(),
-    // The sandbox's own repository; see resolveCredentialRequest.
     repoOwner: v.string(),
     repoName: v.string(),
   },
@@ -31,12 +28,6 @@ export const upsertForSandbox = internalMutation({
       .query("sandboxGitCredentials")
       .withIndex("by_sandbox_id", (q) => q.eq("sandboxId", args.sandboxId))
       .unique();
-    // Union, never replace. `ensureGitCredentialHelper` re-runs on every
-    // resume knowing only the primary installation, and once per linked repo
-    // knowing only that one — replacing here dropped a multi-repo session's
-    // other installations and `/api/git-credentials` then 403'd their pushes.
-    // A sandbox only ever serves one session, so the union can only ever hold
-    // that session's own repos.
     const merged = Array.from(
       new Set([
         ...(existing?.installationIds ?? []),
@@ -44,8 +35,6 @@ export const upsertForSandbox = internalMutation({
         args.installationId,
       ]),
     );
-    // Single-repo sessions keep the field absent, as before multi-repo:
-    // `allowedInstallationIds` falls back to the scalar `installationId`.
     const installationIds = merged.length > 1 ? merged : undefined;
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -71,7 +60,6 @@ export const upsertForSandbox = internalMutation({
   },
 });
 
-/** The repository a credential row was installed for, when the row pins one. */
 function pinnedHomeRepo(
   row: Doc<"sandboxGitCredentials">,
 ): { owner: string; name: string } | null {
@@ -79,19 +67,13 @@ function pinnedHomeRepo(
   return { owner: row.repoOwner, name: row.repoName };
 }
 
-/** The eva entity a sandbox belongs to: who owns it and which repo is its home. */
 async function lookupSandboxOwner(
   db: GenericDatabaseReader<DataModel>,
   sandboxId: string,
 ): Promise<{
   userId: Id<"users">;
   repoId: Id<"githubRepos">;
-  /** Only sessions can carry linked repos (multi-repo sessions). */
   sessionId?: Id<"sessions">;
-  /**
-   * A project coordinator's sandbox (a project-owned session): it reads code
-   * and never pushes (plan decision 6), so it gets read-only tokens only.
-   */
   readOnly: boolean;
 } | null> {
   const session = await db
@@ -110,11 +92,6 @@ async function lookupSandboxOwner(
   return null;
 }
 
-/**
- * The read-only answer for a coordinator sandbox: its home repo, or a
- * sibling its owner can read. GitHub refuses a push with such a token, so the
- * coordinator cannot change code even when it tries.
- */
 async function readOnlyCredential(
   db: GenericDatabaseReader<DataModel>,
   entity: { userId: Id<"users">; repoId: Id<"githubRepos"> },
@@ -151,10 +128,6 @@ async function readOnlyCredential(
   };
 }
 
-/**
- * The `sessionRepos` row for a repository a multi-repo session cloned beside
- * its primary, or null when the session did not link that repository.
- */
 async function linkedSessionRepo(
   db: GenericDatabaseReader<DataModel>,
   sessionId: Id<"sessions">,
@@ -226,12 +199,9 @@ export const resolveCredentialRequest = internalQuery({
       .unique();
     if (!row) return { kind: "denied" as const, reason: "unknown secret" };
 
-    // No path: an old baked helper script, or a fetch from before
-    // `useHttpPath` rolled out. Mint for the sandbox's primary installation.
     const requested =
       args.path === undefined ? null : parseRepoPath(args.path);
 
-    // A project coordinator's sandbox only ever reads.
     const owner = await lookupSandboxOwner(ctx.db, row.sandboxId);
     if (owner?.readOnly) {
       return await readOnlyCredential(ctx.db, owner, row.sandboxId, requested);
@@ -241,7 +211,6 @@ export const resolveCredentialRequest = internalQuery({
       return { kind: "home" as const, installationId: row.installationId };
     }
 
-    // Rows written before the pin fall through to the entity's repository.
     const pinned = pinnedHomeRepo(row);
     if (pinned && isSameGitHubRepo(pinned, requested)) {
       return { kind: "home" as const, installationId: row.installationId };
@@ -263,13 +232,6 @@ export const resolveCredentialRequest = internalQuery({
       return { kind: "home" as const, installationId: row.installationId };
     }
 
-    // A multi-repo session's linked repo needs a full token to push, and it may
-    // live under another GitHub App installation than the primary. Two guards:
-    // the session must actually have linked that repository, and the
-    // installation must be on the allow-list the helper install recorded — so a
-    // sandbox can never mint for an installation its own session does not use.
-    // Checked after the home repository (which keeps the primary installation)
-    // and before the sibling token (which is scoped to contents only).
     const linked = entity.sessionId
       ? await linkedSessionRepo(ctx.db, entity.sessionId, requested)
       : null;

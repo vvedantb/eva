@@ -6,14 +6,10 @@ import {
 } from "./attachmentMeta";
 
 interface AttachmentCardProps {
-  /** Original filename when known — absent for stored attachments. */
   name?: string;
   contentType: string | null;
-  /** Object URL while composing, signed storage URL once uploaded. */
   url: string | null;
-  /** Omit to render a read-only card. */
   onRemove?: () => void;
-  /** When set, the card body opens the attachment (e.g. text modal). */
   onOpen?: () => void;
 }
 
@@ -64,16 +60,11 @@ export function AttachmentCard({
         <button
           type="button"
           aria-label={`Remove ${label}`}
-          // The card may sit inside a link (task detail opens the blob in a new
-          // tab); removing must not also navigate.
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
             onRemove();
           }}
-          // `reveal-on-hover` (globals.css) keeps the quiet hover reveal on a
-          // pointer device and ships the control visible below `sm`, where there
-          // is no hover and this is the only way to drop an attachment.
           className="reveal-on-hover max-sm:hit-target absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground hover:bg-background max-sm:p-1.5"
         >
           <IconX className="size-3" />

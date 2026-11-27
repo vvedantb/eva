@@ -48,7 +48,6 @@ export function QuickTaskBulkBar({
 }: {
   isSelecting: boolean;
   selected: ReadonlySet<Id<"agentTasks">>;
-  /** The listed tasks, to read each selected task's tags. */
   tasks: readonly QuickTask[];
   totalCount: number;
   users: User[] | undefined;
@@ -70,7 +69,6 @@ export function QuickTaskBulkBar({
   const ids = [...selected];
   const count = ids.length;
 
-  /** Runs one write per task, then leaves select mode and says how it went. */
   const each = (write: (id: Id<"agentTasks">) => Promise<unknown>, done: string, failure: string) => {
     setSheet(null);
     onExitSelect();
@@ -82,7 +80,6 @@ export function QuickTaskBulkBar({
   const run = async () => {
     setSheet(null);
     onExitSelect();
-    // As the web `useBulkRunTasks`: each start on its own, and the count of those that started.
     const results = await Promise.all(
       ids.map((id) =>
         startExecution({ id }).then(
@@ -102,7 +99,6 @@ export function QuickTaskBulkBar({
     onExitSelect();
     Promise.all(ids.map((id) => archiveTask({ id })))
       .then(() =>
-        // Undo unarchives each row (a cancelled scheduled run does not come back).
         toast.success(copy.archived, {
           id: "tasks-bulk-archive",
           action: {
@@ -144,7 +140,6 @@ export function QuickTaskBulkBar({
         onSelectAll={onSelectAll}
         onClearSelection={onClearSelection}
         placement="tabBar"
-        // The web bar's three, with its short labels so four controls fit at 390.
         primaryActions={[
           { key: "status", label: "Change Status", shortLabel: "Status", icon: IconRefresh, disabled: count === 0, onClick: () => setSheet("status") },
           { key: "assign", label: "Assign to...", shortLabel: "Assign", icon: IconUser, disabled: count === 0, onClick: () => setSheet("assign") },
@@ -162,7 +157,6 @@ export function QuickTaskBulkBar({
           },
           { key: "labels", label: "Add Labels", icon: IconTags, disabled: count === 0, onClick: () => setSheet("labels") },
           { key: "project", label: "Move to project", icon: IconFolders, disabled: count === 0, onClick: () => setSheet("project") },
-          // In More, not on the bar: with "Select all" and More, a fifth control does not fit at 390.
           { key: "archive", label: ARCHIVE_LABEL, icon: IconArchive, disabled: count === 0, onClick: () => setSheet("archive") },
         ]}
       />
@@ -201,7 +195,6 @@ export function QuickTaskBulkBar({
             each((id) => updateTask({ id, projectId: null }), `Removed ${plural(count)} from their project`, "Couldn't change the project");
             return;
           }
-          // One call for all, as the web "Add to project".
           setSheet(null);
           onExitSelect();
           assignToProject({ taskIds: ids, projectId })

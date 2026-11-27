@@ -19,12 +19,6 @@ import {
   type ChatRef,
 } from "../validators";
 
-/**
- * The chat (session / quick task / project) a doc or artifact was created
- * from. One implementation for both tables: store it on create, check the
- * caller can see it, and resolve it to a display summary for lists.
- */
-
 export const chatSourceArgValidator = chatRefValidator;
 export type ChatSourceArg = ChatRef;
 
@@ -64,8 +58,6 @@ export async function chatSourceFieldsForEntityId(
     const chat = await db.get(sessionChatId);
     const session = chat ? await db.get(chat.sessionId) : null;
     if (!chat || !session) return null;
-    // An owned session's chat files under its owner (`sessionOwner`; a project
-    // task's own chat under that task).
     return chatSourceFieldsForEntityId(
       db,
       String(sessionOwnerEntityId(session) ?? session._id),
@@ -75,8 +67,6 @@ export async function chatSourceFieldsForEntityId(
   if (sessionId) {
     const session = await db.get(sessionId);
     if (!session) return null;
-    // A task's or project's session files its docs, artifacts and Log under
-    // its owner.
     const ownerId = sessionOwnerEntityId(session);
     if (ownerId) return chatSourceFieldsForEntityId(db, ownerId);
     return { sourceKind: "session", sourceSessionId: sessionId };
@@ -310,7 +300,6 @@ export async function listRowsForChatSource(
   return sourceRows(ctx, table, source);
 }
 
-/** `listRowsForChatSource` without the overloads, for callers holding any table. */
 async function sourceRows(
   ctx: QueryCtx,
   table: ChatSourceTable,

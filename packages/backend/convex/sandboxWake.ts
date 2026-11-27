@@ -19,22 +19,11 @@ import {
 } from "./_sessions/owner";
 import { loadOwnerEntityWithAccess } from "./_sessions/queries";
 
-/**
- * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
- * Convex id as a plain string, so everything here starts by normalising it
- * against the right table; the per-surface Start mutations and `get` queries
- * then enforce the same access policy the Eva UI does.
- */
-
 const wakeTargetValidator = v.union(
   v.object({ kind: v.literal("session"), id: v.id("sessions") }),
   v.object({ kind: v.literal("owner"), owner: ownedSessionOwnerValidator }),
 );
 
-/**
- * A session, or a task or project whose session does not exist yet (the
- * wake creates it through `sessions.ensureOwned`, then starts it).
- */
 type WakeTarget = Infer<typeof wakeTargetValidator>;
 
 async function resolveWakeTarget(
@@ -50,16 +39,13 @@ async function resolveWakeTarget(
     const normalized = ctx.db.normalizeId("agentTasks", id);
     const task = normalized ? await ctx.db.get(normalized) : null;
     if (!task) return null;
-    // A task's sandbox is its own session's.
     return await wakeOwnerTarget(ctx, workSessionOwner(task));
   }
   const normalized = ctx.db.normalizeId("projects", id);
   if (!normalized) return null;
-  // A project's sandbox is its session's.
   return await wakeOwnerTarget(ctx, { kind: "project", projectId: normalized });
 }
 
-/** The owner's session, or the owner itself before its session exists. */
 async function wakeOwnerTarget(
   ctx: QueryCtx,
   owner: OwnedSessionOwner,
@@ -70,7 +56,6 @@ async function wakeOwnerTarget(
     : { kind: "owner", owner };
 }
 
-/** Internal: typed ids for the action below (actions have no `normalizeId`). */
 export const resolveTarget = internalQuery({
   args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
@@ -124,7 +109,6 @@ export const getWakeTarget = authQuery({
   },
 });
 
-/** The session behind a wake target, created for an owner that has none yet. */
 async function wakeSessionId(
   ctx: ActionCtx,
   target: WakeTarget,
@@ -153,8 +137,6 @@ async function readStatus(
 export const ensureEntitySandboxActive = action({
   args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.object({ startRequested: v.boolean() }),
-  // Explicit types: the action calls a query from its own module, and Convex's
-  // inferred `internal` type would otherwise be circular (and cascade `any`).
   handler: async (ctx, args): Promise<{ startRequested: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
@@ -167,7 +149,6 @@ export const ensureEntitySandboxActive = action({
     return await awaitSandboxActive({
       kind: "session",
       readStatus: () => readStatus(ctx, sessionId),
-      // The session's Start button, run as the signed-in user.
       start: async () => {
         await ctx.runMutation(api.sessions.startSandbox, { sessionId });
       },

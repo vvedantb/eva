@@ -5,9 +5,7 @@ import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
 import type { InlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
 
 export interface ComposerPredictionTarget {
-  /** The chat the prediction reads. */
   parentId: ChatParentId;
-  /** Newest message in the chat; a new one asks for a fresh prediction. */
   lastMessageId: string;
 }
 

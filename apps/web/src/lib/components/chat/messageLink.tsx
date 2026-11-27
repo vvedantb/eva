@@ -47,7 +47,6 @@ export function ChatMessageScroll({
   smooth?: boolean;
 }) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
-  // React re-attaches a ref whose callback identity changes; scroll only once.
   const scrolledRef = useRef(false);
 
   const ref = (node: HTMLSpanElement | null) => {

@@ -4,11 +4,6 @@ import { internal } from "../_generated/api";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery, type MutationCtx } from "../_generated/server";
 
-/**
- * Manager Ave's thread lifecycle. Every run starts through {@link requestRun},
- * so "one run at a time per user" is decided in exactly one place.
- */
-
 /** A run that neither finished nor crashed cleanly is reclaimed after this. */
 export const AVE_RUN_WATCHDOG_MS = 11 * 60_000;
 
@@ -57,7 +52,6 @@ export async function requestRun(
   await startRun(ctx, thread._id, now);
 }
 
-/** Fences a fresh run id onto the thread and schedules the action + watchdog. */
 export async function startRun(
   ctx: MutationCtx,
   threadId: Id<"aveThreads">,

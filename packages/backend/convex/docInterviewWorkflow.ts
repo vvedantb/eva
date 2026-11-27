@@ -24,7 +24,6 @@ import {
 } from "./_taskWorkflow/helpers";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 
-/** Shape of the JSON the doc-generation LLM step is expected to return. */
 const generatedDocSchema = z.object({
   description: z.string().optional(),
   requirements: z.array(z.string()).optional(),
@@ -43,7 +42,6 @@ interface PreviousAnswer {
   answer: string;
 }
 
-/** Builds a prompt that asks one product-focused question based on previous answers. */
 function buildQuestionPrompt(
   docTitle: string,
   previousAnswers: PreviousAnswer[],
@@ -71,7 +69,6 @@ OR
   return prompt;
 }
 
-/** Replaces the content and activity log of the last entry in an interview history array. */
 function updateLastHistoryEntry<
   T extends {
     role: "user" | "assistant";
@@ -88,8 +85,6 @@ function updateLastHistoryEntry<
   return updated;
 }
 
-// --- Workflow definition ---
-
 /** Runs a single interview step: prepares sandbox, asks one question, and saves the result. */
 export const docInterviewWorkflow = workflow.define({
   args: {
@@ -102,13 +97,11 @@ export const docInterviewWorkflow = workflow.define({
     installationId: v.number(),
   },
   handler: async (step, args): Promise<void> => {
-    // Step 1: Fetch doc + repo data, build question prompt
     const docData = await step.runQuery(
       internal.docInterviewWorkflow.getDocData,
       { docId: args.docId },
     );
 
-    // Step 2: Add empty assistant message for streaming
     await step.runMutation(internal.docInterviewWorkflow.addEmptyAssistant, {
       docId: args.docId,
     });
@@ -153,10 +146,8 @@ export const docInterviewWorkflow = workflow.define({
       },
     );
 
-    // Step 4: Wait for callback
     const result = await step.awaitEvent(docInterviewCompleteEvent);
 
-    // Step 5: Save the result (question or generated content)
     await step.runMutation(internal.docInterviewWorkflow.saveResult, {
       docId: args.docId,
       docTitle: args.docTitle,
@@ -168,8 +159,6 @@ export const docInterviewWorkflow = workflow.define({
     });
   },
 });
-
-// --- Supporting internal functions ---
 
 /** Fetches document and repository data needed for sandbox preparation. */
 export const getDocData = internalQuery({
@@ -340,8 +329,6 @@ export const startInterview = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
-    // One workflow slot per doc: refuse loudly, so the dialog leaves its
-    // loading state and tells the user why (it starts once per message now).
     if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
       throw new Error(
         "Another document task is still running. Wait for it to finish.",
@@ -474,7 +461,6 @@ export const saveGenerateResult = internalMutation({
       if (parsed?.success) {
         const generated = parsed.data;
 
-        // Update doc with generated content
         await ctx.db.patch(args.docId, {
           description: generated.description,
           requirements: generated.requirements,
@@ -522,8 +508,6 @@ export const startGenerate = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
-    // One workflow slot per doc: refuse loudly, so the dialog leaves its
-    // loading state and tells the user why (it starts once per message now).
     if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
       throw new Error(
         "Another document task is still running. Wait for it to finish.",

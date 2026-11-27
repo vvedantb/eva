@@ -1,48 +1,5 @@
 import { SANDBOX_REGION } from "./vercelRegion";
 
-/**
- * Shared package-manager cache backed by a Vercel Drive.
- *
- * WHY: eva bakes `node_modules` into seeded snapshots, so a warm session never
- * installs. Everything that MISSES that snapshot still pays a full cold
- * download: the seed build itself (`launchSeedRun`'s buildCommands), the group
- * builder's per-linked-repo installs, a fresh clone with no snapshot yet, and
- * any `pnpm add` the agent runs mid-session. A Drive is persistent storage that
- * outlives both the sandbox and its snapshots, so those downloads happen once
- * per repo instead of once per sandbox.
- *
- * ## The one-writer rule shapes the whole design
- *
- * A Drive accepts exactly ONE read-write mount at a time; every other sandbox
- * must mount a read-only snapshot of it (`drive.snapshot()`), frozen at mount
- * time. So roles are split:
- *
- * - {@link DRIVE_CACHE_WRITER} — the seed-prep and group-builder sandboxes.
- *   There is at most one per repo at a time (the snapshot workflow serialises
- *   them) and they are exactly where the expensive installs run, so they take
- *   the read-write mount and populate the cache.
- * - {@link DRIVE_CACHE_READER} — every session, task and project sandbox.
- *   Read-only snapshot mount: they consume what the last build wrote.
- *
- * ## Why readers still get a writable cache
- *
- * Package managers write to their own cache even on a cache hit (metadata,
- * lockfiles, new packages), so pointing pnpm straight at a read-only mount
- * fails. Readers therefore overlay an upper dir on local disk (`/var/tmp`, not
- * tmpfs) on top of the read-only mount (verified available: Vercel Sandbox has `overlay` in
- * /proc/filesystems and passwordless sudo). Reads fall through to the Drive,
- * writes land locally and are discarded with the sandbox.
- *
- * ## Failure is always a no-op, never an error
- *
- * Mount paths and env vars are fixed, but the bytes behind them are optional.
- * If the Drive cannot be created, cannot be attached (another sandbox holds the
- * write lock), or the overlay refuses to mount, {@link driveCacheSetupScript}
- * falls back to a plain empty local directory. The cache is then cold — exactly
- * today's behaviour — and nothing else changes. Nothing in this module may ever
- * fail a sandbox create.
- */
-
 /** Where Vercel attaches the Drive. Never referenced by build tooling directly. */
 export const DRIVE_MOUNT_PATH = "/eva-drive";
 
@@ -54,16 +11,6 @@ export const DRIVE_MOUNT_PATH = "/eva-drive";
  */
 export const DRIVE_CACHE_ROOT = "/eva-cache";
 
-/**
- * Local cache directories made redundant by the Drive, per home directory.
- * Every sandbox created with this code points package managers at
- * {@link DRIVE_CACHE_ROOT} (see DRIVE_CACHE_ENV), so these defaults are never
- * written again — but a seeded snapshot built before the switch still carries
- * them (2.2 GB pnpm store + 1.4 GB npm cache + 187 MB pnpm metadata on the
- * sandbox measured 2026-09-23). Pure caches: deleting them never breaks an
- * existing `node_modules`, because pnpm and npm copy, hard-link or reflink
- * files out of the cache and the installed copy keeps its own data.
- */
 const LOCAL_CACHES_REPLACED_BY_DRIVE: ReadonlyArray<string> = [
   ".local/share/pnpm/store",
   ".cache/pnpm",
@@ -90,13 +37,9 @@ export const SANDBOX_HOME_DIRS: ReadonlyArray<string> = [
  * can never empty the Drive.
  */
 export function localCachePruneLines(): string[] {
-  // One loop line, not one line per path: the disk-full reclaim runs this
-  // inline, inside a size-capped command.
   return [
     `for h in ${SANDBOX_HOME_DIRS.join(" ")}; do for d in ${LOCAL_CACHES_REPLACED_BY_DRIVE.join(" ")}; do sudo rm -rf "$h/$d" 2>/dev/null || true; done; done`,
     `if ! mountpoint -q ${DRIVE_CACHE_ROOT} 2>/dev/null; then`,
-    // `npm/_npx` holds packages `npx` is running right now (a preview's
-    // `serve`, for example), so it stays.
     `  sudo find ${DRIVE_CACHE_ROOT} -mindepth 2 -maxdepth 2 ! -path ${DRIVE_CACHE_ROOT}/npm/_npx -exec rm -rf {} + 2>/dev/null || true`,
     `fi`,
   ];
@@ -119,7 +62,6 @@ export function driveCacheTeardownScript(): string {
   ].join("\n");
 }
 
-/** Upper/work dirs for the reader overlay. Local to the sandbox, discarded on delete. */
 const OVERLAY_UPPER = "/var/tmp/eva-cache-upper";
 const OVERLAY_WORK = "/var/tmp/eva-cache-work";
 
@@ -162,10 +104,6 @@ export function driveCacheName(repoId: string): string {
 export const DRIVE_CACHE_ENV: Record<string, string> = {
   npm_config_cache: `${DRIVE_CACHE_ROOT}/npm`,
   npm_config_store_dir: `${DRIVE_CACHE_ROOT}/pnpm-store`,
-  // pnpm's registry-metadata cache is a SEPARATE key from the store: the store
-  // holds package contents, `cache-dir` holds the resolution metadata (167 MB
-  // of it on a seeded sandbox). Without this it stays on local disk and gets
-  // baked into every snapshot.
   npm_config_cache_dir: `${DRIVE_CACHE_ROOT}/pnpm-metadata`,
   YARN_CACHE_FOLDER: `${DRIVE_CACHE_ROOT}/yarn`,
 };
@@ -191,27 +129,16 @@ export function driveCacheSetupScript(): string {
   const cacheDirs = Object.values(DRIVE_CACHE_ENV).join(" ");
   return [
     `sudo mkdir -p ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
-    // Already set up (resumed sandbox, or this ran earlier in create) — stop.
     `if mountpoint -q ${DRIVE_CACHE_ROOT} 2>/dev/null; then exit 0; fi`,
-    // No Drive attached is not an early exit: the directory layout below still
-    // has to be built, it is just backed by local disk and starts empty.
     `if [ -d ${DRIVE_MOUNT_PATH} ]; then`,
     `  if sudo touch ${probe} 2>/dev/null; then`,
     `    sudo rm -f ${probe} 2>/dev/null || true`,
     `    sudo mount --bind ${DRIVE_MOUNT_PATH} ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
     `  else`,
-    // Read-only snapshot mount. Overlay a local upper dir so package managers
-    // can write (they do so even on a cache hit); reads still fall through to
-    // the Drive. Writes are discarded with the sandbox.
     `    sudo mkdir -p ${OVERLAY_UPPER} ${OVERLAY_WORK} 2>/dev/null || true`,
     `    sudo mount -t overlay overlay -o lowerdir=${DRIVE_MOUNT_PATH},upperdir=${OVERLAY_UPPER},workdir=${OVERLAY_WORK} ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
     `  fi`,
     `fi`,
-    // World-writable so the `eva` user and root share one cache; the mount may
-    // be owned by root. Deliberately NOT recursive — on a warm Drive that would
-    // walk the entire package store on every single sandbox create.
-    // Derived from DRIVE_CACHE_ENV, never hand-listed: adding a cache above
-    // must not require remembering to create and chmod its directory here.
     `sudo mkdir -p ${cacheDirs} 2>/dev/null || true`,
     `sudo chmod 777 ${DRIVE_CACHE_ROOT} ${cacheDirs} 2>/dev/null || true`,
     `exit 0`,

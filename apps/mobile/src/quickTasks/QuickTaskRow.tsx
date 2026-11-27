@@ -19,14 +19,12 @@ import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
-/** What a row reads of a task: a `getAllTasks` row or an `agentTasks.listByProject` row. */
 type QuickTaskRowTask = Pick<
   QuickTask,
   "_id" | "repoId" | "title" | "isExecuting" | "hasUnread" | "isAwaitingAnswer" | "numId" | "priority" | "tags" | "createdAt" | "run"
 > & { sandboxStatus?: QuickTask["sandboxStatus"] };
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
-/** Tags drawn on a card; the rest are a "+N", so a task with a dozen tags keeps one line of them. */
 const MAX_TAGS = 3;
 
 /** The card's secondary text (number, tags, creator, age): the Inbox `text-xs` (12 / 16), not the web 10 and 11. */
@@ -118,11 +116,8 @@ export function QuickTaskRow({
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
-  /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
   hasDraftComment: boolean;
-  /** The row menu. */
   onLongPress?: () => void;
-  /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };
 }) {
   const router = useRouter();
@@ -131,9 +126,6 @@ export function QuickTaskRow({
   const simpleView = useSimpleView();
   const showError = hasError && status !== "done";
   const appearance = statusAppearance(status, scheme);
-  // The web: one live mark, never two. A question beats a turn in flight,
-  // which beats the sandbox dot. An in-progress task gets no turn mark,
-  // because the web draws its border beam instead; the phone has no beam.
   const isInProgress = !hasError && status === "in_progress";
   const showWorking = !hasError && !isInProgress && task.isExecuting;
   const sandbox = task.sandboxStatus ? SANDBOX_DOT[task.sandboxStatus] : undefined;
@@ -169,7 +161,6 @@ export function QuickTaskRow({
       accentColor={showError ? theme.destructive : appearance.bar}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
-      // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
       onPress={
         selection
@@ -187,7 +178,6 @@ export function QuickTaskRow({
               {numLabel}
             </Text>
           ) : null}
-          {/* The web medium title at the Inbox row's 14 / 20 (web `text-2sm`, 13). */}
           <Text
             numberOfLines={1}
             className="font-instrument-sans-medium min-w-0 flex-1 text-sm"
@@ -216,7 +206,6 @@ export function QuickTaskRow({
       {(task.tags && task.tags.length > 0) || hasDraftComment ? (
         <View className="flex-row flex-wrap items-center gap-1">
           {(task.tags ?? []).slice(0, MAX_TAGS).map((tag) => (
-            // Web: a `secondary` badge, `px-1.5 font-medium`, a tag icon; 12 text and a 12 icon (web 10).
             <View
               key={tag}
               className="max-w-36 flex-row items-center gap-1 rounded-full border px-2 py-0.5"

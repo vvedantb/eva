@@ -13,11 +13,8 @@ import {
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 
-// Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
-// Moved to `@eva/shared` so the mobile chat streams into the same bubble.
 export { findStreamingTargetMessage } from "@eva/shared";
-// Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
   findBubbleGroups,
   firstNameByUserId,
@@ -32,18 +29,12 @@ export {
  */
 export interface ChatRepo {
   id: Id<"githubRepos">;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
   basePath: string;
 }
 
 /** The id a chat's messages hang off: a session chat, or a pre-chat session. */
 export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
-// `_id` is widened to `string` so callers can prepend client-built synthetic
-// turns (the quick task's first-run activity in the sandbox chat) without
-// forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
-// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
 export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
@@ -97,7 +88,6 @@ export interface ChatHeldFollowUp {
   userId?: Id<"users">;
 }
 
-// Moved to `@eva/shared` so the phone draws the same rows.
 export { collectQuestionSteps, isSandboxLifecycleAlert, visibleChatMessages } from "@eva/shared";
 
 /** True when the transcript has a teammate bubble that needs a display name. */

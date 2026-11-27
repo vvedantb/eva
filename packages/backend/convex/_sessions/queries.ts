@@ -35,22 +35,13 @@ import {
 } from "./ownedSession";
 import { findWorkChat } from "./ownerState";
 
-/** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
   owner: v.string(),
   name: v.string(),
   rootDirectory: v.optional(v.string()),
-  /** The app's custom display label, when set. */
   label: v.optional(v.string()),
 });
 
-/**
- * Sidebar list shape: omit heavy session fields (planContent, terminal tail,
- * pendingTurn, etc.) so list subscriptions stay small. Detail views use `get`.
- *
- * First-message hover preview is not included — that would N+1 into messages
- * for every row. Hover cards fetch `getFirstMessagePreview` on demand.
- */
 const sessionListItemValidator = v.object({
   _id: v.id("sessions"),
   _creationTime: v.number(),
@@ -59,14 +50,12 @@ const sessionListItemValidator = v.object({
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
   title: v.string(),
-  /** Set while "Regenerate title" is running; the sidebar disables the action and hints. */
   titleRegeneration: v.optional(v.object({ startedAt: v.number() })),
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   sandboxId: v.optional(v.string()),
-  /** Last wake failure — the row's dot turns red instead of reading "Asleep". */
   sandboxError: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
@@ -79,37 +68,16 @@ const sessionListItemValidator = v.object({
   lastFastMode: v.optional(v.boolean()),
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
-  /**
-   * True while one of the session's chats has a turn open — a workflow turn
-   * or a daemon-minted continuation (`/loop`). Same window as composer
-   * BorderBeam in practice (message-level isExecuting needs the open thread;
-   * list rows use this field instead of N+1 into messages).
-   */
   isExecuting: v.boolean(),
-  /**
-   * A turn finished after this user last read the chat, and the chat is theirs
-   * or they opened it before. One `chatReads` read per list, not per row.
-   */
   hasUnread: v.boolean(),
-  /** A turn is paused on a blocking question for the user (sidebar "?" mark). */
   isAwaitingAnswer: v.boolean(),
-  /**
-   * Set only on rows this repo sees through a linked checkout rather than as
-   * the session's own repo: the identity of the session's PRIMARY repo, so the
-   * sidebar can badge the row and link to it under the right app.
-   */
   linkedFrom: v.optional(linkedFromValidator),
-  /** Number of linked repos cloned beside the primary (sidebar `+N` badge). */
   linkedRepoCount: v.optional(v.number()),
-  /** Source session when this one came from "Fork session" (sidebar fork glyph). */
   forkedFromSessionId: v.optional(v.id("sessions")),
-  /** Linked-session group; the sidebar lists these rows in their own section. */
   sessionGroupId: v.optional(v.id("sessionGroups")),
-  /** The group's user-set name, when it has one. */
   sessionGroupName: v.optional(v.string()),
 });
 
-/** Maps a full session doc to the slim list payload. */
 function toSessionListItem(
   session: Doc<"sessions">,
   openSessionIds: ReadonlySet<string>,
@@ -157,22 +125,16 @@ function toSessionListItem(
   };
 }
 
-/** Sorts sessions by most recently updated (falling back to creation time). */
 function byMostRecentlyUpdated(a: Doc<"sessions">, b: Doc<"sessions">): number {
   return (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime);
 }
 
-/** A session this repo only sees because it is cloned into that session. */
 type LinkedSession = {
   session: Doc<"sessions">;
   linkedFrom: { owner: string; name: string; rootDirectory?: string };
 };
 
 /**
- * Sessions whose PRIMARY repo is some other app, but which clone this repo as a
- * linked checkout. They belong in this repo's sidebar too — the work happens
- * here — tagged with the primary's identity so the row links to the right app.
- *
  * `alreadyListed` holds the ids the caller found through `by_repo`, so a session
  * that is both primary and linked here is never listed twice.
  */
@@ -226,11 +188,6 @@ async function gatherLinkedSessions(
   return rows;
 }
 
-/**
- * Turn flags (open, awaiting an answer) for every repo the listed sessions
- * actually run under. Turns are filed against a session's primary repo, so a
- * linked-in row's turn is invisible to this repo's own range.
- */
 function turnFlagsIncludingLinked(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -242,7 +199,6 @@ function turnFlagsIncludingLinked(
   ]);
 }
 
-/** Names of the named linked-session groups these sessions belong to. */
 async function sessionGroupNames(
   db: DatabaseReader,
   sessions: Doc<"sessions">[],
@@ -258,10 +214,6 @@ async function sessionGroupNames(
   return names;
 }
 
-/**
- * Adds the sessions that link this repo, then maps everything to list rows.
- * Shared by `list` and `listArchived`, which differ only in `archived`.
- */
 async function toSessionListItems(
   db: DatabaseReader,
   userId: Id<"users">,
@@ -342,7 +294,6 @@ export const getFirstMessagePreview = authQuery({
   },
 });
 
-/** A session on the other end of a fork, with what the hover card needs to link it. */
 const forkLinkValidator = v.object({
   _id: v.id("sessions"),
   title: v.string(),
@@ -350,7 +301,6 @@ const forkLinkValidator = v.object({
   repo: linkedFromValidator,
 });
 
-/** Visible fork end as a link, or null when deleted or the viewer lacks access. */
 async function toForkLink(
   db: DatabaseReader,
   userId: Id<"users">,
@@ -508,7 +458,6 @@ export const ownerChatRefValidator = v.object({
   chatId: v.id("sessionChats"),
 });
 
-/** The owner's work session and its chat, or null when the owner is gone or not visible. */
 async function readOwned(
   db: DatabaseReader,
   userId: Id<"users">,

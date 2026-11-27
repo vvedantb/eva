@@ -58,7 +58,6 @@ export const TASK_PREVIEW_SANDBOX_READY_POLL_MS = 2_000;
 export interface AwaitSandboxActiveDeps {
   kind: ChatTargetKind;
   readStatus: () => Promise<string | undefined>;
-  /** Issues the surface's Start mutation (as the acting user). */
   start: () => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now?: () => number;
@@ -91,8 +90,6 @@ export async function awaitSandboxActive(
     started = true;
   };
 
-  // `wait` is a start/stop already in flight. If that settles to `closed`,
-  // start once rather than failing on a teardown race.
   if (plan === "start") {
     await start();
   }
@@ -131,7 +128,6 @@ export interface SessionMessageCall {
   args: Record<string, string | boolean>;
 }
 
-/** A session chat's send mutations; every MCP send lands in one. */
 const SESSION_CHAT_MUTATIONS = {
   addMessage: "_sessions/mutations:addMessage",
   startExecute: "_sessions/execution:startExecute",
@@ -150,17 +146,13 @@ const SESSION_CHAT_MUTATIONS = {
  * itself on dequeue.
  */
 export function buildChatMessageCalls(input: {
-  /** The session chat the message lands in. */
   chatId: string;
   message: string;
   delivery: AgentDelivery;
-  /** Stamps the "via MCP" chat badge. True for every MCP send. */
   sentViaOrchestrator: boolean;
-  /** The account the turn runs on; null is Team, as the composer sends it. */
   providerAccountId: string | null;
 }): SessionMessageCall[] {
   const { chatId, message, delivery, sentViaOrchestrator } = input;
-  // Omitting the account is how the turn mutations spell Team.
   const account: Record<string, string> = {};
   if (input.providerAccountId !== null) {
     account.providerAccountId = input.providerAccountId;

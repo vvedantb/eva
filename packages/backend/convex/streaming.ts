@@ -131,7 +131,6 @@ export async function upsertStreamingActivity(
   }
 }
 
-/** Whose live output a streaming row carries, by its entity id. */
 type StreamOwner =
   | { kind: "sandboxOwner"; owner: SandboxOwner }
   | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
@@ -141,12 +140,6 @@ type StreamOwner =
   | { kind: "automationRun"; runId: Id<"automationRuns"> }
   | { kind: "project"; projectId: Id<"projects"> };
 
-/**
- * Maps every streaming entity id the app reads to its owner: the prefixed
- * ids (`_chat/agentStreamIds.ts`, sandbox startup rows)
- * and the bare row ids of session chats, sessions, docs (interview, test
- * gen), evaluation reports and projects (interview). Unknown ids map to null.
- */
 function parseStreamOwner(
   db: QueryCtx["db"],
   entityId: string,
@@ -187,7 +180,6 @@ function parseStreamOwner(
   return null;
 }
 
-/** The read rule of the entity that owns a streaming row. */
 async function canReadStream(
   db: QueryCtx["db"],
   userId: Id<"users">,
@@ -203,13 +195,11 @@ async function canReadStream(
     case "doc":
       return (await findDocWithAccess(db, owner.docId, userId)) !== null;
     case "report": {
-      // Same rule as `evaluationReports.listByDoc`, where the id comes from.
       const report = await db.get(owner.reportId);
       const doc = report ? await db.get(report.docId) : null;
       return doc !== null && (await hasRepoAccess(db, doc.repoId, userId));
     }
     case "taskRun": {
-      // Same rule as `agentRuns.get`: the run follows its task.
       const run = await db.get(owner.runId);
       const task = run ? await db.get(run.taskId) : null;
       return task !== null && (await hasTaskAccess(db, task, userId));

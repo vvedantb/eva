@@ -5,7 +5,6 @@ import {
   rememberOwnSave,
 } from "@eva/shared";
 
-/** A mention token as it is stored on the `drafts` row. */
 const mention = (label: string, id: string) => `@[${label}](${id})`;
 const ALICE_ID = "j5712abcdefghijk";
 
@@ -38,11 +37,6 @@ describe("decideDraftPull leaves the editor alone", () => {
     });
   });
 
-  /**
-   * The subscription replays every transition, so a keystroke burst can land
-   * long after the editor moved on. An echo from earlier in the window is still
-   * ours, and re-applying it would resurrect deleted characters.
-   */
   test("when an older save in the echo window arrives late", () => {
     const saves = ["a", "ab", "abc"];
     expect(decide("ab", "abc", saves)).toEqual({
@@ -58,10 +52,6 @@ describe("decideDraftPull leaves the editor alone", () => {
     });
   });
 
-  /**
-   * The regression that makes the pull dangerous: a row lagging behind the
-   * user's latest keystrokes must never be applied, or typed characters vanish.
-   */
   test("when the remote row lags what the user has typed", () => {
     expect(decide("hello wor", "hello world")).toEqual({
       apply: false,

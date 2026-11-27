@@ -43,12 +43,10 @@ import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** The status groups folded closed (To do, Done…), kept on the device. */
 const closedQuickTaskStatuses = persistedIdSet("quickTaskStatusesClosed");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
-/** A To Do row is a task or one of the user's drafts; every other section holds tasks only. */
 type ListItem = { kind: "draft"; draft: QuickTaskDraft } | { kind: "task"; task: QuickTask };
 
 /** The Quick Tasks repo (`useRepoParam`), and the new-task screen on it. */
@@ -59,7 +57,6 @@ export function useQuickTaskRepo() {
     repos,
     repo,
     setRepo,
-    /** The new-task screen, on this repo. */
     openNew: () =>
       router.push(repo ? { pathname: "/quick-task/new", params: { repoId: repo._id } } : "/quick-task/new"),
   };
@@ -93,13 +90,11 @@ export function QuickTasksSection() {
       <View className="px-4">
         <RepoPicker repos={repos} value={repo} onChange={setRepo} />
       </View>
-      {/* Keyed on the repo: its search, filters and open sections start fresh. */}
       <QuickTaskList key={repo._id} repo={repo} />
     </View>
   );
 }
 
-/** The list query for each mode, as the sessions list. */
 const QUICK_TASK_LIST_QUERIES = {
   active: api.agentTasks.getAllTasks,
   archived: api.agentTasks.listArchived,
@@ -108,14 +103,12 @@ const QUICK_TASK_LIST_QUERIES = {
 const MODE_OPTIONS = ARCHIVE_LIST_MODES.map((value) => ({ value, label: ARCHIVE_LIST_MODE_LABELS[value] }));
 
 function QuickTaskList({ repo }: { repo: Repo }) {
-  // Not persisted: the list opens on Active each time, as the sessions list.
   const [mode, setMode] = useState<ArchiveListMode>("active");
   return (
     <View className="flex-1">
       <View className="px-4 pb-2">
         <SegmentedTabs value={mode} options={MODE_OPTIONS} onChange={setMode} />
       </View>
-      {/* Keyed on the mode: its search, filters, selection and open sections start fresh. */}
       <QuickTaskModeList key={mode} repo={repo} mode={mode} />
     </View>
   );
@@ -125,7 +118,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   const { openNew } = useQuickTaskRepo();
   const archived = mode === "archived";
   const tasks = useQuery(QUICK_TASK_LIST_QUERIES[mode], { repoId: repo._id });
-  // The user's own drafts (private to them), at the top of To Do; never in Archived.
   const drafts = useQuery(api.agentTasks.listDrafts, archived ? "skip" : { repoId: repo._id });
   const errorTaskIds = useQuery(
     api.agentRuns.getTaskIdsWithLatestRunError,
@@ -140,7 +132,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   const [closed, toggle] = closedQuickTaskStatuses.useSet("all");
   const [runAllOpen, setRunAllOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
-  // Select mode (the web bulk bar): from a row menu's "Select", that row ticked.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<Id<"agentTasks">>>(new Set());
   const exitSelect = () => {
@@ -163,8 +154,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   const insets = useSafeAreaInsets();
   const scheme = useScheme();
 
-  // Android back leaves select mode first, as it closes a sheet first. An effect:
-  // the hardware back button is a subscription outside React.
   useEffect(() => {
     if (!selecting) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -186,7 +175,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   const shown = applyQuickTaskFilters(tasks, filters);
   const liveDrafts = drafts ?? [];
   const shownDrafts = quickTaskTodoDrafts(liveDrafts, filters);
-  // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...tasks.flatMap((task) => task.tags ?? [])])].sort();
   const sections = groupByTaskStatus(shown).filter((section) => filters.statuses.includes(section.status));
   const errors = new Set<string>(errorTaskIds ?? []);
@@ -267,7 +255,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
               runningAll={runningAll}
             />
           )}
-          // 8 between cards (web `space-y-1.5`, 6), so each reads as its own target.
           ItemSeparatorComponent={CardGap}
           renderItem={({ item, section }) => {
             if (item.kind === "draft") return <QuickTaskDraftRow draft={item.draft} />;
@@ -285,12 +272,10 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
             );
           }}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
-          // Web: the list `p-3 pt-0`.
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
       {actions.dialogs}
-      {/* The bulk bar takes the tab bar's place while selecting, as the inbox. */}
       <Tabs.Screen options={{ tabBarStyle: selecting ? { display: "none" } : undefined }} />
       <QuickTaskBulkBar
         isSelecting={selecting}
@@ -316,7 +301,6 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   );
 }
 
-/** While the tasks load: cards shaped as `QuickTaskRow` (title over tags and age), 8 apart, on the list's `px-3`. */
 function QuickTaskPlaceholders() {
   const card = EVA_THEME[useScheme()].card;
   return (
@@ -333,7 +317,6 @@ function QuickTaskPlaceholders() {
   );
 }
 
-/** The web `RunAllDialog`: what Run All does, who it skips, then Cancel and Run All. */
 function RunAllDialog({
   open,
   onOpenChange,
@@ -376,7 +359,6 @@ function RunAllDialog({
   );
 }
 
-/** One status section's header (`FoldHeader`), with To Do's web "Run All" ("Run" below `sm`) while it has tasks. */
 function StatusHeader({
   status,
   count,
@@ -405,7 +387,6 @@ function StatusHeader({
       onToggle={onToggle}
       trailing={
         onRunAll ? (
-          // Web: a `sm` primary button, 36 high, `mr-2`, a 14 play icon (a spinner while starting).
           <Button
             size="sm"
             fullWidth={false}

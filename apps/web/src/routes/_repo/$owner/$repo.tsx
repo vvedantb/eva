@@ -20,9 +20,6 @@ function MainContent({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
-        // `dvh`, not `vh`: with `overflow-hidden` on the shell, a `100vh`
-        // height on iOS pushes the bottom of every repo page under the browser
-        // chrome with no way to scroll to it.
         "relative flex flex-col",
         SHELL_VIEWPORT_ROUTE_CLASS,
       )}

@@ -16,11 +16,6 @@ import { PrIcon } from "@/sessions/SessionGroup";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
-/**
- * The web flat row body (`ProjectFlatRowBody`): an icon, the title on one
- * line, one muted sentence under it, and `trailing` at the end. No fill: the
- * row fades while pressed.
- */
 function FlatRow({
   icon,
   title,
@@ -146,10 +141,6 @@ export function ProjectTaskPrRow({ task }: { task: ProjectTaskListRow & { prUrl:
   );
 }
 
-/**
- * A Triage row's compact Reject (cancels the task) and Approve (lets the
- * scheduler start it), beside the row as the row is one button.
- */
 function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskId: Id<"agentTasks"> }) {
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);

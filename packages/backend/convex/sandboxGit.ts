@@ -6,7 +6,6 @@ import { authMutation, hasRepoAccess } from "./functions";
 import { sandboxGitSyncValidator } from "./_validators/shapes";
 import { findOwnedSession, findWorkSession } from "./_sessions/owner";
 
-/** Git's own ref-name ceiling is well under this; the cap is just a guard. */
 const BRANCH_MAX_CHARS = 255;
 
 /**
@@ -27,7 +26,6 @@ type SandboxGitTarget = Infer<typeof sandboxGitTargetValidator>;
 type SandboxGitSync = Infer<typeof sandboxGitSyncValidator>;
 type SandboxOwner = Doc<"sessions">;
 
-/** Resolves the session that holds the checkout. */
 async function resolveSandboxOwner(
   ctx: Pick<QueryCtx, "db">,
   target: SandboxGitTarget,
@@ -63,8 +61,6 @@ async function patchSandboxGitState(
   branch: string,
   sync: SandboxGitSync | undefined,
 ): Promise<void> {
-  // One filesystem can be reported by several daemon processes, so the
-  // unchanged case must cost nothing.
   const branchChanged = owner.sandboxBranch !== branch;
   const syncChanged = sync !== undefined && !syncEquals(owner.sandboxGitSync, sync);
   if (!branchChanged && !syncChanged) return;

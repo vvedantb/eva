@@ -25,14 +25,6 @@ import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { DEFAULT_PREVIEW_PORT, previewWakePath } from "@eva/shared";
 
-/**
- * Turns a live preview URL into one that is safe to hand a person: the grant
- * param is a five-minute bearer token, so it must never be persisted or shared
- * (same rule the web app's "open in new tab" follows). Without it the proxy
- * bounces the opener through Eva sign-in and back.
- *
- * `path` replaces the route while keeping any query the proxy put there.
- */
 function shareablePreviewUrl(rawUrl: string, path?: string): string {
   const url = new URL(rawUrl);
   url.searchParams.delete(PREVIEW_GRANT_PARAM);
@@ -51,12 +43,6 @@ function shareablePreviewUrl(rawUrl: string, path?: string): string {
   return url.toString();
 }
 
-/**
- * The permanent Eva page for a chat's Preview tab, for a caller who would
- * rather open it in Eva than hit the sandbox directly. Omitted rather than
- * thrown when the chat has no number yet or the deployment has no web app
- * configured — a missing second link must not cost the caller the first one.
- */
 function evaPreviewUrl(location: EntityLocation): { evaUrl?: string } {
   const previewPath = entityPreviewPath(location);
   if (previewPath === undefined) return {};
@@ -67,12 +53,6 @@ function evaPreviewUrl(location: EntityLocation): { evaUrl?: string } {
   }
 }
 
-/**
- * The stable wake link (`/p/<kind>/<id>`), only while idle pause is fully on:
- * it wakes a paused sandbox on open, so it is the right thing to hand a person
- * once sandboxes can pause underneath them. Undefined otherwise, so the tool's
- * output is unchanged when the setting is off.
- */
 function wakePreviewUrl(
   target: EntityTarget,
   mode: string,
@@ -106,14 +86,8 @@ export function entityTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  // Chat tools use the per-user check only: every chat the user can open in
-  // Eva is reachable, whichever repo minted the token (see entityAccess).
   const { assertUserRepoAccess, resolveRepoRef, resolveEntityTarget } =
     entityAccess(ctx, credentials);
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_entities
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -148,8 +122,6 @@ Only entities you could already open in Eva are returned. The page is capped; "t
       handler: async ({ kind, status, limit, repoId, repoName, app }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
 
-        // Naming a repo narrows the scan; naming none lists across every repo
-        // the caller can reach, which is the same set either way.
         let repos = await mcpListUserRepos(ctx, userId);
         if (repoId !== undefined || repoName !== undefined) {
           const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
@@ -179,13 +151,11 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           isExecuting: entity.isExecuting,
           archived: entity.archived,
           prUrl: entity.prUrl,
-          // Only when the entity holds more than one PR.
           ...(entity.prUrls ? { prUrls: entity.prUrls } : {}),
           branch: entity.branchName,
           updatedAt: entity.updatedAt,
           repo: `${entity.repoOwner}/${entity.repoName}`,
           path: entityPath(entity),
-          // Only sessions carry this, and only when they have linked repos.
           ...(entity.linkedRepoCount
             ? { linkedRepoCount: entity.linkedRepoCount }
             : {}),
@@ -199,10 +169,6 @@ Only entities you could already open in Eva are returned. The page is capped; "t
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // start_sandbox / stop_sandbox
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -259,10 +225,6 @@ If an agent is working in the sandbox (a turn in flight or a task run) this is R
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // get_preview_url
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -325,7 +287,6 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           },
         );
 
-        // An unreachable dev server comes back as an empty url, not an error.
         if (preview.url.length === 0) {
           return toolJsonResult({
             ...summary,
@@ -353,10 +314,6 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // cancel_queued_message
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({

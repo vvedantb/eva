@@ -9,38 +9,23 @@ import { getSandboxHandle } from "./helpers";
 import { launchPreviewDevServer } from "./sessions";
 import { sandboxOwnerKey } from "@eva/shared";
 
-/**
- * Relaunches the session's managed dev server on `sandboxId`: bails on a
- * closing/starting status, a missing or mismatched devPort, or a non-running
- * sandbox; otherwise relaunches it through the single Console launcher.
- */
 async function recoverSessionPreview(
   ctx: ActionCtx,
   args: { sandboxId: string; repoId: Id<"githubRepos">; expectedPort: number },
   session: Doc<"sessions">,
 ): Promise<null> {
-  // "starting" owns service launches: the startup flow resolves the real
-  // port and launches the dev server itself, and this recovery racing it
-  // with a stale sticky devPort is exactly how a duplicate server appeared
-  // on the wrong port (observed in prod: startup launched 13000, a recovery
-  // scheduled during startup launched 3001 one second later).
   const status = session.status;
   if (status === "closed" || status === "stopping" || status === "starting")
     return null;
 
   const { devPort, devCommand } = session;
   if (devPort === undefined || devCommand === undefined) return null;
-  // Multi-app repos preview secondary apps on their own ports; this recovery
-  // only owns the primary dev server.
   if (devPort !== args.expectedPort) return null;
 
   const [handle, repo] = await Promise.all([
     getSandboxHandle(ctx, args.repoId, args.sandboxId),
     ctx.runQuery(internal.githubRepos.getInternal, { id: args.repoId }),
   ]);
-  // Never exec on a non-running sandbox — on Vercel any exec lazily resumes
-  // a stopped VM (see prewarmNeverResurrects contract). handle.state is
-  // fresh: getSandboxHandle fetches with resume:false.
   if (handle.state !== "running") return null;
 
   console.log(
@@ -79,7 +64,6 @@ export const ensureSessionPreviewServices = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /** The upstream listen port the failing preview probed. */
     expectedPort: v.number(),
   },
   returns: v.null(),

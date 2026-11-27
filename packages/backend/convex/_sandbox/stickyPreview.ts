@@ -1,7 +1,5 @@
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 
-/** Shared sticky Preview path helpers for sessions, tasks, projects. */
-
 /** Normalize a Preview path to always start with `/` and never store a grant. */
 export function normalizeStickyPreviewPath(raw: string): string {
   const trimmed = raw.trim();

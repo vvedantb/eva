@@ -1,17 +1,3 @@
-/**
- * Who a routed question goes to.
- *
- * A routed thread is a group thread: Eva asks the handful of people who can
- * actually settle the question rather than guessing at one. Jev judges each
- * teammate independently — one boolean per person, so the bar for "include
- * them" is a number in this file instead of a mood in the prompt — and a
- * keyword fallback covers the gateway being down or Jev picking nobody.
- *
- * Pure so every tunable and every decision can be tested without the gateway.
- * The prompt wording lives here too, beside the threshold it feeds, rather
- * than in the `"use node"` action that sends it.
- */
-
 /** Jev judges each teammate independently; this is the bar to be included. */
 export const PARTICIPANT_THRESHOLD = 0.6;
 
@@ -71,8 +57,6 @@ export function selectByProbability(
     if (probability < PARTICIPANT_THRESHOLD) return;
     scored.push({ index, probability });
   });
-  // Stable sort: equally confident picks keep directory order rather than
-  // shuffling between calls.
   scored.sort((a, b) => b.probability - a.probability);
   return scored.slice(0, MAX_PICKED).map((entry) => entry.index);
 }

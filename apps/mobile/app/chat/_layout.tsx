@@ -3,7 +3,6 @@ import { Redirect, Stack } from "expo-router";
 import { EnsureUser } from "@/auth/EnsureUser";
 import { useStackScreenOptions } from "@/ui/stackOptions";
 
-/** Chats need a signed-in user: every query here is an auth query. */
 export default function ChatLayout() {
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const stackOptions = useStackScreenOptions();

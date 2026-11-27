@@ -14,15 +14,6 @@ import {
   notificationUrgencyValidator,
 } from "../validators";
 
-// Backing functions for mcp/agentInteractionTools.ts. Internal only: the tools
-// resolve the caller's Eva user id first and pass it in, and every function
-// here scopes what it reads or writes to that user.
-
-/**
- * Upper bound on question rows one listing reads. A row only lives while a
- * turn is paused inside AskUserQuestion (and is cleared when the sandbox
- * stops), so the whole table is small; the cap just keeps the read bounded.
- */
 const PENDING_SCAN_LIMIT = 500;
 
 type ChatHit =
@@ -30,13 +21,7 @@ type ChatHit =
   | { kind: "task"; doc: Doc<"agentTasks"> }
   | { kind: "project"; doc: Doc<"projects"> };
 
-/**
- * The chat a pendingQuestions row belongs to. `entityId` is the generic
- * session/task/project id, and a Convex id encodes its table, so trying each
- * table in turn is a lookup rather than a guess.
- */
 async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
-  // A session's questions are keyed by the chat that asked them.
   const chatId = ctx.db.normalizeId("sessionChats", id);
   const sessionId =
     chatId !== null
@@ -60,10 +45,6 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
   return null;
 }
 
-/**
- * The `pendingQuestions.entityId` values one named chat covers. A session's
- * questions are keyed by its chats, so naming the session fans out to them.
- */
 async function questionEntityIds(
   ctx: QueryCtx,
   entityId: string,
@@ -74,7 +55,6 @@ async function questionEntityIds(
   return chats.map((chat) => String(chat._id));
 }
 
-/** A chat's repo. A project's child task inherits its project's repo. */
 async function chatRepoId(
   ctx: QueryCtx,
   hit: ChatHit,
@@ -136,7 +116,6 @@ export const listPendingQuestionsForUser = internalQuery({
       rows = await ctx.db.query("pendingQuestions").take(PENDING_SCAN_LIMIT);
     }
 
-    // Each row resolves its chat and repo on its own; the sort below fixes order.
     const result = [];
     const resolved = await Promise.all(
       rows.map(async (row) => {

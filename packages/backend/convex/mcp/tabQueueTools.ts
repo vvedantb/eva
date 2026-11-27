@@ -22,10 +22,8 @@ import {
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
 
-/** Every public mutation below except appTabs:create returns `null`. */
 const nullReply = z.null();
 
-/** How much of a queued message's content list_queued_messages shows. */
 const CONTENT_PREVIEW_CHARS = 300;
 
 const queuedMessageRow = z.object({
@@ -52,11 +50,6 @@ type AppTabRow = z.infer<typeof appTabRow>;
 
 type ToolError = ReturnType<typeof toolErrorResult>;
 
-/**
- * The settings UI stores the icon as a free-text Tabler component name and
- * renders unknown names as a placeholder. The backend cannot load Tabler's
- * name list, so this checks the shape every Tabler export has.
- */
 const tablerIconArg = z
   .string()
   .trim()
@@ -126,7 +119,6 @@ function appTabView(tab: AppTabRow) {
   };
 }
 
-/** Mirrors appTabs.ts so a bad name fails before a round trip, with the same words. */
 function appTabNameError(
   name: string,
   tabs: ReadonlyArray<AppTabRow>,
@@ -177,10 +169,6 @@ export function tabQueueTools(
     );
   }
 
-  /**
-   * The repo a tab tool acts on: the one named, else the repo of the chat the
-   * caller runs in. Access is the per-user check the web settings page uses.
-   */
   async function resolveTabRepo(
     ref: RepoRef,
     userId: string,
@@ -211,7 +199,6 @@ export function tabQueueTools(
     );
   }
 
-  /** One tab, checked to belong to the resolved repo. */
   async function findTab(
     ref: RepoRef,
     tabId: string,
@@ -230,10 +217,6 @@ export function tabQueueTools(
     }
     return { repoId: repo.repoId, tab, tabs };
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_queued_messages / edit_queued_message / reorder_queued_messages
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -432,11 +415,6 @@ If a message starts running between your list and this call, the reorder fails; 
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_app_tabs / create_app_tab / update_app_tab / set_app_tab_enabled /
-  // delete_app_tab
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({

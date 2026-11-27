@@ -4,7 +4,6 @@ import { Button, Spinner, EmptyState } from "@vvedantb/ui";
 import { IconBrandGithub } from "@tabler/icons-react";
 import { Container } from "@/lib/components/ui/Container";
 
-/** Where the installation's own permissions are changed. */
 const GITHUB_INSTALLATIONS_URL = "https://github.com/settings/installations";
 
 export function RepoSetupLoading() {

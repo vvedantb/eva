@@ -43,8 +43,6 @@ const fixCompleteEvent = defineEvent({
   }),
 });
 
-// --- Workflow definition ---
-
 /** Runs an evaluation: analyzes the codebase against the document and saves a severity-ranked issue list. Fixing issues is opt-in via startFix. */
 export const evaluationWorkflow = workflow.define({
   args: {
@@ -55,8 +53,6 @@ export const evaluationWorkflow = workflow.define({
     branchName: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
-    // Both live outside the try so the finally can tear the sandbox down even
-    // when prepare throws part-way through.
     let sandboxId: string | undefined;
     let sandboxRepoId: Id<"githubRepos"> | undefined;
     try {
@@ -117,9 +113,6 @@ export const evaluationWorkflow = workflow.define({
       });
       throw error;
     } finally {
-      // The sandbox is ephemeral: nothing references it once the report is
-      // saved, so it has to be deleted here or it idles until the provider
-      // reaps it. Best-effort — a failed delete must not fail the workflow.
       if (sandboxId && sandboxRepoId) {
         try {
           await step.runAction(internal.sandbox.deleteSandbox, {
@@ -150,8 +143,6 @@ export const fixWorkflow = workflow.define({
     fixBranchName: v.string(),
   },
   handler: async (step, args): Promise<void> => {
-    // Both live outside the try so the finally can tear the sandbox down even
-    // when prepare throws part-way through.
     let fixSandboxId: string | undefined;
     let sandboxRepoId: Id<"githubRepos"> | undefined;
     try {
@@ -207,8 +198,6 @@ export const fixWorkflow = workflow.define({
           },
         );
 
-        // No commits pushed → the fix agent changed nothing; a PR attempt
-        // would only 404 against a branch origin never received.
         if (!pushResult.pushed) {
           await step.runMutation(internal.evaluationWorkflow.saveFixError, {
             reportId: args.reportId,
@@ -255,9 +244,6 @@ export const fixWorkflow = workflow.define({
       });
       throw error;
     } finally {
-      // The sandbox is ephemeral: the branch is already pushed by this point, so
-      // nothing references the VM. Delete it or it idles until the provider
-      // reaps it. Best-effort — a failed delete must not fail the workflow.
       if (fixSandboxId && sandboxRepoId) {
         try {
           await step.runAction(internal.sandbox.deleteSandbox, {
@@ -271,8 +257,6 @@ export const fixWorkflow = workflow.define({
     }
   },
 });
-
-// --- Supporting internal functions ---
 
 /** Sets the evaluation report status to running. */
 export const setRunning = internalMutation({
@@ -307,9 +291,6 @@ export const getDocData = internalQuery({
       repo.rootDirectory ?? "",
     );
 
-    // The document itself is the specification. The agent explores the codebase
-    // and reports whatever issues it finds, ranked by severity — no fixed
-    // checklist, so the result set may differ between runs.
     const prompt = `You are a QA engineer reviewing whether a codebase satisfies a specification document.
 
 ## Specification: ${doc.title}
@@ -340,12 +321,6 @@ No markdown, no explanation, no text outside the JSON.${rootDirInstruction}`;
   },
 });
 
-/**
- * Schema for the LLM evaluation JSON. Per-field `.catch()` defaults fold
- * validation and fallback values into a single parse: a malformed issue collapses
- * to a default entry, an unknown severity becomes "medium", a missing/non-array
- * `issues` becomes an empty list, and a non-string summary becomes a default.
- */
 const evalJsonSchema = z
   .object({
     issues: z
@@ -753,8 +728,6 @@ export const startFix = authMutation({
     const repo = await ctx.db.get(report.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    // Retries need a unique branch — the previous push is not forced, so reusing
-    // the name would fail if the prior attempt already pushed.
     const base = `${EVA_BRANCH_PREFIX}eval-fix-${String(args.reportId).slice(-8)}`;
     const fixBranchName = report.fixBranchName
       ? `${base}-r${Date.now().toString(36)}`

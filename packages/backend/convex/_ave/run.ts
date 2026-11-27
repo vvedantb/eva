@@ -7,13 +7,6 @@ import { AVE_CONTEXT_ROWS, type AveContextRow } from "./context";
 import { buildAveInstructions } from "./prompt";
 import { startRun } from "./threads";
 
-/**
- * Run-state mutations for one Manager Ave run (`mcp/aveRun.ts`). Every one is
- * fenced on `runId`: a run that was cancelled, reset, or reclaimed by the
- * watchdog can still be executing, and its late writes must land nowhere.
- */
-
-/** The thread, but only while `runId` is still the run in flight. */
 async function fencedThread(
   ctx: MutationCtx,
   threadId: Id<"aveThreads">,
@@ -109,7 +102,6 @@ export const publishProgress = internalMutation({
   },
 });
 
-/** Writes the reply, then either idles the thread or starts the follow-up run. */
 async function settleRun(
   ctx: MutationCtx,
   threadId: Id<"aveThreads">,
@@ -129,7 +121,6 @@ async function settleRun(
     const placeholder = await ctx.db.get(thread.runMessageId);
     if (placeholder && placeholder.finishedAt === undefined) {
       if (result.content.trim() === "" && result.activityLog === "[]") {
-        // Nothing to salvage: an empty bubble above the alert only adds noise.
         await ctx.db.delete(placeholder._id);
       } else {
         await ctx.db.patch(placeholder._id, {
@@ -154,7 +145,6 @@ async function settleRun(
   }
   await clearStreamingActivity(ctx, String(threadId));
 
-  // A Stop also drops whatever arrived mid-run: the user asked Ave to stand down.
   if (thread.rerunRequested === true && thread.cancelRequested !== true) {
     await startRun(ctx, threadId, now);
     return;

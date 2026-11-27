@@ -30,7 +30,6 @@ function pmJsonToMarkdown(node: PMNode, depth?: number): string {
         else if (mark.type === "code") text = `\`${text}\``;
         else if (mark.type === "link")
           text = `[${text}](${String(mark.attrs?.href ?? "")})`;
-        // Suggestion marks: deletion text excluded, insertion/modification included
         else if (mark.type === "deletion") return "";
       }
     }

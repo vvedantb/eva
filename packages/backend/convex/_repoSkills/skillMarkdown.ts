@@ -70,7 +70,6 @@ function getFrontmatterLines(markdown: string): string[] | null {
   return null;
 }
 
-/** Parses description from frontmatter (single line, |/>, or YAML-indented block). */
 function parseDescriptionField(
   frontmatterLines: string[],
   lineIndex: number,
@@ -89,7 +88,6 @@ function parseDescriptionField(
     };
   }
 
-  // YAML implicit multiline: `description:` then indented continuation lines.
   return parseIndentedBlock(frontmatterLines, lineIndex + 1);
 }
 

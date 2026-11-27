@@ -1,17 +1,10 @@
 import tailwindcssAnimate from "tailwindcss-animate";
 import tailwindcssTypography from "@tailwindcss/typography";
 
-/** Colour with Tailwind's opacity modifier. The tokens are full colours
- * (oklch or rgb), so the alpha is mixed in rather than written as `/ <alpha>`.
- * Mixed in oklab, not oklch: Chrome drops a near-grey's hue to `none` in oklch
- * but keeps its small chroma, so neutral greys (the `rgb()` tokens) rendered
- * faintly red. oklab has no hue to lose. Mix with `transparent` in oklab
- * everywhere for the same reason. */
 function v(name) {
   return `color-mix(in oklab, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
 }
 
-/** Maps Tailwind Typography's colour variables onto the design tokens. */
 function proseTokenCss() {
   return {
     "--tw-prose-body": "var(--foreground)",
@@ -26,8 +19,6 @@ function proseTokenCss() {
     "--tw-prose-quote-borders": "var(--border)",
     "--tw-prose-captions": "var(--muted)",
     "--tw-prose-kbd": "var(--foreground)",
-    // Used directly as a box-shadow colour, so the translucency is baked in
-    // (upstream default is the heading colour at 10%).
     "--tw-prose-kbd-shadows":
       "color-mix(in oklab, var(--foreground) 10%, transparent)",
     "--tw-prose-code": "var(--foreground)",
@@ -45,7 +36,6 @@ function proseTokenCss() {
  * `globals.css` for the same reason. */
 export const themeExtend = {
   colors: {
-    // Soft hover / selected fill. `accent` itself stays the package brand.
     "accent-soft": {
       DEFAULT: v("accent-soft"),
       foreground: v("accent-soft-foreground"),
@@ -78,8 +68,6 @@ export const themeExtend = {
       4: v("chart-4"),
       5: v("chart-5"),
     },
-    // Muted categorical ramp for hash-assigned identity colour (tab groups,
-    // repo tiles, avatars) — not for status; status uses `status-*`.
     cat: {
       1: v("cat-1"),
       2: v("cat-2"),
@@ -136,8 +124,6 @@ export const themeExtend = {
     "2xl": "var(--shadow-2xl)",
   },
   borderRadius: {
-    // Controls stay ~10px, surfaces 12–16px, menu items tighter still. Capped
-    // so the "Full" radius theme (--radius: 9999px) cannot turn these into pills.
     surface: "clamp(0.75rem, var(--radius), 1rem)",
     control: "min(var(--radius), 0.625rem)",
     "menu-item": "min(var(--radius), 0.5rem)",
@@ -151,18 +137,6 @@ export const themeExtend = {
     sans: ["var(--font-sans)"],
     mono: ["var(--font-mono)"],
   },
-  // Do NOT add `transitionDuration.DEFAULT` / `transitionTimingFunction.DEFAULT`
-  // here. A v3-config override of either one makes Tailwind v4 drop its own
-  // `--default-transition-duration` / `--default-transition-timing-function`
-  // definitions from the sheet while still emitting the 29 `var()` references to
-  // them, so every bare `transition-*` falls back to `0s` and stops animating.
-  // The house defaults live in the `@theme` block in `globals.css` instead.
-  // The `text-*` scale (size-specific tracking, `3xs`/`2xs`/`2sm` tiers) comes
-  // from `@vvedantb/ui/tokens` (type-scale.css), imported in `globals.css`.
-  // Tailwind Typography ships an unthemed grey palette, which fights the design
-  // tokens wherever rendered markdown sits next to normal UI text. Both the base
-  // and `prose-invert` variable sets point at the same tokens, because the tokens
-  // already flip on `.dark` — so `dark:prose-invert` becomes a harmless no-op.
   typography: {
     DEFAULT: { css: proseTokenCss() },
     invert: { css: proseTokenCss() },

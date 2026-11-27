@@ -8,18 +8,6 @@ import {
   type SpotlightHit,
 } from "./spotlightGroups";
 
-/**
- * Spotlight renders results by walking a hand-written group order, so a hit
- * type that order has never heard of is dropped on the floor — the backend
- * returns it, the user typed its title, and nothing appears. The compiler does
- * not catch it: labels and icons are `Record<HitType, …>` and must be
- * exhaustive, but the order is a plain array.
- *
- * `pr` and `draft` (e5ecaa85d, 2026-09-16) were the first types added since,
- * and needed three separate edits to show up. This asserts the fourth one
- * cannot be forgotten.
- */
-
 function hit(type: HitType): SpotlightHit {
   return {
     type,
@@ -72,7 +60,6 @@ describe("spotlight grouping", () => {
   });
 
   test("a recent entry naming a type this build dropped still gets an icon", () => {
-    // Recents outlive deploys, so the stored type is untrusted input.
     expect(iconForRecent("gone-in-a-rename", "Old thing")).toBeTruthy();
   });
 });

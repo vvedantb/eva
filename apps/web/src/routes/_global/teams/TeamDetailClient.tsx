@@ -67,9 +67,6 @@ export function TeamDetailClient({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
-  // `useQuery` is `undefined` while the subscription is still in flight, so a
-  // single `!team` branch flashed "Team not found" on every cold load of a team
-  // that exists. Only `null` is a real miss.
   if (team === undefined) {
     return (
       <PageWrapper title="Team">

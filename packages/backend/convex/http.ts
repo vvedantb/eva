@@ -39,7 +39,6 @@ import {
 
 const http = httpRouter();
 
-/** Verifies the EVA deploy key from the request Authorization header. */
 function verifyDeployKey(request: Request): boolean {
   const auth = request.headers.get("Authorization");
   if (!auth) return false;
@@ -48,17 +47,12 @@ function verifyDeployKey(request: Request): boolean {
   return timingSafeEqual(auth, `Convex ${expected}`);
 }
 
-/**
- * Computes the scoped HMAC a launched sandbox must present for a heartbeat.
- * The message is domain-separated from every other callback credential.
- */
 async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
   return hmacSha256Hex(secret, message);
 }
 
-/** Reads a required form field from an x-www-form-urlencoded request body. */
 function requiredFormValue(
   params: URLSearchParams,
   key: string,
@@ -96,8 +90,6 @@ http.route({
       return new Response("Invalid heartbeat signature", { status: 401 });
     }
 
-    // Every agent turn holds a durable lease. A heartbeat without one comes
-    // from a process no turn owns, so it is told to stop.
     const turnId = params.get("turnId");
     if (turnId === null) {
       return Response.json({
@@ -109,8 +101,6 @@ http.route({
     if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
       return new Response("Invalid turn lease generation", { status: 400 });
     }
-    // VM memory sample (the daemon sends one at most every 30s). Logged only,
-    // so Axiom shows memory pressure before a VM dies with no stop reason.
     const memAvailableMb = params.get("memAvailableMb");
     if (memAvailableMb !== null) {
       console.log(
@@ -130,16 +120,6 @@ http.route({
   }),
 });
 
-/**
- * Activity heartbeat from the in-sandbox preview proxy (idle pause). The proxy
- * posts at most once a minute while a preview page is on screen (its injected
- * visibility ping) or a non-browser client calls the app, so a saved preview
- * link or an API client keeps its sandbox awake, as Amp's portal does. A
- * hidden tab does not. The HMAC is scoped per sandbox
- * (`previewActivityHmacMessage`). `subject` is the Clerk user from the proxy's
- * session cookie; it is outside the HMAC, so treat it as a diagnostic label
- * for "who kept this awake", never as authorization.
- */
 http.route({
   path: "/api/preview/activity",
   method: "POST",
@@ -170,11 +150,6 @@ http.route({
   }),
 });
 
-/**
- * Records the built-in slash-command catalog a sandbox's harness CLI ships
- * with. A short-lived, single-use token is issued for one sandbox launch, so a
- * value exposed to repo code cannot become a permanent fleet-wide write key.
- */
 http.route({
   path: "/api/harness-skills/report",
   method: "POST",
@@ -223,7 +198,6 @@ http.route({
   }),
 });
 
-/** Parses and validates the request body for the env-vars endpoint. */
 const envVarsBodySchema = z.object({
   repoId: z.string().min(1),
   userId: z.string().min(1),
@@ -268,7 +242,6 @@ http.route({
   }),
 });
 
-/** Extracts the bearer secret from an Authorization header, or null if absent/malformed. */
 function extractBearerSecret(request: Request): string | null {
   const auth = request.headers.get("Authorization");
   if (!auth) return null;
@@ -278,16 +251,8 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
-/**
- * Body the in-sandbox credential helper posts. `path` is git's `path=`
- * component (e.g. `owner/name.git`), present once `credential.useHttpPath` is
- * on; absent for an old baked helper script, which still gets a primary token.
- * Any other shape (or unparsable JSON) degrades to `{}` rather than erroring —
- * a malformed body must not break the credential handshake.
- */
 const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
 
-/** Reads the requested repository path from the helper's body, if any. */
 function parseGitCredentialsPath(body: unknown): string | undefined {
   const parsed = gitCredentialsBodySchema.safeParse(body);
   return parsed.success ? parsed.data.path : undefined;
@@ -301,7 +266,6 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
-    // Old baked helper scripts send an empty body; treat unparseable as `{}`.
     const body: unknown = await request.json().catch(() => ({}));
     const resolved = await ctx.runQuery(
       internal.sandboxGitCredentials.resolveCredentialRequest,
@@ -312,7 +276,6 @@ http.route({
       return new Response("Forbidden", { status: 403 });
     }
     if (resolved.kind === "read_only") {
-      // A project coordinator's sandbox: it reads, it never pushes.
       const readOnly = await ctx.runAction(
         internal.githubAuth.mintReadOnlyRepoToken,
         {
@@ -338,8 +301,6 @@ http.route({
       return Response.json({ username: "x-access-token", ...sibling });
     }
     if (resolved.kind === "linked") {
-      // A multi-repo session's linked repo: a full token, but for that repo's
-      // own installation rather than the primary's.
       console.log(
         `[git-credentials][linked-repo] sandbox=${resolved.sandboxId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
@@ -349,7 +310,6 @@ http.route({
       internal.githubAuth.mintInstallationToken,
       { installationId: resolved.installationId },
     );
-    // `expiresAt` (unix seconds) bounds the helper's cache; see gitCredentials.ts.
     return Response.json({ username: "x-access-token", ...credential });
   }),
 });
@@ -457,11 +417,6 @@ http.route({
   }),
 });
 
-// Boundary schema for the GitHub pull_request webhook. Only `action` and
-// `pull_request.html_url` are required — a payload missing them is ignored with
-// a 200 (matching the old early-returns). Every other field is lenient:
-// `.nullable().catch(null)` turns a missing/mistyped value into null, exactly
-// like the previous getString/getBoolean/getNumber helpers.
 const nullableString = z.string().nullable().catch(null);
 const loginObject = z.object({ login: nullableString }).nullable().catch(null);
 
@@ -478,7 +433,6 @@ const prWebhookSchema = z.object({
       .object({
         ref: nullableString,
         sha: nullableString,
-        // Fork PRs carry the fork here; their branch is not in the base repo.
         repo: z.object({ full_name: nullableString }).nullable().catch(null),
       })
       .nullable()
@@ -514,8 +468,6 @@ const pushWebhookSchema = z.object({
 const SKILLS_ROOT_PREFIXES = [".agents/skills", ".claude/skills"];
 const EVA_CONFIG_ROOT_PREFIXES = [".eva"];
 
-/** True when a commit touches one of the given roots, or when GitHub sent no
- * path lists (force-push / truncated payloads) so we still resync. */
 function pushTouchesRoots(
   commits: Array<{
     added: string[];
@@ -545,14 +497,8 @@ function pushTouchesRoots(
   return !sawAnyPath;
 }
 
-/** Larger bodies are refused before parsing; a real alert is a few KB. */
 const MAX_ALERT_BODY_BYTES = 256 * 1024;
 
-/**
- * Axiom custom webhook notifier for an "Axiom alerts to tasks" install. The
- * path names the automation; `Authorization: Bearer <secret>` proves the
- * caller. Resolved monitors and repeat alerts answer 200 and do nothing.
- */
 http.route({
   pathPrefix: AXIOM_ALERT_PATH_PREFIX,
   method: "POST",
@@ -573,8 +519,6 @@ http.route({
         status: 400,
       });
     }
-    // Check the secret even for a resolve, so the URL answers the same way
-    // to every caller without one.
     const result = await ctx.runMutation(
       internal._automationEvents.dispatch.receiveAlert,
       {
@@ -609,14 +553,10 @@ http.route({
       });
     }
 
-    // `verifyGithubStyleSignature` checks the `sha256=<hex>` header in constant
-    // time and rejects a null header, so a missing signature fails here too.
     if (!(await verifyGithubStyleSignature(secret, body, signature))) {
       return new Response("Invalid signature", { status: 401 });
     }
 
-    // Event-triggered automations (CI auto-fix, review responder, issue to
-    // task, user automations). Independent of the state sync below.
     const repoEvents = parseRepoEvents(event ?? "", body);
     const ciPassed = parseCiPassed(event ?? "", body);
     for (const repoEvent of repoEvents) {
@@ -633,8 +573,6 @@ http.route({
         { passed },
       );
     }
-    // The agent's PR watch: trusted feedback, plus any CI that finished,
-    // whatever its outcome (the last check to finish may end cancelled).
     const ciCompleted = parseCiCompleted(event ?? "", body);
     const watchUrls = prWatchUrls(repoEvents, ciCompleted);
     if (watchUrls.length > 0) {
@@ -668,9 +606,6 @@ http.route({
         return new Response("OK", { status: 200 });
       }
 
-      // One handler for every PR event: it updates (or, for a PR opened on an
-      // Eva branch outside Eva's own flow, creates) the `pullRequests` row,
-      // then lets the session, quick task or project that owns it react.
       const repository = parsed.data.repository;
       const headRepo = pullRequest.head?.repo?.full_name ?? null;
       const baseRepo = repository?.full_name ?? null;
@@ -696,9 +631,6 @@ http.route({
         },
       );
 
-      // Testing Arena: browser runs on every new commit of a ready PR, for
-      // docs that opted in. Fork PRs are skipped: the sandbox clones the base
-      // repo, which does not have the fork's branch.
       const ARENA_ACTIONS = new Set([
         "opened",
         "reopened",
@@ -736,7 +668,6 @@ http.route({
       const parsed = pushWebhookSchema.safeParse(JSON.parse(body));
       if (parsed.success && parsed.data.ref.startsWith("refs/heads/")) {
         const branch = parsed.data.ref.slice("refs/heads/".length);
-        // A push to a watched PR's base branch may cause a merge conflict.
         await ctx.scheduler.runAfter(
           0,
           internal._pullRequests.watch.noteBasePush,
@@ -770,10 +701,6 @@ http.route({
   }),
 });
 
-/**
- * Where to send the browser back to after the GitHub authorize hop. Known
- * installations resume setup; anything else lands on the codebase list.
- */
 function githubAuthReturnUrl(installationId: number | null): string {
   const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
@@ -781,7 +708,6 @@ function githubAuthReturnUrl(installationId: number | null): string {
     : `${webAppUrl}/setup/${installationId}`;
 }
 
-/** Reads a positive integer query parameter, or null when absent/malformed. */
 function integerParam(params: URLSearchParams, key: string): number | null {
   const raw = params.get(key);
   if (raw === null) return null;
@@ -789,9 +715,6 @@ function integerParam(params: URLSearchParams, key: string): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-// The GitHub App's Setup URL. GitHub appends `?installation_id=` to whatever is
-// configured, which a path-parameter route in the SPA cannot read, so the hop
-// happens here and hands the id to /setup/:id.
 http.route({
   path: "/api/github/setup",
   method: "GET",
@@ -814,9 +737,6 @@ http.route({
       return new Response("Missing state", { status: 400 });
     }
 
-    // The nonce is the only thing tying this request to an Eva account, and it
-    // is single-use: redeeming it here means a replayed callback cannot attach a
-    // second token to somebody else's account.
     const claim = await ctx.runMutation(
       internal._github.userTokens.consumeOauthState,
       { nonce: state },
@@ -827,8 +747,6 @@ http.route({
       });
     }
 
-    // GitHub sends `error` instead of `code` when the user declines. Nothing to
-    // store, so return them to the page that asked and let it re-prompt.
     const code = params.get("code");
     if (!code) {
       return Response.redirect(githubAuthReturnUrl(claim.installationId), 302);
@@ -840,8 +758,6 @@ http.route({
         code,
       });
     } catch {
-      // The redirect target re-checks authorization, so a failed exchange shows
-      // the connect prompt again rather than a raw error page.
       return Response.redirect(githubAuthReturnUrl(claim.installationId), 302);
     }
 
@@ -904,10 +820,6 @@ http.route({
   }),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MCP (Clerk OAuth). Well-known routes, /mcp and /health.
-// ─────────────────────────────────────────────────────────────────────────────
-
 registerMcpRoutes(http, {
   authorizationServerMetadata: oauthMetadata,
   protectedResourceMetadata,
@@ -921,7 +833,6 @@ const changelogLinkFields = {
   sig: z.string().min(1),
 };
 
-/** Either 👍 / 👎 on one item, or a rating of the whole email (no item). */
 const changelogFeedbackQuerySchema = z.union([
   z.object({
     ...changelogLinkFields,
@@ -934,13 +845,6 @@ const changelogFeedbackQuerySchema = z.union([
   }),
 ]);
 
-/**
- * One-click feedback from the weekly changelog email: 👍 / 👎 on the top pick,
- * or a rating of the whole email. The signature covers the run and the
- * recipient, so a link only records feedback as the user it was mailed to.
- * An email link has to be a GET; a link scanner that prefetches it only
- * overwrites that user's row, and the user's own later click wins.
- */
 http.route({
   path: "/api/changelog/vote",
   method: "GET",

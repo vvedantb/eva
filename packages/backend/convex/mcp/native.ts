@@ -13,7 +13,6 @@ import {
   type McpPrincipal,
 } from "./authenticate";
 
-// Clerk is the OAuth authorization server. These routes only point clients at it.
 export const oauthMetadata = httpAction(
   createAuthorizationServerMetadataProxy({ issuer: clerkIssuer }),
 );
@@ -35,7 +34,6 @@ const handleMcp = createMcpHttpHandler<McpPrincipal, ActionCtx>({
     }),
 });
 
-// Refused while maintenance mode is on, like the `auth*` wrappers.
 export const mcpHandler = httpAction(async (ctx, request) =>
   isMaintenanceMode()
     ? Response.json(

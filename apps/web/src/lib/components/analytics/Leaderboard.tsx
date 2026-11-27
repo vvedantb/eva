@@ -17,8 +17,6 @@ interface LeaderboardProps {
   entries: LeaderboardEntry[];
 }
 
-// Combined PR + task activity drives the relative score bar — real data,
-// not an invented score. Each bar is sized against the top contributor.
 function activityOf(entry: LeaderboardEntry): number {
   return entry.prsCreated + entry.tasksCompleted;
 }

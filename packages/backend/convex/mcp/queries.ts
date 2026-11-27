@@ -113,11 +113,6 @@ export const listUserTeams = internalQuery({
   },
 });
 
-/**
- * A chat an MCP caller named, before any access check. The three surfaces are
- * separate tables, so the ref search yields a discriminated hit rather than a
- * common document type.
- */
 type ChatTargetHit =
   | { kind: "session"; doc: Doc<"sessions"> }
   | { kind: "task"; doc: Doc<"agentTasks"> }
@@ -129,7 +124,6 @@ const chatTargetKindValidator = v.union(
   v.literal("project"),
 );
 
-/** Kinds to search, in the order a bare reference most likely means. */
 const KIND_SEARCH_ORDER = ["session", "task", "project"] as const;
 
 function kindsToSearch(
@@ -139,11 +133,6 @@ function kindsToSearch(
   return KIND_SEARCH_ORDER.filter((candidate) => candidate === kind);
 }
 
-/**
- * Loads a chat target by Convex id. A Convex id encodes its table, so
- * `normalizeId` rejects an id from another table outright — trying each kind
- * in turn is a lookup, not a guess.
- */
 async function findById(
   ctx: QueryCtx,
   id: string,
@@ -167,11 +156,6 @@ async function findById(
   return null;
 }
 
-/**
- * Finds the chat a pull request is linked to, through its `pullRequests` row,
- * so any PR an owner holds resolves — a linked repo's, a side-branch PR the
- * agent opened, or an earlier PR of a task or project.
- */
 async function findByPrUrl(
   ctx: QueryCtx,
   prUrl: string,
@@ -192,11 +176,6 @@ async function findByPrUrl(
   return doc ? { kind: "project", doc } : null;
 }
 
-/**
- * Finds a chat by the number in its Eva url. A numId is unique only inside one
- * repo AND one kind (session 42 and task 42 both exist), so both must be
- * known: an unresolvable repo is a miss rather than a repo-wide scan.
- */
 async function findByNumId(
   ctx: QueryCtx,
   numId: number,
@@ -236,11 +215,6 @@ async function findByNumId(
   return doc ? { kind: "project", doc } : null;
 }
 
-/**
- * Finds the chat an MCP caller named, before any access check. One ref wins at
- * a time, in the order the caller is most likely to have been precise:
- * explicit id, then PR link, then the per-repo number from the url.
- */
 async function findChatTargetByRef(
   ctx: QueryCtx,
   ref: {
@@ -261,7 +235,6 @@ async function findChatTargetByRef(
   return null;
 }
 
-/** The repo a hit belongs to. A task inherits its project's when it has none. */
 async function targetRepoId(
   ctx: QueryCtx,
   hit: ChatTargetHit,
@@ -288,7 +261,6 @@ async function targetRepoId(
 export const resolveChatTargetForUser = internalQuery({
   args: {
     userId: v.string(),
-    /** Restricts the search to one surface. Required alongside `numId`. */
     kind: v.optional(chatTargetKindValidator),
     id: v.optional(v.string()),
     numId: v.optional(v.number()),
@@ -309,15 +281,10 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: v.string(),
       repoName: v.string(),
       repoRootDirectory: v.optional(v.string()),
-      /** Preview VM state, `"closed"` when the entity has never started one. */
       sandboxStatus: v.string(),
-      /** The VM itself, absent until the entity has had one. */
       sandboxId: v.optional(v.string()),
-      /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
-      /** A task or project on its session: the session that holds its sandbox. */
       sandboxSessionId: v.optional(v.id("sessions")),
-      /** A project's own id, or a project task's project. */
       projectId: v.optional(v.id("projects")),
     }),
   ),
@@ -326,7 +293,6 @@ export const resolveChatTargetForUser = internalQuery({
     if (!userId) return null;
 
     const hit = await findChatTargetByRef(ctx, args);
-    // An archived task or project resolves, like an archived session.
     if (!hit || (hit.kind === "session" && isEntityDeleted(hit.doc))) {
       return null;
     }
@@ -339,8 +305,6 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
-    // A task's or project's sandbox lives on its own session; none before
-    // that session exists.
     const ownerSession =
       hit.kind === "task"
         ? await findWorkSession(ctx.db, hit.doc)
@@ -356,7 +320,6 @@ export const resolveChatTargetForUser = internalQuery({
       targetId: doc._id,
       numId: doc.numId,
       title: doc.title,
-      // A project's status is derived from its tasks (`projectStatus`).
       status:
         hit.kind === "project"
           ? await derivedProjectStage(ctx.db, hit.doc)
@@ -367,8 +330,6 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
-      // A session's own status IS its sandbox's; a task's or project's is its
-      // session's, the same rule lists use (`taskSandboxStatus`).
       sandboxStatus: sandboxRow?.status ?? "closed",
       sandboxId: sandboxRow?.sandboxId,
       devPort: sandboxRow?.devPort ?? repo.devPort,
@@ -383,24 +344,8 @@ export const resolveChatTargetForUser = internalQuery({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// list_entities
-//
-// One page across the three chat surfaces, so an MCP caller can see what
-// already exists (and skip creating a duplicate) without reading three tables
-// itself. Read-only: it never touches status or review state.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Hard ceiling on rows returned, whatever the caller asks for. */
 const MAX_ENTITY_PAGE = 50;
 
-/**
- * Documents the scan may read across every repo and kind. Session/task/project
- * rows carry terminal tails and descriptions, so an unbounded sweep over a
- * user's whole fleet would blow the query's read limit. The budget is split
- * evenly across (repo x kind) rather than spent front to back, so a caller with
- * six repos still hears about all six.
- */
 const ENTITY_SCAN_BUDGET = 300;
 
 const listedEntityValidator = v.object({
@@ -408,15 +353,11 @@ const listedEntityValidator = v.object({
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
-  /** Lifecycle: a session's sandbox status, a task's status, a project's derived stage. */
   status: v.string(),
-  /** Preview VM state, `"closed"` when the entity has never started one. */
   sandboxStatus: v.string(),
   isExecuting: v.boolean(),
   archived: v.optional(v.boolean()),
-  /** The primary PR (else the newest) — see `prUrls` for the rest. */
   prUrl: v.optional(v.string()),
-  /** Every PR linked to the entity, only when it holds more than one. */
   prUrls: v.optional(v.array(v.string())),
   branchName: v.optional(v.string()),
   updatedAt: v.number(),
@@ -424,17 +365,11 @@ const listedEntityValidator = v.object({
   repoOwner: v.string(),
   repoName: v.string(),
   repoRootDirectory: v.optional(v.string()),
-  /** Sessions only, and only when it has linked repos beside its primary. */
   linkedRepoCount: v.optional(v.number()),
 });
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-/**
- * Narrows the caller's free-text status onto one kind's own vocabulary, so the
- * per-status index can be used without an assertion. A status that belongs to
- * another kind simply matches nothing there, which is the honest answer.
- */
 function asSessionStatus(
   status: string,
 ): (typeof SANDBOX_STATUSES)[number] | undefined {
@@ -453,11 +388,6 @@ function asProjectStage(status: string): ProjectStage | undefined {
   return PROJECT_STAGES.find((candidate) => candidate === status);
 }
 
-/**
- * Rows to take per (repo, kind) so the whole budget is not spent on the first
- * repo. Returns at most `limit`, and never less than one, so every repo the
- * caller can reach contributes something.
- */
 function rowsPerScan(
   limit: number,
   repoCount: number,
@@ -467,7 +397,6 @@ function rowsPerScan(
   return Math.max(1, Math.min(limit, Math.floor(ENTITY_SCAN_BUDGET / scans)));
 }
 
-/** Most recent sessions in one repo, newest first, optionally one status only. */
 async function scanSessions(
   ctx: QueryCtx,
   repoId: Id<"githubRepos">,
@@ -487,7 +416,6 @@ async function scanSessions(
       .take(take);
     return filterActiveEntities(rows);
   }
-  // A task's session lists as its task, never as a session of its own.
   return ctx.db
     .query("sessions")
     .withIndex("by_repo_and_deleted", (q) =>
@@ -504,7 +432,6 @@ async function scanTasks(
   status: string | undefined,
   take: number,
 ): Promise<Doc<"agentTasks">[]> {
-  // A task of an archived project is archived with it.
   const archivedProjects = await archivedProjectIds(ctx.db, repoId);
   if (status !== undefined) {
     const narrowed = asTaskStatus(status);
@@ -521,8 +448,6 @@ async function scanTasks(
       .take(take);
     return filterLiveTasks(rows, archivedProjects);
   }
-  // Tasks are the one surface with an updatedAt index, which is also the order
-  // the merged page is sorted by.
   const rows = await ctx.db
     .query("agentTasks")
     .withIndex("by_repo_and_updatedAt", (q) => q.eq("repoId", repoId))
@@ -538,7 +463,6 @@ async function scanProjects(
   take: number,
 ): Promise<Doc<"projects">[]> {
   if (status !== undefined) {
-    // The stage is derived, so it filters a repo's live projects (few).
     const narrowed = asProjectStage(status);
     if (narrowed === undefined) return [];
     const rows = await ctx.db
@@ -596,7 +520,6 @@ function repoColumns(repo: RepoRow) {
 export const listEntitiesForUser = internalQuery({
   args: {
     userId: v.string(),
-    /** Repos to scan. Already narrowed by the tool to the caller's own repos. */
     repoIds: v.array(v.string()),
     kind: v.optional(chatTargetKindValidator),
     status: v.optional(v.string()),
@@ -621,11 +544,8 @@ export const listEntitiesForUser = internalQuery({
     const take = rowsPerScan(limit, repoIds.length, kinds.length);
     const rows: ListedEntity[] = [];
 
-    // Repos and kinds scan side by side; `rows` is sorted below, so the push
-    // order does not matter.
     await Promise.all(
       repoIds.map(async (repoId) => {
-        // Access first: a denied repo reads nothing else.
         if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
         const [repo, openChatEntityIds, taskSandboxStatus] = await Promise.all([
           ctx.db.get(repoId),
@@ -645,8 +565,6 @@ export const listEntitiesForUser = internalQuery({
                   id: doc._id,
                   numId: doc.numId,
                   title: doc.title,
-                  // A session has one status and it is its sandbox's, so both
-                  // columns read the same field rather than inventing a second.
                   status: doc.status,
                   sandboxStatus: doc.status,
                   isExecuting: sessionIsExecuting(doc, openChatEntityIds),
@@ -710,7 +628,6 @@ export const listEntitiesForUser = internalQuery({
     rows.sort((a, b) => b.updatedAt - a.updatedAt);
     const page = rows.slice(0, limit);
 
-    // Only the page that is actually returned pays for the PR lookups.
     const entities = await Promise.all(
       page.map(async (row) => {
         const owner = chatTargetOwner(ctx, row.kind, row.id);
@@ -729,9 +646,6 @@ export const listEntitiesForUser = internalQuery({
       }),
     );
 
-    // `take < limit` means the budget forced a partial scan of at least one
-    // repo, so "more exists" is true even when fewer than `limit` rows came
-    // back. Saying so beats a short page that reads as the whole picture.
     return { entities, truncated: rows.length > limit || take < limit };
   },
 });
@@ -768,8 +682,6 @@ export const entityIsExecuting = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { kind, id }) => {
     if (kind === "session") {
-      // One chat of a session: only its own turn counts, so parallel chats
-      // run side by side (a busy sibling does not queue this one).
       const chatId = ctx.db.normalizeId("sessionChats", id);
       if (chatId) return await hasOpenChatTurn(ctx.db, chatId);
       const sessionId = ctx.db.normalizeId("sessions", id);
@@ -801,7 +713,6 @@ export const entityIsExecuting = internalQuery({
   },
 });
 
-/** Env var key that holds a repo's Postgres read-replica connection string. */
 const POSTGRES_REPLICA_ENV_KEY = "POSTGRES_READ_REPLICA_URL";
 
 /**
@@ -816,8 +727,6 @@ export const reposWithPostgresReplica = internalQuery({
   args: { repoIds: v.array(v.string()) },
   returns: v.array(v.string()),
   handler: async (ctx, { repoIds }): Promise<string[]> => {
-    // One promise per team, so a shared team is still read once while repos
-    // are checked side by side.
     const teamHasKey = new Map<string, Promise<boolean>>();
     const teamHasReplica = (teamId: Id<"teams">): Promise<boolean> => {
       const cached = teamHasKey.get(teamId);
@@ -837,8 +746,6 @@ export const reposWithPostgresReplica = internalQuery({
 
     const hits = await Promise.all(
       repoIds.map(async (rawId) => {
-        // normalizeId turns the caller's string back into a typed Id (or null
-        // for anything malformed) without an `as` cast.
         const repoId = ctx.db.normalizeId("githubRepos", rawId);
         if (!repoId) return false;
         const [repoVars, repo] = await Promise.all([
@@ -859,7 +766,6 @@ export const reposWithPostgresReplica = internalQuery({
   },
 });
 
-/** The pull-request owner a listed row names, or null for a malformed id. */
 function chatTargetOwner(
   ctx: QueryCtx,
   kind: "session" | "task" | "project",
@@ -877,7 +783,6 @@ function chatTargetOwner(
   return projectId ? { kind, projectId } : null;
 }
 
-/** A task's own PR summary (every task owns its PR). */
 async function taskPrUrlById(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
@@ -892,11 +797,8 @@ export const mcpPullRequestValidator = v.object({
   number: v.number(),
   state: prStateValidator,
   branch: v.optional(v.string()),
-  /** The chat's own PR — the one Eva opened for its branch. */
   primary: v.boolean(),
-  /** "eva" when Eva's flow opened it; "agent" for one opened on a side branch. */
   openedBy: prOriginValidator,
-  /** The agent is watching it (`watch_pull_request`). */
   watched: v.boolean(),
 });
 

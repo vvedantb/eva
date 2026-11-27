@@ -1,13 +1,3 @@
-/**
- * Pure mapping between Jev's answer shapes and a finding's triage verdict.
- *
- * Kept free of Convex imports so the node action stays a thin caller and every
- * edge — a score off the end of the scale, a choice naming a task that has
- * since gone — is testable without a deployment. The task id is a type
- * parameter for the same reason: nothing here inspects it, so a test can pass
- * a plain string where the call site passes an `Id<"agentTasks">`.
- */
-
 import { FINDING_SEVERITIES, type FindingSeverity } from "../_validators/enums";
 
 /**

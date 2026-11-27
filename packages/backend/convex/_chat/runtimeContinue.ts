@@ -43,7 +43,6 @@ export async function queueRuntimeContinue(
     .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
     .order("asc")
     .first();
-  // A second turn-end drain (background agents settling) must not queue it twice.
   if (front?.content === TURN_CONTINUE_PROMPT) return;
 
   const now = Date.now();

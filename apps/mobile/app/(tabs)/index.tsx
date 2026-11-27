@@ -66,11 +66,6 @@ export default function InboxScreen() {
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
-  // Android back leaves select mode first, as it closes a sheet first. An
-  // effect because the hardware back button is a subscription outside React.
-  // It comes before the values below: the React Compiler memoises nothing
-  // across a hook call, and the list and its rows are memoised only when no
-  // hook sits between the queries and the JSX.
   useEffect(() => {
     if (!selecting) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -80,7 +75,6 @@ export default function InboxScreen() {
     });
     return () => subscription.remove();
   }, [selecting]);
-  // The web Unread filter: the inbox list, unread rows only.
   const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
   const repoById = new Map<Id<"githubRepos">, NotificationRepo>(
     (repos ?? []).map((repo) => [repo._id, { label: repo.label ?? repo.name, logoUrl: repo.logoUrl }]),
@@ -96,7 +90,6 @@ export default function InboxScreen() {
     setSelecting(false);
     setSelected(new Set());
   };
-  /** Select mode from a long press: that row ticked, and a light tap to say the mode changed. */
   const startSelect = ({ _id: id }: Doc<"notifications">) => {
     closeSwipeRows();
     impactHaptic("light");
@@ -113,8 +106,6 @@ export default function InboxScreen() {
     void run([...selected]);
     exitSelect();
   };
-  // The web `useInboxActions` writes and toasts. Archive offers Undo at once,
-  // as the rows have already left the list.
   const unarchive = (ids: Id<"notifications">[]) => {
     const done = unarchiveMany({ ids });
     done.catch(() => toast.error("Couldn't unarchive", { id: "inbox-unarchive" }));
@@ -139,17 +130,13 @@ export default function InboxScreen() {
     notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
-    // Its chat, else the phone screen its link names (a task, project, PR, doc), else the web.
     openAppLink({ chatTarget: notification.chatTarget, href: notification.href, repoId: notification.repoId });
   };
 
   return (
     <TabScreen>
-      {/* The bulk bar stands in for the tab bar (`FloatingTabBar` hides on `display: "none"`). */}
       <Tabs.Screen options={{ tabBarStyle: selecting ? { display: "none" } : undefined }} />
       {selecting ? (
-        // Android's contextual action bar: the count in place of the title, a
-        // close X before it, and no page actions (the bulk bar holds them).
         <PageHeader
           title={`${selected.size} selected`}
           leading={
@@ -184,7 +171,6 @@ export default function InboxScreen() {
       )}
       {selecting ? null : (
         <View className="px-4 pb-2">
-          {/* The web Needs you / Updates switch. */}
           <SegmentedTabs
             value={view}
             options={[
@@ -198,7 +184,6 @@ export default function InboxScreen() {
       {view === "needs" ? (
         <NeedsYouList rows={needsYou} />
       ) : notifications === undefined ? (
-        // Rows shaped as `NotificationRow`: the 28 mark, subject over event line, the time.
         <SkeletonList
           label="Loading notifications"
           count={8}
@@ -214,7 +199,6 @@ export default function InboxScreen() {
         <SectionList
           sections={groups.map((section) => ({ label: section.label, data: section.items }))}
           keyExtractor={(notification) => notification._id}
-          // Each group header sticks while its rows scroll, as the web `sticky top-0` header.
           stickySectionHeadersEnabled
           {...LIST_WINDOW}
           renderSectionHeader={({ section }) => (
@@ -226,14 +210,10 @@ export default function InboxScreen() {
                 borderBottomColor: EVA_THEME[scheme].border,
               }}
             >
-              {/* The web label is an inline `text-xs` span in a 24 line box. */}
               <SectionLabel style={{ letterSpacing: XS_TRACKING, lineHeight: 24 }}>{section.label}</SectionLabel>
             </View>
           )}
-          // The `DividedList` hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
-          // The same handlers for every row (each row closes over its own notification), so a
-          // row whose notification did not change keeps its drawing when the list draws more.
           renderItem={({ item: notification }) => (
             <NotificationRow
               notification={notification}
@@ -246,9 +226,7 @@ export default function InboxScreen() {
               selection={selecting ? { checked: selected.has(notification._id), onToggle: toggle } : undefined}
             />
           )}
-          // A scroll closes a row swiped open.
           onScrollBeginDrag={closeSwipeRows}
-          // The bulk bar takes the tab bar's slot and height, so one reserve clears either.
           contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
@@ -261,9 +239,6 @@ export default function InboxScreen() {
         onSelectAll={() => setSelected(new Set((notifications ?? []).map((notification) => notification._id)))}
         onClearSelection={() => setSelected(new Set())}
         placement="tabBar"
-        // The web `InboxBulkBar` actions and names; Archive is reversible, so not destructive.
-        // The web bar is icon-only at phone width, so the labels under the icons are
-        // shortened to fit five controls in 390: "Mark unread" would not.
         primaryActions={[
           {
             key: "read",

@@ -33,7 +33,6 @@ export default function DocCommentsScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ docId: string; repo?: string }>();
   const [filter, setFilter] = useState<DocCommentFilter>("open");
-  // The repo and the doc resolve through the lists that hold them, so their ids keep their table types.
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const docs = useQuery(api.docs.list, repo ? { repoId: repo._id } : "skip");
@@ -93,7 +92,6 @@ export default function DocCommentsScreen() {
   );
 }
 
-/** One thread: the quoted text, "For Eva" while it waits on the agent, the comments, then its actions. */
 function Thread({ root, replies, users }: { root: DocComment; replies: DocComment[]; users: User[] | undefined }) {
   const theme = EVA_THEME[useScheme()];
   const setResolved = useMutation(api.docComments.setResolved);
@@ -178,7 +176,6 @@ function Thread({ root, replies, users }: { root: DocComment; replies: DocCommen
   );
 }
 
-/** One comment: the author's initials and name, when, and the text (italic once deleted). */
 function CommentItem({ comment, users }: { comment: DocComment; users: User[] | undefined }) {
   const theme = EVA_THEME[useScheme()];
   const author = comment.authorId ? users?.find((user) => user._id === comment.authorId) : undefined;

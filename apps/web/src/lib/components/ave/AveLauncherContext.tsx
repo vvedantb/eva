@@ -13,9 +13,7 @@ import { createContext, useContext } from "react";
  */
 export interface AveLauncherContextValue {
   isOpen: boolean;
-  /** On `/ave` the page *is* the chat, so every summon affordance goes away. */
   isHidden: boolean;
-  /** Open when closed or minimized, minimize when open. */
   toggle: () => void;
 }
 

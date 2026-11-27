@@ -1,9 +1,3 @@
-/**
- * Pure HTML builders for transactional emails. No Convex or Node dependencies,
- * so this module can be imported from both "use node" actions and elsewhere.
- * Email clients ignore <style>/external CSS, so every style is inlined.
- */
-
 import { escapeHtml } from "@eva/shared/escapeHtml";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
 import {
@@ -32,15 +26,7 @@ export interface DigestEmailOptions {
   /** Base URL of the web app, e.g. https://app.example.com (no trailing slash needed). */
   appUrl: string;
   notifications: DigestNotification[];
-  /**
-   * Overrides the default "You have N unread notifications" heading. Used by the
-   * instant single-notification email to lead with the activity itself.
-   */
   heading?: string;
-  /**
-   * Optional muted line under the heading clarifying the scope, e.g. the daily
-   * digest's "From the past 24 hours". Omitted by the instant email.
-   */
   subtext?: string;
 }
 
@@ -48,20 +34,15 @@ const BRAND = "#4f46e5";
 const TEXT = "#111827";
 const MUTED = "#6b7280";
 const SURFACE = "#f3f4f6";
-/** Light tint of BRAND for the changelog's top-pick card. */
 const BRAND_TINT = "#eef2ff";
 
-// Inter first, with a system fallback stack for clients that ignore web fonts
-// (Gmail, Outlook desktop). Apple Mail / iOS Mail load Inter via the @import.
 const FONT_STACK =
   "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-/** Removes trailing slashes so a base URL can have a path appended cleanly. */
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-/** Returns the "Hi Name," greeting line, escaping the name when present. */
 function renderGreeting(recipientName?: string): string {
   return recipientName ? `Hi ${escapeHtml(recipientName)},` : "Hi,";
 }
@@ -81,24 +62,17 @@ const MONTHS = [
   "Dec",
 ];
 
-/** Formats a timestamp as "DD Mon YYYY" in UTC for a stable, locale-independent output. */
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-/**
- * Joins the app base URL with a notification path, tolerating slashes on
- * either side. A path that is not app-internal falls back to the app root, so
- * a stored href can never point a mailed link at another site.
- */
 function buildLink(appUrl: string, href: string): string {
   const base = stripTrailingSlash(appUrl);
   const path = href.startsWith("/") ? href : `/${href}`;
   return isInternalAppHref(path) ? `${base}${path}` : base;
 }
 
-/** A filled brand-colour call-to-action link. */
 function renderButton(href: string, label: string): string {
   return `<a href="${escapeHtml(href)}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">${escapeHtml(label)}</a>`;
 }
@@ -110,11 +84,8 @@ const DEFAULT_FOOTER_TEXT =
 export function wrapEmailLayout(opts: {
   title: string;
   bodyHtml: string;
-  /** Base URL of the web app, used to load the logo from its public assets. */
   appUrl: string;
-  /** Footer line explaining why the recipient got the email. Defaults to the digest wording. */
   footerText?: string;
-  /** Optional centred band between the body and the footer, e.g. a feedback prompt. */
   closingHtml?: string;
 }): string {
   const logoUrl = `${stripTrailingSlash(opts.appUrl)}/icon.png`;
@@ -161,7 +132,6 @@ export function wrapEmailLayout(opts: {
 </html>`;
 }
 
-/** Renders one notification row: title, optional message, date, and optional view link. */
 function renderNotification(n: DigestNotification, appUrl: string): string {
   const context = n.contextLabel
     ? `<p style="margin:4px 0 0;font-size:13px;line-height:18px;color:${MUTED};">${escapeHtml(n.contextLabel)}</p>`
@@ -218,10 +188,8 @@ export interface AutomationEmailOptions {
   recipientName?: string;
   /** Base URL of the web app, e.g. https://app.example.com (no trailing slash needed). */
   appUrl: string;
-  /** Run summary already converted from markdown to trusted HTML by the caller. */
   contentHtml: string;
   publishedAt: number;
-  /** Heading shown above the body, typically the automation title. */
   heading: string;
 }
 
@@ -252,7 +220,6 @@ export function buildAutomationEmailHtml(opts: AutomationEmailOptions): string {
   });
 }
 
-/** Pill colours per category: foreground text on a light tint of the same hue. */
 const CATEGORY_COLOURS: Record<ChangelogCategory, { fg: string; bg: string }> =
   {
     new: { fg: BRAND, bg: BRAND_TINT },
@@ -266,13 +233,11 @@ export interface ChangelogEmailOptions {
   appUrl: string;
   changelog: Changelog;
   publishedAt: number;
-  /** Signed one-click link that records this recipient's feedback. */
   feedbackUrl: (feedback: ChangelogFeedback) => string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** ISO 8601 week number of a UTC timestamp (weeks start Monday; week 1 holds 4 Jan). */
 function isoWeek(timestamp: number): number {
   const d = new Date(timestamp);
   const day = d.getUTCDay() || 7;
@@ -285,10 +250,6 @@ function isoWeek(timestamp: number): number {
   return Math.ceil(((thursday - yearStart) / DAY_MS + 1) / 7);
 }
 
-/**
- * "Week 42 · 12–18 Oct 2026": the 7 days before publication, which is the
- * window the changelog prompt covers. Month and year show only where they change.
- */
 function formatChangelogWeek(publishedAt: number): string {
   const start = new Date(publishedAt - 7 * DAY_MS);
   const end = new Date(publishedAt - DAY_MS);
@@ -302,20 +263,17 @@ function formatChangelogWeek(publishedAt: number): string {
   return `Week ${isoWeek(start.getTime())} · ${from}–${formatDate(end.getTime())}`;
 }
 
-/** A small rounded category label, e.g. a green "Fixed". */
 function renderCategoryPill(category: ChangelogCategory): string {
   const { fg, bg } = CATEGORY_COLOURS[category];
   return `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background-color:${bg};color:${fg};font-size:11px;line-height:16px;font-weight:600;white-space:nowrap;">${CHANGELOG_CATEGORIES[category].tag}</span>`;
 }
 
-/** Inline "Try it →" link into the app, or nothing when the item has no page. */
 function renderTryLink(item: ChangelogItem, appUrl: string): string {
   return item.path
     ? ` <a href="${escapeHtml(buildLink(appUrl, item.path))}" style="font-size:13px;font-weight:600;color:${BRAND};text-decoration:none;white-space:nowrap;">Try it &rarr;</a>`
     : "";
 }
 
-/** Count pills under the title: "New ×7  Faster ×2 …". */
 function renderCountPills(changelog: Changelog): string {
   return changelogSections(changelog)
     .map(
@@ -325,7 +283,6 @@ function renderCountPills(changelog: Changelog): string {
     .join(" ");
 }
 
-/** The week's top pick: tinted card, large title, button, and the only 👍 / 👎. */
 function renderTopPick(
   { index, item }: IndexedChangelogItem,
   opts: ChangelogEmailOptions,
@@ -348,13 +305,11 @@ function renderTopPick(
   </table>`;
 }
 
-/** "Also new": the remaining new features as a 2-column grid that stacks on phones. */
 function renderNewFeatureGrid(
   entries: IndexedChangelogItem[],
   appUrl: string,
 ): string {
   if (entries.length === 0) return "";
-  // Each column pads only its inner side, so the grid lines up with the body edges.
   const tile = ({ item }: IndexedChangelogItem, column: number) => `<td class="eva-stack" width="50%" style="padding:0 ${column === 0 ? 6 : 0}px 12px ${column === 1 ? 6 : 0}px;vertical-align:top;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${SURFACE};border-radius:12px;">
       <tr>
@@ -375,7 +330,6 @@ function renderNewFeatureGrid(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">${rows.join("")}</table>`;
 }
 
-/** "Faster, fixed and polished": every other change as a compact tagged row. */
 function renderOtherChanges(
   entries: { category: ChangelogCategory; entry: IndexedChangelogItem }[],
   appUrl: string,
@@ -394,7 +348,6 @@ function renderOtherChanges(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.join("")}</table>`;
 }
 
-/** One rating for the whole email: three one-click faces. */
 function renderEmailRating(opts: ChangelogEmailOptions): string {
   const faces = [
     { vote: "love", emoji: "&#128525;", label: "Loved it" },
@@ -478,7 +431,6 @@ export interface AgentEmailOptions {
   /** Base URL of the web app, e.g. https://app.example.com (no trailing slash needed). */
   appUrl: string;
   subject: string;
-  /** Body already converted from markdown to HTML by the caller. */
   contentHtml: string;
 }
 

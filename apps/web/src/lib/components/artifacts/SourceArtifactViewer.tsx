@@ -24,7 +24,6 @@ export function SourceArtifactViewer({
   artifact: { _id: Id<"artifacts">; name: string };
   onBack: () => void;
 }) {
-  // The list rows carry no signed URL; `get` resolves it.
   const withUrl = useQuery(api.artifacts.get, { id: artifact._id });
 
   return (

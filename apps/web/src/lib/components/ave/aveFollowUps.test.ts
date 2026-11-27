@@ -51,8 +51,6 @@ describe("splitAveFollowUps", () => {
   });
 
   it("anchors on the live reply, not an earlier empty finished one", () => {
-    // An earlier turn that finished with no text must not count as in flight,
-    // or the current ask would vanish from the transcript into the queue.
     const earlierAsk = row("user", "list my agents");
     const emptyFinished = row("assistant", "", { finishedAt: 1 });
     const currentAsk = row("user", "now stop them");
@@ -75,7 +73,6 @@ describe("splitAveFollowUps", () => {
   });
 
   it("holds nothing before the run opens its reply", () => {
-    // The run has not claimed yet, so it will read this message itself.
     const messages = [ask, followUp];
     expect(splitAveFollowUps(messages, true).followUps).toEqual([]);
   });

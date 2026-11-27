@@ -19,7 +19,6 @@ import type { Doc } from "./_generated/dataModel";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 
 const DEFAULT_LIMIT = 40;
-/** Bound per-repo reads so cross-repo search stays within Convex budgets. */
 const PER_REPO_TAKE = 200;
 
 const spotlightTypeValidator = v.union(
@@ -59,7 +58,6 @@ type SpotlightHit = {
   title: string;
   subtitle: string;
   href: string;
-  /** Lower is better; used only while building the response. */
   rank: number;
 };
 
@@ -120,11 +118,6 @@ function rankMatch(title: string, query: string): number {
   return 100;
 }
 
-/**
- * The PR number a GitHub pull request URL ends with, or null when the stored
- * value is not one (a stale link, or a URL shape we do not route to). Callers
- * skip the row rather than build a `/reviews/NaN` href.
- */
 function prNumberFromUrl(prUrl: string): number | null {
   const match = /\/pull\/(\d+)\/?$/.exec(prUrl);
   const digits = match?.[1];
@@ -138,11 +131,6 @@ function pushHit(hits: SpotlightHit[], hit: SpotlightHit, limit: number) {
   hits.push(hit);
 }
 
-/**
- * A session's or task's pull request as its own hit: `#123 Title`, opening the
- * in-app review rather than the entity it came from. Ranked below the entity
- * itself so typing a title still lands on the session or task first.
- */
 function pushPrHit(
   hits: SpotlightHit[],
   row: { title: string; prUrl?: string },
@@ -252,7 +240,6 @@ export const search = authQuery({
         );
       }
 
-      // Per-repo nav pages: only when typing (avoids N×pages noise when empty).
       if (query.length > 0 && repoPagesAdded < 8) {
         for (const page of REPO_PAGES) {
           if (simpleView && page.path === "/reviews") continue;
@@ -279,7 +266,6 @@ export const search = authQuery({
       }
     }
 
-    // Artifacts are team-scoped (not per-repo).
     if (query.length > 0) {
       const teamNameById = new Map(
         teams.map((team) => [String(team._id), team.name]),
@@ -328,7 +314,6 @@ export const search = authQuery({
               ctx.db
                 .query("sessions")
                 .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
-                // A task's session is reached through its task.
                 .filter(standaloneOnly)
                 .take(PER_REPO_TAKE),
               ctx.db
@@ -381,9 +366,6 @@ export const search = authQuery({
           }
 
           for (const task of filterLiveTasks(tasks, archived)) {
-            // A draft has no task page of its own yet, so it opens the repo's
-            // Drafts list. The card there deep-links through a search param,
-            // which a plain href string cannot carry.
             if (task.status === "draft") {
               const draftTitle = task.title || "Untitled draft";
               if (!matchesQuery(draftTitle, query)) continue;

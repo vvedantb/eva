@@ -15,14 +15,10 @@ export function ArtifactFrame({
   title: string;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  // The bridge replies through this frame's window as JSON text, which the shim
-  // parses (opaque origin, so any target origin).
   const target = useRef<ArtifactBridgeTarget>({
     postMessage: (json) => iframeRef.current?.contentWindow?.postMessage(json, "*"),
   });
   const { onMessage } = useArtifactBridge(artifactId, target);
-  // The frame is an external system: take its messages from the window, from
-  // this frame's own window only (an opaque origin, so match by source).
   useEffect(() => {
     const listener = (event: MessageEvent) => {
       if (event.source === iframeRef.current?.contentWindow) onMessage(event.data);
@@ -35,9 +31,6 @@ export function ArtifactFrame({
       ref={iframeRef}
       title={title}
       srcDoc={buildArtifactSrcDoc(html)}
-      // allow-scripts WITHOUT allow-same-origin: the artifact runs in an opaque
-      // origin and cannot reach eva's cookies, storage, or DOM. CDN scripts and
-      // postMessage still work.
       sandbox="allow-scripts"
       className="h-full w-full border-0 bg-white"
     />

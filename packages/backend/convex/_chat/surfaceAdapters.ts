@@ -40,48 +40,30 @@ export type ChatEntityId = Id<"sessionChats">;
  */
 export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   kind: "sessionChat";
-  /** Console-log prefix, e.g. "session", "task-chat", "project-chat". */
   logLabel: string;
-  /** Console-log key for the id, e.g. "sessionId". */
   idLogLabel: string;
-  /** This surface's id when `raw` names a row of its table, else null. */
   parseId: (db: DatabaseReader, raw: string) => TId | null;
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  /** The workflow running the entity's chat turn (a session chat reads its open turn). */
   activeWorkflowId: (
     entity: TEntity,
     ctx: QueryCtx,
   ) => string | undefined | Promise<string | undefined>;
-  /** Entity id used for the turn's own streamingActivity row. */
   streamingEntityId: (id: TId) => string;
-  /** Inverse of `streamingEntityId`: null when the row is not this surface's turn row. */
   parseStreamingEntityId: (
     db: DatabaseReader,
     streamingEntityId: string,
   ) => TId | null;
-  /** Any additional streamingActivity rows to clear alongside the turn's own. */
   extraStreamingClears: (id: TId) => string[];
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
   sandboxId: (entity: TEntity) => string | undefined;
   repoId: (entity: TEntity) => Id<"githubRepos"> | undefined;
-  /** Interrupts a still-alive agent process the way cancelChatExecution does. */
   interrupt: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
-  /** Clears the active workflow + synthetic turn, and closes the sandbox status field if `sandboxStopped`. */
   release: (
     ctx: MutationCtx,
     id: TId,
     opts: { sandboxStopped: boolean },
   ) => Promise<void>;
-  /**
-   * Entity side of an expired turn that never bound a workflow (a synthetic
-   * turn): frees the synthetic slot. The caller has already closed the
-   * placeholder and the streaming row, and schedules the queue drain after.
-   */
   finalizeOrphanTurn: (ctx: MutationCtx, id: TId) => Promise<void>;
-  /**
-   * Runs after the lease reconciler finalises a stalled (not sandbox-stopped)
-   * turn. Every chat schedules its one-shot empty-stall retry here.
-   */
   afterStallFinalize: (
     ctx: MutationCtx,
     id: TId,
@@ -110,7 +92,6 @@ export function stalledAlert(
   };
 }
 
-/** Alert text shared by every surface for the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
 const timeoutAlert: ChatAlert = {
   text: "Execution timed out.",
   detail: `${TURN_BACKSTOP_ERROR}.`,
@@ -145,7 +126,6 @@ const sessionChatAdapter: ChatSurfaceAdapter<
         entityId: String(chat._id),
       });
     } else if (session.sandboxId) {
-      // One-shot providers have no per-chat daemon pidfile to reap.
       await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
         sandboxId: session.sandboxId,
         repoId: session.repoId,
@@ -153,24 +133,12 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     }
   },
   release: async (ctx, id, opts) => {
-    // The dead turn's prompt is still sitting in the handoff slot whenever no
-    // daemon claimed it, and nothing else ever empties that slot: claim and
-    // saveResult are both paths this turn never reached. Left behind, the
-    // orphan blocks `ensurePendingTurn` for every later turn, so the chat
-    // opens turns no daemon can claim and stalls each one out forever.
-    // Cleared before the scheduled drain restages the next message.
     await ctx.db.patch(id, {
       syntheticTurnMessageId: undefined,
       pendingTurn: undefined,
       updatedAt: Date.now(),
     });
     if (opts.sandboxStopped) {
-      // Surfaces the stop in the UI — users cannot see the provider
-      // dashboard, and an "active" session with a dead VM just looks
-      // frozen. "closed" is also what stops page-open prewarm from
-      // silently resurrecting the VM (see prewarmDaemon's status guard).
-      // Only an `active` session was running that VM. A newer start
-      // (`starting`) or a stop already in flight owns the status instead.
       const chat = await ctx.db.get(id);
       const session = chat ? await ctx.db.get(chat.sessionId) : null;
       if (session?.status === "active") {
@@ -231,7 +199,6 @@ export type AgentTurnOwner =
   | { kind: "automation"; id: Id<"automationRuns"> }
   | { kind: "doc"; id: Id<"docs"> }
   | { kind: "evaluation"; id: Id<"evaluationReports"> }
-  /** Filed under the project's session. */
   | { kind: "interview"; id: Id<"sessions"> };
 
 /** One handler per kind of turn owner. */
@@ -240,7 +207,6 @@ export type TurnAdapterVisitor<R> = {
   agent: (owner: AgentTurnOwner) => R;
 };
 
-/** The one lane, the project interview: filed under the project's session. */
 function laneOwner(
   db: DatabaseReader,
   entityId: string,

@@ -66,10 +66,7 @@ export function ChangeStatusModal({
 
   const handleChangeStatus = async () => {
     if (!selectedStatus) return;
-    setIsLoading(true);
-    // Built out here: a ternary inside the `try` bails the React Compiler out
-    // of this whole file. See CLAUDE.md.
-    const successMessage = `Updated ${count} task${count === 1 ? "" : "s"}`;
+    setIsLoading(true);    const successMessage = `Updated ${count} task${count === 1 ? "" : "s"}`;
     try {
       await withMutationToast(
         Promise.all(

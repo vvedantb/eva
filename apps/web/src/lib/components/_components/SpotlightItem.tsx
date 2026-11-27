@@ -12,13 +12,10 @@ import type { ReactNode } from "react";
 import type { SpotlightIcon } from "@/lib/components/_components/spotlightGroups";
 
 interface SpotlightItemProps {
-  /** cmdk's own value. Filtering is off, so it only has to be unique. */
   value: string;
   icon: SpotlightIcon;
   title: string;
-  /** Right-hand hint: the app a hit belongs to, or an action's key cap. */
   trailing?: ReactNode;
-  /** Position in its group, for the entrance stagger. */
   index: number;
   onSelect: () => void;
 }

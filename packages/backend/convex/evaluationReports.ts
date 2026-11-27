@@ -18,7 +18,6 @@ const reportValidator = v.object({
   _id: v.id("evaluationReports"),
   _creationTime: v.number(),
   ...evaluationReportFields,
-  // Browser runs: storage ids resolved to URLs for the screenshot thumbnails.
   scenarioResults: v.optional(
     v.array(
       v.object({
@@ -170,7 +169,6 @@ export const autoStartTask = internalMutation({
         rollbackStatus: "todo",
       });
     } catch {
-      // startTaskRun recorded the failure on the run and rolled the task back.
     }
 
     return null;

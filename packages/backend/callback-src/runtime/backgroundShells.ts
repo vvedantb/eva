@@ -7,7 +7,6 @@ const PENDING_CAP = 200;
 const QUEUE_CAP = 20;
 const FLUSH_FAILURE_COOLDOWN_MS = 10_000;
 
-/** Claude Code wording for a Bash tool that was backgrounded (explicit or auto). */
 const BG_SHELL_ID_RE = /running in (?:the )?background.*?ID:?\s*([\w-]+)/i;
 
 type PendingBash = { command: string };
@@ -133,8 +132,6 @@ export async function flushBackgroundShellQueue(): Promise<void> {
   if (eventQueue.length === 0) return;
 
   flushInFlight = true;
-  // canFlushBackgroundShells already checked, but ENTITY_ID is module-level
-  // `string | undefined` so narrow again for JsonObject assignment.
   const sessionId = ENTITY_ID;
   if (typeof sessionId !== "string" || sessionId.length === 0) {
     flushInFlight = false;

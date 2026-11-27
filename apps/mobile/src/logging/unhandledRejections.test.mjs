@@ -1,4 +1,3 @@
-// The installer runs against a fake global: no network, no device.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { installUnhandledRejectionLogging, resetUnhandledRejectionLoggingForTests } from "./unhandledRejections.ts";

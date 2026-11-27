@@ -31,7 +31,6 @@ import {
   type ProjectTaskListRow,
 } from "./useProjectStatus";
 
-/** The selected task's rail tabs: the same icons as the sandbox tabs they show. */
 const TASK_TAB_DESCRIPTORS: {
   [Tab in ProjectTaskTab]: SandboxTabDescriptor & { value: Tab };
 } = {
@@ -58,28 +57,12 @@ export function projectTaskRailTabs(tabs: ReadonlyArray<ProjectTaskTab>) {
   return tabs.map((tab) => TASK_TAB_DESCRIPTORS[tab]);
 }
 
-/**
- * `?tasks=` for the router. The router writes a string that parses as JSON
- * (a lone `"903"`) in quotes, so one tab goes as a number.
- */
 function tasksSearchValue(list: ReadonlyArray<number>) {
   if (list.length === 0) return undefined;
   return list.length === 1 ? list[0] : list.join(",");
 }
 
-export interface ProjectTaskTabs {
-  /** The open task tabs' numIds, in tab order. */
-  numIds: number[];
-  /** The selected task tab's numId; null while Eva's tab is selected. */
-  selected: number | null;
-  /** Opens a task as a tab (or selects its tab), on Details. */
-  open: (numId: number) => void;
-  /** Selects a task tab on Details, or Eva's tab (null). */
-  select: (numId: number | null) => void;
-  /** ✕ on a task tab; the selected one hands over to the tab on its left. */
-  close: (numId: number) => void;
-  /** Shows one of the selected task's panel tabs. */
-  showTab: (tab: ProjectTaskTab) => void;
+export interface ProjectTaskTabs {  numIds: number[];  selected: number | null;  open: (numId: number) => void;  select: (numId: number | null) => void;  close: (numId: number) => void;  showTab: (tab: ProjectTaskTab) => void;
 }
 
 /**
@@ -95,11 +78,7 @@ export function useProjectTaskTabs({
   onShowPanel,
 }: {
   basePath: string;
-  projectPathSegment: string | null;
-  /** The panel tab in the URL now. */
-  sandboxTab: ProjectSandboxTab;
-  /** Expands a collapsed panel. */
-  onShowPanel: () => void;
+  projectPathSegment: string | null;  sandboxTab: ProjectSandboxTab;  onShowPanel: () => void;
 }): ProjectTaskTabs {
   const navigate = useNavigate();
   const [params, setParams] = useQueryStates({
@@ -107,9 +86,7 @@ export function useProjectTaskTabs({
     task: projectPanelTaskParser,
   });
   const selected = params.task;
-  const numIds = projectTaskTabList(params.tasks, selected);
-  // The coordinator tab Eva's tab returns to.
-  const [coordinatorTab, setCoordinatorTab] = useState<ProjectSandboxTab>(
+  const numIds = projectTaskTabList(params.tasks, selected);  const [coordinatorTab, setCoordinatorTab] = useState<ProjectSandboxTab>(
     PROJECT_DEFAULT_SANDBOX_TAB,
   );
 
@@ -173,9 +150,7 @@ export function useProjectTaskTabs({
 /** One task tab: its row and whether the task works now. */
 export interface ProjectTaskTabRow {
   numId: number;
-  row: ProjectTaskListRow;
-  /** The Tasks list's Working: the tab shows the running mark. */
-  running: boolean;
+  row: ProjectTaskListRow;  running: boolean;
 }
 
 /**
@@ -216,11 +191,7 @@ export function useProjectTaskTabRows(
     return row ? [{ numId, row, running: working.has(row._id) }] : [];
   });
   return {
-    rows,
-    /** The selected task tab's row; undefined on Eva's tab. */
-    selectedRow:
-      tabs.selected === null ? undefined : byNumId.get(tabs.selected),
-    /** The selected task's row is still loading: not Eva's tab yet. */
-    selectedLoading: tabs.selected !== null && loading,
+    rows,    selectedRow:
+      tabs.selected === null ? undefined : byNumId.get(tabs.selected),    selectedLoading: tabs.selected !== null && loading,
   };
 }

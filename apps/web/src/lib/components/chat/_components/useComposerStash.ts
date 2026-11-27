@@ -34,7 +34,6 @@ function contentTypeForFile(
   return contentType;
 }
 
-/** Fetches stash attachment URLs into File objects. Returns null on any failure. */
 async function filesFromStashAttachments(
   attachments: StashAttachment[],
 ): Promise<File[] | null> {
@@ -83,8 +82,6 @@ export function useComposerStash({
     },
   );
 
-  // One lock for both: a restore landing mid-stash used to be wiped by the
-  // stash's clear after it had already deleted the entry server-side.
   const busyRef = useRef(false);
 
   const stash = async (): Promise<boolean> => {
@@ -99,19 +96,13 @@ export function useComposerStash({
       return false;
     }
 
-    // Snapshot before any await so concurrent edits don't race the clear.
     const visibleSnapshot = visible;
     const filesSnapshot = files;
-    // Resolved outside try — React Compiler bails on ?? / ?. inside try/catch.
     const editor = mentionRef.current;
     const tokenized = editor
       ? editor.tokenize(visibleSnapshot.trim())
       : visibleSnapshot.trim();
 
-    // Text clears now, not after the upload: anything typed while the upload
-    // and add run lands in an empty composer and survives. Failure paths put
-    // the stashed text back. (`textInput.value` is a render snapshot, so the
-    // live text cannot be read after an await to merge it instead.)
     textInput.clear();
     const putTextBack = () => textInput.setInput(visibleSnapshot);
 
@@ -120,8 +111,6 @@ export function useComposerStash({
       if (filesSnapshot.length > 0) {
         const uploads = await uploadChatAttachments(filesSnapshot);
         attachmentStorageIds = uploads.ids;
-        // Stricter than send: stash clears the composer, so partial upload
-        // must abort and leave the draft untouched.
         if (attachmentStorageIds.length !== filesSnapshot.length) {
           toast.error("Could not upload attachments to stash.");
           putTextBack();
@@ -140,14 +129,12 @@ export function useComposerStash({
       attachmentStorageIds.length > 0 ? attachmentStorageIds : undefined;
 
     try {
-      // Orphaned blobs if add throws after upload — same accepted risk as send.
       const result = await addStash({
         repoId,
         content: tokenized,
         attachmentStorageIds: storageIdsArg,
       });
 
-      // Only the stashed files: ones added during the upload stay attached.
       filesSnapshot.forEach((file) => attachments.remove(file.id));
 
       if (result.evicted) {
@@ -212,7 +199,6 @@ export function useComposerStash({
     try {
       await removeStash({ id: entry._id });
     } catch {
-      // Content already restored — leave the entry so it is not lost.
       toast.error("Restored, but could not remove stash entry.");
     }
 

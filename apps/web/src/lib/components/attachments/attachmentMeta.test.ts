@@ -8,20 +8,6 @@ import {
 } from "./attachmentMeta";
 import { messageAttachments, splitAgentMedia } from "@eva/shared";
 
-/**
- * These guard the paste-to-file fix ("Wall-of-text pastes flooded composers").
- * The behaviour that matters is invisible on screen: whether a paste becomes a
- * `.txt` chip or lands inline. Two boundaries decide that, and both are easy to
- * flip on a refactor (`<` vs `<=`, `>=` vs `>`):
- *
- *  - the 2000-char threshold — one char either side changes the outcome;
- *  - the attachment cap — a full composer must fall back to inline paste, not
- *    silently drop the text.
- *
- * `isAllowedAttachmentFile` lost its `mode` argument in the same change, so a
- * regression could re-narrow it to images only across every composer.
- */
-
 describe("attachPastedTextIfLarge", () => {
   test("pastes shorter than the threshold stay inline", () => {
     const add = vi.fn();
@@ -60,7 +46,6 @@ describe("buildPastedTextFile", () => {
   test("names the file and marks it plain text", async () => {
     const file = buildPastedTextFile("hello world");
     expect(file.name).toBe("pasted-text.txt");
-    // Bun appends ";charset=utf-8"; browsers keep the bare type.
     expect(file.type).toStartWith("text/plain");
     expect(await file.text()).toBe("hello world");
   });
@@ -92,11 +77,6 @@ describe("isAllowedAttachmentFile", () => {
   });
 });
 
-/**
- * The web chat and the phone chat both read a message's attachments and an
- * agent's captures through these (`@eva/shared`), so a change to the legacy
- * fallback or the video split shows on both.
- */
 describe("message attachments and agent media", () => {
   test("falls back to the legacy URL list as images, and drops gone blobs", () => {
     expect(

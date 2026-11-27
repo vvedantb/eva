@@ -16,7 +16,6 @@ import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
 import { findSiblingsOf } from "../_githubRepos/helpers";
 
-/** Full snapshot build doc as returned to the client. */
 const snapshotBuildReturnValidator = v.object({
   _id: v.id("snapshotBuilds"),
   _creationTime: v.number(),
@@ -26,12 +25,6 @@ const snapshotBuildReturnValidator = v.object({
 const STALE_BUILD_MS = 30 * 60 * 1000;
 const MAX_CRON_RETRIES = 2;
 
-/**
- * Resolves whether a build seeds a DB or only rebuilds the base Image.
- * An app seeds iff it has Stop Commands; otherwise the workflow can only
- * rebuild the base Image. forceImageRebuild does not change this — it just
- * refreshes the base before the same seed path runs.
- */
 async function resolveBuildKind(
   ctx: {
     db: { get: (id: Id<"githubRepos">) => Promise<Doc<"githubRepos"> | null> };
@@ -42,11 +35,6 @@ async function resolveBuildKind(
   return (repo?.stopCommands?.length ?? 0) > 0 ? "seeded" : "base";
 }
 
-/**
- * If a build is currently running for a snapshot, either expire it (when stale)
- * or report it as blocking. Returns true only when a non-stale build is still
- * running, in which case the caller must not start a new build.
- */
 async function expireStaleBuild(
   ctx: MutationCtx,
   runningBuild: Doc<"snapshotBuilds"> | null,
@@ -109,8 +97,6 @@ export const getBuild = authQuery({
 export const triggerScheduledBuild = internalMutation({
   args: {
     repoSnapshotId: v.id("repoSnapshots"),
-    // For operational debugging: keep the existing cron entry point but record
-    // the build as manual so completeBuild does not enqueue cron retries.
     disableRetries: v.optional(v.boolean()),
     forceImageRebuild: v.optional(v.boolean()),
   },
@@ -189,7 +175,6 @@ export const listReferencedSandboxIds = internalQuery({
 export const startBuild = authMutation({
   args: {
     repoSnapshotId: v.id("repoSnapshots"),
-    /** App repo that triggered the build (for shared monorepo snapshot configs). */
     appRepoId: v.optional(v.id("githubRepos")),
   },
   returns: v.id("snapshotBuilds"),
@@ -198,8 +183,6 @@ export const startBuild = authMutation({
     if (!sharedConfig) throw new Error("Snapshot config not found");
     await getRepoWithAccess(ctx.db, sharedConfig.repoId, ctx.userId);
 
-    // Lazy-migrate shared monorepo configs onto the triggering app so
-    // eprocurement builds don't share history / baseSnapshotId with apps/web.
     let config = sharedConfig;
     const effectiveAppRepoId = args.appRepoId ?? sharedConfig.repoId;
     await getRepoWithAccess(ctx.db, effectiveAppRepoId, ctx.userId);
@@ -218,7 +201,6 @@ export const startBuild = authMutation({
           enabled: sharedConfig.enabled ?? true,
           buildCommands: sharedConfig.buildCommands,
           seedCommands: sharedConfig.seedCommands,
-          // Do not copy baseSnapshotId — that may be another app's Vercel snap.
           createdAt: now,
           updatedAt: now,
         });
@@ -256,11 +238,6 @@ export const startBuild = authMutation({
         buildId,
         repoSnapshotId: config._id,
         appRepoId: effectiveAppRepoId,
-        // The Snapshots page promises "Rebuild Now always rebuilds the base
-        // Image". Without this, an app WITH Stop Commands only re-seeded on top
-        // of the existing base, so a toolchain or base-image change (the move to
-        // the managed Ubuntu image) never reached it. Scheduled builds stay
-        // seed-only to keep the nightly run cheap.
         forceImageRebuild: true,
       },
     );
@@ -363,7 +340,6 @@ export const completeBuild = internalMutation({
     const build = await ctx.db.get(args.buildId);
     if (!build) return null;
 
-    // Guard: prevent double-completion from concurrent workflow steps
     if (build.status !== "running") return null;
 
     await ctx.db.patch(args.buildId, {

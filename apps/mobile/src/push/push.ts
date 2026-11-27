@@ -8,7 +8,6 @@ export function getPushToken({ ask }: { ask: boolean }): Promise<string | null> 
   return getExpoPushToken({ ask });
 }
 
-/** A push data field as text, or undefined when it is not a non-empty string. */
 const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
 
 /**
@@ -21,7 +20,6 @@ export function usePush() {
   const register = useMutation(api.push.register);
   useExpoPushRegistration({
     register,
-    // A chat (`target`), else the screen the notification's link names (`href`, `repoId`), else the web.
     onNotificationTap: ({ data }) => {
       openAppLink({ chatTarget: text(data.target), href: text(data.href), repoId: text(data.repoId) });
     },

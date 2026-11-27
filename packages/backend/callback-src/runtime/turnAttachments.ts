@@ -2,7 +2,6 @@ import { writeFileSync } from "fs";
 import { fetchWithTimeout } from "../http/convexClient.js";
 import { log } from "../utils.js";
 
-/** Mirrors attachmentExtensionForMimeType in convex/_sandbox_runtime/attachments.ts. */
 function attachmentExtensionForMimeType(mimeType: string): string {
   const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
   switch (type) {

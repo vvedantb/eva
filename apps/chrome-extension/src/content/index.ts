@@ -28,8 +28,6 @@ import {
 
 type ShadowMount = ReturnType<typeof createShadowMount>;
 
-// Persistent overlays: the annotation layer and the toolbar (+ project modal).
-// Both render nothing until activated, so mounting eagerly is cheap.
 const annotationMount = createShadowMount();
 annotationMount.render(createElement(AnnotationOverlay));
 
@@ -43,7 +41,6 @@ toolbarMount.render(
   ),
 );
 
-// Inspect overlay is created on demand and torn down when the mode exits.
 let selectionMount: ShadowMount | null = null;
 
 registerInspectController({
@@ -59,7 +56,6 @@ registerInspectController({
               ok ? "success" : "error",
             );
           });
-          // Stay active for repeated captures until the mode is toggled off.
         },
         onCancel() {
           setMode(null);
@@ -95,7 +91,6 @@ async function showToolbarAndLoad(): Promise<void> {
   }
 }
 
-// React to the icon-driven visibility toggle from the background.
 chrome.runtime.onMessage.addListener(
   (message: ToolbarVisibilityChangedMessage, _sender, sendResponse) => {
     if (message?.type !== "TOOLBAR_VISIBILITY_CHANGED") return false;
@@ -110,13 +105,11 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
-// Poll task statuses while the toolbar is visible and tracking tasks.
 setInterval(() => {
   if (!getToolbarState().visible) return;
   void syncStatusesOnce();
 }, 15000);
 
-// On load, restore the toolbar if it was left visible for this tab.
 void (async () => {
   const res = await requestBackground("GET_TOOLBAR_VISIBILITY", undefined);
   if (res.visible) void showToolbarAndLoad();

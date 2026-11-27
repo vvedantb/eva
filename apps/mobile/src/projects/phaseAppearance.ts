@@ -12,17 +12,14 @@ import type { ComponentType } from "react";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import type { Scheme } from "@/ui/theme";
 
-/** The looks a project stage or a child task's status maps to. */
 type Tone = "in_progress" | "completed" | "cancelled";
 
-/** The web `phaseConfig` icons (`ProjectPhaseBadge.tsx`). */
 const TONE_ICONS: Record<Tone, ComponentType<IconProps>> = {
   in_progress: IconClock,
   completed: IconCircleCheck,
   cancelled: IconCircleX,
 };
 
-/** One tone's icon, its text colour and its row stripe colour (`bar`). */
 function toneAppearance(tone: Tone, scheme: Scheme) {
   const theme = EVA_THEME[scheme];
   const colours: Record<Tone, { text: string; bar: string }> = {
@@ -33,7 +30,6 @@ function toneAppearance(tone: Tone, scheme: Scheme) {
   return { icon: TONE_ICONS[tone], ...colours[tone] };
 }
 
-/** A list section's icon and colour: To Do as the quick-task To Do, the rest as their tone. */
 function columnAppearance(column: "todo" | Tone, scheme: Scheme) {
   return column === "todo" ? statusAppearance("todo", scheme) : toneAppearance(column, scheme);
 }

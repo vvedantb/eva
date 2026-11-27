@@ -1,11 +1,3 @@
-/**
- * Snapshot TTL / retention knobs for Vercel sandboxes.
- *
- * Persistent sandboxes never expire snapshots (0); we delete the sandbox
- * (which cascades snap_* purge) when the owning entity dies, after a grace.
- * Ephemeral keeps a 1-day safety TTL (Vercel rejects 0 < x < 1d).
- */
-
 /** Persistent auto-snapshots: never expire — lifecycle owned by delete paths. */
 export const SNAPSHOT_TTL_MS = 0;
 

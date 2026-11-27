@@ -21,9 +21,6 @@ export const DAEMON_CLAIM_POLL_TIMING = {
   idleExitMs: 45 * 60 * 1000,
   fencePollIntervalMs: 5000,
   fastPollIntervalMs: 50,
-  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
-  // handed over), so 250ms keeps Stop instant while cutting the busiest
-  // phase's claim reads ~5x versus the 50ms handoff cadence.
   busyPollIntervalMs: 250,
   idlePollIntervalMs: 1000,
   fastPollWindowMs: 30_000,
@@ -96,7 +93,6 @@ export function writeOomScoreAdj(target: "self" | number, score: string): void {
   try {
     writeFileSync(path, score);
   } catch {
-    /* Non-Linux and restricted procfs fail open. */
   }
 }
 
@@ -304,10 +300,6 @@ export async function bootWarmDaemon(params: {
     logPrefix,
     onDeposedIdle: params.onDeposedIdle,
   });
-  // The lease preflight and the GitHub token are independent Convex round
-  // trips (measured ~0.1–0.2s and ~0.3–0.45s), so run them side by side. Both
-  // land before the provider spawns: its tool shells inherit `GH_TOKEN` from
-  // process.env. refreshDaemonGithubTokenFromEnv never rejects.
   const [preflightOk] = await Promise.all([
     runPreflightHeartbeat(),
     refreshDaemonGithubTokenFromEnv(),

@@ -23,7 +23,6 @@ import {
 } from "./_pullRequests/store";
 import { findReposByOwnerAndName } from "./_githubRepos/helpers";
 
-/** Webhook actions that can change a PR's tracked state or its title. */
 const TRACKED_ACTIONS = new Set([
   "opened",
   "reopened",
@@ -50,10 +49,8 @@ export const handlePullRequestEvent = internalMutation({
     title: v.optional(v.string()),
     headBranch: v.optional(v.string()),
     baseBranch: v.optional(v.string()),
-    /** The repository the PR targets (the webhook's `repository`). */
     repoOwner: v.optional(v.string()),
     repoName: v.optional(v.string()),
-    /** False when the head lives in a fork: a fork's branch names prove nothing. */
     headInSameRepo: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -66,9 +63,6 @@ export const handlePullRequestEvent = internalMutation({
       args.draft,
       args.merged,
     );
-    // GitHub does not order deliveries: a `ready_for_review` sent a second
-    // before the merge can land after it (PR 1274 read open once merged).
-    // Only `reopened` takes a merged or closed PR back to a live state.
     const staleLiveEvent =
       previousState !== undefined &&
       !isLivePrState(previousState) &&
@@ -92,14 +86,9 @@ export const handlePullRequestEvent = internalMutation({
     if (nextState === null || nextState === previousState) return null;
 
     const owner = row.owner;
-    // A linked repo's PR on a multi-repo task's session counts toward the task.
     const linkedTaskId = await linkedPullRequestTaskId(ctx.db, row);
     if (owner.kind === "session") {
       await reconcileSessionArchiveState(ctx, owner.sessionId);
-      // A "merged" event can be a false positive: GitHub marks a PR merged
-      // whenever its commit SHAs land on the base branch via ANY PR (a
-      // "tip-copy"). A delayed check confirms the merge commit belongs to this
-      // PR and detaches it if not. Only on the transition into merged.
       if (nextState === "merged" && args.mergeCommitSha !== undefined) {
         await ctx.scheduler.runAfter(
           15_000,
@@ -112,12 +101,9 @@ export const handlePullRequestEvent = internalMutation({
 
     const terminal = nextState === "merged" || nextState === "closed";
     let finished = false;
-    // A project's own (legacy) PR only keeps its row state: no new work goes
-    // to a project branch, and the project's status is derived from its tasks.
     const taskId = owner.kind === "task" ? owner.taskId : linkedTaskId;
     if (taskId !== undefined && terminal) {
       finished = await applyTaskPrClosed(ctx, taskId, row);
-      // A merge lets the task's project start the tasks that waited for it.
       const task = await ctx.db.get(taskId);
       if (nextState === "merged" && task?.projectId !== undefined) {
         await onProjectTasksChanged(ctx, task.projectId);
@@ -125,8 +111,6 @@ export const handlePullRequestEvent = internalMutation({
     }
     const eventTaskId = owner.kind === "session" ? taskId : owner.taskId;
     if (terminal) {
-      // Audit trail of the close; "skipped" when the owner did not move
-      // (another PR is still live, or it had already finished).
       await ctx.db.insert("githubWebhookEvents", {
         event: "pull_request",
         action: "closed",
@@ -141,13 +125,6 @@ export const handlePullRequestEvent = internalMutation({
   },
 });
 
-/**
- * Links a PR Eva has no row for to the owner its head branch names. Covers a
- * PR the agent opened from a side branch (`eva/session-<id>-<slug>`), one a
- * person opened by hand on an Eva branch, and one Eva opened but lost before
- * recording (its own branch, so it is restored as the primary when the owner
- * has none).
- */
 async function attachUntrackedPullRequest(
   ctx: MutationCtx,
   args: {
@@ -193,13 +170,6 @@ async function attachUntrackedPullRequest(
   });
 }
 
-/**
- * A task's status follows its PRs: done once every PR is terminal and one
- * merged, cancelled once every PR is closed unmerged. A task with a second PR
- * still open stays where it is. A multi-repo task is done only once every
- * repo's PR merged (`taskPrSummary`). A project's child task whose PR closed
- * unmerged is not cancelled: it shows "needs you" and its dependents wait.
- */
 async function applyTaskPrClosed(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -231,8 +201,6 @@ async function applyTaskPrClosed(
     repoId: task.repoId,
   });
 
-  // Record the PR event on the task's activity timeline so the merge/close is
-  // visible there, not just as a notification. System-driven, so no actor.
   await logTaskActivity(
     ctx,
     task._id,
@@ -242,8 +210,6 @@ async function applyTaskPrClosed(
     merged ? "merged" : "closed",
   );
 
-  // A merged/closed PR makes the task read-only: retiring its session stops
-  // the sandbox and starts the grace delete (mirrors the session archive).
   await syncOwnedSessionWithTaskStatus(ctx, task, task.status, newStatus);
   return true;
 }
@@ -287,8 +253,6 @@ export const handlePushToBaseBranch = internalMutation({
         { repoId: workflowRepo._id },
       );
     }
-    // `.eva/` belongs to the whole GitHub repo: a disconnected monorepo root
-    // still syncs while any of its apps is connected.
     if (
       args.touchedEvaConfig &&
       siblings.some((repo) => repo.connected !== false)

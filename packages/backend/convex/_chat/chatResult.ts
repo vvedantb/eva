@@ -1,14 +1,3 @@
-/**
- * Chat-turn result finalization — one module for session, task chat, and
- * project chat.
- *
- * The three `saveResult` handlers used to copy publish-failure isolation,
- * streaming salvage, and placeholder targeting. A fix on one surface had to
- * be ported by hand — the same class of drift the stall watchdog already
- * collapsed. Callers keep entity-specific orchestration (workflow-slot
- * clearing, queue drain, design/plan patches); this module hides the shared
- * write path.
- */
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
@@ -170,7 +159,6 @@ export async function writeAssistantTurnResult(
     ...fields,
     finishedAt: Date.now(),
   });
-  // Judged out of band; a turn that changed no code schedules nothing.
   await scheduleScopeCheck(ctx, {
     _id: last._id,
     beforeSha: fields.beforeSha,
@@ -230,14 +218,9 @@ export async function applyChatTurnResult(
       }),
     ...args.extraPatch,
   };
-  // Classify the failure on the row itself so the web usage-limit banner reads
-  // a field instead of string-matching the "Error: …" bubble content. Always
-  // assigned — an explicit undefined clears a stale stamp on the target row.
   const isUsageLimit =
     !args.success && args.error !== null && isUsageLimitError(args.error);
   patch.errorType = isUsageLimit ? "rate_limit" : undefined;
-  // Parsed once, now: the text names a wall-clock hour, so re-parsing it after
-  // the reset passes would roll it to tomorrow. Holds the chat's queue.
   patch.limitResetAt =
     isUsageLimit && args.error !== null
       ? (parseUsageLimitResetTime(args.error) ?? undefined)
@@ -278,8 +261,6 @@ export async function insertAssistantPlaceholderIfNeeded(
     .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
     .order("desc")
     .take(args.recentLimit);
-  // People's thread replies can land while a thread turn runs; they are
-  // never the turn's own bubble.
   const turnRows = recent.filter(
     (message) => !(message.role === "user" && message.replyTo !== undefined),
   );

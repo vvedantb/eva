@@ -19,14 +19,8 @@ import { m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 
-/**
- * The same flags T3 Code gives agent pages. No `allow-same-origin`: the page
- * runs in an opaque origin and cannot reach Eva's cookies, storage or DOM.
- * Forms and popups stay usable inside that sandbox.
- */
 const SANDBOX = "allow-scripts allow-forms allow-popups";
 
-/** The package token behind each shadcn-style name a page can read. Names not listed are the same token. */
 const PAGE_TOKEN_SOURCE: Partial<Record<string, string>> = {
   "--card": "--surface-card",
   "--card-foreground": "--surface-foreground",

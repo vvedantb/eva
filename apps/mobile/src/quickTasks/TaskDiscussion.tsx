@@ -67,13 +67,10 @@ export function CommentModeChip({
   );
 }
 
-/** As the web picker: suggest after 400 ms without a keystroke, for at least 2 characters. */
 const SUGGEST_IDLE_MS = 400;
 const SUGGEST_MIN_CHARS = 2;
-/** One emoji, with its variation selector, skin tone and joined parts. */
 const EMOJI_SOURCE =
   "\\p{Extended_Pictographic}(?:\\uFE0F|\\u200D\\p{Extended_Pictographic}|[\\u{1F3FB}-\\u{1F3FF}])*";
-/** The pictograph planes, for an engine without Unicode property escapes (a crash at load would take the screen down). */
 const EMOJI_FALLBACK =
   "(?:[\\u2600-\\u27BF]|\\uD83C[\\uDC00-\\uDFFF]|\\uD83D[\\uDC00-\\uDFFF]|\\uD83E[\\uDC00-\\uDFFF])(?:\\uFE0F|\\u200D(?:[\\u2600-\\u27BF]|\\uD83C[\\uDC00-\\uDFFF]|\\uD83D[\\uDC00-\\uDFFF]|\\uD83E[\\uDC00-\\uDFFF]))*";
 function emojiPattern(flags: string): RegExp {
@@ -107,7 +104,6 @@ export function EmojiPickerSheet({
   const theme = EVA_THEME[scheme];
   const suggest = useAction(api.emojiSuggestions.suggest);
   const [search, setSearch] = useState("");
-  // Answers are keyed by the query they answer, so a stale one never shows against newer text.
   const [answered, setAnswered] = useState<{
     query: string;
     emoji: string[];
@@ -123,7 +119,6 @@ export function EmojiPickerSheet({
     timer.current = setTimeout(() => {
       suggest({ query: next })
         .then((emoji) => setAnswered({ query: next, emoji }))
-        // A failed lookup just leaves the box as it is.
         .catch(() => undefined);
     }, SUGGEST_IDLE_MS);
   };
@@ -233,14 +228,11 @@ export function ReactableMenu({
   copyText,
   onDelete,
 }: {
-  /** Where the held item is; the menu is shut while it is null. */
   anchor: HeldRect | null;
-  /** The held item, drawn again over the chat. */
   preview: ReactNode;
   onClose: () => void;
   groups: ReactionGroup[];
   onToggleReaction: (emoji: string) => void;
-  /** Opens `EmojiPickerSheet`; the caller renders it, since this menu closes first. */
   onMoreReactions?: () => void;
   onReply?: () => void;
   onEdit?: () => void;
@@ -262,7 +254,6 @@ export function ReactableMenu({
     selected: mine.has(emoji),
     render: () => <Text style={{ fontSize: 22 }}>{emoji}</Text>,
   }));
-  // The web picker's trigger icon, last in the pill: every other emoji, by search.
   if (onMoreReactions) {
     items.push({ key: MORE_REACTIONS, label: "More reactions", render: () => <IconMoodSmile size={22} color={theme.mutedForeground} /> });
   }
@@ -284,7 +275,6 @@ export function ReactableMenu({
   );
 }
 
-/** The pill's "More reactions" key: no emoji uses it. */
 const MORE_REACTIONS = "more";
 
 /** The web delete dialog for a comment. */

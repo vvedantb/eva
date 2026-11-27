@@ -19,14 +19,6 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./TeamsDemo.css";
 
-// A team's environment variables. Beats: Add opens a new row under the
-// table; the key is typed; the value is typed and shows only as dots; Save
-// turns the inputs into a row like the others, locked and masked (the
-// payoff). The team's tabs and members frame it as a shared workspace.
-//
-// Real strings: the team, the tabs, the section and its note, the four
-// keys. Values are never shown, only their mask.
-
 const TABS = {
   wide: ["Activity", "Members", "Codebases", "Env variables"],
   compact: ["Members", "Codebases", "Env variables"],
@@ -35,7 +27,6 @@ const TABS = {
 const KEYS = ["ANTHROPIC_API_KEY", "DATABASE_URL", "RESEND_API_KEY"];
 const NEW_KEY = "STRIPE_SECRET_KEY";
 const MASK = "•".repeat(12);
-/** Typed into a password field, so only its length is ever drawn. */
 const TYPED_VALUE = "x".repeat(MASK.length);
 
 const REST = {
@@ -92,7 +83,6 @@ async function story(a: Act<S>) {
   await a.set({ focus: "none", saved: true });
 
   a.mark("payoff");
-  // Off the row's new actions, so the saved row reads whole.
   await a.wait(350);
   await a.move(a.layout === "wide" ? REST.wide : REST.compact);
   await a.wait(1900);

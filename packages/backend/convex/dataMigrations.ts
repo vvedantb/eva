@@ -41,14 +41,10 @@ import type { BackgroundAgentEntry } from "./_validators/tableFields";
  *   npx convex run --component migrations lib:getStatus --watch
  *   npx convex run --component migrations lib:cancel '{name: "dataMigrations:setDefault"}'
  */
-// The second type argument is not optional here: `Migrations` defaults it to
-// `void`, and `customRange` resolves its index field types through it.
 export const dataMigrations = new Migrations<DataModel, typeof schema>(
   components.migrations,
   {
     migrationsLocationPrefix: "dataMigrations:",
-    // Required by any `define` that sets `customRange` — the paginator needs
-    // the schema to resolve the index it ranges over.
     schema,
   },
 );
@@ -114,14 +110,6 @@ export const backfillLogUsageFields = dataMigrations.define({
   },
 });
 
-/*
- * Manager Ave rebuild (Ave now lives in `aveThreads`). Run in order, then drop
- * the deprecated fields and delete these five:
- *   users.orchestratorSessionId, sessions.isOrchestrator,
- *   sessions/agentTasks/projects.watchedByOrchestrator,
- *   queuedMessages.orchestratorNotification
- */
-
 /** Archives each pre-rebuild Ave session (stops its sandbox) and drops the pointer. */
 export const retireOrchestratorSessions = dataMigrations.define({
   table: "users",
@@ -130,8 +118,6 @@ export const retireOrchestratorSessions = dataMigrations.define({
     const session = await ctx.db.get(user.orchestratorSessionId);
     if (session) {
       if (!isSessionArchived(session)) await archiveSessionDoc(ctx, session);
-      // A wake-up queued behind a busy old master would otherwise drain into
-      // the archived chat and restart its sandbox.
       const queued = await ctx.db
         .query("queuedMessages")
         .withIndex("by_parent_and_created", (q) =>
@@ -267,7 +253,6 @@ export const backfillProjectPullRequests = dataMigrations.define({
   table: "projects",
   migrateOne: async (ctx, project) => {
     if (project.prUrl === undefined || project.prCount !== undefined) return;
-    // The stored phase is gone; the GitHub refresh below sets the real state.
     const row = await recordPullRequest(ctx, {
       owner: { kind: "project", projectId: project._id },
       repoId: project.repoId,
@@ -292,8 +277,6 @@ export const backfillRunPullRequests = dataMigrations.define({
     if (run.prUrl === undefined) return;
     const task = await ctx.db.get(run.taskId);
     if (task) {
-      // The state is a guess the GitHub refresh replaces: the task's status
-      // for its PR, terminal for the PRs earlier runs left behind.
       const state =
         task.status === "done"
           ? "merged"
@@ -314,11 +297,6 @@ export const backfillRunPullRequests = dataMigrations.define({
   },
 });
 
-/**
- * Caps every stored `backgroundAgents` array at the settled-entry limit that
- * `mergeBackgroundAgents` now enforces on write. Small batches: an unpruned
- * row can hold several hundred KB, and a batch reads all of its rows at once.
- */
 function pruneBackgroundAgentsPatch(doc: {
   backgroundAgents?: BackgroundAgentEntry[];
 }): { backgroundAgents: BackgroundAgentEntry[] } | undefined {

@@ -16,10 +16,6 @@ import {
   type RepoGroupMember,
 } from "./_repoGroups/validate";
 
-// Group seeded snapshots: fingerprint + isolate queries/mutations live in
-// `_repoGroups/snapshot.ts` (underscore-prefixed, excluded from Convex's
-// function discovery) and are re-exported here so they register under
-// `internal.repoGroups.*`, mirroring `_repoSnapshots/config.ts` → `repoSnapshots.ts`.
 export {
   getGroupForBuild,
   setGroupSeededSnapshot,
@@ -29,14 +25,6 @@ export {
   scheduleGroupRebuild,
 } from "./_repoGroups/snapshot";
 
-/**
- * Saved codebase groups: one primary repo plus the linked repos that should be
- * cloned into the same session sandbox. A group only prefills the new-session
- * picker — a session copies the membership into `sessionRepos` rows at
- * creation, so editing a group never rewrites sessions already running.
- */
-
-/** Just enough of a member repo for the picker to render it. */
 const repoGroupMemberValidator = v.object({
   _id: v.id("githubRepos"),
   owner: v.string(),
@@ -50,9 +38,7 @@ const repoGroupWithMembersValidator = v.object({
   _id: v.id("repoGroups"),
   _creationTime: v.number(),
   ...repoGroupFields,
-  /** Null when the primary repo row has been deleted under the group. */
   primaryRepo: v.union(repoGroupMemberValidator, v.null()),
-  /** Resolved members, in `linkedRepoIds` order; deleted rows are dropped. */
   linkedRepos: v.array(repoGroupMemberValidator),
 });
 
@@ -66,7 +52,6 @@ export async function canAccessRepoGroup(
   return group.teamId !== undefined && hasTeamAccess(db, group.teamId, userId);
 }
 
-/** Loads a group and throws unless the caller may see it. */
 async function getGroupWithAccess(
   db: GenericDatabaseReader<DataModel>,
   id: Id<"repoGroups">,
@@ -80,7 +65,6 @@ async function getGroupWithAccess(
   return group;
 }
 
-/** Loads every linked repo the caller may use, in the given order. */
 async function loadAccessibleRepos(
   db: GenericDatabaseReader<DataModel>,
   repoIds: ReadonlyArray<Id<"githubRepos">>,
@@ -93,7 +77,6 @@ async function loadAccessibleRepos(
   return repos;
 }
 
-/** The identity shape the membership rules work on. */
 function toMember(repo: Doc<"githubRepos">): RepoGroupMember {
   return { id: String(repo._id), owner: repo.owner, name: repo.name };
 }
@@ -110,7 +93,6 @@ export function assertValidRepoGroupMembers(
   if (error !== null) throw new Error(error);
 }
 
-/** Picker summary for one member repo, with its logo resolved. */
 async function toRepoSummary(storage: StorageReader, repo: Doc<"githubRepos">) {
   return {
     _id: repo._id,
@@ -124,7 +106,6 @@ async function toRepoSummary(storage: StorageReader, repo: Doc<"githubRepos">) {
   };
 }
 
-/** True when two membership lists hold the same repos, whatever the order. */
 function sameMembership(
   a: ReadonlyArray<Id<"githubRepos">>,
   b: ReadonlyArray<Id<"githubRepos">>,
@@ -162,7 +143,6 @@ export const create = authMutation({
     const groupId = await ctx.db.insert("repoGroups", {
       name,
       createdBy: ctx.userId,
-      // Teammates of the primary repo's team see (and may use) the group.
       ...(primary.teamId !== undefined ? { teamId: primary.teamId } : {}),
       primaryRepoId: args.primaryRepoId,
       linkedRepoIds: args.linkedRepoIds,
@@ -171,8 +151,6 @@ export const create = authMutation({
         : {}),
       createdAt: Date.now(),
     });
-    // Best-effort background build — a no-op until the primary has its own
-    // seeded snapshot to boot from (buildGroupSnapshot checks and skips).
     await ctx.scheduler.runAfter(
       0,
       internal.repoGroupsActions.buildGroupSnapshot,
@@ -201,9 +179,6 @@ export const update = authMutation({
       seededFingerprint?: undefined;
       updatedAt: number;
     } = { updatedAt: Date.now() };
-    // A seeded snapshot is only valid for the exact inputs it was built from —
-    // track whether anything the fingerprint covers actually changed so a
-    // rebuild is scheduled only when needed, not on every rename.
     let inputsChanged = false;
 
     if (args.name !== undefined) {
@@ -258,7 +233,6 @@ export const remove = authMutation({
   handler: async (ctx, args) => {
     const group = await getGroupWithAccess(ctx.db, args.id, ctx.userId);
     if (group.seededSnapshotName) {
-      // Best-effort: `deleteSeededSnapshot` never throws on its own failures.
       await ctx.scheduler.runAfter(
         0,
         internal.snapshotActions.deleteSeededSnapshot,
@@ -288,12 +262,6 @@ export const rebuildSnapshot = authMutation({
   },
 });
 
-/**
- * Groups the caller created plus those belonging to their teams, each with its
- * member repos resolved so the picker needs no second query. Shared by the
- * app's `listMine` and MCP's `listForUserInternal` so the access rule and the
- * resolved shape have one home.
- */
 async function loadGroupsForUser(
   db: GenericDatabaseReader<DataModel>,
   storage: StorageReader,

@@ -5,12 +5,7 @@ import { z } from "zod";
 import type { FatalReport } from "@/logging/unhandledRejections";
 import { lastExit } from "../../modules/exit-info";
 
-// The last error that closed the app. A release build closes with no message
-// and no log a phone user can read, so the error handler saves it here and
-// the next launch shows it (`LastCrashDialog`), ready to copy.
-
 const KEY = "eva.lastCrash";
-/** SecureStore values over 2 KB warn on iOS; a report is cut below that. */
 const MAX_CHARS = 1_800;
 
 const crashSchema = z.object({
@@ -30,7 +25,6 @@ export async function saveLastCrash(report: FatalReport): Promise<void> {
     if (text.length > MAX_CHARS) text = JSON.stringify({ ...crash, stack: crash.stack.slice(0, MAX_CHARS - (text.length - crash.stack.length)) });
     await SecureStore.setItemAsync(KEY, text);
   } catch {
-    // A crash logger must never throw.
   }
 }
 
@@ -41,7 +35,6 @@ const publish = (next: LastCrash | null) => {
   for (const listener of listeners) listener();
 };
 
-/** Android's exit records shown already: the last one's time. */
 const SEEN_EXIT_KEY = "eva.lastExitSeen";
 const EXIT_TITLES: Record<string, string> = {
   crash_native: "Native crash",
@@ -49,11 +42,6 @@ const EXIT_TITLES: Record<string, string> = {
   anr: "App not responding",
 };
 
-/**
- * A native crash closes the app before JavaScript runs, so nothing is saved.
- * Android keeps why the last process ended (`modules/exit-info`): a crash or
- * ANR newer than the last one shown becomes the report.
- */
 async function nativeExitCrash(): Promise<LastCrash | null> {
   const exit = await lastExit();
   if (!exit) return null;
@@ -66,7 +54,6 @@ async function nativeExitCrash(): Promise<LastCrash | null> {
     at: exit.timestamp,
     version: Constants.expoConfig?.version ?? "?",
     name,
-    // A Java crash's description is only "crash"; its exception line (after "thread: …") says more.
     message: ((exit.reason === "crash" && exit.trace.split("\n")[1]) || exit.description || exit.reason).slice(0, 500),
     stack: exit.trace,
   };
@@ -83,7 +70,6 @@ export async function loadLastCrash(): Promise<void> {
     }
     publish(await nativeExitCrash());
   } catch {
-    // Nothing to show.
   }
 }
 

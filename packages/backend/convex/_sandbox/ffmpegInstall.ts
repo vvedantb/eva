@@ -26,38 +26,22 @@
  * signal the libjack bug above proved worthless here.
  */
 export const FFMPEG_INSTALL_SCRIPT = [
-  // Ubuntu managed images carry ffmpeg in universe, so none of the AL2023
-  // repair below applies to them — and since every step is gated on
-  // `ffmpeg -version`, a successful apt install short-circuits all of it. The
-  // dnf steps stay unguarded rather than wrapped in a `command -v dnf` check:
-  // on Ubuntu they are only reached if apt already failed, where a
-  // `dnf: command not found` absorbed by `|| true` is the correct fallback.
   "if ! ffmpeg -version >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then",
   "  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg >/tmp/ffmpeg-apt.log 2>&1 || true",
   "fi",
-  // Not in the core AL2023 repos — SPAL carries ffmpeg-free (VP8/VP9/WebM).
   "if ! ffmpeg -version >/dev/null 2>&1; then",
   "  sudo dnf install -y spal-release >/tmp/spal-dnf.log 2>&1 || true",
   "  sudo dnf install -y ffmpeg-free >/tmp/ffmpeg-dnf.log 2>&1 || true",
   "fi",
-  // `ffmpeg` proper on revisions that do not carry the -free build.
   "if ! ffmpeg -version >/dev/null 2>&1; then",
   "  sudo dnf install -y ffmpeg >>/tmp/ffmpeg-dnf.log 2>&1 || true",
   "fi",
-  // SPAL's ffmpeg links against libjack.so.0 without depending on anything that
-  // ships it, so a present binary is not a working one. Real JACK first: it is
-  // the only package that puts the library on the default loader path.
   "if ! ffmpeg -version >/dev/null 2>&1; then",
   "  sudo dnf install -y jack-audio-connection-kit >/tmp/libjack-dnf.log 2>&1 || true",
   "fi",
-  // Capability match as a fallback, for revisions where that package is absent
-  // or renamed. May resolve to the pipewire shim, which the next step repairs.
   "if ! ffmpeg -version >/dev/null 2>&1; then",
   '  sudo dnf install -y "libjack.so.0()(64bit)" >>/tmp/libjack-dnf.log 2>&1 || true',
   "fi",
-  // Last resort: put pipewire's off-path JACK shim on the loader path. Only
-  // reached when nothing else provided a loadable libjack, so the risk of
-  // pipewire's implementation shadowing a real one does not arise.
   "if ! ffmpeg -version >/dev/null 2>&1 && [ -e /usr/lib64/pipewire-0.3/jack/libjack.so.0 ]; then",
   "  echo /usr/lib64/pipewire-0.3/jack | sudo tee /etc/ld.so.conf.d/pipewire-jack.conf >/dev/null && sudo ldconfig || true",
   "fi",

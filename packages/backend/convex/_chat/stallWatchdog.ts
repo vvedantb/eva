@@ -54,8 +54,6 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   opts: { sandboxStopped?: boolean } = {},
 ): Promise<void> {
   const streamEntityId = adapter.streamingEntityId(id);
-  // Read the streaming row BEFORE cancelStaleWorkflow clears it — it feeds
-  // the salvage of streamed text / tool steps below.
   const streaming = await ctx.db
     .query("streamingActivity")
     .withIndex("by_entity", (q) => q.eq("entityId", streamEntityId))
@@ -74,7 +72,6 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     }
   }
 
-  // Skip people's thread replies: they can land after a thread turn's bubble.
   const recent = await ctx.db
     .query("messages")
     .withIndex("by_parent", (q) => q.eq("parentId", id))
@@ -92,10 +89,6 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     await finalizeCancelledAssistantMessage(ctx, last, streaming);
   }
 
-  // A turn that died waiting on a question keeps it: the card moves onto the
-  // chat message, and the answer resumes the agent as a normal message. The
-  // card renders only on the last message, so no alert goes after it — the
-  // turn was waiting on the user, not failing.
   await detachPendingQuestions(ctx.db, String(id));
   if ((await findOpenChatQuestion(ctx.db, id)) === null) {
     await insertTurnFollowUp(ctx, {
@@ -108,19 +101,10 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     });
   }
 
-  // A stale heartbeat usually means the agent process is dead, but a merely
-  // wedged one must not keep mutating the sandbox after the turn moves on to
-  // its next one — interrupt it the same way cancelChatExecution does. When the
-  // sandbox itself has stopped there is nothing to interrupt, and killing it
-  // would exec on the stopped VM — which lazily RESUMES it on Vercel (see
-  // prewarmNeverResurrects contract) — so skip the interrupt entirely.
   if (opts.sandboxStopped !== true) {
     await adapter.interrupt(ctx, entity);
   }
 
-  // The `TURN_BACKSTOP_MS` backstop and the lease reconciler can both reach one turn.
-  // Closing the durable turn here stops the reconciler from tearing the same
-  // turn down a second time.
   await closeTurnForWorkflow(ctx, id, workflowId, "error", {
     error: alert.text,
   });

@@ -87,15 +87,12 @@ export async function discardUntrackedSandbox(
     sandboxId: string;
     trackedSandboxId: string | undefined;
     repoId: Id<"githubRepos"> | undefined;
-    /** False when the ignored write came from resuming an existing VM. */
     isNew: boolean;
   },
 ): Promise<void> {
   if (args.repoId === undefined || args.sandboxId === args.trackedSandboxId) {
     return;
   }
-  // A fresh VM never ran user work, so delete it. A resumed VM may hold
-  // uncommitted work from before, so only stop it: stopping is reversible.
   const action = args.isNew
     ? internal.sandbox.deleteSandbox
     : internal.sandbox.stopSandbox;

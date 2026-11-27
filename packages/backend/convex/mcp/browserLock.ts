@@ -24,7 +24,6 @@ export const setAgentBrowsingAt = internalMutation({
     const agentBrowsingAt = args.locked ? Date.now() : undefined;
     const updatedAt = Date.now();
 
-    // A task's or project's browser is its session's.
     const session = await findEntitySession(
       ctx.db,
       args.entityKind,

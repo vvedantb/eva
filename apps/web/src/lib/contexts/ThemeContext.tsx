@@ -25,7 +25,6 @@ export type {
   CustomTheme,
 } from "@/lib/contexts/themeTokens";
 
-/** Next Light → Neutral → Dark → Light. System uses resolved appearance as the start. */
 function nextCycledTheme(
   theme: ThemeMode,
   appearance: "light" | "neutral" | "dark",
@@ -36,7 +35,6 @@ function nextCycledTheme(
   return "light";
 }
 
-/** Drops the injected accent stylesheet so `globals.css` supplies the accent. */
 function clearAccentOverride() {
   const el = document.getElementById("custom-theme-accent");
   if (el) el.remove();
@@ -62,8 +60,6 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
     LETTER_SPACING_VALUES[letterSpacing].value,
   );
 
-  // Persist hint so the next document paint can apply fonts/radius before React.
-  // Appearance is owned by ThemeModeProvider / Convex.
   writeCustomThemeHint({
     accentColor,
     radius,
@@ -71,16 +67,12 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
     letterSpacing,
   });
 
-  // Zinc matches globals.css — drop the override style so base CSS applies.
   if (accentColor === "zinc") {
     clearAccentOverride();
     return;
   }
 
   const colors = lookupAccent(accentColor);
-  // An accent this build does not define. Fall back to the CSS default instead
-  // of throwing on `colors.light`. See `lookupAccent` for why and for how to
-  // remove this.
   if (colors === undefined) {
     clearAccentOverride();
     return;
@@ -96,8 +88,6 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
     document.head.appendChild(styleEl);
   }
 
-  // Brand is the package `--accent` (focus, chart-1 and sidebar primary follow
-  // it). `--accent-soft` is the tinted hover fill that `bg-accent-soft` reads.
   styleEl.textContent = `
     :root {
       --accent: ${colors.light.primary};
@@ -115,9 +105,7 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Theme mode (read, save, optimistic update) is owned by ThemeModeProvider.
   const { theme, appearance, setTheme } = useThemeMode();
-  // Client-only gate without setState-in-effect (SSR snapshot = false).
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -133,7 +121,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (syncedCustomTheme === undefined) return;
     const customTheme = syncedCustomTheme ?? {};
-    // Neutral is dark-family — accent `.dark` rules apply via the `dark` class.
     applyCustomThemeVars(customTheme, appearance !== "light");
   }, [syncedCustomTheme, appearance]);
 

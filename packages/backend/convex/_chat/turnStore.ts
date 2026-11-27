@@ -112,9 +112,7 @@ export async function findOpenSessionTurn(
 
 type OpenTurnFields = {
   streamingEntityId: string;
-  /** Chat turns only: runs and one-shot agents have no placeholder message. */
   placeholderMessageId?: Id<"messages">;
-  /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];

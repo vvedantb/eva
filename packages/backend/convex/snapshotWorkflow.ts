@@ -7,30 +7,12 @@ import {
 } from "./_sandbox_runtime/snapshotStates";
 import { errorMessage } from "@vvedantb/server";
 
-// Detached seed-run poll loop (per app). The whole per-app pipeline (git
-// update, deps/build, daemons, seed, clean stop) runs as ONE detached script on
-// the sandbox (launchSeedRun) so no Convex action ever waits on a slow command
-// — cold docker pulls or readiness waits can take as long as they need. The
-// workflow just polls the script's outcome markers.
 const SEED_RUN_POLL_DELAY_MS = 20_000;
-const MAX_SEED_RUN_POLLS = 150; // ~50 minutes at 20s intervals
+const MAX_SEED_RUN_POLLS = 150;
 
-// Seeded-snapshot capture poll loop (per app). The capture is triggered
-// without blocking (triggerSeededSnapshot) then polled here across separate
-// steps, so a long DB-volume capture never exceeds Convex's 600s per-action
-// ceiling. We poll the snapshot entity until it reaches "ready" (success) or a
-// failure state — see pollSeededSnapshotState for why the sandbox state is not
-// a reliable completion signal.
 const SEED_SNAPSHOT_POLL_DELAY_MS = 15_000;
-const MAX_SEED_SNAPSHOT_POLLS = 240; // ~60 minutes at 15s intervals — captures
-// normally finish in ~6m but have been observed taking 40m+ when the sandbox
-// provider's builder/runner infrastructure is degraded; the window must outlast
-// a bad day because exhausting it costs the app its seeded refresh for this
-// build.
+const MAX_SEED_SNAPSHOT_POLLS = 240;
 
-// Approximate wall-clock into the seed run at poll N. Each iteration is the
-// runAfter delay plus the poll exec itself (~1s), so the delay dominates;
-// Date.now() is unavailable in a deterministic workflow body.
 function formatPollElapsed(pollAttempt: number): string {
   const totalSeconds = Math.round(
     (pollAttempt * SEED_RUN_POLL_DELAY_MS) / 1000,
@@ -67,16 +49,10 @@ export const snapshotBuildWorkflow = workflow.define({
   args: {
     buildId: v.id("snapshotBuilds"),
     repoSnapshotId: v.id("repoSnapshots"),
-    // App that triggered the build (when using a shared monorepo snapshot config).
     appRepoId: v.optional(v.id("githubRepos")),
-    // Rebuild the declarative base Image first (bootstrap / toolchain
-    // changes). The nightly cron and Rebuild Now leave this unset.
     forceImageRebuild: v.optional(v.boolean()),
   },
   handler: async (step, args) => {
-    // Refresh the `.eva/config.json` cache first: the build and seed commands
-    // read below, and the fingerprint stored at capture, must be the file's
-    // values on the branch this build checks out.
     const snapshotOwner = await step.runQuery(
       internal.repoSnapshots.getRepoSnapshotInternal,
       { repoSnapshotId: args.repoSnapshotId },
@@ -87,7 +63,6 @@ export const snapshotBuildWorkflow = workflow.define({
       });
     }
 
-    // Resolve config + repo (owner/name/installation drive git fetch auth).
     const config = await step.runQuery(
       internal.repoSnapshots.getRepoSnapshotInternal,
       { repoSnapshotId: args.repoSnapshotId },
@@ -116,8 +91,6 @@ export const snapshotBuildWorkflow = workflow.define({
     }
     const branch = config.branch;
 
-    // Stop Commands live on the app repo; shared monorepo configs may point at
-    // the parent while the build is triggered from apps/web or eprocurement.
     const hasStopCommands = (repo.stopCommands?.length ?? 0) > 0;
     const imageOnlyBuild = !hasStopCommands && args.forceImageRebuild !== true;
     const rebuildBaseImage = args.forceImageRebuild === true || imageOnlyBuild;
@@ -129,19 +102,10 @@ export const snapshotBuildWorkflow = workflow.define({
       });
     }
 
-    // Bootstrap / toolchain path: rebuild the base Image first
-    // (serial — captures contending with the Image builder slow both down).
-    // `config` was read before the base rebuild, so its baseSnapshotId is the
-    // PREVIOUS base — which the rebuild below deletes once the new one is stored.
-    // Seeding after a rebuild must boot from the new id, not that stale one.
     let rebuiltBaseSnapshotId: string | undefined;
     if (rebuildBaseImage) {
       const baseSnapshotLabel = `base-${config.repoId}`;
       let prepSandboxId: string | null = null;
-      // Keep-last-good: hold the previous base id and delete it only AFTER
-      // the new one is captured and stored. Deleting up front would leave
-      // repoSnapshots.baseSnapshotId pointing at a deleted snapshot on any
-      // failure, breaking every sandbox boot until the next success.
       const previousBaseSnapshotId = config.baseSnapshotId ?? null;
 
       await step.runMutation(internal.repoSnapshots.appendLogs, {
@@ -205,8 +169,6 @@ export const snapshotBuildWorkflow = workflow.define({
             { runAfter: SEED_RUN_POLL_DELAY_MS },
           );
           seedState = poll.state;
-          // Stream stage transitions so the build page shows live progress
-          // instead of staying silent until the terminal status.
           if (poll.stage !== null && poll.stage !== lastStage) {
             lastStage = poll.stage;
             await step.runMutation(internal.repoSnapshots.appendLogs, {
@@ -290,7 +252,6 @@ export const snapshotBuildWorkflow = workflow.define({
         await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
           sandboxId: prepSandboxId,
           repoId: appRepoId,
-          // Keep the new base snap_* — Vercel delete does not cascade reliably.
           preserveSnapshotId: effectiveBaseId,
         });
         prepSandboxId = null;
@@ -301,9 +262,6 @@ export const snapshotBuildWorkflow = workflow.define({
         });
         rebuiltBaseSnapshotId = effectiveBaseId;
 
-        // New base is stored and bootable — now retire the previous one.
-        // Best-effort: a leaked old snapshot is harmless; failing the build
-        // here would be worse than leaving it for the next rebuild to clear.
         if (
           previousBaseSnapshotId &&
           previousBaseSnapshotId !== effectiveBaseId
@@ -325,10 +283,6 @@ export const snapshotBuildWorkflow = workflow.define({
           }
         }
 
-        // Only finish here when nothing follows. completeBuild ignores any
-        // build that is no longer "running", so marking success before the
-        // seed step would hide the seed's own result — and drop the build out
-        // of "running", letting a second Rebuild Now start alongside it.
         if (hasStopCommands) {
           await step.runMutation(internal.repoSnapshots.appendLogs, {
             buildId: args.buildId,
@@ -366,18 +320,11 @@ export const snapshotBuildWorkflow = workflow.define({
       });
     }
 
-    // No seeding without Stop Commands. This also covers forceImageRebuild on an
-    // app with no Stop Commands: rebuild the base Image above, then stop here
-    // (there is nothing to seed).
     if (!hasStopCommands) return;
 
-    // Per-app seeding: this app's snapshot is built and captured independently.
     const seededName = `seeded-${appRepoId}`;
     let prepSandboxId: string | null = null;
 
-    // Error handler: mark this app as fallback and complete the build with an error.
-    // On failure, clear the seeded snapshot name (conservative keep-last-good: the old one
-    // stays live until a successful build replaces it).
     const failBuild = async (error: string): Promise<void> => {
       await step.runMutation(internal.repoSnapshots.recordSeededApp, {
         buildId: args.buildId,
@@ -394,7 +341,6 @@ export const snapshotBuildWorkflow = workflow.define({
     };
 
     try {
-      // Mark this app as actively seeding so the UI shows progress.
       await step.runMutation(internal.repoSnapshots.recordSeededApp, {
         buildId: args.buildId,
         repoId: appRepoId,
@@ -402,8 +348,6 @@ export const snapshotBuildWorkflow = workflow.define({
         seededSnapshotName: null,
       });
 
-      // Prefer the Vercel base Image (`snap_*`) when present so seed-prep does
-      // not create a blank sandbox; without one it clones from scratch.
       const seedImageSnapshot = rebuiltBaseSnapshotId ?? config.baseSnapshotId;
       const created = await step.runAction(
         internal.snapshotActions.createSeedPrepSandbox,
@@ -416,7 +360,6 @@ export const snapshotBuildWorkflow = workflow.define({
       }
       prepSandboxId = created.sandboxId;
 
-      // Fresh refs for the detached script's hard reset (owns git auth).
       await step.runAction(
         internal.sandbox.fetchBaseBranch,
         {
@@ -430,15 +373,11 @@ export const snapshotBuildWorkflow = workflow.define({
         { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
       );
 
-      // The inputs launchSeedRun is about to read, stamped on the snapshot.
       const seededFingerprint = await step.runQuery(
         internal.repoSnapshots.getCurrentSeedFingerprint,
         { repoId: appRepoId },
       );
 
-      // Launch the whole pipeline detached; poll its outcome markers. The
-      // launch is idempotent (live-process guard), so retries can't race a
-      // second copy of the script.
       await step.runAction(
         internal.snapshotActions.launchSeedRun,
         {
@@ -464,8 +403,6 @@ export const snapshotBuildWorkflow = workflow.define({
           { runAfter: SEED_RUN_POLL_DELAY_MS },
         );
         seedState = poll.state;
-        // Stream stage transitions so the build page shows live progress
-        // instead of staying silent until the terminal status.
         if (poll.stage !== null && poll.stage !== lastStage) {
           lastStage = poll.stage;
           await step.runMutation(internal.repoSnapshots.appendLogs, {
@@ -475,8 +412,6 @@ export const snapshotBuildWorkflow = workflow.define({
         }
       }
       if (seedState !== "done") {
-        // Grab the seed-run + daemon logs into the build record BEFORE the
-        // sandbox is torn down — teardown destroys the evidence.
         const diagnostics = await step.runAction(
           internal.snapshotActions.fetchSeedDiagnostics,
           { sandboxId: prepSandboxId, repoId: appRepoId },
@@ -496,16 +431,8 @@ export const snapshotBuildWorkflow = workflow.define({
         return;
       }
 
-      // Get this app's previous seeded snapshot (for keep-last-good fallback and
-      // later cleanup). Stored on the githubRepos record, queried above as `repo`.
       const previousSeededSnapshotName = repo.seededSnapshotName ?? null;
 
-      // Capture the refreshed filesystem into ONE snapshot. Trigger fires the
-      // POST without blocking; poll across separate steps so a long DB
-      // capture never exceeds Convex's 600s per-action ceiling.
-      // triggerSeededSnapshot returns Vercel's generated `snap_*` id, distinct
-      // from seededName. All subsequent steps must use effectiveSeededName so that the right
-      // id is polled and written to seededSnapshotName on every app repo.
       await step.runMutation(internal.repoSnapshots.appendLogs, {
         buildId: args.buildId,
         chunk:
@@ -537,7 +464,6 @@ export const snapshotBuildWorkflow = workflow.define({
           repoId: appRepoId,
         });
         prepSandboxId = null;
-        // Best-effort: remove the partial/failed capture so it doesn't linger.
         await step.runAction(internal.snapshotActions.deleteSeededSnapshot, {
           snapshotName: effectiveSeededName,
           repoId: appRepoId,
@@ -551,12 +477,10 @@ export const snapshotBuildWorkflow = workflow.define({
       await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
         sandboxId: prepSandboxId,
         repoId: appRepoId,
-        // Keep the new seeded snap_* — Vercel delete does not cascade reliably.
         preserveSnapshotId: effectiveSeededName,
       });
       prepSandboxId = null;
 
-      // Point this app at the new snapshot (per-app model).
       await step.runMutation(internal.repoSnapshots.setSeededSnapshotName, {
         repoId: appRepoId,
         seededSnapshotName: effectiveSeededName,
@@ -575,10 +499,6 @@ export const snapshotBuildWorkflow = workflow.define({
         logs: `Seeded snapshot ${effectiveSeededName} built for this app.\n`,
       });
 
-      // This app's own seeded snapshot just moved — any codebase group that
-      // uses it as its primary has a stale fingerprint now, so schedule each
-      // one to rebuild. Best-effort: buildGroupSnapshot logs and no-ops on its
-      // own failures, so a lookup/schedule failure here must not fail the build.
       try {
         const groupIdsToRebuild = await step.runQuery(
           internal.repoGroups.listGroupsByPrimaryRepo,
@@ -597,9 +517,6 @@ export const snapshotBuildWorkflow = workflow.define({
         );
       }
 
-      // Best-effort: delete the previous snapshot if it differed from the new one
-      // (keep-last-good already swapped above, so failures here just leave a stray
-      // snapshot that the next successful build removes).
       if (
         previousSeededSnapshotName &&
         previousSeededSnapshotName !== effectiveSeededName

@@ -16,8 +16,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 const MAX_TERMINAL_PANES = 8;
 const MAX_PREVIEW_PANES = 8;
 
-// Base sandbox tabs (PRD is added separately per-surface). Stable references so
-// the Shift+Tab hotkey memo and tab bar filter don't recompute every render.
 const ALL_SANDBOX_TABS: ReadonlyArray<SandboxTab> = [
   "preview",
   "computer",
@@ -38,9 +36,7 @@ export type SharedTerminalPane = NonNullable<
 export interface SandboxPanesApi {
   consoleDock: ConsoleDockApi;
   previewIds: string[];
-  /** The default dev-server pane (index 0), rendered as the preview Console. */
   consolePane: SharedTerminalPane | undefined;
-  /** User-created terminals (index 1..N), shown in the bottom panel. */
   userTermPanes: SharedTerminalPane[];
   resolvedPreviewActive: string;
   resolvedTermActive: string;
@@ -52,17 +48,11 @@ export interface SandboxPanesApi {
   handleCloseTerminal: (id: string) => Promise<void>;
   newPreviewDisabled: boolean;
   newTerminalDisabled: boolean;
-  /** Base tabs rendered in the right sandbox panel. */
   enabledTabs: ReadonlyArray<SandboxTab>;
 }
 
 interface UseSandboxPanesArgs {
   owner: SandboxOwner;
-  /**
-   * Full localStorage namespace for pane state — e.g. `session:<id>` or
-   * `task:<id>`. Final keys: `eva:<storageScope>:previews` and
-   * `eva:<storageScope>:terminals`.
-   */
   storageScope: string;
   isActive: boolean;
   terminalPanes: SharedTerminalPane[] | undefined;
@@ -109,8 +99,6 @@ export function useSandboxPanes({
   );
   const termPanes = terminalPanes ?? [];
   const termIds = termPanes.map((pane) => pane.id);
-  // Pane 0 is the shared dev-server pane (rendered as the preview Console);
-  // panes 1..N are user-created terminals shown in the bottom panel.
   const consolePane = termPanes[0];
   const userTermPanes = termPanes.slice(1);
   const userTermIds = userTermPanes.map((pane) => pane.id);
@@ -118,11 +106,6 @@ export function useSandboxPanes({
     setTermActiveState(activeId);
   };
 
-  // Terminal panes are shared Convex state so every collaborator sees and
-  // controls the same PTYs. Ensure the default pane exists on mount even when
-  // the sandbox is inactive — TerminalView needs a slot to render its
-  // "start the sandbox to view terminal" empty state. The mutation is
-  // idempotent for concurrent viewers.
   /* eslint-disable no-effect/no-event-handler --
      The pane list is shared Convex state that any collaborator can empty, so
      re-creating the default pane follows the live query, not a local action. */
@@ -132,9 +115,6 @@ export function useSandboxPanes({
   }, [termIds.length, ensureDefaultTerminalPane, owner]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Ensure a default preview pane exists even before the Preview tab is
-  // selected, so the iframe can mount (hidden) and stay cached across tab
-  // switches — including first paint on Review / Editor deep-links.
   useEffect(() => {
     if (previewIds.length > 0) return;
     const id = crypto.randomUUID();
@@ -142,9 +122,6 @@ export function useSandboxPanes({
     setPreviewActive(id);
   }, [previewIds.length, setPreviewIds, setPreviewActive]);
 
-  // The stored active id can point at a removed pane (another collaborator
-  // closed it, or the console pane's id lingers from before it became
-  // user-only). Resolve it during render; nothing reads the stored copy raw.
   const resolvedTermActive =
     userTermIds.length > 0
       ? termActive && userTermIds.includes(termActive)
@@ -181,7 +158,6 @@ export function useSandboxPanes({
   };
 
   const handleCloseTerminal = async (ptyId: string) => {
-    // The console pane is never closable from the UI.
     if (consolePane?.id === ptyId) return;
     const removedIdx = userTermIds.indexOf(ptyId);
     if (removedIdx < 0) return;

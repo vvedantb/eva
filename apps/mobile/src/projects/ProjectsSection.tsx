@@ -40,12 +40,10 @@ import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** The list's search, sort and hidden stages (the web `ProjectsClient` filters over derived stages). */
 type StageListFilters = Omit<ProjectListFilters, "hiddenPhases"> & { hiddenPhases: ProjectStage[] };
 
 const STAGE_LIST_DEFAULTS: StageListFilters = { ...PROJECT_LIST_DEFAULTS, hiddenPhases: [] };
 
-/** The stage groups (To Do, In Progress…) folded away from their default (open with projects), kept on the device. */
 const toggledProjectPhases = persistedIdSet("projectPhasesToggled");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -58,7 +56,6 @@ export function useProjectRepo() {
     repos,
     repo,
     setRepo,
-    /** The new-project screen, on this repo. */
     openNew: () => router.push(repo ? { pathname: "/project/new", params: { repoId: repo._id } } : "/project/new"),
   };
 }
@@ -87,13 +84,11 @@ export function ProjectsSection() {
       <View className="px-4">
         <RepoPicker repos={repos} value={repo} onChange={setRepo} />
       </View>
-      {/* Keyed on the repo: its search, filters and open sections start fresh. */}
       <ProjectList key={repo._id} repo={repo} />
     </View>
   );
 }
 
-/** The list query for each mode, as the sessions list. */
 const PROJECT_LIST_QUERIES = {
   active: api.projects.list,
   archived: api.projects.listArchived,
@@ -102,14 +97,12 @@ const PROJECT_LIST_QUERIES = {
 const MODE_OPTIONS = ARCHIVE_LIST_MODES.map((value) => ({ value, label: ARCHIVE_LIST_MODE_LABELS[value] }));
 
 function ProjectList({ repo }: { repo: Repo }) {
-  // Not persisted: the list opens on Active each time, as the sessions list.
   const [mode, setMode] = useState<ArchiveListMode>("active");
   return (
     <View className="flex-1">
       <View className="px-4 pb-2">
         <SegmentedTabs value={mode} options={MODE_OPTIONS} onChange={setMode} />
       </View>
-      {/* Keyed on the mode: its search, filters and open sections start fresh. */}
       <ProjectModeList key={mode} repo={repo} mode={mode} />
     </View>
   );
@@ -119,12 +112,10 @@ function ProjectModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }) 
   const { openNew } = useProjectRepo();
   const scheme = useScheme();
   const projects = useQuery(PROJECT_LIST_QUERIES[mode], { repoId: repo._id });
-  // Each project's stage is derived from its child tasks, never stored.
   const statuses = useProjectListStatuses(repo._id, mode === "archived");
   const stageOf = (projectId: string): ProjectStage => statuses?.get(projectId)?.stage ?? "todo";
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<StageListFilters>(STAGE_LIST_DEFAULTS);
-  // Columns the user folded or unfolded: as the web, a column starts open when it has projects.
   const [toggled, toggle] = toggledProjectPhases.useSet("all");
   const actions = useProjectActions({ repo, users });
   const largerText = useLargerText();
@@ -220,7 +211,6 @@ function ProjectModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }) 
             />
           )}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No projects" />}
-          // Web: the list `p-3 pt-0`.
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
@@ -229,7 +219,6 @@ function ProjectModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }) 
   );
 }
 
-/** While the projects load: cards shaped as `ProjectRow` (title over preview, then the bar), 8 apart, on the list's `px-3`. */
 function ProjectPlaceholders() {
   const card = EVA_THEME[useScheme()].card;
   return (
@@ -248,14 +237,6 @@ function ProjectPlaceholders() {
 
 type Page = "root" | "sort" | "phases";
 
-/**
- * The web Projects toolbar at phone width: the search field ("Search
- * projects...") and the Options menu as a bottom sheet with a page per web
- * submenu: Sort (field, then direction) and Phases, then "Clear all filters"
- * when a filter is on. A sort pick closes the sheet, as the web menu
- * closes; a phase toggle keeps it open, and the last shown phase stays.
- * "+ New Project" is the header's "+".
- */
 function ProjectsToolbar({
   filters,
   onChange,
@@ -338,7 +319,6 @@ function ProjectsToolbar({
           returnKeyType="search"
         />
       </View>
-      {/* The web `secondary` Options button, icon only below `sm`: 40 high, reaching 44 with its slop. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="View options"

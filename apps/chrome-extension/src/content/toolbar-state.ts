@@ -5,7 +5,6 @@ export type ToolbarMode = "annotate" | "inspect" | null;
 interface ToolbarFeedback {
   message: string;
   type: "success" | "error";
-  /** When set, the feedback renders as a clickable action (e.g. open Eva). */
   action?: "sign_in";
 }
 
@@ -13,12 +12,10 @@ export interface ToolbarState {
   visible: boolean;
   feedback: ToolbarFeedback | null;
   loading: boolean;
-  /** Pixel position once dragged; -1 means "use default bottom-centre". */
   x: number;
   y: number;
   mode: ToolbarMode;
   projectModalOpen: boolean;
-  /** True when a backend request reported the user is not signed in. */
   signedOut: boolean;
   version: number;
 }
@@ -53,12 +50,6 @@ export function getToolbarState(): ToolbarState {
   return state;
 }
 
-/* ------------------------------ inspect bridge ----------------------------- *
- * The inspect overlay is mounted from content/index.ts. It registers a small
- * controller here so mode switching can start/stop it without this module
- * depending on the React mount.
- * --------------------------------------------------------------------------- */
-
 interface InspectController {
   start: () => void;
   stop: () => void;
@@ -69,8 +60,6 @@ let inspectController: InspectController | null = null;
 export function registerInspectController(controller: InspectController): void {
   inspectController = controller;
 }
-
-/* --------------------------------- actions --------------------------------- */
 
 export function showToolbar(): void {
   set({ visible: true });

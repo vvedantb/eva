@@ -53,16 +53,13 @@ export const AVE_TOOL_NAMES = [
 ] as const;
 
 const MAX_STEPS = 25;
-/** Well inside the 10-minute action limit, so the run always reaches finishRun. */
 const TOTAL_TIMEOUT_MS = 8 * 60_000;
 const STEP_TIMEOUT_MS = 3 * 60_000;
 const PUBLISH_INTERVAL_MS = 400;
-/** Tool output kept in the chat step and in the replayed model context. */
 const STEP_OUTPUT_CHARS = 2_000;
 const REPLAY_TOOL_OUTPUT_CHARS = 4_000;
 const REPLAY_TOTAL_CHARS = 200_000;
 
-/** The `ActivityStep` JSON shape the shared chat UI renders (`@vvedantb/ui`). */
 type AveStep = {
   type: "tool" | "response";
   label: string;
@@ -84,7 +81,6 @@ function toolLabel(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** A short, human line for the step: the argument a person would look for. */
 function toolDetail(input: string): string | undefined {
   const parsed = z
     .object({
@@ -110,7 +106,6 @@ const callToolTextSchema = z.object({
   ),
 });
 
-/** Flattens an MCP `CallToolResult` into the text the model reads. */
 function callToolResultText(result: object): string {
   const parsed = callToolTextSchema.safeParse(result);
   if (!parsed.success) return JSON.stringify(result);
@@ -136,7 +131,6 @@ function toAiTools(evaTools: readonly EvaTool[]): ToolSet {
     tools[evaTool.name] = dynamicTool({
       description: evaTool.description,
       inputSchema: z.object(evaTool.inputShape),
-      // `invoke` re-parses with the tool's own schema: the boundary check.
       execute: async (input) =>
         callToolResultText(await evaTool.invoke(JSON.stringify(input))),
     });
@@ -144,7 +138,6 @@ function toAiTools(evaTools: readonly EvaTool[]): ToolSet {
   return tools;
 }
 
-/** Caps tool outputs so a replayed run cannot blow the next run's context. */
 function capReplay(messages: ReadonlyArray<object>): string | undefined {
   const capped = JSON.stringify(messages, (_key, value) =>
     typeof value === "string" && value.length > REPLAY_TOOL_OUTPUT_CHARS
@@ -175,11 +168,6 @@ function describeFailure(failure: GatewayFailure): string {
   }
 }
 
-/**
- * Coalesces progress writes: at most one in flight, the latest state wins, and
- * the stream never waits on it. The mutation's answer doubles as the cancel
- * poll, so a Stop reaches the loop without a separate query.
- */
 function progressPublisher(
   ctx: ActionCtx,
   threadId: Id<"aveThreads">,
@@ -305,8 +293,6 @@ export const run = internalAction({
             break;
           }
           case "finish-step":
-            // Text written before a tool call is a response step of its own,
-            // so the final bubble reads in the order Ave actually worked.
             if (stepText.trim() !== "" && part.finishReason === "tool-calls") {
               steps.push({
                 type: "response",

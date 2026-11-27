@@ -1,25 +1,3 @@
-/**
- * Distro-agnostic package installs for Vercel sandboxes.
- *
- * eva's sandboxes used to be exclusively Amazon Linux 2023 (`runtime: "node24"`),
- * so every install site hardcoded `sudo dnf install -y …`. Managed Images move
- * new sandboxes to Ubuntu, but every seeded snapshot captured before that flip
- * is still AL2023 and still restores — so the SAME runtime code (desktop start,
- * jq/docker/tmux bootstrap, seed toolchain) runs on both distros, sometimes on
- * the same day.
- *
- * Rather than duplicate an `apt-get … || dnf …` fallback at ~30 call sites, this
- * module emits one bash helper that:
- *   1. picks the package manager present in the image (apt-get, else dnf),
- *   2. maps a distro-neutral package id to that manager's real package name,
- *   3. tries a batch install first, then falls back package-by-package so a
- *      single drifted name (e.g. `libasound2` → `libasound2t64` on Ubuntu 24.04+)
- *      names itself in the log instead of failing the whole group.
- *
- * The mapping lives in TypeScript (`PACKAGE_ALIASES`) and is compiled into a
- * bash `case` so it stays a single, testable source of truth.
- */
-
 /** Package manager flavours eva's sandbox images ship. */
 export type PackageManager = "apt" | "dnf";
 
@@ -32,7 +10,6 @@ export const PACKAGE_ALIASES: Record<
   string,
   Record<PackageManager, readonly string[]>
 > = {
-  // --- core toolchain ---
   docker: { apt: ["docker.io"], dnf: ["docker"] },
   git: { apt: ["git"], dnf: ["git"] },
   jq: { apt: ["jq"], dnf: ["jq"] },
@@ -44,7 +21,6 @@ export const PACKAGE_ALIASES: Record<
   curl: { apt: ["curl"], dnf: ["curl"] },
   unzip: { apt: ["unzip"], dnf: ["unzip"] },
 
-  // --- build toolchain (node-gyp / better-sqlite3 / psycopg2) ---
   gcc: { apt: ["gcc"], dnf: ["gcc"] },
   "g++": { apt: ["g++"], dnf: ["gcc-c++"] },
   make: { apt: ["make"], dnf: ["make"] },
@@ -53,14 +29,10 @@ export const PACKAGE_ALIASES: Record<
   "python3-dev": { apt: ["python3-dev"], dnf: ["python3-devel"] },
   "libpq-dev": { apt: ["libpq-dev"], dnf: ["libpq-devel"] },
 
-  // --- VNC desktop stack ---
   "vnc-server": {
     apt: ["tigervnc-standalone-server", "tightvncserver"],
     dnf: ["tigervnc-server"],
   },
-  // Debian splits the shared data/config out of the server package; AL2023 ships
-  // it inside tigervnc-server, so the dnf side is the same package again (a
-  // second install of an installed package is a no-op).
   "vnc-common": { apt: ["tigervnc-common"], dnf: ["tigervnc-server"] },
   "x11-utils": { apt: ["x11-utils"], dnf: ["xorg-x11-utils"] },
   "x11-xserver-utils": {
@@ -70,12 +42,6 @@ export const PACKAGE_ALIASES: Record<
   xterm: { apt: ["xterm"], dnf: ["xterm"] },
   "dbus-x11": { apt: ["dbus-x11"], dnf: ["dbus-x11"] },
 
-  // --- Chrome/Electron shared libraries ---
-  // Primary apt names are the ones the Phase 1 harness actually installed on
-  // `vercel/sandbox/universal` (Ubuntu 26.04), not names inferred from docs.
-  // Ubuntu 24.04 renamed some of these for the 64-bit time_t ABI break and 26.04
-  // has since dropped several of those suffixes again, so where the two releases
-  // disagree the other spelling stays as a fallback candidate.
   gtk3: { apt: ["libgtk-3-0", "libgtk-3-0t64"], dnf: ["gtk3"] },
   nss: { apt: ["libnss3"], dnf: ["nss"] },
   alsa: { apt: ["libasound2t64", "libasound2"], dnf: ["alsa-lib"] },
@@ -145,7 +111,6 @@ export const CHROME_RUNTIME_LIBRARY_PACKAGES = [
   "cups-libs",
 ] as const;
 
-/** Compile-time guard: every referenced id must exist in PACKAGE_ALIASES. */
 function assertKnown(ids: readonly string[]): readonly string[] {
   for (const id of ids) {
     if (!(id in PACKAGE_ALIASES)) {
@@ -155,15 +120,12 @@ function assertKnown(ids: readonly string[]): readonly string[] {
   return ids;
 }
 
-/** Bash `case` arm per package id, emitting candidates for the active manager. */
 function renderAliasCase(): string {
   const arms = Object.entries(PACKAGE_ALIASES).map(([id, byManager]) => {
     const apt = byManager.apt.join(" ");
     const dnf = byManager.dnf.join(" ");
     return `    ${id}) if [ "$2" = apt ]; then echo "${apt}"; else echo "${dnf}"; fi ;;`;
   });
-  // Unknown ids fall through to the id itself: a package whose name is identical
-  // everywhere never needs a table entry.
   return ['  case "$1" in', ...arms, '    *) echo "$1" ;;', "  esac"].join(
     "\n",
   );
@@ -190,8 +152,6 @@ export const PACKAGE_HELPER_SCRIPT = [
   "eva__pkg_candidates() {",
   renderAliasCase(),
   "}",
-  // apt needs an index refresh before the first install; the marker keeps the
-  // (slow) refresh to once per boot even though callers install in many stages.
   "eva__pkg_apt_refresh() {",
   "  [ -f /tmp/.eva-apt-refreshed ] && return 0",
   `  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y >>${PACKAGE_INSTALL_LOG} 2>&1 || true`,
@@ -209,14 +169,6 @@ export const PACKAGE_HELPER_SCRIPT = [
   "  echo \"eva_pkg_install: no candidate installed for '$pkg' via $mgr\" >&2",
   "  return 1",
   "}",
-  // Batch first (one transaction, far faster), then package-by-package so the
-  // log names the exact id whose package drifted rather than just the group.
-  //
-  // Recommends are deliberately left ON for apt. The Phase 1 harness verified
-  // every name below with plain `apt-get install -y`; `--no-install-recommends`
-  // would trade a few hundred MB in a snapshot captured once for a toolchain
-  // that was never actually exercised in that shape (docker.io's cgroupfs/
-  // apparmor bits, for one).
   "eva_pkg_install() {",
   '  [ "$#" -gt 0 ] || return 0',
   '  local mgr pkg batch="" rc=0',
@@ -232,29 +184,17 @@ export const PACKAGE_HELPER_SCRIPT = [
   '  for pkg in "$@"; do eva__pkg_install_one "$mgr" "$pkg" || rc=1; done',
   "  return $rc",
   "}",
-  // Installs an already-downloaded package FILE (not a repo name). Vendors that
-  // ship one artifact per packaging format (code-server) download the right one
-  // and hand it here rather than shelling out to dpkg/rpm themselves.
   "eva_pkg_file_ext() {",
   '  if [ "$(eva_pkg_manager)" = apt ]; then echo deb; else echo rpm; fi',
   "}",
   "eva_pkg_install_file() {",
   "  local path=$1 mgr; mgr=$(eva_pkg_manager)",
   '  if [ "$mgr" = apt ]; then',
-  // apt-get, not dpkg -i: this resolves the artifact's own dependencies.
   `    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$path" >>${PACKAGE_INSTALL_LOG} 2>&1`,
   "  else",
   `    sudo rpm -Uvh "$path" >>${PACKAGE_INSTALL_LOG} 2>&1`,
   "  fi",
   "}",
-  // ffmpeg is deliberately NOT here — see _sandbox/ffmpegInstall.ts. Its every
-  // step has to be gated on the binary actually running rather than on the
-  // manager's exit code (AL2023's pipewire JACK shim claims the libjack
-  // capability and installs it off the loader path, so dnf exits 0 while ffmpeg
-  // still dies), which is the opposite of eva_pkg_install's contract.
-  //
-  // Chrome is not in either distro's default repos, so each manager needs its
-  // own vendor repo registered first. Chromium is the soft fallback.
   "eva_pkg_install_chrome() {",
   "  command -v google-chrome-stable >/dev/null 2>&1 && return 0",
   "  command -v chromium >/dev/null 2>&1 && return 0",
@@ -280,9 +220,6 @@ export const PACKAGE_HELPER_SCRIPT = [
   "  fi",
   "  command -v google-chrome-stable >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1",
   "}",
-  // GitHub CLI. The pinned release tarball is the primary path on both distros
-  // (see snapshotActions); this is the repo-based fallback when that download
-  // flakes, which is the only part that differs by manager.
   "eva_pkg_install_gh() {",
   "  command -v gh >/dev/null 2>&1 && return 0",
   "  local mgr; mgr=$(eva_pkg_manager)",

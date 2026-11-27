@@ -100,7 +100,6 @@ export function getLeaseTerminalReason(): LeaseTerminalReason | null {
   return terminalReason;
 }
 
-/** A released lease never matches; otherwise id and generation must match. */
 function isSameTurnLease(
   a: TurnLeaseIdentity,
   b: TurnLeaseIdentity | null,

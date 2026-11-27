@@ -1,6 +1,5 @@
 import type { Plugin } from "vite";
 
-/** Replaced in `index.html` with one preconnect + dns-prefetch pair per origin. */
 const PLACEHOLDER = "<!-- origin-hints -->";
 
 function stringEnv(
@@ -19,12 +18,6 @@ function originOf(url: string): string | undefined {
   }
 }
 
-/**
- * A Clerk publishable key carries its own frontend API host: the part after
- * `pk_test_` / `pk_live_` is base64 of `<host>$`. Deriving the host from the key
- * means the hint can never point at a different Clerk instance than the one the
- * app authenticates against.
- */
 function clerkFrontendOrigin(publishableKey: string): string | undefined {
   const encoded = publishableKey.replace(/^pk_(test|live)_/, "");
   if (encoded === publishableKey) return undefined;

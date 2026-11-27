@@ -9,7 +9,6 @@ import { prNumberFromGithubUrl, type PrState } from "@eva/shared";
 export interface PullRequestContext {
   readonly number: number;
   readonly title: string;
-  /** Canonical GitHub `html_url`. The identity of the chip (dedupe key). */
   readonly url: string;
   readonly headBranch?: string;
   readonly baseBranch?: string;

@@ -1,11 +1,3 @@
-/**
- * Membership rules for a codebase group, shared by `repoGroups.create`/`update`
- * and by `sessions.create` (which validates an ad-hoc selection the same way).
- *
- * Pure so both paths cannot drift: a selection Eva would refuse to save must
- * also be refused when it is passed straight into a session.
- */
-
 /** Identity of one repo row, as much of it as the rules need. */
 export type RepoGroupMember = {
   id: string;

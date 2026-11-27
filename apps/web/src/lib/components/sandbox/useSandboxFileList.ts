@@ -32,10 +32,6 @@ interface SandboxFileListSnapshot {
   state: SandboxFileListState;
 }
 
-// Sandboxes heartbeat frequently and the Files tab stays mounted while hidden.
-// Keyed by sandbox+root so quick-open and the tree share the same data, and
-// switching root (multi-repo sessions) does not clobber the other repo's
-// cached listing.
 const fileListCache = new Map<string, CachedFileList>();
 
 function fileListCacheKey(
@@ -75,7 +71,6 @@ export function useSandboxFileList({
   sandboxId,
   repoId,
   isActive,
-  /** Lists a linked repo's checkout instead of the primary (multi-repo sessions). */
   rootPath,
 }: {
   sandboxId: string | undefined;
@@ -133,9 +128,6 @@ export function useSandboxFileList({
     setIsRefreshing(false);
   };
 
-  // Listing is an imperative sandbox action rather than a live Convex query;
-  // this effect synchronizes it when a sandbox starts, changes, or the root
-  // selector (multi-repo sessions) points at a different checkout.
   useEffect(() => {
     if (!sandboxId) {
       loadedFor.current = "";
@@ -192,9 +184,6 @@ export function useSandboxFileList({
 
     return () => {
       cancelled = true;
-      // A cancelled attempt must not count as loaded: StrictMode runs this
-      // effect twice on mount, and the second run would otherwise skip the
-      // fetch the first run just abandoned, leaving the tree on its spinner.
       loadedFor.current = "";
     };
   }, [sandboxId, isActive, repoId, rootPath, listSandboxFiles]);

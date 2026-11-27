@@ -48,11 +48,6 @@ export function getGitHubCredentials() {
 
 let sharedAppAuth: ReturnType<typeof createAppAuth> | null = null;
 
-/**
- * One `createAppAuth` per process. It caches installation tokens (keyed by
- * installation, permissions and repositories) until shortly before expiry,
- * so repeated calls in a warm action reuse the token instead of minting one.
- */
 function appAuth(): ReturnType<typeof createAppAuth> {
   sharedAppAuth ??= createAppAuth(getGitHubCredentials());
   return sharedAppAuth;
@@ -69,14 +64,6 @@ export async function getInstallationToken(
   return installationAuth.token;
 }
 
-/**
- * Token for exactly one repository in an installation (contents write +
- * metadata read). Used when a sandbox asks for credentials for a repository
- * other than its own: it can clone and push that repository, but cannot reach
- * the rest of the installation or touch PRs, issues or workflows. Scopes by
- * repository id when known; GitHub also accepts the repository name for
- * installations whose id we never recorded.
- */
 function siblingRepoInstallationAuth(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
@@ -124,11 +111,6 @@ export function getAppOctokit(): Octokit {
   });
 }
 
-/**
- * A token plus its real GitHub expiry (unix seconds). The process cache above
- * can hand out a token up to 59 minutes old, so callers that cache it again
- * (the sandbox credential helper) must key off `expiresAt`, not fetch time.
- */
 const sandboxGitCredentialValidator = v.object({
   token: v.string(),
   expiresAt: v.number(),

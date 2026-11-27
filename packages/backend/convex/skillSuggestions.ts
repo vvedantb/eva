@@ -39,7 +39,6 @@ export const suggest = action({
   ): Promise<{ needsSkill: number; suggestions: RankedSuggestion[] }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    // Flag off (also old APKs that call without checking it): no Jev call, no chips.
     const flags = await ctx.runQuery(api.auth.getExperimentalFlags, {});
     if (!flags.skillSuggestions) return { needsSkill: 0, suggestions: [] };
 

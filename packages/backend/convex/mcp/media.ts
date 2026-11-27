@@ -2,11 +2,6 @@ import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, internalQuery } from "../_generated/server";
 
-// Agent-facing media hosting for the MCP `upload_media` / `get_media_url`
-// tools — lets sandbox agents host a screenshot/recording at a permanent
-// public URL so it can be embedded in a GitHub PR comment or Linear issue
-// (chat attachments are not visible outside Eva).
-
 /** Generates a temporary upload URL a sandbox agent can POST raw bytes to. */
 export const generateUploadUrl = internalMutation({
   args: {},

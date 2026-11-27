@@ -34,11 +34,7 @@ export function ScheduleDatesPopover({
           <IconCalendarPlus size={14} />
           Set dates
         </Button>
-      </PopoverTrigger>
-      {/* Two months side by side are ~560px. `PopoverContent` already caps its
-          width on a phone, so the calendar scrolls sideways inside the popover
-          instead of pushing the page. */}
-      <PopoverContent className="w-auto max-sm:overflow-x-auto p-0" align="end">
+      </PopoverTrigger>      <PopoverContent className="w-auto max-sm:overflow-x-auto p-0" align="end">
         <Calendar
           mode="range"
           numberOfMonths={2}

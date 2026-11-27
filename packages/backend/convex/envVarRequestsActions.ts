@@ -12,14 +12,6 @@ import { writeSandboxFile } from "./_sandbox_runtime/sandboxFiles";
 import { EVA_ENV_FILE, renderEvaEnvFile } from "./_sandbox/vercelEnvFile";
 import { savedReply } from "./_envVarRequests/replies";
 
-/**
- * Appends the var to the running sandbox's env file, so the agent's next shell
- * has it without a restart. The value goes in through `writeFile`, never on an
- * exec command line, and the temp file is removed in the same exec. A later
- * `export` wins when the file is sourced, so appending also replaces. False
- * when the VM is not running: `getSandboxHandle` never wakes it, and the next
- * start writes the file from the stored vars anyway.
- */
 async function writeLive(
   ctx: ActionCtx,
   request: Doc<"envVarRequests">,
@@ -79,7 +71,6 @@ export const save = action({
       });
     }
 
-    // Stored is what matters; a failed live write only delays it to the next start.
     const live = await writeLive(ctx, request, value).catch(() => false);
     await ctx.runMutation(internal.envVarRequests.markSaved, {
       requestId: request._id,

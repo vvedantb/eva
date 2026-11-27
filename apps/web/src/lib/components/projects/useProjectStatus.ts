@@ -13,10 +13,6 @@ export type ProjectTaskListRow = FunctionReturnType<
   typeof api.agentTasks.listByProject
 >[number];
 
-/**
- * The tasks whose latest run failed, of the rows the caller can open. One
- * query for every project on the page: the home repo is the access scope.
- */
 function useFailedTaskIds(
   repoId: Id<"githubRepos">,
   rows: ReadonlyArray<ProjectTaskListRow> | undefined,

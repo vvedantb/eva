@@ -152,7 +152,6 @@ async function fetchSkill(
   }
 }
 
-/** Shared GitHub scan + apply for manual, cron, and webhook skill sync. */
 async function syncSkillsForTarget(
   ctx: ActionCtx,
   target: SyncTarget,
@@ -274,7 +273,6 @@ export const syncAllRepos = internalAction({
       internal.repoSkills.listCanonicalReposForSkillSync,
       {},
     );
-    // Stagger to stay under GitHub secondary rate limits across many installs.
     for (let i = 0; i < repoIds.length; i++) {
       const repoId = repoIds[i];
       if (repoId === undefined) continue;
@@ -283,8 +281,6 @@ export const syncAllRepos = internalAction({
         internal._repoSkills.sync.syncRepoInternal,
         { repoId },
       );
-      // Same daily pass converges the repo-owned `.eva/` config cache when a
-      // push webhook was missed.
       await ctx.scheduler.runAfter(
         i * 2000 + 1000,
         internal._evaConfig.sync.syncEvaConfig,

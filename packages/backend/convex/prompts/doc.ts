@@ -1,4 +1,3 @@
-/** Shared output format instructions appended to PRD-generating prompts. */
 const PRD_OUTPUT = `## Output Format
 You MUST output ONLY valid JSON with this exact structure:
 {

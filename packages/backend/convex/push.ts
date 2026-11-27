@@ -37,7 +37,6 @@ export const { register, unregister, listTokensForUser, removeTokens, send, chec
       if (!userId) throw new Error("Not authenticated");
       return userId;
     },
-    // Keep the return annotations: without them `internal` refers to itself (TS7022).
     listTokensRef: (): ExpoPushListTokensRef<Id<"users">> => internal.push.listTokensForUser,
     removeTokensRef: (): ExpoPushRemoveTokensRef => internal.push.removeTokens,
     sendRef: (): ExpoPushSendRef<Id<"users">> => internal.push.send,

@@ -52,11 +52,6 @@ export function getComponentName(fiber: FiberNode): string {
   }
 
   if (typeof type === "function") {
-    // React attaches `displayName` as an optional extra property, so it is not
-    // on the built-in `Function` type that `typeof` narrowing gives us. Narrow
-    // with `in` (same approach as the object branch below) instead of asserting.
-    // The length check keeps the original `||` semantics: an empty displayName
-    // falls through to the function name.
     if (
       "displayName" in type &&
       typeof type.displayName === "string" &&
@@ -358,9 +353,6 @@ export function generateSelector(element: HTMLElement): string {
       }
     }
 
-    // Annotated, not inferred: `parent` feeds the `current = parent` back-edge
-    // at the end of the loop, and inferring it from the narrowed `current` makes
-    // the two types mutually dependent (TS7022).
     const parent: HTMLElement | null = current.parentElement;
     if (parent) {
       const currentElement = current;

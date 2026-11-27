@@ -18,42 +18,15 @@ import {
 import { log, tryParseJsonObject } from "../utils.js";
 import { pidAlive, sleep, writeOomScoreAdj } from "../runtime/daemonProcess.js";
 
-/**
- * Eva-managed `opencode serve` process — one healthy HTTP server per sandbox,
- * shared by every turn.
- *
- * The opencode SDK is a typed HTTP client, so a server has to exist before a
- * turn can run. `createOpencode()` would spawn one per client, but it ties the
- * process lifetime to the caller: our callback exits after each turn, which
- * would mean a cold server start (~2s) on every single turn. Instead the server
- * is spawned detached, recorded in a pidfile, health-probed for reuse, and
- * restarted whenever the probe fails (crash, sandbox resume, OOM kill).
- *
- * NOTE: the server inherits the callback's env verbatim, HOME included. Do NOT
- * point HOME at OPENCODE_RUNTIME_HOME_DIR — that dir only holds Eva's own
- * session-state file, while opencode reads credentials from
- * /home/eva/.local/share/opencode/auth.json (written by
- * hydratePersistedOpencodeState before we get here).
- */
-
 const SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
 const SERVER_LOCK_DIR = OPENCODE_RUNTIME_HOME_DIR + "/server.lock";
 const SERVER_LOG_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.log";
 
 const HEALTH_PROBE_TIMEOUT_MS = 3_000;
-/**
- * Per-probe cap while a server boots. The socket accepts connections ~0.3s
- * before `opencode serve` can answer, and a request that lands in that window
- * never gets a reply: with the 3s cap every cold start lost ~3s to it. An
- * aborted probe does not cancel the instance bootstrap it started, so a short
- * cap only means a retry. Healthy replies take ~15ms (first one ~170ms).
- */
 const STARTUP_PROBE_TIMEOUT_MS = 250;
 const STARTUP_TIMEOUT_MS = 60_000;
 const HEALTH_POLL_INTERVAL_MS = 50;
-/** A lock older than this belongs to a callback that died mid-start. */
 const LOCK_STALE_MS = 90_000;
-/** Cap on the server log tail surfaced in error messages. */
 const LOG_TAIL_BYTES = 4_000;
 
 const opencodeServerBaseUrl =
@@ -72,10 +45,6 @@ export function readOpencodeServerLogTail(
   }
 }
 
-/**
- * `GET /config` is the cheapest authenticated-by-nothing route the server
- * exposes; a 2xx means the HTTP layer and the config loader are both up.
- */
 async function probeHealth(
   timeoutMs: number = HEALTH_PROBE_TIMEOUT_MS,
 ): Promise<boolean> {
@@ -99,11 +68,6 @@ function readRecordedPid(): number {
   }
 }
 
-/**
- * Kills the recorded server only when the pid still belongs to an opencode
- * process — pids are recycled, and a stale pidfile must never take out an
- * unrelated sandbox process (the repo's dev server, a user command).
- */
 function killRecordedServer(): void {
   const pid = readRecordedPid();
   if (!pid) return;
@@ -118,7 +82,6 @@ function killRecordedServer(): void {
     process.kill(pid, "SIGKILL");
     log("opencode server pid=" + String(pid) + " was unhealthy — killed");
   } catch {
-    /* already gone */
   }
 }
 
@@ -133,26 +96,14 @@ function spawnServer(): number {
         "--port=" + String(OPENCODE_SERVER_PORT),
       ],
       {
-        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
-        // whether Opencode can edit outside cwd in a multi-repo session; if
-        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
-        // instead — no rebuild needed.
         cwd: AGENT_CWD,
         env: { ...process.env },
-        // Detached: the server must outlive this turn's callback process so the
-        // next turn reuses it instead of paying a cold start.
         detached: true,
         stdio: ["ignore", logFd, logFd],
       },
     );
     child.unref();
     const pid = child.pid ?? 0;
-    // Make the kernel OOM killer prefer the agent subtree (server -> tool
-    // processes like tsc, which all inherit this score) over the callback,
-    // which the launcher deliberately protects as the heartbeat and failure
-    // reporter. Without this the server would inherit that protection and a
-    // memory-hungry tool could get the reporter killed instead of itself.
-    // Raising a score on our own child is always permitted.
     writeOomScoreAdj(pid, "300");
     writeFileSync(
       SERVER_STATE_FILE,
@@ -186,12 +137,6 @@ async function waitForHealth(pid: number): Promise<void> {
   );
 }
 
-/**
- * mkdir is the atomic primitive available on every filesystem, so the lock is a
- * directory rather than a file. A concurrent turn (chat + task on one sandbox)
- * that loses the race waits on the health probe instead of racing a second
- * server onto the same port.
- */
 function acquireStartupLock(): boolean {
   try {
     mkdirSync(SERVER_LOCK_DIR);
@@ -206,7 +151,6 @@ function acquireStartupLock(): boolean {
         return true;
       }
     } catch {
-      /* lost the reclaim race — fall through and wait */
     }
     return false;
   }
@@ -216,7 +160,6 @@ function releaseStartupLock(): void {
   try {
     rmSync(SERVER_LOCK_DIR, { recursive: true, force: true });
   } catch {
-    /* already released */
   }
 }
 
@@ -230,7 +173,6 @@ export async function ensureOpencodeServer(): Promise<string> {
   if (await probeHealth()) return opencodeServerBaseUrl;
 
   if (!acquireStartupLock()) {
-    // Another callback is starting the server; its health is our health.
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(HEALTH_POLL_INTERVAL_MS);
@@ -240,7 +182,6 @@ export async function ensureOpencodeServer(): Promise<string> {
       if (!existsSync(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
-    // The lock holder gave up. Fall through and start one ourselves.
     releaseStartupLock();
     if (!acquireStartupLock()) {
       throw new Error(
@@ -251,7 +192,6 @@ export async function ensureOpencodeServer(): Promise<string> {
   }
 
   try {
-    // Re-probe under the lock: the previous holder may have just succeeded.
     if (await probeHealth()) return opencodeServerBaseUrl;
     killRecordedServer();
     const startedAt = Date.now();

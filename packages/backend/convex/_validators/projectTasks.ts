@@ -2,10 +2,6 @@ import { v } from "convex/values";
 import { taskStatusValidator } from "./enums";
 import { prStateValidator } from "./tableFields";
 
-// Return shapes of a project's child tasks (`_projects/taskTable.ts`). A leaf
-// module: the list queries build their validators from these at load time,
-// so they must not pull the scheduler's import graph in.
-
 /**
  * `ProjectTaskFacts` (`@eva/shared/projectStatus`) as a return value: what
  * clients pass to the shared rules (`projectStatus`, `projectTaskNeedsYou`).
@@ -56,15 +52,12 @@ export const projectTaskRowValidator = v.union(
     approved: v.boolean(),
     phaseLabel: v.optional(v.string()),
     repoId: v.optional(v.id("githubRepos")),
-    /** `owner/name` of the task's repo. */
     repo: v.optional(v.string()),
     prState: v.optional(prStateValidator),
     prUrl: v.optional(v.string()),
     needsYou: v.optional(needsYouValidator),
     waitingForCoordinator: v.boolean(),
-    /** The open question to the coordinator, when there is one. */
     openAsk: v.optional(v.string()),
-    /** Reports newer than the coordinator's last turn. */
     newReports: v.array(v.string()),
     coordinatorRetries: v.number(),
   }),

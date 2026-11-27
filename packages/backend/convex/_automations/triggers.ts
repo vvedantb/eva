@@ -15,11 +15,6 @@ import {
 } from "../_automationEvents/events";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
-/**
- * True when the automation already has an agent run executing. An event run
- * still waiting out its debounce is `queued` with no workflow yet, and does
- * not count: it has not claimed a sandbox.
- */
 async function hasRunInFlight(
   ctx: MutationCtx,
   automationId: Id<"automations">,
@@ -40,13 +35,6 @@ async function hasRunInFlight(
   return queued.some((run) => run.activeWorkflowId !== undefined);
 }
 
-/**
- * Starts an automation's execution workflow, inserting a queued run unless an
- * event trigger already made one. Shared by the cron, "run now" and event
- * paths — all start an identical run once their eligibility checks pass. The
- * workflow never re-reads the row, so this is where the system-automation
- * catalog overlay is applied, and where an event's details join the prompt.
- */
 async function startAutomationRun(
   ctx: MutationCtx,
   storedAutomation: Doc<"automations">,
@@ -126,8 +114,6 @@ export const runNow = authMutation({
       args.automationId,
       ctx.userId,
     );
-    // Resolved so the prompt guard sees the catalog definition, not the
-    // placeholder stored on a system install.
     const automation = resolveAutomationDoc(stored);
     if (!automation.description) {
       throw new Error("Automation has no description/prompt configured");
@@ -170,8 +156,6 @@ export const startEventRun = internalMutation({
       });
       return null;
     }
-    // Busy: wait for the current run rather than drop the event, so a burst
-    // of merges still runs once per merge.
     if (await hasRunInFlight(ctx, automation._id)) {
       if (Date.now() - run.startedAt > EVENT_RUN_MAX_WAIT_MS) {
         await ctx.db.patch(args.runId, {

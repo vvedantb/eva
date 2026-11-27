@@ -11,19 +11,13 @@ import {
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 
-interface TimelineSidebarMetaProps {
-  /** Task counts by display status (`listStatusesForRepo`). */
-  counts?: ProjectStatus["counts"];
+interface TimelineSidebarMetaProps {  counts?: ProjectStatus["counts"];
   lead?: Id<"users">;
-  members?: Id<"users">[];
-  /** Shown when a project has neither a lead nor members. */
-  fallbackUserId: Id<"users">;
+  members?: Id<"users">[];  fallbackUserId: Id<"users">;
 }
 
 const MAX_AVATARS = 2;
 
-/** Linear-style circular progress ring (donut). Track + accent arc for the
- *  completed share; an empty track when there are no tasks. */
 function ProgressRing({ pct }: { pct: number }) {
   const size = 14;
   const stroke = 2;

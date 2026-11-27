@@ -18,7 +18,6 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 type LogEntry = FunctionReturnType<typeof api.chatLog.listForSource>[number];
 type ChatSource = FunctionReturnType<typeof api.docs.listForSource>[number]["source"];
 
-/** A row's badge: only a child task, as the web project tabs (the project's own rows need none). */
 function taskBadge(source: ChatSource): ChatSourceLabelFields | null {
   return source?.kind === "task" ? source : null;
 }
@@ -38,7 +37,6 @@ export function ProjectDocuments({
 }: {
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
-  /** The project's child tasks (`useProjectTaskStatus`): the Log names the task behind an entry. */
   tasks: ProjectTaskListRow[] | undefined;
 }) {
   const source = { kind: "project" as const, projectId };
@@ -49,7 +47,6 @@ export function ProjectDocuments({
   if (docs === undefined || artifacts === undefined || log === undefined) {
     return <CenteredSpinner label="Loading documents" />;
   }
-  // One row per finding or decision: the entries nothing replaced, newest first.
   const entries = log.filter((entry) => entry.supersededById === undefined).reverse();
   if (docs.length === 0 && artifacts.length === 0 && entries.length === 0) {
     return <EmptyState icon={IconFile} title="No documents yet" />;
@@ -102,7 +99,6 @@ export function ProjectDocuments({
   );
 }
 
-/** One Log entry, as the web `ChatLogEntryCard` header and title: its kind, the task that wrote it, its age, then the title. */
 function LogEntryRow({ entry, task }: { entry: LogEntry; task: ChatSourceLabelFields | undefined }) {
   const theme = EVA_THEME[useScheme()];
   return (

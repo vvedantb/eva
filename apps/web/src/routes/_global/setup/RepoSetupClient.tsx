@@ -33,8 +33,6 @@ export function RepoSetupClient({
   const [authorizing, setAuthorizing] = useState(false);
   const [addedRepos, setAddedRepos] = useState<Set<string>>(new Set());
   const [addingRepos, setAddingRepos] = useState<Set<string>>(new Set());
-  // Key → why its last connect failed, so a partial failure is recoverable in
-  // place instead of costing the user the whole page.
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [expandedRepo, setExpandedRepo] = useState<string | null>(null);
   const [monorepoApps, setMonorepoApps] = useState<
@@ -60,9 +58,6 @@ export function RepoSetupClient({
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : "";
-        // A brand-new installation is only verifiable through the user's own
-        // GitHub token, so send them through the authorize hop instead of
-        // showing a dead end.
         if (message.includes(GITHUB_AUTH_REQUIRED)) {
           setNeedsGitHubAuth(true);
         } else {
@@ -96,7 +91,6 @@ export function RepoSetupClient({
     }
   };
 
-  /** Connects one repo (or one app inside it). Resolves to whether it landed. */
   const addRepoEntry = async (repo: GitHubRepo, rootDirectory?: string) => {
     const key = rootDirectory
       ? `${repo.fullName}:${rootDirectory}`
@@ -126,7 +120,6 @@ export function RepoSetupClient({
         "Try again.",
       );
       setFailures((prev) => ({ ...prev, [key]: reason }));
-      // An app inside a repo has no row of its own to hang the reason on.
       if (rootDirectory) toast.error(`Couldn't add ${key}. ${reason}`);
     }
     setAddingRepos((prev) => {
@@ -148,8 +141,6 @@ export function RepoSetupClient({
     setSyncing(false);
 
     const failed = results.filter((added) => !added);
-    // Navigating away here used to discard the failures with the page. The
-    // per-repo Retry only exists if the user is still standing on it.
     if (failed.length > 0) {
       toast.error(
         `Could not add ${failed.length} of ${pending.length} repositories. Retry them below.`,
@@ -214,8 +205,6 @@ export function RepoSetupClient({
     );
   }
 
-  // Nothing to choose from: the install granted access to no repository, which
-  // is fixed on GitHub rather than here.
   if (repos.length === 0) return <RepoSetupEmpty />;
 
   return (

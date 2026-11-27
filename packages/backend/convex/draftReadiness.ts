@@ -13,15 +13,12 @@ import {
   READINESS_SIGNAL_QUESTIONS,
 } from "./_agentTasks/readiness";
 
-/** Titles are a line; descriptions are a paragraph. Judge the head of each. */
 const MAX_TITLE_CHARS = 300;
 const MAX_DESCRIPTION_CHARS = 4000;
 
-/** The same draft is re-judged on every pause in typing; an hour of reuse is plenty. */
 const READINESS_CACHE_TTL_MS = 60 * 60 * 1000;
 
 const readinessResult = v.object({
-  /** 0 (too vague to start) to 1 (fully specified). */
   score: v.number(),
   missing: v.array(
     v.union(v.literal("target"), v.literal("expected"), v.literal("current")),
@@ -110,7 +107,6 @@ export const assess = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    // Flag off: a perfect score, the same "no banner" answer as a failure.
     const flags = await ctx.runQuery(api.auth.getExperimentalFlags, {});
     if (!flags.draftReadiness) return { score: 1, missing: [] };
     return await readinessCache.fetch(ctx, {

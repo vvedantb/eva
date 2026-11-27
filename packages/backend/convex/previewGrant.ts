@@ -15,12 +15,6 @@ import { assertActionSandboxAccess } from "./functions";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 
-/**
- * Reads the ES256 preview-grant keypair from the env. The grant is asymmetric
- * on purpose: only the private half lives in Convex, while the public half is
- * embedded in the in-sandbox proxy. App code running inside a sandbox can read
- * the public key but cannot forge a grant with it.
- */
 function readPrivateJwk(): JWK {
   const json = process.env.PREVIEW_GRANT_PRIVATE_KEY;
   if (!json) {
@@ -95,7 +89,6 @@ export const mintPreviewGrant = action({
     sandboxId: v.string(),
     port: v.number(),
     repoId: v.string(),
-    /** Path, query and hash to open on the preview origin. */
     path: v.string(),
   },
   returns: v.string(),
@@ -109,8 +102,6 @@ export const mintPreviewGrant = action({
       throw new Error("Not authenticated");
     }
 
-    // `githubRepos.getByIdString` returns the repo only for the connector or a team
-    // member, otherwise null — null means the user may not preview it.
     const repo = await ctx.runQuery(api.githubRepos.getByIdString, {
       repoId: args.repoId,
     });
@@ -127,8 +118,6 @@ export const mintPreviewGrant = action({
       sub: identity.subject,
     });
 
-    // Parse against a placeholder base, then copy only the path parts: the
-    // caller's input can never change the origin, even as `//host/...`.
     const requested = new URL(args.path, "https://eva.invalid");
     const target = new URL(preview.url);
     target.protocol = "https:";

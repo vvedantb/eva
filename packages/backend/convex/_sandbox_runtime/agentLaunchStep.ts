@@ -17,7 +17,6 @@ export async function launchAgentStep(
   owner: {
     entityId: TurnEntityId;
     lane?: TurnLane;
-    /** The session whose sandbox the agent holds: its open-turn reads see the turn. */
     sessionId?: Id<"sessions">;
   },
 ): Promise<void> {

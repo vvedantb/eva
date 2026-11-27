@@ -6,19 +6,6 @@ import {
   writeThemeAppearanceHint,
 } from "./themeHint";
 
-/**
- * The FOUC hint is the only thing that survives a reload before Convex answers,
- * so it has to carry the *preference*, not just the appearance it resolved to
- * (e5ecaa85d, 2026-09-16). "System" resolved to light or dark on the way out,
- * and a hint that stored only that came back as a fixed Light or Dark on the
- * next boot: the user's System choice was silently downgraded, and flipping the
- * OS theme stopped moving Eva.
- *
- * The other half of the round trip is the inline script in `index.html`, which
- * repaints from the same record — see `themeFoucScript.test.ts`.
- */
-
-/** In-memory stand-in: the node test environment has no localStorage. */
 function fakeStorage(seed?: string) {
   const store = new Map<string, string>();
   if (seed !== undefined) store.set(CUSTOM_THEME_HINT_KEY, seed);
@@ -96,9 +83,6 @@ describe("theme FOUC hint", () => {
   test("a hint written before `mode` existed still yields its appearance", () => {
     install(fakeStorage(JSON.stringify({ appearance: "neutral" })));
 
-    // `mode: undefined` is what tells the provider to fall back to the
-    // appearance; reporting "neutral" here would invent a preference the user
-    // never expressed.
     expect(readThemeHintSeed()).toEqual({
       mode: undefined,
       appearance: "neutral",

@@ -18,7 +18,6 @@ export const generateUploadUrl = authMutation({
  */
 export const attachMedia = authAction({
   args: {
-    // Same union as `messages.parentId`: session turns send their chat id.
     parentId: messageFields.parentId,
     messageId: v.optional(v.id("messages")),
     turnId: v.optional(v.string()),

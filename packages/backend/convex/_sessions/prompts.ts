@@ -21,17 +21,13 @@ import { getAIModelProvider } from "../_validators/aiModels";
  * so the agent does not have to rediscover (or guess) them each turn.
  */
 export interface ChatRuntimeFacts {
-  /** Sandbox owner key: `session-<id>`, `task-<id>` or `project-<id>`. */
   ownerKey: string;
   prUrl?: string;
   devCommand?: string;
   startupCommands?: readonly string[];
   backgroundCommands?: readonly string[];
-  /** Repo opted in to `.eva/memory/` (Agent Memory Repo spec). */
   agentMemoryEnabled?: boolean;
-  /** Owner opted in to Experimental → Ask teammates (`ask_teammate` MCP tool). */
   askTeammatesEnabled?: boolean;
-  /** Owner opted in to Experimental → PR watch (`watch_pull_request` MCP tool). */
   prWatchEnabled?: boolean;
 }
 
@@ -45,7 +41,6 @@ function commandList(commands: readonly string[] | undefined): string {
   return commands.map((command) => `\`${command}\``).join(", ");
 }
 
-/** The "this chat" block: PR, dev server wiring, and the Eva MCP controls. */
 function buildChatRuntimeSection(
   runtime: ChatRuntimeFacts,
   branchName: string,
@@ -104,7 +99,6 @@ export function buildTitleDigest(
     used = entries[pinnedIndex].line.length;
   }
 
-  // Newest first: the tail of the conversation says what the work became.
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (kept.has(index)) continue;
     const cost = entries[index].line.length + (kept.size > 0 ? 2 : 0);
@@ -119,11 +113,6 @@ export function buildTitleDigest(
     .join("\n\n");
 }
 
-/**
- * Eva's chat rules that never change between chats or turns. Claude gets them
- * as its system prompt (`chatSystemPrompt`); other providers have no system
- * prompt hook, so they ride the first turn's message.
- */
 const CHAT_STATIC_INSTRUCTIONS = `
 
 ## Shared Browser (user-visible):
@@ -182,25 +171,15 @@ export function buildEditPrompt({
   planContent?: string;
   readableRepos?: ReadonlyArray<{ owner: string; name: string }>;
   linkedRepos?: LinkedRepoPromptRow[];
-  /**
-   * The provider session already holds this chat's full instructions from an
-   * earlier turn. Send only the guard rails, so each message stays small.
-   */
   followUp?: boolean;
-  /** The agent got `CHAT_STATIC_INSTRUCTIONS` as its system prompt. */
   staticInSystemPrompt?: boolean;
   runtime?: ChatRuntimeFacts;
 }): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  // Task/project chat reuse this helper and pass spec/description as planContent.
-  // Sessions pass "" — leftover plan.md must not become an "Approved plan" block.
   const planContext = planContent ? `\n\nContext:\n${planContent}` : "";
   const devPortText =
     devPort !== undefined ? String(devPort) : "its configured dev port";
-  // Agents kept concluding "no dev server is running" seconds after a sandbox
-  // start (a cold Next compile takes 1-2 minutes) and launching their own —
-  // duplicate dev servers are what pushed 16GB VMs into OOM kills.
   const devServerSection = `
 
 ## App dev server (managed by Eva):
@@ -211,9 +190,6 @@ That dev server is reachable from outside the sandbox. When the user asks for "t
   const guardRails = `Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\``;
-  // User- and repo-owned instructions ride every turn; Eva's reference
-  // sections were sent on the first turn and stay in the resumed session.
-  // Readable repos are reference only, so they ride the first turn.
   const ownedInstructions = (readableReposBlock: string) =>
     `${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${readableReposBlock}${buildRootDirectoryInstruction(rootDirectory)}`;
   if (followUp) {

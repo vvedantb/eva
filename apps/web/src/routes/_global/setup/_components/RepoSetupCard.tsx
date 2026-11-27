@@ -19,7 +19,6 @@ interface RepoSetupCardProps {
   repo: GitHubRepo;
   isExpanded: boolean;
   isAdded: boolean;
-  /** Connect is in flight for this repo. */
   isAdding?: boolean;
   onToggleExpand: () => void;
   onAdd: () => void;

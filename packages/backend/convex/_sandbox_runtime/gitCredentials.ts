@@ -13,21 +13,8 @@ const HELPER_SCRIPT_PATH = "/home/eva/.local/bin/git-credential-eva";
 const HELPER_CONFIG_DIR = "/home/eva/.config/eva";
 export const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 
-// Repositories that may have a URL-embedded GitHub token in `.git/config` from
-// either a legacy clone or a baked snapshot. We scrub each on every helper
-// install so git uses our credential helper instead of stale URL credentials.
 const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 
-// Bash credential helper. Git invokes it with `get` and supplies protocol, host
-// and (with `credential.useHttpPath`) the repository path on stdin. We read the
-// `path=` line and POST it to the eva backend with the per-sandbox bearer
-// secret. The backend mints a full installation token for the sandbox's own
-// repo, a token for that repository's own GitHub App installation when it is a
-// session's linked repo (those may live under a different installation than the
-// primary), and a read-only, single-repository token for any other repo its
-// owner can reach in eva. A short file cache, keyed by repository so tokens
-// never cross installations, trims duplicate mints during a single git
-// operation (clone/fetch/push fan out into several helper invocations).
 export const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
@@ -125,7 +112,6 @@ fi
 printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 `;
 
-/** Resolves the public Convex site URL used by the in-sandbox credential helper. */
 function resolveConvexSiteUrl(): string {
   return (
     resolvePublicConvexSiteUrl(process.env) ??
@@ -164,8 +150,6 @@ export async function ensureGitCredentialHelper(
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 
-  // Independent of each other, and nothing calls the helper until the exec
-  // below wires it into git config — so one round trip instead of three.
   await Promise.all([
     ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
       sandboxId: sandbox.id,
@@ -181,13 +165,6 @@ export async function ensureGitCredentialHelper(
     writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent),
   ]);
 
-  // Legacy snapshots and pre-helper clones embed the installation token in
-  // `remote.origin.url` (e.g. `https://x-access-token:ghs_xxx@github.com/...`).
-  // Git uses URL-embedded credentials in preference to a credential helper, so
-  // any in-sandbox `git pull` would keep failing with the expired baked token.
-  // Strip embedded creds from any known repo's `.git/config` so the helper is
-  // consulted instead. The sed pattern matches `user:password@github.com` and
-  // rewrites it to bare `github.com`, regardless of token value.
   const repoCleanupSteps = KNOWN_REPO_DIRS.flatMap((dir) => [
     `if [ -f ${dir}/.git/config ]; then sed -i -E 's|(https?://)[^@/[:space:]]+:[^@/[:space:]]+@github\\.com/|\\1github.com/|g' ${dir}/.git/config; fi`,
     `if [ -d ${dir}/.git ]; then git -C ${dir} config --unset-all http.https://github.com/.extraheader 2>/dev/null || true; fi`,
@@ -200,26 +177,14 @@ export async function ensureGitCredentialHelper(
       `chmod 700 ${HELPER_CONFIG_DIR}`,
       `chmod 600 ${HELPER_CONFIG_PATH}`,
       `chmod 755 ${HELPER_SCRIPT_PATH}`,
-      // Stale cache from a prior secret/token must not be reused under the new secret.
       `rm -f /tmp/git-cred-cache /tmp/git-cred-cache-*`,
-      // Wipe any inherited URL-embedded token / extraheader before switching to the helper.
       `git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true`,
-      // Sends the repository path to `/api/git-credentials` (git's `path=`
-      // component) so the helper can mint a token for a linked repo's own
-      // installation instead of always the primary's.
       `git config --global credential.useHttpPath true`,
-      // Reset credential.helper to exactly `''` + our helper. `--unset-all`
-      // first so re-runs don't error with "credential.helper has multiple
-      // values" — git's plain `config` refuses to overwrite a multi-valued
-      // key, which is the state we leave behind after one install.
       `git config --global --unset-all credential.helper 2>/dev/null || true`,
       `git config --global --add credential.helper ''`,
       `git config --global --add credential.helper ${HELPER_SCRIPT_PATH}`,
       `git config --global --replace-all credential.https://github.com.helper ${HELPER_SCRIPT_PATH}`,
-      // Makes git send `path=owner/repo.git` on stdin so the helper can ask for
-      // a read-only token for a sibling repo instead of the sandbox's own.
       `git config --global credential.https://github.com.useHttpPath true`,
-      // Agents often `git pull` without a strategy; modern git fatals otherwise.
       `git config --global pull.rebase true`,
       ...repoCleanupSteps,
     ].join(" && "),

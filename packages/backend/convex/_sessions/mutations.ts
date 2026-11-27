@@ -71,24 +71,12 @@ const createSessionArgs = v.object({
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
   baseBranch: v.optional(v.string()),
-  /** "Stack a new session on this PR": the PR whose head is `baseBranch`. */
   stackOnPrNumber: v.optional(v.number()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
-  /**
-   * Extra repos to clone into the same sandbox beside `repoId`. Each becomes a
-   * `sessionRepos` row. Overrides the group's membership when both are given.
-   */
   linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
-  /** Saved codebase group whose members prefilled the selection. */
   repoGroupId: v.optional(v.id("repoGroups")),
-  /** Whether linked repos install dependencies on clone. Defaults to true. */
   installDependencies: v.optional(v.boolean()),
-  /**
-   * Session whose agent spun this one up (MCP `create_session`). The new
-   * session joins that session's linked-session group.
-   */
   fromSessionId: v.optional(v.id("sessions")),
 });
 
@@ -98,14 +86,12 @@ type CreateSessionArgs = Infer<typeof createSessionArgs>;
 export interface CreateSessionFork {
   sourceSessionId: Id<"sessions">;
   sourceSandboxId: string;
-  /** Start the source again after this fork's first sandbox is taken. */
   restartSource: boolean;
 }
 
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
-/** The linked-session group a new session spun up from `sourceId` joins. */
 async function joinSessionGroup(
   ctx: AuthMutationCtx,
   sourceId: Id<"sessions">,
@@ -133,8 +119,6 @@ export async function createSession(
     { baseBranch: args.baseBranch },
     repo,
   );
-  // Linked repos are resolved and validated before anything is inserted, so a
-  // rejected selection never leaves a half-built session behind.
   const group =
     args.repoGroupId === undefined
       ? null
@@ -213,12 +197,8 @@ export async function createSession(
   await ctx.db.patch(sessionId, { branchName });
   const created = await ctx.db.get(sessionId);
   if (!created) throw new Error("Session was not created");
-  // The Main chat is the session's own transcript; the first message queues
-  // on it, and `ensureMainChat` carries the session's composer picks over.
   const mainChat = await ensureMainChat(ctx, created);
 
-  // Every linked repo is checked out on the SAME branch name as the primary,
-  // off its own default base.
   await insertSessionRepos(
     ctx,
     { sessionId, branchName },
@@ -248,9 +228,6 @@ export async function createSession(
 
   const content = args.message?.trim() ?? "";
   if (content) {
-    // MCP `create_session` (and any caller that omits `model`) relies on
-    // `repo.defaultModel` resolved above. Checking `args.model` here threw
-    // after the session row was built and rolled the mutation back.
     if (!model) {
       throw new Error("model is required when queuing a message");
     }
@@ -267,12 +244,8 @@ export async function createSession(
       fastMode,
       providerAccountId,
       attachmentStorageIds: args.attachmentStorageIds,
-      // A session the orchestrator created: its first message is master-sent
-      // too, so it carries the same badge as anything sent later.
       sentViaOrchestrator: args.sentViaOrchestrator,
     });
-    // The first message queues directly rather than going through
-    // startExecute, so its mentions are notified here instead.
     const session = await ctx.db.get(sessionId);
     if (session) {
       await notifyChatMentions(ctx, {
@@ -313,7 +286,6 @@ export const addMessage = authMutation({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     model: v.optional(aiModelValidator),
     reasoningLevel: v.optional(reasoningLevelValidator),
-    /** Set by MCP send_chat_message / send_agent_message. */
     sentViaOrchestrator: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -415,7 +387,6 @@ export async function archiveSessionDoc(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
-  // Archive the sandbox (stops it first, then moves to cold storage)
   if (session.sandboxId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.archiveSandbox, {
       sandboxId: session.sandboxId,
@@ -438,7 +409,6 @@ export async function stopAndArchiveSession(
   session: Doc<"sessions">,
 ): Promise<void> {
   if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
-  // Re-read: the stop moves the status, and the archive patches from this doc.
   const fresh = await ctx.db.get(session._id);
   if (fresh) await archiveSessionDoc(ctx, fresh);
 }
@@ -459,7 +429,6 @@ export const archiveGroup = authMutation({
     );
     if (!session.sessionGroupId) throw new Error("Session is not in a group");
     const groupId = session.sessionGroupId;
-    // Same cap as `listGroup`, so the dialog's count matches what archives.
     const members = await ctx.db
       .query("sessions")
       .withIndex("by_session_group", (q) => q.eq("sessionGroupId", groupId))
@@ -483,7 +452,6 @@ export const archive = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    // A task's session archives with its task (`retireOwnedSession`).
     assertStandaloneSession(session, "be archived on its own");
     await archiveSessionDoc(ctx, session);
     return null;

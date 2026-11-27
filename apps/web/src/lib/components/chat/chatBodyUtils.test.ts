@@ -72,7 +72,6 @@ describe("buildPrecedingUserTurns", () => {
       ]),
     );
     expect(turns.get("a1")?.label).toBe("u1");
-    // A second reply in one turn has no user turn directly before it.
     expect(turns.has("a2")).toBe(false);
     expect(turns.get("a3")?.label).toBe("u2");
     expect(turns.has("handoff")).toBe(false);
@@ -100,7 +99,6 @@ describe("findTurnWindowStart", () => {
   });
 
   test("covers the whole transcript when it has fewer turns", () => {
-    // Index 0, not the first user row: the rows before it must stay visible.
     expect(findTurnWindowStart(transcript, 3)).toBe(0);
     expect(findTurnWindowStart(transcript, 25)).toBe(0);
   });
@@ -119,8 +117,6 @@ describe("findStreamingTargetMessage", () => {
   });
 
   test("a queued turn's newer placeholder does not steal a still-streaming older turn", () => {
-    // The session-62 incident: a synthetic loop-continuation bubble was still
-    // streaming when a queued user message inserted its own placeholder.
     const messages = [
       user("u1"),
       finished("loop-turn"),
@@ -203,7 +199,6 @@ describe("visibleChatMessages", () => {
 });
 
 describe("findHandoffBoundaryIds", () => {
-  // Typing `model` as the doc's union keeps these fixtures pinned to real ids.
   const sent = (_id: string, model?: ChatBodyMessage["model"]) => ({
     _id,
     role: "user" as const,
@@ -282,7 +277,6 @@ describe("findNewMessageIds", () => {
   });
 
   test("counts a reply by its finish time", () => {
-    // Started before the anchor, finished after it: still new.
     expect(findNewMessageIds([timedReply("a", 3, 9)], 5, me)).toEqual(["a"]);
   });
 

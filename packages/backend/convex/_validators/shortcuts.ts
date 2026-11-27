@@ -11,23 +11,10 @@ export const SHORTCUT_GROUPS = [
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 export interface ShortcutDef {
-  /** Row title on the settings page. */
   name: string;
-  /** Row subtitle: what pressing the key actually does. */
   description: string;
   group: ShortcutGroup;
-  /**
-   * The combo in force until the user rebinds it. Typed as a string here
-   * because this package has no hotkey library, but `as const` below keeps the
-   * literal, so the web app's `resolveBinding` fails to compile if any default
-   * is not a valid `Hotkey`.
-   */
   defaultHotkey: string;
-  /**
-   * Set only for shortcuts that occupy a run of numbered slots (the rail's
-   * "jump to app N"). The binding's key must be a digit, and slots 2..N derive
-   * their combo by substituting that digit.
-   */
   slots?: number;
 }
 
@@ -133,8 +120,6 @@ export const SHORTCUT_DEFS = {
     description:
       "Step through the open sandbox tabs. Rebind to Shift+Tab to restore the old default.",
     group: "Sandbox",
-    // Sits in the same Control+Alt family as the panel toggle. Shift+punctuation
-    // is deliberately unavailable — it is keyboard-layout dependent.
     defaultHotkey: "Control+Alt+ArrowRight",
   },
   cycleSandboxTabBack: {
@@ -144,7 +129,6 @@ export const SHORTCUT_DEFS = {
     defaultHotkey: "Control+Alt+ArrowLeft",
   },
   togglePreviewConsole: {
-    // Keep the stored id stable so existing user overrides continue to work.
     name: "Toggle terminal panel",
     description: "Open or close the terminal panel beneath the workspace.",
     group: "Sandbox",

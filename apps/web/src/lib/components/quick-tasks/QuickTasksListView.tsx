@@ -66,15 +66,7 @@ interface QuickTasksListViewProps {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
-  selectedTaskId?: string | null;
-  /**
-   * Fires when a card is opened (not in selection mode). The master/detail
-   * caller uses it to bring the detail pane forward on a phone, which the URL
-   * alone cannot express when the tapped task is the one already open.
-   */
-  onOpenTask?: (id: Id<"agentTasks">) => void;
-  /** The Archived list: no drafts, no Run All, Unarchive in row menus. */
-  archived?: boolean;
+  selectedTaskId?: string | null;  onOpenTask?: (id: Id<"agentTasks">) => void;  archived?: boolean;
 }
 
 export function QuickTasksListView({
@@ -122,9 +114,6 @@ export function QuickTasksListView({
   const todoDrafts = archived ? [] : liveTodoDrafts;
   const searchQuery = q;
   const visibleStatuses = new Set(statuses);
-
-  // Respect the sort order applied by QuickTasksClient (e.g. by latest run).
-  // Re-sorting here would override the user's chosen sort.
   const tasks = externalTasks;
 
   const filteredTasks = (() => {
@@ -217,10 +206,7 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
-            const drafts = status === "todo" ? todoDrafts : [];
-            // Shift-click spans this section only — the visible order of the
-            // group the click landed in, not the whole flattened list.
-            const sectionIds = items.map((t) => t._id);
+            const drafts = status === "todo" ? todoDrafts : [];            const sectionIds = items.map((t) => t._id);
             const Icon = cfg.icon;
 
             return [

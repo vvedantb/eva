@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-// React Native release builds swallow unhandled promise rejections: no JS
-// error reaches logcat. This installs Hermes' rejection tracker (and logs
-// uncaught sync errors) so each one reaches `console.error`.
-
 type GlobalHandler = (error: Error, isFatal?: boolean) => void;
 
 type Tracker = (options: { allRejections: boolean; onUnhandled: (id: number, error: Error) => void }) => void;
@@ -19,7 +15,6 @@ const envSchema = z.object({
 
 const errorShape = z.object({ name: z.string().optional(), message: z.string().optional(), stack: z.string().optional() });
 
-/** Logs name, message and a short stack. Never the rejected value itself. Never throws. */
 function logUncaught(kind: "unhandled-rejection" | "uncaught-error", caught: Error | object | string | number | boolean | null | undefined, extra?: { isFatal?: boolean }) {
   try {
     const parsed = errorShape.safeParse(caught);
@@ -31,7 +26,6 @@ function logUncaught(kind: "unhandled-rejection" | "uncaught-error", caught: Err
       stack: parsed.success ? parsed.data.stack?.split("\n").slice(0, 6).join("\n") : undefined,
     });
   } catch {
-    // A logger must never throw.
   }
 }
 
@@ -40,7 +34,6 @@ let installed = false;
 /** What a fatal error leaves behind for the next launch (`lastCrash.ts`). */
 export type FatalReport = { name: string; message: string; stack: string };
 
-/** How long a fatal error waits for `onFatal` before the app closes anyway. */
 const FATAL_SAVE_MS = 1_000;
 
 function fatalReport(caught: Error | object | string | number | boolean | null | undefined): FatalReport {
@@ -80,7 +73,6 @@ export function installUnhandledRejectionLogging(
           previous(error, isFatal);
           return;
         }
-        // Save first, then let the app close as before.
         const timeout = new Promise<void>((resolve) => setTimeout(resolve, FATAL_SAVE_MS));
         void Promise.race([onFatal(fatalReport(error)).catch(() => {}), timeout]).finally(() => previous(error, isFatal));
       });

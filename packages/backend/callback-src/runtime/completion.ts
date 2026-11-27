@@ -160,17 +160,9 @@ type SyntheticResult = {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   model: string;
-  /** Fallback prose from `type:"assistant"` lines (Cursor emits these). */
   assistantText: string;
 };
 
-/**
- * Reads the `{type:"result"}` line an SDK runner pushes at the end of a turn.
- *
- * Runners that own their own event loop (Cursor, OpenCode) also own the turn's
- * usage numbers, so completion picks up one line instead of reparsing the whole
- * stdout buffer — the reparse OpenCode needed while it ran as a CLI is gone.
- */
 function readSyntheticResult(output: string): SyntheticResult {
   const found: SyntheticResult = {
     sawResult: false,
@@ -268,8 +260,6 @@ export function extractResultEvent(output: string): ResultEvent | null {
           outputTokens: found.outputTokens,
           cacheReadInputTokens: found.cacheReadTokens,
           cacheCreationInputTokens: found.cacheWriteTokens,
-          // OpenCode reports the model the server actually served the turn
-          // with; Cursor's runner does not, so fall back to the configured id.
           model:
             found.model ||
             (PROVIDER === "opencode"
@@ -440,11 +430,6 @@ function buildErrorMessage(
       "ms"
     );
   }
-  // Signal kills (128 + signal number) reached here only when no timeout flag
-  // fired, so the process was stopped by something outside the callback: a new
-  // message cancelling the run, the sandbox being stopped or hitting its
-  // timeout, or the kernel OOM-killer. Report it as an interruption, not a raw
-  // exit code — an interrupted turn is never a success.
   if (code === 137 || code === 143) {
     return (
       agentName +
@@ -543,7 +528,6 @@ export function buildTurnCompletionPayload(params: {
   error: string | null;
   activityLog: string | null;
   resultEvent?: ResultEvent | null;
-  /** For callers that build the usage event themselves (codex app-server). */
   rawResultEvent?: string;
   entityFieldFallback?: string;
 }): JsonObject {
@@ -644,16 +628,8 @@ async function uploadMediaFile(
   throw new Error("Missing storageId in upload response");
 }
 
-/**
- * Which chat message a harvest attaches to: an exact one for a synthetic turn,
- * otherwise the reply of `turnId`. The server falls back to the parent's latest
- * message only when neither resolves. The latest alone is wrong: completion
- * drains the queue, so a follow-up turn can open during the upload and take
- * this turn's media.
- */
 type MediaTarget = { messageId?: string; turnId?: string };
 
-/** Attaches uploaded media to the chat message the turn just wrote. */
 async function attachChatMediaIfAny(
   uploaded: { storageId: string; fileName: string }[],
   target: MediaTarget,
@@ -668,13 +644,6 @@ async function attachChatMediaIfAny(
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 
-/**
- * Attaches uploaded media to the run doc, for task runs.
- *
- * A run writes no `messages` row — the quick task's first-run chat turn and the
- * timeline row are both rendered from the run itself — so its media hangs off
- * the run instead of the last message.
- */
 async function attachRunMediaIfAny(
   uploaded: { storageId: string; fileName: string }[],
 ): Promise<void> {
@@ -690,7 +659,6 @@ async function attachRunMediaIfAny(
   );
 }
 
-/** Completion fields that carry agent/CLI text into chat and Convex logs. */
 const REDACTED_COMPLETION_FIELDS: readonly string[] = [
   "result",
   "error",
@@ -710,12 +678,7 @@ export async function sendTurnCompletion(
     const value = args[field];
     if (typeof value === "string") args[field] = redactSecrets(value);
   }
-  // Every caller runs persistTurnWork() before this, so the checkpoint's
-  // afterSha is the pushed turn-end tip.
   appendTurnCheckpoint(args);
-  // Stop heartbeating under the lease before the server closes the turn, or a
-  // later heartbeat (e.g. during the chat media upload) comes back `closed`
-  // and reads as a takeover (session 225).
   releaseTurnLeaseForCompletion();
   await callConvexWithRetry("mutation", mutation, args);
 }
@@ -732,10 +695,7 @@ export async function sendTurnCompletion(
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  // The run harvest runs while the lease is still held: the server has not
-  // closed the turn yet, so its heartbeats stay valid during the upload.
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
-  // Every caller fences the payload with its turn lease before this point.
   const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) {
@@ -745,29 +705,6 @@ export async function deliverCompletionWithMedia(
   }
 }
 
-/**
- * Scans sandbox `recordings/` then `screenshots/` under the repo root and the
- * app rootDirectory, uploads all captured media (videos first, in capture
- * order), and attaches it to the turn's chat reply — or, for a task run, to the
- * run doc that the chat renders its first turn from.
- * Shared by the one-shot callback and the Claude sdk-daemon finalize path —
- * daemon turns previously skipped this, so chat never showed agent
- * recordings.
- *
- * Posted files move into `<dir>/.posted/` rather than being deleted, so a
- * later turn can reuse a capture (PR/Linear embeds) without recapturing.
- * Files whose upload failed stay at the top level and are retried by the
- * next turn's harvest — deleting them destroyed the only copy.
- *
- * Prefer calling via `deliverCompletionWithMedia` so the message exists before
- * attachMedia patches it.
- */
-/**
- * Path of a harvest entry that is safe to upload, else null. The agent (or a
- * prompt injection) controls these folders, so a symlinked folder, a symlink
- * or a hard link could otherwise post a secret file (git credentials, env)
- * to chat. Only plain single-link files directly in a real folder pass.
- */
 function harvestableFile(dir: string, file: string): string | null {
   if (file === "." || file === ".." || file.includes("/")) return null;
   try {
@@ -780,12 +717,6 @@ function harvestableFile(dir: string, file: string): string | null {
   }
 }
 
-/**
- * Moves a posted deliverable into `<dir>/.posted/`. Same-name files
- * overwrite, so a re-posted capture keeps only its latest copy. The `.posted`
- * entry itself never matches the harvest's extension filters, so archived
- * files are not re-posted.
- */
 function archivePostedFile(dir: string, file: string): void {
   const postedDir = dir + "/.posted";
   mkdirSync(postedDir, { recursive: true });
@@ -796,10 +727,6 @@ export async function uploadAndAttachSandboxMedia(
   target: MediaTarget,
 ): Promise<void> {
   const uploaded: { storageId: string; fileName: string }[] = [];
-  // Agents re-capture the same frame more than once (a retried screenshot, a
-  // verify loop); byte-identical files add chat noise, so only the first copy
-  // of any content uploads. Distinct captures are the prompt's job — the
-  // deliverable folders are documented as post-everything-to-chat.
   const seenDigests = new Set<string>();
   const isDuplicate = (filePath: string): boolean => {
     const digest = createHash("sha256")
@@ -826,7 +753,6 @@ export async function uploadAndAttachSandboxMedia(
         }
         archivePostedFile(recDir, file);
       } catch {
-        /* upload failed — leave the file for the next turn's harvest */
       }
     }
   }
@@ -853,7 +779,6 @@ export async function uploadAndAttachSandboxMedia(
         }
         archivePostedFile(ssDir, file);
       } catch {
-        /* upload failed — leave the file for the next turn's harvest */
       }
     }
   }

@@ -1,12 +1,3 @@
-/**
- * The one way script/file content reaches a sandbox.
- *
- * Deliberately a near-leaf module (its only runtime import is `driveCache.ts`,
- * which imports only the region constant) so every delivery path — including `swap.ts` and
- * `attachments.ts`, which `helpers.ts` imports — can route through it without
- * forming an import cycle.
- */
-
 import type { SandboxHandle } from "../_sandbox/provider";
 import { localCachePruneLines } from "../_sandbox/driveCache";
 import { errorMessage } from "@vvedantb/server";
@@ -34,16 +25,8 @@ export const MAX_INLINE_EXEC_CONTENT_BYTES = 8 * 1024;
  */
 export const SWAP_FILE_PATH = "/swapfile";
 
-/**
- * Vercel `writeFiles` uploads a tarball and extracts it inside the VM. When the
- * disk (or its inodes) is full the extract fails and the API answers only
- * `400 The submitted tarball could not be extracted` — no ENOSPC in sight.
- * Prod 2026-11-09: every resume write on one sandbox failed this way, while an
- * exec on the same VM reported `No space left on device`.
- */
 const TARBALL_EXTRACT_FAILED = "tarball could not be extracted";
 
-/** Below this much free disk (MiB) or inodes we call the disk full. */
 const DISK_FULL_FREE_MIB = 256;
 const DISK_FULL_FREE_INODES = 1000;
 
@@ -57,7 +40,6 @@ const DISK_MARKER = "eva-disk:";
  */
 export const LOW_DISK_CLEANUP_MIB = 2048;
 
-/** Eva-owned logs in /tmp. Emptied (not deleted: writers hold them open) past 64 MiB. */
 const EVA_TMP_LOGS = [
   "bg-*.log",
   "eva-*.log",
@@ -160,7 +142,6 @@ export function buildReclaimDiskScript(): string {
 export type DiskReclaimReport = {
   freeMib: number;
   freeInodes: number;
-  /** The script's status line, for logs. */
   status: string;
 };
 
@@ -190,7 +171,6 @@ export function isDiskFull(report: DiskReclaimReport): boolean {
   );
 }
 
-/** Frees eva-owned disk space. Fail-open: returns null when it could not run. */
 async function reclaimSandboxDisk(
   sandbox: SandboxHandle,
 ): Promise<DiskReclaimReport | null> {

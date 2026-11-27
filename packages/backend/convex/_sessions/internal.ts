@@ -156,10 +156,6 @@ export const detachForeignMergedPr = internalMutation({
   },
 });
 
-// Soft UX lock for agent-driven browsing moved to
-// `internal.mcp.browserLock.setAgentBrowsingAt` (generalized to
-// sessions/tasks/projects); MCP browser_lock / browser_unlock call that now.
-
 /**
  * Applies an LLM-generated session title only while the placeholder remains.
  * Manual renames (anything other than DEFAULT_SESSION_TITLE) are never overwritten.
@@ -182,7 +178,6 @@ export const applyGeneratedTitle = internalMutation({
   },
 });
 
-/** Newest messages considered when re-titling; the digest trims further by characters. */
 const TITLE_CONTEXT_MESSAGE_LIMIT = 200;
 
 /**
@@ -210,9 +205,7 @@ export const getTitleContext = internalQuery({
   ),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    // A task's session carries its task's title; it is never re-titled.
     if (!session || !isStandaloneSession(session)) return null;
-    // The title follows the session's own conversation: the Main chat.
     const mainChat = await findMainChat(ctx.db, args.sessionId);
     const newestFirst = mainChat
       ? await ctx.db
@@ -285,12 +278,6 @@ export const applyRegeneratedTitle = internalMutation({
   },
 });
 
-/**
- * Everything `sandbox.revertSessionToTurn` needs before it touches the VM.
- * Refuses up front when the session has no running sandbox, a turn is still
- * open (the daemon owns the worktree until it finishes), or the message never
- * recorded a checkpoint. Auth happens in the action, against `repoId`.
- */
 const revertContextValidator = v.union(
   v.object({
     status: v.literal("ok"),
@@ -298,11 +285,8 @@ const revertContextValidator = v.union(
     sandboxId: v.string(),
     branchName: v.string(),
     beforeSha: v.string(),
-    /** Multi-repo checkpoint, when the turn recorded one (see messageFields.beforeShas). */
     beforeShas: v.optional(v.array(repoShaValidator)),
-    /** 1-based position of this reply among its chat's real assistant turns. */
     turnNumber: v.number(),
-    /** The chat the turn ran in; the restore alert lands there. */
     chatId: v.id("sessionChats"),
   }),
   v.object({ status: v.literal("not_running"), repoId: v.id("githubRepos") }),
@@ -313,8 +297,6 @@ const revertContextValidator = v.union(
 type RevertContext = Infer<typeof revertContextValidator>;
 
 export const getRevertContext = internalQuery({
-  // `messageId` is a plain string: the chat tree widens message ids so it can
-  // hold client-built synthetic turns, which never carry checkpoints anyway.
   args: { sessionId: v.id("sessions"), messageId: v.string() },
   returns: revertContextValidator,
   handler: async (ctx, args): Promise<RevertContext> => {
@@ -322,7 +304,6 @@ export const getRevertContext = internalQuery({
     if (!session) throw new Error("Session not found");
     const messageId = ctx.db.normalizeId("messages", args.messageId);
     const message = messageId === null ? null : await ctx.db.get(messageId);
-    // Session messages hang off one of the session's chats.
     const chatId =
       message === null ? null : ctx.db.normalizeId("sessionChats", message.parentId);
     const chat = chatId === null ? null : await ctx.db.get(chatId);
@@ -340,7 +321,6 @@ export const getRevertContext = internalQuery({
     ) {
       return { status: "not_running", repoId };
     }
-    // Any chat's open turn blocks: all chats share the session's worktree.
     if (await hasOpenChatTurn(ctx.db, args.sessionId)) {
       return { status: "turn_open", repoId };
     }

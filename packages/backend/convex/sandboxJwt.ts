@@ -31,7 +31,6 @@ export type SandboxJwtPurpose = "vm" | "mcp";
 export async function signSandboxUserJwt(
   clerkId: string,
   purpose: SandboxJwtPurpose,
-  /** A project coordinator's VM: its GitHub token refresh stays read-only. */
   readOnlyGit = false,
 ): Promise<string> {
   const privateKeyJwk = sandboxPrivateJwkSchema.parse(
@@ -70,18 +69,11 @@ export const mintSandboxSessionTokens = internalAction({
     userId: v.id("users"),
     repoId: v.id("githubRepos"),
     enableMcp: v.boolean(),
-    // Optional launch-entity identity embedded in the MCP-internal token so
-    // entity-scoped tools (browser_start/lock/unlock) can resolve the
-    // session/task/project without the agent passing an id.
     entityId: v.optional(v.string()),
     entityKind: v.optional(
       v.union(v.literal("session"), v.literal("task"), v.literal("project")),
     ),
-    // The session chat a session daemon runs. `entityId` stays the session so
-    // session-level tools (dev server, browser, PRs) keep resolving; chat
-    // content (panels, questions, env var cards) lands on this row instead.
     chatId: v.optional(v.string()),
-    /** The VM belongs to a read-only sandbox (`isReadOnlySandboxOwner`). */
     readOnlyGit: v.optional(v.boolean()),
   },
   returns: v.object({
@@ -105,21 +97,19 @@ export const mintSandboxSessionTokens = internalAction({
       throw new Error("User has no clerkId");
     }
 
-    // Sandbox auth token (ES256) — required.
     const sandboxToken = await signSandboxUserJwt(
       clerkId,
       "vm",
       args.readOnlyGit === true,
     );
 
-    // MCP-internal token (HS256) — best-effort.
     let mcpToken: { token: string; expiresIn: number } | null = null;
     if (args.enableMcp) {
       try {
         const internalSecret = process.env.MCP_INTERNAL_SECRET;
         if (internalSecret) {
           const secret = new TextEncoder().encode(internalSecret);
-          const expiresIn = 28800; // 8 hours
+          const expiresIn = 28800;
           const token = await new SignJWT({
             sub: clerkId,
             iss: "eva",

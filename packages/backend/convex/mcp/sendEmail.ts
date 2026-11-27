@@ -84,12 +84,9 @@ export const runSendEmail = internalAction({
 
     try {
       await sendEmail({ to: recipient.email, subject, html });
-      // Outside production sendEmail redirects to the test inbox; `to` is still
-      // the user's own address, which is what the agent asked for.
       return { ok: true, to: recipient.email };
     } catch (error) {
       const message = errorMessage(error);
-      // Never log the body — it is the user's content.
       console.error("[mcp.sendEmail]", message);
       return { ok: false, errorCode: "provider_error", error: message };
     }

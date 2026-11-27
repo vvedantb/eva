@@ -224,7 +224,6 @@ export function QuickTaskToolbar({
           returnKeyType="search"
         />
       </View>
-      {/* The web `secondary` Options button, icon only below `sm`: a pill (a circle here), 40 high, reaching 44 with its slop. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Options"

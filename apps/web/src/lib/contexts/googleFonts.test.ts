@@ -62,7 +62,6 @@ describe("ensureGoogleFont", () => {
         },
       },
     });
-    // A fresh copy: the module keeps the hrefs it already injected.
     const fresh = "./googleFonts.ts?fresh";
     const fonts: typeof googleFonts = await import(fresh);
     fonts.ensureGoogleFont("geist");

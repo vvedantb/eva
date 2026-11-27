@@ -41,26 +41,12 @@ import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
 import { taskRunSettings } from "../_projects/runSettings";
 
-/**
- * The hidden session behind a task (`owner: { kind: "task" }`, a quick task
- * or a project's child task) or a project's coordinator
- * (`owner: { kind: "project" }`). The owner stays the product surface; its
- * session runs the sandbox and the chat.
- *
- *   owner created ──first need──▶ ensureWorkSession (one session, never two)
- *   task done / cancelled / archived,
- *   project archived ──▶ retireOwnedSession (stop + archive)
- *   reopened / unarchived ──▶ reviveOwnedSession (unarchive)
- */
-
 /** A task's or project's session and its Main chat. */
 export type OwnedSessionContext = {
   session: Doc<"sessions">;
   mainChat: Doc<"sessionChats">;
 };
 
-// The lookups (`workSessionOwner`, `findWorkSession`, `findWorkChat`) live
-// in the leaf `owner.ts` and `ownerState.ts` so low-level modules can use them.
 export type { OwnerChat, OwnerEntity };
 
 /** Loads the task or project behind an owner, or null when it is gone. */
@@ -143,8 +129,6 @@ export async function insertWorkSession(
     ...chatSeedFields(await chatSeedSettings(ctx.db, target)),
     updatedAt: Date.now(),
   });
-  // A multi-repo task's repos, cloned beside its own exactly as a multi-repo
-  // session's are; from here the session path clones, pushes and opens PRs.
   await insertSessionRepos(
     ctx,
     { sessionId, branchName: seed.branchName },
@@ -156,11 +140,6 @@ export async function insertWorkSession(
   return session;
 }
 
-/**
- * The repos a task's session links (`agentTasks.linkedRepoIds`), checked when
- * the task was created (`createCoordinatorTasks`). A repo deleted since, or
- * one that became the task's own repo by a move, is left out.
- */
 async function taskLinkedRepos(
   db: DatabaseReader,
   target: OwnerEntity,
@@ -210,7 +189,6 @@ export const chatSeedValidator = v.object({
     use1mContext: v.optional(v.boolean()),
     fastMode: v.optional(v.boolean()),
   }),
-  /** Absent is Team. */
   providerAccountId: v.optional(v.id("userProviderAccounts")),
 });
 
@@ -245,7 +223,6 @@ export async function chatSeedSettings(
   };
 }
 
-/** A project task's project model, else the owner's repo default. */
 async function ownerFallbackModel(
   db: DatabaseReader,
   entity: OwnerEntity,
@@ -261,7 +238,6 @@ async function ownerFallbackModel(
   return repoId !== undefined ? (await db.get(repoId))?.defaultModel : undefined;
 }
 
-/** A seed as the chat (or session) columns it is written to. */
 function chatSeedFields(seed: ChatSeed): ChatSettingsSource {
   return {
     lastModel: seed.model,
@@ -274,7 +250,6 @@ function chatSeedFields(seed: ChatSeed): ChatSettingsSource {
   };
 }
 
-/** The fields an owner gives its new session. */
 function ownedSessionSeed(entity: OwnerEntity) {
   if (entity.kind === "task") {
     const { task } = entity;
@@ -283,8 +258,6 @@ function ownedSessionSeed(entity: OwnerEntity) {
       repoId: task.repoId,
       userId: task.createdBy,
       title: task.title,
-      // The task's own branch: its PRs stay owned by the task
-      // (`resolvePrOwnerFromBranch`).
       branchName: taskBranchName(task),
       baseBranch: task.baseBranch,
     };
@@ -294,7 +267,6 @@ function ownedSessionSeed(entity: OwnerEntity) {
     repoId: project.repoId,
     userId: project.userId,
     title: project.title,
-    // The project's branch: its PRs stay owned by the project.
     branchName: resolveProjectBranchName(project._id, project),
     baseBranch: project.baseBranch,
   };
@@ -342,7 +314,6 @@ export async function mirrorOwnerIntoSession(
   await ctx.db.patch(session._id, { title: seed.title, baseBranch });
 }
 
-/** How long a branch move waits for the project's session to go idle. */
 const BRANCH_SYNC_RETRY_MS = 60_000;
 
 /**
@@ -491,9 +462,6 @@ export async function retireOwnedSession(
 ): Promise<void> {
   const session = await findOwnedSession(ctx.db, owner);
   if (!session) return;
-  // A `closed` row's VM is stopped: every path that runs it (a start or a
-  // task run's claim) moves the row off `closed` first. Silent, like the
-  // run's own stop.
   if (session.status !== "closed") {
     await requestSessionSandboxStop(ctx, session._id, {
       stopReason: { kind: "task" },
@@ -547,11 +515,6 @@ export function isTerminalTaskStatus(status: Doc<"agentTasks">["status"]) {
   return status === "done" || status === "cancelled";
 }
 
-/**
- * The one lifecycle mapping: an owner entering a terminal state retires its
- * session, one leaving it revives it. A task: done/cancelled. A project:
- * archived.
- */
 async function syncOwnedSessionWithTerminal(
   ctx: MutationCtx,
   owner: OwnedSessionOwner,

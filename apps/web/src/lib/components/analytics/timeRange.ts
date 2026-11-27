@@ -1,11 +1,3 @@
-/**
- * The analytics time-range vocabulary, and the windows each range selects.
- *
- * Separate from `TimeRangeFilter.tsx` because these are the arguments the
- * analytics queries run on: pure, testable, and free of the component's UI
- * imports.
- */
-
 export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 

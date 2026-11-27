@@ -76,7 +76,6 @@ async function awaitingAnswerIdsOf(
   );
 }
 
-/** Open chat turns in one repo. A lane turn (summary, interview) is a one-shot agent, not a chat turn. */
 async function openChatTurnsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -88,13 +87,6 @@ async function openChatTurnsForRepo(
   return turns.filter((turn) => turn.lane === undefined);
 }
 
-/**
- * A turn lights up its entity and its session. A task's or project's session
- * also lights up its owner (its card is where that chat lives), and a project
- * task's own chat lights up that task. One point read per distinct open-turn
- * session (and per open chat turn in a project's session), never one per
- * list row.
- */
 async function idsOfTurns(
   db: DatabaseReader,
   turns: ReadonlyArray<Doc<"turns">>,
@@ -113,7 +105,6 @@ async function idsOfTurns(
       .filter((session) => session !== null)
       .map((session) => [String(session._id), session]),
   );
-  // Only an owned session's chats can speak for an owner (`sessionOwner`).
   const ownedTurns = turns.filter((turn) => {
     const session = sessions.get(String(turn.sessionId));
     return session !== undefined && sessionOwnerEntityId(session) !== undefined;
@@ -121,7 +112,6 @@ async function idsOfTurns(
   ownedTurns.forEach((turn) => {
     const session = sessions.get(String(turn.sessionId));
     if (!session) return;
-    // A chat's or a run's turn lights up the session's owner.
     const ownerId = sessionOwnerEntityId(session);
     if (ownerId) ids.add(String(ownerId));
   });
@@ -133,8 +123,6 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"] | Id<"agentTasks"> | Id<"projects">,
 ): Promise<boolean> {
-  // A task or a project chats (and runs) through its own session: those
-  // turns count too.
   const taskId = db.normalizeId("agentTasks", entityId);
   const projectId = db.normalizeId("projects", entityId);
   const ownedSession = taskId
@@ -144,7 +132,6 @@ export async function hasOpenChatTurn(
       : null;
   const sessionId = ownedSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {
-    // A session runs through its chats: any chat's open turn counts.
     const chatTurn = await db
       .query("turns")
       .withIndex("by_session_open", (q) =>
@@ -153,8 +140,6 @@ export async function hasOpenChatTurn(
       .first();
     if (chatTurn !== null) return true;
   }
-  // A task or project owns no turn of its own: its session's turns are
-  // covered above.
   const turnEntityId = taskId || projectId ? null : turnOwnerId(db, entityId);
   if (turnEntityId === null) return false;
   const turn = await db
@@ -166,7 +151,6 @@ export async function hasOpenChatTurn(
   return turn !== null;
 }
 
-/** `id` as a turn owner, or null for an id of another table. */
 function turnOwnerId(
   db: DatabaseReader,
   id: string,

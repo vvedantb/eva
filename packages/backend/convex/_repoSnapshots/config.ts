@@ -10,7 +10,6 @@ import { computeSeedFingerprint } from "../_evaConfig/config";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { findSiblingsOf } from "../_githubRepos/helpers";
 
-/** Converts a schedule string to a cron expression, returning null for "manual". */
 function resolveCronspec(schedule: string): string | null {
   if (schedule === "manual") return null;
   return schedule;
@@ -21,16 +20,12 @@ export async function findSnapshotForRepo(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Doc<"repoSnapshots"> | null> {
-  // First priority: app-specific config (new per-app model)
   const appSpecific = await db
     .query("repoSnapshots")
     .withIndex("by_repo", (q) => q.eq("repoId", repoId))
     .first();
   if (appSpecific) return appSpecific;
 
-  // Fallback (backward compat): if this is an app repo without its own config,
-  // check if a shared root config exists and return it.
-  // This allows existing monorepo-scoped configs to keep working while we migrate to per-app.
   const repo = await db.get(repoId);
   if (!repo) return null;
 
@@ -82,20 +77,16 @@ export const getRepoSnapshot = authQuery({
 export const getRepoSnapshotName = internalQuery({
   args: {
     repoId: v.id("githubRepos"),
-    // Set when the session branch's `.eva/config.json` changes the seed inputs:
-    // the seeded data no longer matches, so boot the base Image instead.
     skipSeeded: v.optional(v.boolean()),
   },
   returns: v.union(
     v.object({
       snapshotName: v.string(),
-      // Present only for a seeded snapshot (see computeSeedFingerprint).
       seededFingerprint: v.optional(v.string()),
     }),
     v.null(),
   ),
   handler: async (ctx, args) => {
-    // Per-app seeded snapshot takes precedence (fast start with seeded DB).
     const repo = await ctx.db.get(args.repoId);
     if (repo?.seededSnapshotName && args.skipSeeded !== true) {
       return {
@@ -107,7 +98,6 @@ export const getRepoSnapshotName = internalQuery({
     const snapshot = await findSnapshotForRepo(ctx.db, args.repoId);
     if (!snapshot) return null;
 
-    // Vercel base Image (`snap_*`) from the last successful base build.
     return snapshot.baseSnapshotId
       ? { snapshotName: snapshot.baseSnapshotId }
       : null;
@@ -131,7 +121,6 @@ export async function findSeedableAppRepos(
   const configRepo = await db.get(config.repoId);
   if (!configRepo) return [];
   const siblings = await findSiblingsOf(db, configRepo);
-  // Repos that are a monorepo parent of another sibling — skip these.
   const parentIds = new Set<Id<"githubRepos">>();
   for (const r of siblings) {
     if (r.parentRepoId) parentIds.add(r.parentRepoId);
@@ -172,10 +161,6 @@ export const getSeededAppStatus = authQuery({
   },
 });
 
-/**
- * Seed fingerprint of the commands a seeded snapshot is built from right now.
- * The build syncs `.eva/` first, so these cached fields are the file's values.
- */
 async function currentSeedFingerprint(
   db: GenericDatabaseReader<DataModel>,
   repo: Doc<"githubRepos">,
@@ -232,8 +217,6 @@ export const getRepoSnapshotInternal = internalQuery({
   returns: v.union(
     v.object({
       repoId: v.id("githubRepos"),
-      // Snapshots build from the repo's default branch — the same branch the
-      // `.eva/` config cache follows.
       branch: v.string(),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
@@ -303,13 +286,9 @@ export const saveRepoSnapshot = authMutation({
   returns: v.id("repoSnapshots"),
   handler: async (ctx, args) => {
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
-    // Build/seed commands come from `.eva/config.json`; a resync fills them in
-    // when this creates the app's snapshot row.
     await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
       repoId: args.repoId,
     });
-    // Check for an app-specific config first (per-app model).
-    // During transition, fall back to a shared root config and create an app-scoped row from it.
     const appSpecific = await ctx.db
       .query("repoSnapshots")
       .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
@@ -318,7 +297,6 @@ export const saveRepoSnapshot = authMutation({
     const cronName = `snapshot-rebuild-${args.repoId}`;
 
     if (appSpecific) {
-      // Update the app's own config
       const cronspec = resolveCronspec(args.schedule);
       const cronJobId = await safeReplaceCron(ctx, {
         name: cronName,
@@ -335,8 +313,6 @@ export const saveRepoSnapshot = authMutation({
       return appSpecific._id;
     }
 
-    // No app-specific config. For backwards compat, check if a shared root config exists
-    // and copy it to this app. This is the lazy-migration path.
     const repo = await ctx.db.get(args.repoId);
     if (repo) {
       const siblings = await findSiblingsOf(ctx.db, repo);
@@ -348,7 +324,6 @@ export const saveRepoSnapshot = authMutation({
           .withIndex("by_repo", (q) => q.eq("repoId", sibling._id))
           .first();
         if (siblingSnapshot) {
-          // Found a shared root config. Migrate it to this app by creating an app-scoped row.
           const now = Date.now();
           const id = await ctx.db.insert("repoSnapshots", {
             repoId: args.repoId,
@@ -373,7 +348,6 @@ export const saveRepoSnapshot = authMutation({
       }
     }
 
-    // No shared config found — create a new app-specific row from scratch
     const now = Date.now();
     const id = await ctx.db.insert("repoSnapshots", {
       repoId: args.repoId,

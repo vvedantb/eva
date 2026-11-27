@@ -42,20 +42,6 @@ import {
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
 
-/**
- * Idle pause: stops sandboxes nobody is using (Amp-orb style) so Vercel stops
- * billing provisioned memory for them. Pause/resume is already what Stop and
- * Start do (snapshot + resume), so the only new behaviour is *when* a stop is
- * requested.
- *
- * Gated by `appSettings.sandboxIdlePauseMode`:
- *   - `off`     — this module does nothing (default; identical to pre-feature).
- *   - `on`      — logs `[sandboxIdlePause] pause …` and requests the stop.
- *
- * The daily `sandboxAutoStop` sweep is untouched and keeps running alongside.
- */
-
-/** Upper bound on pauses per 5-minute tick so one sweep never floods the provider. */
 const MAX_PAUSES_PER_RUN = 25;
 
 const settingsShape = {
@@ -100,8 +86,6 @@ export const setSandboxIdlePauseSettings = authMutation({
     if (existing) {
       await ctx.db.patch(existing._id, patch);
     } else {
-      // The daily auto-stop fields are required on the row; mirror the
-      // defaults `getSandboxAutoStopSettings` reports when no row exists.
       await ctx.db.insert("appSettings", {
         sandboxAutoStopEnabled: false,
         sandboxAutoStopTime: "22:00",
@@ -130,7 +114,6 @@ export const switchOffInternal = internalMutation({
   },
 });
 
-/** Same cap per repo and kind as the rail's awake-sandbox counts. */
 const AWAKE_PER_REPO_LIMIT = 64;
 
 const awakeSandboxValidator = v.object({
@@ -138,17 +121,13 @@ const awakeSandboxValidator = v.object({
   entityId: v.string(),
   title: v.string(),
   repoLabel: v.string(),
-  /** App path to the session, quick task or project; absent before numId backfill. */
   href: v.optional(v.string()),
-  /** An agent turn, run or queued follow-up holds the sandbox awake. */
   busy: v.boolean(),
-  /** First name of someone with a sandbox tab open right now. */
   viewerName: v.optional(v.string()),
   lastUserActivityAt: v.number(),
   lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
   lastUserName: v.optional(v.string()),
   lastAgentFinishedAt: v.optional(v.number()),
-  /** When both idle graces end; the 5-minute sweep pauses it after this. */
   idleDeadline: v.number(),
 });
 
@@ -175,8 +154,6 @@ export const listAwakeSandboxes = authQuery({
           entities.map(async (entity) => {
             const candidate = await inspectEntity(ctx, entity);
             if (!candidate) return null;
-            // A task's or project's session shows as its owner: that is the
-            // page the user opens (the session itself is hidden).
             const shown = await shownSandboxOwner(ctx, entity.doc);
             return {
               kind: shown.kind,
@@ -217,7 +194,6 @@ export const listAwakeSandboxes = authQuery({
 
 type AwakeEntity = { kind: "session"; doc: Doc<"sessions"> };
 
-/** Awake (status `active`, sandbox attached, not deleted) sessions in one repo. */
 async function awakeEntitiesInRepo(
   ctx: QueryCtx,
   repoId: Id<"githubRepos">,
@@ -233,7 +209,6 @@ async function awakeEntitiesInRepo(
     .map((doc) => ({ kind: "session" as const, doc }));
 }
 
-/** What the status page shows for a session: its owner when it has one. */
 async function shownSandboxOwner(
   ctx: QueryCtx,
   session: Doc<"sessions">,
@@ -294,7 +269,6 @@ const candidateValidator = v.object({
   status: v.optional(v.string()),
   busy: v.boolean(),
   present: v.boolean(),
-  /** A user on a sandbox tab right now; credited when presence resets the clock. */
   presentUserId: v.optional(v.id("users")),
   lastUserActivityAt: v.number(),
   lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
@@ -304,20 +278,12 @@ const candidateValidator = v.object({
 
 type Candidate = Infer<typeof candidateValidator>;
 
-/**
- * True when a fresh streaming row or a queued follow-up exists for the entity.
- * A stale streaming row (see `isStreamingRowFresh`) does not count: leftover
- * rows from crashed turns or old data must not pin a sandbox awake forever.
- * Open turns, runs and workflows are the authoritative busy signals and are
- * checked separately by the callers.
- */
 async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean> {
   const streaming = await ctx.db
     .query("streamingActivity")
     .withIndex("by_entity", (q) => q.eq("entityId", entityId))
     .first();
   if (streaming && isStreamingRowFresh(streaming, Date.now())) return true;
-  // A session chat's turn streams under the chat id and queues on it too.
   const parentId = ctx.db.normalizeId("sessionChats", entityId);
   if (!parentId) return false;
   const queued = await ctx.db
@@ -326,10 +292,6 @@ async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean>
     .order("asc")
     .first();
   if (queued === null) return false;
-  // A queue waiting out a usage limit sends nothing for hours, so it must not
-  // keep the VM billing; its resume drain wakes the sandbox again. The raw
-  // account pick stands in for the dequeue-time resolve: a message on another
-  // account is not held, so the drain has already sent it.
   const hold = await usageLimitHoldFor(
     ctx,
     parentId,
@@ -345,8 +307,6 @@ async function inspectSession(
 ): Promise<Candidate | null> {
   const session = await ctx.db.get(sessionId);
   if (!session) return null;
-  // A session's turns, staged prompts and queues live on its chats, so any
-  // live chat with work keeps the sandbox awake.
   const chats = await listLiveSessionChats(ctx.db, sessionId);
   let chatBusy = false;
   for (const chat of chats) {
@@ -360,8 +320,6 @@ async function inspectSession(
       await openChatEntityIdsFor(ctx.db, sessionId),
     ) ||
     chatBusy ||
-    // Streaming rows keyed by the session itself: a session that predates
-    // chats and has not been opened (so has no Main chat row) yet.
     (await hasPendingWork(ctx, String(sessionId)));
   return await finishCandidate(
     ctx,
@@ -450,7 +408,6 @@ async function resolveSandboxOwnerState(
     repoId: doc.repoId,
     inspect: () => inspectSession(ctx, doc._id),
   }));
-  // The repo resolves the Vercel credentials a stop needs.
   const repoId = owners.find((owner) => owner.repoId)?.repoId;
   if (!repoId) return { state: "unknown" };
   let stopping = false;
@@ -542,8 +499,6 @@ export const run = internalAction({
     let busy = 0;
     let present = 0;
     let paused = 0;
-    // Inspect each sandbox just before deciding on it: `pause` re-checks only
-    // status and busy, so a batched read could act on stale presence.
     for (const ref of refs) {
       const candidate = await ctx.runQuery(
         internal.sandboxIdlePause.inspectCandidate,
@@ -552,8 +507,6 @@ export const run = internalAction({
       if (!candidate) continue;
       if (candidate.present) {
         present += 1;
-        // Presence is an interaction: restart the grace from now so the
-        // sandbox outlives the tab by the configured window, not by zero.
         await ctx.runMutation(internal._sandbox.activity.touchUser, {
           ...ref,
           source: "viewing",

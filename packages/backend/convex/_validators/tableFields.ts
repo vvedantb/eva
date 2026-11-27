@@ -82,25 +82,15 @@ export const userFields = {
   customTheme: v.optional(customThemeValidator),
   toolbarVisible: v.optional(v.boolean()),
   customInstructions: v.optional(v.string()),
-  /** Leftover; writers use `userPresence`. Readers merge until backfill. */
   lastSeenAt: v.optional(v.number()),
   lastSeenPath: v.optional(v.string()),
   lastChangelogDismissedAt: v.optional(v.number()),
   onboardingCompletedAt: v.optional(v.number()),
   emailNotificationsEnabled: v.optional(v.boolean()),
-  /** Opt-in experimental features (settings → Experimental). */
   experimentalFlags: v.optional(experimentalFlagsValidator),
-  /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  /**
-   * @deprecated Pre-rebuild Manager Ave session pointer. Nothing reads or writes
-   * it; `retireOrchestratorSessions` clears it, then the field is dropped. Ave
-   * lives in `aveThreads` now.
-   */
   orchestratorSessionId: v.optional(v.id("sessions")),
-  /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
   grokBotWebhookUrl: v.optional(v.string()),
-  /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
   grokBotWebhookKey: v.optional(v.string()),
 };
 
@@ -111,54 +101,31 @@ export const userPresenceFields = {
   lastSeenPath: v.optional(v.string()),
 };
 
-// A user's own coding-agent login ("bring your own account"). Each row is one
-// account for one provider (e.g. a personal Claude Code OAuth token, a Cursor
-// API key). `credentials` holds the provider's auth env vars with values
-// encrypted at rest (see `encryption.ts`); the plaintext is only decrypted at
-// sandbox-launch time to override the shared team credential, so the user's own
-// usage bills to their account. Selected per session/task in the model picker.
 export const userProviderAccountFields = {
   userId: v.id("users"),
   provider: aiProviderValidator,
   label: v.string(),
   credentials: v.array(v.object({ key: v.string(), value: v.string() })),
-  // When true, teammates (anyone sharing a team with the owner) can select this
-  // account and run on its credentials. They never see or edit the values.
   shared: v.optional(v.boolean()),
-  // Last time these credentials were actually injected into a sandbox, and who
-  // for. Written at launch so the owner can see a forgotten share being used.
   lastUsedAt: v.optional(v.number()),
   lastUsedByUserId: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
 
-// A user's own GitHub App user access token, obtained by sending them through
-// the App's OAuth authorize step. Used to answer "is this person really in
-// installation N?" — GitHub's docs are explicit that a client-supplied
-// `installation_id` cannot be trusted, and only a user token can verify the
-// caller's own entitlement. `accessToken`/`refreshToken` hold ciphertext (see
-// `encryption.ts`); plaintext exists only inside a node action. One row per user.
 export const githubUserTokenFields = {
   userId: v.id("users"),
   accessToken: v.string(),
-  /** Epoch ms. GitHub App user tokens last 8h when the App expires them. */
   accessTokenExpiresAt: v.number(),
-  // Both absent when the App has token expiry turned off: the access token then
-  // never expires and GitHub issues no refresh token.
   refreshToken: v.optional(v.string()),
   refreshTokenExpiresAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
 
-// Short-lived CSRF nonce for the GitHub OAuth authorize hop. The callback is a
-// plain browser redirect with no Convex auth, so the row is what ties the
-// returned `code` back to the user who started the flow. Consumed on first use.
 export const githubOauthStateFields = {
   nonce: v.string(),
   userId: v.id("users"),
-  /** Installation the user was mid-connecting, restored after the redirect. */
   installationId: v.optional(v.number()),
   expiresAt: v.number(),
 };
@@ -202,7 +169,6 @@ export const connectorOauthStateFields = {
   userId: v.id("users"),
   provider: connectorProviderValidator,
   actor: connectorActorValidator,
-  /** Relative path to bounce back to. Must start with `/settings`. */
   returnPath: v.optional(v.string()),
   codeVerifier: v.optional(v.string()),
   expiresAt: v.number(),
@@ -257,7 +223,6 @@ export type BackgroundAgentEntry = Infer<typeof backgroundAgentEntryValidator>;
 export const agentGoalValidator = v.object({
   objective: v.string(),
   status: v.union(v.literal("active"), v.literal("complete")),
-  /** Stop hook evaluations that said "not met yet". */
   checks: v.number(),
   lastCheck: v.optional(v.string()),
 });
@@ -306,12 +271,11 @@ export const chatReadParentIdValidator = v.union(
  * Every durable turn owner: the three chats, quick-task runs, and the rows the
  * one-shot agents work on (automation runs, docs, evaluation reports).
  */
-// Task chat turns removed (moved to session chats in 1b/2); a project keeps
-// its interview lane turns. schema-narrowing-ok: clearLegacyOwnerChatFields
+// schema-narrowing-ok: clearLegacyOwnerChatFields
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
-  // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
+  // schema-narrowing-ok: migrateProjectInterviewState
   v.id("agentRuns"),
   v.id("automationRuns"),
   v.id("docs"),
@@ -322,19 +286,16 @@ export const turnEntityIdValidator = v.union(
  * A one-shot agent that works on a row which also owns chat turns. The lane
  * keeps its turn apart from the chat's: chat turns leave it unset.
  */
-// Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
+// schema-narrowing-ok: retireSessionSummaries
 export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
 /** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
 export const turnFields = {
-  // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
+  // schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
   lane: v.optional(turnLaneValidator),
-  // The session a chat turn belongs to, so one indexed scan answers "how many
-  // chats of this session are running" (the parallel-chat cap) and "is any
-  // chat of this session executing" (the sidebar).
   sessionId: v.optional(v.id("sessions")),
   streamingEntityId: v.string(),
   state: turnStateValidator,
@@ -346,21 +307,12 @@ export const turnFields = {
   error: v.optional(v.string()),
   workflowId: v.optional(v.string()),
   placeholderMessageId: v.optional(v.id("messages")),
-  /**
-   * The thread root a chat turn answers in (a reply that @mentioned Eva).
-   * Its retries, alerts and continuations join the same thread.
-   */
   replyTo: v.optional(v.id("messages")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
-  /**
-   * Set by the lease reconciler the first time it finds the lease expired
-   * while the sandbox process was still alive; cleared by the next successful
-   * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
-   */
   silentSince: v.optional(v.number()),
 };
 

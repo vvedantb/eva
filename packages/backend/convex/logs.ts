@@ -9,7 +9,6 @@ import {
 import { deriveLogUsage } from "./_logs/usage";
 import { logUsageFields } from "./_validators/tableFields";
 
-/** Denormalised usage columns copied onto every log DTO. */
 function usageOf(entry: Doc<"logs">) {
   return {
     costUsd: entry.costUsd,
@@ -111,8 +110,6 @@ export const getByProjectId = authQuery({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
     }
-    // Confirm the project lives in the repo the caller is asking about — the
-    // by_project index alone would otherwise leak logs across repos.
     const project = await ctx.db.get(args.projectId);
     if (!project || project.repoId !== args.repoId) {
       return [];

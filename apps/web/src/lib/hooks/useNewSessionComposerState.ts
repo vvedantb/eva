@@ -12,7 +12,6 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 
-// Older blobs also held model/traits/account; only the draft is read now.
 const storedDraftSchema = z.object({ draft: z.string() }).catch({ draft: "" });
 
 function storageKey(repoId: Id<"githubRepos">) {
@@ -42,7 +41,6 @@ export function useNewSessionComposerState(
       },
     },
   );
-  // Unpicked fields follow the repo defaults live.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
     {},

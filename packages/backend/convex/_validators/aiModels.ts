@@ -44,16 +44,12 @@ export const aiModelValidator = v.union(
   v.literal("claude:claude-opus-4-5-20251101"),
   v.literal("claude:claude-opus-4-6"),
   v.literal("claude:claude-fable-5-2"),
-  // Legacy Fable 5.1 and 5 — still accepted so existing sessions can load;
-  // normalizeAIModel maps them to claude-fable-5-2.
   v.literal("claude:claude-fable-5-1"),
   v.literal("claude:claude-fable-5"),
   v.literal("codex:gpt-6-astra"),
   v.literal("codex:gpt-5.6-sol"),
   v.literal("codex:gpt-5.6-terra"),
   v.literal("codex:gpt-5.6-luna"),
-  // Legacy Codex — still accepted so existing sessions can load;
-  // normalizeAIModel maps them to gpt-5.6-sol (the bare 5.6 alias included).
   v.literal("codex:gpt-5.6"),
   v.literal("codex:gpt-5.5"),
   v.literal("codex:gpt-5.5-pro"),
@@ -65,8 +61,6 @@ export const aiModelValidator = v.union(
   v.literal("opencode:openai/gpt-5.6-sol"),
   v.literal("opencode:openai/gpt-5.6-terra"),
   v.literal("opencode:openai/gpt-5.6-luna"),
-  // Legacy opencode — still accepted so existing sessions can load;
-  // normalizeAIModel maps them to openai/gpt-5.6-sol.
   v.literal("opencode:openai/gpt-5-codex"),
   v.literal("opencode:openai/gpt-5.2"),
   v.literal("opencode:openai/gpt-5.3-codex"),
@@ -78,9 +72,6 @@ export const aiModelValidator = v.union(
   v.literal("cursor:gpt-6-astra"),
   v.literal("cursor:gemini-3.1-pro"),
   v.literal("cursor:composer-2.5"),
-  // Legacy — still accepted so existing sessions with these lastModel values
-  // can load; normalizeAIModel remaps them. The reasoning-suffixed cursor ids
-  // predate the SDK migration (effort now lives on the traits menu).
   v.literal("cursor:grok-4.6-low"),
   v.literal("cursor:grok-4.6-medium"),
   v.literal("cursor:grok-4.6-high"),
@@ -132,7 +123,6 @@ export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
 export interface ModelReasoningTraits {
   levels: ReadonlyArray<ReasoningLevel>;
   default: ReasoningLevel;
-  /** The CLI's own default when Eva's `default` differs; omitted means equal. */
   providerDefault?: ReasoningLevel;
   ultrathink?: boolean;
 }
@@ -165,7 +155,6 @@ const CLAUDE_REASONING_FULL: ModelReasoningTraits = {
   ultrathink: true,
 };
 
-/** Opus defaults to medium in Eva; the Claude CLI defaults to high. */
 const CLAUDE_REASONING_OPUS: ModelReasoningTraits = {
   ...CLAUDE_REASONING_FULL,
   default: "medium",
@@ -183,35 +172,26 @@ const CLAUDE_REASONING_OPUS_46: ModelReasoningTraits = {
   ultrathink: true,
 };
 
-/** GPT-6 Astra: no none/minimal level; low is the floor. */
 const CODEX_REASONING_ASTRA: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh", "max"],
   default: "medium",
 };
 
-/** GPT-5.6 Sol/Terra/Luna: none/off through `max` above xhigh. */
 const CODEX_REASONING_56: ModelReasoningTraits = {
   levels: ["off", "low", "medium", "high", "xhigh", "max"],
   default: "medium",
 };
 
-/**
- * Cursor SDK models: the level is resolved to a per-model SDK parameter at
- * runtime (resolveCursorModelSelection in callback-src) and degrades to the
- * bare model when the model exposes no reasoning parameter.
- */
-const CURSOR_REASONING: ModelReasoningTraits = {
+const CURSOR_REASONING:ModelReasoningTraits = {
   levels: ["low", "medium", "high"],
   default: "medium",
 };
 
-/** Grok 4.6/4.7: low, medium, high (default), xhigh. Fast is a separate trait. */
 const CURSOR_REASONING_GROK_XHIGH: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh"],
   default: "high",
 };
 
-/** GPT-6 Astra on Cursor: no `max` (config.ts clamps max → high). */
 const CURSOR_REASONING_ASTRA: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh"],
   default: "medium",
@@ -279,12 +259,6 @@ export interface AIModelOption {
   contextWindow1m?: boolean;
   contextWindowDefaultLabel?: string;
   fastMode?: boolean;
-  /**
-   * Default context window in tokens, for the usage meter. Only set where the
-   * number is known here — left undefined rather than guessed, so the meter can
-   * say "unknown" instead of inventing a denominator. A run that reports its own
-   * `contextWindow` (e.g. Claude's 1M mode) always wins over this.
-   */
   contextWindow?: number;
 }
 
@@ -420,7 +394,6 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CURSOR_REASONING_GROK_XHIGH,
     fastMode: true,
-    // xAI documents 500K for 4.7 (docs.x.ai/developers/grok-4-7, 21 Sep 2026).
     contextWindow: 500000,
   },
   {
@@ -560,8 +533,6 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
     ],
   ],
   ["codex:gpt-6-astra", ["codex:gpt-6-astra"]],
-  // Bare gpt-5.6 alias routes to Sol (OpenAI's flagship alias), and retired
-  // Codex generations collapse onto the current flagship.
   [
     "codex:gpt-5.6-sol",
     [
@@ -578,7 +549,6 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
   ["codex:gpt-5.6-terra", ["codex:gpt-5.6-terra"]],
   ["codex:gpt-5.6-luna", ["codex:gpt-5.6-luna"]],
   ["opencode:openai/gpt-6-astra", ["opencode:openai/gpt-6-astra"]],
-  // Retired opencode models collapse onto the current flagship.
   [
     "opencode:openai/gpt-5.6-sol",
     [
@@ -592,8 +562,6 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
   ],
   ["opencode:openai/gpt-5.6-terra", ["opencode:openai/gpt-5.6-terra"]],
   ["opencode:openai/gpt-5.6-luna", ["opencode:openai/gpt-5.6-luna"]],
-  // Effort lives on the reasoning selector now — suffixed variants collapse
-  // to one base model (the stored reasoning level carries the distinction).
   [
     "cursor:grok-4.5",
     [
@@ -643,7 +611,6 @@ const AI_MODEL_BY_ALIAS: ReadonlyMap<string, AIModel> = new Map(
 
 /** Normalizes a raw model string (including legacy formats) to a canonical AIModel value. */
 export function normalizeAIModel(model: string | null | undefined): AIModel {
-  // "sonnet" / "claude:sonnet" and unknown strings fall back to the default.
   return (model && AI_MODEL_BY_ALIAS.get(model)) || DEFAULT_AI_MODEL;
 }
 
@@ -807,8 +774,6 @@ export function buildTraitsExecutionPayload(
     payload.use1mContext = true;
   }
 
-  // Fast is deliberately explicit: Cursor first-party models can otherwise
-  // resolve a bare model id to their higher-priced Fast variant.
   if (traits.fastMode) {
     payload.fastMode = stored.fastMode === true;
   }
@@ -873,11 +838,6 @@ export function findAIModelOption(
   };
 }
 
-/**
- * The ways a result event can spell an option's id: the `AIModel` key minus its
- * provider prefix, plus (for opencode's `openai/gpt-6-astra` style ids) the part
- * after the slash.
- */
 function rawIdsForOption(option: AIModelOption): ReadonlyArray<string> {
   const withoutProvider = option.id.slice(option.id.indexOf(":") + 1);
   const slash = withoutProvider.lastIndexOf("/");
@@ -943,11 +903,6 @@ export function getVisibleAIModelOptions(
   });
 }
 
-/**
- * Simple view keeps one current model per provider family: the Claude models we
- * recommend, the latest Codex generation, and Cursor's latest Grok/Composer.
- * Everything else stays selectable in the normal UI — this only trims the list.
- */
 const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
   "claude:claude-fable-5-2",
   "claude:opus",
@@ -988,7 +943,6 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";
-  // Grok 4.6 has no tick of its own: 4.7 is the Cursor top step now.
   return "cursor:grok-4.7";
 }
 

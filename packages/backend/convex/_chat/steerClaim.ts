@@ -2,17 +2,9 @@ import { v, type Infer } from "convex/values";
 import type { MutationCtx } from "../_generated/server";
 import type { ChatEntityId } from "./surfaceAdapters";
 
-/**
- * The daemon-claim half of steering (routing: `./steer.ts`). A leaf module:
- * the claim mutations spread `steerClaimArgs` at load time, and `./steer.ts`
- * imports the session workflow graph, which would make that spread undefined.
- */
-
 /** Steer args every chat daemon claim accepts. */
 export const steerClaimArgs = {
-  /** The daemon has a live turn that can take a steer right now. */
   acceptSteer: v.optional(v.boolean()),
-  /** Outcome of the steers the previous claim handed over. */
   steerAcks: v.optional(
     v.array(v.object({ id: v.string(), delivered: v.boolean() })),
   ),
@@ -38,7 +30,6 @@ export async function drainSteers(
     if (!row || row.parentId !== entity._id || row.steer !== "delivering") {
       continue;
     }
-    // Native steers carry no attachments, so the row owns no blobs.
     if (ack.delivered) await ctx.db.delete(row._id);
     else await ctx.db.patch(row._id, { steer: undefined });
   }

@@ -7,12 +7,6 @@ import {
 } from "./owner";
 
 /**
- * Read-only owner lookups that need the chat modules. Kept apart
- * from the leaf `owner.ts`, which the schema validators import, so loading
- * the schema never pulls these modules into an import cycle.
- */
-
-/**
  * The session chat a task or project talks in (the Main chat of its own
  * session), or null until something needed it (`ensureOwnerChat`).
  */

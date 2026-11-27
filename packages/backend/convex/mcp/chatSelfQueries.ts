@@ -17,10 +17,6 @@ import {
   findWorkSession,
 } from "../_sessions/owner";
 
-// Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
-// tool has already resolved the chat through `resolveEntityTarget`, which is
-// where the per-user access check lives, so this only reads what it was named.
-
 const chatDetailsValidator = v.object({
   baseBranch: v.optional(v.string()),
   prUrl: v.optional(v.string()),
@@ -28,7 +24,6 @@ const chatDetailsValidator = v.object({
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
   previewPath: v.optional(v.string()),
-  /** `session-<id>` / `task-<id>` / `project-<id>`, the Console launcher's owner key. */
   ownerKey: v.string(),
   consoleTmuxSession: v.string(),
   repoRootDirectory: v.optional(v.string()),
@@ -45,7 +40,6 @@ const chatDetailsValidator = v.object({
       enabled: v.boolean(),
     }),
   ),
-  /** Every PR linked to the chat, primary first, then newest first. */
   pullRequests: v.array(mcpPullRequestValidator),
   linkedRepos: v.array(
     v.object({
@@ -68,7 +62,6 @@ type ChatOwnerFields = Pick<
   "baseBranch" | "prUrl" | "prState" | "devPort" | "devCommand" | "previewPath"
 > & { ownerKey: string; owner: PrOwnerRef };
 
-/** The per-surface fields; everything else is shared repo config. */
 async function ownerFields(
   ctx: QueryCtx,
   kind: Infer<typeof chatEntityKindValidator>,
@@ -93,8 +86,6 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
-    // A task's sandbox (preview port, path, owner key) is its own session's;
-    // its PRs stay the task's.
     const session = await findWorkSession(ctx.db, task);
     if (!session) return null;
     return {
@@ -111,7 +102,6 @@ async function ownerFields(
   const projectId = ctx.db.normalizeId("projects", id);
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (!project) return null;
-  // A project's sandbox is its session's; its PRs stay the project's.
   const session = await findOwnedSession(ctx.db, {
     kind: "project",
     projectId: project._id,
@@ -156,7 +146,6 @@ export const getChatDetails = internalQuery({
   args: {
     kind: chatEntityKindValidator,
     id: v.string(),
-    /** The repo `resolveEntityTarget` settled on (a project task's comes from its project). */
     repoId: v.id("githubRepos"),
   },
   returns: v.union(v.null(), chatDetailsValidator),

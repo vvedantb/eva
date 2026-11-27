@@ -12,7 +12,6 @@ export const stopReasonValidator = v.optional(
       kind: v.literal("idle"),
       idleMinutes: v.number(),
     }),
-    /** The quick task, not a person, stopped its session (run end, retire). */
     v.object({ kind: v.literal("task") }),
   ),
 );

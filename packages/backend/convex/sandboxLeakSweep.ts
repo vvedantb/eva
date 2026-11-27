@@ -8,19 +8,6 @@ import { resolveSandboxCredentialsOnly } from "./envVarResolver";
 import { foreignSandboxDeployment } from "./_sandbox/tags";
 import { errorMessage } from "@vvedantb/server";
 
-/**
- * Leak sweep: stops Vercel VMs that run while every Eva owner is `closed`.
- *
- * The Vercel SDK resumes a stopped sandbox on any exec, so a background job
- * that runs a command after Stop wakes the VM again. The owner row still says
- * `closed`, and idle pause only scans `active` rows, so nothing stopped it.
- * This sweep asks Vercel which VMs run and stops the ones Eva does not want.
- *
- * Shares `appSettings.sandboxIdlePauseMode`: `off` does nothing, `dry-run`
- * logs `[sandboxLeakSweep] would-stop …`, `on` stops the VM.
- */
-
-/** A VM must have been running this long first, so a start in flight is never raced. */
 const MIN_RUNNING_MS = 3 * 60_000;
 
 export const run = internalAction({
@@ -53,7 +40,6 @@ export const run = internalAction({
         });
         for await (const sandbox of list) {
           if (sandbox.status !== "running") continue;
-          // Another deployment's VM: its owner rows here are a stale mirror.
           if (foreignSandboxDeployment(sandbox.tags) !== null) continue;
           const since = sandbox.statusUpdatedAt ?? sandbox.updatedAt;
           if (now - since < MIN_RUNNING_MS) continue;
@@ -76,8 +62,6 @@ export const run = internalAction({
         `[sandboxLeakSweep] ${verb} sandbox=${sandboxId} repo=${repoId}`,
       );
       if (mode !== "on") continue;
-      // Same action the Stop button finalizes with; it never throws on a
-      // VM that is already gone or stopped.
       await ctx.runAction(internal.sandbox.stopSandbox, { sandboxId, repoId });
     }
     console.log(

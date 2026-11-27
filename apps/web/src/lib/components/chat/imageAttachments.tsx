@@ -14,15 +14,6 @@ import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachment
 import { useUploadBlobs } from "@/lib/components/attachments/useUploadBlobs";
 import { UserMessageAttachments } from "@/lib/components/chat/UserMessageAttachments";
 
-/**
- * Chat-specific attachment pieces. Files are pasted/dropped into the
- * prompt-input attachment context, uploaded to Convex storage on send,
- * materialized into the sandbox as `/tmp/eva-attachment-*`, and shown back on
- * the user message. The accept lists, limits, and labelling live in
- * `@/lib/components/attachments/attachmentMeta` and are re-exported here for
- * existing callers.
- */
-
 export {
   MAX_CHAT_ATTACHMENTS,
   MAX_CHAT_ATTACHMENT_BYTES,

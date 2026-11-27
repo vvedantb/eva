@@ -108,25 +108,16 @@ export function GroupTasksModal({
     open: false,
     ids: "",
   });
-  const selectedIds = selectedTasks.map((task) => task._id).join(",");
-  // Reset order when the modal opens or the selection set changes.
-  if (isOpen && (!syncKey.open || syncKey.ids !== selectedIds)) {
+  const selectedIds = selectedTasks.map((task) => task._id).join(",");  if (isOpen && (!syncKey.open || syncKey.ids !== selectedIds)) {
     setSyncKey({ open: true, ids: selectedIds });
     setOrderedTasks(selectedTasks);
   } else if (!isOpen && syncKey.open) {
     setSyncKey({ open: false, ids: "" });
   }
 
-  const projects = useQuery(api.projects.list, { repoId: repo._id });
-  // A project's stage is derived from its tasks; any project takes new tasks
-  // (a done project opens again).
-  const statuses = useProjectListStatuses(repo._id);
+  const projects = useQuery(api.projects.list, { repoId: repo._id });  const statuses = useProjectListStatuses(repo._id);
   const createFromTasks = useMutation(api.projects.createFromTasks);
   const assignToProject = useMutation(api.agentTasks.assignToProject);
-
-  // The house activation split. A lone `PointerSensor` armed on distance never
-  // works on touch: the finger is also describing a scroll, the browser wins the
-  // gesture, and the drag dies. See `useDragSensors`.
   const sensors = useDragSensors({ sortable: true });
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -158,10 +149,7 @@ export function GroupTasksModal({
       const created = await convex.query(api.projects.get, { id: projectId });
       setTitle("");
       onSuccess();
-      onClose();
-      // Nested ifs rather than a ternary: React Compiler bails on the whole
-      // file when a conditional expression sits inside a try/catch.
-      if (created) {
+      onClose();      if (created) {
         const segment = entityPathSegment(created);
         if (segment) {
           navigate({
@@ -178,10 +166,7 @@ export function GroupTasksModal({
 
   const handleAddToProject = async () => {
     if (!selectedProjectId || taskIds.length === 0) return;
-    setIsLoading(true);
-    // Built out here: a ternary inside the `try` bails the React Compiler out
-    // of this whole file. See CLAUDE.md.
-    const successMessage = `Added ${taskIds.length} task${taskIds.length === 1 ? "" : "s"} to project`;
+    setIsLoading(true);    const successMessage = `Added ${taskIds.length} task${taskIds.length === 1 ? "" : "s"} to project`;
     try {
       await withMutationToast(
         assignToProject({

@@ -32,9 +32,7 @@ export function QuickTaskDraftRow({
   return (
     <ListRow
       accentClassName={draftStyle.bar}
-      onClick={() =>
-        // Keeps the list's filters; QuickTasksClient opens the modal on `draft`.
-        void navigate({ to: ".", search: (prev) => ({ ...prev, draft: id }) })
+      onClick={() =>        void navigate({ to: ".", search: (prev) => ({ ...prev, draft: id }) })
       }
       aria-label={`Draft: ${label}`}
       contentClassName="flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"

@@ -28,16 +28,13 @@ import { FoldBandHeader, FoldFooter } from "@/ui/FoldHeader";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** A project's task status groups folded away from their default, kept on the device. */
 const toggledProjectTaskStatuses = persistedIdSet("projectTaskDisplayStatusesToggled");
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
-/** One list row: a task under its display status, or a task's PR. */
 type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string; repoName?: string } };
 
-/** The Pull requests group's key, beside the display statuses (web `PULL_REQUESTS`). */
 const PULL_REQUESTS = "pull_requests";
 
 /**
@@ -62,7 +59,6 @@ export function ProjectTasks({
   project: Project;
   repo: Repo;
   users: User[] | undefined;
-  /** `agentTasks.listByProject`, undefined while it loads (`useProjectTaskStatus`). */
   tasks: ProjectTaskListRow[] | undefined;
   failedTaskIds: ReadonlySet<string>;
 }) {
@@ -76,10 +72,8 @@ export function ProjectTasks({
   const actions = useQuickTaskActions({ repo, users, projects });
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const [approving, setApproving] = useState(false);
-  // Sections the user folded or unfolded, against each one's `defaultOpen`.
   const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
   const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds, archivedTasks ?? []);
-  // One lookup for the people who added the Triage tasks ("Added by <name>").
   const authorIds = [
     ...new Set(
       (sections.find((section) => section.status === "triage")?.tasks ?? []).flatMap(({ row }) =>
@@ -180,7 +174,6 @@ export function ProjectTasks({
                         Approve all
                       </Button>
                     ) : null}
-                    {/* The web outline "+": a 44 square here, in place of the web 24. */}
                     {section.first ? (
                       <Pressable
                         accessibilityRole="button"

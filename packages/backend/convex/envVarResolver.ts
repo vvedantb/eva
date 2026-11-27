@@ -22,7 +22,6 @@ export async function resolveAllEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
-  // Repo vars do not depend on the team lookup: fetch both chains together.
   const [teamVars, repoVars] = await Promise.all([
     ctx
       .runQuery(internal.githubRepos.getTeamIdForRepo, { repoId })
@@ -42,7 +41,6 @@ export async function resolveEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
-  // Repo vars do not depend on the team lookup: fetch both chains together.
   const [teamVars, repoVars] = await Promise.all([
     ctx
       .runQuery(internal.githubRepos.getTeamIdForRepo, { repoId })
@@ -79,7 +77,6 @@ export async function resolveSeedOnlyEnvVars(
   return { ...teamVars, ...repoVars };
 }
 
-/** Sibling repos of the codebase (same owner/name and team), requested repo first. */
 async function listMonorepoRepoIds(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
@@ -103,13 +100,6 @@ async function loadSiblingRepoFields(
   return docs.filter((doc) => doc !== null);
 }
 
-/**
- * Collects Vercel token/team from the target repo and monorepo siblings, but
- * VERCEL_PROJECT_ID only from the target (or the root's picked app). Sibling
- * apps often share token + team via team env vars, while each app has its own
- * Vercel project — borrowing a sibling app's project id creates sandboxes
- * under the wrong app.
- */
 async function selectVercelCredentialsForRepo(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
@@ -157,10 +147,6 @@ async function selectVercelCredentialsForRepo(
   };
 }
 
-/**
- * vCPUs for the target app's sandboxes. Always the target's own size, never
- * the sibling whose Vercel project the credentials came from.
- */
 async function resolveSandboxVcpus(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
@@ -288,7 +274,6 @@ export async function resolveProviderAccountCredentials(
   if (account.provider !== modelProvider) {
     throw new Error("Selected provider account does not support this model");
   }
-  // Bookkeeping only — never let it break a launch that has its credentials.
   try {
     await ctx.runMutation(internal.userProviderAccounts.recordUsageInternal, {
       accountId,
