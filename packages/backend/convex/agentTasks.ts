@@ -15,6 +15,7 @@ export {
   updateStatus,
   archive,
   unarchive,
+  addAttachments,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,

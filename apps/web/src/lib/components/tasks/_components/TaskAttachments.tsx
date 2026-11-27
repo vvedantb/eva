@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { IconPaperclip } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
@@ -12,14 +13,19 @@ import {
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
-import { labelForAttachment } from "@/lib/components/attachments/attachmentMeta";
+import {
+  CHAT_ATTACHMENT_ACCEPT,
+  labelForAttachment,
+} from "@/lib/components/attachments/attachmentMeta";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { useAddTaskFiles } from "./useAddTaskFiles";
 
 /**
  * "Files" section for a task's attachments. Each card opens the stored blob in a
  * new tab; hovering reveals a remove button. Removing deletes the stored blob,
- * so it is confirmed first and cannot be undone. Files can only be added when
- * the task is created. A read-only (archived) task shows no remove button.
+ * so it is confirmed first and cannot be undone. "Attach files" uploads more
+ * (pasting into the description does too). A read-only (archived) task shows
+ * neither control.
  */
 export function TaskAttachments({
   taskId,
@@ -37,6 +43,8 @@ export function TaskAttachments({
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const addFiles = useAddTaskFiles(taskId);
 
   async function removeStored(file: {
     storageId: Id<"_storage">;
@@ -125,6 +133,31 @@ export function TaskAttachments({
           </m.div>
         ) : null}
       </AnimatePresence>
+      {readOnly ? null : (
+        <div>
+          <button
+            type="button"
+            disabled={addFiles.isUploading}
+            onClick={() => inputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 -mx-2 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
+          >
+            <IconPaperclip size={14} />
+            <span>{addFiles.isUploading ? "Uploading…" : "Attach files"}</span>
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={CHAT_ATTACHMENT_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              void addFiles.add(Array.from(e.target.files ?? []));
+              // Reset so picking the same file again still fires onChange.
+              e.target.value = "";
+            }}
+          />
+        </div>
+      )}
       <ConfirmDialog
         size="md"
         open={pending !== null}

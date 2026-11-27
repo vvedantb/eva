@@ -24,6 +24,27 @@ import { hasActiveTaskRun } from "./taskRunStatus";
 
 type TaskRunMode = Infer<typeof runModeValidator>;
 
+/**
+ * The task files the agent has not seen: all of them on the first run, then
+ * the ones uploaded after the previous run started (each blob's upload time).
+ */
+async function attachmentsAddedSince(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  previousRunStartedAt: number | undefined,
+): Promise<Id<"_storage">[] | undefined> {
+  const ids = task.attachmentStorageIds ?? [];
+  if (previousRunStartedAt === undefined || ids.length === 0)
+    return ids.length > 0 ? ids : undefined;
+  const blobs = await Promise.all(
+    ids.map((id) => ctx.db.system.get("_storage", id)),
+  );
+  const added = ids.filter(
+    (_id, index) => (blobs[index]?._creationTime ?? 0) > previousRunStartedAt,
+  );
+  return added.length > 0 ? added : undefined;
+}
+
 /** What started a run, as the chat's user row says it. */
 export function runChatPrompt(p: {
   task: Pick<Doc<"agentTasks">, "title" | "description">;
@@ -132,7 +153,11 @@ export async function startTaskRunTurn(
       p.displayContent ??
       runChatPrompt({ task, mode, isFirstRun, comment, note }),
     taskRun: { mode },
-    attachmentStorageIds: isFirstRun ? task.attachmentStorageIds : undefined,
+    attachmentStorageIds: await attachmentsAddedSince(
+      ctx,
+      task,
+      previousRunStartedAt,
+    ),
     sentViaOrchestrator: p.sentViaOrchestrator,
   });
 }
