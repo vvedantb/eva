@@ -76,7 +76,6 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 
-/** Composer settings a turn carries; stored on the chat when it is staged. */
 type TurnSettings = {
   model: Doc<"turns">["model"];
   reasoningLevel?: Doc<"sessionChats">["lastReasoningLevel"];
@@ -97,12 +96,10 @@ const turnSettingsArgs = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
 
-/** The idle-pause clock belongs to the sandbox, which every chat of a session shares. */
 function sessionActivityRef(session: Doc<"sessions">) {
   return { kind: "session" as const, entityId: String(session._id) };
 }
 
-/** Stages a prompt for the warm daemon, opens the durable turn and starts the workflow. */
 async function stageAndStartChatTurn(
   ctx: MutationCtx,
   params: {
@@ -111,7 +108,6 @@ async function stageAndStartChatTurn(
     actingUserId: Id<"users">;
     message: string;
     settings: TurnSettings;
-    /** A retry of a thread turn: Eva answers in that thread again. */
     replyTo?: Id<"messages">;
   },
 ): Promise<void> {
@@ -161,11 +157,6 @@ async function stageAndStartChatTurn(
   });
 
   const normalizedModel = normalizeAIModel(settings.model);
-  // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
-  // in `prewarmDaemon` below): the composer can send a model default explicitly
-  // (e.g. reasoning "high", its display value), and forwarding it verbatim gives
-  // this turn's prewarm and the workflow's prewarm a different daemon opts sig
-  // from the page-open one — killing the daemon that was just booted.
   const launchTraits = launchTraitsFromStored(normalizedModel, {
     reasoningLevel: settings.reasoningLevel,
     thinkingEnabled: settings.thinkingEnabled,
@@ -221,8 +212,6 @@ async function stageAndStartChatTurn(
       chatId: chat._id,
       message: params.message,
       model: settings.model,
-      // Same normalisation as the prewarm above: the workflow forwards these
-      // straight back into `prewarmSessionDaemon`.
       ...launchTraits,
       providerAccountId: stickyProviderAccountId,
       credentialOwnerUserId,
@@ -236,10 +225,6 @@ async function stageAndStartChatTurn(
   await trackSessionChatWorkflow(ctx, chat._id, workflowId);
 }
 
-/**
- * The message a retried turn sends. A thread turn's retry wraps the reply in
- * the thread prompt again and answers in the same thread.
- */
 async function threadTurnMessage(
   ctx: MutationCtx,
   replyTo: Id<"messages"> | undefined,
@@ -250,7 +235,6 @@ async function threadTurnMessage(
   return { message: threadReplyPrompt(root, content), replyTo: root._id };
 }
 
-/** Parks a message on the chat's queue; the next drain starts it. */
 async function enqueueChatMessage(
   ctx: MutationCtx,
   params: {
@@ -260,7 +244,6 @@ async function enqueueChatMessage(
     displayContent?: string;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
-    /** A thread reply for Eva: her answer joins this root's thread. */
     replyTo?: Id<"messages">;
   },
 ): Promise<void> {
@@ -328,8 +311,6 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
-    // A task run or the parallel-chat cap holds the slot: no restage, the
-    // stall alert stays and the user resends.
     if (!(await sessionChatHasFreeSlot(ctx.db, context))) return null;
 
     const repo = await ctx.db.get(session.repoId);
@@ -341,9 +322,6 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       repo,
       actingUserId,
       ...(await threadTurnMessage(ctx, turn.replyTo, lastUserContent)),
-      // Raw sticky traits: `stageAndStartChatTurn` normalises them through
-      // `launchTraitsFromStored` before they reach any daemon launch, so this
-      // restaged turn's opts sig matches a warm daemon's instead of killing it.
       settings: {
         model: turn.model,
         reasoningLevel: chat.lastReasoningLevel,
@@ -372,7 +350,6 @@ export const retryEmptyStalledSessionTurn = internalMutation({
 export const retryLastTurnWithAccount = authMutation({
   args: {
     chatId: v.id("sessionChats"),
-    /** null = the team credential. */
     providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
   },
   returns: v.null(),
@@ -389,7 +366,6 @@ export const retryLastTurnWithAccount = authMutation({
     ) {
       throw new Error("A turn is already running");
     }
-    // Same gate as a send: a task run or the parallel-chat cap holds the slot.
     if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
       throw new Error("The sandbox is busy. Try again when it finishes.");
     }
@@ -400,7 +376,6 @@ export const retryLastTurnWithAccount = authMutation({
       .order("desc")
       .take(20);
     const userMessage = selectUsageLimitRetryUserMessage(recent);
-    // A failed thread turn retries in its thread.
     const failedReplyTo = resultTargetMessage(recent)?.replyTo;
 
     const repo = await ctx.db.get(session.repoId);
@@ -473,7 +448,6 @@ export const startExecute = authMutation({
       userId: ctx.userId,
     });
 
-    // Notify before the turn runs or queues so a mention fires either way.
     await notifyChatMentions(ctx, {
       content: args.message,
       authorUserId: ctx.userId,

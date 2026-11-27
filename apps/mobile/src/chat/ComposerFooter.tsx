@@ -20,11 +20,6 @@ type StashEntry = FunctionReturnType<typeof api.promptStash.listForRepo>[number]
 type Composer = ReturnType<typeof useMentionComposer>;
 type ComposerAttachments = ReturnType<typeof useAttachments>;
 
-/**
- * The web footer's `bg-muted/70`, mixed over the page background into one
- * solid colour. Drawn at 70%, it let the transcript show through on a phone,
- * where the keyboard lifts the composer over the messages.
- */
 function mutedFooterFill(theme: { muted: string; background: string }): string {
   const channel = (hex: string, at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
   const mix = (at: number) =>
@@ -97,15 +92,10 @@ export function ComposerFooter({
   model,
 }: {
   leading?: ReactNode;
-  /** Chips for work running beside the chat (background agents, then processes), after the leading control. */
   status?: ReactNode;
-  /** The repo the stash is saved against (the web stash is per user and repo). */
   repoId: Id<"githubRepos"> | undefined;
-  /** The draft the stash saves and restores into. */
   composer: Composer;
-  /** The draft's images, stashed with it. */
   attachments: ComposerAttachments;
-  /** The model chip. Simple view hides it, as the web composer. */
   model?: ReactNode;
 }) {
   const theme = EVA_THEME[useScheme()];
@@ -123,18 +113,11 @@ export function ComposerFooter({
       className="mx-3 flex-row items-center gap-0.5 px-2 py-1"
       style={{ backgroundColor: mutedFooterFill(theme), borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
     >
-      {/* As the web phone bar: the leading control takes what the stash and
-          the model leave (`flex-1 basis-0`), so its label truncates first and
-          the model keeps its name and trait ("· High"). It never goes below
-          an icon and a chevron, and never past 40% (the web branch chip's
-          `max-w-[min(220px,40vw)]`). The model truncates only when it alone
-          does not fit. */}
       {leading ? (
         <View className="flex-1 flex-row" style={{ minWidth: LEADING_MIN_WIDTH, maxWidth: "40%" }}>
           {leading}
         </View>
       ) : null}
-      {/* Shrinks on a narrow phone, so the chips' labels give way and their counts stay. */}
       {status ? <View className="min-w-0 shrink flex-row items-center gap-0.5">{status}</View> : null}
       {stash ? <View className="shrink-0">{stash}</View> : null}
       {modelChip ? <View className="ml-auto min-w-0 shrink">{modelChip}</View> : null}
@@ -142,11 +125,9 @@ export function ComposerFooter({
   );
 }
 
-/** A chip squeezed to its icon and chevron, as the web branch chip at 390: `px-2`, 14 icon, two 6 gaps, 12 chevron. */
 const LEADING_MIN_WIDTH =
   2 * PROMPT_INPUT_CHIP.paddingX + PROMPT_INPUT_CHIP.iconSize + 2 * PROMPT_INPUT_CHIP.gap + PROMPT_INPUT_CHIP.chevronSize;
 
-/** The web Simple view opt-in (`auth.getExperimentalFlags`); false while it loads. */
 export function useSimpleView(): boolean {
   return useQuery(api.auth.getExperimentalFlags, {})?.simpleView === true;
 }
@@ -183,20 +164,11 @@ export function FooterSheet({
   );
 }
 
-/** The web stash row snippet: one line of display text, or "(attachments only)". */
 function previewSnippet(tokenized: string): string {
   const line = tokenizedToDisplayText(tokenized).replace(/\s+/g, " ").trim();
   return line.length === 0 ? "(attachments only)" : line;
 }
 
-/**
- * The web stash trigger (bookmark, "Stash", the count in medium tabular
- * figures, no chevron) and its drawer as a sheet: newest first, a row restores
- * the prompt into the composer and takes it off the stash, × deletes it.
- * Stashing a draft is ⌘S on the web, which a phone has no key for, so the
- * sheet starts with "Stash this prompt" (the same `promptStash.add`), and the
- * chip shows while there is a draft to stash, even with nothing stashed yet.
- */
 function StashChip({
   repoId,
   entries,
@@ -215,8 +187,6 @@ function StashChip({
   const draft = composer.text.trim();
   const canStash = draft !== "" || attachments.items.length > 0;
 
-  // The web `useComposerStash().stash`: the field clears at once and the text
-  // comes back (with its picks) if the save fails.
   const stashDraft = () => {
     if (attachments.uploading) {
       toast.error("Wait for the attachments to upload");
@@ -238,18 +208,12 @@ function StashChip({
   };
 
   const restore = (entry: StashEntry) => {
-    // The web turns the stashed files back into composer attachments; the
-    // phone composer uploads only what it picks, so it says so, as the web
-    // does for files its composer cannot take.
     if (entry.attachments.length > 0) {
       toast.error("This stash has attachments this composer cannot accept.");
       return;
     }
-    // The stored tokens come back as picks, so a send still mentions whom the
-    // stashed prompt did. Added after any draft, as the web.
     composer.restore(entry.content);
     setOpen(false);
-    // Already restored: keep the entry rather than lose it, as the web.
     remove({ id: entry._id }).catch(() => toast.error("Restored, but could not remove stash entry."));
   };
 
@@ -291,7 +255,6 @@ function StashChip({
                 onPress={() => restore(entry)}
               />
             </View>
-            {/* The web row's × (always shown at phone width), a 44 target beside the row, not inside it. */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Delete stash"

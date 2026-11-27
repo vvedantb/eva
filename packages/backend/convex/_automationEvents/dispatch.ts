@@ -34,7 +34,6 @@ import { isTerminalRunStatus } from "../_automations/runStatus";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 import { chatEntityKindValidator } from "../_validators/enums";
 
-/** Every run an automation made for one PR or issue. */
 async function runsForTarget(
   db: DatabaseReader,
   automationId: Id<"automations">,
@@ -48,10 +47,6 @@ async function runsForTarget(
     .collect();
 }
 
-/**
- * CI fix messages sent for a PR since it was last fully green. The "stopping
- * here" note counts too, which is what keeps the PR quiet after it.
- */
 function countCiAttempts(runs: ReadonlyArray<Doc<"automationRuns">>): number {
   return runs.filter(
     (run) =>
@@ -61,10 +56,6 @@ function countCiAttempts(runs: ReadonlyArray<Doc<"automationRuns">>): number {
   ).length;
 }
 
-/**
- * Whether this automation should queue a run for the event. Routing presets
- * only act on PRs Eva opened, and CI auto-fix stops once it has given up.
- */
 async function shouldQueue(
   ctx: MutationCtx,
   automation: Doc<"automations">,

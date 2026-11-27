@@ -20,10 +20,8 @@ import { useScheme } from "@/ui/theme";
 
 type Theme = (typeof EVA_THEME)[EvaThemeScheme];
 
-/** Eight rows show before the list scrolls, so a long plan leaves the transcript most of the screen. */
 const MAX_LIST_HEIGHT = 8 * 22;
 
-/** Every status's look in one place, from the web `TASK_STATUS_STYLE`; a new status fails the type check here. */
 function statusStyle(theme: Theme, status: ComposerTaskStep["status"]) {
   switch (status) {
     case "completed":
@@ -52,9 +50,7 @@ export function ComposerTasksPanel({
   streamingEntityId,
   turnId,
 }: {
-  /** The chat's streaming row (`chatStreamingEntityId`). */
   streamingEntityId: string | undefined;
-  /** The live reply the steps belong to; undefined while no turn runs (no panel). */
   turnId: string | undefined;
 }) {
   const theme = EVA_THEME[useScheme()];

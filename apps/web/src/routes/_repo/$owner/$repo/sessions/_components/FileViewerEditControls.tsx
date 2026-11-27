@@ -27,7 +27,6 @@ export type FileViewerEditState =
       onSave: () => void;
     };
 
-// The editor's keymap has no save command, so the shortcut is ours to teach.
 const SAVE_SHORTCUT = formatForDisplay("Mod+S");
 
 /**

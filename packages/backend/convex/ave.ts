@@ -8,14 +8,7 @@ import {
   requestRun,
 } from "./_ave/threads";
 
-/**
- * Manager Ave's public API: one live thread per user, no repo, no sandbox, no
- * model choice. The run itself is `mcp/aveRun.ts`; everything here only reads
- * the thread or asks for a run through `requestRun`.
- */
-
 const MAX_MESSAGE_CHARS = 20_000;
-/** The chat shows the recent conversation; older rows stay in the table. */
 const LIST_LIMIT = 200;
 
 export const getThread = authQuery({
@@ -65,7 +58,6 @@ export const listMessages = authQuery({
       .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
       .order("desc")
       .take(LIST_LIMIT);
-    // Replay payloads are model context, not chat content — never ship them.
     return recent
       .reverse()
       .map((row) => ({ ...row, modelMessages: undefined }));

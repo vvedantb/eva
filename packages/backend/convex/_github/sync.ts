@@ -56,7 +56,6 @@ export const syncRepos = action({
       }
       seenCodebases.add(codebaseKey);
 
-      // githubAuth caches the token, so later repos of the installation reuse it.
       const octokit = await getInstallationOctokit(existingRepo.installationId);
       const { data: repo } = await octokit.rest.repos.get({
         owner: existingRepo.owner,
@@ -74,8 +73,6 @@ export const syncRepos = action({
       ]);
       const appPaths: string[] = [];
       let hasAddedApp = false;
-      // Sequential on purpose: every app upsert reads and inserts into the same
-      // `by_github_id` range, so parallel ones would only conflict and retry.
       for (const app of apps) {
         const state = await ctx.runMutation(internal.githubRepos.syncDetectedApp, {
           owner: repo.owner.login,
@@ -105,8 +102,6 @@ export const syncRepos = action({
         name: repo.name,
         paths: appPaths,
       });
-      // The root row goes only once an app row replaces it; with only new
-      // apps, it is the codebase's last row.
       if (hasAddedApp) {
         monorepos.push({ owner: repo.owner.login, name: repo.name });
       }

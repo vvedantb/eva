@@ -30,11 +30,6 @@ import { startTaskExecution } from "./execution";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { titleFromPrompt } from "@eva/shared";
 
-/**
- * The user's drafts in a repo. A draft is never archived (`deleteDraft`
- * deletes it), so `archivedAt` is only the index prefix; `createdBy` is in the
- * range so other users' drafts are never read.
- */
 function myLiveDrafts(
   db: QueryCtx["db"],
   repoId: Id<"githubRepos">,
@@ -227,7 +222,6 @@ export const activateDraft = authMutation({
         ),
       });
     }
-    // An approved project task may start: the scheduler picks it up.
     if (task.projectId && approved) {
       await ctx.scheduler.runAfter(
         0,
@@ -244,10 +238,6 @@ export const activateDraft = authMutation({
   },
 });
 
-/**
- * Deletes a draft row with the run summary and subscription `saveDraft` made.
- * A draft is unsent text: it is deleted, never archived.
- */
 async function deleteDraftRow(
   ctx: MutationCtx,
   draftId: Id<"agentTasks">,

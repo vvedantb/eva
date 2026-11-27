@@ -15,41 +15,16 @@ import {
   selectSuggestion,
 } from "@handlewithcare/prosemirror-suggest-changes";
 
-/**
- * Mirrors the library's `SuggestionId` (not re-exported from the package
- * root). A suggestion's id is its mark `id` attr — string in our case.
- */
 type SuggestionId = string | number;
-
-/**
- * Suggestion mode (track changes) for the collaborative doc editor.
- *
- * Built on @handlewithcare/prosemirror-suggest-changes: edits made while the
- * mode is enabled are converted into `insertion` / `deletion` / `modification`
- * marks rather than mutating the document, so they sync to every collaborator
- * via prosemirror-sync (the marks ride the same steps) and can be accepted or
- * rejected. The backend markdown mirror already drops `deletion` text and keeps
- * insertion text, so the mirror reflects the accepted state.
- *
- * The marks below are native TipTap re-implementations of the library's mark
- * specs (matching names/excludes so the library's commands resolve them by
- * name from the schema). All clients share this schema, so synced docs stay
- * consistent.
- */
 
 type SuggestionKind = "insertion" | "deletion" | "modification";
 
-/** A suggestion id encodes its author and creation time: `userId|createdAt|rand`. */
 function makeSuggestionId(userId: string | null): string {
   const author = userId ?? "unknown";
-  // A short random suffix keeps distinct edits in the same millisecond unique;
-  // the library reuses an adjacent mark's id when extending one, so continuity
-  // of a single suggestion is preserved without us tracking it.
   const rand = Math.random().toString(36).slice(2, 8);
   return `${author}|${Date.now()}|${rand}`;
 }
 
-/** Decodes the author/time packed into a suggestion id. */
 function parseSuggestionAuthor(id: string): {
   userId: string | null;
   createdAt: number | null;

@@ -13,7 +13,6 @@ import {
   type ChangelogFeedbackTally,
 } from "./_changelog/entry";
 
-/** Roughly a year of a weekly automation — deep enough to never need paging. */
 const ENTRY_LIMIT = 50;
 
 /**
@@ -82,10 +81,6 @@ const feedbackTallyValidator = v.object({
   email: v.object({ love: v.number(), ok: v.number(), meh: v.number() }),
 });
 
-/**
- * Who sees email feedback results: Eva admins (`users.isAdmin`) and whoever
- * set up the changelog automation, so it works before anyone is made admin.
- */
 function canSeeChangelogFeedback(
   user: Doc<"users"> | null,
   automation: Doc<"automations">,
@@ -96,7 +91,6 @@ function canSeeChangelogFeedback(
   );
 }
 
-/** Email feedback counts for one structured run; null for legacy markdown runs. */
 async function loadFeedbackTally(
   db: GenericDatabaseReader<DataModel>,
   run: Doc<"automationRuns">,
@@ -148,8 +142,6 @@ export const listChangelog = query({
       automation,
     );
 
-    // A successful run can still finish without a summary (nothing shipped that
-    // week); those have nothing to render, so drop them rather than show blanks.
     const entries = [];
     for (const run of runs) {
       if (!run.resultSummary || !run.finishedAt) continue;

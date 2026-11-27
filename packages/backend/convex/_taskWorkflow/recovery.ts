@@ -11,7 +11,6 @@ import { onProjectTasksChanged } from "../functions";
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
 
-/** Checks whether an error message indicates a sandbox infrastructure/network issue. */
 /**
  * Why a quick task run did not start or claim its sandbox: the task's
  * session chat holds it, or a start/stop is in flight. A user start is refused
@@ -87,12 +86,6 @@ export function isSandboxNetworkIssue(errorMsg: string): boolean {
   return hasNetworkMarker || hasTransientStatusMarker;
 }
 
-/**
- * Watchdog stops that earn one auto-retry: the agent went silent, died, or
- * never started. A launch race once left quick task 284 with no agent at all;
- * the next run on a fresh launch succeeds. Finalisation stalls are left out —
- * that run's work already landed, and a rerun could duplicate it.
- */
 const RETRYABLE_WATCHDOG_EXIT_REASONS = new Set([
   "watchdog_killed",
   "watchdog_startup_stalled",
@@ -105,9 +98,6 @@ export function isRetryableWatchdogExit(exitReason: string | undefined) {
   );
 }
 
-// Usage-limit text parsing lives in ./usageLimitReset (pure module shared with
-// the web app's recovery card); re-exported here so existing importers keep
-// working, and so the web never pulls this module's workflow imports.
 export { isUsageLimitError, parseUsageLimitResetTime } from "./usageLimitReset";
 
 /** Calculates a randomized retry delay for quick task auto-retries. */
@@ -140,11 +130,6 @@ export async function cleanUpStaleRun(
       sandboxId: params.sandboxId,
       repoId: params.repoId,
     });
-    // Task sandboxes are persistent: stop (don't delete) so any uncommitted
-    // work or unpushed commits stay recoverable and the next run resumes the
-    // same filesystem. Diagnostics (dmesg OOM lines, done file, callback log
-    // tail) are captured onto the run first, while the sandbox is still
-    // running.
     await ctx.scheduler.runAfter(
       0,
       internal.sandbox.captureDiagnosticsAndStopSandbox,
@@ -164,13 +149,10 @@ export async function cleanUpStaleRun(
     exitReason: params.exitReason,
   });
 
-  // The run's sandbox is its session's (`attachTaskRunSandbox`), so the task
-  // row keeps no sandbox reference.
   await ctx.db.patch(params.taskId, {
     updatedAt: Date.now(),
     ...(params.taskStatus === "in_progress" ? { status: "todo" as const } : {}),
   });
-  // No runId fence: the workflow cancelled above is whichever the task tracks.
   await finishTaskRun(ctx, params.taskId, undefined);
 
   await ctx.scheduler.runAfter(
@@ -183,15 +165,11 @@ export async function cleanUpStaleRun(
       delayMs: buildQuickTaskRetryDelayMs(),
     },
   );
-  // The task left `in_progress`: its project may start the next ones.
   const task = await ctx.db.get(params.taskId);
   if (task?.projectId !== undefined) {
     await onProjectTasksChanged(ctx, task.projectId);
   }
 
-  // Every stop path ends here: the old chain, the lease reconciler and the
-  // `TURN_BACKSTOP_MS` backstop. Closing the run's turn keeps the two stall systems from
-  // both acting on one run.
   await closeOpenTurn(ctx, params.runId, "error", {
     error: params.errorMessage,
   });

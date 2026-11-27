@@ -227,12 +227,8 @@ export function DocContentTab({
     }: {
       transaction: Transaction;
     }) => {
-      // Only local edits drive version snapshots; ignore remote (collab) steps
-      // so another user's edits don't trigger or attribute a version here.
       if (transaction.getMeta("collab$")) return;
       editCountRef.current += 1;
-      // Returning `prev` unchanged skips a re-render, so this costs nothing per
-      // keystroke once the status line already says "Unsaved version".
       setDocSaveState((prev) =>
         prev.status === "pending" ? prev : { status: "pending" },
       );
@@ -263,7 +259,6 @@ export function DocContentTab({
 
   /* eslint-disable no-effect/no-external-store-subscription --
      Same TipTap event bus as above: no snapshot function to subscribe with. */
-  // Track anchors still present in the doc so deleted ones show as orphaned.
   useEffect(() => {
     if (!editor) return;
     const update = () =>
@@ -279,7 +274,6 @@ export function DocContentTab({
   /* eslint-disable no-effect/no-event-handler --
      Keeps a ref fresh for a callback the TipTap extension calls imperatively
      from a DOM click, outside React's event system. */
-  // Highlight click -> focus its thread in the panel.
   useEffect(() => {
     anchorClickRef.current = (anchorId: string) => {
       setActiveAnchorId(anchorId);
@@ -288,7 +282,6 @@ export function DocContentTab({
   }, [commentsOpen, onToggleComments]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Panel thread click -> scroll the editor to the anchored text.
   const handleAnchorActivate = (anchorId: string) => {
     setActiveAnchorId(anchorId);
     if (editor) scrollToAnchor(editor, anchorId);
@@ -300,7 +293,6 @@ export function DocContentTab({
     if (from === to) return;
     const text = editor.state.doc.textBetween(from, to, " ");
     const anchorId = nanoid();
-    // Anchor the selection immediately so the pending highlight tracks edits.
     applyCommentAnchor(editor, anchorId);
     setComposingAnchorId(anchorId);
     setComposingAnchorText(text);
@@ -322,8 +314,6 @@ export function DocContentTab({
 
   const handleRestoreVersion = async (pmContent: string) => {
     if (!editor) return;
-    // Snapshot the current state first so the restore is itself reversible
-    // (dedupe in saveVersion makes this free when nothing changed).
     await withMutationToast(
       saveVersion({
         docId: doc._id,
@@ -332,11 +322,8 @@ export function DocContentTab({
       }).then(() => {
         try {
           const json = JSON.parse(pmContent);
-          // Apply with skip meta so the restore is not turned into a tracked
-          // suggestion while in Suggesting mode.
           setContentUntracked(editor, json);
         } catch {
-          // ignore malformed snapshots
         }
         setSelectedVersionId(null);
       }),
@@ -355,14 +342,8 @@ export function DocContentTab({
   }
 
   return (
-    // `relative`: below `md` the comments / history / suggestions panels are
-    // full-width overlays over the editor rather than a 320px column beside it,
-    // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {/* This tab has no toolbar of its own, so the version state sits top
-            right above the editor. It renders nothing until there is something
-            to say. */}
         {selectedVersionId ? null : (
           <DocSaveStatus state={docSaveState} onRetry={runSaveVersion} />
         )}
@@ -408,8 +389,6 @@ export function DocContentTab({
               >
                 <EditorContent
                   editor={editor}
-                  // Code fences scroll inside themselves; an unbroken line would
-                  // otherwise widen the whole document past the viewport.
                   className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
                 />
                 {editor && (

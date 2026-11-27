@@ -41,8 +41,6 @@ export function PreviewPaneTabs({
               exit={{ opacity: 0 }}
               transition={tokenTransition.fast}
               className={cn(
-                // The wrapper only shifts colour; the press lives on the button
-                // inside it, so `transform` here named a property nothing sets.
                 "group flex h-8 shrink-0 items-center rounded-lg motion-base",
                 selected ? "bg-card" : "hover:bg-muted/80",
               )}

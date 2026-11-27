@@ -8,10 +8,8 @@ export type PreviewWakeKind = (typeof PREVIEW_WAKE_KINDS)[number];
 
 export interface PreviewWakeParams {
   kind: PreviewWakeKind;
-  /** Convex document id of the session, quick task or project. */
   id: string;
   port?: number;
-  /** App route to land on, e.g. "/demo/referral-portal". */
   path?: string;
 }
 

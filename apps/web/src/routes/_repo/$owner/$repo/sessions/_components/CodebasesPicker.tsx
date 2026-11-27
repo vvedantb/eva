@@ -70,11 +70,9 @@ export function useCodebasesSelection() {
     linkedRepos,
     repoGroupId,
     installDependencies: params.deps !== "0",
-    /** Ad-hoc pick/remove — always clears the saved-group binding. */
     setLinkedRepoIds: (ids: Id<"githubRepos">[]) => {
       void setParams({ linked: ids, group: "" });
     },
-    /** Applies a saved group's membership verbatim. */
     applyGroup: (group: CodebaseGroup) => {
       void setParams({
         linked: group.linkedRepoIds.map(String),
@@ -85,8 +83,6 @@ export function useCodebasesSelection() {
     setInstallDependencies: (value: boolean) => {
       void setParams({ deps: value ? "1" : "0" });
     },
-    /** Binds the current ad-hoc selection to a just-saved group, without
-     * touching `linked`/`deps` — the saved group has that exact membership. */
     bindToGroup: (id: Id<"repoGroups">) => {
       void setParams({ group: String(id) });
     },
@@ -163,8 +159,6 @@ export function CodebasesPicker() {
   const foreignGroups = codebases.groups.filter(
     (group) => group.primaryRepoId !== primary._id,
   );
-  // Only one row per `owner/name` can be linked (a linked repo is the whole
-  // checkout), so the checkbox shows on that representative row alone.
   const linkableIds = new Set(
     pickableCodebaseRepos(codebases.repos, primary).map((repo) => repo._id),
   );
@@ -181,9 +175,6 @@ export function CodebasesPicker() {
   const handleSaveGroup = async () => {
     const name = groupName.trim();
     if (!name || codebases.linkedRepoIds.length === 0) return;
-    // try/catch (not a bare `.catch`) because the result feeds the next step —
-    // React Compiler is fine with this shape (no throw/ternary/&&/loop in the
-    // try itself, and a catch is present).
     try {
       const id = await catchMutationError(
         createGroup({
@@ -198,7 +189,6 @@ export function CodebasesPicker() {
       setGroupName("");
       codebases.bindToGroup(id);
     } catch {
-      // Already toasted by catchMutationError.
     }
   };
 

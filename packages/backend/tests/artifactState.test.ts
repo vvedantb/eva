@@ -4,11 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Hosted artifacts keep persistent state through window.cowork.state. These
- * hit the real functions: "user" scope must stay private per viewer, "shared"
- * must be one copy per team, and outsiders must see and write nothing.
- */
 
 const TIMEOUT_MS = 30_000;
 const ALICE = "clerk|artifact-state-alice";

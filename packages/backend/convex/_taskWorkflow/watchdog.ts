@@ -20,9 +20,6 @@ export const handleStaleRun = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
-    // Keyed on the workflow, not the status: a task the user moved mid-run
-    // still has a run to time out. Status resets below only touch
-    // `in_progress`, so the user's choice survives.
     const workflowId = taskRunWorkflowId(task);
     if (workflowId === undefined) return null;
 
@@ -60,7 +57,6 @@ export const handleStaleRun = internalMutation({
         updatedAt: Date.now(),
       });
       await finishTaskRun(ctx, args.taskId, undefined);
-      // The task left `in_progress`: its project may start the next ones.
       if (task.projectId !== undefined) {
         await onProjectTasksChanged(ctx, task.projectId);
       }

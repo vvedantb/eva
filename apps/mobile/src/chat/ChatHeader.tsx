@@ -28,7 +28,6 @@ import { RepoLogo } from "@/ui/RepoLogo";
 import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
-/** No leading group: the default, one array for every render. */
 const NO_ITEMS: MenuEntry[] = [];
 
 /** One ⋯ menu item: the `DropdownMenuItem` label, icon and tone. */
@@ -66,27 +65,20 @@ export function ChatHeader({
   usage,
   sandbox,
 }: {
-  /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
   repoId: Id<"githubRepos">;
   repoLabel: string;
   title: string;
   onBack: () => void;
   onOpenWeb: () => void;
   onCopyLink: () => void;
-  /** Set while the agent works: Stop in the menu. */
   onStop?: () => void;
-  /** Session chats: these session actions (`useSessionActions`) in their web groups. */
   sessionMenu?: {
     groups: SessionMenuAction[][];
     onSelect: (action: SessionMenuAction) => void;
-    /** Each action's label and icon (`useSessionActions().itemFor`). */
     itemFor: (action: SessionMenuAction) => { label: string; icon: ComponentType<IconProps>; warning?: boolean };
   };
-  /** The menu's first group: Find in chat, and a session's Summarise Session (the web header menu's first item). */
   leadingItems?: MenuEntry[];
-  /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
   usage?: ReactNode;
-  /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
   sandbox?: ReactNode;
 }) {
   const scheme = useScheme();
@@ -95,15 +87,10 @@ export function ChatHeader({
   const foreground = EVA_THEME[scheme].foreground;
   const repo = useQuery(api.githubRepos.get, { id: repoId });
   const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId });
-  // The web seed (`SessionSwitcher`): owner, name and display label.
   const tileColor = repo ? EVA_THEME[scheme][`cat${repoTileSlot(`${repo.owner}/${repo.name}/${repoDisplayLabel(repo)}`)}`] : undefined;
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
     actions.map((action) => ({ ...(sessionMenu ? sessionMenu.itemFor(action) : SESSION_ACTION_ITEMS[action]), onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
-  // The web More menu's groups: Find in chat and Summarise Session first; then Rename and Regenerate title; then its Copy
-  // submenu (title, link, branch name) laid flat with Open PR and Open on web;
-  // then Archive / Unarchive alone; then Stop, the destructive item, last.
-  // Empty groups drop out, so no divider stands alone.
   const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
   const menuGroups: MenuEntry[][] = [
     leadingItems,
@@ -123,7 +110,6 @@ export function ChatHeader({
         <IconChevronLeft size={20} color={foreground} />
       </HeaderIconButton>
       <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
-        {/* Web breadcrumb: the logo at 16 with no border, else a 16 initial tile (the cat colour on a 12% tint), the repo in medium muted, a slash at 50%, the title in semibold. */}
         <RepoLogo
           logoUrl={logoUrl}
           size={16}
@@ -139,7 +125,6 @@ export function ChatHeader({
             </View>
           }
         />
-        {/* A long repo name gives up width too, so the title keeps at least half the row. */}
         <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
           {repoLabel}
         </Text>
@@ -154,7 +139,6 @@ export function ChatHeader({
         {sandbox}
         {usage}
         <DropdownMenu>
-          {/* Flat on the rail, as the web trough's buttons: the trough is their surface. */}
           <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70">
             <IconDots size={18} color={foreground} />
           </DropdownMenuTrigger>

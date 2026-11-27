@@ -94,29 +94,11 @@ export async function readSdkPlanUsage(
   return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
 }
 
-/** Node's own global prefix (node is `<prefix>/bin/node`); see `globalNpmRoots`. */
 const NODE_GLOBAL_ROOT =
   dirname(dirname(process.execPath)) + "/lib/node_modules";
 
-/** Memoized: the warm daemon resolves pins repeatedly and `npm root -g` spawns a process. */
 let cachedGlobalNpmRoots: string[] | null = null;
 
-/**
- * Every directory a globally installed package may live in, preferred first.
- *
- * The seed installs the agent toolchain with `sudo npm install -g` (see
- * snapshotActions.ts), which lands in node's own prefix —
- * `/vercel/runtimes/node24/lib/node_modules` on a Vercel sandbox. This callback
- * runs as the unprivileged sandbox user, whose npm config points `npm root -g`
- * at a per-user prefix (`~/.global/npm/lib/node_modules`) holding only pnpm, so
- * probing `npm root -g` alone never saw the seeded toolchain: every fresh
- * sandbox npm-installed the Agent SDK again (~4.6s on the daemon boot critical
- * path) and reported the pinned global `claude` as version "unknown".
- *
- * Deriving the first root from `process.execPath` (node is `<prefix>/bin/node`)
- * is independent of whichever user's npm config is in effect. The `npm root -g`
- * answer stays as a second candidate for images that install elsewhere.
- */
 function globalNpmRoots(): string[] {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
   const roots: string[] = [NODE_GLOBAL_ROOT];
@@ -124,7 +106,6 @@ function globalNpmRoots(): string[] {
     const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
     if (npmRoot) roots.push(npmRoot);
   } catch {
-    // No npm on PATH, or a broken npm config — the node-derived root still holds.
   }
   cachedGlobalNpmRoots = roots.filter(
     (root, index) => roots.indexOf(root) === index,
@@ -132,10 +113,8 @@ function globalNpmRoots(): string[] {
   return cachedGlobalNpmRoots;
 }
 
-/** User-writable fallback install location (persists in home across resumes). */
 const SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
 
-/** Version recorded in `packageRoot`'s manifest, or null when unreadable. */
 function installedPackageVersion(packageRoot: string): string | null {
   try {
     const manifest: JsonLike = JSON.parse(
@@ -176,12 +155,7 @@ export function resolvePinnedSdkEntry(pin: {
   entryRelPath: string;
 }): string {
   const localRoot = SDK_LOCAL_PREFIX + "/node_modules/" + pin.packageName;
-  // First root holding the exact pin wins; a drifted root is only reported once
-  // the search has failed everywhere, so a stale copy in one root stays quiet
-  // while another root serves the pin.
   let driftedVersion: string | null = null;
-  // Probe the node-derived root before `globalNpmRoots` spawns `npm root -g`
-  // (~100–250ms on the daemon boot path) — the seeded image always hits here.
   const nodeRoot = NODE_GLOBAL_ROOT + "/" + pin.packageName;
   if (installedPackageVersion(nodeRoot) === pin.version) {
     return nodeRoot + pin.entryRelPath;
@@ -257,16 +231,6 @@ export async function loadSdk(): Promise<SdkModule> {
 
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 
-/**
- * Version of the package behind an npm-installed `<prefix>/bin/<bin>` link, or
- * null when the binary is not laid out that way (e.g. a native install).
- *
- * Read from the binary's own prefix rather than from whichever global root has
- * the package: a `claude update` run in the terminal puts a newer copy in the
- * user's npm prefix, which sits behind the image's copy on PATH. Probing roots
- * found that newer copy, reported the pin as present and returned `command -v
- * claude` — the image's stale 2.1.258 — so the agent stayed on it for good.
- */
 function binPackageVersion(
   binPath: string,
   packageName: string,
@@ -357,9 +321,6 @@ function claudeExecutablePath(): string {
 }
 
 export function buildSdkOptions(sessionMode: SessionMode): SdkOptions {
-  // Map SDK option shapes from the existing config (model, system prompt,
-  // allowed tools, MCP, permissions, session resume). Formerly mirrored
-  // Claude CLI flags; those builders are gone.
   const extraArgs: Record<string, string> = { settings: settingsJson };
   return buildSdkOptionsFromParts(sessionMode, extraArgs);
 }
@@ -377,17 +338,6 @@ function buildSdkOptionsFromParts(
       ? { allowedTools: ALLOWED_TOOLS.split(",") }
       : { allowedTools: [] };
 
-  // Every agent turn runs `default` mode behind `canUseTool`, which allows all
-  // tools — AskUserQuestion excepted, and only on the surfaces that wire the
-  // answering UI (`buildCanUseTool` owns that call).
-  //
-  // Not `bypassPermissions`: that mode auto-allows built-in tools but leaves MCP
-  // tools gated, since an external MCP server is a trust boundary the bypass
-  // deliberately does not cross. `canUseTool` is consulted for MCP calls, so it
-  // is the only path that reaches them. This used to be keyed off
-  // BLOCKING_QUESTIONS_ENABLED (sessions only), which left task and project
-  // chats unable to call any `mcp__eva__*` tool at all — read-only ones included
-  // — even though their prompts instruct them to.
   const permissionOption: Pick<
     SdkOptions,
     "permissionMode" | "allowDangerouslySkipPermissions" | "canUseTool"
@@ -403,15 +353,6 @@ function buildSdkOptionsFromParts(
           allowDangerouslySkipPermissions: true,
         };
 
-  // Suppress the claude engine's per-turn NON-ESSENTIAL model calls (topic /
-  // title / flavour-text side calls) — measured as a ~6s second API call
-  // that delays turn completion after the visible reply.
-  // Policy A: delete CLAUDE_CODE_DISABLE_BACKGROUND_TASKS so session SDK
-  // children can Bash-background (panel tracks/kills). Do not set the key to
-  // undefined — some spawn paths stringify it. Only warm daemons (CLAIM_MUTATION
-  // set) and session attempts may background — one-shot task/project runs exit
-  // after `result`, which would kill any backgrounded child, so launch.ts's =1
-  // must survive for them.
   const env: Record<string, string | undefined> = {
     ...process.env,
     CLAUDE_CONFIG_DIR: CLAUDE_RUNTIME_CONFIG_DIR,
@@ -420,18 +361,7 @@ function buildSdkOptionsFromParts(
     DISABLE_TELEMETRY: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
-    // Always defer MCP/tool schemas (agent turns only). "auto" made the CLI
-    // await a count_tokens API call before the first request to test a ~10%
-    // threshold: one more API round trip (≥0.12s measured) before every
-    // daemon's first token. With MCP servers still connecting (see below) that
-    // count saw only built-ins, so the first request also went out without
-    // ToolSearch.
     ENABLE_TOOL_SEARCH: "true",
-    // Do not hold the first turn until every HTTP MCP server (eva, linear,
-    // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
-    // first token ~3s sooner. The servers still join mid-turn; ToolSearch
-    // reaches them and the CLI tells the model a pending server "is still
-    // connecting" instead of reporting its tools missing.
     CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0",
   };
   if (
@@ -451,21 +381,12 @@ function buildSdkOptionsFromParts(
       ? { effort: claudeEffort }
       : {};
 
-  // Current models (Fable 5, Opus 5/4.8/4.7, Sonnet 5) default thinking
-  // display to "omitted": the API still thinks, but `thinking_delta` events
-  // stream empty text, so claudeParseLine's reasoning step never fills and
-  // the UI shows a long pause where Cursor/Codex show reasoning. Ask for
-  // API-side summaries explicitly. Thinking-off keeps the settings.json
-  // `alwaysThinkingEnabled: false` path — Fable 5 rejects an explicit
-  // `{ type: "disabled" }` with a 400, so never send that here.
   const thinkingOption: Pick<SdkOptions, "thinking"> = claudeThinkingDisabled
     ? {}
     : { thinking: { type: "adaptive", display: "summarized" } };
 
   return {
     cwd: WORK_DIR,
-    // Multi-repo sessions only: lets Claude read/edit linked repo clones
-    // under the workspace root without moving cwd off the primary repo.
     ...(WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {}),
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
@@ -481,12 +402,7 @@ function buildSdkOptionsFromParts(
           append: EVA_SDK_SYSTEM_APPEND,
         },
     ...permissionOption,
-    // Emit token-level partial (`stream_event`) messages so claudeParseLine can
-    // stream text deltas into the reply live (dedup guards the final message).
     includePartialMessages: true,
-    // Forward each subagent's text too (not only its tool calls), so its child
-    // thread view can show the whole transcript. claudeParseLine keeps it out
-    // of the parent's reply.
     forwardSubagentText: true,
     ...allowedToolsOption,
     env,
@@ -497,9 +413,6 @@ function buildSdkOptionsFromParts(
       ? { resume: sessionMode.sessionId }
       : {}),
     extraArgs,
-    // A repo with `.eva/mcp.json` gets the merged set from Eva; its own
-    // `.mcp.json` would then add duplicates, such as a second `eva`. Repos
-    // without one keep loading `.mcp.json` as before.
     ...(hasRepoMcpFile ? { strictMcpConfig: true } : {}),
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
@@ -544,13 +457,10 @@ export async function runClaudeSdkAttempt(
     try {
       if (q.interrupt) await q.interrupt();
     } catch {
-      /* already finished */
     }
   };
   const healthTimer = setInterval(() => {
     const now = Date.now();
-    // A turn paused on a blocking question produces no SDK messages by design —
-    // keep the timers fresh so it is never killed while genuinely waiting.
     if (S.awaitingQuestionAnswer) {
       S.activeAttemptStartedAt = now;
       lastMessageAt = now;
@@ -562,15 +472,9 @@ export async function runClaudeSdkAttempt(
       void interrupt();
       return;
     }
-    // The SDK emits nothing between a tool_use and its tool_result, so a
-    // long-running tool (Bash allows 10min; subagent Task calls longer) is
-    // indistinguishable from a hang by message silence alone: while a tool is
-    // in flight only the hard runtime cap
-    // applies, and the silence clock restarts once the tool result lands.
     if (S.inFlightToolUses > 0) {
       lastMessageAt = now;
     }
-    // Idle only counts before the result event; after it the turn is done.
     if (!sawResult && now - lastMessageAt > NO_OUTPUT_TIMEOUT_MS * 5) {
       timedOutForNoOutput = true;
       log("runClaudeSdkAttempt: no SDK messages — interrupting");
@@ -594,9 +498,6 @@ export async function runClaudeSdkAttempt(
         sawResult = true;
         resultIsError = message.is_error === true;
         if (resultIsError) {
-          // Only the "success" subtype carries `result` — it holds the error
-          // text when a turn ended on an API error. The error subtypes report
-          // through `errors` instead.
           resultErrorMessage =
             message.subtype === "success"
               ? message.result
@@ -624,10 +525,6 @@ export async function runClaudeSdkAttempt(
     } catch (error) {
       const messageText =
         error instanceof Error ? error.message : String(error);
-      // Self-heal a stale persisted session id: a prior attempt that died
-      // before Claude ran can persist a session id whose conversation was
-      // never created, making `resume` fail. Retry once as a fresh
-      // conversation with the same id so persistence stays consistent.
       if (
         effectiveMode.mode === "resume" &&
         effectiveMode.sessionId &&
@@ -658,10 +555,6 @@ export async function runClaudeSdkAttempt(
     clearInterval(healthTimer);
   }
 
-  // Plan usage-limit reading, taken while the query handle is still alive. The
-  // stream's `rate_limit_event`s already populated whichever window they named;
-  // this fills in the rest. Reporting is fire-and-forget — the turn's outcome is
-  // already decided below and must not depend on it.
   startClaudeUsageReport({
     readUsage: () => readSdkPlanUsage(q),
     error: resultErrorMessage || queryErrorMessage || undefined,

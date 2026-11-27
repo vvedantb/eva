@@ -1,8 +1,3 @@
-/**
- * What the scope check needs about one finished turn, read in the isolate so
- * the node action never touches the database directly.
- */
-
 import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
@@ -11,13 +6,8 @@ import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { messageMediaStorageIds } from "../_messages/media";
 import { isScreenshotType, MAX_SCREENSHOTS } from "./visual";
 
-/** Enough history to reach the user message behind a long agent turn. */
 const RECENT_MESSAGE_LIMIT = 60;
 
-/**
- * The repo a chat's diff lives in. `messages.parentId` spans four tables, so
- * normalizeId is the only way to tell which one an id belongs to.
- */
 async function resolveRepoId(
   ctx: QueryCtx,
   parentId: Doc<"messages">["parentId"],
@@ -64,7 +54,6 @@ export const getTurnContext = internalQuery({
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId);
     if (!message || message.role !== "assistant") return null;
-    // A re-run (retried schedule, replayed workflow) must not bill Jev twice.
     if (message.scopeCheck !== undefined) return null;
 
     const { beforeSha, afterSha } = message;
@@ -81,13 +70,10 @@ export const getTurnContext = internalQuery({
       .take(RECENT_MESSAGE_LIMIT);
     const index = recent.findIndex((row) => row._id === message._id);
     if (index < 0) return null;
-    // Newest first, so everything after the reply is older than it. System
-    // alerts wear the user role but are Eva's own words, not the ask.
     const prompt = recent
       .slice(index + 1)
       .find((row) => row.role === "user" && row.isSystemAlert !== true);
     if (!prompt) return null;
-    // Opt-in per user (settings → Experimental): off means no Jev spend.
     const asker =
       prompt.userId === undefined ? null : await ctx.db.get(prompt.userId);
     if (!resolveExperimentalFlags(asker).scopeCheck) return null;

@@ -1,14 +1,5 @@
 "use node";
 
-/**
- * Triages an automation run's findings with TypeSafe Jev: one severity score
- * and one duplicate check per finding, judged against the repo's open tasks.
- *
- * Background work scheduled by `updateRunStatus`. Every failure path leaves
- * the findings untriaged rather than failing the run — the UI falls back to
- * the agent's own severity and the raw order.
- */
-
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
@@ -29,9 +20,7 @@ import type { Infer } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { findingTriageValidator } from "./_validators/shapes";
 
-/** Keeps the prompt small; a title past this is already unreadable in the UI. */
 const MAX_TITLE_CHARS = 120;
-/** Descriptions run long in audit findings; Jev needs the gist, not the essay. */
 const MAX_DESCRIPTION_CHARS = 2000;
 
 type Triage = Infer<typeof findingTriageValidator>;
@@ -77,7 +66,6 @@ export const triageFindings = internalAction({
       const results = await Promise.all(
         batch.map(async (finding) => {
           const input: EvaluateInputRaw = {
-            // JSON-compatible only: no `undefined` anywhere inside `state`.
             state: {
               title: finding.title.slice(0, MAX_TITLE_CHARS),
               description: finding.description.slice(0, MAX_DESCRIPTION_CHARS),

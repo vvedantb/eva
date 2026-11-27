@@ -1,18 +1,3 @@
-// Runs oxc-transform-react (the exact React Compiler the build runs) over
-// apps/web/src and fails when a file bails out of compilation for a reason not
-// recorded in the baseline. @vitejs/plugin-react surfaces each bailout as a
-// build warning, but a 700-chunk build scrolls them past unnoticed and nothing
-// fails — so this stays the gate that actually stops a regression.
-//
-//   node scripts/compiler-check.mjs             check against the baseline
-//   node scripts/compiler-check.mjs --update    rewrite the baseline from HEAD
-//
-// The baseline (scripts/compiler-check-baseline.json) keys on "file :: reason"
-// rather than line numbers so unrelated edits do not churn it. Entries that no
-// longer reproduce are reported so the baseline can be shrunk; they never fail
-// the check. The try/catch family of bailouts is additionally linted live by
-// the oxlint no-value-block-in-try rule — this script is the backstop that
-// catches every other reason (refs, purity, incompatible libraries, ...).
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,12 +12,9 @@ const BASELINE_PATH = path.join(
 );
 const UPDATE = process.argv.includes("--update");
 
-// Resolve the compiler through apps/web so we test what the build runs.
 const req = createRequire(path.join(WEB, "package.json"));
 const { transformSync } = await import(req.resolve("oxc-transform-react"));
 
-// Mirrors @vitejs/plugin-react: files without a component-shaped identifier are
-// skipped by the plugin, so compiling them here would report phantom bailouts.
 const CODE_FILTER = /forwardRef|memo|\b(?:[A-Z]|use[A-Z0-9])/;
 
 function walk(dir, out = []) {
@@ -46,7 +28,6 @@ function walk(dir, out = []) {
   return out;
 }
 
-// Byte offsets come back on the diagnostic labels; the report wants line numbers.
 function lineAt(code, offset) {
   let line = 1;
   for (let i = 0; i < offset && i < code.length; i++) {
@@ -55,12 +36,11 @@ function lineAt(code, offset) {
   return line;
 }
 
-// key: "relpath :: reason"  ->  [line, line, ...] for display only
 const found = new Map();
 
 for (const file of walk(path.join(WEB, "src"))) {
   const code = readFileSync(file, "utf8");
-  if (code.includes('"use no memo"')) continue; // deliberate opt-out
+  if (code.includes('"use no memo"')) continue;
   if (!CODE_FILTER.test(code)) continue;
   const rel = path.relative(ROOT, file).split(path.sep).join("/");
 

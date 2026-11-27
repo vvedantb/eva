@@ -136,20 +136,9 @@ export const htmlRenderFrameMessage = z.discriminatedUnion("method", [
 
 export const HTML_RENDER_SIZE_CHANGED = SIZE_CHANGED_METHOD;
 
-/**
- * Base styles, injected before the page's own so the page wins: transparent
- * canvas on the chat background, theme text colour and font.
- */
 const BASE_CSS =
   "html{background:transparent;color:var(--foreground);font-family:var(--font-sans,system-ui,sans-serif)}body{margin:0}";
 
-/**
- * Runs before the page's own scripts. It applies theme changes the host
- * posts, reports the page height, routes link
- * clicks to the host (a popup from the sandbox would inherit the sandbox),
- * and replaces Web Storage, which throws in an opaque origin, with an
- * in-memory store.
- */
 const BOOTSTRAP_SCRIPT = `(function(){
 var s=document.getElementById("eva-theme"),n=0,inFrame=window.parent!==window;
 function mem(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},get length(){return Object.keys(d).length}}}
@@ -160,7 +149,6 @@ document.addEventListener("click",function(e){var a=e.isTrusted?e.composedPath()
 if(inFrame){var h,o,z=function(){var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}},"*")};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement)}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z()});window.addEventListener("load",z)}
 })();`;
 
-/** The theme as one `:root` rule; values are stripped of anything that could end the rule. */
 function themeCss(context: HtmlRenderHostContext): string {
   const declarations = Object.entries(context.styles.variables)
     .filter(([name]) => /^--[a-z0-9-]+$/.test(name))

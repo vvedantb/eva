@@ -79,9 +79,6 @@ async function probePreviewReady(
   port: number,
 ): Promise<boolean> {
   try {
-    // Prefer a listen check: Next/Vite often bind before the first route
-    // finishes compiling. A short HTTP curl times out mid-compile and used to
-    // trigger remount → kill → relaunch loops (session 41 / CarePulse web).
     const listening = (
       await execHandle(handle, buildPortListenProbeCommand(port), 5)
     ).trim();
@@ -133,11 +130,6 @@ import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
 import { sleep } from "../_shared/async";
 
-/**
- * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
- * the deployment has no `ENCRYPTION_KEY` or no reachable site URL, which
- * simply disables the heartbeat (the sweep then relies on tab presence).
- */
 function previewActivityParams(sandboxId: string): {
   activityUrl: string;
   activityHmac: string;
@@ -153,7 +145,6 @@ function previewActivityParams(sandboxId: string): {
   };
 }
 
-// A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
@@ -161,10 +152,6 @@ const sessionPersistenceIdValidator = v.union(
   v.id("agentTasks"),
 );
 
-// Must outlast DAEMON_LAUNCH_LEASE_MS (30s in daemonEntitySnapshot.ts) so a
-// dead holder unblocks us at expiry, and long enough that a holder still
-// running docker bootstrap (~30s on Ave's Ubuntu image) can finish and
-// release. Losers then re-check alive / optsmismatch instead of giving up.
 const PREWARM_LAUNCH_LEASE_WAIT_MS = 90_000;
 const PREWARM_LAUNCH_LEASE_POLL_MS = 500;
 
@@ -173,7 +160,6 @@ export const validateSandbox = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /** The caller knows another step provisions swap and Docker. */
     skipDocker: v.optional(v.boolean()),
   },
   returns: v.object({ healthy: v.boolean() }),
@@ -181,18 +167,12 @@ export const validateSandbox = internalAction({
     let sandbox: SandboxHandle | undefined;
     try {
       sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      // Start the sandbox if it's stopped (fast resume ~3-5s)
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
         skipDocker: args.skipDocker,
       });
       return { healthy: true };
     } catch (e) {
-      // Exit 137 on the `echo 1` probe / an exec that never answered: the VM
-      // reports running but cannot execute commands (OOM meltdown, dead guest
-      // agent). start() no-ops on a "running" VM, so re-validating as-is can
-      // never recover — stop+resume once, and only if that also fails report
-      // unhealthy so the caller falls back to recreating.
       if (sandbox !== undefined && isSandboxUnresponsiveError(e)) {
         console.warn(
           `[sandbox] validateSandbox: sandbox ${args.sandboxId} is unresponsive (${errorMessage(e, "exec failed")}); attempting stop+resume`,
@@ -213,10 +193,6 @@ export const validateSandbox = internalAction({
   },
 });
 
-/**
- * The startup commands this sandbox should run: the checked-out branch's own
- * `.eva/config.json` entry when present, else the cached default-branch ones.
- */
 async function resolveStartupCommands(
   ctx: ActionCtx,
   sandbox: SandboxHandle,
@@ -285,9 +261,6 @@ export async function runStartupCommandsDirect(
 
   const fingerprint = computeStartupFingerprint(commands);
   if (!args.force) {
-    // Skip when these exact commands already ran (marker carries their
-    // fingerprint). A branch that edited them reruns here, even on a sandbox
-    // booted from a seeded snapshot.
     if (startupMarkerMatches(await readStartupMarker(sandbox), fingerprint)) {
       console.log(
         `[sandbox] runStartupCommands: marker matches, skipping ${commands.length} commands`,
@@ -302,11 +275,9 @@ export async function runStartupCommandsDirect(
 
   const errors: string[] = [];
   for (const command of commands) {
-    // Repo-configured commands can embed tokens; logs and errors show this.
     const shown = redactSecrets(command);
     console.log(`[sandbox] runStartupCommands: running: ${shown}`);
     try {
-      // 10 minute timeout per command (supabase start can take a while)
       const output = await execHandle(sandbox, command, 600);
       console.log(`[sandbox] runStartupCommands: completed: ${shown}`);
       if (output.trim()) {
@@ -316,19 +287,13 @@ export async function runStartupCommandsDirect(
       const msg = errorMessage(e, "command failed");
       console.error(`[sandbox] runStartupCommands: failed: ${shown}`, msg);
       errors.push(`${shown}: ${msg}`);
-      // Continue with other commands even if one fails
     }
   }
 
-  // Create the marker only when every command succeeded. Writing it after a
-  // failed run permanently branded the sandbox as seeded: every resume then
-  // marker-skipped the seed and the DB stayed empty forever. Leaving the
-  // marker absent lets the next resume retry the full startup sequence.
   if (errors.length === 0) {
     try {
       await writeStartupMarker(sandbox, fingerprint);
     } catch {
-      // Non-fatal
     }
   } else {
     console.error(
@@ -348,8 +313,6 @@ export const runStartupCommands = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    // When true, skip the marker file check and re-run commands even if they
-    // previously ran. Used by the retry flow to recover from failed runs.
     force: v.optional(v.boolean()),
   },
   returns: v.object({
@@ -360,23 +323,6 @@ export const runStartupCommands = internalAction({
   handler: (ctx, args) => runStartupCommandsDirect(ctx, args),
 });
 
-/**
- * Classifies a failure from one of runBackgroundCommands' cheap launcher execs
- * (pid check, cleanup, daemon fork — none run real work inline):
- *
- * - `"command-failed"` — the VM is fine; only this command lost. Record it and
- *   carry on with the rest.
- * - `"unresponsive"` — the provider says `running` but the VM cannot execute
- *   (exit 137 / hung exec — OOM meltdown). Safe to stop+resume once.
- * - `"not-running"` — the VM is stopped/stopping/gone. Launching or restarting
- *   would either fail again or resurrect a sandbox the user just stopped, so
- *   only abort.
- *
- * A provider 400 alone proves nothing (see sandboxErrors.ts) — but execs
- * against a dead VM do surface as `Status code 400 is not ok`, so a 400 is
- * confirmed with a trivial probe. The probe is only run after the state check
- * says `running`, so it can never lazily resume a stopped VM.
- */
 async function classifyBackgroundLaunchFailure(
   sandbox: SandboxHandle,
   error: unknown,
@@ -401,24 +347,6 @@ async function classifyBackgroundLaunchFailure(
   }
 }
 
-/**
- * Shell lines reading `/tmp/bg-<i>.pid` into `$pid`, blanking it unless that
- * process is still *our* daemon wrapper.
- *
- * Pid files are baked into seeded snapshots (the seed run writes them and /tmp
- * survives restore — the same reason `/tmp/.startup-commands-done` works), so
- * on a freshly restored VM the recorded number is from an earlier boot. Pids
- * are dense on a fresh boot, so it can now belong to something unrelated and
- * alive (dockerd, containerd, the eva daemon): trusting it made the heal skip a
- * relaunch forever, and signalling its process group would take out that whole
- * service. One /proc read settles it — the wrapper is `bash -l
- * /tmp/bg-cmd-<i>.sh` after setsid/nohup exec, Convex wrapper included, so the
- * script path must appear in its cmdline.
- *
- * A zombie has an empty cmdline and so never qualifies. That is the behaviour
- * we already had (signalling a zombie did nothing), and the Convex `pkill`
- * lines still reap any orphans it left behind.
- */
 const ownedBgPidLines = (i: number): string[] => [
   `pid=$(cat /tmp/bg-${i}.pid 2>/dev/null || true)`,
   `if [ -n "$pid" ] && ! tr '\\0' ' ' < /proc/"$pid"/cmdline 2>/dev/null | grep -qF "/tmp/bg-cmd-${i}.sh"; then pid=; fi`,
@@ -437,16 +365,7 @@ export const runBackgroundCommands = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /**
-     * When true, skip daemons whose `/tmp/bg-<i>.pid` is still alive. Used by
-     * the preview heal path so we do not double-start Convex.
-     */
     onlyRestartDead: v.optional(v.boolean()),
-    /**
-     * When set, a fire-and-forget readiness watcher is scheduled for any
-     * Convex daemon launched here, surfacing a non-fatal warning on the
-     * session if `convex dev` never becomes ready.
-     */
     sessionId: v.optional(v.id("sessions")),
   },
   returns: v.object({
@@ -478,33 +397,18 @@ export const runBackgroundCommands = internalAction({
       `[sandbox] runBackgroundCommands: launching ${commands.length} background command(s)${args.onlyRestartDead ? " (onlyRestartDead)" : ""}`,
     );
 
-    // Last gate before the memory-hungry daemons (`convex dev` restoring a
-    // large snapshot, `next dev` cold compile). ensureSandboxRunning normally
-    // provisioned swap already, so this is a single cheap no-op exec — but it
-    // also covers relaunch paths that reach here without a fresh boot
-    // (onlyRestartDead heal, preview repair).
     await ensureSwapFile(sandbox);
 
     const errors: string[] = [];
     let launched = 0;
     let launchedConvex = false;
-    // One stop+resume per run: exit 137 / hung execs on these cheap launcher
-    // commands mean the VM itself is wedged (OOM meltdown, dead guest agent),
-    // and every further launch would cascade through the same 20s+ failure.
     let restartAttempted = false;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
-      // Repo-configured commands can embed tokens; logs and errors show this.
       const shown = redactSecrets(command);
       const isConvexCommand = isConvexBackendCommand(command);
-      // Everything per command runs in one try — including the pid check and
-      // cleanup execs, which used to throw uncaught out of the whole action
-      // (prod 2026-09-01: exit 137 on the heal pid check surfaced as an
-      // uncaught failure to every scheduled caller).
       try {
         if (args.onlyRestartDead) {
-          // `kill -0` is true for zombies (state Z). After `npx convex dev`
-          // dies, a defunct bash PID left heal permanently skipping relaunch.
           const alive = (
             await execHandle(
               sandbox,
@@ -524,20 +428,6 @@ export const runBackgroundCommands = internalAction({
             continue;
           }
         }
-        // Drop a stale pid / leftover Convex before (re)launch so a zombie or
-        // half-dead backend cannot keep :3210 / ExportInProgress wedged.
-        //
-        // Kill the whole process group (`-- -$pid`), not just the recorded pid:
-        // the launch below uses `setsid`, so that pid is a session/group leader
-        // and the actual work (`pnpm start-db` → `supabase start` → docker CLI)
-        // lives in its group. Killing the leader alone left those children
-        // orphaned, still holding their fd to /tmp/bg-<i>.log — after the
-        // relaunch truncated it they kept writing at the old offset (multi-KB
-        // NUL hole in the log) and raced the new daemon (prod 2026-09-01). The
-        // bare-pid fallback covers pid files from an older launch form, and the
-        // TERM → poll → KILL grace lets supabase/docker exit cleanly. A pid
-        // that fails the ownership check leaves `$pid` empty, so a stale
-        // snapshot-baked file is only removed, never signalled.
         const cleanup = [
           ...ownedBgPidLines(i),
           `if [ -n "$pid" ]; then kill -TERM -- -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true`,
@@ -546,7 +436,6 @@ export const runBackgroundCommands = internalAction({
           `rm -f /tmp/bg-${i}.pid`,
         ];
         if (isConvexCommand) {
-          // Use `[c]onvex` so pkill does not match this cleanup shell's cmdline.
           cleanup.push(
             `pkill -TERM -f '[c]onvex-local-backend' 2>/dev/null || true`,
             `pkill -TERM -f '[c]onvex dev' 2>/dev/null || true`,
@@ -559,37 +448,16 @@ export const runBackgroundCommands = internalAction({
         await execHandle(sandbox, cleanup.join("; "), 15);
         const logPath = `/tmp/bg-${i}.log`;
         const scriptPath = `/tmp/bg-cmd-${i}.sh`;
-        // Run the command from a script file rather than inlining it via
-        // `bash -lc '<command>'`: the inline form puts the whole command text
-        // into the wrapper shell's cmdline, so a user guard like
-        // `pgrep -f "[c]onvex dev" || npx convex dev` matches its own wrapper
-        // (the unguarded "npx convex dev" launch text) and silently never starts
-        // the daemon. With a script file the cmdline is just the file path, and
-        // user quoting cannot break out of anything.
-        //
-        // CarePulse local backends: plant glibc-safe binary + unset agent mode.
-        // See convexLocalBackend.ts (anonymous mode rejects --local-backend-version).
         const scriptBody = isConvexCommand
           ? buildConvexBackgroundScriptBody(command)
           : command;
         console.log(
           `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
-        // The file API, not `echo <base64> | base64 -d`. The command is
-        // repo-supplied and the Convex wrapper adds a multi-KB preamble, so an
-        // inline transport puts unbounded content (base64-inflated by 4/3) into
-        // one `bash -lc` argument — the same 128 KB MAX_ARG_STRLEN cliff that
-        // broke the preview proxy. writeFile has no such limit.
         await writeSandboxFile(sandbox, scriptPath, scriptBody, {
           executable: true,
         });
-        // setsid + </dev/null fully detaches the daemon into its own session, so
-        // it survives the exec session teardown even when the user's command
-        // self-backgrounds. A trailing `&` would otherwise let bash -lc exit
-        // immediately, letting a process-group SIGTERM reach the daemon (nohup
-        // only blocks SIGHUP).
         const launchCmd = `(setsid nohup bash -l ${scriptPath} </dev/null > ${logPath} 2>&1 & echo $! > /tmp/bg-${i}.pid) && echo LAUNCHED`;
-        // Short timeout — we only wait for the shell to fork the daemon.
         await execHandle(sandbox, launchCmd, 10);
         launched += 1;
         if (isConvexCommand) launchedConvex = true;
@@ -597,8 +465,6 @@ export const runBackgroundCommands = internalAction({
         const verdict = await classifyBackgroundLaunchFailure(sandbox, e);
         if (
           verdict === "unresponsive" &&
-          // The preview heal poll must never stop/resume a VM the user may be
-          // mid-turn in; it only reports, and the lifecycle paths recover.
           !args.onlyRestartDead &&
           !restartAttempted
         ) {
@@ -608,10 +474,6 @@ export const runBackgroundCommands = internalAction({
           );
           try {
             await restartUnresponsiveSandbox(sandbox);
-            // The stop killed every daemon launched earlier in this run —
-            // start over from the first command on the recovered VM. The
-            // cleanup step makes relaunching already-attempted commands
-            // idempotent.
             errors.length = 0;
             launched = 0;
             launchedConvex = false;
@@ -630,10 +492,6 @@ export const runBackgroundCommands = internalAction({
         );
         errors.push(`${shown}: ${msg}`);
         if (verdict !== "command-failed") {
-          // The VM cannot run commands (wedged, or no longer running). Stop
-          // cascading: record the skip and return a handled result — heal
-          // polls and scheduled restarts get `errors`, not an uncaught action
-          // failure, and no further 20s+ timeouts pile onto a dead VM.
           const remaining = commands.length - i - 1;
           if (remaining > 0) {
             errors.push(
@@ -648,10 +506,6 @@ export const runBackgroundCommands = internalAction({
       }
     }
 
-    // Fire-and-forget readiness watcher: the session unlocks immediately, and
-    // if `convex dev` never becomes ready the watcher surfaces a warning
-    // instead of blocking startup on a grep loop (which also used to die at
-    // undici's 300s headersTimeout when run as a single long exec).
     if (launchedConvex) {
       const sessionId = args.sessionId;
       if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
@@ -675,7 +529,6 @@ export const runBackgroundCommands = internalAction({
   },
 });
 
-/** Poll cadence / budget for the fire-and-forget Convex readiness watcher. */
 const CONVEX_READY_POLL_INTERVAL_MS = 10_000;
 const CONVEX_READY_TIMEOUT_MS = 360_000;
 

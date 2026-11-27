@@ -7,11 +7,7 @@ import { usePrDiff } from "@/lib/components/sandbox/usePrDiff";
 
 interface RecapStaleBannerProps {
   prUrl: string;
-  repoId: Id<"githubRepos">;
-  /** The head commit the recap was written for. */
-  recapSha: string;
-  /** The way to bring the recap up to date, e.g. a Regenerate button. */
-  action?: ReactNode;
+  repoId: Id<"githubRepos">;  recapSha: string;  action?: ReactNode;
 }
 
 /**

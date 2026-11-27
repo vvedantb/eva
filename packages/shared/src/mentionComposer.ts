@@ -2,13 +2,6 @@ import type { AIProvider, Id } from "@eva/backend";
 import { harnessSkillTokenId, systemSkillTokenId } from "./mentionText";
 
 /**
- * The `@` mention and `/` skill pickers of a chat composer, as pure logic the
- * web editor (`MentionEditor`) and the phone composer share: the candidate
- * lists built from the same Convex queries, the trigger the draft is typing,
- * the filter, and the text an accepted pick leaves behind.
- */
-
-/**
  * What a Data `@` entry points at. Mirrors the backend `DataMentionKind`
  * union — a new kind there fails to assign here until it is added.
  */
@@ -18,17 +11,9 @@ export interface MentionItem<TId extends string = string> {
   id: TId;
   label: string;
   description?: string;
-  /** Type badge shown in the picker (e.g. Eva, Claude, Person). */
   badge?: string;
-  /** Provider badge identity, used to select its logo without matching text. */
   provider?: AIProvider;
-  /** Data entity kind — the picker shows its icon in place of a kind badge. */
   kind?: MentionKind;
-  /**
-   * Set when this item is a teammate rather than a data entity, so the picker
-   * row shows their avatar. Same value as `id` for people items; kept separate
-   * so the renderer can tell the two kinds apart without re-deriving it.
-   */
   personUserId?: Id<"users">;
 }
 
@@ -44,14 +29,9 @@ export interface MentionTrigger {
 /** Where the last accepted picker item put its chip, and what it inserted. */
 export interface InsertedToken {
   startIndex: number;
-  /** The visible token, e.g. `/caveman-help` or `@Design doc`. */
   token: string;
 }
 
-/**
- * A trigger starts the text or follows whitespace, and runs to the end of the
- * draft with no whitespace in it.
- */
 function isValidTrigger(value: string, triggerIndex: number): boolean {
   if (/\s/.test(value.slice(triggerIndex + 1))) return false;
   const charBefore = triggerIndex > 0 ? value[triggerIndex - 1] : "";
@@ -172,8 +152,6 @@ export function dataMentionItems(
     id: item.id,
     label: item.label,
     badge: item.badge,
-    // Drives the picker's icon. Assigning the backend union here is the
-    // guard: a new kind there fails to compile until it gets an icon.
     kind: item.kind,
     ...(item.description !== undefined ? { description: item.description } : {}),
   }));
@@ -281,13 +259,6 @@ export const CLAUDE_HARNESS_SKILLS: readonly HarnessSkill[] = [
   },
 ];
 
-/**
- * Built-in skills for the harness a provider runs, if we know its catalog.
- *
- * `reported` is the live catalog from `harnessSkills.getForProvider`: a row's
- * skills, `null` when no sandbox has reported yet, `undefined` while the query
- * is in flight. Both fall back to the static list, so the picker never blinks.
- */
 function harnessSkillsForProvider(
   provider: AIProvider | undefined,
   reported?: readonly HarnessSkill[] | null,
@@ -317,9 +288,6 @@ export function harnessSlashItems(
             id: harnessSkillTokenId(skill.name),
             label: skill.name,
             description: skill.description,
-            // Same badge the `.claude/skills` repo skills carry — a built-in
-            // and a Claude-only repo skill are both "provided by Claude" to
-            // the person picking one.
             badge: metadata.badge,
             provider,
           },
@@ -380,8 +348,6 @@ export function skillSlashItems(
     description: skill.description,
     ...(isClaudeSkillSourcePath(skill.sourcePath) ? { badge: "Claude", provider: "claude" } : {}),
   }));
-  // A repo skill of the same name shadows the Eva one — the sandbox
-  // materializer leaves user-owned skill directories alone.
   const systemItems: SlashItem[] = systemSkills.flatMap((skill) =>
     skill.installed && !selectedRepoSkills.some((repo) => repo.title === skill.name)
       ? [{ id: systemSkillTokenId(skill.name), label: skill.name, description: skill.description, badge: "Eva" }]

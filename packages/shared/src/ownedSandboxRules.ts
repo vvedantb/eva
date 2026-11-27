@@ -1,9 +1,5 @@
 import type { TaskStatus } from "./taskMeta";
 
-// When a task's sandbox and git actions are offered, web and phone: the task
-// page footer and menu. A project's coordinator is read-only: it offers no
-// git actions.
-
 /** Task statuses whose review sandbox can be woken at any time (the preview of the work). */
 export const PREVIEW_SANDBOX_ALLOWED_STATUSES: TaskStatus[] = [
   "code_review",

@@ -7,16 +7,7 @@ import type { PullRequestTarget } from "./pullRequestDraftState";
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
 
-/**
- * GitHub's native stacked pull requests (a preview feature). A stack is an
- * ordered chain of PRs from the ultimate base branch upwards; merging entry N
- * lands entries 1..N together, which is why the merge box has to know about
- * every PR below the one on screen.
- */
-
-/** A stack longer than this is not something a reader navigates in a popover. */
 const MAX_STACK_ENTRIES = 50;
-/** One poll a second for up to five minutes, the same ceiling GitHub's own UI uses. */
 const ASYNC_MERGE_POLL_LIMIT = 300;
 const ASYNC_MERGE_POLL_INTERVAL_MS = 1_000;
 
@@ -29,20 +20,15 @@ const pullRequestStackEntryValidator = v.object({
   baseRef: v.string(),
   status: v.union(v.literal("open"), v.literal("closed"), v.literal("merged")),
   draft: v.boolean(),
-  /** null while GitHub computes mergeability. */
   mergeable: v.union(v.boolean(), v.null()),
-  /** REST's lowercase vocabulary: clean | dirty | blocked | behind | unstable | draft | unknown */
   mergeableState: v.string(),
 });
 
 export const pullRequestStackValidator = v.object({
-  /** The stack's own number on GitHub, not a pull request number. */
   number: v.number(),
   size: v.number(),
-  /** One-based position of the pull request this overview describes. */
   position: v.number(),
   baseRef: v.string(),
-  /** Ordered from the base branch upwards, so `entries[0]` merges first. */
   entries: v.array(pullRequestStackEntryValidator),
 });
 
@@ -224,7 +210,6 @@ const asyncMergeResultSchema = z.object({
     .nullish(),
 });
 
-/** A 409 (already in flight) and a 400 (terminal failure) both carry a usable body. */
 const asyncMergeErrorSchema = z.object({
   status: z.number(),
   response: z.object({ data: asyncMergeResultSchema }).optional(),

@@ -1,10 +1,3 @@
-/**
- * The rubric behind the quick-task "draft readiness" nudge, and the two pure
- * functions that turn Jev's raw answers into something the banner can render.
- *
- * Runtime-free on purpose: the `"use node"` action imports it, and so do the
- * tests, so neither pulls a Convex runtime into the other.
- */
 
 /** Ordered lowest to highest; Jev answers with a position on this scale. */
 export const READINESS_LEVELS = [

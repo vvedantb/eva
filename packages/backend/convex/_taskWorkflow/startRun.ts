@@ -31,13 +31,6 @@ export async function taskWorkSessionBusy(
   return await ownedSessionBusy(db, { kind: "task", taskId: task._id });
 }
 
-/**
- * A project's child task runs on the project's model and account, copied
- * when the task starts (`takesProjectSettings`, decision 20). Returns the
- * task as the run sees it, and whose personal account the run may unlock
- * (`accountHolder`): the project owner for the project's account, else the
- * person who created the task.
- */
 async function adoptProjectRunSettings(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
@@ -87,8 +80,6 @@ export async function startTaskRun(
   },
 ): Promise<Id<"agentRuns">> {
   const { repo } = p;
-  // One agent per sandbox: a run waits while its session's chat is mid-reply,
-  // as a chat message waits behind a run.
   if (await taskWorkSessionBusy(ctx.db, p.task)) {
     throw new Error(TASK_CHAT_BUSY_ERROR);
   }
@@ -121,8 +112,6 @@ export async function startTaskRun(
       ? { pendingChangeRequestCommentId: undefined }
       : {}),
   });
-  // A task runs on its own session's sandbox. Looked up (or created) here so
-  // the run's turn and sandbox writes land on that one session.
   const ownedSession = (await ensureWorkSession(ctx, { kind: "task", task }))
     .session;
   try {
@@ -130,7 +119,6 @@ export async function startTaskRun(
       runId,
       taskId: task._id,
       repoId: repo._id,
-      // The task's own repo's GitHub App installation, never a project's.
       installationId: repo.installationId,
       projectId: task.projectId,
       ownedSessionId: ownedSession._id,
@@ -159,18 +147,6 @@ export async function startTaskRun(
   return runId;
 }
 
-/**
- * Opens the run's durable turn (its startup lease covers sandbox
- * preparation), starts `taskExecutionWorkflow` with it, binds the turn and
- * records the workflow on the task. A failed start closes the turn and
- * rethrows, so `startTaskRun` can roll back.
- *
- * A task's run turn is filed under its session (`sessionId`): the
- * session's chats then see it as their busy gate, so a chat message sent
- * mid-run queues behind the run (`sessionChatHasFreeSlot`), and the run's
- * end drains that queue (`closeTurn`). The turn stays keyed on the run, so
- * completion, cancel and the watchdog are unchanged.
- */
 async function startTaskRunWorkflow(
   ctx: MutationCtx,
   args: ObjectType<typeof taskExecutionWorkflowArgs>,

@@ -20,10 +20,8 @@ import { FileViewerToolbarButton } from "./FileViewerToolbarButton";
 
 interface FileViewerHeaderProps {
   segments: FileBreadcrumbSegment[];
-  /** Absolute sandbox path, shown on hover — the breadcrumb is relative. */
   title: string;
   dirty: boolean;
-  /** Absent for non-markdown files and before the file has loaded. */
   markdown?: {
     view: "rendered" | "source";
     disabled: boolean;
@@ -31,7 +29,6 @@ interface FileViewerHeaderProps {
   };
   wrap: boolean;
   onWrapChange: (wrap: boolean) => void;
-  /** Absent when there is no text to copy (media, or not loaded). */
   copyContent?: string;
   onRefresh: () => void;
   edit: FileViewerEditState;
@@ -91,8 +88,6 @@ export function FileViewerHeader({
       >
         <div className="flex w-max min-w-full items-center gap-1 text-xs [direction:ltr]">
           {segments.map((segment, index) => (
-            // Keyed by the path so far: a repeated directory name (`src/src`)
-            // would collide on the label alone.
             <span
               key={segments
                 .slice(0, index + 1)

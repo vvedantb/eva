@@ -8,15 +8,7 @@ import {
 interface EvaIconProps {
   size?: number;
   className?: string;
-  /**
-   * Pass `null` where a visible "Eva" wordmark sits beside the icon, so screen
-   * readers do not announce the name twice.
-   */
   label?: string | null;
-  /**
-   * Draw the backing disc. Off where the mark sits among line glyphs (the
-   * rail), since at ~22px the disc reads as a pale blob and swallows the star.
-   */
   disc?: boolean;
 }
 

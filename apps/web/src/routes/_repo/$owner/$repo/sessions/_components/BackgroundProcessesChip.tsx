@@ -48,7 +48,6 @@ export function BackgroundProcessesChip({
 
   const count = rows?.length ?? 0;
   const live = isRouteActive && count > 0;
-  // Elapsed times are only on screen inside the popover.
   const ticking = live && popoverOpen;
 
   /* eslint-disable no-effect/no-external-store-subscription, no-effect/no-adjust-state-on-prop-change --
@@ -92,7 +91,6 @@ export function BackgroundProcessesChip({
     const runReconcile = () => {
       if (document.visibilityState !== "visible") return;
       void reconcile({ sessionId }).catch(() => {
-        /* swallow — next tick retries */
       });
     };
 

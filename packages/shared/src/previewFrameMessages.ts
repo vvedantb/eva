@@ -8,13 +8,10 @@
  * script's tsconfig resolves it directly.
  */
 export const PREVIEW_FRAME_MESSAGE = {
-  // Nav-sync script → Eva.
   navigation: "navigation",
   unload: "eva-preview-unload",
-  // Eva → nav-sync script.
   historyBack: "eva-preview-history-back",
   historyForward: "eva-preview-history-forward",
-  // Annotation script → Eva.
   annotateReady: "eva-preview-annotate-ready",
   annotateSelected: "eva-preview-annotate-selected",
   annotateRect: "eva-preview-annotate-rect",
@@ -27,7 +24,6 @@ export const PREVIEW_FRAME_MESSAGE = {
   webMcpTools: "eva-preview-webmcp-tools",
   webMcpResult: "eva-preview-webmcp-result",
   webMcpError: "eva-preview-webmcp-error",
-  // Eva → annotation script.
   annotateMode: "eva-preview-annotate-mode",
   annotateFreeze: "eva-preview-annotate-freeze",
   annotateClear: "eva-preview-annotate-clear",

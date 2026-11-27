@@ -3,26 +3,6 @@ import type { Infer } from "convex/values";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { usageLimitProviderValidator } from "../validators";
 
-/**
- * Row identity for `agentUsageLimits`, and the read-time trimming every reader
- * owes a stored row.
- *
- * A reading measures a *credential's* plan, not a repo's: the same connected
- * account has the same headroom whichever repo it runs on. So a row is keyed by
- * the credential — the connected account, or, for the shared
- * `CLAUDE_CODE_OAUTH_TOKEN` from team/repo env vars, the team that owns it.
- *
- * Rows written while the key still included the repo keep their `repoId`, and
- * they share the `by_provider_account` index range with the account rows that
- * replaced them. Every lookup therefore drops them in JS. The set is tiny (one
- * row per repo the account ever ran on) and `report` deletes the ones it walks
- * past, so the range drains itself within a day — the same day the 24h
- * freshness window stops honouring them anyway.
- *
- * That filter lives here and nowhere else: a reader that forgot it would start
- * showing a per-repo number again, which is the bug this keying replaced.
- */
-
 export type UsageLimitProvider = Infer<typeof usageLimitProviderValidator>;
 
 /**
@@ -116,8 +96,6 @@ export async function findUsageLimitRow(
   key: UsageLimitRowKey,
 ): Promise<Doc<"agentUsageLimits"> | null> {
   if (key.providerAccountId === undefined) {
-    // Legacy rows never set `teamId`, so this range holds only new team rows
-    // and needs no filtering.
     return await db
       .query("agentUsageLimits")
       .withIndex("by_provider_team", (q) =>
@@ -139,10 +117,6 @@ export async function listLegacyUsageLimitRows(
   db: GenericDatabaseReader<DataModel>,
   key: UsageLimitRowKey,
 ): Promise<Array<Doc<"agentUsageLimits">>> {
-  // A team row's legacy ancestors reported no account either, so they sit in
-  // the same `providerAccountId: undefined` slot of the account range — for
-  // every team, since a legacy row names a repo and not a team. Sweeping them
-  // all is fine: nothing reads a legacy row any more, whoever it belonged to.
   return pickLegacyRows(
     await accountRangeRows(db, key.provider, key.providerAccountId),
   );
@@ -208,14 +182,6 @@ export function presentReading(
       next.windows = activeWindows;
     } else {
       delete next.windows;
-      // A status observed alongside windows expires when all of those windows
-      // reset. Windowless status-only events remain until the row's captured-at
-      // freshness limit above.
-      //
-      // The discriminant goes with it: "complete" described a reading whose
-      // windows have all since reset, and leaving it would have the UI report
-      // that the provider has no plan windows at all. A reading that never
-      // carried windows keeps it — that is the case it exists for.
       if (reportedWindows.length > 0) {
         delete next.status;
         delete next.completeness;

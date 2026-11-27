@@ -16,10 +16,6 @@ import {
   type ProjectTaskStage,
 } from "./projectStatus";
 
-// How web and phone show a project's derived status (`./projectStatus`) from
-// the rows they already load: `agentTasks.listByProject` plus the tasks whose
-// latest run failed (`agentRuns.getTaskIdsWithLatestRunError`).
-
 /** Project stages in workflow order: kanban columns and list sections. */
 export const PROJECT_STAGES = [
   "todo",

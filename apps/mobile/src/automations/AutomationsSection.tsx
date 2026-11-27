@@ -59,7 +59,6 @@ function AutomationListRow({ automation, repoId }: { automation: AutomationRow; 
       onPress={() => router.push({ pathname: "/automation/[automationId]", params: { automationId: automation._id, repo: repoId } })}
       className="min-h-14 flex-row items-center gap-3 px-4 py-2 active:opacity-70"
     >
-      {/* The web row dot: green while the automation is on. */}
       <View className="size-2 rounded-full" style={{ backgroundColor: automation.enabled ? theme.success : theme.mutedForeground }} />
       <Text numberOfLines={1} className="font-instrument-sans min-w-0 flex-1 text-sm" style={{ color: theme.foreground }}>
         {automation.title}

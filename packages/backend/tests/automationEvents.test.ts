@@ -236,7 +236,6 @@ describe("cron registration", () => {
   test("event presets keep the install's label but not its event", () => {
     const install = row({
       systemKey: "issue-to-task",
-      // A tampered event is ignored: the catalog owns it.
       trigger: { kind: "event", event: "pr_merged", label: "eva:web" },
     });
     expect(automationTrigger(install)).toEqual({
@@ -300,7 +299,6 @@ describe("messages", () => {
 });
 
 describe("axiom alerts", () => {
-  // Axiom's default custom-webhook template, threshold monitor triggering.
   const threshold = {
     action: "Open",
     event: {

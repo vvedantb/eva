@@ -24,12 +24,7 @@ interface RecapWalkthroughProps {
   steps: readonly RecapWalkthroughStep[];
   prUrl: string;
   prNumber: number;
-  repoId: Id<"githubRepos">;
-  /**
-   * The scrolling ancestor. File diffs mount only when near it, as in the Code
-   * tab: a step can hold every file of a large PR ("Other changes").
-   */
-  scrollRoot: HTMLElement | null;
+  repoId: Id<"githubRepos">;  scrollRoot: HTMLElement | null;
 }
 
 /**
@@ -54,13 +49,9 @@ export function RecapWalkthrough({
     rawState.status === "ready" && ignoreWhitespace
       ? { ...rawState, entries: applyIgnoreWhitespace(rawState.entries) }
       : rawState;
-  const workBranch = rawState.status === "ready" ? rawState.workBranch : null;
-  // A regenerated recap can have fewer steps than the one being read.
-  const current = Math.min(index, steps.length - 1);
+  const workBranch = rawState.status === "ready" ? rawState.workBranch : null;  const current = Math.min(index, steps.length - 1);
   const step = steps[current];
   if (step === undefined) return null;
-
-  // A new step starts at its top, not wherever the last one was scrolled to.
   const goTo = (next: number) => {
     setIndex(next);
     scrollRoot?.scrollTo({ top: 0 });
@@ -156,7 +147,6 @@ export function RecapWalkthrough({
   );
 }
 
-/** One file of a step: its PR diff, or why it cannot be shown. */
 function StepFileDiff({
   path,
   state,
@@ -165,9 +155,7 @@ function StepFileDiff({
 }: {
   path: string;
   state: PrDiffState;
-  scrollRoot: HTMLElement | null;
-  /** The step's first file renders at once: it is in view on arrival. */
-  eager: boolean;
+  scrollRoot: HTMLElement | null;  eager: boolean;
 }) {
   const { resolvedTheme } = useThemeMode();
   if (state.status === "loading") {

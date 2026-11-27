@@ -15,16 +15,9 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 interface RecapAskAgentButtonProps {
   step: RecapWalkthroughStep;
   prUrl: string;
-  prNumber: number;
-  /**
-   * Branch a new session starts on: the head branch of an open PR from this
-   * repo, so the agent reads the code under review. Null starts on the repo's
-   * default branch (a fork, or a closed PR whose change is on the base).
-   */
-  workBranch: string | null;
+  prNumber: number;  workBranch: string | null;
 }
 
-/** The prompt both paths send: the step as context, then a default question. */
 function stepPrompt({
   step,
   prUrl,

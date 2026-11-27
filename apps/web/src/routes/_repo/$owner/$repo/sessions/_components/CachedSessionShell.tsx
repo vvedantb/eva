@@ -15,25 +15,11 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 interface CachedSessionShellProps {
   numId: string;
-  /**
-   * Repo identity captured when the shell was cached — NOT the live URL.
-   * The sessions layout survives `$owner/$repo` changes, so a hidden shell
-   * must keep resolving against its own repo, not the one now in the URL.
-   */
   owner: string;
   repoParam: string;
-  /** True when this shell matches the URL `$numId` (visible). */
   isActiveRoute: boolean;
 }
 
-/**
- * One kept-alive session detail tree. While `isActiveRoute` is false the shell
- * keeps its DOM and state (parent uses a hidden `<Activity>`, so its effects
- * are torn down) and freezes its sandbox tab and chat
- * tab so the active session's URL does not rewrite sibling caches. Each shell
- * carries its own passive RepoProvider so shells from other apps stay
- * resolvable.
- */
 export function CachedSessionShell({
   numId,
   owner,
@@ -65,11 +51,6 @@ function CachedSessionShellInner({
   const simpleView = useSimpleView();
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
-  // What the session tree is told. Turning active is immediate; turning
-  // inactive is deferred, so the shell being hidden (already hidden by the
-  // parent's `<Activity>`) re-renders after the next session paints instead of in the
-  // same blocking commit. URL-following logic below keeps the live
-  // `isActiveRoute`, so a lagging shell never adopts the new session's URL.
   const deferredActive = useDeferredValue(isActiveRoute);
   const isTreeActive = isActiveRoute || deferredActive;
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
@@ -83,21 +64,14 @@ function CachedSessionShellInner({
   }, [isActiveRoute, urlSandboxTab]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
-  // `?chat=N` picks the chat tab. Frozen the same way as the sandbox tab:
-  // only the visible shell follows the URL, so a hidden session keeps the
-  // chat it was left on. Render-phase sync, like the layout's cache promotion.
   const [urlChat] = useQueryState("chat", chatParser);
   const [chatNumber, setChatNumber] = useState(urlChat);
   if (isActiveRoute && chatNumber !== urlChat) {
     setChatNumber(urlChat);
   }
-  // Written through the (stable) router, not the nuqs setter: that setter
-  // changes identity on every navigation, and this handler is a prop of the
-  // whole session tree, so it re-rendered every cached shell on each switch.
   const onChatChange = (number: number | null) => {
     void navigate({
       to: ".",
-      // Main is the absent param, so plain session links keep opening Main.
       search: (prev) => ({
         ...prev,
         chat: number === null || number === 1 ? undefined : number,
@@ -105,17 +79,10 @@ function CachedSessionShellInner({
     });
   };
 
-  // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
-  // `basePath`. `navigate({ to })` matches the route tree before the
-  // history rewrite, so `/owner/repo/app/sessions/…` is a miss on
-  // monorepo apps and the Review tab never opens.
   const sessionParams = { owner, repo: repoParam, numId };
 
   const openFile = (path: string) => {
     if (simpleView) return;
-    // A file the agent touched in a linked checkout has to select that repo's
-    // root, or the Files tree would list the primary beside another repo's
-    // file. `undefined` drops a stale root when a primary file is opened.
     const filesRoot = workspaceRootPath(path) ?? undefined;
     void navigate({
       to: "/$owner/$repo/sessions/$numId/$sandboxTab",
@@ -164,8 +131,6 @@ function CachedSessionShellInner({
         />
       ) : null}
       <EntityNumIdGate
-        // Same rule as the redirect above: only the visible shell may navigate,
-        // so a hidden shell holding a legacy Convex id just keeps its spinner.
         resolve={isActiveRoute ? session : { ...session, redirectTo: null }}
         entityLabel="session"
         backTo={`${basePath}/sessions`}

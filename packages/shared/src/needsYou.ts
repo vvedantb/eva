@@ -1,12 +1,5 @@
 import type { NeedsYouReason } from "./projectStatus";
 
-/**
- * The Inbox's "Needs you" view: work that waits for a person, across
- * projects, quick tasks and sessions. Derived from live state, never from a
- * read flag: a row leaves the list when someone acts on it. The backend query
- * (`needsYou.list`) builds the rows; web and phone group and label them here.
- */
-
 /** The Needs you groups, in their on-screen order. */
 export const NEEDS_YOU_GROUPS = [
   "question",
@@ -44,7 +37,6 @@ export function needsYouGroupForProjectTask(
   }
 }
 
-/** Quick task statuses that mean "the work is done, its PR waits for a person". */
 const QUICK_TASK_REVIEW_STATUSES: ReadonlySet<string> = new Set([
   "code_review",
   "business_review",

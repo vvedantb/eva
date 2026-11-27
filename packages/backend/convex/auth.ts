@@ -92,8 +92,6 @@ export const ensureUserExists = mutation({
       throw new Error("Clerk user ID is required");
     }
 
-    // Only the claims the token carries. Sandbox VM and MCP tokens hold `sub`
-    // alone, so an absent claim must never overwrite a stored email or name.
     const profile: Partial<Pick<Doc<"users">, ProfileField>> = {
       ...(email ? { email } : {}),
       ...(typeof identity.firstName === "string"
@@ -126,20 +124,6 @@ export const ensureUserExists = mutation({
       };
     }
 
-    // No record for this Clerk ID. Before creating one, check whether this
-    // person already exists under a stale Clerk ID from a different Clerk
-    // instance — copying a prod snapshot into dev carries prod's Clerk IDs,
-    // which never match the dev instance's IDs for the same human. Rebinding
-    // the existing record beats stranding its data behind an orphaned ID.
-    //
-    // Email is the only identifier shared across instances. Clerk keeps
-    // addresses unique per instance, so within one instance this can only fire
-    // after an account is deleted and recreated, where reclaiming the record is
-    // also what you want.
-    //
-    // Only a verified address may claim a record: otherwise anyone who signs up
-    // with an existing user's address unverified would take over their account.
-    // Unverified callers get a fresh record below instead.
     if (email && identity.emailVerified === true) {
       const userWithSameEmail = await ctx.db
         .query("users")
@@ -287,8 +271,6 @@ export const setShortcutOverride = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // The id vocabulary is derived from SHORTCUT_DEFS rather than repeated as a
-    // validator union, so the check happens here instead of in `args`.
     if (!isShortcutId(args.id)) {
       throw new Error(`Unknown shortcut id: ${args.id}`);
     }

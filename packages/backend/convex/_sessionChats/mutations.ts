@@ -77,7 +77,6 @@ export const create = authMutation({
   args: {
     sessionId: v.id("sessions"),
     title: v.optional(v.string()),
-    /** The chat the user pressed `+` on; its model and account carry over. */
     fromChatId: v.optional(v.id("sessionChats")),
   },
   returns: sessionChatValidator,
@@ -142,7 +141,6 @@ export const remove = authMutation({
       throw new Error("Stop this chat before you delete it");
     }
     await ctx.db.patch(chat._id, { archived: true });
-    // Now, not in the purge: a queued send must not start a turn meanwhile.
     await deleteQueuedMessages(ctx, chat._id);
     const drafts = await ctx.db
       .query("drafts")

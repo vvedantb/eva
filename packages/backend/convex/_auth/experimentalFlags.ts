@@ -5,7 +5,6 @@ import type {
   resolvedExperimentalFlagsValidator,
 } from "../_validators/shapes";
 
-// Derived from the validators so a new flag is declared once, in shapes.ts.
 export type ExperimentalFlagKey = Infer<typeof experimentalFlagKeyValidator>;
 
 export type ResolvedExperimentalFlags = Infer<

@@ -485,9 +485,6 @@ export function ChatPanel({
           onCancel={handleCancel}
           onForkTranscript={handleForkTranscript}
           afterMessage={(messageId) => {
-            // Only plans captured on a message render in the transcript, so a
-            // plan stays where it was proposed. Unanchored plan content (Edit,
-            // update_plan, a seeded implementation session) lives in the Plan tab.
             const plan = proposedPlanForMessage(capturedPlans, messageId);
             if (!plan) return null;
             return (

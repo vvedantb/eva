@@ -27,10 +27,6 @@ import type { ChatLogEntry } from "./useChatLog";
 
 type LogItem = { entry: ChatLogEntry; history: ChatLogEntry[] };
 
-/**
- * Entries nothing has replaced, each with the older versions it replaced
- * (newest first), so the timeline shows one row per finding or decision.
- */
 function currentWithHistory(entries: ChatLogEntry[]): LogItem[] {
   const byId = new Map(entries.map((entry) => [entry._id, entry]));
   const olderThan = (entry: ChatLogEntry) =>
@@ -39,7 +35,6 @@ function currentWithHistory(entries: ChatLogEntry[]): LogItem[] {
     .filter((entry) => entry.supersededById === undefined)
     .map((entry) => {
       const history: ChatLogEntry[] = [];
-      // Bounded by the entry count, so a malformed chain cannot loop.
       for (
         let older = olderThan(entry);
         older && history.length < entries.length;
@@ -51,7 +46,6 @@ function currentWithHistory(entries: ChatLogEntry[]): LogItem[] {
     });
 }
 
-/** Items grouped by day, newest day first; items within a day oldest first. */
 function groupByDay(items: LogItem[]) {
   const days: Array<{ day: string; items: LogItem[] }> = [];
   for (const item of items) {
@@ -77,7 +71,6 @@ export function ChatLogView({
   source: ChatSourceArg;
   entries: ChatLogEntry[];
   onBack: () => void;
-  /** A project's Log: names the child task that wrote an entry. */
   entrySource?: (entry: ChatLogEntry) => ReactNode;
 }) {
   const [kindFilter, setKindFilter] = useQueryState(

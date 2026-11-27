@@ -1,6 +1,3 @@
-// eva's look for the @vvedantb/ui controls family: buttons, badges, fields,
-// toggles, tabs, accordion and friends. Each string is the exact class list the
-// legacy @eva/ui component rendered, so the swap changes no DOM.
 import { createElement } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { getDefaultClassNames } from "react-day-picker";
@@ -19,18 +16,13 @@ const buttonVariant = {
   link: "text-primary underline-offset-4 hover:underline",
 };
 
-// Only the sizes that differ from the package: `xs` is 11px text and both
-// 28px sizes force a 14px icon. The other sizes use the package classes.
 const buttonSize = {
   xs: "h-7 px-2 text-2xs hit-target [&_svg]:size-3.5",
   "icon-xs": "h-7 w-7 hit-target [&_svg]:size-3.5",
 };
 
-// `rounded` is one string for every size, so `xs` gets `rounded-lg`, not the
-// package's `rounded-md`. `pill` uses the package default (`rounded-full`).
 const buttonShape = { rounded: "rounded-lg" };
 
-/** `buttonVariants({ variant: "ghost" })` of the legacy Button, for the calendar. */
 const ghostButton = cn(
   buttonBase,
   buttonVariant.ghost,
@@ -38,8 +30,6 @@ const ghostButton = cn(
   buttonShape.rounded,
 );
 
-// 16px below `sm`: iOS Safari zooms the page when a focused field's computed
-// font-size is under 16px.
 const fieldClasses =
   "flex h-10 w-full max-sm:min-w-0 border border-input bg-card px-3.5 py-2 text-base sm:text-sm transition-[border-color,box-shadow,background-color] placeholder:text-muted-foreground/90 focus-visible:border-ring/50 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 rounded-control";
 
@@ -59,7 +49,6 @@ export const controlsConfig = {
       shape: buttonShape,
     },
   },
-  // Icon-only bulk actions at every width; the label shows in a tooltip.
   BulkActionBar: { labels: "tooltip" },
   Badge: {
     classes: {
@@ -86,15 +75,12 @@ export const controlsConfig = {
   },
   Checkbox: {
     classes: {
-      // `before:` is the package's 40px tap area around the 16px box.
       root: "peer relative size-4 shrink-0 cursor-pointer rounded-[6px] border border-input bg-card motion-press active:scale-[0.9] before:absolute before:inset-[-12px] before:content-[''] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
     },
   },
   Switch: {
     classes: {
-      // `before:` is the package's tap area around the 24px track.
       root: "peer relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent motion-press before:absolute before:inset-[-8px] before:content-[''] active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted",
-      // Checked: primary-foreground, so a near-white primary keeps a visible knob.
       thumb:
         "pointer-events-none block size-5 rounded-full bg-white shadow-sm t-switch-thumb data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-primary-foreground data-[state=unchecked]:translate-x-0.5",
     },
@@ -110,8 +96,6 @@ export const controlsConfig = {
   },
   ButtonGroup: {
     classes: {
-      // Children abut, so the `max-sm` hit-target bleed of small buttons is
-      // dropped rather than letting a neighbour steal taps.
       base: "flex w-fit items-stretch max-sm:[&>*]:after:content-none has-[>[data-slot=button-group]]:gap-2 focus-visible:*:relative focus-visible:*:z-10 [&>[data-slot=select-trigger]:last-of-type]:has-[select[aria-hidden=true]:last-child]:rounded-r-lg [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
       text: "bg-secondary flex items-center gap-2 border border-border px-4 text-sm font-medium [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none rounded-surface",
       separator: "bg-input relative m-0! self-stretch data-[orientation=vertical]:h-auto",
@@ -131,7 +115,6 @@ export const controlsConfig = {
       ].join(" "),
       addon: {
         base: "text-muted-foreground flex h-auto cursor-text select-none items-center justify-center gap-2 py-1.5 text-sm font-medium group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-4px)] [&>svg:not([class*='size-'])]:size-4",
-        // The other alignments use the package classes.
         align: {
           "inline-end": "order-last pr-3 has-[>button]:mr-[-0.4rem] has-[>kbd]:mr-[-0.35rem]",
         },
@@ -153,16 +136,12 @@ export const controlsConfig = {
     animation: "none",
     classes: {
       input: fieldClasses,
-      // The scale composes with the centring `-translate-y-1/2`, so the button
-      // presses in place.
       button:
         "max-sm:hit-target motion-press absolute right-2 top-1/2 z-4 inline-flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.92] focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/35",
     },
   },
   SearchInput: {
     classNameTarget: "wrapper",
-    // No `label` here: the package default ("Search") is the field's
-    // accessible name. A call site can still pass its own.
     placeholder: "Search...",
     clearLabel: "Clear",
     enterKeyHint: false,
@@ -215,19 +194,14 @@ export const controlsConfig = {
   },
   Carousel: {
     classes: {
-      // The 10px width step is not animated: below the threshold where it reads
-      // as motion, and width would relayout the dot row every frame.
       dot: "h-1.5 cursor-pointer rounded-full motion-press active:scale-90",
     },
   },
   Tabs: {
     variant: "segmented",
     pillMotion: "xy",
-    // Tab content slides 32px from the side of the picked tab (`TabsTransition`).
     transition: "slide",
     classes: {
-      // `justify-center-safe`: centred content that overflows would make the
-      // leading tabs unreachable; safe alignment falls back to start.
       list: "relative inline-flex items-center justify-center bg-background p-1 text-muted-foreground max-sm:max-w-full max-sm:justify-center-safe max-sm:overflow-x-auto max-sm:scrollbar-none rounded-surface",
       size: {
         default: "h-10",
@@ -246,11 +220,9 @@ export const controlsConfig = {
       header: "flex flex-1",
       trigger:
         "group flex flex-1 cursor-pointer items-center justify-between py-3 text-sm font-medium motion-press active:scale-[0.99] hover:text-foreground [&[data-state=open]>svg]:rotate-180",
-      // `t-accordion-content` (globals.css) animates both directions.
       content: "t-accordion-content text-sm",
       contentInner: "pb-3 pt-0",
     },
-    // Same duration and easing as the panel, so chevron and content finish together.
     icon: createElement(IconChevronDown, {
       size: 16,
       className:
@@ -258,8 +230,6 @@ export const controlsConfig = {
     }),
   },
   Collapsible: {
-    // `t-collapsible-content` (globals.css) gives every panel the same
-    // measured-height open and close.
     classes: { trigger: "cursor-pointer", content: "t-collapsible-content" },
   },
 } satisfies UiConfig;

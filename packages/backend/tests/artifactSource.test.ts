@@ -4,12 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Artifacts created from a sandbox token are stored against that session /
- * task / project so the chat Artifacts tab and the global Artifacts page
- * share one row. These hit the real queries: a source-level index name
- * check would miss a list that still ranged over by_team.
- */
 
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|artifact-source";

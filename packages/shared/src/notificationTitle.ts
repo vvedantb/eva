@@ -14,22 +14,16 @@
  * people's inboxes.
  */
 export type NotificationTitleParts = {
-  /** Line one: the entity's own name, or the whole title when nothing parses. */
   subject: string;
-  /** Line two: what happened, e.g. `PR #678 merged`. Absent when unparsed. */
   event: string | undefined;
 };
 
-/** Punctuation left dangling once the quoted subject is lifted out of a title. */
 const EDGE_PUNCTUATION = /^[\s—–\-:,]+|[\s—–\-:,]+$/g;
 
-/** A preposition left stranded at the end of a prefix, as in `New comment on`. */
 const TRAILING_PREPOSITION = /\s+(?:on|in|for|to|of|about|from)$/i;
 
-/** First double-quoted run in a title — the backend quotes entity names. */
 const QUOTED_SUBJECT = /"([^"]+)"/;
 
-/** A subject that is nothing but one quoted run, e.g. `"Fix login"`. */
 const FULLY_QUOTED = /^"([^"]+)"$/;
 
 function tidy(fragment: string): string {
@@ -55,9 +49,6 @@ export function splitNotificationTitle(notification: {
   const title = notification.title.trim();
   const context = notification.contextLabel?.trim();
 
-  // Types whose title names the actor rather than the entity ("Ada mentioned
-  // you in a comment") already carry the entity separately, so no parsing is
-  // needed: the context label is the subject and the whole title is the event.
   if (context) {
     return { subject: context, event: title || undefined };
   }
@@ -65,10 +56,6 @@ export function splitNotificationTitle(notification: {
   const quoted = QUOTED_SUBJECT.exec(title);
   const colon = title.indexOf(": ");
 
-  // A colon before any quote means the subject is everything after it, quotes
-  // and all: `Task completed: Fix the "login" flow` must not surrender "login"
-  // to the quote rule. A colon inside a quoted run (`New comment on "Parser:
-  // rewrite it"`) sorts after the quote and falls through to the quote rule.
   if (colon > 0 && (!quoted || colon < quoted.index)) {
     const event = title.slice(0, colon).trim();
     const subject = unwrapQuotes(title.slice(colon + 2).trim());

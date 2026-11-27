@@ -165,8 +165,6 @@ function FloatingTocItems({
   minLevel: number;
   onItemClick: (id: string) => void;
 }) {
-  // Mounts with the nav shell (headings >= 2). Later content edits keep this
-  // mounted, so `useFirstPaintGate` blocks restagger after the first scan.
   const firstPaint = useFirstPaintGate();
 
   return (

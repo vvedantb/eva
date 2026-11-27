@@ -68,7 +68,6 @@ import { ChatUiPanelTabs } from "./cards/ChatUiPanelTabs";
 import { AgentMedia } from "./media/AgentMedia";
 import { StepDetail } from "./StepDetail";
 
-/** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
 const STEP_ICONS: Record<Exclude<ActivityLogStep["type"], "status">, ComponentType<IconProps>> = {
   read: IconFileSearch,
   edit: IconPencil,
@@ -91,7 +90,6 @@ const STEP_ICONS: Record<Exclude<ActivityLogStep["type"], "status">, ComponentTy
   steer: IconSteeringWheel,
 };
 
-/** Shell steps take the glyph of what they ran (web `iconForStep`): a search, git, or the terminal. */
 const COMMAND_ICONS = { inspect: IconSearch, git: IconGitBranch, terminal: IconTerminal2 } as const;
 
 function StepIcon({ step }: { step: ActivityLogStep }) {
@@ -121,10 +119,8 @@ function MutedText({ size, children }: { size: "text-xs" | "text-sm"; children: 
   );
 }
 
-/** Where a row's step sits in the parsed log, to load its trimmed detail (`StepDetail`). */
 type RowProps = { row: ActivityRow; steps: ActivityLogStep[]; messageId: string };
 
-/** The web `TodoChecklist`: a status glyph per item, done items struck through, waiting ones faded. */
 function TodoChecklist({ step }: { step: ActivityLogStep }) {
   const scheme = useScheme();
   const muted = textColor(scheme, "muted");
@@ -149,7 +145,6 @@ function TodoChecklist({ step }: { step: ActivityLogStep }) {
               <IconCircle size={14} color={EVA_THEME[scheme].mutedForeground} />
             )}
           </View>
-          {/* Web `leading-snug` (1.375). */}
           <Text
             className={todo.status === "in_progress" ? "flex-1 font-instrument-sans-medium text-sm" : "flex-1 font-instrument-sans text-sm"}
             style={[
@@ -166,7 +161,6 @@ function TodoChecklist({ step }: { step: ActivityLogStep }) {
   );
 }
 
-/** A to-do snapshot as one line with done/total, folding open to the checklist (web `ActivityTodosLine`). */
 function TodosRow({ step }: { step: ActivityLogStep }) {
   const active = step.status === "active";
   const todos = step.todos ?? [];
@@ -187,7 +181,6 @@ function TodosRow({ step }: { step: ActivityLogStep }) {
   );
 }
 
-/** A subagent's own thinking, behind "Thought  12s" (web `ActivityReasoningLine`). */
 function ReasoningRow({ step }: { step: ActivityLogStep }) {
   const active = step.status === "active";
   const seconds = activityStepSeconds(step);
@@ -210,12 +203,6 @@ function ReasoningRow({ step }: { step: ActivityLogStep }) {
   );
 }
 
-/**
- * One step as the web `ActivityStepRow`: a short verb, a file chip or the
- * command, and the time it took ("Created toCsv.ts  ›", "Ran pnpm test  4s").
- * A step with a command, output or edits opens to them; a subagent opens to
- * the steps it ran ("3 steps"), up to 8 and "+N more".
- */
 function StepRow({ row, steps, messageId }: RowProps) {
   const { step } = row;
   if (step.type === "todos") return <TodosRow step={step} />;
@@ -231,7 +218,6 @@ function StepRow({ row, steps, messageId }: RowProps) {
   const head = (
     <>
       <StepIcon step={step} />
-      {/* A long command cuts off; the verb before a chip keeps its width. */}
       <AgentTraceTitle shimmer={active} className={chip ? "shrink-0" : undefined}>
         {presentation.text}
       </AgentTraceTitle>
@@ -249,7 +235,6 @@ function StepRow({ row, steps, messageId }: RowProps) {
   }
   const index = steps.indexOf(step);
   return (
-    // Subagent rows start open so the steps they ran stay in view, as the web.
     <AgentTraceCollapsible defaultOpen={children.shown.length > 0}>
       <AgentTraceCollapsibleTrigger
         trailing={
@@ -266,7 +251,6 @@ function StepRow({ row, steps, messageId }: RowProps) {
           {chip ? null : descriptionText}
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      {/* The 28 high rows bring their own 4 above and below, so 4 more keeps the detail 8 clear of them. */}
       <AgentTraceCollapsibleContent className="gap-1">
         {hasDetail ? <StepDetail step={step} index={index} messageId={messageId} /> : null}
         {children.shown.map((child, childIndex) => (
@@ -278,12 +262,6 @@ function StepRow({ row, steps, messageId }: RowProps) {
   );
 }
 
-/**
- * A run of tool steps behind one summary line ("Searched the code, read
- * files"), as the web `ActivityActionGroup`: the first step's icon, open while
- * a step in it runs, the steps behind a rail when open. The summary stays
- * muted when a step in it failed; the failed row is red once open.
- */
 function StepRun({ rows, steps, messageId }: { rows: ActivityRow[]; steps: ActivityLogStep[]; messageId: string }) {
   const active = rows.some(({ step }) => step.status === "active");
   const first = rows[0]?.step;
@@ -295,7 +273,6 @@ function StepRun({ rows, steps, messageId }: { rows: ActivityRow[]; steps: Activ
           <AgentTraceTitle shimmer={active}>{deriveActionGroupSummary(rows.map(({ step }) => step))}</AgentTraceTitle>
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      {/* The rows stack at the trace's 28 pitch, each line its own whole target. */}
       <AgentTraceCollapsibleContent>
         {rows.map((row, index) => (
           <StepRow key={activityRowKey(row, index)} row={row} steps={steps} messageId={messageId} />
@@ -309,7 +286,6 @@ function Segment({ segment, steps, messageId }: { segment: ActivitySegment; step
   if (segment.kind === "actions") return <StepRun rows={segment.rows} steps={steps} messageId={messageId} />;
   if (segment.kind === "row") return <StepRow row={segment.row} steps={steps} messageId={messageId} />;
   const text = segment.step.detail?.trim();
-  // Web `ActivityReasoningBlock`: the reasoning as the reply's markdown, `my-1`.
   return text ? (
     <View className="my-1">
       <Markdown onCopyCode={copyText} onCopyTable={copyText}>
@@ -319,11 +295,6 @@ function Segment({ segment, steps, messageId }: { segment: ActivitySegment; step
   ) : null;
 }
 
-/**
- * The timeline blocks with the web cap: past 8, a settled turn shows the
- * first 8 and "Show N more" after them; a live one the newest 8, with the
- * toggle above.
- */
 function SegmentList({ segments, steps, messageId, live }: { segments: ActivitySegment[]; steps: ActivityLogStep[]; messageId: string; live: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const overflow = segments.length - ACTIVITY_MAX_VISIBLE_BLOCKS;
@@ -333,7 +304,6 @@ function SegmentList({ segments, steps, messageId, live }: { segments: ActivityS
         ? segments.slice(overflow)
         : segments.slice(0, ACTIVITY_MAX_VISIBLE_BLOCKS)
       : segments;
-  // Keys follow the full list, so a block keeps its fold state when the cap moves.
   const offset = overflow > 0 && !expanded && live ? overflow : 0;
   const toggle: ReactNode =
     overflow > 0 ? (
@@ -357,11 +327,6 @@ function SegmentList({ segments, steps, messageId, live }: { segments: ActivityS
   );
 }
 
-/**
- * The web `ActivityStreamingHeader`: before the turn has a step to show (the
- * folded layout hides thinking and reply text), the spinner and the live
- * step's label, or "Working..." until the first activity arrives.
- */
 function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
   const work = steps.filter((step) => step.type !== "response");
   const current = work.find((step) => step.status === "active") ?? work[0];
@@ -399,30 +364,20 @@ export function AssistantMessage({
   failure,
   stopped = false,
 }: {
-  /** For loading a trimmed step's full detail. */
   messageId: string;
   content: string;
   activityLog?: string;
-  /** How long the turn ran ("2m", the web `formatDuration`), once it finished. Folds the trace behind "Worked for …". */
   duration?: string;
-  /** The coordinator chat: the reply only, no "Worked for" steps (the web bubble). */
   hideTrace?: boolean;
-  /** The agent's captures on this reply (`message.media`). */
   media?: ResolvedMediaEntry[];
-  /** The turn's cards, when they take the prose's slot behind tabs (the web `panelTabs`). */
   tabPanels?: ReactNode;
-  /** The turn is still running (`LiveAssistantMessage`): until it has a step to show, the live status stands in. */
   live?: boolean;
-  /** A failed turn (`turnErrorTitle`): the notice takes the prose's place, with Retry when there is a prompt to re-send. */
   failure?: { title: string; onRetry?: () => void };
-  /** The turn was stopped: a "Stopped" line under it, so a stop with no text does not read as an empty reply. */
   stopped?: boolean;
 }) {
   const steps = parseActivityLog(activityLog);
   const segments = foldedActivitySegments(steps);
-  // The web skips a reply still streaming its first text (`getAssistantTurnState`).
   const settled = content !== "" || duration !== undefined;
-  // What the agent asked and what was picked, kept in the reply once answered (the web `AssistantQuestionCards`).
   const questionSteps = settled ? collectQuestionSteps(steps) : [];
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
   const prose = (
@@ -461,7 +416,6 @@ export function AssistantMessage({
   );
 }
 
-/** The web marker under a stopped turn: a small stop icon and "Stopped", muted. */
 function StoppedLine() {
   const muted = EVA_THEME[useScheme()].mutedForeground;
   return (
@@ -490,12 +444,6 @@ export function LiveAssistantMessage({ streamingEntityId, messageId }: { streami
   );
 }
 
-/**
- * The web `TurnErrorNotice`: a turn that failed, as a failure rather than a
- * reply. A destructive 10% panel with the warning icon, the title ("This turn
- * failed", "Claude usage limit reached"), the provider's own text under it,
- * and Retry when the prompt can be re-sent.
- */
 function TurnErrorNotice({ title, detail, onRetry }: { title: string; detail: string; onRetry?: () => void }) {
   const theme = EVA_THEME[useScheme()];
   return (

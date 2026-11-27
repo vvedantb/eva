@@ -1,12 +1,3 @@
-/**
- * The questions Jev is asked about a turn's diff, and the pure reduction from
- * its answers to the verdict stored on the assistant message.
- *
- * Runtime-free (the validator it derives its return type from is a type-only
- * import) so the thresholds, caps and sort order are testable without a
- * deployment.
- */
-
 import type { z } from "zod";
 import type { booleanQuestion } from "../_jev/schema";
 import type { scopeCheckValidator } from "../_validators/shapes";
@@ -85,15 +76,10 @@ type ScopeCheck = Infer<typeof scopeCheckValidator>;
 export interface JudgedHunk {
   file: string;
   header: string;
-  /** P(the prompt asked for this change). */
   requested: number;
-  /** P(the change is required to make a requested change work). */
   necessary: number;
-  /** What a user sees change, when Jev returned a kind it recognises. */
   kind?: ChangeKind;
-  /** Plain-English headline, e.g. `Icon changed (IconAward → IconTrophy)`. */
   summary?: string;
-  /** Plain-English screen name, e.g. `Awarded panel`. */
   surface?: string;
 }
 
@@ -137,7 +123,6 @@ export function clipPrompt(prompt: string): string {
 export function buildOverallDiff(hunks: readonly DiffHunk[]): {
   text: string;
   clipped: boolean;
-  /** Past {@link STANDARD_DIFF_CHARS}: the headline call must ask for long context. */
   longContext: boolean;
 } {
   const lines: string[] = [];
@@ -169,11 +154,8 @@ export function summariseScopeCheck(args: {
   totalHunks: number;
   diffTruncated: boolean;
   evaluatedAt: number;
-  /** P(the reply mentioned it) per {@link hunkKey}; absent when that call failed. */
   mentioned?: ReadonlyMap<string, number>;
-  /** P(the change shows in a screenshot) per {@link hunkKey}. */
   visible?: ReadonlyMap<string, number>;
-  /** The screenshot pass, when the turn posted screenshots Jev could read. */
   screenshots?: ScopeCheck["screenshots"];
 }): ScopeCheck {
   const mentioned = args.mentioned ?? new Map<string, number>();
@@ -188,8 +170,6 @@ export function summariseScopeCheck(args: {
     if (hunk.kind !== undefined) row.kind = hunk.kind;
     if (hunk.summary !== undefined) row.summary = hunk.summary;
     if (hunk.surface !== undefined) row.surface = hunk.surface;
-    // Left off rather than defaulted: "Jev could not tell us" and "the reply
-    // said nothing" would otherwise read identically on the chip.
     const mention = mentioned.get(hunkKey(hunk));
     if (mention !== undefined) row.mentioned = mention;
     const seen = visible.get(hunkKey(hunk));

@@ -34,7 +34,6 @@ export function ChatLogEntryCard({
 }: {
   entry: ChatLogEntry;
   history?: ChatLogEntry[];
-  /** A project's Log: the child task that wrote the entry. */
   source?: ReactNode;
 }) {
   const header = (

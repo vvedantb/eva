@@ -10,9 +10,6 @@ export interface ParsedFinding {
   suggestedFix?: string;
 }
 
-// Boundary schema for one finding in the LLM's FINDINGS_JSON block. Any item
-// that fails validation (missing fields, bad severity) becomes null via
-// `.catch(null)` and is skipped, preserving the original per-item behaviour.
 const findingItemSchema = z.object({
   title: z.string(),
   description: z.string(),
@@ -40,8 +37,6 @@ export function parseFindingsFromResult(
     );
     if (!parsed.success) return null;
 
-    // Map before filtering so the `finding-${i}` id keeps the original array
-    // index even when earlier items were skipped.
     const findings: ParsedFinding[] = parsed.data
       .map((item, i): ParsedFinding | null => {
         if (!item) return null;

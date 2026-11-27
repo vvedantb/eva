@@ -4,9 +4,7 @@ import type { ReactNode } from "react";
 import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 
-interface SandboxPaneBoundaryProps {
-  /** Pane name shown in the fallback, e.g. "Review". */
-  label: string;
+interface SandboxPaneBoundaryProps {  label: string;
   children: ReactNode;
 }
 

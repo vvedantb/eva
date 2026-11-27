@@ -48,17 +48,13 @@ export const taskExecutionWorkflowArgs = {
   taskId: v.id("agentTasks"),
   repoId: v.id("githubRepos"),
   installationId: v.number(),
-  /** The task's project, for its prompt context; the run itself is a task's. */
   projectId: v.optional(v.id("projects")),
-  /** The task's own session: the run claims and attaches its sandbox there. */
   ownedSessionId: v.id("sessions"),
-  /** Unused: every run works on `eva/task-<id>`. Kept for in-flight workflows. */
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   isFirstTaskOnBranch: v.boolean(),
   model: v.optional(aiModelValidator),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /** Who unlocks the run's personal account: the task creator, or the project owner for the project's account (`startTaskRun`). */
   credentialOwnerUserId: v.optional(v.id("users")),
   userId: v.id("users"),
   mode: v.optional(runModeValidator),
@@ -68,7 +64,6 @@ export const taskExecutionWorkflowArgs = {
 export const taskExecutionWorkflow = workflow.define({
   args: {
     ...taskExecutionWorkflowArgs,
-    /** The run's durable turn, opened by `startTaskRunWorkflow`. */
     turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
@@ -80,9 +75,6 @@ export const taskExecutionWorkflow = workflow.define({
     let keepTaskSandboxActiveAfterRun = false;
     let sessionClaim: TaskRunSessionClaim | null = null;
 
-    // Outside the try: a run that is no longer queued (cancelled first) has
-    // nothing to finalize, and its cancel path already released the task slot
-    // and turn. Running the tail would clear a newer run's workflow id.
     const startResult = await step.runMutation(
       internal.taskWorkflow.updateRunToRunning,
       { runId: args.runId, taskId: args.taskId, repoId: args.repoId },
@@ -99,19 +91,11 @@ export const taskExecutionWorkflow = workflow.define({
         mode: args.mode,
         ownedSessionId: args.ownedSessionId,
       });
-      // A task's session lends its sandbox through the session
-      // lifecycle: claimed (`closed` → `starting`, or reused while `active`)
-      // before the VM is touched, so the row never reads `closed` over a
-      // running VM. A start or stop in flight refuses the claim: the run
-      // fails with the busy error and retries shortly (one busy rule with
-      // `startTaskRun`), so it never boots a VM no session row records.
       sessionClaim = await step.runMutation(
         internal.sessions.claimSandboxForTaskRun,
         { sessionId: args.ownedSessionId, runId: args.runId },
       );
       if (sessionClaim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
-      // A VM the reviewer had open stays up (`active`) after the run; idle
-      // pause stops it later.
       keepTaskSandboxActiveAfterRun = sessionClaim.wasActive;
       const reusableSandboxId = sessionClaim.sandboxId;
       try {
@@ -140,17 +124,12 @@ export const taskExecutionWorkflow = workflow.define({
         }
         throw prepareError;
       }
-      // `starting` → `active` with this VM: chat, preview and sweeps all
-      // read it there. Refused if a stop or newer start won meanwhile; the
-      // tail then stops this VM as the run's own.
       await step.runMutation(internal.sessions.attachTaskRunSandbox, {
         sessionId: args.ownedSessionId,
         sandboxId,
         attempt: sessionClaim.attempt,
       });
 
-      // A multi-repo task: clone (or catch up) its linked repos beside the
-      // home repo before the agent starts, as a multi-repo session's start does.
       if (data.hasLinkedRepos) {
         await prepareLinkedRepoSteps(step, {
           sessionId: args.ownedSessionId,
@@ -179,8 +158,6 @@ export const taskExecutionWorkflow = workflow.define({
         completionMutation: "taskWorkflow:handleCompletion",
         entityIdField: "taskId",
         model: args.model ?? DEFAULT_AI_MODEL,
-        // Traits come off the task doc for the same reason as attachments
-        // below: every entry point then honours the user's picks.
         reasoningLevel: data.traits.reasoningLevel,
         thinkingEnabled: data.traits.thinkingEnabled,
         use1mContext: data.traits.use1mContext,
@@ -192,9 +169,6 @@ export const taskExecutionWorkflow = workflow.define({
         requireTaskCommit: true,
         providerAccountId: args.providerAccountId,
         credentialOwnerUserId: args.credentialOwnerUserId,
-        // Read off the task doc rather than the workflow args so every entry
-        // point (quick run, queued, scheduled, project build, auto-run from
-        // findings) delivers the user's attachments without extra plumbing.
         attachmentStorageIds: data.attachmentStorageIds,
         turnId: turnLease.turnId,
         turnLeaseGeneration: turnLease.leaseGeneration,
@@ -259,11 +233,6 @@ export const taskExecutionWorkflow = workflow.define({
         }
       }
 
-      // PR create/refresh only when this run actually pushed commits: a run
-      // that published nothing has no diff to open or refresh a PR for, and
-      // attempting one against a branch origin may not even have burned
-      // compare retries into a spurious "PR creation failed" (404). Transient
-      // failures still recover via the next pushing run or the Create PR button.
       let completionPrError: string | null = null;
       if (finalSuccess && pushedCommits) {
         const createPrAsDraft = true;
@@ -283,12 +252,6 @@ export const taskExecutionWorkflow = workflow.define({
             );
           }
 
-          // Wrap PR creation/refresh in try/catch so a GitHub failure (closed PR
-          // already exists, base branch missing, transient API error after retries)
-          // does not bubble to the outer catch — which would silently flip the run
-          // back to success: true with a null prUrl and no error, hiding the
-          // failure from the user. Commits are already pushed; the manual
-          // "Create PR" button is the recovery path.
           console.log(
             `[task-workflow] run=${args.runId} entering PR step path=${args.isFirstTaskOnBranch ? "create" : "refresh"}`,
           );
@@ -308,18 +271,12 @@ export const taskExecutionWorkflow = workflow.define({
             draft: createPrAsDraft,
           };
           if (args.isFirstTaskOnBranch) {
-            // Quick tasks land in business_review on completion; the PR should
-            // mirror that by opening as draft. The user promotes it to ready
-            // when they move the task to code_review.
             completionPrUrl = await step.runAction(
               internal.taskWorkflowActions.createTaskPullRequest,
               createPrArgs,
               PR_STEP_RETRY,
             );
           } else {
-            // Subsequent runs: try to update the existing open PR body first.
-            // If the previous PR was merged/closed, fall back to creating a
-            // fresh PR so change-request runs still get a PR auto-created.
             try {
               completionPrUrl = await step.runAction(
                 internal.taskWorkflowActions.refreshTaskPullRequestBody,
@@ -357,9 +314,6 @@ export const taskExecutionWorkflow = workflow.define({
         }
       }
 
-      // A multi-repo task: push each linked repo with new commits and open its
-      // draft PR, after the home PR so each body links it. Not gated on the
-      // home push, so a failed home publish never strands linked commits.
       if (result.success && sandboxId && data.hasLinkedRepos) {
         await publishLinkedRepoSteps(step, {
           sessionId: args.ownedSessionId,
@@ -369,12 +323,6 @@ export const taskExecutionWorkflow = workflow.define({
         });
       }
 
-      // Surface a PR-step failure to the user even though the run is otherwise
-      // successful — the commits are already on GitHub, so we keep success: true
-      // (no auto-retry, no sandbox-preserve), but record the error in the
-      // dedicated prError field so the UI can show what went wrong instead of
-      // silently dropping it (the run-level `error` field is cleared on success
-      // runs by finalizeRunStatus).
       outcome = {
         success: finalSuccess,
         error: finalError,
@@ -391,9 +339,6 @@ export const taskExecutionWorkflow = workflow.define({
         ...outcome,
       });
       runFinalized = true;
-      // The task lands in business_review here, so its diff is not final yet:
-      // its PR description is written when the reviewer moves it to
-      // code_review (`agentTasks.updateStatus`).
     } catch (error) {
       outcome = outcome ?? {
         success: false,
@@ -405,8 +350,6 @@ export const taskExecutionWorkflow = workflow.define({
       };
     }
 
-    // One terminal tail for both paths: finalize the run if the try did not,
-    // retry a failed task, then stop its sandbox when that is safe.
     try {
       if (!runFinalized) {
         await step.runMutation(internal.taskWorkflow.completeRun, {
@@ -437,14 +380,7 @@ export const taskExecutionWorkflow = workflow.define({
         }
       }
 
-      // Stop (don't delete) task sandboxes that were not already open in
-      // the reviewer UI. If a change-request reused an active preview sandbox,
-      // keep it active so "View Sandbox" continues pointing at a live sandbox.
       if (sandboxId && !preserveSandboxOnFailure) {
-        // `active` → `stopping` → `closed` through the session stop path,
-        // unless the reviewer had it open when the run began (it stays
-        // `active` and idle pause stops it later). Mirrors
-        // `keepTaskSandboxActiveAfterRun` for the task sandbox.
         try {
           await step.runMutation(
             internal.sessions.finishTaskRunSandboxMutation,

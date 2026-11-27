@@ -143,8 +143,6 @@ export function DocInterviewDialog({
     const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "assistant" && lastMessage.content) {
       setIsLoading(false);
-      // Parsed via the helper rather than an inline try/catch: React Compiler
-      // bails on the whole file when a logical expression sits inside one.
       const parsed = parseJsonOrNull(lastMessage.content);
       if (parsed !== null) {
         if (parsed.description && parsed.requirements) {
@@ -164,7 +162,6 @@ export function DocInterviewDialog({
             "Couldn't generate the document",
             "doc-interview-generate",
           ).catch(() => {
-            // Let the user retry from the same ready message.
             generateRequestedForRef.current = null;
             setIsLoading(false);
           });
@@ -180,7 +177,6 @@ export function DocInterviewDialog({
 
   const askQuestion = async (currentAnswers: AnswerRecord[]) => {
     setIsLoading(true);
-    // A failed start used to leave the dialog on its loading state for good.
     await catchMutationError(
       startDocInterview({
         docId: doc._id,
@@ -198,7 +194,6 @@ export function DocInterviewDialog({
      one trigger's click handler. */
   useEffect(() => {
     if (!open) {
-      // Reopening an empty interview asks the first question again.
       hasTriggeredRef.current = false;
       return;
     }
@@ -220,7 +215,6 @@ export function DocInterviewDialog({
         const parsed: unknown = JSON.parse(lastAssistantMsg.content);
         if (isParsedQuestion(parsed)) currentQuestion = parsed.question;
       } catch {
-        // ignore
       }
     }
 

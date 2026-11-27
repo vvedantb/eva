@@ -21,7 +21,6 @@ export function extractReadOnlyDeliverable(resultText: string): string {
   return stripLeadingHorizontalRule(afterMarker).trim();
 }
 
-/** Removes a lone `---` line agents sometimes add right after the marker. */
 function stripLeadingHorizontalRule(text: string): string {
   if (!text.startsWith("---")) return text;
   const afterHr = text.slice(3);

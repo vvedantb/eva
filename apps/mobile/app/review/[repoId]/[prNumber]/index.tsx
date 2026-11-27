@@ -420,11 +420,6 @@ function ReviewHeader({
   );
 }
 
-/**
- * The web `PrRemedyButton`: the blocker's fix as a link in the blocker's own
- * colour at the line's end (a session on the head branch with the fix asked
- * for). It fills the 44 high line and pads its width to 44 or more.
- */
 function RemedyLink({ label, colour, starting, onPress }: { label: string; colour: string; starting: boolean; onPress: () => void }) {
   return (
     <Pressable

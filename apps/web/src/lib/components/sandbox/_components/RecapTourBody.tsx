@@ -17,9 +17,7 @@ interface RecapTourBodyProps {
     html?: string;
     prUrl?: string;
     prRecapStatus?: "pending" | "ready" | "error";
-  };
-  /** Repo the PR diff is read through: the surface's app repo. */
-  repoId: Id<"githubRepos">;
+  };  repoId: Id<"githubRepos">;
 }
 
 /**
@@ -30,9 +28,7 @@ interface RecapTourBodyProps {
  * The walkthrough scrolls in its own box, which this owns: its file diffs mount
  * only when near that box (see `DiffFileLazyBody`), so they need the element.
  */
-export function RecapTourBody({ doc, repoId }: RecapTourBodyProps) {
-  // State, not a ref: the diffs need it as their IntersectionObserver root.
-  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+export function RecapTourBody({ doc, repoId }: RecapTourBodyProps) {  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const prNumber =
     doc.prUrl !== undefined ? prNumberFromGithubUrl(doc.prUrl) : undefined;
   const steps = doc.recapWalkthrough ?? [];

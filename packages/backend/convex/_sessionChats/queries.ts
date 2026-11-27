@@ -54,7 +54,6 @@ export const resolveForSession = authQuery({
       args.number !== undefined
         ? await findChatByNumber(ctx.db, args.sessionId, args.number)
         : null;
-    // A closed chat has no tab and no composer, so its link opens Main.
     if (requested && requested.archived !== true) return requested;
     return await findMainChat(ctx.db, args.sessionId);
   },
@@ -89,7 +88,6 @@ function pickDeliveryChat(
   if (chat === undefined) {
     return live.find((candidate) => candidate.isMain) ?? live[0] ?? null;
   }
-  // A project task's own chat is named by its id (`orchestratorSendMessage`).
   const byId = live.find((candidate) => String(candidate._id) === chat);
   if (byId) return byId;
   const asNumber = Number(chat);

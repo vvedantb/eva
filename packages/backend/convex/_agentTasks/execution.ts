@@ -39,7 +39,6 @@ export async function startTaskExecution(
   if (!repo) {
     throw new Error("Repository not found");
   }
-  // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
   if (await hasActiveRun(ctx.db, taskId)) {
     throw new Error("Task already has an active execution");
   }
@@ -55,8 +54,6 @@ export async function startTaskExecution(
     isFirstTaskOnBranch: firstOnBranch,
     mode: options.mode,
     triggeredBy: ctx.userId,
-    // Explicit comment (quick-task "Make changes") wins; otherwise consume any
-    // comment parked on the task by an earlier change request.
     triggeringCommentId:
       options.triggeringCommentId ?? task.pendingChangeRequestCommentId,
     clearPendingChangeRequest: true,

@@ -14,13 +14,6 @@ import {
   startHandedTask,
 } from "./_projects/scheduler";
 
-// A project's child tasks run in parallel, each like a quick task, started by
-// the scheduler (`_projects/scheduler.ts`) once approved: the coordinator's
-// at creation, a person's once approved (at creation or from Triage). There
-// is no project build to start, schedule or cancel.
-
-// --- Scheduler ---
-
 /**
  * Starts the project's ready child tasks: approved `todo` tasks, not halted
  * and with no run pending, with no cap on how many run.
@@ -63,7 +56,6 @@ export const approveProjectTasks = authMutation({
  */
 export const retryFailedTaskAsCoordinator = internalMutation({
   args: {
-    /** The coordinator's project: the task must belong to it. */
     projectId: v.string(),
     taskId: v.string(),
     note: v.string(),

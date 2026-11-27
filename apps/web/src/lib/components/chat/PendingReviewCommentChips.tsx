@@ -57,9 +57,6 @@ export function PendingReviewCommentChips() {
                       </TooltipTrigger>
                       <button
                         type="button"
-                        // 20px painted, so it needs `hit-target` to reach the 40px
-                        // minimum — it is the smallest control in the chat composer and
-                        // the one most often missed.
                         className="hit-target inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-muted"
                         aria-label={`Remove comment on ${label}`}
                         onClick={() => review.remove(comment.id)}

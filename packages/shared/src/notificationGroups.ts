@@ -1,10 +1,5 @@
 import { formatDayLabel } from "./utils/dayLabel";
 
-/**
- * Inbox sectioning shared by the web and mobile inboxes. Pure: the caller
- * supplies the type label (its notification config) and the repo label.
- */
-
 /** How the inbox sections notifications (the web `inboxGroups`). */
 export type InboxGroup = "day" | "repo" | "type" | "urgency";
 
@@ -16,11 +11,6 @@ type Urgency = "high" | "normal" | "low";
 /** The fields grouping reads. */
 export type GroupableNotification = { createdAt: number; urgency?: Urgency };
 
-/**
- * Delivery loudness, as a sort key. An unrouted mention (urgency undefined, so
- * routing has not landed yet) and every notification created before urgency
- * existed sort as `normal` — the same place the backend treats them.
- */
 const URGENCY_RANK = { high: 0, normal: 1, low: 2 } as const;
 
 function urgencyOf(notification: GroupableNotification): Urgency {
@@ -43,7 +33,6 @@ export function urgencyLabel(notification: GroupableNotification): string {
   }
 }
 
-/** Sections in rank order, so "Needs reply" always leads the list. */
 const URGENCY_LABEL_ORDER: readonly string[] = ["Needs reply", "FYI", "Low priority"];
 
 export interface NotificationGroup<N> {
@@ -85,7 +74,6 @@ export function groupNotifications<N extends GroupableNotification>(
     }
     bucket.items.push(notification);
   }
-  // `Array.prototype.sort` is stable (ES2019); `toSorted` is missing in some Hermes release builds, so an equal-urgency pair keeps the newest-first order it arrived in.
   const ordered = groups.map((bucket) => ({
     label: bucket.label,
     items: [...bucket.items].sort((a, b) => URGENCY_RANK[urgencyOf(a)] - URGENCY_RANK[urgencyOf(b)]),

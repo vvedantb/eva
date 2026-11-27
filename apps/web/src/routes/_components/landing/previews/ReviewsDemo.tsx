@@ -13,14 +13,6 @@ import { BrandMark } from "../BrandMark";
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./ReviewsDemo.css";
 
-// Reviews: a pull request in Eva. Beats: the recap writes itself into the
-// pinned comment; the visitor opens a comment on the changed line and types
-// what is still wrong; Send to agent hands it over, and the same comment
-// shows Claude Code fixing it (the payoff).
-//
-// Real strings: the pull request title and branch, the recap, the diff, the
-// review comment and the agent's status. Older comments are bars.
-
 const RECAP =
   "Trims spaces before the postcode check, so a pasted postcode passes. One file, tests pass.";
 const RECAP_WORDS = RECAP.split(" ").length;
@@ -34,7 +26,6 @@ const DIFF_HEAD = [
 ];
 const DIFF_TAIL = ["}"];
 
-/** Filler: earlier comments, and the next file's lines. */
 const OLDER: readonly (readonly [number, number])[] = [
   [96, 150],
   [120, 132],

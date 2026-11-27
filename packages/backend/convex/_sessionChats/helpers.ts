@@ -212,18 +212,9 @@ function copyChatSettings(source: ChatSettingsSource): ChatSettingsSource {
   };
 }
 
-/**
- * Bytes and rows one `moveLegacyTranscriptPage` call may read. Heavy sessions
- * hold transcripts far over the 16 MiB per-function read limit, so the move
- * runs in bounded pages across mutations instead of one `collect()`.
- */
 const LEGACY_TRANSCRIPT_PAGE_BYTES = 2 * 1024 * 1024;
 const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
 
-/**
- * Reads the next bounded page of an index range. `full` means the page hit
- * the budget, so more rows may remain.
- */
 async function takeBoundedPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
   maxBytes: number,
@@ -240,7 +231,6 @@ async function takeBoundedPage<T extends Doc<LegacyChatRowTable>>(
   return { page, bytes, full: false };
 }
 
-/** Moves one bounded page of legacy rows onto the chat with `move`. */
 async function repointPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
   maxBytes: number,
@@ -251,7 +241,6 @@ async function repointPage<T extends Doc<LegacyChatRowTable>>(
   return { bytes, full };
 }
 
-/** Tables whose rows hang off a chat parent and move with its transcript. */
 type LegacyChatRowTable =
   | "messages"
   | "queuedMessages"
@@ -278,7 +267,6 @@ export async function moveLegacyTranscriptPage(
     await ctx.db.patch(row._id, { parentId: chatId });
   };
   const chat = await ctx.db.get(chatId);
-  // Each table reads into what is left of the one byte budget.
   const tables = [
     (left: number) =>
       repointPage(
@@ -337,8 +325,6 @@ export async function moveLegacyTranscriptPage(
   }
 
   const sessionId = from;
-  // `drafts` is indexed by user first; other users' pre-chat drafts are moved
-  // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
   if (!chat) return true;
   const drafts = await ctx.db
     .query("drafts")
@@ -429,8 +415,6 @@ export async function createSessionChat(
 ): Promise<Doc<"sessionChats">> {
   const { session } = params;
   const chats = await listSessionChats(ctx.db, session._id);
-  // `number` stays unique for `?chat=N` links; the default title reuses the
-  // lowest label no open tab holds, so open/close/open reads "Chat 2" again.
   const number = chats.reduce((max, chat) => Math.max(max, chat.number), 0) + 1;
   const source: ChatSettingsSource = params.inheritFrom ?? session;
   const openTitles = new Set(

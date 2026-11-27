@@ -15,18 +15,6 @@ import { BrandMark, type BrandName } from "../BrandMark";
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./ProjectsDemo.css";
 
-// A project's build pipeline. Beats: the visitor starts the build; two queued
-// tasks start running (the third waits for a free agent); the reviewed task
-// merges; the first to finish opens its pull request and the queued one
-// starts; the last moves to review; the first merges too (the payoff: three of
-// five merged, the meter filled to match). After the click it runs on its own.
-//
-// Wide is the board, cards travelling column to column. Compact is the list
-// view of the same project: rows stay put and their status changes in place.
-//
-// Real strings: the five task titles, their statuses, the column names, the
-// progress and the button.
-
 type Col = 0 | 1 | 2 | 3;
 type Id = "address" | "basket" | "postcode" | "tax" | "cards";
 
@@ -48,7 +36,6 @@ const COLUMNS = ["Todo", "Running", "In review", "Merged"] as const;
 const COLS: readonly Col[] = [0, 1, 2, 3];
 const TOTAL = IDS.length;
 
-/** Where a task sits: its column, and when it arrived there (cards stack in arrival order). */
 type Place = { col: Col; seq: number };
 type S = { build: boolean; at: Record<Id, Place> };
 
@@ -74,7 +61,6 @@ const poster: S = {
   },
 };
 
-// Card pitch on the board; the CSS sizes columns (140 + 8) and cards (60) to match.
 const COL_STEP = 148;
 const ROW_STEP = 68;
 
@@ -118,13 +104,11 @@ async function story(a: Act<S>) {
   await a.wait(2600);
 }
 
-/** Where the pointer waits: on empty ground, clear of the board's words. */
 const REST = {
   wide: { x: 520, y: 82 },
   compact: { x: 250, y: 410 },
 } as const;
 
-/** Each task's slot in its column: its rank among the tasks that arrived there before it. */
 function slotOf(at: Record<Id, Place>, id: Id) {
   const mine = at[id];
   return IDS.filter(
@@ -205,7 +189,6 @@ export function ProjectsDemo({ onEnd }: LandingDemoProps) {
                         <div
                           key={id}
                           className="pj-card"
-                          // The latest arrival travels over the cards it passes.
                           style={{
                             transform: `translate(${x}px, ${y}px)`,
                             zIndex: place.seq,
@@ -240,7 +223,6 @@ export function ProjectsDemo({ onEnd }: LandingDemoProps) {
   );
 }
 
-/** A task's status, crossfaded in one slot as it moves along the pipeline. */
 function Status({ task, col }: { task: Task; col: Col }) {
   return (
     <States

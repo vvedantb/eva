@@ -3,9 +3,6 @@ import {
   SANDBOX_JWT_JWKS_DATA_URI,
 } from "./sandboxAuthConfig";
 
-// Both providers are omitted rather than half-configured when their env vars
-// are missing: the CLI rejects a provider with an undefined domain or jwks,
-// which would fail the push on a backend that has not been seeded yet.
 const clerkDomain = process.env.CLERK_JWT_ISSUER_DOMAIN;
 if (!clerkDomain) {
   console.error(

@@ -1,7 +1,3 @@
-/**
- * Writing the scope verdict back, and the one place a turn asks for one.
- */
-
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
@@ -34,7 +30,6 @@ export async function scheduleScopeCheck(
 ): Promise<void> {
   const { beforeSha, afterSha } = message;
   if (beforeSha === undefined || afterSha === undefined) return;
-  // Equal shas mean the turn changed no code.
   if (beforeSha === afterSha) return;
   await ctx.scheduler.runAfter(0, internal.scopeCheck.evaluateTurn, {
     messageId: message._id,

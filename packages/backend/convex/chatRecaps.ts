@@ -26,31 +26,13 @@ import { listProjectTasks } from "./_projects/scheduler";
 import { findWorkSession } from "./_sessions/owner";
 import { findMainChat } from "./_sessionChats/helpers";
 
-/**
- * A short recap of a chat, written for one user. Two kinds:
- * - "away" ("Since you've been gone"): when they come back after
- *   `RECAP_AWAY_MS` and a turn finished while they were away.
- *   `chatReads.markRead` starts it (it alone knows the read time before it
- *   moves).
- * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`), or
- *   on a reopen after `RECAP_REVISIT_MS` with nothing new.
- * `textGen.generateChatRecap` writes the text. A
- * project's coordinator (its Main chat) covers every chat in the project's
- * session plus each child task's Main chat in the task's own session, and
- * names the task chats as chips. One row per (user, chat); a new absence replaces
- * it, Dismiss deletes it.
- */
-
 /** Away at least this long before a recap is worth a model call. */
 export const RECAP_AWAY_MS = 30 * 60 * 1000;
 /** Away this long with nothing new, a reopen recaps the whole chat. */
 export const RECAP_REVISIT_MS = 4 * 60 * 60 * 1000;
 
-/** Newest rows read per chat; a recap is about the latest work, not all of it. */
 const MESSAGES_PER_CHAT = 60;
-/** Characters kept from one message. */
 const MESSAGE_CLIP = 1_200;
-/** Total characters of transcript sent to the model, newest kept first. */
 const DIGEST_BUDGET = 16_000;
 
 const recapRowValidator = v.object({
@@ -74,7 +56,6 @@ function getRecapRow(
     .unique();
 }
 
-/** A recap younger than this survives an open: a quick double open keeps it. */
 const RECAP_KEEP_ON_REOPEN_MS = 60_000;
 
 /**
@@ -109,7 +90,6 @@ export async function maybeStartRecap(
     userId: Id<"users">;
     parentId: ChatParentId;
     lastReadAt: number;
-    /** The later of the read time and the last visit. */
     lastSeenAt: number;
     lastTurnFinishedAt: number | undefined;
     now: number;
@@ -128,7 +108,6 @@ export async function maybeStartRecap(
   });
 }
 
-/** Replaces the user's recap for this chat with a new one and writes it. */
 async function startRecap(
   ctx: MutationCtx,
   input: {
@@ -203,18 +182,11 @@ export const dismiss = authMutation({
   },
 });
 
-/** One chat the recap reads, with how the model should name it. */
 interface RecapChat {
   parentId: ChatParentId;
-  /** Plain label, or an `@[Title](taskId)` token the model may copy. */
   label: string;
 }
 
-/**
- * The chats a recap covers. A project's coordinator (its Main chat) reads
- * the project session's chats and each child task's Main chat: every task
- * owns its own session (`workSessionOwner`).
- */
 async function recapChats(
   ctx: QueryCtx,
   parentId: ChatParentId,

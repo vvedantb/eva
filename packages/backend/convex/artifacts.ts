@@ -29,10 +29,6 @@ import {
 } from "./_chatSource/helpers";
 import { errorMessage } from "@vvedantb/server";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Return validators (composed from the single-source-of-truth artifactFields)
-// ─────────────────────────────────────────────────────────────────────────────
-
 const artifactDoc = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
@@ -40,7 +36,6 @@ const artifactDoc = v.object({
   source: chatSourceSummaryValidator,
 });
 
-// get() resolves the stored HTML to a (time-limited, signed) storage URL.
 const artifactWithUrl = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
@@ -60,15 +55,6 @@ async function withSource(
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MCP CallToolResult envelope
-//
-// Same output as `toolJsonResult`/`toolErrorResult` from @vvedantb/server, but
-// typed text-only: `callTool`'s `returns` validator allows only text blocks, and
-// the package's `ToolResult` also allows image and audio. Hosted artifacts parse
-// `content[].text`.
-// ─────────────────────────────────────────────────────────────────────────────
-
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
@@ -86,10 +72,6 @@ function textResult(
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CRUD
-// ─────────────────────────────────────────────────────────────────────────────
-
 /** Temporary upload URL for the artifact HTML (client POSTs the file, then calls create). */
 export const generateUploadUrl = authMutation({
   args: {},
@@ -97,12 +79,6 @@ export const generateUploadUrl = authMutation({
   handler: async (ctx) => ctx.storage.generateUploadUrl(),
 });
 
-// Tools a hosted artifact is allowed to invoke through the bridge. Read-only
-// only: no task creation or other write tools. This list — not the artifact's
-// declared `mcpTools` — is the runtime gate. Supabase tools are allowed by
-// prefix: eva only ever registers the read-only Supabase subset (its remote is
-// pinned to ?read_only=true and filtered by READ_ONLY_SUPABASE_TOOLS in
-// mcp/supabase.ts), so no write Supabase tool can reach the bridge.
 const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "postgres_query",
   "query_table",
@@ -144,8 +120,6 @@ export const create = authMutation({
 
 /** Fetches one artifact plus a signed URL for its HTML; null if missing or no team access. */
 export const get = authQuery({
-  // Accept a raw string (the route param) and normalise it, so callers never
-  // need an `as Id<...>` cast at the route boundary.
   args: { id: v.string() },
   returns: v.union(artifactWithUrl, v.null()),
   handler: async (ctx, args) => {
@@ -311,31 +285,11 @@ export const remove = authMutation({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// The bridge: window.cowork.callMcpTool → here
-//
-// A hosted artifact (running in a sandboxed iframe) posts its callMcpTool
-// requests to the parent, which forwards them here. We re-dispatch eva's
-// existing read-only MCP tools as the SIGNED-IN user — no OAuth, no MCP wire
-// protocol — and return the identical envelope so the artifact runs unmodified.
-//
-// Every allowed tool except list_repos is forwarded to eva's MCP server as the
-// caller (no scopedRepoId), so access, args and error text match mcp/tools.ts.
-// Team binding only scopes where the artifact is listed; a call may target any
-// repo the caller can reach.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Claude names MCP tools `mcp__<serverId>__<bareName>`. Strip through the last
-// "__" (serverIds can themselves contain "__", so lastIndexOf is correct).
 function bareToolName(toolName: string): string {
   const idx = toolName.lastIndexOf("__");
   return idx === -1 ? toolName : toolName.slice(idx + 2);
 }
 
-// Forwards a read-only tool (Convex data, Postgres, Supabase) to eva's MCP
-// server via a single stateless tools/call, the same path the hosted /mcp
-// endpoint uses. This keeps the bridge in sync with the server's tool registry
-// without re-implementing each tool here.
 async function callViaMcpServer(
   ctx: ActionCtx,
   userId: Id<"users">,
@@ -377,7 +331,6 @@ function textItem(text: string): { type: "text"; text: string } {
   return { type: "text", text };
 }
 
-/** Normalises a JSON-RPC tools/call response into the strict text envelope. */
 function parseMcpResponse(body: string): ToolResult {
   let rpc: z.infer<typeof mcpRpcResponse>;
   try {
@@ -414,8 +367,6 @@ export const callTool = authAction({
     try {
       switch (name) {
         case "list_repos": {
-          // Kept direct: artifacts parse this bare-array shape, while the MCP
-          // tool returns `{ repos, groups }` plus repo instructions.
           const repos: Array<{
             id: string;
             owner: string;

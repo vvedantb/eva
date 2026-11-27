@@ -1,15 +1,11 @@
 import type { Doc } from "@eva/backend";
 
-// A project's status is derived, never stored: it is read from its child
-// tasks and their PRs. Web, phone and the backend scheduler share these rules.
-
 type TaskStatus = Doc<"agentTasks">["status"];
 type PrState = NonNullable<Doc<"agentTasks">["prState"]>;
 
 /** What the stage rule reads of a task. */
 export interface TaskStageFacts {
   status: TaskStatus;
-  /** The task's PR summary state; undefined when it has no PR. */
   prState?: PrState;
 }
 
@@ -17,37 +13,12 @@ export interface TaskStageFacts {
 export interface ProjectTaskFacts extends TaskStageFacts {
   id: string;
   taskNumber?: number;
-  /**
-   * The task may run (`agentTasks.approvedAt`): the coordinator's tasks are
-   * approved at creation; feedback waits for a person.
-   */
   approved: boolean;
-  /**
-   * A person's Triage approval handed the task to the coordinator
-   * (`agentTasks.handedToCoordinatorAt`) and it has not started: only the
-   * coordinator starts it (or adds it to an open task), never the scheduler.
-   */
   withCoordinator?: boolean;
-  /**
-   * The latest run ended and nothing restarts it by itself: it failed, or a
-   * person cancelled it. A usage-limit stop is `usageLimited` instead.
-   */
   halted?: "failed" | "cancelled";
-  /** The latest run hit the usage limit on the account the project still uses. */
   usageLimited: boolean;
-  /** A run is queued, running, scheduled or waiting to retry. */
   runPending: boolean;
-  /**
-   * Restarts the coordinator spent on this task (`agentTasks.coordinatorRetries`).
-   * Absent reads as 0.
-   */
   coordinatorRetries?: number;
-  /**
-   * The task's open ask (`report_to_coordinator` with `kind: "ask"`), by who
-   * must answer it now: the coordinator, or a person once the coordinator had
-   * its turn without answering (or its wake-ups are paused). Absent when no
-   * ask is open.
-   */
   openAsk?: "coordinator" | "person";
 }
 
@@ -123,9 +94,6 @@ export function projectTaskNeedsYou(
   if (task.status === "todo" || task.status === "draft") {
     return task.approved ? undefined : "approve";
   }
-  // Review needs the task's own open PR. A task from before the coordinator
-  // can sit in review with no PR (its work went into the project's PR):
-  // there is nothing for a person to review there.
   return projectTaskStage(task) === "in_review" && task.prState === "open"
     ? "review"
     : undefined;
@@ -181,7 +149,6 @@ export function projectTaskDisplayStatus(
 
 export interface ProjectStatus {
   stage: ProjectStage;
-  /** The project's tasks by display status (`projectTaskDisplayStatus`). */
   counts: Record<ProjectTaskDisplayStatus, number>;
   needsYou: Array<{ id: string; reason: NeedsYouReason }>;
 }

@@ -6,8 +6,6 @@ type RepoBaseBranchSource = Pick<
   "defaultBaseBranch"
 > | null;
 
-// Returns the first candidate that is non-empty after trimming, else the
-// configured fallback. Callers pass candidates in priority order.
 function firstBranchOrFallback(
   ...candidates: Array<string | undefined>
 ): string {

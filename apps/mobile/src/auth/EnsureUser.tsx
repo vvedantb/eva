@@ -12,9 +12,7 @@ export const ENSURE_USER_TIMEOUT_MS = 20_000;
 
 type State = { kind: "pending" } | { kind: "ready" } | { kind: "error"; code: string; message: string };
 
-/** One call per app run: every signed-in layout shares it. */
 let ensured: Promise<void> | null = null;
-/** Set once `useConvexAuth().isAuthenticated` is true. Read by the failure log. */
 let convexAuthSeen = false;
 
 function timeoutAfter(ms: number): { promise: Promise<never>; clear: () => void } {
@@ -85,7 +83,6 @@ export function EnsureUser({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
-        {/* The account's appearance mode needs the user row, so it waits for it here. */}
         <AccountThemeSync />
       </>
     );

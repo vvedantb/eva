@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "@eva/shared/appTabSlug";
 
 test("RESERVED_APP_TAB_SLUGS keeps computer, legacy desktop, pr, and legacy diffs reserved", () => {
-  // Computer tab URL is /computer; desktop stays reserved so custom tabs can't collide.
   expect(RESERVED_APP_TAB_SLUGS.has("computer")).toBe(true);
   expect(RESERVED_APP_TAB_SLUGS.has("desktop")).toBe(true);
   expect(RESERVED_APP_TAB_SLUGS.has("browser")).toBe(true);

@@ -14,8 +14,6 @@ import { formatBytes, type ViewerState } from "../_utils/-fileViewerState";
 import { SandboxFileCode } from "./SandboxFileCode";
 import { ViewerNotice } from "./ViewerNotice";
 
-// `@pierre/diffs/edit` is a whole text editor. Nobody who only reads files
-// should pay to download it, so it arrives when Edit is first pressed.
 const SandboxFileEditor = lazy(async () => {
   const module = await import("./SandboxFileEditor");
   return { default: module.SandboxFileEditor };
@@ -23,9 +21,7 @@ const SandboxFileEditor = lazy(async () => {
 
 interface FileViewerBodyProps {
   state: ViewerState;
-  /** Absolute sandbox path, used as the media alt text. */
   filePath: string;
-  /** Repo-relative path handed to the highlighter. */
   name: string;
   cacheKey: string;
   wrap: boolean;

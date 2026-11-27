@@ -54,30 +54,12 @@ import {
 export const agentTaskWithLastRunValidator = v.object({
   ...agentTaskValidator.fields,
   lastRunStartedAt: v.optional(v.number()),
-  /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
   isExecuting: v.boolean(),
-  /** The sandbox status of the session the task works on (`taskSandboxStatus`). */
   sandboxStatus: v.optional(sessionStatusValidator),
-  /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
   hasUnread: v.boolean(),
-  /** A chat turn is paused on a blocking question for the user. */
   isAwaitingAnswer: v.boolean(),
-  /**
-   * A project task in a repo the caller cannot access (`listByProject`): only
-   * its number, status and PR state are kept, so project status still counts
-   * it. The title is empty.
-   */
   locked: v.optional(v.boolean()),
-  /**
-   * `listByProject` only: the task as the shared status rules read it
-   * (`@eva/shared/projectStatus`), with the usage limit, open ask and
-   * coordinator retries the row alone does not carry.
-   */
   facts: v.optional(projectTaskFactsValidator),
-  /**
-   * `listByProject` only: a multi-repo task's PRs, one per repo
-   * (`taskRepoPullRequests`). Absent for a single-repo task.
-   */
   repoPrs: v.optional(
     v.array(
       v.object({
@@ -89,7 +71,6 @@ export const agentTaskWithLastRunValidator = v.object({
   ),
 });
 
-/** A locked `listByProject` row: what derived project status needs, nothing more. */
 function lockedTaskRow(
   task: Doc<"agentTasks">,
 ): Infer<typeof agentTaskWithLastRunValidator> {
@@ -121,7 +102,6 @@ function repoIdsOf(
   return repoIds;
 }
 
-/** Per-repo turn ids across every repo the tasks belong to, one query per repo. */
 async function turnIdsForRepos(
   db: QueryCtx["db"],
   tasks: ReadonlyArray<Doc<"agentTasks">>,
@@ -138,7 +118,6 @@ async function turnIdsForRepos(
 
 type RunSummary = Doc<"agentTaskRunSummaries">;
 
-/** Each task's run summary and unread flag, one point read per task. */
 async function pointReadLookups(
   db: QueryCtx["db"],
   userId: Id<"users">,
@@ -157,7 +136,6 @@ async function pointReadLookups(
   const summariesByTask = new Map<string, RunSummary>();
   tasks.forEach((task, i) => {
     const summary = summaries[i];
-    // The repo-wide path only sees summaries filed under the listed repos.
     if (summary && repoIds.has(summary.repoId)) {
       summariesByTask.set(String(task._id), summary);
     }
@@ -169,7 +147,6 @@ async function pointReadLookups(
   };
 }
 
-/** Run summaries and unread flags for every task, from one range per repo. */
 async function repoWideLookups(
   db: QueryCtx["db"],
   userId: Id<"users">,
@@ -206,7 +183,6 @@ async function repoWideLookups(
   };
 }
 
-/** Enriches each task with its most recent run start and its busy state. */
 async function enrichTasksWithLastRun(
   db: QueryCtx["db"],
   userId: Id<"users">,
@@ -231,7 +207,6 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
-      // The same session the task page reads (`liveTaskSandboxStatuses`).
       const row = { ...task, sandboxStatus: taskSandboxStatus(task) };
       if (summary) {
         return {
@@ -242,7 +217,6 @@ async function enrichTasksWithLastRun(
           isAwaitingAnswer,
         };
       }
-      // Migration-safe fallback for tasks whose summary row is not backfilled.
       const latestRun = await db
         .query("agentRuns")
         .withIndex("by_task", (q) => q.eq("taskId", task._id))
@@ -296,7 +270,6 @@ export const listByProject = authQuery({
       rows.filter((row) => row.canAccess).map((row) => row.task),
     );
     const enrichedById = new Map(enriched.map((row) => [String(row._id), row]));
-    // Only a multi-repo task reads its PRs per repo.
     const repoPrsByTask = new Map<string, TaskRepoPullRequest[]>(
       await Promise.all(
         rows
@@ -389,15 +362,10 @@ export const getByNumId = authQuery({
   },
 });
 
-/** Task statuses that count as active (not draft, done or cancelled). */
 const ACTIVE_TASK_STATUSES: ReadonlySet<Doc<"agentTasks">["status"]> = new Set(
   OPEN_TASK_STATUSES,
 );
 
-/**
- * Active tasks across every repo the user can reach, most recently updated
- * first. Scope rules: team repos plus connected repos, active statuses only.
- */
 async function activeTasksForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
@@ -438,7 +406,6 @@ export const countSandboxTasks = authQuery({
   returns: v.number(),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
-    // A quick task's sandbox lives on its session.
     const sessionStatuses = await liveOwnedSessionStatuses(ctx.db, [
       args.repoId,
     ], "task");
@@ -458,14 +425,6 @@ export const countSandboxTasks = authQuery({
   },
 });
 
-/**
- * Fields the orchestrator's `list_agents` needs from a task — and nothing else.
- *
- * Whole task documents carry `backgroundAgents` and `description` that
- * measured up to 35KB and 8KB on real data; the fleet list keeps
- * eight small fields and drops the rest, so a supervision round was moving
- * hundreds of KB per call for no benefit.
- */
 const orchestratorTaskValidator = v.object({
   _id: v.id("agentTasks"),
   _creationTime: v.number(),
@@ -475,7 +434,6 @@ const orchestratorTaskValidator = v.object({
   status: taskStatusValidator,
   updatedAt: v.number(),
   model: v.optional(aiModelValidator),
-  /** Main run or chat turn: one sandbox-busy status (`taskIsExecuting`). */
   isExecuting: v.boolean(),
 });
 
@@ -506,11 +464,6 @@ export const getActiveTasksSlim = authQuery({
   },
 });
 
-/**
- * A repo's non-draft quick tasks (outside a project), live or archived. A
- * project task lives only in its project (`listByProject`), even when it
- * targets this repo; it archives with its project.
- */
 async function listQuickTasksByArchive(
   ctx: QueryCtx,
   repoId: Id<"githubRepos">,
@@ -574,8 +527,6 @@ export const getStatusesByIds = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    // The Chrome extension polls ids it has seen; ids the caller cannot
-    // access are dropped exactly like deleted tasks.
     const statuses: TaskStatusRow[] = [];
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
@@ -588,11 +539,6 @@ export const getStatusesByIds = authQuery({
 });
 
 
-/**
- * Cap on duplicate candidates handed to findings triage. Jev takes at most 255
- * choice options, and a longer list costs tokens without helping — the most
- * recently touched open tasks are the ones a fresh finding can duplicate.
- */
 const OPEN_TASK_TITLE_LIMIT = 150;
 
 /**

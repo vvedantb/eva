@@ -46,9 +46,6 @@ export function SessionDetailClient({
 }) {
   const { basePath, repo } = useRepo();
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  // Hidden cached shells keep the last paint so switching back does not flash.
-  // Skipping the hot streams — and the session doc itself — is what stops a
-  // background turn from re-rendering a whole chat tree the user cannot see.
   const session = useHeldQuery(
     api.sessions.get,
     isRouteActive ? { id: sessionId } : "skip",
@@ -57,8 +54,6 @@ export function SessionDetailClient({
     api.sessionChats.listForSession,
     isRouteActive ? { sessionId } : "skip",
   );
-  // Held per session, not per chat number: a tab switch keeps the old chat
-  // painted until the new one resolves instead of unmounting the page.
   const activeChat = useHeldQuery(
     api.sessionChats.resolveForSession,
     isRouteActive
@@ -88,8 +83,6 @@ export function SessionDetailClient({
       ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
       : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
-  // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
@@ -98,9 +91,6 @@ export function SessionDetailClient({
   const createChat = useMutation(api.sessionChats.create);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
 
-  // A session created before chats existed has no Main chat row yet; opening
-  // it is what creates one (and moves its transcript onto it). Keyed on the
-  // boolean so it fires once per empty result, not on every chats update.
   const needsMainChat =
     isRouteActive && chats !== undefined && chats.length === 0;
   /* eslint-disable no-effect/no-event-handler --
@@ -160,7 +150,6 @@ export function SessionDetailClient({
   const simpleView = useSimpleView();
   const handleSandboxToggle = (action: "start" | "stop") =>
     lifecycle.run(action, async () => {
-      // The toast is the error report; nothing else to do on failure.
       await (
         action === "start"
           ? catchMutationError(
@@ -199,7 +188,6 @@ export function SessionDetailClient({
   const handleCreateChat = async () => {
     if (isCreatingChat) return;
     setIsCreatingChat(true);
-    // Built above the `try`: a conditional inside it trips the compiler lint.
     const createArgs = { sessionId, ...(chatId ? { fromChatId: chatId } : {}) };
     try {
       const created = await withMutationToast(
@@ -239,7 +227,6 @@ export function SessionDetailClient({
     );
   }
 
-  // Main is being created by the effect above (legacy session on first open).
   if (activeChat === null) {
     return <CenteredSpinner label="Opening chat" />;
   }
@@ -249,8 +236,6 @@ export function SessionDetailClient({
 
   const chatPanel = (
     <ChatPanel
-      // One mount per chat: composer draft, attachments and local state must
-      // not carry over to another tab.
       key={activeChat._id}
       sessionId={sessionId}
       session={session}
@@ -312,8 +297,6 @@ export function SessionDetailClient({
                 isRouteActive={isRouteActive}
                 repoId={session.repoId}
                 prUrl={session.prUrl}
-                // Prefer session (set after services start); fall back to app
-                // settings so preview doesn't default to 3000 before that lands.
                 devPort={session.devPort ?? repo.devPort}
                 devCommand={session.devCommand ?? repo.devCommand}
                 owner={owner}

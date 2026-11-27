@@ -18,7 +18,6 @@ const proposalValidator = v.object({
   ...sessionProposalFields,
 });
 
-/** The chat message a "Do it here" click posts back to the agent. */
 function doItHereReply(title: string): string {
   return `Do it here, in this chat: ${title}`;
 }
@@ -64,7 +63,6 @@ export const listByParent = authQuery({
   },
 });
 
-/** A proposal the caller may answer. Throws when it is gone or answered. */
 async function pendingProposal(
   db: DatabaseReader,
   proposalId: Id<"sessionProposals">,
@@ -79,7 +77,6 @@ async function pendingProposal(
   return proposal;
 }
 
-/** The session a chat belongs to, when the chat is a session's. */
 async function owningSessionId(
   db: DatabaseReader,
   parentId: Doc<"sessionProposals">["parentId"],

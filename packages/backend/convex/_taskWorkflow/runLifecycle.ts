@@ -209,8 +209,6 @@ export const completeRun = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const run = await ctx.db.get(args.runId);
-    // The completion of a run that ended on its ask came in as a success
-    // (`handleCompletion`); it is recorded as waiting, not as done.
     const endedOnAsk =
       args.success && run !== null && (await runEndedOnAsk(ctx.db, run));
 
@@ -232,30 +230,17 @@ export const completeRun = internalMutation({
     const staleCompletion =
       (await hasActiveRun(ctx.db, args.taskId)) ||
       (await isSupersededTaskRun(ctx.db, args.taskId, args.runId));
-    // A project task that asked its coordinator a question ended its turn on
-    // purpose: it stays `in_progress` (keeping its parallel slot) until the
-    // answer starts its next run (`_projects/reports.ts`).
     const waitingForAnswer =
       task?.projectId !== undefined &&
       (await findOpenAsk(ctx.db, args.taskId)) !== null;
     if (task && !staleCompletion) {
       await ctx.db.patch(args.taskId, {
-        // The run owns `in_progress` only. A status the user picked mid-run
-        // (done, cancelled, a review column) is theirs and stays.
         ...(task.status === "in_progress" && !waitingForAnswer
           ? { status: args.success ? "business_review" : "todo" }
           : {}),
         updatedAt: now,
       });
-      // Released with the status, not in the workflow's `finally`: the
-      // remaining steps (PR description, sandbox stop) run for tens of
-      // seconds after this, and a `running` task that has already left
-      // `in_progress` shows the card the "Eva is replying" grid long after eva
-      // stopped. The `finally` stays as the safety net for runs that never
-      // reach here. Guarded by `staleCompletion`, so a queued or superseding
-      // run keeps its own state.
       await finishTaskRun(ctx, args.taskId, args.runId);
-      // Also schedules the project's next ready tasks (`scheduleReadyTasks`).
       if (task.projectId) {
         await onProjectTasksChanged(ctx, task.projectId);
       }
@@ -263,25 +248,16 @@ export const completeRun = internalMutation({
 
     await clearTaskRunStreaming(ctx, args.taskId, args.runId);
 
-    // Run success/failure deliberately sends no notification: the task card and
-    // chat already show the outcome, so an inbox row per run is pure noise.
-
-    // Auto-schedule retry on usage-limit errors
     if (!args.success && args.error && isUsageLimitError(args.error)) {
       const resetAt = parseUsageLimitResetTime(args.error);
       if (resetAt && resetAt > Date.now()) {
         if (task?.projectId) {
-          // Project task: the project's scheduler starts nothing while its
-          // account is at the limit, and looks again at the reset time (or
-          // sooner, when a person changes the project's account).
           await ctx.scheduler.runAt(
             resetAt,
             internal.buildWorkflow.scheduleReadyTasks,
             { projectId: task.projectId },
           );
         } else if (task) {
-          // Quick task: retry at the reset time, unless a schedule or a
-          // newer run already owns the task.
           const retry = await scheduleTaskRun(
             ctx,
             args.taskId,

@@ -10,12 +10,9 @@
 export interface ModelPricing {
   inputPerMillion: number;
   cacheReadPerMillion: number;
-  /** 5-minute cache write rate where the provider publishes one. */
   cacheWritePerMillion?: number;
   outputPerMillion: number;
-  /** URL the rates were read from. */
   source: string;
-  /** Date the rates were read, YYYY-MM-DD. */
   asOf: string;
 }
 
@@ -78,14 +75,12 @@ export const CODEX_PRICING_PER_MILLION: Record<
   string,
   { input: number; cached: number; output: number }
 > = {
-  // OpenAI API list prices (per 1M tokens).
   // GPT-6 Astra — third-party report of the OpenAI pricing page, read
   // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
   "gpt-6-astra": { input: 10.0, cached: 1.0, output: 50.0 },
   "gpt-5.6-sol": { input: 5.0, cached: 0.5, output: 30.0 },
   "gpt-5.6-terra": { input: 2.0, cached: 0.2, output: 12.0 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  // Legacy — kept so in-flight sandboxes still cost-account correctly.
   "gpt-5.5": { input: 5.0, cached: 0.5, output: 30.0 },
   "gpt-5.5-pro": { input: 30.0, cached: 30.0, output: 180.0 },
 
@@ -96,8 +91,6 @@ export const CODEX_PRICING_PER_MILLION: Record<
   "gpt-5-codex": { input: 1.25, cached: 0.125, output: 10.0 },
 };
 
-// Longest key first so "claude-fable-5-1" wins over "claude-fable-5" for
-// "claude-fable-5-1-20260801" and the like.
 const CLAUDE_KEYS_BY_LENGTH = Object.keys(CLAUDE_PRICING_PER_MILLION).sort(
   (a, b) => b.length - a.length,
 );

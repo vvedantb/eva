@@ -65,8 +65,6 @@ function hasUnreadFor(
   entity: ChatEntity,
   row: Doc<"chatReads"> | null,
 ): boolean {
-  // `chatReads.repoId` is required, so a task with no repo can never be marked
-  // read. Keep it quiet rather than lit forever.
   if (entity.repoId === undefined) return false;
   return computeHasUnread({
     isOwn: isOwnChat(userId, entity),
@@ -90,12 +88,9 @@ export async function unreadLookupForRepo(
     .collect();
   const byParent = new Map(rows.map((row) => [String(row.parentId), row]));
   return async (entity) => {
-    // A chat that never finished a turn cannot be unread; skip the point read.
     if (entity.lastTurnFinishedAt === undefined) return false;
     const cached = byParent.get(String(entity._id));
     if (cached) return hasUnreadFor(userId, entity, cached);
-    // Same-repo misses have no row by construction; only linked sessions from
-    // other repos need the point read.
     if (entity.repoId === undefined || entity.repoId === repoId) {
       return hasUnreadFor(userId, entity, null);
     }
@@ -116,14 +111,6 @@ export async function unreadLookupForRepo(
  */
 export const POINT_READ_LIMIT = 50;
 
-/**
- * Up to this many entities, `unreadLookupForList` reads one chat read row
- * each. It costs one read per row, so it stays well under the 4,096 reads a
- * function may make. The repo-wide read holds every session, task and project
- * row the user has in the repo, so a list of one kind paid for all three:
- * `projects.list` for 500 projects beside 3,000 sessions read 6,128 documents
- * in 1.8 s that way, and 753 documents in 313 ms by point reads (load test).
- */
 const LIST_POINT_READ_LIMIT = 1_000;
 
 /** Unread check for a list of `count` entities in one repo (see `LIST_POINT_READ_LIMIT`). */
@@ -177,16 +164,13 @@ export const isUnread = authQuery({
   },
 });
 
-/** `lastVisitedAt` moves at most this often; recaps need minutes, not seconds. */
 const VISIT_WRITE_INTERVAL_MS = 60_000;
 
-/** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
 async function upsertReadRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   entity: ChatEntity,
 ): Promise<void> {
-  // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
   if (entity.repoId === undefined) return;
   const row = await getReadRow(ctx.db, userId, entity._id);
   const lastReadAt = Date.now();
@@ -199,7 +183,6 @@ async function upsertReadRow(
     });
     return;
   }
-  // Already past the watermark: skip, so repeat calls on mount do not churn.
   if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return;
   await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
 }
@@ -227,7 +210,6 @@ export const touchVisit = authMutation({
 export const markRead = authMutation({
   args: {
     parentId: chatTurnEntityIdValidator,
-    /** The chat just came on screen (not a reply landing while it was). */
     opened: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -236,11 +218,8 @@ export const markRead = authMutation({
     const entity = await ctx.db.get(args.parentId);
     if (!entity) return null;
     const now = Date.now();
-    // Read before the upsert moves it. A first open (no row) has no absence.
     const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
     await upsertReadRow(ctx, ctx.userId, entity);
-    // Recaps belong to one visit: an open expires the last one, then may
-    // write a new one. A reply landing while the chat is watched does neither.
     if (args.opened === true) await expireRecap(ctx, ctx.userId, args.parentId, now);
     if (row && args.opened === true) {
       await maybeStartRecap(ctx, {
@@ -253,19 +232,14 @@ export const markRead = authMutation({
       });
     }
     if (row) {
-      // Throttled: the client marks on every open and every landed reply,
-      // and `touchVisit` keeps it fresh while the chat stays on screen.
       if (now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
         await ctx.db.patch(row._id, { lastVisitedAt: now });
       }
     }
-    // The sidebar keys a session's unread dot by the session id, so reading
-    // one of its chats also reads the session.
     const chatId = ctx.db.normalizeId("sessionChats", args.parentId);
     const chat = chatId ? await ctx.db.get(chatId) : null;
     const session = chat ? await ctx.db.get(chat.sessionId) : null;
     if (session) await upsertReadRow(ctx, ctx.userId, session);
-    // A task's or project's session shows its unread dot on the owner's card.
     const ownerId = session ? sessionOwnerEntityId(session) : undefined;
     const taskId = ownerId ? ctx.db.normalizeId("agentTasks", ownerId) : null;
     const projectId = ownerId ? ctx.db.normalizeId("projects", ownerId) : null;

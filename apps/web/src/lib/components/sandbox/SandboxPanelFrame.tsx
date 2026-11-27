@@ -34,9 +34,7 @@ export function SandboxEmptyRailFrame({
   children,
 }: {
   collapsed: boolean;
-  onToggle: () => void;
-  /** False drops the lone collapse control (a project's task view). */
-  showToggle?: boolean;
+  onToggle: () => void;  showToggle?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -76,12 +74,8 @@ export function SandboxNotStartedRail({
 }: {
   collapsed: boolean;
   onToggle: () => void;
-  ownerLabel: "task" | "project";
-  /** Undefined when this viewer or phase cannot start it. */
-  onStart: (() => void) | undefined;
-  isStarting: boolean;
-  /** The session lookup is loading: show nothing rather than a false "none". */
-  isPending: boolean;
+  ownerLabel: "task" | "project";  onStart: (() => void) | undefined;
+  isStarting: boolean;  isPending: boolean;
   showToggle?: boolean;
 }) {
   return (

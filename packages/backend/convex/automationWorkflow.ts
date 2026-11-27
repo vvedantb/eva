@@ -36,7 +36,6 @@ export const automationExecutionWorkflow = workflow.define({
     let sandboxId: string | undefined;
 
     let completionPrUrl: string | null = null;
-    // App-row credentials for Vercel; defaults to automation repo until resolved.
     let sandboxRepoId = args.repoId;
     const isReadOnly = args.readOnly === true;
     const isActionable = isReadOnly && args.actionsEnabled === true;
@@ -52,8 +51,6 @@ export const automationExecutionWorkflow = workflow.define({
         repoId: args.repoId,
       });
       if (!data) throw new Error("Automation data not found");
-      // Shared automations live on the monorepo root; Vercel credentials live on
-      // app rows. Use sandboxRepoId for create/launch/delete/push only.
       sandboxRepoId = data.sandboxRepoId;
 
       const prompt = isActionable
@@ -87,7 +84,6 @@ export const automationExecutionWorkflow = workflow.define({
         baseBranch: data.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
         branchName: isReadOnly ? undefined : args.branchName,
         createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
-        // Ephemeral agent runs only need checkout + Claude; skip repo setup daemons.
         skipStartupCommands: true,
       }));
 
@@ -135,7 +131,6 @@ export const automationExecutionWorkflow = workflow.define({
           },
         );
 
-        // No commits pushed (ahead-of-remote gate) → no diff, no PR to open.
         if (pushResult.pushed) {
           completionPrUrl = await step.runAction(
             internal.taskWorkflowActions.createPullRequest,
@@ -200,11 +195,6 @@ export const automationExecutionWorkflow = workflow.define({
         error: msg,
       });
     } finally {
-      // The sandbox is ephemeral: nothing references it once the run status is
-      // written, so it has to be deleted here or it idles until the provider
-      // reaps it. In the finally rather than on each path so a future early
-      // return cannot skip it. Best-effort — a failed delete must not fail the
-      // workflow.
       if (sandboxId) {
         try {
           await step.runAction(internal.sandbox.deleteSandbox, {

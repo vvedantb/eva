@@ -1,20 +1,5 @@
 import type { Doc } from "@eva/backend";
 
-/**
- * Where each notification type is delivered: the one routing table
- * (`internal/plans/todo/notifications-v2-5.md`, "Proposed design"). The
- * backend reads it to push and to pick the instant email or the daily digest;
- * the web reads it to toast and raise desktop pop-ups; Inbox → Needs you reads
- * it for its question rows.
- *
- * Urgency is a modifier on top of the table. Mention routing (Jev) sets it on
- * chat mentions; agent `notify_user` and comment mentions set it at creation.
- * - `high`: push, toast and an instant email, whatever the type says.
- * - `normal`: the table, except a chat mention Jev judged fyi, which waits
- *   for the digest.
- * - `low`: inbox only (no toast, push or email).
- */
-
 export type NotificationType = Doc<"notifications">["type"];
 type Urgency = NonNullable<Doc<"notifications">["urgency"]>;
 
@@ -22,27 +7,21 @@ type Urgency = NonNullable<Doc<"notifications">["urgency"]>;
 export type NotificationEmail = "instant" | "digest" | "none";
 
 export type NotificationRoute = {
-  /** The Inbox view that asks you to act. Every row is also in Updates. */
   inbox: "needs_you" | "updates";
-  /** Web toast, chime and desktop pop-up. */
   toast: boolean;
-  /** Phone push. */
   push: boolean;
   email: NotificationEmail;
 };
 
 export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
   {
-    // @mention of you (chat or comment).
     mention: { inbox: "needs_you", toast: true, push: true, email: "instant" },
-    // Eva asks you / a routed question or its reply.
     routed_question: {
       inbox: "needs_you",
       toast: true,
       push: true,
       email: "instant",
     },
-    // Reply to your comment, or in a thread you are in.
     comment_reply: {
       inbox: "updates",
       toast: true,
@@ -55,14 +34,12 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: true,
       email: "instant",
     },
-    // Comment on a task or doc you follow.
     comment_added: {
       inbox: "updates",
       toast: true,
       push: false,
       email: "digest",
     },
-    // A "Make changes" comment re-runs Eva: in-app only.
     changes_requested: {
       inbox: "updates",
       toast: true,
@@ -81,15 +58,12 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: false,
       email: "digest",
     },
-    // A session archived because its PR merged or closed: inbox only.
     session_archived: {
       inbox: "updates",
       toast: false,
       push: false,
       email: "none",
     },
-    // An agent's `notify_user`, an automation's email draft. An agent message
-    // about a chat also asks for you (`isNeedsYouNotification`).
     system: { inbox: "updates", toast: true, push: false, email: "digest" },
   };
 
@@ -101,10 +75,6 @@ export type RoutableNotification = {
   chatTarget?: string;
 };
 
-/**
- * A chat mention: Jev judges it after it is written (`mentionRouting`).
- * Comment mentions carry their comment and are not judged.
- */
 function isChatMention(notification: RoutableNotification): boolean {
   return (
     notification.type === "mention" && notification.commentId === undefined

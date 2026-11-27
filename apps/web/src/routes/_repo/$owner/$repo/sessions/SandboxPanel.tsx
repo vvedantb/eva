@@ -381,8 +381,6 @@ export function SandboxPanel({
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             onAnnotationSubmit={submitAnnotation}
-            // Only the session on screen holds the idle-pause presence beacon;
-            // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
             onScreen={isRouteActive}
             autoWakeEligible={autoWakeEligible}

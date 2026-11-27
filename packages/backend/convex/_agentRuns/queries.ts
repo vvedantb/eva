@@ -10,7 +10,6 @@ import {
 } from "../functions";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 
-/** Loads a run and its parent task, enforcing task access. Returns null if the run is missing or inaccessible. */
 async function loadAccessibleRun(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,
@@ -23,12 +22,6 @@ async function loadAccessibleRun(
   return { run, task };
 }
 
-/**
- * Whether a failed run is still the task's latest outcome. Follow-up chat
- * turns run in the run's session but create no new run, so a run that failed
- * once would otherwise mark the task as failed forever. The error stays only
- * while no chat turn is live and the latest finished one is the run or failed.
- */
 async function isRunErrorCurrent(
   db: GenericDatabaseReader<DataModel>,
   runId: Id<"agentRuns">,
@@ -46,7 +39,6 @@ async function isRunErrorCurrent(
         q.eq("sessionId", sessionId).eq("open", open),
       )
       .order("desc");
-  // Summary and interview lanes are side jobs, not replies.
   for await (const turn of sessionTurns(true)) {
     if (turn.lane === undefined) return false;
   }
@@ -57,11 +49,6 @@ async function isRunErrorCurrent(
   return true;
 }
 
-/**
- * Whether the caller may read a task named in a batch query that already
- * checked `repoId`. A task in that repo needs only the draft check; any other
- * task falls back to the full access check.
- */
 async function canReadBatchTask(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,

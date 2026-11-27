@@ -36,7 +36,6 @@ export function BaseBranchChip({
   const listBranches = useAction(api.github.listBranches);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  // Keyed by repo: a picked repo reads its own branches.
   const [loaded, setLoaded] = useState<{ repoId: Id<"githubRepos">; branches: Branch[] } | null>(null);
   const branches = loaded?.repoId === repoId ? loaded.branches : null;
   const query = search.trim().toLowerCase();

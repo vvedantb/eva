@@ -3,7 +3,6 @@ import { Suggestion, Suggestions } from "@vvedantb/native-ui/ai";
 import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { useClipboardHasImage } from "@/chat/clipboardImage";
 
-/** The row fades in as a chip arrives (the kit popover's 150 ms); Reduce Motion skips it. */
 const CHIP_ENTER = FadeIn.duration(150).reduceMotion(ReduceMotion.System);
 
 const NO_SKILLS: readonly MentionItem[] = [];

@@ -83,9 +83,6 @@ let lastIdleActivityAt = Date.now();
 let lastClaimAt = 0;
 let finalText = "";
 let exitWithError = false;
-// Cumulative thread usage from `thread/tokenUsage/updated`; per-turn usage is
-// the delta of this total across the turn boundary (the protocol reports no
-// per-turn usage on `turn/completed`).
 let threadTotalUsage: JsonObject | null = null;
 let turnStartUsage: JsonObject | null = null;
 
@@ -143,10 +140,6 @@ export function normalizeAppServerNotification(
   return null;
 }
 
-/**
- * Per-turn usage as the delta of cumulative thread totals (codex 0.146.0
- * `thread/tokenUsage/updated` reports `TokenUsageBreakdown` fields, camelCase).
- */
 function readTokenCount(source: JsonObject | null, key: string): number {
   const value = source ? source[key] : 0;
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -186,8 +179,6 @@ async function finalizeTurn(
   const result = finalText || S.currentStreamedContent || S.rawOutput;
   if (await reconcileStreamingAndPersist()) return;
   const usage = computeTurnUsageDelta(turnStartUsage, threadTotalUsage);
-  // codex never sets S.pendingQuestionData (only the Claude parser emits a
-  // question), so the shared envelope adds no pendingQuestion here.
   const completionArgs = buildTurnCompletionPayload({
     success,
     result,
@@ -208,7 +199,6 @@ async function failActiveTurn(error: string): Promise<void> {
   try {
     await finalizeTurn(false, error);
   } catch {
-    /* best effort */
   }
   exitWithError = true;
   supervisor.stop();
@@ -222,8 +212,6 @@ function processNotification(
     const total = asJsonObject(
       asJsonObject(notification.params.tokenUsage).total,
     );
-    // Keep the last known totals on a malformed notification: an empty object
-    // here would turn into an all-zeros usage event at finalize.
     if (Object.keys(total).length > 0) threadTotalUsage = total;
   }
   const event = normalizeAppServerNotification(notification);
@@ -296,8 +284,6 @@ async function startTurn(
   const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
-  // Snapshot before the request: tokenUsage notifications for this turn can
-  // arrive ahead of the turn/start response on the same stream.
   turnStartUsage = threadTotalUsage;
   const result = await client.request("turn/start", {
     threadId: S.activeCodexThreadId,
@@ -319,7 +305,6 @@ async function startTurn(
   log("codex daemon: turn started " + providerTurnId);
 }
 
-/** The running turn's App Server id, or "" when no turn can take a steer. */
 function liveProviderTurnId(): string {
   if (supervisor.phase !== "running") return "";
   return supervisor.currentTurn?.providerTurnId ?? "";
@@ -341,8 +326,6 @@ export async function runCodexAppServerDaemon(): Promise<void> {
 
   const client = new CodexAppServerClient();
   try {
-    // App Server reads CODEX_HOME during startup, so hydrate credentials and
-    // runtime config before spawning it rather than immediately before resume.
     const sessionMode = prepareCodexSessionState();
     client.start();
     await client.initialize();
@@ -368,9 +351,6 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         if (completion) await completion;
       }
 
-      // The loop ticks at 50ms to drain app-server notifications; the claim
-      // mutation only runs at the shared cadence (busy/fast/idle) so an idle
-      // or mid-turn daemon does not read its chat row 20 times a second.
       const claimNow = Date.now();
       if (
         claimNow - lastClaimAt >=
@@ -397,9 +377,6 @@ export async function runCodexAppServerDaemon(): Promise<void> {
           providerTurnId &&
           supervisor.beginCancellation()
         ) {
-          // Fire-and-forget like the claude daemon: an awaited interrupt can
-          // stall claiming for the full request timeout, and its failure must
-          // not tear the daemon down — the turn settles via `turn/completed`.
           void client
             .request("turn/interrupt", {
               threadId: S.activeCodexThreadId,
@@ -411,9 +388,6 @@ export async function runCodexAppServerDaemon(): Promise<void> {
               log("codex daemon: interrupt failed — " + message);
             });
         }
-        // After the cancel: a steer that races a Stop is rejected and runs as
-        // the next queued turn. `expectedTurnId` makes App Server reject a
-        // steer that lands after this turn already ended.
         await deliverSteers(readSteers(claimed), async (text) => {
           const turnId = liveProviderTurnId();
           if (!turnId) return false;
@@ -443,11 +417,6 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       }
 
       const now = Date.now();
-      // App Server emits nothing while a tool runs, so a long silent tool call
-      // is indistinguishable from a hang by event silence alone: while a tool
-      // is in flight only the hard runtime cap applies, and the silence clock
-      // restarts once the tool result lands. `resetTurnState` zeroes the
-      // in-flight count at every turn start.
       if (S.inFlightToolUses > 0) {
         lastEventAt = now;
       }

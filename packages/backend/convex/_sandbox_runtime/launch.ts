@@ -534,7 +534,6 @@ export async function launchScript(
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/run-design.done",
     5,
   );
-  // Use handle.exec (not execHandle) so cwd stays at the Vercel default — the script
   await sandbox.execDetached(
     "chmod +x /tmp/eva-launch-runner.sh && /tmp/eva-launch-runner.sh",
     { timeoutSeconds: 15 },

@@ -36,7 +36,6 @@ export function BackgroundAgentsChip({ chatId, readOnly }: { chatId: Id<"session
   const [target, setTarget] = useState<{ toolUseId: string; title: string } | null>(null);
   const agents = (chat?.backgroundAgents ?? []).filter(isVisibleBackgroundAgent);
 
-  // The confirm closes on either button; a failed stop toasts.
   const copy = backgroundAgentStopCopy(target?.title);
   const stopDialog = (
     <ConfirmDialog
@@ -53,14 +52,12 @@ export function BackgroundAgentsChip({ chatId, readOnly }: { chatId: Id<"session
       }}
     />
   );
-  // The dialog outlives the chip: the agent may finish while it is open.
   if (!chatId || agents.length === 0) return stopDialog;
 
   return (
     <>
       <PromptInputChip
         icon={<IconRobot size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
-        // As the Stash chip: a label that gives way when squeezed, and a count that stays.
         label={agents.length === 1 ? "Agent" : "Agents"}
         count={agents.length}
         chevron={false}
@@ -69,7 +66,6 @@ export function BackgroundAgentsChip({ chatId, readOnly }: { chatId: Id<"session
         accessibilityLabel={`Background: ${backgroundAgentsLabel(agents.length)}`}
         onPress={() => setOpen(true)}
       />
-      {/* Shut when the last agent leaves, so it never shows an empty list. */}
       <FooterSheet open={open && agents.length > 0} onOpenChange={setOpen} title="Background agents">
         {agents.map((agent) => {
           const title = backgroundAgentTitle(agent);
@@ -91,7 +87,6 @@ export function BackgroundAgentsChip({ chatId, readOnly }: { chatId: Id<"session
                   variant="outline"
                   leftIcon={<IconPlayerStop size={14} color={theme.foreground} />}
                   onPress={() => {
-                    // The confirm opens over the composer, not over this sheet.
                     setOpen(false);
                     setTarget({ toolUseId: agent.toolUseId, title });
                   }}

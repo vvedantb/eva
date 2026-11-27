@@ -32,17 +32,11 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
  * shortcut, the tab-bar toggle button, and the action palette.
  */
 export interface TerminalPanelApi {
-  expanded: boolean;
-  /** Expands (creating the first terminal when none exist) or collapses. */
-  toggle: () => void;
-  /** Creates a terminal pane and reveals the panel. */
-  newTerminal: () => void;
+  expanded: boolean;  toggle: () => void;  newTerminal: () => void;
   newTerminalDisabled: boolean;
 }
 
-interface SandboxWorkspaceProps {
-  /** Keys the panes, preview and PTYs (a quick task's is its session). */
-  owner: SandboxOwner;
+interface SandboxWorkspaceProps {  owner: SandboxOwner;
   storageScope: string;
   sandboxId: string | undefined;
   isActive: boolean;
@@ -95,14 +89,6 @@ export function SandboxWorkspace({
   const setPanelExpanded = (next: boolean) => {
     setExpanded(next);
   };
-
-  // Imperative resize/collapse runs after the state commit rather than inside
-  // setPanelExpanded: its closure flows through the children() render call
-  // (terminalPanel), and a ref read reachable from render bails the whole file
-  // out of React Compiler memoization. The collapsedRef guard skips the sync
-  // when the change originated from a drag (handleResize already saw it), so
-  // no resize fires mid-drag. This also covers `expanded` flips from other
-  // tabs via the shared localStorage key.
   useEffect(() => {
     if (collapsedRef.current === !expanded) return;
     collapsedRef.current = !expanded;
@@ -113,11 +99,7 @@ export function SandboxWorkspace({
     bottomPanelRef.current?.collapse();
   }, [expanded, savedBottomSize, bottomPanelRef]);
 
-  const handleResize = (size: PanelSize) => {
-    // A hidden panel reports NaN, not a collapse — see `isMeasuredPanelSize`.
-    // Reading it as expanded flipped the stored open flag on every session
-    // switch, leaving the Mod+J toggle a click behind the real panel.
-    if (!isMeasuredPanelSize(size)) return;
+  const handleResize = (size: PanelSize) => {    if (!isMeasuredPanelSize(size)) return;
     const collapsed = size.asPercentage === 0;
     if (collapsedRef.current === collapsed) return;
     collapsedRef.current = collapsed;

@@ -9,18 +9,10 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
  * share.
  */
 export interface SubagentView {
-  toolUseId: string;
-  /** The prompt/description the agent was spawned with. */
-  title: string;
-  /** Raw lifecycle status ("running", "completed", "failed", "stale", ...). */
-  status: string;
+  toolUseId: string;  title: string;  status: string;
   backgrounded: boolean;
   startedAt?: number;
-  settledAt?: number;
-  /** The agent's transcript: steps it ran, in execution order. */
-  steps: ActivityStep[];
-  /** Final report from the Agent tool result, when the log captured it. */
-  resultText?: string;
+  settledAt?: number;  steps: ActivityStep[];  resultText?: string;
 }
 
 export type SubagentTone = "active" | "success" | "danger" | "muted";
@@ -43,9 +35,7 @@ function statusFromStep(step: ActivityStep): string {
 function subagentTitle(step: ActivityStep): string | undefined {
   const detail = step.detail?.trim();
   if (detail) return detail;
-  const label = step.label.trim();
-  // The parser's placeholder labels carry no information worth showing.
-  if (label && label !== "Running agent..." && label !== "Ran agent") {
+  const label = step.label.trim();  if (label && label !== "Running agent..." && label !== "Ran agent") {
     return label;
   }
   return undefined;
@@ -64,18 +54,8 @@ export function deriveSubagents({
   streamingActivity,
   backgroundAgents,
   sandboxRunning = true,
-}: {
-  /** Persisted `message.activityLog` payloads, in message order. */
-  activityLogs: ReadonlyArray<string | undefined>;
-  /** Live `streamingActivity.currentActivity` — pass only while a turn runs. */
-  streamingActivity?: string;
-  backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
-  /**
-   * A sub-agent cannot outlive its sandbox, but a stop can strand entries as
-   * "running" before the daemon settles them. When false, active statuses
-   * read as stale instead of running forever.
-   */
-  sandboxRunning?: boolean;
+}: {  activityLogs: ReadonlyArray<string | undefined>;  streamingActivity?: string;
+  backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;  sandboxRunning?: boolean;
 }): SubagentView[] {
   const byId = new Map<string, SubagentView>();
   const order: string[] = [];
@@ -114,11 +94,7 @@ export function deriveSubagents({
       }
     }
     for (const [parentId, kids] of childrenByParent) {
-      const agent = upsert(parentId);
-      // A later source repeating the same agent carries at least as many
-      // steps; replacing (not appending) keeps persisted + streaming from
-      // double-counting the same turn.
-      if (kids.length >= agent.steps.length) agent.steps = kids;
+      const agent = upsert(parentId);      if (kids.length >= agent.steps.length) agent.steps = kids;
     }
   };
 

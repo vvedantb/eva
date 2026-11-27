@@ -5,7 +5,6 @@ import type { Id } from "../_generated/dataModel";
 
 type ChatRowsParentId = Id<"sessions"> | Id<"sessionChats">;
 
-/** Messages deleted per run of `purgeDeletedChat`; tool output rows are heavy. */
 const PURGE_MESSAGE_PAGE = 100;
 
 /** Deletes the chat's queued sends, so none can start a turn on it. */
@@ -75,7 +74,6 @@ export async function deleteChatRows(
     .collect();
   for (const row of proposals) await ctx.db.delete(row._id);
   deleted += proposals.length;
-  // Closed turns only: an open turn still has a live agent behind it.
   const turns = await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) => q.eq("entityId", parentId))

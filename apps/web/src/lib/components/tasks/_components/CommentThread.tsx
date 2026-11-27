@@ -10,10 +10,8 @@ import type { TaskComment } from "@eva/shared/taskDetail";
 
 type Users = FunctionReturnType<typeof api.users.listAll>;
 
-/** Subtle dividers inside comment threads — tuned per theme on `bg-muted/40`. */
 const THREAD_SEPARATOR_CLASS = "bg-foreground/5 dark:bg-foreground/5";
 
-/** Horizontal padding of every row in the thread card. */
 const THREAD_ROW_X_CLASS = "px-3.5";
 
 interface CommentThreadProps {
@@ -23,7 +21,6 @@ interface CommentThreadProps {
   repliesByParentId: Map<Id<"taskComments">, TaskComment[]>;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
   depth?: number;
-  /** An archived task: no reply box, edit or delete. */
   readOnly?: boolean;
 }
 
@@ -46,9 +43,6 @@ function ReplyThreads({
 }) {
   if (replies.length === 0) return null;
 
-  // A direct reply to the root comment is a row of the thread card, so it takes
-  // the card's own padding and an edge-to-edge divider (Linear-style). Deeper
-  // replies sit inside their parent's row and are grouped by indent alone.
   const isCardRow = depth === 0;
 
   return (
@@ -87,8 +81,6 @@ export function CommentThread({
   const replies = repliesByParentId.get(comment._id) ?? [];
 
   if (depth === 0) {
-    // The card owns no padding: comment, replies and the reply composer are
-    // rows, so their dividers reach the card edge instead of floating inside it.
     return (
       <Surface density="none" className="overflow-hidden">
         <div className={cn(THREAD_ROW_X_CLASS, "py-3")}>

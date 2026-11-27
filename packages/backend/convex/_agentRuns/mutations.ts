@@ -5,7 +5,6 @@ import { internalMutation } from "../_generated/server";
 import { deploymentStatusValidator } from "../validators";
 import { authMutation, hasTaskAccess } from "../functions";
 
-/** Loads a run and its parent task, enforcing task access. Throws "Run not found" if the run is missing or inaccessible. */
 async function loadAccessibleRun(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,

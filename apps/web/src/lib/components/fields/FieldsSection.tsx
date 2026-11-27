@@ -1,11 +1,5 @@
 import type { ReactNode } from "react";
 
-/**
- * Detail-page field rows: one field per row, label above the group. Shared by
- * the task Properties column and the project Overview column so the two
- * surfaces cannot drift apart.
- */
-
 /** One type size for every label, value and control in a fields column. */
 export const FIELD_TEXT_CLASS = "text-sm";
 

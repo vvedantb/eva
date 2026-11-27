@@ -13,7 +13,6 @@ import {
 } from "./_changelog/entry";
 import { hmacSha256Hex } from "./_shared/hmac";
 
-/** Builds the signed one-click feedback link for one recipient of one changelog run. */
 async function changelogFeedbackUrlBuilder(
   runId: string,
   userId: string,

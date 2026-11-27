@@ -1,8 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
 import { z } from "zod";
 
-// `ExitInfoModule.kt`: why the app's last process ended, from Android 11+.
-// Null on iOS, web, older Android, or when there is no record.
 
 const exitSchema = z.object({
   reason: z.string(),
@@ -12,7 +10,6 @@ const exitSchema = z.object({
 });
 export type LastExit = z.infer<typeof exitSchema>;
 
-// The native module: `lastExit` is a function; what it resolves to is parsed below.
 const nativeSchema = z.object({
   lastExit: z.custom<() => Promise<unknown>>((value) => typeof value === "function"),
 });

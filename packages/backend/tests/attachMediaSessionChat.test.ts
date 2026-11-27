@@ -5,16 +5,6 @@ import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Session turns write their transcript under a `sessionChats` id, and the
- * sandbox callback sends that id to `attachMedia`. The action's validator once
- * accepted only session/project/task ids, so every session screenshot and
- * recording was rejected and never reached the chat message.
- *
- * `attachMedia` is public, so it must also check that the caller can access
- * the message's parent. Without that check, any signed-in user could attach
- * media to another team's chat.
- */
 
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|attach-media-session-chat";
@@ -94,7 +84,6 @@ describe("attachMedia", () => {
           model: "claude:sonnet",
           repoId: chat.repoId,
         });
-        // Completion drained the queue while the upload ran.
         await ctx.db.insert("messages", {
           parentId: f.chatId,
           role: "user",

@@ -71,7 +71,6 @@ export function DocSuggestionsPanel({
         <Button
           size="icon-sm"
           variant="ghost"
-          // 24px on desktop, as before; `icon-sm` is 32px and only wanted on touch.
           className="sm:size-6"
           aria-label="Close suggestions"
           onClick={onClose}
@@ -148,10 +147,6 @@ function SuggestionRow({
   const userId = toUserId(suggestion.userId);
   return (
     <div className="relative border-b border-border p-3 transition-colors hover:bg-accent-soft/40">
-      {/* A real button stretched across the row rather than `onClick` on the
-          wrapper: the row had no keyboard path and no role at all. The row keeps
-          its own controls, which is why this is an overlay and not a wrapper —
-          they opt back above it with `LIST_ROW_CONTROL_CLASS`. */}
       <button
         type="button"
         aria-label={`Reveal ${KIND_LABEL[suggestion.kind].toLowerCase()} in the document`}
@@ -253,7 +248,6 @@ function isUserId(id: string): id is Id<"users"> {
   return USER_ID_PATTERN.test(id);
 }
 
-/** Narrows a suggestion id's author segment to a real users-table id. */
 function toUserId(userId: string | null): Id<"users"> | null {
   return userId && isUserId(userId) ? userId : null;
 }

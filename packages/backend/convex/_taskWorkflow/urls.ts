@@ -1,7 +1,6 @@
 import { ENTITY_SECTION, repoBasePath } from "@eva/shared";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 
-/** Absolute web URL of a repo: Eva's base URL plus `repoBasePath`. */
 function repoUrl(owner: string, name: string, rootDirectory?: string): string {
   return `${getEvaBaseUrl()}${repoBasePath({ owner, name, rootDirectory })}`;
 }

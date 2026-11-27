@@ -85,14 +85,11 @@ export default function NewSessionScreen() {
       ? pickedBranch.branch
       : (stack?.base ?? repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
   const stackOnPrNumber = stack !== null && baseBranch === stack.base ? stack.prNumber : undefined;
-  // The prompt draft is kept per repo on the device, as the web's `new-session-composer`;
-  // model and traits start from the repo defaults each visit, as on the web.
   const savedDraft = newSessionDrafts.useValue(repo?._id ?? "");
   const composer = useMentionComposer(repo?._id, getAIModelProvider(model), (tokenized) => {
     if (repo) newSessionDrafts.set(repo._id, tokenized);
   });
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
-  // A repo's saved draft goes into the composer when the repo changes, or when it finishes loading into an empty one.
   const [shownDraft, setShownDraft] = useState<{ repoId: string; loaded: boolean } | null>(null);
   if (repo && (shownDraft?.repoId !== repo._id || (!shownDraft.loaded && savedDraft !== null && composer.text === ""))) {
     setShownDraft({ repoId: repo._id, loaded: savedDraft !== null });

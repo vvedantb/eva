@@ -18,12 +18,6 @@ import type {
 import { log } from "../utils.js";
 import type { ProviderAdapter } from "./types.js";
 
-/**
- * Unwraps a Cursor SDK tool result. Results arrive enveloped as
- * `{status:"success", value} | {status:"error", error}` (e.g. shell value
- * `{exitCode, stdout, stderr, executionTime}`, edit value `{diffString}`);
- * plain payloads fall through to the shared multi-key probe.
- */
 function probeCursorSdkToolResult(
   status: string,
   result: JsonValue | undefined,
@@ -46,7 +40,6 @@ function probeCursorSdkToolResult(
   }
   const isError = eventIsError || envelopeIsError;
 
-  // Error payloads can be a bare message string or `{message}`.
   if (typeof payload === "string") {
     const output = buildStepOutput(payload);
     if (!output && !isError) return undefined;
@@ -99,12 +92,6 @@ function probeCursorSdkToolResult(
   return probed;
 }
 
-/**
- * Maps a Cursor SDK `tool_call` event (status "running" | "completed" |
- * "error", stable `call_id`) to push/complete canonical events. Duplicate
- * transitions are dropped via the per-attempt id sets; a terminal event whose
- * `running` was never seen pushes then completes so no tool goes missing.
- */
 function cursorToolCallEvents(event: JsonObject): CanonicalEvent[] {
   const callId =
     typeof event.call_id === "string" && event.call_id.trim()
@@ -174,10 +161,6 @@ export function cursorCompactionEventPhase(
   return null;
 }
 
-/**
- * Stream event types that legitimately carry nothing the activity feed wants.
- * Producing no canonical events for these is expected, not a parser gap.
- */
 const SILENT_EVENT_TYPES = new Set([
   "user",
   "status",
@@ -186,7 +169,6 @@ const SILENT_EVENT_TYPES = new Set([
   "usage",
 ]);
 
-/** Event types already reported: one log line each, not one per stream event. */
 const reportedSilentTypes = new Set<string>();
 
 /**
@@ -243,12 +225,8 @@ function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
         typeof block.text === "string" &&
         block.text
       ) {
-        // The Cursor SDK emits one assistant event per text delta. Treating
-        // each event as a complete block inserts a Markdown paragraph between
-        // token fragments in the shared canonical assembler.
         events.push({ kind: "stream_text_delta", text: block.text });
       }
-      // tool_use blocks are ignored — tool lifecycle comes from tool_call events.
     }
     return events;
   }
@@ -290,8 +268,6 @@ function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
 }
 
 function onStreamLine(parsed: JsonObject): StreamLineResult {
-  // Belt-and-braces session capture — the runner persists agent.agentId right
-  // after create/resume; this keeps the id fresh if the SDK ever rotates it.
   if (
     parsed.type === "system" &&
     typeof parsed.agent_id === "string" &&

@@ -1,18 +1,11 @@
 #!/usr/bin/env node
-// One backend for both apps: every Convex function the phone calls must also
-// be one the web calls, so the two clients cannot drift onto separate server
-// paths. A phone-only function needs an entry in ALLOWED with the reason it
-// cannot be shared. CI runs this; `node scripts/check-shared-backend.mjs`.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Phone-only functions, each with the reason. Remove an entry when the web calls it. */
 const ALLOWED = {
   "push.register": "Device push tokens: the web has no phone push.",
   "push.unregister": "Device push tokens: the web has no phone push.",
   "crashReports.report": "Phone crash reports: a native or JS crash closes the phone app; the web has no such crash to report.",
-  // The neutral chat actions (#1302): the web moves onto them one action at
-  // a time; remove each entry as the web starts calling it.
   "chats.get": "The web moves onto chats.* one action at a time (#1302).",
   "chats.send": "The web moves onto chats.* one action at a time (#1302).",
   "chats.setModel": "The web moves onto chats.* one action at a time (#1302).",

@@ -28,7 +28,6 @@ export const updateTaskArgs = {
   taskNumber: v.optional(v.number()),
   assignedTo: v.optional(v.union(v.id("users"), v.null())),
   model: v.optional(aiModelValidator),
-  // null = clear to team credentials. undefined = no change.
   providerAccountId: v.optional(
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
@@ -60,7 +59,6 @@ export async function buildTaskUpdates(
 ): Promise<TaskUpdates> {
   const updates: TaskUpdates = { updatedAt: Date.now() };
   await applyProjectUpdate(ctx, task, args, updates);
-  // After the project move, so an explicit taskNumber still wins.
   applyPlainFieldUpdates(args, updates);
   await applyProviderAccountUpdate(ctx, task, args, updates);
   return updates;
@@ -75,9 +73,6 @@ async function applyProjectUpdate(
   if (args.projectId === undefined) return;
   const newProjectId = args.projectId ?? undefined;
   updates.projectId = newProjectId;
-  // Position the task at the end when moving it into a different project
-  // by computing taskNumber as max(existing) + 1. Mirrors createQuickTask
-  // and assignToProject.
   if (newProjectId && newProjectId !== task.projectId) {
     const existingTasks = await ctx.db
       .query("agentTasks")
@@ -117,7 +112,6 @@ async function applyProviderAccountUpdate(
   args: UpdateTaskArgs,
   updates: TaskUpdates,
 ): Promise<void> {
-  // Only the task owner may set a personal account; must be their own.
   let nextProviderAccountId = task.providerAccountId;
   if (args.providerAccountId !== undefined) {
     if (ctx.userId !== task.createdBy) {
@@ -130,9 +124,6 @@ async function applyProviderAccountUpdate(
     );
     updates.providerAccountId = nextProviderAccountId;
   }
-  // Owner changes model alone → keep matching personal account or re-default.
-  // When providerAccountId is also in this update (picker chose Team/personal
-  // with the model), the explicit account wins — do not reconcile over it.
   if (
     args.model !== undefined &&
     args.providerAccountId === undefined &&
@@ -173,7 +164,6 @@ async function logTitleChange(
     task.title,
     args.title,
   );
-  // Every task owns its PR, so the PR follows the task's title.
   const primaryPr = await findPrimaryPullRequest(ctx.db, {
     kind: "task",
     taskId: args.id,

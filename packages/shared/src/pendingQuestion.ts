@@ -1,13 +1,5 @@
 import { z } from "zod";
 
-/**
- * The agent's blocking question (AskUserQuestion input), stored as JSON on
- * `pendingQuestions.payload` and on streaming rows. Shared by the web chat,
- * the mobile app and the backend push text.
- *
- * A question with any malformed field (or option) is dropped via
- * `.catch(null)` + filter rather than failing the whole payload.
- */
 const questionSchema = z.object({
   question: z.string(),
   header: z.string(),

@@ -83,12 +83,6 @@ export const createSessionPr = action({
       });
     }
 
-    // Write the reviewer description here rather than on every push: this is
-    // the moment the work is offered for review, the diff is final, the
-    // session sandbox is normally still up, and it costs one model call per
-    // review instead of one per turn. Scheduled, not awaited, so the modal
-    // returns straight away. If idle pause stopped the sandbox, the action
-    // resumes it for the model call and stops it again.
     if (session.sandboxId !== undefined) {
       await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
         installationId: repo.installationId,
@@ -109,13 +103,6 @@ export const createSessionPr = action({
   },
 });
 
-/**
- * The single GitHub call behind every draft PR a multi-repo session opens —
- * the primary repo's PR and each linked `sessionRepos` PR alike. Delegates to
- * `taskWorkflowActions.createPullRequest` (open-or-update-existing, then wait
- * for the head ref to be visible) so there is exactly one codepath that talks
- * to GitHub for a draft session PR, whichever repo it belongs to.
- */
 async function createDraftPrOnGitHub(
   ctx: ActionCtx,
   args: {
@@ -145,18 +132,12 @@ async function createDraftPrOnGitHub(
   );
 }
 
-/**
- * "Related pull requests" entries for a new session PR: every PR the session
- * (or, for a task's session, the task) already holds except the one being
- * opened (`sessionRepoId` names its repo; undefined is the primary repo).
- */
 async function siblingPullRequests(
   ctx: ActionCtx,
   sessionPrs: Doc<"pullRequests">[],
   sessionRepoId: Id<"sessionRepos"> | undefined,
 ): Promise<SiblingPr[]> {
   const others = sessionPrs.filter((pr) => {
-    // A multi-repo task's own PRs are all siblings of a linked repo's PR.
     if (pr.owner.kind === "task") return true;
     return (
       pr.owner.kind === "session" &&
@@ -207,9 +188,6 @@ export const createDraftSessionPr = internalAction({
     });
     if (!repo) return null;
 
-    // The reviewer-facing description is generated from the diff after the PR
-    // exists (`generatePrDescription`).
-
     const evaUrl = buildEvaSessionUrl(
       repo.owner,
       repo.name,
@@ -217,9 +195,6 @@ export const createDraftSessionPr = internalAction({
       repo.rootDirectory,
     );
 
-    // Every other PR the session already holds — each linked repo's, and any
-    // the agent opened on a side branch. One opened after this PR is not
-    // retrofitted into its body.
     const siblingPrs = await siblingPullRequests(ctx, sessionPrs, undefined);
     const body = appendRelatedPrsSection(
       buildPrBody([], evaUrl),
@@ -307,9 +282,6 @@ export const createDraftSessionRepoPr = internalAction({
     });
     if (!primaryRepo) return null;
 
-    // A multi-repo task's session: the task owns the home repo's PR, and
-    // every linked PR carries the task's description (its merge order) and
-    // links the task, like the home PR's body.
     const taskId = sessionOwnerTaskId(session);
     const task = taskId
       ? await ctx.runQuery(internal.agentTasks.getInternal, { id: taskId })
@@ -320,9 +292,6 @@ export const createDraftSessionRepoPr = internalAction({
         })
       : [];
 
-    // Every sibling PR already known: the primary's (the task's own for a
-    // task), every other linked repo's, and any side-branch PR, whichever
-    // exist at this point.
     const siblingPrs = [
       ...(await siblingPullRequests(ctx, taskPrs, undefined)),
       ...(await siblingPullRequests(ctx, sessionPrs, linkedRepo._id)),
@@ -386,7 +355,6 @@ export const createDraftSessionRepoPr = internalAction({
       `[github] Created draft PR for sessionRepo ${args.sessionRepoId}: ${result}`,
     );
 
-    // The task's own PR opened before this one: list it there now too.
     const taskPr = taskPrs.find((pr) => pr.primary && isLivePrState(pr.state));
     if (task && taskPr) {
       await patchTaskPrRelatedPrs(ctx, task._id, taskPr);
@@ -396,11 +364,6 @@ export const createDraftSessionRepoPr = internalAction({
   },
 });
 
-/**
- * Rewrites the "Related pull requests" block of a multi-repo task's own PR
- * (`upsertRelatedPrsBlock`) from its linked repos' PRs. Best-effort: a
- * failure is logged and the next body refresh writes the block again.
- */
 async function patchTaskPrRelatedPrs(
   ctx: ActionCtx,
   taskId: Id<"agentTasks">,
@@ -472,7 +435,6 @@ export const linkSessionPrToStack = internalAction({
       return null;
     }
 
-    // Both overviews gained or changed a stack.
     await Promise.all(
       [args.parentPrNumber, childPrNumber].map((prNumber) =>
         invalidatePrOverviewCache(ctx, { repoId: args.repoId, prNumber }),

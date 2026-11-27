@@ -39,8 +39,6 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     if (run.exitReason === "auto_retry_scheduled") return null;
 
     const errorMessage = args.error ?? run.error ?? "";
-    // A run held back by a busy task chat (its session's sandbox was mid
-    // start/stop at claim time) waits, like a scheduled run, then retries.
     const chatBusy = errorMessage === TASK_CHAT_BUSY_ERROR;
     const retryableFailure =
       chatBusy ||
@@ -104,14 +102,11 @@ export const executeScheduledTask = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    // Consumes the schedule. A stale job (replaced, cancelled, not due) stops here.
     const fired = await fireTaskRunSchedule(ctx, args.taskId, args.scheduledAt);
     if (!fired.ok) return null;
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
     if (await hasActiveRun(ctx.db, args.taskId)) return null;
-    // The task's chat is mid-reply on its sandbox: try again shortly instead of failing the schedule (`startTaskRun`
-    // refuses a busy chat).
     if (await taskWorkSessionBusy(ctx.db, task)) {
       await scheduleTaskRun(
         ctx,
@@ -131,8 +126,6 @@ export const executeScheduledTask = internalMutation({
       userId: task.createdBy,
       baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
       isFirstTaskOnBranch: await isFirstTaskOnBranch(ctx.db, args.taskId),
-      // Carry through any parked change-request comment so a re-run started via
-      // the scheduler is still labelled "made changes" on the timeline.
       triggeringCommentId: task.pendingChangeRequestCommentId,
       clearPendingChangeRequest: true,
       rollbackStatus: "todo",
@@ -144,7 +137,6 @@ export const executeScheduledTask = internalMutation({
 
 /** Ends the task's run state if no runs are still queued or running. */
 export const clearActiveWorkflow = internalMutation({
-  // `runId` is optional: workflows started before it existed omit it.
   args: { taskId: v.id("agentTasks"), runId: v.optional(v.id("agentRuns")) },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -154,8 +146,6 @@ export const clearActiveWorkflow = internalMutation({
     const activeRun = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (!activeRun) {
-      // The session chat queue behind the run drains when the run's turn
-      // closes (`closeTurn`).
       await finishTaskRun(ctx, args.taskId, args.runId);
     }
 

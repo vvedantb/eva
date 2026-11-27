@@ -61,11 +61,7 @@ function patch(path: string, added: string): string {
   ].join("\n");
 }
 
-interface HunkHeaderCounts {
-  /** `-old,DECLARED +new,DECLARED` as written in the `@@` header. */
-  readonly declared: readonly [number, number];
-  /** Old/new line totals counted from the hunk body that follows it. */
-  readonly actual: [number, number];
+interface HunkHeaderCounts {  readonly declared: readonly [number, number];  readonly actual: [number, number];
 }
 
 /**

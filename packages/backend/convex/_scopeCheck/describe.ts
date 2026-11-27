@@ -1,16 +1,3 @@
-/**
- * Turns a flagged hunk into something a non-technical reader can act on.
- *
- * The chip used to name a hunk as `…/AwardedPanel.tsx` plus its `@@` header,
- * which only a developer can decode — the motivating miss was a designer
- * reading exactly that and not realising an icon had changed. So Jev also
- * classifies each hunk, and a pure extractor pulls the concrete before/after
- * out of the hunk body: "Icon changed (IconAward → IconTrophy)" in "Awarded
- * panel".
- *
- * Runtime-free so every extraction edge is testable without a deployment.
- */
-
 import type { z } from "zod";
 import type { booleanQuestion, choiceQuestion } from "../_jev/schema";
 
@@ -92,10 +79,8 @@ export function clipReply(reply: string): string {
   return reply.slice(0, MAX_REPLY_CHARS);
 }
 
-/** Longer than this and the "detail" is a paragraph, not a label. */
 const MAX_DETAIL_VALUE_CHARS = 60;
 
-/** File names that name a route rather than a thing; the folder is the screen. */
 const INDEX_LIKE_NAMES: ReadonlySet<string> = new Set([
   "index",
   "page",
@@ -111,7 +96,6 @@ const COLOUR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|\b(?:bg|text|border|fill|stroke|ring|from|to|via)-[a-z0-9-]+|--[a-z][a-z0-9-]*|\b[a-z][a-zA-Z]*\.\d\b/g;
 const QUOTED_PATTERN = /"([^"\n]{2,60})"|'([^'\n]{2,60})'/g;
 
-/** Which side of the hunk a line belongs to; context lines belong to neither. */
 function sideLines(body: string, marker: "+" | "-"): string {
   return body
     .split("\n")
@@ -123,8 +107,6 @@ function sideLines(body: string, marker: "+" | "-"): string {
 }
 
 function matchesOf(text: string, pattern: RegExp): string[] {
-  // `matchAll` needs its own lastIndex per call; the module-level regexes are
-  // global, so reuse without resetting would skip matches on the second side.
   const found = new Set<string>();
   for (const match of text.matchAll(
     new RegExp(pattern.source, pattern.flags),
@@ -135,11 +117,6 @@ function matchesOf(text: string, pattern: RegExp): string[] {
   return [...found];
 }
 
-/**
- * The first value that only one side has, as `old → new`. A hunk that only
- * adds (or only removes) yields the one side it has; a hunk where both sides
- * share every value yields nothing rather than a misleading pair.
- */
 function firstDifference(body: string, pattern: RegExp): string | undefined {
   const removed = matchesOf(sideLines(body, "-"), pattern);
   const added = matchesOf(sideLines(body, "+"), pattern);
@@ -175,7 +152,6 @@ function titleCase(parts: readonly string[]): string {
   ].join(" ");
 }
 
-/** camelCase, kebab-case, snake_case and dotted names all become words. */
 function words(name: string): string[] {
   return name
     .replace(/[.\-_]+/g, " ")
@@ -197,7 +173,6 @@ export function humaniseSurface(path: string): string {
   const segments = path.split("/").filter((segment) => segment.length > 0);
   const file = segments.at(-1) ?? path;
   const base = file.replace(/\.[^.]+$/, "");
-  // `page.tsx` and `[id].tsx` are both route plumbing rather than a name.
   const routeLike =
     INDEX_LIKE_NAMES.has(base.toLowerCase()) || base.startsWith("[");
 
@@ -209,7 +184,6 @@ export function humaniseSurface(path: string): string {
         (segment) =>
           !segment.startsWith("[") && segment !== "src" && segment !== "app",
       );
-    // Nothing above it says where this is; the raw file name beats "[id]".
     return folder === undefined
       ? file
       : titleCase(words(folder.replace(/^\(|\)$/g, "")));

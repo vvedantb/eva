@@ -36,27 +36,16 @@ export function SandboxStartStopButton({
   isActive: boolean;
   isToggling: boolean;
   onToggle: (action: "start" | "stop") => void;
-  /** Makes the stop affordance inert while the assistant holds the turn. */
   isAssistantResponding?: boolean;
-  /** The last wake attempt failed — the control offers a retry, not a start. */
   hasStartError?: boolean;
-  /** Task and project footers run the larger icon button; headers stay compact. */
   size?: "sm" | "default";
 }) {
   const simpleView = useSimpleView();
   const idlePause = useQuery(
     api.sandboxIdlePause.getSandboxIdlePauseSettings,
     simpleView ? {} : "skip",
-  );
-  // Simple view: idle pause sleeps the sandbox and the Preview tab wakes it, so
-  // the control only shows where auto-wake cannot help — a failed wake, or idle
-  // pause not "on" (auto-wake is gated on it). Otherwise there is no way back.
-  // Hidden while the setting loads, so the common "on" case never flashes.
-  const autoWakes = idlePause === undefined || idlePause.mode === "on";
+  );  const autoWakes = idlePause === undefined || idlePause.mode === "on";
   if (simpleView && (isActive || (!hasStartError && autoWakes))) return null;
-
-  // Only stopping is unsafe mid-turn; a turn cannot be running on a sandbox
-  // that is asleep, but if the flags ever disagree, starting stays available.
   const blockedMidTurn = isActive && isAssistantResponding;
   const label = isActive
     ? SLEEP_EVA_LABEL
@@ -67,11 +56,7 @@ export function SandboxStartStopButton({
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
       <Button
-        size={size === "sm" ? "icon-sm" : "icon"}
-        // Secondary in both states, the action carried by the icon colour
-        // (red stop, green play): on a chat header track buttons are flat,
-        // and a destructive fill would leave a white icon on the trough.
-        variant="secondary"
+        size={size === "sm" ? "icon-sm" : "icon"}        variant="secondary"
         onClick={() => {
           if (blockedMidTurn) return;
           onToggle(isActive ? "stop" : "start");

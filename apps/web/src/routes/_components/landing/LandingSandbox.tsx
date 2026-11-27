@@ -78,7 +78,6 @@ export function LandingSandbox() {
   );
 }
 
-/** Boot log that types itself out once, the first time it scrolls into view. */
 function SandboxTerminal() {
   return (
     <div className="overflow-hidden rounded-surface bg-background smooth-shadow-ring-md">

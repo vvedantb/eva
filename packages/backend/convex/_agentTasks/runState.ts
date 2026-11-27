@@ -70,19 +70,11 @@ export function nextTaskRun(
 ): TaskRunTransition {
   const state = current?.state ?? "idle";
   switch (event.type) {
-    /**
-     * A user schedule replaces any pending schedule or retry. Not while
-     * running: the run's end decides what happens next.
-     */
     case "schedule":
       if (state === "running") {
         return reject("Task already has an active execution");
       }
       return to({ state: "scheduled", at: event.at, jobId: event.jobId });
-    /**
-     * An automatic retry only fills an idle task: it never replaces a user
-     * schedule or another retry, and never a newer run that already started.
-     */
     case "scheduleRetry":
       if (state !== "idle") return reject(`Task is ${state}`);
       return to({ state: "retry_pending", at: event.at, jobId: event.jobId });
@@ -91,11 +83,6 @@ export function nextTaskRun(
         return reject("Task is not scheduled");
       }
       return to(undefined);
-    /**
-     * The job fired. It only owns a schedule that is still pending, due, and
-     * (when the job carries one) at the time it was scheduled for — a
-     * reschedule leaves the old job's run stale.
-     */
     case "fire":
       if (
         current?.state !== "scheduled" &&
@@ -108,21 +95,12 @@ export function nextTaskRun(
         return reject("Schedule was replaced");
       }
       return to(undefined);
-    /**
-     * Callers gate on `agentRuns` (`hasActiveRun`) first. A leftover
-     * `running` here is replaced: rejecting it would
-     * leave a started workflow untracked and block every later run.
-     */
     case "start":
       return to({
         state: "running",
         workflowId: event.workflowId,
         runId: event.runId,
       });
-    /**
-     * Only the running run ends itself. A pending schedule or retry outlives
-     * the run that set it, and a newer run keeps its own state.
-     */
     case "finish":
       if (current?.state !== "running") return reject(`Task is ${state}`);
       if (
@@ -136,7 +114,6 @@ export function nextTaskRun(
   }
 }
 
-/** Applies `event` to the stored task and writes the result. */
 async function applyTaskRunEvent(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -241,12 +218,6 @@ export async function finishTaskRun(
 const STALE_RUN_AGE_MS = 24 * 60 * 60 * 1000;
 const STALE_RUN_PAGE_SIZE = 100;
 
-/**
- * A done/cancelled task, untouched for a day, still `running` a run that
- * nothing will finish: no open turn for its workflow or run, and its
- * `agentRuns` row is terminal or absent. Rows migrated from the legacy
- * `activeWorkflowId` carry no `runId`. Returns the stale run, else null.
- */
 async function staleTerminalRun(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,

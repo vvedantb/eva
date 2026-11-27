@@ -23,17 +23,8 @@ interface CommentReplyComposerProps {
   parentId: Id<"taskComments">;
 }
 
-/**
- * The reply field carries no box of its own: it is the last row of the thread
- * card, so the card's divider and padding already frame it. A bordered control
- * here read as a second, competing surface stacked inside the first.
- */
 const REPLY_INPUT_CLASS =
   "min-h-8 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0";
-
-// ---------------------------------------------------------------------------
-// Inner form — mounts only once the draft has resolved.
-// ---------------------------------------------------------------------------
 
 interface CommentReplyComposerFormProps extends CommentReplyComposerProps {
   initialContent: string | null;
@@ -47,7 +38,6 @@ function CommentReplyComposerForm({
   const currentUserId = useQuery(api.auth.me);
   const mentionRef = useRef<CommentMentionInputHandle>(null);
 
-  // Seed text + maps from draft via useState initializer (no hydration useEffect).
   const [
     {
       displayText: initialText,
@@ -87,14 +77,10 @@ function CommentReplyComposerForm({
     setIsSubmitting(true);
     try {
       await createComment({ taskId, content, parentId });
-      // Read into a local and guarded with ifs rather than `?.`: React Compiler
-      // bails on the whole file when an optional-chaining call sits inside a
-      // try/catch.
       const mention = mentionRef.current;
       if (mention) mention.reset();
       setReplyText("");
       clearDraft();
-      // Keep focus so a follow-up reply can be typed without re-clicking.
       if (mention) mention.focus();
     } catch (err) {
       console.error("Failed to post reply:", err);
@@ -109,8 +95,6 @@ function CommentReplyComposerForm({
         users={typingUsers}
         className="absolute bottom-full left-0 mb-1"
       />
-      {/* Fixed slot keeps the avatar from shifting the input once it loads;
-          h-8 aligns it with the input's first line when multi-line. */}
       <span className="flex h-8 w-4 shrink-0 items-center justify-center">
         {currentUserId ? (
           <UserInitials userId={currentUserId} size="sm" hideLastSeen />
@@ -140,10 +124,6 @@ function CommentReplyComposerForm({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Outer shell — loads the draft, shows a disabled editor while loading.
-// ---------------------------------------------------------------------------
-
 /**
  * Persistent thread reply input, Linear-style: the current user's avatar, a
  * single-line "Leave a reply" field that grows as you type, and an always-
@@ -158,8 +138,6 @@ export function CommentReplyComposer({
     target: { kind: "taskComment", taskId, parentCommentId: parentId },
   });
 
-  // While the draft query is pending, render a disabled placeholder with the
-  // same layout so there is no shift when the form mounts.
   if (draft === undefined) {
     return (
       <div className="flex items-start gap-2">
