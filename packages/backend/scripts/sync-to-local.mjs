@@ -743,10 +743,32 @@ for (const python of ["python3", "python"]) {
 if (!emptied) {
   fail("python3 or python is required to build the empty snapshot.");
 }
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", emptyZip], {
-  label: `empty ${target.name}`,
-  secrets: [target.adminKey],
-});
+/**
+ * A `--replace-all` import, retried: the sandbox's own `convex dev` daemon can
+ * push a schema change mid-import ("Could not complete import because schema
+ * changed"). Replacing everything again is safe, so try up to three times.
+ */
+function importReplacingAll(zip, label) {
+  const args = ["import", ...targetFlags, "--replace-all", "--yes", zip];
+  for (let attempt = 1; attempt < 3; attempt++) {
+    if (
+      runConvex(args, {
+        label,
+        secrets: [target.adminKey],
+        allowFailure: true,
+      }) !== null
+    ) {
+      return;
+    }
+    console.log(
+      `\n[${label}] failed; retrying in 15s (attempt ${attempt + 1} of 3)`,
+    );
+    spawnSync("sleep", ["15"]);
+  }
+  runConvex(args, { label: `${label} (last try)`, secrets: [target.adminKey] });
+}
+
+importReplacingAll(emptyZip, `empty ${target.name}`);
 rmSync(emptyZip, { force: true });
 
 // Push the checked-out schema before the real import, so the import validates
@@ -756,10 +778,7 @@ installComponents();
 // Root tables first, and only here is --replace-all right: it clears tables the
 // snapshot omits, which is what makes the local deployment a mirror rather than a
 // merge. The component imports below must not repeat the flag — see there.
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
-  label: `import into ${target.name}`,
-  secrets: [target.adminKey],
-});
+importReplacingAll(zipPath, `import into ${target.name}`);
 
 // --replace, not --replace-all: --replace-all is deployment-wide even alongside
 // --component, so it also clears every ROOT table not present in the component's
