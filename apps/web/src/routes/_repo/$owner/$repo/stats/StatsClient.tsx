@@ -36,16 +36,12 @@ import { useLoadedFade } from "@/lib/hooks/useLoadedFade";
 
 const STATS_RANGES = ["7d", "30d", "90d", "all"] as const;
 
-/** Hours we credit back to a human for each task the agent completed. */
 const HOURS_SAVED_PER_TASK = 2;
 
 export function StatsClient() {
   const { repo } = useRepo();
   const [timeRange, setTimeRange] = useQueryState("range", timeRangeParser);
 
-  // Analytics windows are measured from this clock. Queries take the timestamp
-  // as an argument because they cannot read it themselves — a Convex query is
-  // cached against its data, so a clock read freezes at first compute time.
   const today = useQuantizedNow(DAY_MS);
 
   const startTime = getStartTime(timeRange, today);

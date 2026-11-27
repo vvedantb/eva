@@ -108,14 +108,16 @@ export function GroupTasksModal({
     open: false,
     ids: "",
   });
-  const selectedIds = selectedTasks.map((task) => task._id).join(",");  if (isOpen && (!syncKey.open || syncKey.ids !== selectedIds)) {
+  const selectedIds = selectedTasks.map((task) => task._id).join(",");
+  if (isOpen && (!syncKey.open || syncKey.ids !== selectedIds)) {
     setSyncKey({ open: true, ids: selectedIds });
     setOrderedTasks(selectedTasks);
   } else if (!isOpen && syncKey.open) {
     setSyncKey({ open: false, ids: "" });
   }
 
-  const projects = useQuery(api.projects.list, { repoId: repo._id });  const statuses = useProjectListStatuses(repo._id);
+  const projects = useQuery(api.projects.list, { repoId: repo._id });
+  const statuses = useProjectListStatuses(repo._id);
   const createFromTasks = useMutation(api.projects.createFromTasks);
   const assignToProject = useMutation(api.agentTasks.assignToProject);
   const sensors = useDragSensors({ sortable: true });
@@ -149,7 +151,8 @@ export function GroupTasksModal({
       const created = await convex.query(api.projects.get, { id: projectId });
       setTitle("");
       onSuccess();
-      onClose();      if (created) {
+      onClose();
+      if (created) {
         const segment = entityPathSegment(created);
         if (segment) {
           navigate({
@@ -166,7 +169,8 @@ export function GroupTasksModal({
 
   const handleAddToProject = async () => {
     if (!selectedProjectId || taskIds.length === 0) return;
-    setIsLoading(true);    const successMessage = `Added ${taskIds.length} task${taskIds.length === 1 ? "" : "s"} to project`;
+    setIsLoading(true);
+    const successMessage = `Added ${taskIds.length} task${taskIds.length === 1 ? "" : "s"} to project`;
     try {
       await withMutationToast(
         assignToProject({

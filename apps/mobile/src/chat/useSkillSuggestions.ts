@@ -9,7 +9,6 @@ import {
 import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 
-/** A trailing-edge debounce: each call cancels the waiting one; `run` fires once the caller is quiet for `ms`. */
 function idleTimer(ms: number) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const cancel = () => {
@@ -34,7 +33,6 @@ function idleTimer(ms: number) {
  * as soon as the draft moves on, as the web. Call `noteDraft` on each edit.
  */
 export function useSkillSuggestions(skills: readonly MentionItem[], text: string) {
-  // Behind the `skillSuggestions` experimental flag (web Settings → Experimental): off means no Jev call and no chips.
   const enabled = useQuery(api.auth.getExperimentalFlags, {})?.skillSuggestions === true;
   const suggest = useAction(api.skillSuggestions.suggest);
   const [{ schedule, cancel }] = useState(() => idleTimer(SUGGEST_IDLE_MS));

@@ -66,7 +66,8 @@ export function ChangeStatusModal({
 
   const handleChangeStatus = async () => {
     if (!selectedStatus) return;
-    setIsLoading(true);    const successMessage = `Updated ${count} task${count === 1 ? "" : "s"}`;
+    setIsLoading(true);
+    const successMessage = `Updated ${count} task${count === 1 ? "" : "s"}`;
     try {
       await withMutationToast(
         Promise.all(

@@ -77,7 +77,6 @@ export function useDraftSync(target: DraftTarget | null) {
     target ? { target } : "skip",
   );
   const setDraft = useMutation(api.drafts.set);
-  // The saved draft value this screen has already considered.
   const [considered, setConsidered] = useState<string | null | undefined>(
     undefined,
   );
@@ -105,17 +104,11 @@ export function useDraftSync(target: DraftTarget | null) {
       ownSaves: sync.ownSaves,
     });
     if (!decision.apply || typeof remote !== "string") return;
-    // Taken from the server: it is already saved, and its echo is ours.
     sync.lastSaved = remote;
     sync.ownSaves = rememberOwnSave(sync.ownSaves, remote);
     composer.load(remote);
   };
 
-  /**
-   * The newest content known for `other` (saved from this client or taken
-   * from the server), or null: a composer that switches targets loads it,
-   * since `pull` ignores this client's own saves.
-   */
   const lastKnown = (other: DraftTarget): string | null =>
     syncs.get(targetKey(other))?.lastSaved ?? null;
 

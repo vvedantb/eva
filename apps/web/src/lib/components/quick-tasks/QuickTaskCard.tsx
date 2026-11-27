@@ -77,16 +77,23 @@ interface QuickTaskCardProps {
   hasError?: boolean;
   deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
-  groupedCodebases?: GroupedCodebase[];  href?: string;  onClick?: (event: MouseEvent<HTMLElement>) => void;
+  groupedCodebases?: GroupedCodebase[];
+  href?: string;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
   isSelecting?: boolean;
   isSelected?: boolean;
-  isActive?: boolean;  onToggleSelect?: (event: { shiftKey: boolean }) => void;
+  isActive?: boolean;
+  onToggleSelect?: (event: { shiftKey: boolean }) => void;
   assignedTo?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   users?: User[];
   currentUserId?: Id<"users">;
-  projects?: Project[];  isAgentActive?: boolean;  hasUnread?: boolean;  isAwaitingAnswer?: boolean;  archived?: boolean;
+  projects?: Project[];
+  isAgentActive?: boolean;
+  hasUnread?: boolean;
+  isAwaitingAnswer?: boolean;
+  archived?: boolean;
 }
 
 export function QuickTaskCard({
@@ -122,7 +129,8 @@ export function QuickTaskCard({
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
-  const accentClass = showError ? "bg-destructive" : statusMeta.bar;  const isInProgress = !hasError && status === "in_progress";
+  const accentClass = showError ? "bg-destructive" : statusMeta.bar;
+  const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
   const simpleView = useSimpleView();
 
@@ -214,7 +222,8 @@ export function QuickTaskCard({
       <div className="flex min-w-0 items-start gap-2">
         {isSelecting ? (
           <Checkbox
-            checked={isSelected}            onClick={(event) => {
+            checked={isSelected}
+            onClick={(event) => {
               event.stopPropagation();
               event.preventDefault();
               onToggleSelect?.({ shiftKey: event.shiftKey });
@@ -239,7 +248,8 @@ export function QuickTaskCard({
               </TooltipTrigger>
               <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
             </Tooltip>
-          ) : null}          {isAwaitingAnswer ? (
+          ) : null}
+          {isAwaitingAnswer ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="relative flex items-center hit-target">
@@ -277,7 +287,8 @@ export function QuickTaskCard({
                 {SANDBOX_STATUS_STYLES[sandboxStatus].label}
               </TooltipContent>
             </Tooltip>
-          ) : null}          <UnreadDot show={hasUnread && !isAgentActive} />
+          ) : null}
+          <UnreadDot show={hasUnread && !isAgentActive} />
           {scheduledAt ? (
             <Tooltip>
               <TooltipTrigger asChild>

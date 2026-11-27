@@ -22,26 +22,18 @@ import {
 import { useQuery } from "convex/react";
 import { useState } from "react";
 
-/**
- * The composer text as the person reads it (`@Ada`, `/review`), with the
- * label → id of each pick so a send carries the web's tokens. Changes as one.
- */
 type Draft = {
   text: string;
   mentionMap: ReadonlyMap<string, string>;
   skillMap: ReadonlyMap<string, string>;
-  /** The chip the last pick inserted (see `isInsertedTokenTrigger`). */
   inserted: InsertedToken | null;
-  /** The picker was closed (Android back, as the web Escape) and stays shut until the text changes. */
   dismissed: boolean;
 };
 
 const EMPTY_DRAFT: Draft = { text: "", mentionMap: new Map(), skillMap: new Map(), inserted: null, dismissed: false };
 
-/** A pick still in the draft text: an `@` mention or a `/` skill, by its label. */
 export type ComposerPick = { kind: MentionChipKind; label: string };
 
-/** The labels of `map` whose `@Label` (or `/Label`) is still in `text`. */
 function labelsIn(text: string, map: ReadonlyMap<string, string>, pattern: (labels: string[]) => RegExp): string[] {
   return [...map.keys()].filter((label) => pattern([label]).test(text));
 }
@@ -96,7 +88,6 @@ export function useMentionComposer(
   const peopleIds = new Set([...merged.peopleIds, ...extraPeople.map((item) => item.id)]);
   const skills = repoId ? skillSlashItems(repoSkills ?? [], systemSkills ?? [], provider, harnessCatalog?.skills) : [];
 
-  // The web chat composer always has a `/` empty state ("No available skills."), so `/` always opens.
   const found = findMentionTrigger(draft.text, items.length > 0, true);
   const trigger = found && !isInsertedTokenTrigger(draft.text, found.startIndex, draft.inserted) ? found : null;
   const pool = trigger?.kind === "slash" ? skills : items;
@@ -134,7 +125,6 @@ export function useMentionComposer(
     edit({ ...draft, text, inserted, dismissed: false });
   };
 
-  /** Adds `/label` after the draft as a pick, as the web `insertSkill` (a skill suggestion chip). */
   const insertSkill = (item: MentionItem) => {
     const token = `/${item.label}`;
     const needsSpace = draft.text.length > 0 && !/\s$/.test(draft.text);
