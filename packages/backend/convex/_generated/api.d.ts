@@ -28,9 +28,9 @@ import type * as _agentTasks_runFacts from "../_agentTasks/runFacts.js";
 import type * as _agentTasks_runState from "../_agentTasks/runState.js";
 import type * as _agentTasks_runSummary from "../_agentTasks/runSummary.js";
 import type * as _agentTasks_scheduling from "../_agentTasks/scheduling.js";
+import type * as _agentTasks_taskChatSeed from "../_agentTasks/taskChatSeed.js";
 import type * as _agentTasks_taskPr from "../_agentTasks/taskPr.js";
 import type * as _agentTasks_taskRunStatus from "../_agentTasks/taskRunStatus.js";
-import type * as _agentTasks_taskChatSeed from "../_agentTasks/taskChatSeed.js";
 import type * as _agentTasks_taskRunTurn from "../_agentTasks/taskRunTurn.js";
 import type * as _agentTasks_uiImplementationPrompt from "../_agentTasks/uiImplementationPrompt.js";
 import type * as _agentTasks_updateTask from "../_agentTasks/updateTask.js";
@@ -226,7 +226,6 @@ import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthro
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
 import type * as _projects_batches from "../_projects/batches.js";
 import type * as _projects_chatTaskCards from "../_projects/chatTaskCards.js";
-import type * as _projects_progress from "../_projects/progress.js";
 import type * as _projects_conflicts from "../_projects/conflicts.js";
 import type * as _projects_coordinatorWake from "../_projects/coordinatorWake.js";
 import type * as _projects_coordinatorWakeDelivery from "../_projects/coordinatorWakeDelivery.js";
@@ -234,9 +233,10 @@ import type * as _projects_development from "../_projects/development.js";
 import type * as _projects_helpers from "../_projects/helpers.js";
 import type * as _projects_internal from "../_projects/internal.js";
 import type * as _projects_mutations from "../_projects/mutations.js";
+import type * as _projects_progress from "../_projects/progress.js";
+import type * as _projects_projectAccount from "../_projects/projectAccount.js";
 import type * as _projects_queries from "../_projects/queries.js";
 import type * as _projects_reports from "../_projects/reports.js";
-import type * as _projects_projectAccount from "../_projects/projectAccount.js";
 import type * as _projects_scheduler from "../_projects/scheduler.js";
 import type * as _projects_summary from "../_projects/summary.js";
 import type * as _projects_taskTable from "../_projects/taskTable.js";
@@ -598,6 +598,7 @@ import type * as validators from "../validators.js";
 import type * as workProfiles from "../workProfiles.js";
 import type * as workflowManager from "../workflowManager.js";
 import type * as workflowWatchdog from "../workflowWatchdog.js";
+import type * as zzProofSeed from "../zzProofSeed.js";
 
 import type {
   ApiFromModules,
@@ -626,9 +627,9 @@ declare const fullApi: ApiFromModules<{
   "_agentTasks/runState": typeof _agentTasks_runState;
   "_agentTasks/runSummary": typeof _agentTasks_runSummary;
   "_agentTasks/scheduling": typeof _agentTasks_scheduling;
+  "_agentTasks/taskChatSeed": typeof _agentTasks_taskChatSeed;
   "_agentTasks/taskPr": typeof _agentTasks_taskPr;
   "_agentTasks/taskRunStatus": typeof _agentTasks_taskRunStatus;
-  "_agentTasks/taskChatSeed": typeof _agentTasks_taskChatSeed;
   "_agentTasks/taskRunTurn": typeof _agentTasks_taskRunTurn;
   "_agentTasks/uiImplementationPrompt": typeof _agentTasks_uiImplementationPrompt;
   "_agentTasks/updateTask": typeof _agentTasks_updateTask;
@@ -824,7 +825,6 @@ declare const fullApi: ApiFromModules<{
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
   "_projects/batches": typeof _projects_batches;
   "_projects/chatTaskCards": typeof _projects_chatTaskCards;
-  "_projects/progress": typeof _projects_progress;
   "_projects/conflicts": typeof _projects_conflicts;
   "_projects/coordinatorWake": typeof _projects_coordinatorWake;
   "_projects/coordinatorWakeDelivery": typeof _projects_coordinatorWakeDelivery;
@@ -832,9 +832,10 @@ declare const fullApi: ApiFromModules<{
   "_projects/helpers": typeof _projects_helpers;
   "_projects/internal": typeof _projects_internal;
   "_projects/mutations": typeof _projects_mutations;
+  "_projects/progress": typeof _projects_progress;
+  "_projects/projectAccount": typeof _projects_projectAccount;
   "_projects/queries": typeof _projects_queries;
   "_projects/reports": typeof _projects_reports;
-  "_projects/projectAccount": typeof _projects_projectAccount;
   "_projects/scheduler": typeof _projects_scheduler;
   "_projects/summary": typeof _projects_summary;
   "_projects/taskTable": typeof _projects_taskTable;
@@ -1196,6 +1197,7 @@ declare const fullApi: ApiFromModules<{
   workProfiles: typeof workProfiles;
   workflowManager: typeof workflowManager;
   workflowWatchdog: typeof workflowWatchdog;
+  zzProofSeed: typeof zzProofSeed;
 }>;
 
 /**
