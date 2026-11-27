@@ -105,6 +105,12 @@ const FLAG_GROUPS: FlagGroup[] = [
         description:
           "Suggest a / skill that fits your message while you type. Chips appear above the composer; tap one to add it.",
       },
+      {
+        key: "viewPrsChip",
+        title: "View PRs chip",
+        description:
+          "Show a chip above the composer when the chat has pull requests. Tap it to open one.",
+      },
     ],
   },
   {

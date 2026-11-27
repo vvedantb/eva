@@ -54,6 +54,7 @@ export function useSessionChatBinding({
   return {
     entity: { kind: "session", sessionId, chatId },
     ownerLabel: "session",
+    prOwner: { kind: "session", sessionId },
     active: isRouteActive,
     doc: {
       title: session.title,

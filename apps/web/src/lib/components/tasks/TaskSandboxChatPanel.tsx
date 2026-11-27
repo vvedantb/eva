@@ -57,6 +57,7 @@ export function useTaskChatBinding(
   return useOwnedChatBinding({
     ownedSession: taskSession,
     ownerLabel: "task",
+    prOwner: { kind: "task", taskId },
     title: task?.title,
     common: {
       accounts: accounts.options,
