@@ -35,6 +35,7 @@ FOLLOW ALL OF THESE RULES
 - Eliminate duplication, centralise your changes so its easier to update them
 - Keep-alive UI hides with React `<Activity>`; use a `hidden` class only where effects must keep running (terminals, on WebGL xterm).
 - Web: no `prefers-reduced-motion` or `useReducedMotion`; only "Disable page animations" turns motion off (design-check enforces).
+- Changing the preview comment card, comments drawer or toolbar? Update the injected copy in `packages/backend/preview-annotation-src` and run `pnpm preview:parity`.
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 
