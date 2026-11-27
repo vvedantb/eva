@@ -31,7 +31,8 @@ import { useQueryState } from "nuqs";
 import { api, type Id } from "@eva/backend";
 import { messageLinkParser } from "@/lib/search-params";
 import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
-import { PreviewActionBar } from "./_components/PreviewActionBar";
+import { usePreviewScreenshot } from "./_components/usePreviewScreenshot";
+import { usePreviewToolbarBridge } from "./_components/usePreviewToolbarBridge";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import {
   PreviewCommentsDrawer,
@@ -155,6 +156,31 @@ export function WebPreviewPanel({
   // so it survives route changes. Nav bar / annotation consumers get the
   // element via this subscription instead of an in-tree ref.
   const iframeElement = usePreviewIframeElement(pathStorageKey);
+  const screenshot = usePreviewScreenshot(iframeElement);
+  // The toolbar is drawn inside the page by the preview proxy; this hands it
+  // Eva's state and runs the tools that need Eva.
+  usePreviewToolbarBridge({
+    iframeElement,
+    state: {
+      selectEnabled: annotation !== undefined,
+      commentsEnabled: annotation !== undefined,
+      commentsActive: commentsOpen,
+      // Open only: a resolved comment needs nothing more.
+      commentCount: comments.filter((comment) => !isResolved(comment)).length,
+      sketchEnabled: canSketch,
+      sketchActive: sketchMode,
+    },
+    actions: {
+      select: () => setAnnotationMode(!annotationMode),
+      comments: () => setCommentsOpen(!commentsOpen),
+      sketch: () => {
+        setSketchMode(!sketchMode);
+        // One tool at a time: both read pointer input on the page.
+        setAnnotationMode(false);
+      },
+      screenshot: screenshot.capture,
+    },
+  });
   const fullscreenElement = useFullscreenElement();
   const [fullscreenRequested, setFullscreenRequested] = useState(false);
   // Esc exits fullscreen without going through our toggle — resync in render.
@@ -351,42 +377,6 @@ export function WebPreviewPanel({
       <PreviewToolCallExecutor
         parentId={toolCallParentId}
         iframeElement={iframeElement}
-      />
-      <PreviewActionBar
-        iframeElement={iframeElement}
-        // Sketch brings its own toolbar to the same spot, with Close.
-        hidden={showPlaceholder || sketchMode}
-        selectElement={
-          annotation
-            ? {
-                active: annotationMode,
-                onToggle: () => setAnnotationMode(!annotationMode),
-              }
-            : undefined
-        }
-        comments={
-          annotation
-            ? {
-                active: commentsOpen,
-                onToggle: () => setCommentsOpen(!commentsOpen),
-                // Open only: a resolved comment needs nothing more.
-                count: comments.filter((comment) => !isResolved(comment))
-                  .length,
-              }
-            : undefined
-        }
-        sketch={
-          canSketch
-            ? {
-                active: sketchMode,
-                onToggle: () => {
-                  setSketchMode(!sketchMode);
-                  // One tool at a time: both read pointer input on the page.
-                  setAnnotationMode(false);
-                },
-              }
-            : undefined
-        }
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar

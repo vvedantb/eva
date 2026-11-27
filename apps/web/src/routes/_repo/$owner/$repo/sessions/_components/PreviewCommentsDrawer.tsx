@@ -29,11 +29,6 @@ export function previewCommentsDrawerWidth(box: IframeBox): number {
 /** Gap between the floating drawer and the preview's edges. */
 const DRAWER_INSET = 8;
 
-/** The preview width the drawer covers, gap included; the action bar centres beside it. */
-export function previewCommentsDrawerSpace(box: IframeBox): number {
-  return previewCommentsDrawerWidth(box) + DRAWER_INSET;
-}
-
 /** Path only: `/a/?x=1#y` and `/a` are the same page. */
 function pagePathname(path: string): string {
   const pathname = path.split(/[?#]/)[0] ?? "/";

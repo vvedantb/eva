@@ -228,7 +228,7 @@ Build is split into phases (Convex 10-min action ceiling). Normally finishes in 
 - Desktop: TigerVNC, noVNC, websockify, Google Chrome
 - Docker Engine (nested containers like `supabase start`)
 - Agent CLIs: Claude Code, Codex, opencode, Cursor
-- Other: agent-browser, Convex CLI, Supabase CLI 2.90.0, agentation-mcp, Claude Agent SDK, code-server
+- Other: agent-browser, Convex CLI, Supabase CLI 2.90.0, Claude Agent SDK, code-server
 
 Edit `launchSeedRun` in `packages/backend/convex/snapshotActions.ts` to change base tooling. Prefer **Build Commands** for project-specific needs.
 

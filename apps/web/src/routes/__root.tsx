@@ -28,15 +28,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
-// /** Lazy so the agentation package stays out of the production bundle. */
-// const DevAgentation = import.meta.env.DEV
-//   ? lazy(() =>
-//       import("@/lib/components/DevAgentation").then((m) => ({
-//         default: m.DevAgentation,
-//       })),
-//     )
-//   : null;
-//
 // /** Lazy so @vvedantb/redline stays out of the production bundle. */
 // const DevRedline = import.meta.env.DEV
 //   ? lazy(() =>
@@ -76,11 +67,6 @@ function RootComponent() {
       {/* No analytics from embedded documents: the host page already counts. */}
       {IS_EMBEDDED ? null : <Analytics />}
       {/* Dev overlays, commented out for now.
-      {DevAgentation ? (
-        <Suspense fallback={null}>
-          <DevAgentation />
-        </Suspense>
-      ) : null}
       {DevRedline ? (
         <Suspense fallback={null}>
           <DevRedline />

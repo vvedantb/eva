@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v34";
+const SCRIPT_VERSION = "stream-v41";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -519,19 +519,13 @@ function authorize(clientReq, clientRes) {
 // forwards those requests to the local Convex backend. /__convex-site maps to
 // the Convex HTTP-actions port the same way.
 //
-// The agentation annotation widget has the same problem: it runs in the browser
-// but its server listens on sandbox-localhost:4747, which the user's machine
-// cannot reach. /__agentation forwards to it on the authenticated preview origin.
-//
 // /__tab/<port> generalises that to any in-sandbox port, so user-defined custom
 // tabs (Supabase Studio on 54323, say) share this one exposed proxy port with
 // the Preview tab rather than fighting over it.
 const CONVEX_PORT = 3210;
 const CONVEX_SITE_PORT = 3211;
-const AGENTATION_PORT = 4747;
 const CONVEX_PREFIX = "/__convex";
 const CONVEX_SITE_PREFIX = "/__convex-site";
-const AGENTATION_PREFIX = "/__agentation";
 const TAB_PREFIX = ${JSON.stringify(PREVIEW_TAB_PREFIX)};
 
 // Returns the path with the prefix stripped (always leading-slashed), or null
@@ -567,7 +561,7 @@ function matchTabPrefix(url) {
 }
 
 // Maps an incoming request URL to an upstream port + stripped path. Anything
-// outside the Convex / agentation / tab prefixes goes to the dev server and
+// outside the Convex / tab prefixes goes to the dev server and
 // gets HTML injection.
 function resolveRoute(url) {
   const u = url || "/";
@@ -585,15 +579,6 @@ function resolveRoute(url) {
     return {
       port: CONVEX_PORT,
       path: convexMatch,
-      injects: false,
-      tabPrefix: null,
-    };
-  }
-  const agentationMatch = matchPrefix(u, AGENTATION_PREFIX);
-  if (agentationMatch !== null) {
-    return {
-      port: AGENTATION_PORT,
-      path: agentationMatch,
       injects: false,
       tabPrefix: null,
     };
@@ -1055,7 +1040,7 @@ function rewriteNovncModuleImports(html) {
 // moved under the tab's own prefix. Prefixes the proxy owns are left alone, as
 // are protocol-relative ("//cdn/x") and absolute URLs.
 const TAB_SKIP_PREFIX_RE =
-  /^\/(?:__tab\/|__convex|__agentation|__eva_preview_proxy)/;
+  /^\/(?:__tab\/|__convex|__eva_preview_proxy)/;
 
 function prefixTabPath(value, tabPrefix) {
   if (value.length === 0 || value[0] !== "/" || value[1] === "/") return null;
