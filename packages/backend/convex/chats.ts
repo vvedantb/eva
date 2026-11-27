@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import {
   authMutation,
   authQuery,
@@ -70,6 +70,76 @@ const traitArgs = {
   fastMode: v.optional(v.boolean()),
 };
 
+const sendArgs = {
+  target: v.string(),
+  message: v.string(),
+  /** What the chat shows when `message` is a rich agent prompt (a preview annotation). */
+  displayContent: v.optional(v.string()),
+  /** Preview "Select element" sends: where the annotation points. */
+  annotation: v.optional(previewAnnotationValidator),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The composer's picks for this message (the web sends them). Absent: the
+   * chat's sticky model, traits and account (the phone).
+   */
+  settings: v.optional(
+    v.object({
+      model: aiModelValidator,
+      ...traitArgs,
+      /** Absent is Team. */
+      providerAccountId: v.optional(v.id("userProviderAccounts")),
+    }),
+  ),
+  /** The proposed plan this message implements: marked implemented. */
+  sourceProposedPlanId: v.optional(v.id("proposedPlans")),
+};
+
+const sendArgsValidator = v.object(sendArgs);
+
+/**
+ * The whole decision of `send` for one caller. The web and phone mutation and
+ * the preview-link HTTP route (`previewComments.sendForUser`) both run it, so
+ * a message from a direct sandbox link takes the same path as one from the app.
+ */
+export async function sendChatMessage(
+  ctx: AuthMutationCtx,
+  args: Infer<typeof sendArgsValidator>,
+): Promise<null> {
+  const message = args.message.trim();
+  if (!message) return null;
+  const { chat, entity } = await resolveWritableChat(ctx, args.target);
+  if (!chat.canReply) throw new Error("This chat is closed");
+  // A task's or project's first send creates its session chat; later sends
+  // resolve as that session chat directly (`resolveMobileChat`).
+  const context =
+    entity.kind === "session"
+      ? entity.context
+      : await ensureOwnerChat(ctx, entity);
+  if (args.sourceProposedPlanId !== undefined) {
+    await markPlanImplementedIn(
+      ctx,
+      args.sourceProposedPlanId,
+      context.session._id,
+    );
+  }
+  const { attachmentStorageIds } = args;
+  await sendSessionChatMessage(ctx, {
+    context,
+    userId: ctx.userId,
+    content: message,
+    displayContent: args.displayContent?.trim() || undefined,
+    annotation: args.annotation,
+    settings: args.settings
+      ? { ...args.settings, attachmentStorageIds }
+      : stickyTurnSettings(
+          context.chat,
+          normalizeAIModel(context.chat.lastModel ?? chat.model),
+          attachmentStorageIds,
+        ),
+  });
+  return null;
+}
+
 /**
  * Sends a person's message in any chat the apps open (session chat, quick
  * task, project). The server alone decides whether it runs now or queues:
@@ -79,65 +149,9 @@ const traitArgs = {
  * `attachmentStorageIds` come from `messages.generateUploadUrl` uploads.
  */
 export const send = authMutation({
-  args: {
-    target: v.string(),
-    message: v.string(),
-    /** What the chat shows when `message` is a rich agent prompt (a preview annotation). */
-    displayContent: v.optional(v.string()),
-    /** Preview "Select element" sends: where the annotation points. */
-    annotation: v.optional(previewAnnotationValidator),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /**
-     * The composer's picks for this message (the web sends them). Absent: the
-     * chat's sticky model, traits and account (the phone).
-     */
-    settings: v.optional(
-      v.object({
-        model: aiModelValidator,
-        ...traitArgs,
-        /** Absent is Team. */
-        providerAccountId: v.optional(v.id("userProviderAccounts")),
-      }),
-    ),
-    /** The proposed plan this message implements: marked implemented. */
-    sourceProposedPlanId: v.optional(v.id("proposedPlans")),
-  },
+  args: sendArgs,
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const message = args.message.trim();
-    if (!message) return null;
-    const { chat, entity } = await resolveWritableChat(ctx, args.target);
-    if (!chat.canReply) throw new Error("This chat is closed");
-    // A task's or project's first send creates its session chat; later sends
-    // resolve as that session chat directly (`resolveMobileChat`).
-    const context =
-      entity.kind === "session"
-        ? entity.context
-        : await ensureOwnerChat(ctx, entity);
-    if (args.sourceProposedPlanId !== undefined) {
-      await markPlanImplementedIn(
-        ctx,
-        args.sourceProposedPlanId,
-        context.session._id,
-      );
-    }
-    const { attachmentStorageIds } = args;
-    await sendSessionChatMessage(ctx, {
-      context,
-      userId: ctx.userId,
-      content: message,
-      displayContent: args.displayContent?.trim() || undefined,
-      annotation: args.annotation,
-      settings: args.settings
-        ? { ...args.settings, attachmentStorageIds }
-        : stickyTurnSettings(
-            context.chat,
-            normalizeAIModel(context.chat.lastModel ?? chat.model),
-            attachmentStorageIds,
-          ),
-    });
-    return null;
-  },
+  handler: (ctx, args) => sendChatMessage(ctx, args),
 });
 
 /** Marks a plan implemented by a message sent in the plan's own session. */

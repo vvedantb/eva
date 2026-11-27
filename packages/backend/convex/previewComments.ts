@@ -1,9 +1,14 @@
 import { v } from "convex/values";
-import { parseAnnotationDisplay } from "@eva/shared/previewAnnotationDisplay";
+import {
+  buildAnnotationDisplay,
+  parseAnnotationDisplay,
+} from "@eva/shared/previewAnnotationDisplay";
 import { getUserDisplayName } from "@eva/shared/taskDetail";
-import { authMutation, authQuery } from "./functions";
-import { getSessionChatWithAccess } from "./_sessionChats/helpers";
-import type { QueryCtx } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { sendChatMessage } from "./chats";
+import { findMainChat, getSessionChatWithAccess } from "./_sessionChats/helpers";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
 /**
@@ -114,15 +119,14 @@ function feedbackOf(content: string): string {
   return parseAnnotationDisplay(content)?.feedback ?? content;
 }
 
-export const list = authQuery({
-  args: { chatId: v.id("sessionChats") },
-  returns: v.array(previewCommentValidator),
-  handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
+/** The drawer's list for one chat, for a caller who may open it. */
+async function listComments(
+  ctx: QueryCtx,
+  chatId: Id<"sessionChats">,
+  userId: Id<"users">,
+) {
+  {
+    const { chat } = await getSessionChatWithAccess(ctx.db, chatId, userId);
     const parentId = chat._id;
     const [rows, queued] = await Promise.all([
       ctx.db
@@ -190,7 +194,13 @@ export const list = authQuery({
       ...waiting.sort((a, b) => b.timestamp - a.timestamp),
       ...messages.flatMap((comment) => (comment ? [comment] : [])),
     ];
-  },
+  }
+}
+
+export const list = authQuery({
+  args: { chatId: v.id("sessionChats") },
+  returns: v.array(previewCommentValidator),
+  handler: (ctx, args) => listComments(ctx, args.chatId, ctx.userId),
 });
 
 /**
@@ -198,24 +208,113 @@ export const list = authQuery({
  * chat may do either, as with doc comments. Queued comments have no row yet,
  * so they cannot be resolved.
  */
+async function setCommentResolved(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  id: Id<"messages">,
+  resolved: boolean,
+): Promise<null> {
+  const row = await ctx.db.get(id);
+  const chatId = row ? ctx.db.normalizeId("sessionChats", row.parentId) : null;
+  if (!row || !row.annotation || !chatId) {
+    throw new Error("Comment not found");
+  }
+  await getSessionChatWithAccess(ctx.db, chatId, userId);
+  const { resolvedAt, resolvedBy, ...open } = row.annotation;
+  void resolvedAt;
+  void resolvedBy;
+  await ctx.db.patch(row._id, {
+    annotation: resolved
+      ? { ...open, resolvedAt: Date.now(), resolvedBy: userId }
+      : open,
+  });
+  return null;
+}
+
 export const setResolved = authMutation({
   args: { id: v.id("messages"), resolved: v.boolean() },
   returns: v.null(),
+  handler: (ctx, args) =>
+    setCommentResolved(ctx, ctx.userId, args.id, args.resolved),
+});
+
+/**
+ * Direct sandbox links. The preview-link HTTP routes (`previewCommentsHttp.ts`)
+ * act for the user a signed link token names, so these take the user id as an
+ * argument and are internal: only the token check reaches them.
+ */
+
+/**
+ * The user and chat a link token is minted for: the signed-in caller and the
+ * main chat of the session that owns `sandboxId`. Null when the sandbox has
+ * no session or the caller may not open it.
+ */
+export const linkTarget = authQuery({
+  args: { repoId: v.id("githubRepos"), sandboxId: v.string() },
+  returns: v.union(
+    v.object({ userId: v.id("users"), chatId: v.id("sessionChats") }),
+    v.null(),
+  ),
   handler: async (ctx, args) => {
-    const row = await ctx.db.get(args.id);
-    const chatId = row ? ctx.db.normalizeId("sessionChats", row.parentId) : null;
-    if (!row || !row.annotation || !chatId) {
-      throw new Error("Comment not found");
-    }
-    await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
-    const { resolvedAt, resolvedBy, ...open } = row.annotation;
-    void resolvedAt;
-    void resolvedBy;
-    await ctx.db.patch(row._id, {
-      annotation: args.resolved
-        ? { ...open, resolvedAt: Date.now(), resolvedBy: ctx.userId }
-        : open,
-    });
-    return null;
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return null;
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (!session || session.repoId !== args.repoId) return null;
+    const chat = await findMainChat(ctx.db, session._id);
+    return chat ? { userId: ctx.userId, chatId: chat._id } : null;
+  },
+});
+
+export const listForUser = internalQuery({
+  args: { userId: v.id("users"), chatId: v.id("sessionChats") },
+  returns: v.array(previewCommentValidator),
+  handler: (ctx, args) => listComments(ctx, args.chatId, args.userId),
+});
+
+export const setResolvedForUser = internalMutation({
+  args: {
+    userId: v.id("users"),
+    id: v.id("messages"),
+    resolved: v.boolean(),
+  },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    setCommentResolved(ctx, args.userId, args.id, args.resolved),
+});
+
+/** Sends a comment from a direct link: the same path as the Eva page's card. */
+export const sendForUser = internalMutation({
+  args: {
+    userId: v.id("users"),
+    chatId: v.id("sessionChats"),
+    feedback: v.string(),
+    /** `<tag.class>` of the element. */
+    element: v.string(),
+    selector: v.string(),
+    pagePath: v.string(),
+    /** The element's context, as the page formatted it. */
+    details: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const feedback = args.feedback.trim();
+    if (!feedback) throw new Error("Write a note first");
+    const ref = {
+      element: args.element,
+      pagePath: args.pagePath,
+      selector: args.selector,
+    };
+    const full = `${feedback}\n\n---\n**Preview annotation**\n- Page: \`${args.pagePath}\`\n- Element: \`${args.element}\`\n- Selector: \`${args.selector}\`\n\n${args.details}`;
+    return sendChatMessage(
+      { ...ctx, userId: args.userId },
+      {
+        target: String(args.chatId),
+        message: full,
+        displayContent: buildAnnotationDisplay(feedback, ref),
+        annotation: ref,
+      },
+    );
   },
 });

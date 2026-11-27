@@ -18,6 +18,13 @@
 
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { openSelectionCard, type SelectionCard } from "./commentCard";
+import { openCommentsDrawer, type CommentsDrawer } from "./commentsDrawer";
+import {
+  listComments,
+  loadEvaSession,
+  sendComment,
+  type EvaSession,
+} from "./evaApi";
 import type { ToolbarTheme } from "./theme";
 import { mountToolbar, type Toolbar } from "./toolbar";
 
@@ -375,6 +382,9 @@ function evaPreviewAnnotationScript(): void {
   let toolbar: Toolbar | null = null;
   /** Direct link only: the note card for the picked element. */
   let selectionCard: SelectionCard | null = null;
+  /** Direct link only: set when the proxy handed over a preview-comments token. */
+  let evaSession: EvaSession | null = null;
+  let commentsDrawer: CommentsDrawer | null = null;
 
   function post(
     payload:
@@ -874,6 +884,13 @@ function evaPreviewAnnotationScript(): void {
     paintBox(target, chipLabel(target), false);
   }
 
+  /** A picked element is done: clear it and tell the toolbar what happened. */
+  function finishSelection(notice: string): void {
+    clearAll();
+    setMode(false);
+    toolbar?.update({ notice });
+  }
+
   function onClick(event: MouseEvent): void {
     if (!modeActive) return;
     const target = event.target;
@@ -895,6 +912,7 @@ function evaPreviewAnnotationScript(): void {
       // No Eva to take the annotation: a card takes the note and copies it
       // with the element's context, to paste into a chat or an issue.
       selectionCard?.close();
+      const session = evaSession;
       selectionCard = openSelectionCard({
         info: {
           chip: elementChip(target),
@@ -903,17 +921,31 @@ function evaPreviewAnnotationScript(): void {
           accessibility: context.accessibility,
         },
         rect,
-        onCopy: (note) =>
-          copyToClipboard(formatContextForClipboard(context, note)).then(
-            (ok) => {
-              clearAll();
-              setMode(false);
-              toolbar?.update({
-                notice: ok ? "Copied for Eva" : "Couldn't copy",
+        submitLabel: session ? "Send to Eva" : "Copy for Eva",
+        requireNote: session !== null,
+        onSubmit: async (note) => {
+          if (session) {
+            try {
+              await sendComment(session, {
+                feedback: note,
+                element: elementChip(target),
+                selector: context.selector,
+                pagePath: context.pagePath,
+                details: formatContextForClipboard(context, ""),
               });
-              return ok;
-            },
-          ),
+            } catch (error) {
+              return error instanceof Error ? error.message : "Couldn't send";
+            }
+            finishSelection("Sent to Eva");
+            return null;
+          }
+          const ok = await copyToClipboard(
+            formatContextForClipboard(context, note),
+          );
+          if (!ok) return "Couldn't copy";
+          finishSelection("Copied for Eva");
+          return null;
+        },
         onCancel: clearAll,
       });
       return;
@@ -1547,6 +1579,7 @@ function evaPreviewAnnotationScript(): void {
     if (labelEl) labelEl.style.display = labelDisplayForCapture;
     toolbar?.setHiddenForCapture(false);
     selectionCard?.setHiddenForCapture(false);
+    commentsDrawer?.setHiddenForCapture(false);
   }
 
   let overlayDisplayForCapture = "";
@@ -1609,6 +1642,7 @@ function evaPreviewAnnotationScript(): void {
     if (labelEl) labelEl.style.display = "none";
     toolbar?.setHiddenForCapture(true);
     selectionCard?.setHiddenForCapture(true);
+    commentsDrawer?.setHiddenForCapture(true);
     return loadHtml2Canvas()
       .then(renderViewportCanvas)
       .then((canvas) => canvas.toDataURL("image/png"))
@@ -1857,8 +1891,28 @@ function evaPreviewAnnotationScript(): void {
             setMode(!modeActive);
           }
         },
-        comments: () =>
-          post({ type: "eva-preview-toolbar-action", action: "comments" }),
+        comments: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "comments" });
+            return;
+          }
+          if (commentsDrawer) {
+            commentsDrawer.close();
+            commentsDrawer = null;
+            toolbar?.update({ commentsActive: false });
+            return;
+          }
+          if (!evaSession) return;
+          commentsDrawer = openCommentsDrawer({
+            session: evaSession,
+            onClose: () => {
+              commentsDrawer = null;
+              toolbar?.update({ commentsActive: false });
+            },
+            onCount: (commentCount) => toolbar?.update({ commentCount }),
+          });
+          toolbar?.update({ commentsActive: true });
+        },
         freeze: () => setFrozen(!frozen),
         sketch: () =>
           post({ type: "eva-preview-toolbar-action", action: "sketch" }),
@@ -1874,6 +1928,24 @@ function evaPreviewAnnotationScript(): void {
       // only the ones that need no parent are shown.
       { selectEnabled: !embedded },
     );
+  }
+
+  // Direct link: the proxy may hold a token for this sandbox's chat. With it
+  // the Comments button, the drawer and "Send to Eva" appear.
+  if (ownsToolbar && !embedded) {
+    void loadEvaSession().then(async (session) => {
+      if (!session) return;
+      evaSession = session;
+      toolbar?.update({ commentsEnabled: true });
+      try {
+        const existing = await listComments(session);
+        toolbar?.update({
+          commentCount: existing.filter((c) => c.resolved === null).length,
+        });
+      } catch {
+        // The drawer shows the failure when it is opened.
+      }
+    });
   }
 
   post({ type: "eva-preview-annotate-ready" });

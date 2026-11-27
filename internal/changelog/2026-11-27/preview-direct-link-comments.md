@@ -1,0 +1,7 @@
+# Direct sandbox link: Comments, the drawer and Send to Eva
+
+- A direct link now has the Comments button (with an open count), a comments drawer (filters, Eva's reply, Resolve) and "Send to Eva" in the note card. They need a token: Eva mints one at the link handshake. Without one the card falls back to "Copy for Eva".
+- Token: `previewGrant.signPreviewCommentsToken`, ES256 with the grant key, audience `eva-preview-comments`, names one user and the main chat of the sandbox's session (`previewComments.linkTarget`). It rides inside the grant, which the proxy verifies; the proxy keeps it in an HttpOnly cookie and serves it at `/__eva_preview_proxy/eva-comments`. A proxy session cookie is not trusted for this: the sandbox can read its HMAC secret, so it could forge one.
+- New routes `POST /preview-comments/{list,send,resolve}` (`previewCommentsHttp.ts`, CORS open, bearer token) call `previewCommentsNode.handle`, which acts as the token's user. `chats.send` now runs `sendChatMessage`, so a link send takes the same path as the app. Page input is length-limited; the chat comes from the token only.
+- In-page code: `evaApi.ts`, `commentsDrawer.ts`, `commentCard.ts` (send mode). `SCRIPT_VERSION` is `stream-v43`.
+- Not covered by a live sandbox test: the proxy cookie step and the handshake. Resolve is untested end to end: the test comments stayed queued, and only sent comments can be resolved.

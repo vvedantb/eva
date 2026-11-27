@@ -19,3 +19,9 @@ export const PREVIEW_SESSION_COOKIE = "__eva_preview_session";
 
 /** Query-string param carrying the bootstrap grant to the proxy. */
 export const PREVIEW_GRANT_PARAM = "__eva_grant";
+
+/** Audience of the token a direct sandbox link uses to list and send preview comments. */
+export const PREVIEW_COMMENTS_AUDIENCE = "eva-preview-comments";
+
+/** Lifetime of that token. Matches the proxy session it travels with. */
+export const PREVIEW_COMMENTS_TTL_SECONDS = PREVIEW_SESSION_TTL_SECONDS;
