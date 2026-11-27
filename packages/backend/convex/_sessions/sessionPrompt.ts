@@ -17,7 +17,7 @@ import {
 import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
-import { taskPrUrl } from "../_pullRequests/store";
+import { taskPrUrl } from "@eva/shared";
 import { sessionOwner } from "./owner";
 import {
   formatProjectTaskTable,
@@ -178,7 +178,7 @@ async function ownerPromptContext(
           )
         : withTaskContext(task, message),
       planContent: task.description,
-      prUrl: taskPrUrl(task),
+      prUrl: taskPrUrl(task, project?.prUrl),
     };
   }
   const projectId = owner.kind === "project" ? owner.projectId : undefined;

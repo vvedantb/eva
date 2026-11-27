@@ -78,3 +78,16 @@ export function sandboxAutoWakeEligible({
     isBusy === false
   );
 }
+
+/**
+ * The PR a task links to: its own, else (an old project task that never
+ * opened one) its project's. Every task opens its own PR on its own branch,
+ * so the task's PR is the one that holds its work. One rule for the web, the
+ * phone, the backend and MCP.
+ */
+export function taskPrUrl(
+  task: { prUrl?: string },
+  projectPrUrl: string | undefined,
+): string | undefined {
+  return task.prUrl ?? projectPrUrl;
+}

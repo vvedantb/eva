@@ -31,10 +31,14 @@ import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The two files that define every stored field shape. */
+/**
+ * The files that define every stored field shape. `enums.ts` holds the
+ * stored unions (statuses, kinds) that `tableFields.ts` builds fields from.
+ */
 export const WATCHED_FILES = [
   "packages/backend/convex/schema.ts",
   "packages/backend/convex/_validators/tableFields.ts",
+  "packages/backend/convex/_validators/enums.ts",
 ];
 
 const MIGRATIONS_FILE = "packages/backend/convex/dataMigrations.ts";

@@ -24,7 +24,7 @@ export function useSessionTurnPorts(
   accounts: ReadonlyArray<ModelAccount>,
 ): SandboxTurnPorts {
   const send = useMutation(api.chats.send);
-  const addMessage = useMutation(api.sessions.addMessage);
+  const postSendError = useMutation(api.sessions.postSendError);
   return {
     send: (args, expected) =>
       withSessionChat(chat, (chatId) => {
@@ -41,7 +41,7 @@ export function useSessionTurnPorts(
       }),
     postError: (content) =>
       withSessionChat(chat, (chatId) =>
-        addMessage({ chatId, role: "assistant", content }),
+        postSendError({ chatId, content }),
       ),
   };
 }
