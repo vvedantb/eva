@@ -1,8 +1,3 @@
-/**
- * Labels for the chat (session, quick task or project) a doc or artifact was
- * created from, shared by the web badge and the phone Documents list.
- */
-
 /** The chat kinds a doc or artifact source can be. */
 export type ChatSourceKind = "session" | "task" | "project";
 

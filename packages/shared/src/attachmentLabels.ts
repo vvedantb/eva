@@ -1,10 +1,3 @@
-/**
- * How a user-attached file is named and drawn, for every surface that shows
- * one (the web composer, chat, quick tasks and task detail, and the phone
- * chat). Stored attachments are only storage ids, so once uploaded the
- * original filename is gone and the content type is the fallback.
- */
-
 /** The file name's extension, lower case with its dot (`.md`), or "". */
 export function filenameExtension(name: string): string {
   const lower = name.toLowerCase();
@@ -32,7 +25,7 @@ export function isImageContentType(
  * and spec text files (Claude Design HTML exports, Markdown and text specs).
  */
 export const MAX_CHAT_ATTACHMENTS = 5;
-export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const SESSION_TEXT_EXTENSIONS: readonly string[] = [".html", ".htm", ".md", ".txt"];
 

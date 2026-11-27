@@ -45,8 +45,6 @@ export default function ProjectScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ projectId: string; repo?: string; tab?: string }>();
   const leave = () => goBackOrReplace(router, "/projects");
-  // Route params are strings: the repo and the project resolve through the
-  // lists that hold them, so their ids keep their table types.
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const projects = useQuery(api.projects.list, repo ? { repoId: repo._id } : "skip");
@@ -59,7 +57,6 @@ export default function ProjectScreen() {
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
   const tab: Tab = params.tab === "overview" || params.tab === "documents" ? params.tab : "coordinator";
-  // The web page's sandbox actions, leading the "…" sheet.
   const git = useProjectGitActions(project);
   const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onArchived: leave, extraRows: git.rows });
 
@@ -75,7 +72,6 @@ export default function ProjectScreen() {
         {loading ? (
           <CenteredSpinner label="Loading project" />
         ) : (
-          // The web `EntityNotFound` for a project.
           <EmptyState icon={IconLayoutKanban} title="Project not found" description="It does not exist, or you no longer have access." />
         )}
       </Screen>
@@ -87,7 +83,6 @@ export default function ProjectScreen() {
       title={project.title}
       onBack={leave}
       headerRight={
-        // The web header "…" (`ProjectDetailHeaderActions`).
         <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
       }
     >
@@ -119,7 +114,6 @@ export default function ProjectScreen() {
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
-/** The open tab, over the project's child tasks and their derived status (`useProjectTaskStatus`). */
 function ProjectTab({
   tab,
   project,
@@ -147,10 +141,8 @@ function ProjectTab({
   );
 }
 
-/** Never shown: the menu hook needs a repo before the screen has one. */
 const EMPTY_REPO = { owner: "", name: "" };
 
-/** The stack header (back, the title, an optional end button) over the screen body. */
 function Screen({ title, onBack, headerRight, children }: { title: string; onBack: () => void; headerRight?: ReactNode; children: ReactNode }) {
   return (
     <View className="flex-1">
@@ -162,12 +154,10 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
-/** The bottom bar: "Chat" (the coordinator chat, with the unread dot while a reply waits). */
 function ProjectDock({ project }: { project: Project }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
-  // The project chats in its session's Main chat; no chat yet, nothing unread.
   const owned = useQuery(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: project._id } });
   const chatId = owned?.session?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;

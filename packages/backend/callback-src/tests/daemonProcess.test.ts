@@ -69,7 +69,6 @@ test("buildEntityMutationArgs prefixes the entity field", () => {
 });
 
 test("entityMutationArgs prefixes the entity this daemon owns", async () => {
-  // config.ts reads the entity env at import time, so load a fresh module graph.
   stubEnv("ENTITY_ID_FIELD", "taskId");
   stubEnv("ENTITY_ID", "t1");
   freshModules();
@@ -93,7 +92,6 @@ afterEach(() => {
 });
 
 test("claimDaemonPidfileBoot leaves a live rival untouched", async () => {
-  // A real process whose argv names the callback runner, as a rival daemon's does.
   rival = spawn(process.execPath, [
     "-e",
     "setTimeout(() => {}, 5000)",
@@ -120,12 +118,6 @@ test("claimDaemonPidfileBoot leaves a live rival untouched", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/**
- * A pidfile that outlived a Vercel stop/resume names a pid the reboot re-issued
- * to one of the services the resume spawned. Deferring to it leaves the entity
- * with no daemon at all, which is how session 238 lost three turns.
- */
-// Off Linux there is no procfs argv, so any live pid counts as a rival.
 test.skipIf(process.platform !== "linux")(
   "claimDaemonPidfileBoot claims over a recycled pid",
   () => {
@@ -136,7 +128,6 @@ test.skipIf(process.platform !== "linux")(
       entity: join(dir, "d.entity"),
       opts: join(dir, "d.opts"),
     };
-    // The test worker: live, but its argv is not the callback runner.
     writeFileSync(paths.pid, String(process.pid));
     const claim = claimDaemonPidfileBoot({
       paths,
@@ -186,10 +177,6 @@ test("cleanOwnedDaemonMarkers only unlinks when this pid owns the file", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/**
- * A launch that races past the boot claim overwrites the pidfile; the deposed
- * daemon must exit or it double-claims turns forever, but never mid-turn.
- */
 test("a deposed daemon exits only once its active work ends", () => {
   vi.useFakeTimers();
   let busy = true;

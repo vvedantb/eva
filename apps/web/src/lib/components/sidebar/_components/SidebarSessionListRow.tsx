@@ -20,7 +20,6 @@ interface SidebarSessionListRowProps {
   onForkNavigate: (pathSegment: string) => void;
   onRenameRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
   onArchiveRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
-  /** Linked-session group rows: show the app mark, offer "Remove from group". */
   inGroup?: boolean;
 }
 

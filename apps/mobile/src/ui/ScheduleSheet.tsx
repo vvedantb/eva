@@ -5,7 +5,6 @@ import { View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { useNow } from "@/ui/clock";
 
-/** The next full hour after `now`: a time that can be scheduled as it opens. */
 function nextFullHour(now: number): number {
   const at = new Date(now);
   at.setMinutes(0, 0, 0);
@@ -32,15 +31,11 @@ export function ScheduleSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** The current schedule: the sheet edits it, with Remove. */
   scheduledAt: number | undefined;
-  /** Called with the picked time (a new schedule or an update). */
   onSchedule: (timestamp: number) => void;
   onRemove?: () => void;
 }) {
-  // The picked time, seeded each time the sheet opens (the web `reset` on open).
   const [picked, setPicked] = useState<{ for: number | undefined; at: Date } | null>(null);
-  // The minute clock, so "has it passed" stays true to the time while the sheet is open.
   const now = useNow(60_000);
   const seed = picked && picked.for === scheduledAt ? picked.at : new Date(scheduledAt ?? nextFullHour(now));
   const isScheduled = scheduledAt !== undefined;

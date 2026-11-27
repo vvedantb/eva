@@ -15,7 +15,6 @@ import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoTileColor } from "@/lib/utils/repoTileColor";
 
 interface SessionTabsNewMenuProps {
-  /** Apps in strip order, so the menu reads in the same order as the tabs. */
   repos: RepoWithLogo[];
 }
 

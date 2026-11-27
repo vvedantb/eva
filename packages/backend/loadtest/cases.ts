@@ -1,10 +1,5 @@
-// The query cases the load test probes. Each case calls a real public query
-// (the same `api.*` reference the web app subscribes to) as the focal user.
-// Args come from the seeded refs, so every case touches the scaled data.
 import { getFunctionName } from "convex/server";
 import type { FunctionArgs, FunctionReference } from "convex/server";
-// The subpath, not the barrel: plain Node cannot resolve the barrel's
-// extensionless imports.
 import { transcriptTailArgs } from "@eva/shared/chatTranscript";
 import { z } from "zod";
 import { api } from "../convex/_generated/api.js";
@@ -33,7 +28,6 @@ export type SeedRefs = z.infer<typeof seedRefsSchema>;
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** `usage.summary` bucket; a function so the literal type does not widen to string. */
 function dayBucket(): "day" {
   return "day";
 }
@@ -43,11 +37,8 @@ function sessionOwner(sessionId: Id<"sessions">): { kind: "session"; sessionId: 
 }
 
 type QueryCase = {
-  /** Stable label; also the report key. */
   name: string;
-  /** What the web app uses it for, for the report. */
   surface: string;
-  /** "module:export", as the function log stream reports it. */
   functionName: string;
   run: (call: CallQuery, refs: SeedRefs) => Promise<unknown>;
 };
@@ -74,8 +65,6 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("sessions.list", "sessions sidebar", api.sessions.list, (r) => ({ repoId: r.repoId })),
   q("sessions.listRepos", "session header", api.sessions.listRepos, (r) => ({ sessionId: r.sessionId })),
   q("messages.listByParent", "chat transcript", api.messages.listByParent, (r) => ({ parentId: r.mainChatId })),
-  // Opening a session: what `SessionDetailClient`, `ChatPanel` and `ChatBody`
-  // subscribe to for the focal (heavy) chat.
   q("sessions.getByNumId", "session open", api.sessions.getByNumId, (r) => ({ repoId: r.repoId, numId: 1 })),
   q("sessions.get", "session open", api.sessions.get, (r) => ({ id: r.sessionId })),
   q("sessionChats.listForSession", "session open", api.sessionChats.listForSession, (r) => ({ sessionId: r.sessionId })),
@@ -92,8 +81,6 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("pendingQuestions.getActive", "session open", api.pendingQuestions.getActive, (r) => ({ entityId: r.mainChatId })),
   q("proposedPlans.listBySession", "session open", api.proposedPlans.listBySession, (r) => ({ sessionId: r.sessionId })),
   q("chatReads.isUnread", "session open", api.chatReads.isUnread, (r) => ({ parentId: r.mainChatId })),
-  // What a chat paints from first, with the same args as the web and phone
-  // (`transcriptTailArgs`). Compare with `messages.listByParent` above.
   q("messages.listByParent.tail", "session open", api.messages.listByParent, (r) => transcriptTailArgs(r.mainChatId)),
   q("pullRequests.listForOwner", "session PR chrome", api.pullRequests.listForOwner, (r) => ({ owner: sessionOwner(r.sessionId) })),
   q("projects.list", "projects page", api.projects.list, (r) => ({ repoId: r.repoId })),

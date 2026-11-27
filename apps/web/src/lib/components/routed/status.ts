@@ -1,10 +1,7 @@
 import type { BadgeProps } from "@vvedantb/ui";
 
 export function statusLabel(status: string): string {
-  if (status === "waiting_human") return "Needs reply";
-  // Everyone asked has answered and Eva has been woken with the replies.
-  // Not "Waiting on Eva": that reads as a person called Eva.
-  if (status === "waiting_eva") return "Answered";
+  if (status === "waiting_human") return "Needs reply";  if (status === "waiting_eva") return "Answered";
   if (status === "resolved") return "Resolved";
   if (status === "cancelled") return "Cancelled";
   return "Open";

@@ -6,28 +6,9 @@ import type { GitStatus, GitStatusEntry } from "@pierre/trees";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import { TREE_UNSAFE_CSS, treeThemeVars } from "./treeTheme";
 
-interface DiffFileTreeProps {
-  /** Changed file paths, in diff order. */
-  files: string[];
-  /** Per-path git status, drives the tree's colour indicators. */
-  statuses: Record<string, GitStatus>;
-  /** Path highlighted on first render (restored from the URL). */
-  initialSelectedPath: string | null;
-  /**
-   * Fired when a file row is clicked. Only leaf files reach here — directory
-   * selections are filtered out because they are not in `files`.
-   */
-  onSelect: (path: string) => void;
-  /**
-   * Cursor's plain list: no git-status colours, letters or folder dots, no
-   * indent guides, a lighter selection. The cards beside it already carry the
-   * change counts.
-   */
-  quiet?: boolean;
+interface DiffFileTreeProps {  files: string[];  statuses: Record<string, GitStatus>;  initialSelectedPath: string | null;  onSelect: (path: string) => void;  quiet?: boolean;
 }
 
-/** Show the surface the tree sits on (the sandbox card, or the page) rather
- * than painting the page tone over the card. */
 const TREE_SURFACE_VARS = { "--trees-bg-override": "transparent" };
 
 const QUIET_TREE_VARS = {
@@ -62,10 +43,7 @@ export function DiffFileTree({
     flattenEmptyDirectories: true,
     unsafeCSS: TREE_UNSAFE_CSS,
     initialExpansion: "open",
-    initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],
-    // Fires for file and directory rows; ignore paths outside the changed set
-    // (i.e. directories) so only real file clicks drive the diff view.
-    onSelectionChange: (selectedPaths) => {
+    initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],    onSelectionChange: (selectedPaths) => {
       const path = selectedPaths[0];
       if (path && files.includes(path)) onSelect(path);
     },

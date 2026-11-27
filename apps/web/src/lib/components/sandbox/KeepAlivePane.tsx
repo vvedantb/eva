@@ -21,16 +21,9 @@ export function KeepAlivePane({
   className,
   children,
 }: {
-  active: boolean;
-  /** Unmount the body (and drop the visit) until it is shown again. */
-  discard?: boolean;
-  /** Classes on the pane body; `<Activity>` hides it when inactive. */
-  className: string;
+  active: boolean;  discard?: boolean;  className: string;
   children: ReactNode;
-}) {
-  // Render-phase latch, not an effect: the first active render mounts the
-  // body in the same commit as the tab switch.
-  const [visited, setVisited] = useState(active && !discard);
+}) {  const [visited, setVisited] = useState(active && !discard);
   if (discard) {
     if (visited) setVisited(false);
     return null;

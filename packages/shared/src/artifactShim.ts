@@ -1,19 +1,3 @@
-// The cowork bridge injected into every hosted artifact page before the
-// artifact's own scripts run: the web's sandboxed iframe and the phone's
-// WebView (`HtmlView`). It recreates `window.cowork.callMcpTool` — the API
-// Claude's Cowork host normally injects — by posting each call to the host
-// (eva), which runs it through eva's read-only MCP tools and posts the result
-// back, correlated by a per-call id. The artifact runs unmodified. On the
-// phone the page posts through `window.ReactNativeWebView` (a WebView has no
-// parent), and the host's replies arrive as the same `message` events.
-// It also adds `window.cowork.state`, eva's persistent per-artifact key/value
-// store (see convex/artifactState.ts), so artifacts can work as small apps.
-//
-// Readiness handshake: the sandboxed iframe (opaque origin) and the parent's
-// message listener attach on independent schedules, so a call posted before the
-// parent is listening would be lost. The shim therefore queues calls and pings
-// the parent with "eva-bridge-hello" until it receives "eva-bridge-ready", then
-// flushes the queue. This makes delivery race-free without `allow-same-origin`.
 const COWORK_SHIM = `<script>
 (function () {
   // In an opaque-origin sandbox (allow-scripts, no allow-same-origin) accessing

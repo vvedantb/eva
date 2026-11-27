@@ -1,9 +1,3 @@
-// Builds a self-contained HTML report from one or two result files.
-//
-//   node loadtest/report.ts [--before before] [--after after] [--out report]
-//
-// Reads loadtest/results/<label>.json and writes loadtest/results/<out>.html.
-// Charts are inline SVG; no network or chart library needed.
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -85,7 +79,6 @@ function get(run: Run, scale: number, name: string): Summary | undefined {
   return summaries.get(key(run, scale, name));
 }
 
-// Mann-Whitney per (case, scale) with Holm-Bonferroni across the family.
 type Test = { name: string; scale: number; p: number; delta: number; adjusted: number };
 const tests: Array<Test> = [];
 for (const name of caseNames) {
@@ -105,8 +98,6 @@ byP.forEach((t, i) => {
 });
 const testFor = (name: string, scale: number) => tests.find((t) => t.name === name && t.scale === scale);
 
-// ---------------------------------------------------------------------------
-// Formatting
 
 function compact(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "–";
@@ -131,8 +122,6 @@ function pFmt(p: number): string {
   return p < 0.001 ? "<0.001" : p.toFixed(3);
 }
 
-// ---------------------------------------------------------------------------
-// Charts
 
 const W = 300;
 const H = 170;
@@ -151,7 +140,6 @@ function logTicks(min: number, max: number): Array<number> {
 
 type Point = { scale: number; value: number | null; failed: boolean; tip: string; lo?: number; hi?: number };
 
-/** One small multiple: x = scale (log, categorical steps), y = log value. */
 function miniChart(title: string, unit: string, series: Array<{ run: Run; points: Array<Point> }>, limit?: number): string {
   const values = series.flatMap((s) => s.points.flatMap((p) => (p.value === null ? [] : [p.value, p.hi ?? p.value, p.lo ?? p.value])));
   if (limit) values.push(limit);
@@ -222,7 +210,6 @@ function pointsFor(name: string, run: Run, metric: "docs" | "time"): Array<Point
   });
 }
 
-// Overview dumbbell: documents read at the largest scale, before → after.
 function dumbbell(): string {
   const top = scales[scales.length - 1] ?? 1;
   const rows = caseNames
@@ -263,8 +250,6 @@ function dumbbell(): string {
   return parts.join("");
 }
 
-// ---------------------------------------------------------------------------
-// Tables
 
 function statsTable(): string {
   const head = `<tr><th>Query</th><th>Scale</th><th class="num">Docs read<br>before → after</th><th class="num">Median ms before<br>(95% CI)</th><th class="num">Median ms after<br>(95% CI)</th><th class="num">Speed-up</th><th class="num">p (Holm)</th><th class="num">Cliff's δ</th><th>Status</th></tr>`;
@@ -304,8 +289,6 @@ function datasetTable(file: ResultsFile): string {
   const total = `<tr class="group"><td><b>Total</b></td>${file.scales.map((s) => `<td class="num"><b>${s.seedDocs.toLocaleString("en-GB")}</b></td>`).join("")}</tr>`;
   return `<table class="compact">${head}${rows.join("")}${total}</table>`;
 }
-
-// ---------------------------------------------------------------------------
 
 const top = scales[scales.length - 1] ?? 1;
 const failingBefore = caseNames.filter((n) => (get("before", top, n)?.ok ?? 1) === 0);

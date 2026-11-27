@@ -1,11 +1,5 @@
 import type { Doc } from "@eva/backend";
 
-/**
- * A chat's Log rendered as markdown. One renderer for the three readers: the
- * Documents tab download, the agent's `read_chat_log` tool, and the catch-up
- * block a fresh agent session gets. Rows come from `chatLog:listForSource`.
- */
-
 export type ChatLogKind = Doc<"chatLogEntries">["kind"];
 export type ChatLogAuthor = Doc<"chatLogEntries">["author"];
 
@@ -17,7 +11,6 @@ export type ChatLogRow = {
   createdAt: number;
   beforeSha?: string;
   afterSha?: string;
-  /** Set when a later decision replaced this one. */
   supersededById?: string;
 };
 
@@ -74,7 +67,6 @@ function entryLines(row: ChatLogRow): string[] {
   if (row.beforeSha && row.afterSha) {
     lines.push(`  Commits ${shortSha(row.beforeSha)}..${shortSha(row.afterSha)}`);
   }
-  // A replaced entry keeps its title only; its replacement has the detail.
   if (row.body && !replaced) {
     for (const line of row.body.trim().split("\n")) lines.push(`  ${line}`);
   }
@@ -104,14 +96,11 @@ export function renderChatLogMarkdown(
       : [];
 
   const fixed = [...header, ...decisionBlock, "", "## Timeline"].join("\n");
-  // Reserve room for the "(N older entries omitted)" line.
   let remaining =
     options.budget === undefined
       ? Infinity
       : options.budget - fixed.length - OMISSION_RESERVE;
 
-  // Newest first so a budget drops the oldest entries. A day heading costs
-  // once, when the first (oldest kept) entry of that day is admitted.
   const kept: Array<{ row: ChatLogRow; text: string }> = [];
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = rows[index];

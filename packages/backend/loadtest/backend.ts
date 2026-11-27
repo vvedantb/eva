@@ -1,5 +1,3 @@
-// Isolated load-test backend: lifecycle, code push and seeding. Shared by
-// run.ts (benchmarks) and compare.ts (output equivalence).
 import { spawn, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -14,9 +12,6 @@ export const WORK_DIR = "/tmp/eva-loadtest";
 export const PORT = 3310;
 export const URL = `http://127.0.0.1:${PORT}`;
 export const FOCAL_IDENTITY_ISSUER = "https://loadtest.invalid";
-
-// ---------------------------------------------------------------------------
-// Isolated backend lifecycle
 
 function findBackendBinary(): string {
   const root = "/vercel/.cache/convex/binaries";
@@ -57,7 +52,6 @@ export function stopBackend() {
   try {
     process.kill(pid, "SIGTERM");
   } catch {
-    // Already gone.
   }
   fs.rmSync(pidFile);
 }
@@ -86,11 +80,6 @@ export async function freshBackend(instanceSecret: string) {
   await waitForBackend(60_000);
 }
 
-/**
- * Runs the Convex CLI against the load-test backend. The CLI rewrites
- * `.env.local` (CONVEX_URL) even with --env-file, so the dev file is
- * snapshotted and restored around every call.
- */
 function convexCli(args: Array<string>, adminKey: string, projectDir = BACKEND_ROOT) {
   const envFile = path.join(WORK_DIR, ".env");
   fs.writeFileSync(envFile, `CONVEX_SELF_HOSTED_URL=${URL}\nCONVEX_SELF_HOSTED_ADMIN_KEY=${adminKey}\n`);
@@ -118,9 +107,6 @@ export async function pushFunctions(adminKey: string, projectDir = BACKEND_ROOT)
   convexCli(["dev", "--once", "--typecheck", "disable"], adminKey, projectDir);
 }
 
-// ---------------------------------------------------------------------------
-// Seeding
-
 const planSchema = z.array(
   z.object({
     kind: z.enum(["teammates", "shellRepos", "sessions", "projects", "quickTasks", "docs", "automations", "focalMessages", "focalRuns", "focalTaskTimeline", "focalDocComments", "focalSessionPrs", "focalAutomationRuns", "routedThreads"]),
@@ -138,7 +124,6 @@ export async function seed(client: AdminClient, scale: number, now: number) {
     const total = unitsPerScale * scale;
     const starts: Array<number> = [];
     for (let start = 0; start < total; start += unitsPerChunk) starts.push(start);
-    // Inserts never read, so parallel chunks cannot conflict.
     await runPool(starts, 2, async (start) => {
       const count = Math.min(unitsPerChunk, total - start);
       const inserted = insertedSchema.parse(

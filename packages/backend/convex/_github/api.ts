@@ -88,10 +88,6 @@ export const listRepos = authAction({
     if (accessState === "denied") {
       throw new Error("Not authorized to inspect this installation");
     }
-    // No Eva row for this installation yet, so there is nothing on our side that
-    // could have authorized the caller. `installationId` arrives from the
-    // browser and GitHub warns it can be spoofed, so the only sound check is to
-    // ask GitHub what *this user's* token can see in that installation.
     if (accessState === "unclaimed") {
       return await listInstallationReposForUser(
         ctx,
@@ -135,8 +131,6 @@ export const detectMonorepoApps = authAction({
     if (accessState === "denied") {
       throw new Error("Not authorized to inspect this installation");
     }
-    // Same reasoning as listRepos: with no Eva row backing the installation, the
-    // caller's own GitHub token is the only thing that can vouch for them.
     if (accessState === "unclaimed") {
       await assertUserCanUseRepo(
         ctx,
@@ -156,25 +150,6 @@ export const detectMonorepoApps = authAction({
   },
 });
 
-/**
- * Adds a repo (or one monorepo app of it) to Eva.
- *
- * The GitHub-side checks happen here rather than in the mutation because they
- * need network calls:
- * - New installation: `assertUserCanUseRepo` asks GitHub whether *this user's*
- *   token can see `owner/name` inside it. Without that, any signed-in user could
- *   bind a row to an arbitrary installation id and then mint installation
- *   tokens for it through `getInstallationTokenAction`. Installations Eva
- *   already knows the caller can use skip this, so adding a second repo never
- *   re-prompts for authorization.
- * - Always: `resolveInstallationRepo` proves the repo is in the installation
- *   and supplies the stored id, owner and name. Client values are never stored,
- *   so a row cannot impersonate another tenant's repository.
- */
-/**
- * Authorizes the caller on an installation repo and returns GitHub's own
- * identity for it. Shared by every action that adds repo rows.
- */
 async function authorizeInstallationRepo(
   ctx: ActionCtx,
   userId: Id<"users">,
@@ -213,8 +188,6 @@ export const connectRepo = authAction({
     teamId: v.optional(v.id("teams")),
   },
   returns: v.id("githubRepos"),
-  // Explicit annotation: the handler reaches back into `internal`, so inference
-  // would have to resolve this action's own type to type itself.
   handler: async (ctx, args): Promise<Id<"githubRepos">> => {
     const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
     return await ctx.runMutation(
@@ -248,7 +221,6 @@ export const importDetectedApps = authAction({
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
     const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
-    // Sequential: every insert reads the same `by_github_id` range.
     for (const app of args.apps) {
       await ctx.runMutation(
         internal._githubRepos.mutations.createForInstallation,

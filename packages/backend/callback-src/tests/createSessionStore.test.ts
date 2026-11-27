@@ -28,11 +28,6 @@ test("createSessionStore reads and writes resume id", () => {
   expect(store.readSessionState()).toEqual({ resumeSessionId: "sess-123" });
 });
 
-/**
- * The local file is this sandbox's live state; the persist copy can lag it by
- * a turn. Without a local file (hydrate copy failed), the persist copy is
- * still a valid resume point.
- */
 test("readSessionState prefers local state and falls back to the persist copy", () => {
   const dir = mkdtempSync(join(tmpdir(), "session-store-"));
   const paths = storePaths(dir);

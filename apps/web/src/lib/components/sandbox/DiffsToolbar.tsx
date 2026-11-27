@@ -35,11 +35,7 @@ const KIND_LABEL: Record<DiffFileKind, string> = {
   generated: "Generated",
 };
 
-interface DiffsToolbarProps {
-  /** Line totals of the files on screen; null while the diff is not loaded. */
-  size: DiffSize | null;
-  /** The commit Code is scoped to, shown as a clearable chip; null for all. */
-  scopedCommit: { sha: string; headline: string } | null;
+interface DiffsToolbarProps {  size: DiffSize | null;  scopedCommit: { sha: string; headline: string } | null;
   onClearScope: () => void;
   diffView: DiffView;
   onDiffViewChange: (view: DiffView) => void;
@@ -174,11 +170,6 @@ export function DiffsToolbar({
   );
 }
 
-/**
- * The diff's `+n −m`, and beside it how much of that is code — so a "+2,000"
- * that is mostly lockfile and tests reads as the 300 lines it really is. The
- * tooltip breaks it down by kind.
- */
 function DiffSizeSplit({
   size,
 }: {
@@ -253,9 +244,7 @@ function IconToggle({
           shape="rounded"
           variant="ghost"
           size="icon-sm"
-          aria-pressed={pressed}
-          // Radix wires TooltipContent as a description, not a name.
-          aria-label={label}
+          aria-pressed={pressed}          aria-label={label}
           className={cn(pressed && "bg-muted text-foreground", className)}
           onClick={onPress}
         >

@@ -1,16 +1,3 @@
-/**
- * The `render_ui` request contract: the content blocks an agent hands Eva and
- * the caps that keep one panel a panel.
- *
- * Runtime-free (zod only) so the MCP tool in the V8 isolate and the
- * `"use node"` composition client share one definition, mirroring
- * `_jev/schema.ts`.
- *
- * The split matters: the agent owns every string a panel displays, and Jev
- * only decides how those strings are arranged. Nothing here lets a model
- * invent copy.
- */
-
 import { z } from "zod";
 import {
   GENERATIVE_UI_BUTTON_VARIANTS,
@@ -33,11 +20,6 @@ const tone = z.enum(GENERATIVE_UI_TONES);
 const shortText = z.string().min(1).max(200);
 const bodyText = z.string().min(1).max(MAX_TEXT_CHARS);
 
-/**
- * A link the chat will open or load. `.url()` alone accepts `javascript:` and
- * `data:`, which a button in the user's own session must never carry, so the
- * scheme is checked as well.
- */
 const httpUrl = z
   .string()
   .url()
@@ -120,9 +102,7 @@ const imageBlock = z.object({
 const buttonBlock = z.object({
   kind: z.literal("button"),
   label: shortText,
-  /** Text posted back into the chat when pressed. */
   reply: z.string().min(1).max(MAX_TEXT_CHARS).optional(),
-  /** Opened in a new tab when pressed. Ignored when `reply` is set. */
   url: httpUrl.optional(),
   variant: z.enum(GENERATIVE_UI_BUTTON_VARIANTS).default("secondary"),
 });
@@ -175,12 +155,10 @@ export type RenderUiInputRaw = z.input<typeof renderUiInput>;
 export type ComposeOutcome =
   | {
       ok: true;
-      /** The composed spec, serialised for storage. */
       spec: string;
       elementCount: number;
       elapsedMs: number;
       inputTokens: number | null;
-      /** "limit" means the element budget stopped the composer early. */
       stopReason: "finish" | "limit" | "unavailable";
     }
   | {

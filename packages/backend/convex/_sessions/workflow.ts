@@ -680,22 +680,13 @@ export const getSessionData = internalQuery({
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     linkedRepoCount: v.optional(v.number()),
     sandboxSetupPending: v.boolean(),
-    /**
-     * False for a task's session: it pushes the task branch, but the draft PR
-     * and linked-repo publish belong to the task. Optional only so a workflow
-     * journaled before this field replays.
-     */
     ownsPullRequests: v.optional(v.boolean()),
-    /** The quick task that owns this session; its chat pushes open its PR. */
     ownerTaskId: v.optional(v.id("agentTasks")),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
       getSessionChatOrThrow(ctx.db, args.chatId),
       ctx.db.get(args.userId),
-      // Input images attached to the triggering user message. Used to re-stage
-      // pendingTurn on the queued/cancel-race path (immediate sends stage them
-      // directly in startExecute).
       ctx.db
         .query("messages")
         .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
@@ -706,8 +697,6 @@ export const getSessionData = internalQuery({
 
     const [repo, primaryPr] = await Promise.all([
       ctx.db.get(session.repoId),
-      // The primary repo's own PR: a side-branch PR the agent opened must not
-      // stop Eva from opening the session's draft.
       findPrimaryPullRequest(ctx.db, {
         kind: "session",
         sessionId: session._id,
@@ -824,11 +813,9 @@ export const saveResult = internalMutation({
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
-    /** Stamped onto the reply on success, making it this provider's checkpoint. */
     model: v.optional(aiModelValidator),
     planContent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
-    /** Turn checkpoint from the callback (see messageFields.beforeSha). */
     ...turnCheckpointArgs,
   },
   returns: v.null(),
@@ -843,8 +830,6 @@ export const saveResult = internalMutation({
       return null;
     }
 
-    // Any successful turn may have ended with the eva-design JSON, so this is
-    // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
     const extraPatch: Omit<AssistantTurnResultPatch, "content"> = {
       isSystemAlert: undefined,
@@ -887,7 +872,6 @@ export const saveResult = internalMutation({
       agentBrowsingAt?: undefined;
     } = {
       updatedAt: now,
-      // Crash hygiene: drop stale soft-lock if the agent forgot browser_unlock.
       agentBrowsingAt: undefined,
     };
     if (args.planContent && args.planContent !== session.planContent) {
@@ -927,8 +911,6 @@ export const claimPendingTurn = authMutation({
   args: {
     ...daemonChatTargetArgs,
     model: v.optional(aiModelValidator),
-    // When false, drain cancel/stop/usage only. Old sandboxes omit this and
-    // keep acquiring the running lease (previous behaviour).
     acceptTurn: v.optional(v.boolean()),
     ...steerClaimArgs,
   },
@@ -953,15 +935,11 @@ export const claimPendingTurn = authMutation({
     if (chatId === null) return emptyClaim;
     const chat = await ctx.db.get(chatId);
     if (!chat) return emptyClaim;
-    // The owner path reads only the chat row on every 50ms poll.
     if (chat.userId !== ctx.userId) {
       if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
         throw new Error("Not authorized");
     }
 
-    // Level-triggered: an old callback that does not read this field must not
-    // consume it. The refresh action clears `usageRefreshRequestedAt` when it
-    // stops waiting so a failed lookup can retry until then.
     const usageRefreshRequested = chat.usageRefreshRequestedAt !== undefined;
 
     const stopTaskToolUseIds = chat.pendingTaskStops ?? [];
@@ -969,15 +947,11 @@ export const claimPendingTurn = authMutation({
       await ctx.db.patch(chat._id, { pendingTaskStops: undefined });
     }
 
-    // Cancel must drain the same way as stopTaskToolUseIds above: the daemon
-    // polls this mutation continuously, including mid-turn, specifically to
-    // notice an interrupt — gating the drain on pendingTurn would strand it.
     const cancelRequested = chat.cancelRequestedAt !== undefined;
     if (cancelRequested) {
       await ctx.db.patch(chat._id, { cancelRequestedAt: undefined });
     }
 
-    // Steers drain mid-turn too: that is the only time a daemon takes one.
     const steers = await drainSteers(ctx, chat, args);
 
     const drained = {
@@ -988,12 +962,6 @@ export const claimPendingTurn = authMutation({
       steers,
     };
 
-    // A prewarm is killing this daemon right now (stale callback bundle or a
-    // model/tools change). Handing it the turn in the milliseconds before the
-    // kill lands acquires the 2-minute running lease for a process that is
-    // already dying, and nothing heartbeats it — the "Turn stalled" alert of
-    // session 125. pendingTurn stays staged for the replacement daemon; the
-    // drains above still ran, so a cancel is never stranded by the pause.
     if (
       isDaemonClaimPaused({
         claimPausedUntil: chat.claimPausedUntil,
@@ -1005,17 +973,9 @@ export const claimPendingTurn = authMutation({
 
     if (!chat.pendingTurn) return drained;
 
-    // Withhold the turn while a new session's sandbox is still pulling the
-    // latest base branch and reinstalling drifted deps (flag set at early-ready,
-    // cleared when setup finishes). Returning an empty claim leaves pendingTurn
-    // intact; the daemon keeps polling (45m idle budget) and claims the moment
-    // the gate clears, so the agent never executes against a stale checkout.
     const session = await ctx.db.get(chat.sessionId);
     if (session?.sandboxSetupPending === true) return drained;
 
-    // The daemon is not ready to start (still finalizing, synthetic open, or
-    // a real turn in flight). Leave pendingTurn so the 2-minute running lease
-    // is not acquired with nobody heartbeating it (session 65 / session 125).
     if (args.acceptTurn === false) return drained;
 
     const pendingModel = chat.pendingTurn.model;
@@ -1035,8 +995,6 @@ export const claimPendingTurn = authMutation({
       (id) => ctx.storage.getUrl(id),
       chat.pendingTurn.attachmentStorageIds,
     );
-    // Every staged chat prompt names its durable turn. A slot without one
-    // is dropped, not handed out without a lease.
     const pendingTurnId = chat.pendingTurn.turnId;
     const claim =
       pendingTurnId === undefined
@@ -1089,8 +1047,6 @@ export const updateBackgroundAgents = authMutation({
       backgroundAgents,
       updatedAt: Date.now(),
     });
-    // Queued messages wait for these agents, so their settling is a queue
-    // release the chat itself never signals otherwise.
     await scheduleQueueDrainAfterBackgroundAgents(
       ctx,
       chat._id,
@@ -1157,13 +1113,10 @@ export const ensurePendingTurn = internalMutation({
   handler: async (ctx, args) => {
     const chat = await ctx.db.get(args.chatId);
     if (!chat) return null;
-    // One-shot providers push the prompt; restaging would only spam a leftover
-    // daemon with claimPendingTurn mismatch logs.
     if (args.model !== undefined && !usesChatDaemon(args.model)) {
       return null;
     }
 
-    // Every chat workflow has a turn: no open turn, no restage.
     const openTurn = await findOpenTurn(ctx, args.chatId);
     if (!openTurn || isTurnClaimed(openTurn)) return null;
     const last = await ctx.db
@@ -1218,9 +1171,6 @@ export const restageOpenTurn = internalMutation({
     const context = await loadSessionChat(ctx.db, args.chatId);
     if (!context) return { restaged: false as const, reason: "chat not found" };
     const { chat, session } = context;
-    // Orphans do not count: a slot left behind by a turn that already closed is
-    // exactly the wedge this escape hatch exists to clear, and refusing on it
-    // made the hatch useless on the chats that needed it most.
     const openTurn = await findOpenTurn(ctx, args.chatId);
     if (!openTurn) return { restaged: false as const, reason: "no open turn" };
     const pendingTurnLive = isPendingTurnLive({
@@ -1236,8 +1186,6 @@ export const restageOpenTurn = internalMutation({
       .order("desc")
       .take(5);
     const lastAssistant = messages.find((m) => m.role === "assistant");
-    // Stricter than the in-workflow re-stage: this path rebuilds the prompt from
-    // the user message, so a bubble that already streamed text would replay it.
     if (
       lastAssistant === undefined ||
       !isUnclaimedOpenTurn({
@@ -1265,7 +1213,6 @@ export const restageOpenTurn = internalMutation({
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return { restaged: false as const, reason: "repo not found" };
-    // Daemon-pull recovery only — one-shot providers push via launch.
     if (!usesChatDaemon(chat.lastModel)) {
       return {
         restaged: false as const,
@@ -1306,9 +1253,6 @@ export const restageOpenTurn = internalMutation({
 export const openSyntheticTurn = authMutation({
   args: {
     ...daemonChatTargetArgs,
-    // The daemon's own model. Optional only for daemons launched before the
-    // field existed; those fall back to `chat.lastModel`, which the picker
-    // can move mid-flight and may therefore mis-attribute the checkpoint.
     model: v.optional(aiModelValidator),
   },
   returns: v.object({
@@ -1317,7 +1261,6 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    // No placeholder can open without a chat; the daemon logs and carries on.
     const chatId = await resolveDaemonChatId(ctx.db, args);
     if (chatId === null) throw new Error("Chat not found");
     const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
@@ -1325,7 +1268,6 @@ export const openSyntheticTurn = authMutation({
       throw new Error("Not authorized");
 
     const turnModel = normalizeAIModel(args.model ?? chat.lastModel);
-    // A continuation of a thread turn answers in the same thread.
     const { messageId, replyTo } = await insertTurnFollowUp(ctx, {
       parentId: chat._id,
       role: "assistant",
@@ -1333,9 +1275,6 @@ export const openSyntheticTurn = authMutation({
       timestamp: Date.now(),
       activityLog: "",
       isSyntheticTurn: true,
-      // Stamped at open time because the daemon protocol carries no model on
-      // completion. Not yet a checkpoint — that needs `finishedAt` too — and
-      // `completeSyntheticTurn` clears it again if the turn fails.
       model: turnModel,
     });
     const turnId = await openSessionChatTurn(ctx, {
@@ -1417,7 +1356,6 @@ export const completeSyntheticTurn = authMutation({
 
     const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
-    // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {
       _id: args.messageId,
       beforeSha: patch.beforeSha,
@@ -1474,7 +1412,6 @@ export const handleStaleSyntheticTurn = internalMutation({
       .first();
     const streamingStale = isStreamingActivityStale(streaming);
     if (!streamingStale) {
-      // Still live — re-arm so a later daemon death is still cleaned up.
       await ctx.scheduler.runAfter(
         10 * 60 * 1000,
         internal.sessionWorkflow.handleStaleSyntheticTurn,
@@ -1540,8 +1477,6 @@ export const handleCompletion = authMutation({
       `[sessionWorkflow] handleCompletion received chatId=${chat._id} success=${args.success} workflowId=${activeWorkflowId}`,
     );
 
-    // One-shot providers never claimPendingTurn, so clear any leftover staged
-    // prompt here. Persistent chat daemons already cleared it on claim.
     if (chat.pendingTurn !== undefined) {
       await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }

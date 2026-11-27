@@ -50,13 +50,6 @@ export const KILL_PRIOR_AGENT_PROCESSES_CMD =
   "pkill -x claude 2>/dev/null || true; " +
   "pkill -x claude-code 2>/dev/null || true; " +
   "pkill -x codex 2>/dev/null || true; " +
-  // Only legacy `opencode run` turns, never `opencode serve`: since the SDK
-  // migration the long-lived server is shared across turns and killing it here
-  // would force a cold start (and a fresh port bind) on every single launch.
-  // Bracketing keeps the regex from matching this command's own `bash -lc`
-  // wrapper, whose cmdline contains the pattern text — without it, pkill
-  // SIGTERMs the wrapping shell and the exec dies with exit 143 before
-  // reaching `true`.
   "pkill -f '[o]pencode run' 2>/dev/null || true; " +
   "pkill -x cursor-agent 2>/dev/null || true; " +
   "true";
@@ -67,9 +60,6 @@ export function workspaceDirShell(): string {
 }
 export const DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 export const SNAPSHOT_SANDBOX_READY_TIMEOUT_SECONDS = 30;
-// Restoring an archived sandbox's filesystem can take much longer than a
-// stopped→started fast resume. The 60s default is fine for the fast-resume
-// case, but trips a noisy timeout on archived thaws.
 export const ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS = 600;
 /**
  * Bound for an explicit resume attempt when the sandbox/snapshot may be gone.
@@ -92,22 +82,11 @@ export async function execHandle(
     handle.exec(cmd, { cwd, timeoutSeconds: timeout }),
     clientTimeoutMs,
     `exec (${timeout}s)`,
-    // Typed: a client-side timeout means the VM never answered — a
-    // dead-sandbox signal for isSandboxUnresponsiveError, unlike a command
-    // that ran and failed.
     (message) => new SandboxExecTimeoutError(message),
   );
   if (resp.exitCode !== 0) {
-    // Redacted: this error text reaches Convex logs and chat warnings, and a
-    // failing clone/push echoes its token-bearing URL.
     const output = redactSecrets(resp.output?.trim() ?? "");
-    // The command prefix is the only clue when the provider discards output on
-    // a kill (e.g. exit 143 = SIGTERM at timeout) — without it the failing exec
-    // is unidentifiable in logs.
     const cmdHint = `cmd=${JSON.stringify(redactSecrets(cmd.slice(0, 80)))}`;
-    // Typed, not a bare Error: the sandbox answered, so it is alive. The type
-    // is what stops its output (`relation "X" does not exist`) from ever being
-    // read as "the sandbox is gone". See sandboxErrors.ts.
     throw new SandboxCommandFailedError(
       output
         ? `Sandbox command failed (exit ${resp.exitCode}): ${output}`
@@ -139,21 +118,13 @@ export async function ensureDockerDaemon(
     );
     return true;
   } catch {
-    // Not running (or docker not installed) — try to start it below.
   }
 
-  // Prefer the shared bootstrap first. On Vercel resume the plain restart
-  // below often fails (wasting ~1s) before this same bootstrap succeeds.
   if (await bootstrapVercelDocker(sandbox)) {
     return true;
   }
 
   try {
-    // Cleanup before restart: kill any half-alive dockerd/containerd, then
-    // remove their pidfiles AND sockets. After sandbox auto-stop/resume, both
-    // pidfiles survive but their PIDs map to unrelated processes in the new
-    // boot — dockerd/containerd refuse to start while a pidfile claims a
-    // running peer, so we must delete them.
     await execHandle(
       sandbox,
       [
@@ -169,10 +140,6 @@ export async function ensureDockerDaemon(
         buildDockerInfoWaitLoop(60),
         buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
-        // Newline-joined, not "; ": backgrounding `dockerd … &` followed by a
-        // literal `;` is a bash syntax error, so this whole script used to fail
-        // to PARSE — the recovery never ran, it just threw into the catch below
-        // and logged "Docker not available". A newline terminates `&` cleanly.
       ].join("\n"),
       90,
     );
@@ -201,7 +168,6 @@ export async function bootstrapVercelDocker(
     await execHandle(sandbox, "docker info >/dev/null 2>&1", 5);
     return true;
   } catch {
-    // Not running — bootstrap below.
   }
 
   const script = [
@@ -255,27 +221,8 @@ export async function ensureSandboxRunning(
   options: {
     timeoutSeconds?: number;
     onRestoring?: () => Promise<void>;
-    /**
-     * When true, skip the per-boot bootstrap (swap + dockerd) — either the
-     * caller runs it itself after unlocking the UI (session reuse early-ready),
-     * or the sandbox runs no workload at all (snapshot retention start/stop).
-     */
     skipDocker?: boolean;
-    /**
-     * When true, skip the post-start `echo 1` exec probe. start() already
-     * verifies the provider reports the session running; the first REAL exec
-     * pays the same warmup the probe would, so on latency-sensitive paths
-     * (session resume early-ready) the probe only delays the UI unlock —
-     * observed ~14s on Vercel resumes. Callers that follow up with their own
-     * commands (git checkout, services) get equivalent failure surfacing.
-     */
     skipExecProbe?: boolean;
-    /**
-     * When true (explicit user-initiated starts), a Vercel stop still in
-     * flight is waited out and the sandbox resumed from the fresh snapshot,
-     * instead of the start being refused. Leave unset on background paths
-     * (prewarm, watchdog) so they cannot resurrect a just-stopped sandbox.
-     */
     resumeAfterStop?: boolean;
   } = {},
 ): Promise<void> {
@@ -283,8 +230,6 @@ export async function ensureSandboxRunning(
     options.timeoutSeconds ?? DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS;
   const startedAt = Date.now();
 
-  // Refresh first and skip the exec probe when state already says we need a
-  // resume: lazy resume is off, so the probe would only fail on a stopped VM.
   let knownState: string | null = null;
   try {
     await sandbox.refresh();
@@ -338,8 +283,6 @@ export async function ensureSandboxRunning(
     (state === "stopped" || state === "starting") &&
     options.onRestoring
   ) {
-    // Vercel maps stopped→stopped (not archived). Surface progress while
-    // start() resumes the snapshot.
     console.log(
       `[sandbox] ensureSandboxRunning: sandbox ${sandbox.id} is ${state}, waiting for resume`,
     );
@@ -360,10 +303,6 @@ export async function ensureSandboxRunning(
     `[sandbox] ensureSandboxRunning: sandbox ${sandbox.id} now running (total ${Date.now() - startedAt}ms${options.skipExecProbe ? ", exec probe skipped" : ""})`,
   );
 
-  // Neither swap nor dockerd runs as a system service, so both are lost on
-  // auto-stop/resume. Re-provision on every ensureSandboxRunning call unless
-  // the caller wants to unlock the UI first (session reuse early-ready).
-  // Swap goes first: it is what keeps the next memory spike from OOM-killing.
   if (!options.skipDocker) {
     await ensureSwapFile(sandbox);
     await ensureDockerDaemon(sandbox);
@@ -431,9 +370,6 @@ export async function withTimeout<T>(
 export function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) {
     if (error.message.trim().length > 0) return error.message;
-    // Some errors carry an empty message (e.g. Node's AggregateError from a
-    // failed network call). Returning "" verbatim left blank errorDetail on
-    // sandboxStartupWarning messages — recover what we can from name/errors/cause.
     const parts: string[] = [];
     if (error.name && error.name !== "Error") parts.push(error.name);
     if (error instanceof AggregateError) {
@@ -470,12 +406,6 @@ export async function resolveSandboxClientOnly(
   return client;
 }
 
-/**
- * Seed fingerprint of `branch`'s own `.eva/config.json` entry for this app, or
- * null when it cannot differ from the cache (default branch, repo without
- * `.eva/`, branch not pushed yet, no or invalid file) or GitHub is unreachable — a null keeps the seeded
- * snapshot, the fast and usually correct choice.
- */
 async function branchSeedFingerprint(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
@@ -485,8 +415,6 @@ async function branchSeedFingerprint(
     const target = await ctx.runQuery(internal._evaConfig.cache.getSyncTarget, {
       repoId,
     });
-    // Default branch = the cache itself. A repo that never adopted `.eva/`
-    // skips the GitHub read on this hot path.
     if (!target || !target.hasEvaConfig || target.ref === branch) return null;
     const text = await readEvaFileAtRef(target, EVA_CONFIG_PATH, branch);
     if (text === null) return null;
@@ -507,18 +435,7 @@ export async function resolveSandboxContext(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
   opts?: {
-    /**
-     * A multi-repo session's saved codebase group. When its seeded snapshot
-     * (primary + linked repos, deps installed) is still current for this
-     * primary repo, boot from it instead of the plain per-repo snapshot — see
-     * `getGroupSnapshotForBoot`.
-     */
     repoGroupId?: Id<"repoGroups">;
-    /**
-     * Branch the sandbox will check out. When its `.eva/config.json` changes
-     * the seed inputs, the seeded snapshot's data is stale for it, so the
-     * sandbox boots the base Image instead.
-     */
     branch?: string;
   },
 ): Promise<{
@@ -528,7 +445,6 @@ export async function resolveSandboxContext(
 }> {
   const startedAt = Date.now();
   const repoGroupId = opts?.repoGroupId;
-  // Independent reads: run them together to save round trips on every boot.
   const [{ credentials, sandboxEnvVars }, repoSnapshot, groupSnapshotName] =
     await Promise.all([
       resolveSandboxCredentials(ctx, repoId),
@@ -541,8 +457,6 @@ export async function resolveSandboxContext(
     ]);
   const client = getSandboxClient(credentials);
   let snapshotName = groupSnapshotName || repoSnapshot?.snapshotName;
-  // A branch whose `.eva/config.json` changes the seed inputs cannot use the
-  // seeded snapshot's data. Only checked when the seeded snapshot would boot.
   if (
     !groupSnapshotName &&
     opts?.branch &&
@@ -602,21 +516,10 @@ export async function getRunningSandboxHandle(
   return sandbox.state === "running" ? sandbox : null;
 }
 
-// Covers a slow launch (cold CLI install + uploads + ready poll); a launcher
-// that died holding the lock blocks the next one for at most this long.
 const SANDBOX_LAUNCH_LOCK_TTL_MS = 120_000;
 const SANDBOX_LAUNCH_LOCK_WAIT_MS = 120_000;
 const SANDBOX_LAUNCH_LOCK_POLL_MS = 500;
 
-/**
- * Serialises `launchScript` per sandbox. Every launch writes the same fixed
- * files (/tmp/design-prompt.txt, /tmp/eva-launch-runner.sh, the pid/ready
- * markers), so two overlapping launches on one sandbox clobber each other.
- * Observed on quick task 284: a session prewarm and the task launch overlapped
- * by 2s, only the session daemon started, the task accepted its ready marker,
- * and the task prompt never ran until the watchdog killed it 15 minutes later.
- * Fails open after the wait so a stuck lock can never block launches outright.
- */
 async function withSandboxLaunchLock<T>(
   ctx: GenericActionCtx<DataModel>,
   sandboxId: string,
@@ -673,13 +576,7 @@ export async function signAndLaunchScript(
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
     enableMcp?: boolean;
-    // When set, the entity owner's provider account credentials are decrypted
-    // and layered over `extraEnvVars`, overriding the shared team credential.
-    // Resolved here — the single launch choke point — so every caller only
-    // threads the id. Ownership is checked against credentialOwnerUserId
-    // (entity createdBy), not the launcher `userId` (MCP/auth).
     providerAccountId?: Id<"userProviderAccounts">;
-    /** Entity owner (`createdBy`); defaults to `userId` when omitted. */
     credentialOwnerUserId?: Id<"users">;
     claimMutation?: string;
     openSyntheticTurnMutation?: string;
@@ -693,9 +590,6 @@ export async function signAndLaunchScript(
     `[sandbox][launch] signAndLaunchScript started entityId=${entityId} mutation=${completionMutation} repoId=${repoId} sandboxId=${sandbox.id}`,
   );
 
-  // Layer the selected owner account's credentials last so they win over the
-  // team credential baked into the sandbox env. Explicit selections fail
-  // closed if they are unavailable or do not match the model.
   const credentialOwnerUserId = opts.credentialOwnerUserId ?? userId;
   let extraEnvVars = opts.extraEnvVars;
   if (opts.providerAccountId) {
@@ -709,11 +603,6 @@ export async function signAndLaunchScript(
       extraEnvVars = {
         ...extraEnvVars,
         ...accountEnv,
-        // Attribution for the turn's usage-limit reading (usageLimits:report).
-        // Set only inside this branch: plan limits are per account, so a reading
-        // may only be attributed to the account whose credentials the run
-        // actually authenticated with — a fallback to the team credential
-        // reports no account and keeps its own row.
         PROVIDER_ACCOUNT_ID: opts.providerAccountId,
       };
       console.log(
@@ -721,9 +610,6 @@ export async function signAndLaunchScript(
       );
     }
   }
-  // The linked-repo workspace description lives on the session, so it is
-  // resolved here — the single launch choke point.
-  // A session daemon is keyed by its chat; the session comes through the chat.
   const launchChat =
     entityIdField === "chatId"
       ? await ctx.runQuery(internal.sessionChats.getInternal, {
@@ -736,12 +622,6 @@ export async function signAndLaunchScript(
       ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
       : null);
 
-  // Every launch path (prewarm daemon, launch on an existing sandbox,
-  // relaunch/heal) comes through here, so resolving the linked clones once
-  // means the agent is told about the same workspace on all of them. Absent entirely for single-repo sessions.
-  // Annotated locally so this `runQuery` cannot feed a generated-api type
-  // cycle back into `_generated/api.d.ts`.
-  // A task run launches by task id: its clones live on the task's session.
   const workspaceSession =
     launchSession ??
     (entityIdField === "taskId"
@@ -759,20 +639,14 @@ export async function signAndLaunchScript(
     linkedRepos = linkedRows;
   }
 
-  // Mint the sandbox auth token and MCP token in a single node action. This
-  // replaces three separate runAction hops across two "use node" isolates, which
-  // cold-started Node twice and dominated launch latency (~3s).
   const { sandboxToken, mcpToken } = await ctx.runAction(
     internal.sandboxJwt.mintSandboxSessionTokens,
     {
       userId,
       repoId,
       enableMcp: opts.enableMcp !== false,
-      // The MCP token names the session (not the chat) so every session-level
-      // tool keeps resolving; the chat rides along as its own claim.
       entityId: launchSession ? String(launchSession._id) : entityId,
       ...(launchChat ? { chatId: entityId } : {}),
-      // A project launch (the old interview) runs on the coordinator's VM too.
       readOnlyGit:
         entityIdField === "projectId" ||
         (launchSession !== null && isReadOnlySandboxOwner(launchSession.owner)),
@@ -798,9 +672,6 @@ export async function signAndLaunchScript(
     }
   }
 
-  // A catalog writer is deliberately short-lived and single-use. Unlike the
-  // old fleet-constant HMAC, reading one sandbox's env cannot grant permanent
-  // write access to the global composer catalog.
   const provider = getAIModelProvider(normalizeAIModel(opts.model));
   let harnessCatalogToken: string | undefined;
   if (provider === "claude") {
@@ -814,9 +685,6 @@ export async function signAndLaunchScript(
     });
   }
 
-  // System skills reach the agent as stub SKILL.md files in the checkout, and
-  // the stubs are useless without the eva MCP server — so a launch with MCP
-  // disabled ships an empty list, which prunes any leftovers.
   const systemSkillStubs = mcpToken
     ? await ctx.runQuery(internal.repoSystemSkills.listStubsForLaunch, {
         repoId,
@@ -847,7 +715,6 @@ export async function signAndLaunchScript(
   );
 }
 
-/** Owner id types that can derive a stable per-owner Claude session UUID. */
 type PersistableSessionId =
   | Id<"sessionChats">
   | Id<"sessions">

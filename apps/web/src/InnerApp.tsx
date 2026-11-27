@@ -19,17 +19,12 @@ export function InnerApp({
   useEffect(() => {
     if (!isLoaded) return;
     writeSignedInHint(isSignedIn ?? false);
-    // The early anonymous render below was a guess. If Clerk disagrees (hint
-    // cleared but a session exists), re-run route guards so `/` redirects to
-    // /home the way a blocking boot would have.
     if (!hadSession && isSignedIn) {
       void router.invalidate();
     }
   }, [isLoaded, isSignedIn]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Returning signed-in users keep the previous behavior: hold paint until
-  // the session is restored, so protected routes never flash the landing.
   if (!isLoaded && hadSession) {
     return <AuthLoadingScreen />;
   }

@@ -38,13 +38,8 @@ await esbuild.build({
   entryPoints: [entry],
   bundle: true,
   platform: "browser",
-  // Runs in the previewed app's browser, so no downlevelling helpers are needed
-  // and names stay as authored (see keepNames note below).
   target: "es2020",
   format: "iife",
-  // keepNames/minifyIdentifiers would emit calls to a module-scope `__name`
-  // helper. Harmless here (the whole bundle ships together) but the point of
-  // this build step is an injected script with zero external references.
   keepNames: false,
   minify: false,
   outfile: outJs,

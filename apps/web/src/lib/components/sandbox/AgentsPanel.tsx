@@ -85,9 +85,7 @@ function AgentRow({
   const tone = subagentTone(agent.status);
   const running = tone === "active";
   const canStop =
-    running && agent.backgrounded && !isReadOnly && onRequestStop !== undefined;
-  // `response` steps are the agent's own messages, not steps it ran.
-  const stepCount = agent.steps.filter(
+    running && agent.backgrounded && !isReadOnly && onRequestStop !== undefined;  const stepCount = agent.steps.filter(
     (step) => step.type !== "response",
   ).length;
 

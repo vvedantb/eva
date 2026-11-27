@@ -36,20 +36,12 @@ export function SessionDetailClient({
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
-  /** Chat tab from the URL (`?chat=N`); null means Main. */
   chatNumber: number | null;
   onChatChange: (number: number | null) => void;
-  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeSandboxTab: string;
   onSandboxTabChange: (tab: string) => void;
-  /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile: (path: string) => void;
-  /** Opens the PR tab (Diffs sub-tab); optional repo-relative path scrolls to that file. */
   onViewDiff?: (repoRelativePath?: string) => void;
-  /**
-   * False while this session shell is kept mounted but another session is
-   * shown — Preview must not clear/refetch from sibling URL churn.
-   */
   isRouteActive?: boolean;
 }) {
   const { basePath, repo } = useRepo();
@@ -61,8 +53,6 @@ export function SessionDetailClient({
     api.sessions.get,
     isRouteActive ? { id: sessionId } : "skip",
   );
-  // The session's chats: Main plus any parallel chats. The URL picks one;
-  // a missing or closed number falls back to Main server-side.
   const chats = useHeldQuery(
     api.sessionChats.listForSession,
     isRouteActive ? { sessionId } : "skip",
@@ -122,32 +112,17 @@ export function SessionDetailClient({
   }, [needsMainChat, sessionId, ensureMainChat]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Pre-warm the active chat's daemon as soon as it is known (once the sandbox
-  // is), so the user's first message is warm instead of paying a ~20s cold
-  // respawn. Only the visible tab: idle daemons for every chat would hold
-  // memory the running ones need. Idempotent server-side (skips if a daemon
-  // is already alive), so re-firing when the sandbox id resolves is cheap.
   const prewarmDaemon = useMutation(api.sessionWorkflow.prewarmDaemon);
   const sandboxId = session?.sandboxId;
-  // A closed/stopping session keeps its sandboxId, so gate on status too:
-  // prewarming resumes the stopped Vercel VM (server-side no-op now, but this
-  // avoids the pointless round-trip on every closed-session page open).
   const sandboxStatus = session?.status;
-  // Depend on the scalar fields only — depending on the `session` doc identity
-  // re-fired this on every patch to the doc (status flips, updatedAt, PR
-  // state…), and a burst of prewarms can race the server's alive-check into
-  // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionArchived = session?.archive !== undefined;
   /* eslint-disable no-effect/no-event-handler --
      Prewarms the sandbox daemon for the session the route landed on; the
      trigger is navigation plus server-side status, not a click. */
   useEffect(() => {
-    // A hidden cached shell must not resume a VM the user is not looking at.
-    if (!isRouteActive) return;
+      if (!isRouteActive) return;
     if (!sandboxId || !chatId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
-    // Don't prewarm (which resumes the VM) an archived session — auto-stop
-    // below owns its teardown.
     if (sessionArchived) return;
     void prewarmDaemon({ chatId });
   }, [
@@ -160,9 +135,6 @@ export function SessionDetailClient({
   ]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Recover sandboxes left running in an archived session (the archive's own
-  // stop may have raced). A merged PR the owner kept live (Disable
-  // auto-archive) is not archived, so its sandbox stays up.
   const archiveAutoStopKey = useRef<string | null>(null);
   /* eslint-disable no-effect/no-event-handler --
      The auto-archive is a GitHub webhook landing in Convex, so the teardown has
@@ -182,10 +154,6 @@ export function SessionDetailClient({
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
   /* eslint-enable no-effect/no-event-handler */
-  // `stopping` is a transient backend state set synchronously by `stopSandbox`,
-  // cleared once the Vercel sandbox's stop call completes. Showing the spinner
-  // (and disabling Start) for its full duration prevents the stop/start race
-  // that previously orphaned sandboxes.
   const lifecycle = useSandboxLifecycle(session?.status);
   const isSandboxStarting = lifecycle.isStarting;
   const isSandboxStopping = lifecycle.isStopping;
@@ -210,8 +178,6 @@ export function SessionDetailClient({
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
-  // Must stay above loading/null early returns — Phase 3 review comments
-  // introduced this hook after them and tripped React #310 on session resolve.
   const handleViewDiff = (repoRelativePath?: string) => {
     if (simpleView) return;
     if (onViewDiff) {
@@ -221,9 +187,6 @@ export function SessionDetailClient({
     }
     setExpandRightSignal((n) => n + 1);
   };
-  // Declared here, not inline in the ChatPanel JSX: inline, the compiler
-  // rebuilds them with that whole block, so they change on every switch
-  // (`isRouteActive`) and re-render each transcript row they reach.
   const openPrdTab = () => {
     onSandboxTabChange("prd");
     setExpandRightSignal((n) => n + 1);
@@ -282,8 +245,6 @@ export function SessionDetailClient({
   }
 
   const isSandboxActive = session.status === "active";
-  // `archive` is the one lock: a merged/closed PR locks the session only
-  // through auto-archive, which the owner can turn off.
   const isArchived = session.archive !== undefined;
 
   const chatPanel = (

@@ -107,11 +107,6 @@ function Screen({ onBack, headerRight, children }: { onBack: () => void; headerR
   );
 }
 
-/**
- * The web "Options" button (icon only below `sm`) as the header "…", and
- * its menu items a phone can use as a sheet: Copy PRD, and View Tests PR
- * once test generation has made one.
- */
 function DocOptions({ content, testsPrUrl }: { content: string; testsPrUrl: string | undefined }) {
   const muted = EVA_THEME[useScheme()].mutedForeground;
   const [open, setOpen] = useState(false);

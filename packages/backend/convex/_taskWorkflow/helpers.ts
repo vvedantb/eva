@@ -180,8 +180,6 @@ export async function finalizeRunStatus(
     });
   }
 
-  // Single terminal-status choke point for a run, guarded above against
-  // re-finalizing, so a watched task's master is woken exactly once.
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,

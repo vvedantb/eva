@@ -4,11 +4,6 @@ import {
   measureTickStallMs,
 } from "../runtime/eventLoopStall.js";
 
-/**
- * A frozen daemon (VM swap thrash) misses every heartbeat and loses its lease
- * server-side. The only daemon-side evidence is how late its next tick fired,
- * so this measurement is what turns "no logs for six minutes" into a diagnosis.
- */
 describe("measureTickStallMs", () => {
   const interval = 10_000;
   const base = {

@@ -1,9 +1,5 @@
 import type { SystemSkillHydration } from "./registry";
 
-/**
- * Variation directions, applied in order: variation `a` takes the first, `b` the
- * second, and so on. Ported from the old design-mode prompt.
- */
 const VARIATION_STRATEGIES = [
   "a — Clean/conventional: clarity, familiar patterns, straightforward navigation",
   "b — Creative/bold: unconventional layout, striking hierarchy, unique interactions",

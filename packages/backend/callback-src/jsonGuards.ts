@@ -1,7 +1,5 @@
 import type { JsonObject, JsonValue } from "./types.js";
 
-// Leaf module: `runtime/state.ts` needs these at load time, and importing them
-// from `utils.ts` (which imports state) would make the two modules circular.
 
 /** True for plain JSON objects (not null, not arrays). */
 export function isJsonObject(

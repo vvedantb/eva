@@ -728,7 +728,6 @@ export const repoSkillFields = {
   repoId: v.id("githubRepos"),
   title: v.string(),
   description: v.optional(v.string()),
-  /** Full SKILL.md body from the last successful GitHub sync. */
   content: v.optional(v.string()),
   sourcePath: v.optional(v.string()),
   sourceSha: v.optional(v.string()),
@@ -752,25 +751,17 @@ export const repoSkillContentFields = {
  */
 export const repoSystemSkillFields = {
   repoId: v.id("githubRepos"),
-  /** Registry key, e.g. "eva-capture". */
   name: v.string(),
   installedBy: v.id("users"),
   installedAt: v.number(),
 };
 
-// Lifecycle of a single app's seeded-snapshot build within Step 5: actively
-// seeding, captured successfully, or fell back to the base Image.
 export const seededAppStatusValidator = v.union(
   v.literal("running"),
   v.literal("seeded"),
   v.literal("fallback"),
 );
 
-// Per-app outcome of a seeded-snapshot build (recorded per snapshotBuild during
-// Step 5). status tracks the lifecycle (running while in progress); is optional
-// for build records created before the field existed (treat absent as terminal,
-// inferred from seededSnapshotName). seededSnapshotName is the captured snapshot
-// name on success, or null while running / when it fell back to the base Image.
 export const seededAppResultValidator = v.object({
   repoId: v.id("githubRepos"),
   app: v.optional(v.string()),
@@ -783,19 +774,14 @@ export const snapshotBuildFields = {
   repoSnapshotId: v.id("repoSnapshots"),
   status: snapshotBuildStatusValidator,
   triggeredBy: snapshotBuildTriggerValidator,
-  // "base" (image only) vs "seeded" (boots + seeds DB before capture).
-  // Optional: legacy rows predate this field and render without a type.
   kind: v.optional(snapshotBuildKindValidator),
   logs: v.string(),
   error: v.optional(v.string()),
   workflowRunId: v.optional(v.number()),
-  // Workflow driving this build, so a cancel can stop the run rather than
-  // only relabelling the row. Optional: rows predating the field have none.
   workflowId: v.optional(v.string()),
   startedAt: v.number(),
   completedAt: v.optional(v.number()),
   retryCount: v.optional(v.number()),
-  // Per-app seeding outcomes captured during Step 5 of the build workflow.
   seededApps: v.optional(v.array(seededAppResultValidator)),
 };
 
@@ -824,46 +810,23 @@ export const githubRepoFields = {
   defaultFastMode: v.optional(v.boolean()),
   sessionsVncEnabled: v.optional(v.boolean()),
   sessionsVscodeEnabled: v.optional(v.boolean()),
-  // Opt-out: when true, other sandboxes may not mint read tokens for this
-  // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
   sandboxReadExcluded: v.optional(v.boolean()),
-  // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
-  // Repo spec). Shared across sibling app rows.
   agentMemoryEnabled: v.optional(v.boolean()),
-  // vCPUs / memory of this app's sandboxes (`SANDBOX_SIZES` in @eva/shared).
-  // Per-app: apps of one monorepo need different sizes. Absent = large.
   sandboxSize: v.optional(sandboxSizeValidator),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
   mcpRootPrompt: v.optional(v.string()),
-  // startup/background/stop commands and devPort/devCommand: a read-only cache
-  // of `.eva/config.json` on the default branch (_evaConfig/cache.ts writes
-  // them). Sandboxes read this copy so a boot needs no GitHub call.
   startupCommands: v.optional(v.array(v.string())),
   backgroundCommands: v.optional(v.array(v.string())),
-  // Clean-shutdown commands run before snapshotting a seeded sandbox so on-disk
-  // volumes (e.g. local Postgres) flush consistently. Used by the seeded-snapshot
-  // build stage; not run on normal sandbox starts.
   stopCommands: v.optional(v.array(v.string())),
-  // Name of this app's seeded running-sandbox snapshot (filesystem snapshot with
-  // the DB already seeded), set by the seeded-snapshot build when it succeeds.
-  // Preferred over the base Image snapshot at sandbox-create time for fast starts.
   seededSnapshotName: v.optional(v.string()),
-  // computeSeedFingerprint (build/seed/background/stop commands) of the inputs
-  // seededSnapshotName was built from. A session branch whose `.eva/config.json`
-  // differs skips the seeded snapshot (see resolveSandboxContext).
   seededFingerprint: v.optional(v.string()),
-  // Last sync of the repo-owned `.eva/` folder on the default branch (see
-  // _evaConfig/sync.ts). Absent ⇒ the repo has no `.eva/config.json` yet.
   evaConfig: v.optional(
     v.object({
       ref: v.string(),
       syncedAt: v.number(),
-      // Parse error of the current file; the cache keeps the last good values.
       error: v.optional(v.string()),
-      // False when the repo has the file but it does not list this app: the
-      // app's commands are left as they were (add it to the file to set them).
       appListed: v.optional(v.boolean()),
       mcpServers: v.array(
         v.object({
@@ -877,12 +840,7 @@ export const githubRepoFields = {
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
   systemPrompt: v.optional(v.string()),
-  // Convex storage id of an uploaded logo image shown next to the repo in repo
-  // lists. Per-app (not shared across monorepo siblings). Resolved to a URL by
-  // list/listByTeam via ctx.storage.getUrl.
   logoStorageId: v.optional(v.id("_storage")),
-  // Optional display name shown in the sidebar / repo lists instead of the
-  // GitHub name (or monorepo leaf). Per-app; empty clears back to the default.
   label: v.optional(v.string()),
 };
 
@@ -892,23 +850,16 @@ export const teamFields = {
   createdBy: v.id("users"),
   createdAt: v.number(),
   isPersonal: v.optional(v.boolean()),
-  // Convex storage id of an uploaded team icon. Resolved to a URL by
-  // teams.list / teams.get / users.listTeamWithMembers via ctx.storage.getUrl.
   logoStorageId: v.optional(v.id("_storage")),
-  // Wide banner image shown behind the app sidebar header for this team's repos.
   backgroundStorageId: v.optional(v.id("_storage")),
 };
 
 export const projectFields = {
   ...entityNumIdFields,
-  // deletedAt moved to archivedAt. schema-narrowing-ok: archiveDeletedEntities
-  /** Archived with its tasks: hidden from lists, still opens by URL; `unarchive` clears it. */
+  // schema-narrowing-ok: archiveDeletedEntities
   archivedAt: v.optional(v.number()),
-  /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
-  /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
   summaryDocId: v.optional(v.id("docs")),
-  /** The order the project's phase labels (`agentTasks.phaseLabel`) show in. */
   phaseLabels: v.optional(v.array(v.string())),
   userId: v.id("users"),
   title: v.string(),
@@ -916,29 +867,23 @@ export const projectFields = {
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  // Legacy phase, planningMode, build, interview, lastBuildError and
-  // codeReviewer removed. schema-narrowing-ok: clearLegacyProjectFields
+  // schema-narrowing-ok: clearLegacyProjectFields
   priority: v.optional(priorityValidator),
   rawInput: v.string(),
   projectLead: v.optional(v.id("users")),
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
-  // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState
+  // schema-narrowing-ok: migrateProjectBuildState
+  // schema-narrowing-ok: migrateProjectInterviewState
   branchVersion: v.optional(v.number()),
-  // Set when chat or other queue helpers touch the project. Mirrors
-  // `sessions.updatedAt` so the same queue/list helpers work uniformly.
   updatedAt: v.optional(v.number()),
-  // codeReviewer removed. schema-narrowing-ok: clearProjectCodeReviewer
+  // schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
   model: v.optional(aiModelValidator),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   lastTurnFinishedAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
-  // Manager Ave thread watching this project's chat for completion
-  // notifications (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
 };
 
@@ -961,7 +906,6 @@ export const automationTriggerValidator = v.union(
   v.object({
     kind: v.literal("event"),
     event: repoEventKindValidator,
-    // `issue_labeled` only: the label that fires it (defaults to "eva").
     label: v.optional(v.string()),
   }),
 );
@@ -973,31 +917,17 @@ export const automationFields = {
   title: v.string(),
   description: v.string(),
   cronSchedule: v.string(),
-  // Missing means `{ kind: "cron" }`, so rows from before event triggers
-  // keep their schedule without a migration.
   trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),
   shared: v.optional(v.boolean()),
-  // When true, a successful run emails its result summary to every user with
-  // email notifications enabled (see _automations/email.ts).
   sendEmail: v.optional(v.boolean()),
-  // `create_task` presets only. Missing means true: a created task starts
-  // at once. False leaves it in To do for a person to start.
   autoStartTasks: v.optional(v.boolean()),
-  // `production_alert` presets only. SHA-256 hex of the bearer secret the
-  // alert webhook must send. The plain secret is shown once, never stored.
   alertSecretHash: v.optional(v.string()),
-  // True skips review and sends straight away. Missing means each email waits
-  // on its run as a draft until someone sends it, so review is the default.
   emailAutoSend: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
-  // Set when this row is a per-repo install of a hardcoded system automation
-  // (see _automations/systemAutomations.ts). Content fields hold placeholders;
-  // the catalog overlays title/description/readOnly/actionsEnabled/trigger
-  // at read and run time, so editing the code updates every install at once.
   systemKey: v.optional(v.string()),
   createdBy: v.id("users"),
   createdAt: v.number(),
@@ -1388,12 +1318,9 @@ export const docFields = {
   activeWorkflowId: v.optional(v.string()),
   testGenStatus: v.optional(evaluationStatusValidator),
   testPrUrl: v.optional(v.string()),
-  // Testing Arena: set when browser scenarios run on every PR. Holds the user
-  // who turned it on — PR runs launch with their credentials.
   arenaPrRunsUserId: v.optional(v.id("users")),
   contentUpdatedAt: v.optional(v.number()),
   lastParsedAt: v.optional(v.number()),
-  /** Set on create going forward; optional so legacy docs need no backfill. */
   createdBy: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -1438,31 +1365,20 @@ export const docVersionDraftFields = {
   updatedAt: v.number(),
 };
 
-// One row per (user, surface target). `kind` names the input surface so the
-// table stays extensible. Exactly one target FK group is set, matching `kind`.
-// Content is stored TOKENIZED (@[Label](id)) so mentions survive reload.
-//
-// Drafts ≠ prompt stashes: a draft is the single live WIP for one composer
-// surface (autosaved upsert). A prompt stash is an explicit multi-entry queue
-// of frozen snapshots (see `promptStashFields`) — do not merge the tables.
 export const draftFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),
-  // Task and project chat drafts removed. schema-narrowing-ok: deleteLegacyOwnerChatDrafts
+  // schema-narrowing-ok: deleteLegacyOwnerChatDrafts
   kind: v.union(v.literal("taskComment"), v.literal("sessionChat")),
   taskId: v.optional(v.id("agentTasks")),
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
-  // One draft per session chat tab; `sessionId` stays for the index and repo scope.
   chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),
 };
 
-// Per-user per-repo queue of frozen composer snapshots (⌘S). Cap enforced in
-// `promptStash.ts`. Content is tokenized; "" allowed for attachment-only.
-// Ordering uses Convex `_creationTime` (no separate createdAt).
 export const promptStashFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),
@@ -1473,11 +1389,9 @@ export const promptStashFields = {
 export const evaluationReportFields = {
   repoId: v.id("githubRepos"),
   docId: v.id("docs"),
-  /** Absent on reports from before browser runs existed: those are "code". */
   kind: v.optional(evaluationKindValidator),
   trigger: v.optional(evaluationTriggerValidator),
   status: evaluationStatusValidator,
-  // Severity-ranked issues flagged against the document.
   issues: v.optional(v.array(evalIssueValidator)),
   summary: v.optional(v.string()),
   error: v.optional(v.string()),
@@ -1485,11 +1399,8 @@ export const evaluationReportFields = {
   fixStatus: v.optional(evalFixStatusValidator),
   fixBranchName: v.optional(v.string()),
   prUrl: v.optional(v.string()),
-  // Branch the evaluation ran against, so an opt-in fix uses the same base.
   branchName: v.optional(v.string()),
-  // Browser runs: one entry per scenario, filled when the run completes.
   scenarioResults: v.optional(v.array(arenaScenarioResultValidator)),
-  // PR-triggered runs: the commit tested and the GitHub check run reporting it.
   prNumber: v.optional(v.number()),
   headSha: v.optional(v.string()),
   checkRunId: v.optional(v.number()),
@@ -1497,8 +1408,6 @@ export const evaluationReportFields = {
   updatedAt: v.number(),
 };
 
-// A stored, repeatable browser test for one Testing Arena doc. `instructions`
-// is plain English: the steps to take and the outcome that counts as a pass.
 export const arenaScenarioFields = {
   repoId: v.id("githubRepos"),
   docId: v.id("docs"),
@@ -1508,7 +1417,6 @@ export const arenaScenarioFields = {
   updatedAt: v.number(),
 };
 
-// Discriminated target for get/set — explicit per surface, no field-sniffing.
 export const draftTarget = v.union(
   v.object({
     kind: v.literal("taskComment"),
@@ -1522,12 +1430,6 @@ export const draftTarget = v.union(
   }),
 );
 
-// A hosted Claude "Cowork" artifact: a self-contained HTML page uploaded to eva
-// that calls the Eva MCP read-only tools via an in-app bridge. boundTeamId scopes
-// listing/visibility only — tool calls target any repo the signed-in user can
-// access (enforced per call). declaredTools is advisory metadata parsed from the
-// artifact's cowork-artifact-meta header; the runtime read-only whitelist is the
-// real gate. New row per upload; manual delete.
 export const artifactFields = {
   name: v.string(),
   description: v.optional(v.string()),
@@ -1536,14 +1438,7 @@ export const artifactFields = {
   htmlStorageId: v.id("_storage"),
   uploadedBy: v.id("users"),
   createdAt: v.number(),
-  // Chat that created this artifact (`create_artifact` from a sandbox token).
-  // Manual uploads leave these unset. Indexes skip rows with no source.
   ...chatSourceFields,
-  // The chat thread and turn the artifact was created in, for its inline card
-  // in the transcript. Same anchor as a `render_html` page. Rows made before
-  // the card existed, and manual uploads, have neither.
-  // Artifacts were not moved with the 1b/2 transcripts: an artifact made in
-  // an old task or project chat keeps that chat's id as its anchor.
   chatParentId: v.optional(
     v.union(
       v.id("sessionChats"),
@@ -1555,10 +1450,6 @@ export const artifactFields = {
   messageId: v.optional(v.id("messages")),
 };
 
-// Persistent key/value state for one hosted artifact, read and written through
-// `window.cowork.state` in the iframe bridge. `ownerId` set = private to that
-// viewer ("user" scope); unset = shared by every member of the bound team.
-// `value` is JSON text, so artifacts can store any JSON without `v.any()`.
 export const artifactStateFields = {
   artifactId: v.id("artifacts"),
   ownerId: v.optional(v.id("users")),
@@ -1568,10 +1459,6 @@ export const artifactStateFields = {
   updatedAt: v.number(),
 };
 
-// A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
-// inside the sandbox, resolved through the same auth proxy as the Preview tab.
-// `icon` is a free-text Tabler icon name (e.g. "IconBolt"); unknown names fall
-// back to a placeholder at render. `order` sorts tabs within the app's list.
 export const appTabFields = {
   repoId: v.id("githubRepos"),
   name: v.string(),
@@ -1609,38 +1496,14 @@ export const backgroundProcessFields = {
  * belong here — its spend is the per-turn cost gauge's business.
  */
 export const agentUsageLimitFields = {
-  /**
-   * Legacy. Readings used to be keyed per repo, and the rows written then still
-   * name the repo they were reported on; new rows never set it. Nothing reads
-   * them — plan headroom is a fact about the credential, so a per-repo row was
-   * the same number filed under the wrong key — and they age out of the 24h
-   * freshness window on their own, so `report` just deletes any it walks past.
-   */
   repoId: v.optional(v.id("githubRepos")),
   provider: usageLimitProviderValidator,
-  /**
-   * The connected account the run authenticated as. Plan limits are per
-   * account, so this is the row's identity: without it a second account's
-   * reading would overwrite the first. Absent on the team row below.
-   */
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /**
-   * The team whose shared credential (`CLAUDE_CODE_OAUTH_TOKEN`, from team or
-   * repo env vars) this reading measures. Set only on that row, and never
-   * alongside `providerAccountId`: a run authenticates as one or the other.
-   */
   teamId: v.optional(v.id("teams")),
-  /** Epoch ms the sandbox took this reading. */
   capturedAt: v.number(),
-  /** claude.ai plan, e.g. "max". Absent for API-key sessions. */
   subscriptionType: v.optional(v.string()),
   status: v.optional(usageLimitStatusValidator),
   windows: v.optional(v.array(usageLimitWindowValidator)),
-  /**
-   * What the latest observation covered, so a windowless row says why. Absent
-   * on rows written by callback bundles that predate the discriminant; readers
-   * treat that as "unknown", not as any of the three states.
-   */
   completeness: v.optional(usageLimitCompletenessValidator),
 };
 
@@ -1652,10 +1515,8 @@ export const agentUsageLimitFields = {
  */
 export const chatUiPanelFields = {
   parentId: chatParentIdValidator,
-  /** The assistant turn the panel appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.optional(v.string()),
-  /** The layout request the agent made, kept for debugging and provenance. */
   prompt: v.string(),
   spec: v.string(),
   elementCount: v.number(),
@@ -1668,10 +1529,8 @@ export const chatUiPanelFields = {
  */
 export const chatHtmlRenderFields = {
   parentId: chatParentIdValidator,
-  /** The assistant turn the page appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.string(),
-  /** The agent's frame height in CSS px, used until the page reports its own. */
   height: v.number(),
   bodyId: v.id("chatHtmlRenderBodies"),
   createdAt: v.number(),
@@ -1695,15 +1554,12 @@ export const envVarRequestScopeValidator = v.union(
  */
 export const envVarRequestFields = {
   parentId: chatParentIdValidator,
-  /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   key: v.string(),
   reason: v.string(),
   scope: envVarRequestScopeValidator,
   repoId: v.id("githubRepos"),
-  /** Set when `scope` is "team": the repo's team at request time. */
   teamId: v.optional(v.id("teams")),
-  /** The chat's sandbox at request time, for the live write. */
   sandboxId: v.optional(v.string()),
   status: v.union(
     v.literal("pending"),
@@ -1727,21 +1583,16 @@ export const sessionProposalFields = {
     v.id("projects"),
     v.id("agentTasks"),
   ),
-  /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
-  /** The repo (and app) the proposing chat runs in; the new session opens there. */
   repoId: v.id("githubRepos"),
   title: v.string(),
-  /** One or two sentences on why this is a task of its own. Shown on the card. */
   reason: v.string(),
-  /** The first message of the new session, written by the agent. */
   brief: v.string(),
   status: v.union(
     v.literal("pending"),
     v.literal("started"),
     v.literal("here"),
   ),
-  /** Set when `status` is "started": the session the user opened. */
   sessionId: v.optional(v.id("sessions")),
   sessionNumId: v.optional(v.number()),
   createdAt: v.number(),
@@ -1763,9 +1614,7 @@ export const previewToolCallFields = {
     v.id("agentTasks"),
   ),
   kind: v.union(v.literal("list"), v.literal("invoke")),
-  /** Invoke only: the page tool to run. */
   name: v.optional(v.string()),
-  /** Invoke only: the arguments, as JSON object text. */
   argumentsJson: v.optional(v.string()),
   status: v.union(
     v.literal("pending"),
@@ -1773,7 +1622,6 @@ export const previewToolCallFields = {
     v.literal("done"),
     v.literal("error"),
   ),
-  /** Random per-browser-tab id of the tab that won the claim. */
   claimedBy: v.optional(v.string()),
   resultJson: v.optional(v.string()),
   error: v.optional(v.string()),
@@ -1786,7 +1634,6 @@ export const proposedPlanFields = {
   turnId: v.optional(v.id("turns")),
   messageId: v.optional(v.id("messages")),
   planMarkdown: v.string(),
-  /** Dedup key: `tool:<toolUseId>` or `plan:<markdown>`. */
   captureKey: v.string(),
   implementedAt: v.optional(v.number()),
   implementationSessionId: v.optional(v.id("sessions")),
@@ -1804,14 +1651,7 @@ export const projectTaskReportFields = {
   taskId: v.id("agentTasks"),
   kind: v.union(v.literal("report"), v.literal("ask")),
   text: v.string(),
-  /**
-   * An ask is `open` until the first answer (the coordinator's or a
-   * person's) makes it `answered`, or its task stops (`closed`). A report
-   * stays `open` until its task stops; the coordinator sees the reports newer
-   * than its last turn.
-   */
   state: v.union(v.literal("open"), v.literal("answered"), v.literal("closed")),
-  /** Who answered an ask: the coordinator, or the person who wrote in the task chat. */
   answeredBy: v.optional(v.union(v.literal("coordinator"), v.id("users"))),
   answeredAt: v.optional(v.number()),
   createdAt: v.number(),
@@ -1841,11 +1681,10 @@ export const projectCoordinatorWakeFields = {
     v.literal("triage"),
   ),
   key: v.string(),
-  /** One line for the coordinator's wake-up message. */
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
-  // heldAt removed with the hourly cap. schema-narrowing-ok: clearCoordinatorWakeHeldAt
+  // schema-narrowing-ok: clearCoordinatorWakeHeldAt
 };
 
 export const notificationFields = {
@@ -1857,30 +1696,11 @@ export const notificationFields = {
   href: v.optional(v.string()),
   repoId: v.optional(v.id("githubRepos")),
   createdAt: v.number(),
-  // Human-readable task/project context shown on the notification card, e.g.
-  // a quick task's title or "Project title: issue title" for project tasks.
-  // Only set for types whose title does not already name the task (mentions,
-  // comment replies); snapshotted at creation, absent otherwise.
   contextLabel: v.optional(v.string()),
-  // Set once this notification has been included in an email (instant send or
-  // daily digest), so neither path emails the same notification twice.
   emailedAt: v.optional(v.number()),
-  // When the user archived this notification out of the inbox. Absent means
-  // "in the inbox" — archiving is reversible, so the row is kept and only
-  // this stamp moves. Archived rows never count as unread.
   archivedAt: v.optional(v.number()),
-  // The comment this notification was generated from, when it came from one.
-  // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
-  // field so the anchor survives independently of the href string. Absent on
-  // non-comment notifications and on every notification created before this
-  // field existed — those keep landing at the top of the target page.
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
-  // How loudly to deliver this one: high = instant email, normal = daily
-  // digest only, low = inbox only. Undefined means not yet routed (a mention
-  // whose routing action has not landed) or legacy; treated as normal.
   urgency: v.optional(notificationUrgencyValidator),
-  // The chat this notification is about (session, quick task or project id),
-  // so the mobile inbox can open it without parsing `href`.
   chatTarget: v.optional(v.string()),
 };
 
@@ -1892,18 +1712,12 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  // snapshotName removed with Daytona. schema-narrowing-ok: removeDaytonaSnapshotFields
+  // schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
   buildCommands: v.optional(v.array(v.string())),
-  // Seed-once commands run ONLY during seeded-snapshot builds, in the
-  // post-daemon phase (services like `convex dev` are up). For one-time
-  // data seeding (env set, convex import). Never re-run on sandbox boot,
-  // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
-  // Vercel base Image capture (`snap_*`) from a running sandbox — separate
-  // from per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -1957,7 +1771,6 @@ export const routedParticipantFields = {
   userId: v.id("users"),
   teamId: v.id("teams"),
   lastMessageAt: v.number(),
-  /** True while Eva is still waiting on this person specifically. */
   needsReply: v.boolean(),
   addedAt: v.number(),
   repliedAt: v.optional(v.number()),
@@ -1968,7 +1781,6 @@ export const routedMessageFields = {
   authorKind: routedAuthorKindValidator,
   authorUserId: v.optional(v.id("users")),
   body: v.string(),
-  /** Why Eva is asking — source work + agent briefing. Absent on older rows. */
   context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),

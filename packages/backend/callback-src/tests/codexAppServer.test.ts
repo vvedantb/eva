@@ -78,7 +78,6 @@ test("computes per-turn usage as the delta of cumulative thread totals", () => {
       null,
     ),
   ).toBeNull();
-  // First turn of a fresh thread: no baseline yet, totals count in full.
   expect(
     computeTurnUsageDelta(null, {
       inputTokens: 100,
@@ -92,7 +91,6 @@ test("computes per-turn usage as the delta of cumulative thread totals", () => {
     cacheWriteInputTokens: 10,
     outputTokens: 25,
   });
-  // Later turn: only the growth since the turn-start snapshot counts.
   expect(
     computeTurnUsageDelta(
       {
@@ -114,7 +112,6 @@ test("computes per-turn usage as the delta of cumulative thread totals", () => {
     cacheWriteInputTokens: 0,
     outputTokens: 70,
   });
-  // Resumed thread replaying lower totals, or malformed fields: clamp to 0.
   expect(
     computeTurnUsageDelta(
       { inputTokens: 500, outputTokens: 90 },

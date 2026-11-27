@@ -7,25 +7,18 @@ import { components, internal } from "../_generated/api";
 import { getRepoOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 
-/** 30 pages of 100 closed PRs covers a busy repo's 90 days; older buckets go blank. */
 const MAX_CLOSED_PR_PAGES = 30;
 
-/** Merges trickle in all day; ten minutes keeps the Stats page cheap and close to live. */
 const MERGED_PRS_CACHE_TTL_MS = 10 * 60_000;
 
 const mergedPrValidator = v.object({
   number: v.number(),
   mergedAt: v.number(),
-  /** Author is a GitHub bot account (Dependabot, Renovate, an App). */
   bot: v.boolean(),
 });
 
 const mergedPrsResultValidator = v.object({
   prs: v.array(mergedPrValidator),
-  /**
-   * Merges before this time may be missing because the page cap was hit;
-   * equal to `since` when the list is complete.
-   */
   coveredFrom: v.number(),
 });
 
@@ -104,7 +97,6 @@ export const getEvaMergeShare = action({
   args: {
     repoId: v.id("githubRepos"),
     startTime: v.number(),
-    /** Right edge of the chart — the last bucket is the one containing it. */
     endTime: v.number(),
     bucketSizeMs: v.number(),
     force: v.optional(v.boolean()),
@@ -114,7 +106,6 @@ export const getEvaMergeShare = action({
       date: v.number(),
       evaMerged: v.number(),
       totalMerged: v.number(),
-      /** False when the bucket starts before the fetched history reaches. */
       covered: v.boolean(),
     }),
   ),

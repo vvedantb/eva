@@ -22,7 +22,6 @@ export function useSessionChatActions() {
     );
   };
 
-  /** Throws on failure (after the toast) so the caller keeps its dialog open. */
   const deleteChat = async (chatId: Id<"sessionChats">) => {
     await withMutationToast(
       removeMutation({ chatId }),

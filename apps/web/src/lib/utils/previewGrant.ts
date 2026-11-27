@@ -1,5 +1,3 @@
-// Client-side helpers for the preview-access grant param.
-// Must match PREVIEW_GRANT_PARAM in packages/backend/convex/previewGrantConfig.ts.
 const PREVIEW_GRANT_PARAM = "__eva_grant";
 
 /**

@@ -57,7 +57,6 @@ export async function resolveStableDeploymentUrl(
   const envVars = await resolveAllEnvVars(ctx, repoId);
   const token = envVars.VERCEL_TOKEN;
   if (!token) {
-    // No token configured → fall back to today's behaviour immediately.
     return { url: perCommitUrl, shouldKeepPolling: false };
   }
   const teamId = envVars.VERCEL_TEAM_ID;
@@ -68,17 +67,9 @@ export async function resolveStableDeploymentUrl(
     teamId,
   });
   if (alias) {
-    // Vercel's API returns aliases as bare hostnames (e.g. `my-app-git-feat-team.vercel.app`).
-    // Prepend `https://` so the stored URL is absolute — without a scheme, browsers treat
-    // it as a relative path and prepend the current page's origin when rendered in `<a href>`.
     return { url: `https://${alias}`, shouldKeepPolling: false };
   }
 
-  // Alias not yet attached. Keep polling but DO NOT touch the stored URL —
-  // returning `undefined` makes the mutation skip the `deploymentUrl` patch,
-  // so users never see a per-commit URL briefly before it flips to the
-  // stable alias. On the final attempt we accept the per-commit URL as a
-  // safety net so the preview button isn't empty forever.
   if (attempt < MAX_POLL_ATTEMPTS - 1) {
     return { url: undefined, shouldKeepPolling: true };
   }

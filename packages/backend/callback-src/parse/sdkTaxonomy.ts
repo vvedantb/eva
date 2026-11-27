@@ -5,7 +5,6 @@ import { isJsonObject, log, trimmedString } from "../utils.js";
 
 const loggedUnknownKinds = new Set<string>();
 
-/** Task ids seen in prior `background_tasks_changed` payloads (daemon session). */
 const knownBackgroundTaskIds = new Set<string>();
 
 function readStringArray(value: JsonValue): string[] {
@@ -124,7 +123,6 @@ function readBackgroundTaskDescriptions(
   return descriptions;
 }
 
-/** Returns newly seen background task ids from a `background_tasks_changed` payload. */
 function diffNewBackgroundTaskIds(taskIds: string[]): string[] {
   const newly: string[] = [];
   for (const id of taskIds) {
@@ -215,9 +213,6 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
     return [];
   }
 
-  // Plan usage-limit state is captured into callback state and reported to
-  // Convex at turn end — it is account-level status, not turn activity, so it
-  // deliberately produces no timeline row.
   if (messageType === "rate_limit_event") {
     mergeClaudeRateLimitEvent(event);
     return [];
@@ -275,7 +270,6 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
     return [];
   }
 
-  // Any other handled system subtype completes an in-flight status row.
   completeActiveStatusStep();
 
   if (subtype === "compact_boundary") {

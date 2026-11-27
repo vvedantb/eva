@@ -1,8 +1,5 @@
 import { getAIModelProvider, type Doc } from "@eva/backend";
 
-// A failed turn, web and phone: it shows as a failure notice, not as a reply
-// whose text happens to start with "Error:".
-
 /** The failure text without the harness's `Error: ` stamp, which the notice's icon and title already say. */
 export function stripErrorPrefix(content: string): string {
   const trimmed = content.trim();
@@ -23,9 +20,7 @@ export function turnErrorTitle({
   providerLabel,
 }: {
   errorType: Doc<"messages">["errorType"];
-  /** Stamp of the user turn this answers: what the run was actually sent on. */
   turnModel: string | undefined;
-  /** The assistant row's own stamp, for a failure with no user turn above it. */
   messageModel: string | undefined;
   providerLabel: (provider: string) => string;
 }): string | null {

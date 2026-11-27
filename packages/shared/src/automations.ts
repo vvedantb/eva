@@ -1,9 +1,6 @@
 import { DEFAULT_ISSUE_LABEL, REPO_EVENT_LABELS, type AutomationTrigger } from "@eva/backend";
 import cronstrue from "cronstrue";
 
-// Automations, web and phone: the trigger and schedule in words, and a run's
-// status tone. A schedule is stored in UTC and read in the viewer's time zone.
-
 export const CRON_TRIGGER: AutomationTrigger = { kind: "cron" };
 
 /** A row's trigger; rows from before event triggers run on their schedule. */
@@ -23,7 +20,6 @@ function getOffsetMinutes(): number {
   return -new Date().getTimezoneOffset();
 }
 
-/** Moves a cron's minute and hour by `offsetMin`; null when they are not plain numbers. */
 function offsetCronHour(expression: string, offsetMin: number): string | null {
   const parts = expression.trim().split(/\s+/);
   if (parts.length < 5) return null;

@@ -466,7 +466,6 @@ export const listUserMessagesByParent = authQuery({
         q.eq("parentId", args.parentId).eq("role", "user"),
       )
       .collect();
-    // Thread replies are not in the transcript, so not in its jump rail either.
     return rows.filter((row) => row.replyTo === undefined).map((row) => ({
       _id: row._id,
       _creationTime: row._creationTime,

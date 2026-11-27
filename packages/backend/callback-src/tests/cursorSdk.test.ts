@@ -136,7 +136,6 @@ test("the Cursor model catalog keeps only the ids and aliases the SDK matches on
     { id: "grok-4.6", aliases: ["grok"] },
     { id: "composer-2.5" },
   ]);
-  // An empty list would make the SDK reject every model, non-retryably.
   expect(cursorModelCatalogJson([])).toBeNull();
 });
 
@@ -156,9 +155,6 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
       compactionInFlight: false,
     }),
   ).toBe(300_000);
-  // The pre-visible window rolls from the LAST event of any type: a stream
-  // still emitting lifecycle events (status, usage, summaries) is alive, so
-  // only total silence trips the stall — never a slow warm-up that talks.
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: false,
@@ -168,8 +164,6 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
       compactionInFlight: false,
     }),
   ).toBe(290_000);
-  // Once reasoning/text/tools are visible, a normal one-minute model pause is
-  // not fatal. A much longer safety bound still catches a genuinely dead run.
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: true,
@@ -188,8 +182,6 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
       compactionInFlight: false,
     }),
   ).toBeGreaterThan(300_000);
-  // An in-place compaction can outlast every silence budget; timing it out
-  // would replace the very agent the resume-always design exists to keep.
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: false,
@@ -242,7 +234,6 @@ test("splitCursorModel separates base id and reasoning level", () => {
     base: "grok-4.5",
     level: "medium",
   });
-  // Legacy CLI-era slug persisted from pre-migration sessions.
   expect(splitCursorModel("cursor-grok-4.5-high")).toEqual({
     base: "grok-4.5",
     level: "high",
@@ -305,7 +296,6 @@ test("filterModeParamsByModel drops params the model does not declare", () => {
   expect(filterModeParamsByModel(candidates, model, opted(false, true))).toEqual(
     [],
   );
-  // Declared id but undeclared value drops too.
   const wrongValue = {
     id: "grok-4.5",
     displayName: "Grok 4.5",
@@ -314,7 +304,6 @@ test("filterModeParamsByModel drops params the model does not declare", () => {
   expect(
     filterModeParamsByModel(candidates, wrongValue, opted(false, true)),
   ).toEqual([]);
-  // A declared id with an empty values list accepts any value.
   const openValues = {
     id: "grok-4.5",
     displayName: "Grok 4.5",
@@ -326,7 +315,6 @@ test("filterModeParamsByModel drops params the model does not declare", () => {
 });
 
 test("filterModeParamsByModel without a model entry keeps only opted-in params", () => {
-  // Not opted in: the protective fast=false is dropped rather than sent blind.
   expect(
     filterModeParamsByModel(
       cursorModeParams("grok-4.5", false, false),
@@ -334,7 +322,6 @@ test("filterModeParamsByModel without a model entry keeps only opted-in params",
       opted(false, false),
     ),
   ).toEqual([]);
-  // Opted in: best-effort send of exactly what the user asked for.
   expect(
     filterModeParamsByModel(
       cursorModeParams("grok-4.5", true, true),
@@ -352,7 +339,6 @@ function opted(fastMode: boolean, use1mContext: boolean) {
 }
 
 test("isResourceExhaustedMessage matches Cursor's Connect-RPC 429", () => {
-  // Exact shape observed in prod (task 234, 17 Aug 2026).
   expect(isResourceExhaustedMessage("[resource_exhausted] Error")).toBe(true);
   expect(
     isResourceExhaustedMessage("[resource_exhausted] quota exceeded"),
@@ -363,13 +349,6 @@ test("isResourceExhaustedMessage matches Cursor's Connect-RPC 429", () => {
   expect(isResourceExhaustedMessage("")).toBe(false);
 });
 
-/**
- * The prod failure (task 234, 17 Aug 2026): a Cursor turn rejected with
- * `resource_exhausted` died in ~40s with zero tokens and put the raw
- * `[resource_exhausted] Error` in the chat, even though the rate limit cleared
- * minutes later. These cover the retry policy that absorbs it — a regression
- * here puts the raw Connect-RPC code back in front of the user.
- */
 const EXHAUSTED = "[resource_exhausted] Error";
 
 function outcome(over: Partial<CursorTurnOutcome> = {}): CursorTurnOutcome {
@@ -387,7 +366,6 @@ function outcome(over: Partial<CursorTurnOutcome> = {}): CursorTurnOutcome {
   };
 }
 
-/** Drives the policy with scripted turns, recording backoff instead of waiting. */
 function harness(turns: ReadonlyArray<CursorTurnOutcome | Error>) {
   const delays: number[] = [];
   let calls = 0;
@@ -416,8 +394,6 @@ test("a transient resource_exhausted result retries and the retry's result wins"
 
   expect(h.calls()).toBe(2);
   expect(h.delays).toEqual([15_000]);
-  // Only this outcome is emitted, so the swallowed failure never reaches the
-  // parser as a result line.
   expect(result.isError).toBe(false);
   expect(result.resultText).toBe("recovered");
 });
@@ -441,7 +417,6 @@ test("resource_exhausted backs off 15s then 30s before giving up", async () => {
   expect(h.delays).toEqual([15_000, 30_000]);
   expect(h.calls()).toBe(3);
   expect(result.isError).toBe(true);
-  // The whole point of the fix: the user reads a remedy, never the raw code.
   expect(result.resultText).toBe(RESOURCE_EXHAUSTED_CHAT_MESSAGE);
 });
 
@@ -451,16 +426,12 @@ test("a resource_exhausted throw past the retry budget still propagates", async 
     new Error(EXHAUSTED),
     new Error(EXHAUSTED),
   ]);
-  // The caller maps this to the readable message; it must not be mistaken for
-  // a healthy turn, so it rejects rather than resolving with an empty result.
   await expect(h.run()).rejects.toThrow(EXHAUSTED);
   expect(h.calls()).toBe(3);
 });
 
 test("unrelated failures are never retried or reworded", async () => {
   const thrown = harness([new Error("[agent_not_found] Error")]);
-  // agent_not_found has its own fresh-agent recovery upstream — swallowing it
-  // here would break that path.
   await expect(thrown.run()).rejects.toThrow("agent_not_found");
   expect(thrown.calls()).toBe(1);
 
@@ -488,8 +459,6 @@ test("a timed-out attempt stops retrying and still reads as rate-limited", async
       calls++;
       return outcome({ isError: true, resultText: EXHAUSTED });
     },
-    // The health timer cancelled the run; sleeping 30s would burn the
-    // remaining budget for a turn that can no longer finish.
     aborted: () => true,
     onRetry: (delayMs) => delays.push(delayMs),
     sleep: async () => {},
@@ -508,7 +477,6 @@ const tokens = {
   totalTokens: 15,
 };
 
-/** An `AgentUsage` as `agent.getUsage()` returns it for a local agent. */
 function agentUsage(
   totalRawCents: number | null,
   runs: [string, number | null][],
@@ -533,17 +501,14 @@ test("readCursorCostSnapshot normalizes AgentUsage and unreported cost", () => {
     totalRawCents: 7.5,
     entries: [{ runId: "uuid-a", rawCents: 7.5 }],
   });
-  // Cost absent on the totals and on a turn group both read as "not reported".
   expect(readCursorCostSnapshot(agentUsage(null, [["uuid-a", null]]))).toEqual({
     totalRawCents: null,
     entries: [{ runId: "uuid-a", rawCents: null }],
   });
-  // Nothing to read from is an empty snapshot, never a throw.
   expect(readCursorCostSnapshot(undefined)).toEqual(EMPTY_CURSOR_COST_SNAPSHOT);
   expect(readCursorCostSnapshot({ runs: "not-an-array" })).toEqual(
     EMPTY_CURSOR_COST_SNAPSHOT,
   );
-  // A group without a usage UUID cannot be diffed, so it is not an entry.
   expect(readCursorCostSnapshot({ runs: [{ usage: tokens }] })).toEqual({
     totalRawCents: null,
     entries: [],
@@ -560,7 +525,6 @@ test("attributeCursorTurnRawCents charges only this turn's usage groups", () => 
   );
   expect(attributeCursorTurnRawCents(before, after)).toBe(12);
 
-  // A fresh agent starts from the empty baseline: everything is this turn's.
   expect(
     attributeCursorTurnRawCents(
       EMPTY_CURSOR_COST_SNAPSHOT,
@@ -570,8 +534,6 @@ test("attributeCursorTurnRawCents charges only this turn's usage groups", () => 
 });
 
 test("attributeCursorTurnRawCents ignores a prior turn's late-landing cost", () => {
-  // The previous turn's group existed at snapshot time with no cost yet; its
-  // cost landing during this turn belongs to that turn, not to this one.
   const before = readCursorCostSnapshot(agentUsage(null, [["prior", null]]));
   const after = readCursorCostSnapshot(
     agentUsage(30, [
@@ -584,7 +546,6 @@ test("attributeCursorTurnRawCents ignores a prior turn's late-landing cost", () 
 
 test("attributeCursorTurnRawCents is null until this turn's cost lands", () => {
   const before = readCursorCostSnapshot(agentUsage(30, [["prior", 30]]));
-  // The group exists but carries no cost yet — retry rather than report 0.
   expect(
     attributeCursorTurnRawCents(
       before,
@@ -596,7 +557,6 @@ test("attributeCursorTurnRawCents is null until this turn's cost lands", () => {
       ),
     ),
   ).toBeNull();
-  // A reported 0 is an answer, not a gap: request-priced usage bills 0 raw.
   expect(
     attributeCursorTurnRawCents(
       before,
@@ -611,8 +571,6 @@ test("attributeCursorTurnRawCents is null until this turn's cost lands", () => {
 });
 
 test("attributeCursorTurnRawCents counts growth in the uuid-less remainder", () => {
-  // Local events the backend records without a usage UUID only ever move the
-  // totals, so the totals-minus-groups remainder is their only trace.
   const before = readCursorCostSnapshot(agentUsage(30, [["prior", 30]]));
   const after = readCursorCostSnapshot(
     agentUsage(50, [
@@ -622,7 +580,6 @@ test("attributeCursorTurnRawCents counts growth in the uuid-less remainder", () 
   );
   expect(attributeCursorTurnRawCents(before, after)).toBe(20);
 
-  // A shrinking remainder never becomes a negative charge.
   expect(
     attributeCursorTurnRawCents(
       readCursorCostSnapshot(agentUsage(50, [["prior", 30]])),
@@ -654,10 +611,8 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
       delays.push(delayMs);
     },
   });
-  // Cost is eventually consistent, so a gap is not final until the budget is.
   expect(calls).toBe(COST_LOOKUP_RETRY_DELAYS_MS.length + 1);
   expect(delays).toEqual([...COST_LOOKUP_RETRY_DELAYS_MS]);
-  // Never fails the turn: a missing cost is simply omitted downstream.
   expect(pending).toBeUndefined();
 
   const lateDelays: number[] = [];
@@ -680,8 +635,6 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
 });
 
 test("resolveCursorTurnCostUsd degrades to no cost when a lookup fails", async () => {
-  // A failed pre-send baseline on a resumed agent: charging the agent's whole
-  // history to this turn would be worse than reporting nothing.
   const noBaseline: CursorCostSnapshot | null = null;
   let calls = 0;
   expect(
@@ -696,7 +649,6 @@ test("resolveCursorTurnCostUsd degrades to no cost when a lookup fails", async (
   ).toBeUndefined();
   expect(calls).toBe(0);
 
-  // Every post-run lookup throwing (wrapped by the caller into null) is a gap.
   expect(
     await resolveCursorTurnCostUsd({
       before: EMPTY_CURSOR_COST_SNAPSHOT,

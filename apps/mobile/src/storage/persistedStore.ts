@@ -3,11 +3,6 @@ import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 import { z } from "zod";
 
-/**
- * The phone's equivalent of the web's `localStorage` settings: values kept on
- * this device across launches. Secure store on a phone; `localStorage` on the
- * web preview build, which has no secure store.
- */
 const device =
   Platform.OS === "web"
     ? {
@@ -57,7 +52,6 @@ export function persistedStore<T>(name: string, fallback: T, parse: (raw: string
         const value = raw === null ? null : parse(raw);
         if (value !== null && !store.has(key)) store.set(key, value);
       })
-      // No store or an unreadable value: keep the default.
       .catch(() => undefined);
   };
   return {
@@ -66,7 +60,6 @@ export function persistedStore<T>(name: string, fallback: T, parse: (raw: string
       store.set(key, value);
       device.set(storageKey(key), JSON.stringify(value)).catch(() => undefined);
     },
-    /** Subscribing is the first read, so the restore starts there rather than in an effect. */
     useValue: (key: string) =>
       useSyncExternalStore(
         (listener) => {
@@ -96,7 +89,6 @@ const idList = z.array(z.string());
 export function persistedIdSet(name: string) {
   const store = persistedStore<readonly string[]>(name, [], jsonParser(idList));
   return {
-    /** The ids under `key`, and a toggle that adds or removes one. */
     useSet: (key: string): [ReadonlySet<string>, (id: string) => void] => {
       const ids = store.useValue(key);
       const toggle = (id: string) => {

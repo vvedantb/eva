@@ -4,11 +4,7 @@ import type { FunctionArgs } from "convex/server";
 import { useEffect, useState } from "react";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
-// The open chat's read state, web and phone: it marks the chat read while it
-// is on screen, and remembers where unseen replies began for the "NEW" divider.
-// A subpath (`@eva/shared/chatReadState`), not the root: it is React.
-
-/** How often an on-screen chat reports presence; well under the 30-minute away recap. */
+/** Heartbeat for an on-screen chat; well under the 30-minute away recap. */
 const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
 
 /** A chat whose read state is kept (a session chat, task or project). */
@@ -42,12 +38,8 @@ export function useChatReadState({
   const markRead = useMutation(api.chatReads.markRead);
   const touchVisit = useMutation(api.chatReads.touchVisit);
 
-  // State, not a ref: the anchor drives render (the divider must appear once
-  // it is captured). Adjusted during render, React's "store information from
-  // previous renders" pattern, so no effect and no extra commit.
   const [captured, setCaptured] = useState<{ parentId: ChatReadParentId; anchor: number | undefined } | null>(null);
   if (!isActive) {
-    // Leaving (hidden tab, cached shell, another screen) drops the anchor, so the return gets a fresh one.
     if (captured !== null) setCaptured(null);
   } else if (read !== undefined && (captured === null || captured.parentId !== parentId)) {
     setCaptured({ parentId, anchor: read.hasUnread ? (read.lastReadAt ?? 0) : undefined });
@@ -63,12 +55,9 @@ export function useChatReadState({
   useEffect(() => {
     if (!isActive || parentId === undefined) return;
     void markRead({ parentId, opened: true });
-    // Present while on screen, and once on leaving: the next recap measures
-    // the absence from here, not from the open.
     const timer = setInterval(() => touchVisit({ parentId }).catch(() => undefined), VISIT_HEARTBEAT_MS);
     return () => {
       clearInterval(timer);
-      // Best effort: signing out or closing the app can drop it.
       touchVisit({ parentId }).catch(() => undefined);
     };
   }, [parentId, isActive, markRead, touchVisit]);

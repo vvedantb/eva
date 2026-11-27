@@ -29,7 +29,6 @@ describe("the daemon preserves durable ownership from the claim response", () =>
 });
 
 describe("the Cursor daemon isolates every turn in a disposable worker", () => {
-  /** V8 aborts on heap exhaustion: exit code 134 or a direct SIGABRT. */
   test.each([
     [
       { status: "exited", code: 134, signal: null },
@@ -59,11 +58,6 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
     ).toBe("Cursor turn worker could not start: ENOENT");
   });
 
-  /**
-   * The daemon scrubbed EVA_MCP_AUTH/EVA_MCP_BASE_URL from its own env at
-   * import, so a plain env inherit ships the worker without the eva MCP
-   * server — every Cursor turn then silently loses all eva MCP tools.
-   */
   test("hands the scrubbed eva MCP credentials back to the turn worker", () => {
     const env = buildCursorTurnWorkerEnv(
       { PATH: "/usr/bin" },

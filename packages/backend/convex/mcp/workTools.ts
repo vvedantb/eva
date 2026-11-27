@@ -117,10 +117,6 @@ export function workTools(
     return resolveKind("task", directId, rest);
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // Quick task lifecycle
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "update_task",
@@ -181,7 +177,6 @@ In a project coordinator chat, name the task by taskNumber; you can change only 
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (caller?.role === "coordinator") {
-          // Only a task not started yet.
           const refused = await guarded(async () => {
             await ctx.runMutation(
               internal.mcp.projectQueries.editTaskAsCoordinator,

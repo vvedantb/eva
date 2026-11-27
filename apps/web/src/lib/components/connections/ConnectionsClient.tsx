@@ -41,7 +41,6 @@ function sourceBadge(source: ConnectorStatus["source"]): {
 }
 
 interface ConnectionsClientProps {
-  /** Test / screenshot override. Omit in production. */
   statusesOverride?: ReadonlyArray<ConnectorStatus>;
 }
 

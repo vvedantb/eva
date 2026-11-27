@@ -12,7 +12,6 @@ export function emitParsedStreamLine(line: string): void {
   processRealtimeStdoutChunk(line);
 }
 
-/** Buffers stdout chunks and processes complete lines for realtime event handling. */
 function processRealtimeStdoutChunk(text: string): void {
   S.realtimeOutputBuffer += text;
   while (true) {
@@ -26,10 +25,6 @@ function processRealtimeStdoutChunk(text: string): void {
       continue;
     }
     handleRealtimeStreamLine(line);
-    // SDK providers run in-process. Drain their complete event lines now so
-    // live tool activity does not depend on a timer getting scheduled while
-    // the SDK is producing a busy stream. The interval remains the recovery
-    // path for partial lines and events arriving during an in-flight flush.
     void flushStreaming();
   }
 }

@@ -1,7 +1,3 @@
-// A doc's comment threads, web and phone: top-level comments split into open
-// and resolved, and each thread's replies, oldest first (`docComments.listByDoc`
-// returns them oldest first).
-
 export type DocCommentFilter = "open" | "resolved";
 
 type ThreadComment = { _id: string; parentId?: string; resolvedAt?: number };

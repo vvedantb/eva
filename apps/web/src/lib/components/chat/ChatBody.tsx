@@ -445,9 +445,6 @@ function ChatBodyInner({
 
   const currentUserId = useQuery(api.auth.me);
 
-  // The turn that just finished belongs to whoever sent the last user message.
-  // Unattributed rows (legacy / optimistic) count as own, matching how the
-  // transcript itself attributes them.
   const lastUserMessage = displayMessages[lastUserMessageIndex];
   useAgentReplyChime({
     conversationId,
@@ -474,8 +471,6 @@ function ChatBodyInner({
         ? dayBoundaryIds
         : new Set([...dayBoundaryIds, newBoundaryId]),
   });
-  // "Since you've been gone": the server writes it when you return after a
-  // long absence; it sits under the newest message, where the chat opens.
   const { recap, dismiss: dismissRecap } = useChatRecap({
     parentId: chatParentId,
     active: isRouteActive,
@@ -491,17 +486,8 @@ function ChatBodyInner({
         onDismiss={dismissRecap}
       />
     ) : null;
-  // Seen state lives here, not in the divider: the pill is a sibling and needs
-  // it. It is keyed by the boundary id, so a new boundary starts unseen.
   const newDivider = useSeenOnce(newBoundaryId);
 
-  // A long chat renders only its last TRANSCRIPT_TURN_WINDOW turns; older ones
-  // load as the reader scrolls up (ChatEarlierTurnsLoader). Committing every
-  // turn made opening a 450-message chat block for 1–2 s, and every row is
-  // work on each streamed token. The window is pinned to its first row and
-  // only grows: new turns append below it, so nothing above the reader ever
-  // unmounts mid-read. It also grows to hold the NEW divider, a jump-rail
-  // target and the first find match, which all need their row in the DOM.
   const windowKey = chatParentId ?? conversationId;
   const [transcriptWindow, setTranscriptWindow] = useState<TranscriptWindow>({
     key: windowKey,
@@ -519,14 +505,10 @@ function ChatBodyInner({
     newBoundaryId === undefined
       ? -1
       : displayMessages.findIndex((message) => message._id === newBoundaryId);
-  // An unknown pin (an optimistic row that took its server id) falls back to
-  // the default window.
   const baseWindowStart =
     pinnedIndex >= 0
       ? pinnedIndex
       : findTurnWindowStart(displayMessages, TRANSCRIPT_TURN_WINDOW);
-  // A shared message link (`?message=<id>`) opens the chat at that message.
-  // Only the chat on screen follows it: hidden cached shells read the same URL.
   const linkedParam = useLinkedMessageId();
   const linkedIndex =
     linkedParam === null || !isRouteActive
@@ -538,15 +520,12 @@ function ChatBodyInner({
     baseWindowStart,
     ...[
       newBoundaryIndex,
-      // The linked row's whole turn, so it does not open mid-turn.
       linkedIndex >= 0
         ? findTurnWindowStart(displayMessages, 1, linkedIndex + 1)
         : -1,
     ].filter((index) => index >= 0),
   );
   const windowFirstId = displayMessages[windowStart]?._id;
-  // Pinning during render is React's "adjust state when a prop changes"
-  // pattern: it re-renders before commit, and settles once the pin matches.
   if (windowFirstId !== undefined && ownWindow?.firstId !== windowFirstId) {
     setTranscriptWindow({
       ...ownWindow,
@@ -555,7 +534,6 @@ function ChatBodyInner({
     });
   }
 
-  /** Grows the window up to `index`, when that row is above it. */
   const extendWindowTo = (
     index: number,
     extra: Pick<TranscriptWindow, "anchor" | "scrollTo">,
@@ -566,8 +544,6 @@ function ChatBodyInner({
   };
 
   const loadEarlierTurns = (anchor: TranscriptScrollAnchor | undefined) => {
-    // Transition priority: a batch of heavy turns must not freeze the scroll
-    // that asked for it.
     startTransition(() => {
       extendWindowTo(
         findTurnWindowStart(
@@ -580,14 +556,10 @@ function ChatBodyInner({
     });
   };
 
-  // A rail tick or a find query can aim above the loaded history. The chat
-  // asks for the history, and the jump completes in the render that has the
-  // row (or gives up once nothing older is left).
   const [pendingJump, setPendingJump] = useState<
     { kind: "message"; messageId: string } | { kind: "find"; query: string }
   >();
 
-  // Rail ticks are user rows: the window starts at the tick's own turn.
   const revealMessage = (messageId: string) => {
     const index = displayMessages.findIndex(
       (message) => message._id === messageId,
@@ -603,7 +575,6 @@ function ChatBodyInner({
     });
   };
 
-  /** The window start that puts the first match of `query` in the DOM. */
   const firstFindMatchStart = (query: string) => {
     const first = findThreadMatches(findDocuments, query)[0];
     if (!first) return -1;
@@ -613,15 +584,9 @@ function ChatBodyInner({
     return index < 0 ? -1 : findTurnWindowStart(displayMessages, 1, index + 1);
   };
 
-  // Typing pauses before the server search: each prefix ("a", "au", "aut")
-  // would otherwise load history down to its own oldest match.
   const findSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [findJumpKey, setFindJumpKey] = useState(0);
 
-  // Urgent, in the bar's own input event: the rows must be in the DOM by the
-  // time the bar's deferred query paints and jumps, which counts DOM matches.
-  // Every match lies at or below the first one, so its turn is enough. Older
-  // history is searched on the server, and loaded down to its oldest match.
   const revealFirstFindMatch = (query: string) => {
     extendWindowTo(firstFindMatchStart(query), {});
     if (findSearchTimer.current !== null) clearTimeout(findSearchTimer.current);
@@ -657,10 +622,6 @@ function ChatBodyInner({
     newDivider.markSeen();
   };
 
-  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
-  // (`render_html`) and secret requests (`request_env_var`). One query each
-  // per chat covers all three surfaces, since every one of them renders
-  // through this component.
   const chatUiPanels = useQuery(
     api.chatUi.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
@@ -716,15 +677,10 @@ function ChatBodyInner({
     hasOlderHistory,
   );
 
-  // Artifacts saved in this chat (`create_artifact`) and the agent's
-  // `submit_feedback` reports. Placed by the same rule as the cards above, but
-  // kept apart: they sit with the turn's output and never trade places with
-  // its prose behind a tab.
   const chatArtifacts = useQuery(
     api.artifacts.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
-  // Thumbs on turns and the agent's reports.
   const chatFeedback = useQuery(
     api.feedback.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
@@ -760,33 +716,20 @@ function ChatBodyInner({
   );
   const firstNames = firstNameByUserId(users ?? []);
 
-  // Retry re-sends the failed turn's prompt through the normal send path. It is
-  // withheld while a turn is running (the send would only queue behind it) and
-  // on a read-only chat, which has no composer at all.
   const handleRetryTurn =
     isArchived || isExecuting
       ? undefined
       : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
-          // `onSend` rejects on a failed send so the composer can keep the
-          // pending chips. The surface has already toasted by then, so swallow
-          // it here rather than leaving an unhandled rejection.
           void onSend(content, attachmentStorageIds).catch(() => {});
         };
 
-  // A panel button sends its text through the normal send path, so it queues
-  // behind a running turn exactly as a typed message would. Withheld on a
-  // read-only chat and on one whose sandbox is asleep, which is what renders
-  // the panel's buttons disabled instead of inert.
   const handlePanelReply =
     isArchived || isInputDisabled
       ? undefined
       : (message: string) => {
-          // See `handleRetryTurn`: the rejection is already surfaced as a toast.
           void onSend(message).catch(() => {});
         };
 
-  // Undefined rather than an empty array: the caller slots this into a wrapper
-  // that must not render (and take margin) when the turn has no panels.
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
@@ -823,19 +766,6 @@ function ChatBodyInner({
           }
         });
 
-  /**
-   * Every prop handed to a row must keep its identity across ChatBody renders.
-   * `ChatMessage` is memoised, and switching sessions re-renders ChatBody (the
-   * cached shells flip `isRouteActive`); one unstable prop re-renders all rows.
-   *
-   * `isBacklog` marks a row the chat opened already scrolled past, which skips
-   * its enter animation: nothing arrived, and 80 simultaneous enter animations
-   * is the most expensive part of committing a long transcript.
-   *
-   * (`content-visibility: auto` on these rows was tried and reverted — no
-   * intrinsic-size estimate fits a chat turn, so the scroll height grew from
-   * 19k to 36k px as the user scrolled up through them.)
-   */
   const precedingUserTurns = buildPrecedingUserTurns(displayMessages);
 
   const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
@@ -843,8 +773,6 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const joinsPrevious = bubbleGroups.joinsPrevious.has(message._id);
     const joinsNext = bubbleGroups.joinsNext.has(message._id);
-    // One name over a run of one sender's bubbles: a teammate's first name,
-    // or "Eva" over her replies in the coordinator chat.
     const senderFirstName = joinsPrevious
       ? undefined
       : assistantBubbles && message.role === "assistant"
@@ -857,8 +785,6 @@ function ChatBodyInner({
     return (
       <div
         key={message._id}
-        // A run of one sender's bubbles sits 4px apart, not 12 (20 in the
-        // coordinator chat, whose hover toolbar sits on a bubble's top edge).
         className={cn(
           "flex flex-col gap-3",
           joinsPrevious && (assistantBubbles ? "-mt-4" : "-mt-2"),
@@ -874,7 +800,6 @@ function ChatBodyInner({
           message={message}
           animateIn={!isBacklog && rowsAnimateIn}
           repo={repo}
-          // The run's action row sits under its last bubble only.
           showTurnMeta={!simpleView && !joinsNext}
           joinsNext={joinsNext}
           showScopeCheck={showScopeCheck}
@@ -895,8 +820,6 @@ function ChatBodyInner({
           backgroundAgents={backgroundAgents}
           sandboxRunning={sandboxRunning}
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-          // Only a failed turn shows Retry. `handleRetryTurn` changes with
-          // `onSend`, so handing it to every row re-rendered the transcript.
           onRetryTurn={
             message.errorType !== undefined ? handleRetryTurn : undefined
           }
@@ -908,7 +831,6 @@ function ChatBodyInner({
               ? setForkThroughId
               : undefined
           }
-          // System alerts and empty rows have nothing to reply to.
           onReply={
             onOpenThread && canForkMessage(message) ? onOpenThread : undefined
           }
@@ -937,18 +859,10 @@ function ChatBodyInner({
       />
       <Conversation
         className="flex-1 min-h-0"
-        // Only a live reply glides down. Any other growth — loading skeleton
-        // to transcript, the deferred backlog, late markdown — snaps, so an
-        // opened chat lands at the bottom instead of animating from the top.
         resize={streamingTargetId ? "smooth" : "instant"}
       >
         <ConversationContent
           className={cn("p-3 max-w-3xl mx-auto w-full", messageGap)}
-          // No native scroll anchoring: ChatEarlierTurnsLoader holds the
-          // reader's place itself, and two corrections would add up.
-          // Until the backlog commits, the content is only the last turn: the
-          // thumb filled the whole track, then jumped to the bottom when the
-          // older turns landed. A transparent thumb keeps the gutter's width.
           scrollClassName={
             displayMessages.length > 0 && !backlogReady
               ? "[container-type:size] [overflow-anchor:none] [scrollbar-color:transparent_transparent]"
@@ -957,8 +871,6 @@ function ChatBodyInner({
         >
           {displayMessages.length === 0 ? (
             transcriptTail ? (
-              // Bottom-anchored like a live last turn, so the tail sits in the
-              // same spot above the composer whether or not messages exist.
               <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
                 {transcriptTail}
               </div>
@@ -987,13 +899,8 @@ function ChatBodyInner({
                 ownWindow?.anchor !== undefined ||
                 hasOlderHistory) ? (
                 <ChatEarlierTurnsLoader
-                  // A landed history step changes the first row: the fresh
-                  // marker observes again and now grows the window over it.
                   key={`${windowFirstId}:${displayMessages[0]?._id}`}
                   anchor={ownWindow?.anchor}
-                  // Only the chat on screen grows its window: a hidden cached
-                  // shell has no reader scrolling up. Rendered rows run out
-                  // before loaded ones do; then the next history step loads.
                   onReach={
                     !isRouteActive
                       ? undefined
@@ -1011,8 +918,6 @@ function ChatBodyInner({
                     .map((message) => renderMessage(message, true))
                 : null}
               <ChatLastTurn>
-                {/* The kit's last turn spaces its rows 12px; this keeps the
-                    chat's own message gap there too. */}
                 <div className={cn("flex flex-col", messageGap)}>
                   {displayMessages
                     .slice(lastUserMessageIndex)

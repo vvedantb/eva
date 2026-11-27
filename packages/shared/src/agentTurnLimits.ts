@@ -1,8 +1,3 @@
-/**
- * Turn length limits shared by the sandbox daemon (callback-src) and Convex.
- * Keep them here so the daemon cap and the Convex backstops cannot drift apart.
- */
-
 /** Daemon cap on one agent turn. Long prompts (load tests, profiling) need hours. */
 export const TURN_MAX_RUNTIME_MS = 3 * 60 * 60 * 1000;
 

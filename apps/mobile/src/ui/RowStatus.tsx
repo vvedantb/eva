@@ -40,11 +40,6 @@ export function WorkingMark() {
   return <LoadingState label="Working" size="sm" colors={WORKING_COLORS} paused={!focused} />;
 }
 
-/**
- * Eva's web `LoadingState` column colours (packages/ui `foundations.ts`): the
- * brand purple, its oklab mix with blue, then blue, left to right. The same
- * in every theme, as on the web.
- */
 const WORKING_COLORS: readonly [string, string, string] = ["#8B3FB8", "#6f61c8", "#3B7DD8"];
 
 /**

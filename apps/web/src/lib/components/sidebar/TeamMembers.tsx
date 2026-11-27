@@ -25,9 +25,6 @@ export function OnlineTeamAvatars({ collapsed }: { collapsed: boolean }) {
   const teamData = useQuery(api.users.listTeamWithMembers, {});
   const { following, startFollowing, stopFollowing } = useFollow();
 
-  // Presence is decided here rather than in the query: `listTeamWithMembers`
-  // returns every teammate with their `lastSeenAt`, and only a client can
-  // re-evaluate "seen in the last two minutes" as time passes.
   const now = useQuantizedNow(30_000);
   const twoMinutes = 2 * 60 * 1000;
 

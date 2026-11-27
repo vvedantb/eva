@@ -153,16 +153,10 @@ async function runLoggedSessionStep<T>(
     console.error(
       `[sandbox][sessions] ${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${error instanceof Error ? error.message : String(error)}`,
     );
-    // Prefix the step label so downstream error surfaces (sandboxStartupWarning
-    // errorDetail) say which step failed. Mutate rather than wrap to preserve
-    // instanceof checks (e.g. SandboxStartAbortedError in startSessionSandbox).
     if (
       error instanceof Error &&
       !(error instanceof SandboxStartAbortedError)
     ) {
-      // Message-less errors keep recurring here (~5min into startup) with no
-      // identifying info; persist the constructor and top stack frames so the
-      // next occurrence tells us which layer threw.
       const anonymousDetail = `failed with no error message (constructor=${error.constructor.name}, stack: ${(error.stack ?? "none").split("\n").slice(0, 4).join(" | ").slice(0, 400)})`;
       error.message = `${label}: ${errorMessage(error, anonymousDetail)}`;
     }
@@ -170,7 +164,6 @@ async function runLoggedSessionStep<T>(
   }
 }
 
-/** One log line for a background/startup command run, or null when nothing ran. */
 function describeCommandRun(
   kind: "background" | "startup",
   result: { ran: boolean; commandCount: number; errors: string[] },
@@ -182,7 +175,6 @@ function describeCommandRun(
   return `${verb} ${result.commandCount} ${kind} command(s)${errors}`;
 }
 
-/** Launches the repo's background commands as a logged step. Returns whether they ran. */
 async function runBackgroundCommandsStep(
   ctx: GenericActionCtx<DataModel>,
   step: string,
@@ -204,7 +196,6 @@ async function runBackgroundCommandsStep(
   });
 }
 
-/** Runs the repo's startup commands as a logged step. Returns per-command errors. */
 async function runStartupCommandsStep(
   ctx: GenericActionCtx<DataModel>,
   step: string,
@@ -223,17 +214,12 @@ async function runStartupCommandsStep(
   });
 }
 
-/** Checks out a session branch with automatic retry on transient git errors. */
 async function checkoutSessionBranchWithRetry(
   sandbox: SandboxHandle,
   branchName: string,
   baseBranch: string,
 ): Promise<void> {
   const maxAttempts = 3;
-  // One-shot: a reused VM whose previous run died mid-merge refuses every
-  // checkout with "needs merge; resolve your current index first" — abort the
-  // stale operation and retry. If recovery does not clear it, the next failure
-  // throws as before; nothing else is reset away.
   let recoveredUnresolvedIndex = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -258,7 +244,6 @@ async function checkoutSessionBranchWithRetry(
         try {
           await recoverUnresolvedGitIndex(sandbox);
         } catch (recoverError) {
-          // Best-effort: the retried checkout below surfaces the real state.
           logSession(
             `checkoutSessionBranchWithRetry unresolved-index recovery failed (branch=${branchName}, base=${baseBranch}): ${errorMessage(recoverError, "recovery failed")}`,
           );
@@ -279,13 +264,6 @@ async function checkoutSessionBranchWithRetry(
   }
 }
 
-/**
- * Thrown by a resume/start when the user has requested a stop mid-flight. The
- * start action catches it, ensures the (possibly woken) VM is stopped, and
- * defers the terminal status to the stop flow — so a Stop that races a Start
- * never leaves a live orphan VM, a stuck `stopping` row, or a false
- * "Sandbox Error" for what was really a stop.
- */
 class SandboxStartAbortedError extends Error {
   constructor(message: string) {
     super(message);
@@ -293,10 +271,6 @@ class SandboxStartAbortedError extends Error {
   }
 }
 
-/**
- * True once this start should give up: Stop was clicked, the session is
- * gone, or a newer start superseded it.
- */
 async function sessionStopRequested(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
@@ -313,11 +287,6 @@ async function sessionStopRequested(
   );
 }
 
-/**
- * Stop can land after early-ready and still leave reuse launching Convex and
- * the preview server. Those steps used to keep going, then a 6-minute readiness
- * watcher posted "startup unfinished" against the closed chat (session 125).
- */
 async function abortReuseIfSessionStopped(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
@@ -331,20 +300,6 @@ async function abortReuseIfSessionStopped(
   }
 }
 
-/**
- * Shared resume ordering for reused sandboxes across session/task/project
- * reuse flows. Owns the drift-prone sequence so a fix lands in one place, not
- * four: wait for the VM (skipping docker + the ~14s post-resume exec probe),
- * unlock the UI via `onEarlyReady` as soon as it reports running, then start
- * docker, self-heal the git credential helper, and check out the branch.
- *
- * Callers supply the entity-specific progress message (`onRestoring`), the
- * early-ready mutation (`onEarlyReady`), and a `shouldAbort` predicate that
- * reports the user's stop intent. `shouldAbort` is polled before waking the VM
- * and before each post-wake exec, so a Stop that races this resume aborts
- * (throwing {@link SandboxStartAbortedError}) instead of running commands
- * against a stopping sandbox (which 422s) or resurrecting a stopped one.
- */
 async function resumeReusedSandbox(
   ctx: GenericActionCtx<DataModel>,
   handle: SandboxHandle,
@@ -366,15 +321,10 @@ async function resumeReusedSandbox(
       );
     }
   };
-  // Don't wake a VM the user has already asked to stop.
   await abortIfStopRequested();
   try {
     await handle.refresh();
   } catch (refreshErr) {
-    // Rethrown as a typed verdict, not a prefixed string: the caller that
-    // decides whether to mint a replacement re-inspects this error, and a
-    // string prefix is exactly the signal that used to be forgeable by any
-    // command output that happened to be quoted into a message.
     if (isSandboxGoneError(refreshErr)) {
       throw new SandboxGoneError(
         `sandbox gone on refresh: ${errorMessage(refreshErr, "refresh failed")}`,
@@ -388,35 +338,19 @@ async function resumeReusedSandbox(
   await ensureSandboxRunning(handle, {
     timeoutSeconds: RESUME_READY_TIMEOUT_SECONDS,
     skipDocker: true,
-    // Skip the ~14s post-resume exec probe: start() already verified the
-    // session reports running, and the git steps right after early-ready
-    // surface any real failure.
     skipExecProbe: true,
-    // Explicit user start: if the previous run's stop is still snapshotting,
-    // wait it out and resume instead of refusing. `shouldAbort` above still
-    // catches a genuine user Stop.
     resumeAfterStop: true,
     onRestoring: opts.onRestoring,
   });
-  // A Stop may have landed while start() was waking the VM — bail before the
-  // exec steps rather than run commands against a now-stopping sandbox.
   await abortIfStopRequested();
-  // Unlock chat/tabs as soon as the VM is up — docker/git/services continue.
   await opts.onEarlyReady();
-  // ensureSandboxRunning skipped the per-boot bootstrap to unlock sooner; pay
-  // it here, swap first, before any service can spike memory.
   await ensureSwapFile(handle);
   await ensureDockerDaemon(handle);
   await abortIfStopRequested();
-  // Self-heal: rotate the per-sandbox secret + reinstall the helper every
-  // resume so in-sandbox `git pull` and any subsequent fetch authenticate
-  // without relying on a stale URL-embedded token.
   await ensureGitCredentialHelper(ctx, handle, opts.installationId, {
     owner: opts.repoOwner,
     name: opts.repoName,
   });
-  // Respect a branch the user switched to; only fresh sandboxes are forced
-  // onto the session branch (their disk never held the user's checkout).
   const userBranch = await getUserCheckedOutBranch(handle, opts.branchName);
   if (userBranch) {
     logSession(
@@ -431,17 +365,12 @@ async function resumeReusedSandbox(
   );
 }
 
-/** Syncs remote refs for session restore, falling back to base branch if session branch is missing. */
 async function syncSessionRefsForRestore(
   sandbox: SandboxHandle,
   repoOwner: string,
   repoName: string,
   branchName: string,
   baseBranch: string,
-  // When set, also fetch the base branch so `origin/<base>` is refreshed to the
-  // latest commit before the branch is (re)created from it — otherwise a new
-  // session inherits whatever stale base the snapshot baked. Opt-in so the
-  // task/project restore callers keep their session-branch-only fetch.
   opts?: { refreshBase?: boolean },
 ): Promise<void> {
   const branchesToFetch = opts?.refreshBase
@@ -474,13 +403,11 @@ async function syncSessionRefsForRestore(
     );
     return;
   }
-  // checkoutSessionBranch resolves the base start point in the same exec.
   logSession(
     `syncSessionRefsForRestore remote session branch missing, falling back to base branch restore (repo=${repoOwner}/${repoName}, branch=${branchName}, base=${baseBranch})`,
   );
 }
 
-/** Installs project dependencies after snapshot restore, with retry on transient failures. */
 async function installSnapshotDependenciesWithRetry(
   sandbox: SandboxHandle,
   rootDir: string,
@@ -488,8 +415,6 @@ async function installSnapshotDependenciesWithRetry(
   const pm = await detectPackageManager(sandbox, rootDir);
   const workspaceRoot = workspaceDirShell();
   const dir = rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
-  // pnpm workspaces must install from the lockfile root (usually the repo root),
-  // not from a nested app rootDirectory that only has package.json.
   const installCwd = pm === "pnpm" ? workspaceRoot : dir;
   const installCommand = dependencyInstallCommand(pm, installCwd);
   const timeoutSeconds = pm === "pnpm" ? 240 : 180;
@@ -502,12 +427,6 @@ async function installSnapshotDependenciesWithRetry(
   );
 }
 
-/**
- * Whether Node and/or Python dependency manifests drifted between the
- * snapshot's baked commit (`bakedSha`) and HEAD. Split so a Python-only change
- * does not trigger a Node reinstall (which can fail on yarn repos and kill the
- * session).
- */
 async function lockfileDrifted(
   sandbox: SandboxHandle,
   rootDir: string,
@@ -520,14 +439,9 @@ async function lockfileDrifted(
       : pm === "yarn"
         ? "yarn.lock"
         : "package-lock.json";
-  // pnpm resolves its lockfile at the workspace (lockfile) root; npm/yarn keep
-  // it beside the app package.json under rootDir.
   const lockPath =
     pm === "pnpm" || !rootDir ? lockfile : `${rootDir}/${lockfile}`;
   const workspaceRoot = workspaceDirShell();
-  // `git diff --quiet` exits 1 on difference, which execHandle would throw on —
-  // trap both outcomes into printed markers and read those instead. Missing
-  // Python paths diff clean (no drift).
   const out = await execHandle(
     sandbox,
     [
@@ -550,16 +464,6 @@ type TryReuseSandboxOptions = {
   fallbackOnPrepareError?: boolean;
 };
 
-/**
- * Attempts to reuse an existing sandbox by running a preparation function on it.
- * Only a missing/deleted/unresumable sandbox should fall through to creating a
- * replacement; failed preparation on a found sandbox usually means the old
- * filesystem is still the user's source of truth and must not be silently
- * abandoned — except when the resume itself proves the snapshot is gone.
- *
- * `label` prefixes the diagnostic logs so different callers stay
- * distinguishable in the logs.
- */
 async function tryReuseSandboxWith<T>(
   label: string,
   get: (id: string) => Promise<T>,
@@ -585,8 +489,6 @@ async function tryReuseSandboxWith<T>(
     await prepareFn(sandbox);
   } catch (error) {
     const message = errorMessage(error, "preparation failed");
-    // Snapshot gone / resume deadline: fall through even when
-    // fallbackOnPrepareError is false — otherwise sessions hang then hard-fail.
     if (isSandboxGoneError(error)) {
       logSession(
         `${label} found unresumable sandbox ${existingSandboxId}; creating replacement: ${message}`,
@@ -605,11 +507,6 @@ async function tryReuseSandboxWith<T>(
   return sandbox;
 }
 
-/**
- * After reuse returns null, refuse to mint a replacement while the old id is
- * still a live VM. A false "sandbox gone" matcher used to orphan the original
- * and leave two running boxes billed against the same session.
- */
 async function refuseReplacementIfStillAlive(
   client: SandboxClient,
   existingSandboxId: string,
@@ -630,7 +527,6 @@ async function refuseReplacementIfStillAlive(
   );
 }
 
-/** Reuse a provider-neutral sandbox handle by id (see {@link tryReuseSandboxWith}). */
 function tryReuseSandboxHandle(
   client: SandboxClient,
   existingSandboxId: string | undefined,
@@ -657,15 +553,6 @@ type SessionSandboxPreparationArgs = {
   baseBranch: string;
   repoId: Id<"githubRepos">;
   startDesktop: boolean;
-  /**
-   * True when the session also has `sessionRepos` rows to clone into
-   * `/tmp/workspace`. Set by both `startSandbox` paths (create and resume —
-   * a resume that falls through to a fresh sandbox has to re-clone them) so
-   * the setup-pending flag stays armed until
-   * `sessionSandboxStartupWorkflow` has provisioned every row. Absent
-   * (`prepareSessionSandbox`, used by `sessionExecuteWorkflow`) behaves as
-   * false: that path runs mid-session, long after provisioning.
-   */
   hasLinkedRepos?: boolean;
 };
 
@@ -675,15 +562,11 @@ type PreparedSessionSandbox = {
   usedSnapshot: boolean;
   sandboxDetails: string;
   branchName: string;
-  /** Present when startSessionServices completed; absent on early-ready soft keep. */
   devPort?: number;
   devCommand?: string;
-  /** True when an existing sandbox id was unresumable and we created fresh. */
   resumeFellBack: boolean;
-  /** The Vercel sandbox id (Vercel is the only sandbox provider). */
 };
 
-/** Emits progress steps to a streaming entity for UI updates. */
 async function emitProgress(
   ctx: GenericActionCtx<DataModel>,
   entityId: string,
@@ -700,7 +583,6 @@ async function emitProgress(
   });
 }
 
-/** Clears the streaming activity for an entity when startup is done. */
 async function clearProgress(
   ctx: GenericActionCtx<DataModel>,
   entityId: string,
@@ -711,7 +593,6 @@ async function clearProgress(
   });
 }
 
-/** Emits session sandbox startup progress steps to streaming for UI updates. */
 function emitSessionProgress(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
@@ -726,7 +607,6 @@ function emitSessionProgress(
   );
 }
 
-/** Marks the final step complete and clears streaming. */
 function completeSessionProgress(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
@@ -737,14 +617,10 @@ function completeSessionProgress(
   );
 }
 
-/** Core logic for preparing a session sandbox: reuses existing or creates new, syncs refs, and starts services. */
 async function prepareSessionSandboxInternal(
   ctx: GenericActionCtx<DataModel>,
   args: SessionSandboxPreparationArgs,
 ): Promise<PreparedSessionSandbox> {
-  // Total wall-clock budget for this call, logged at every exit point below
-  // so slow session starts can be attributed to reuse vs. fresh-create vs.
-  // provider without re-deriving it from scattered per-step timings.
   const startedAt = Date.now();
   const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
   const completedSteps: ProgressStep[] = [];
@@ -767,7 +643,6 @@ async function prepareSessionSandboxInternal(
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
-  // A project coordinator only reads code (`sessionSandboxProfile`).
   const profile = sessionSandboxProfile(launchSession?.owner);
   const readOnly =
     launchSession !== null && isReadOnlySandboxOwner(launchSession.owner);
@@ -783,8 +658,6 @@ async function prepareSessionSandboxInternal(
     completedSteps,
     "Resolving sandbox context...",
   );
-  // Resume path: credentials-only client (no full env decrypt). Full context
-  // (env map + snapshot) loads only if reuse fails and we create.
   const client = await runLoggedSessionStep(
     "resolveSessionSandboxClient",
     actionDetails,
@@ -841,8 +714,6 @@ async function prepareSessionSandboxInternal(
                     branchName: args.branchName,
                     isNew: false,
                     usedSnapshot: false,
-                    // Services are relaunched below; keep the Preview heal off
-                    // this sandbox until then so it cannot double-launch them.
                     markServicesPending: true,
                   });
                 },
@@ -850,8 +721,6 @@ async function prepareSessionSandboxInternal(
                   sessionStopRequested(ctx, args.sessionId, args.startAttempt),
               }),
           );
-          // No setupBranch here: resumeReusedSandbox already owns the branch
-          // step, and a `checkout -B` would undo a branch the user switched to.
           if (!profile.runsServices) {
             reusedResult = {
               sandbox: handle,
@@ -927,13 +796,6 @@ async function prepareSessionSandboxInternal(
             handle.id,
             args.startAttempt,
           );
-          // Resume is the only path that can relaunch linked repos' dev
-          // servers: they were cloned by `prepareLinkedRepo` (run once, from
-          // `sessionSandboxStartupWorkflow`, on the session's first-ever
-          // create) and never re-run on a plain resume. Rows a create hasn't
-          // reached yet (`clonedAt` unset) are silently skipped — nothing to
-          // restart until they exist on disk. The read overlaps the primary
-          // launch so it costs no extra round trip.
           const [, linkedRows] = await Promise.all([
             runLoggedSessionStep(
               "reuseSessionSandbox.launchDevServer",
@@ -983,8 +845,6 @@ async function prepareSessionSandboxInternal(
             resumeFellBack: false,
           };
         },
-        // Never silently create a replacement when the existing sandbox is
-        // still reachable — that orphans the old VM and loses workspace state.
         { fallbackOnPrepareError: false },
       ),
   );
@@ -1004,7 +864,6 @@ async function prepareSessionSandboxInternal(
     status: "complete",
   });
 
-  // Create path needs full env map + snapshot — load only after reuse failed.
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     "resolveSessionSandboxContext",
     actionDetails,
@@ -1014,17 +873,10 @@ async function prepareSessionSandboxInternal(
         branch: args.branchName,
       }),
   );
-  // A forked session's first sandbox is a Vercel fork of the source sandbox
-  // (DBs included). A replacement for an expired fork sandbox boots the repo
-  // snapshot instead, since the source may be gone by then.
   const forkFrom =
     reuseId === undefined ? launchSession?.forkSourceSandboxId : undefined;
   const bootsFromImage = Boolean(snapshotName) || forkFrom !== undefined;
   if (forkFrom) {
-    // Check the source before forking: a create failure is too opaque to tell
-    // "source deleted" from a transient. A gone source can never be forked, so
-    // drop it — the next Start boots the repo snapshot instead of failing
-    // forever — and still restart the source if the fork had stopped it.
     try {
       await client.get(forkFrom);
     } catch (error) {
@@ -1062,10 +914,6 @@ async function prepareSessionSandboxInternal(
     "Creating sandbox...",
   );
 
-  // Mark the session active as soon as the sandbox exists so the UI can chat /
-  // open tabs while branch checkout + services finish in the background.
-  // Snapshot restore is sub-second; the remaining work is what used to make
-  // "new session" feel like 10–60s.
   let earlyReadyEmitted = false;
   const preparing = runLoggedSessionStep(
     "createSessionSandboxAndPrepareRepo",
@@ -1083,8 +931,6 @@ async function prepareSessionSandboxInternal(
         async (sandbox) => {
           if (earlyReadyEmitted) return;
           earlyReadyEmitted = true;
-          // Seed configured app port/command immediately so Preview doesn't
-          // fall back to 3000 while startSessionServices is still running.
           const configured = repo ? devOverrides(repo) : undefined;
           await ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
@@ -1094,15 +940,7 @@ async function prepareSessionSandboxInternal(
             isNew: true,
             usedSnapshot: bootsFromImage,
             resumeFellBack: reuseId !== undefined,
-            // Snapshot restores keep a stale checkout + baked modules; gate the
-            // queued first turn until the base pull + install below finish.
-            // Linked repos gate it too, regardless of snapshot — they still
-            // need to be cloned/installed after this action returns (see
-            // `sessionSandboxStartupWorkflow`), and the workflow — not this
-            // action — clears the gate once they're done.
             markSetupPending: bootsFromImage || args.hasLinkedRepos === true,
-            // Background + startup commands have not run yet on this fresh VM;
-            // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
             ...(configured?.devPort !== undefined
               ? { devPort: configured.devPort }
@@ -1115,12 +953,11 @@ async function prepareSessionSandboxInternal(
         undefined,
         { mode: "none" },
         undefined,
-        !profile.runsServices, // skipInstallDeps
+        !profile.runsServices,
         forkFrom,
-        undefined, // driveCacheRole
-        true, // deferDocker: awaited below, before services need it
+        undefined,
+        true,
         profile.vcpus,
-        // Its env and clone tokens only read its home repo (decision 6).
         readOnly
           ? {
               kind: "read",
@@ -1129,9 +966,6 @@ async function prepareSessionSandboxInternal(
           : SANDBOX_GIT_WRITE,
       ),
   );
-  // The fork has been taken (or has failed) once this settles: only now is it
-  // safe to start the source again. Settled on both outcomes so a failed fork
-  // never leaves the source parked; a retry forks the same source again.
   const prepared = forkFrom
     ? await preparing.finally(() =>
         ctx.runMutation(internal.sessions.settleForkSource, {
@@ -1142,11 +976,6 @@ async function prepareSessionSandboxInternal(
     : await preparing;
   const handle = prepared.sandbox;
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
-  // Any setup step below (ref sync, branch checkout, config restore, seeded-
-  // runtime restore, dev server) can throw. If early-ready already marked the
-  // session active, the user may already be chatting — never delete that VM.
-  // Only delete on failure when the UI never unlocked (no early-ready), else
-  // the sandbox leaks unreferenced.
   let resolvedDevPort: number | undefined;
   let resolvedDevCommand: string | undefined;
   try {
@@ -1156,13 +985,6 @@ async function prepareSessionSandboxInternal(
       status: "complete",
     });
 
-    // Snapshot restore leaves HEAD at the (possibly stale) baked commit whose
-    // lockfile the baked node_modules were installed against. Capture it before
-    // the checkout below moves HEAD to the latest base, so we can tell whether
-    // deps drifted and an install is actually needed. Runs alongside the ref
-    // fetch (which never moves HEAD) and is awaited before the checkout.
-    // Best-effort: on failure resolve null and force an install rather than
-    // skip a needed one.
     const bakedShaPromise: Promise<string | null> = prepared.usedSnapshot
       ? execHandle(handle, `cd ${workspaceDirShell()} && git rev-parse HEAD`, 15)
           .then((output) => output.trim())
@@ -1190,8 +1012,6 @@ async function prepareSessionSandboxInternal(
           args.repoName,
           args.branchName,
           args.baseBranch,
-          // Refresh origin/<base> so a brand-new session branch is created from
-          // the latest base commit, not the snapshot's stale baked base.
           { refreshBase: true },
         ),
     );
@@ -1224,15 +1044,6 @@ async function prepareSessionSandboxInternal(
       status: "complete",
     });
 
-    // No `setupBranch` here: the checkout above already left the session
-    // branch checked out with its upstream pinned, so setupBranch could only
-    // resolve `localBranch` and re-run `checkout -B <branch> <branch>` — ~1.5s
-    // of pure repeat on the first-turn gate.
-
-    // Now on the latest base: reinstall only when the lockfile actually drifted
-    // from the snapshot's baked commit, so the common no-dep-change session keeps
-    // its fast baked node_modules. Fresh-clone (non-snapshot) sessions already
-    // installed inside createSandboxAndPrepareRepo, so this is snapshot-only.
     if (prepared.usedSnapshot && profile.runsServices) {
       await emitSessionProgress(
         ctx,
@@ -1276,13 +1087,6 @@ async function prepareSessionSandboxInternal(
       });
     }
 
-    // Code is on the latest base and deps are current — release the gate so the
-    // daemon can claim the queued first turn. Dev server / background / startup
-    // commands below keep warming without blocking the agent. No-op when the
-    // gate was never set (non-snapshot path).
-    // Linked repos: leave the gate set. `sessionSandboxStartupWorkflow` still
-    // has to clone/install every `sessionRepos` row after this action returns,
-    // and it — not this action — clears the gate once that finishes (or fails).
     if (!args.hasLinkedRepos) {
       await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
         sessionId: args.sessionId,
@@ -1312,8 +1116,6 @@ async function prepareSessionSandboxInternal(
       completedSteps,
       "Starting dev server...",
     );
-    // Deferred at create so it overlapped the repo prep above. Services,
-    // background and startup commands may need dockerd (e.g. Supabase).
     await prepared.dockerReady;
     const services = await runLoggedSessionStep(
       "newSessionSandbox.startSessionServices",
@@ -1391,15 +1193,9 @@ async function prepareSessionSandboxInternal(
       {
         sandboxId: handle.id,
         repoId: args.repoId,
-        // Seeded snapshots ship `/tmp/.startup-commands-done` from the build;
-        // force re-bootstrap on every fresh session sandbox so dockerd and
-        // local services come back after Vercel snapshot restore.
         force: prepared.usedSnapshot ? true : undefined,
       },
     );
-    // runStartupCommands collects per-command failures instead of throwing, so
-    // without this they only reach transient console logs — surface them on the
-    // session so the user can see why services are missing.
     if (startupCommandErrors.length > 0) {
       await ctx.runMutation(internal.sessions.sandboxStartupWarning, {
         sessionId: args.sessionId,

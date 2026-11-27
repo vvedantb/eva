@@ -1,9 +1,6 @@
 import type { PrState } from "./prState";
 import { isSandboxPausedAlert } from "./sandboxStopReason";
 
-// Which transcript rows a chat draws, and the session's read-only banner: one
-// rule for the web `ChatBody` and the phone chat.
-
 const SANDBOX_LIFECYCLE_ALERTS = new Set(["Sandbox started", "Sandbox stopped", "Sandbox reconnected"]);
 
 /** A sandbox start, stop, reconnect or idle-pause row: never drawn, as it repeats on every VM cycle. */
@@ -11,7 +8,6 @@ export function isSandboxLifecycleAlert(message: { isSystemAlert?: boolean; cont
   return (
     message.isSystemAlert === true &&
     (SANDBOX_LIFECYCLE_ALERTS.has(message.content) ||
-      // "Sandbox paused after N min idle" carries a number, so it cannot sit in the exact-match set.
       isSandboxPausedAlert(message.content))
   );
 }

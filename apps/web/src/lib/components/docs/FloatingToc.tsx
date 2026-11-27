@@ -11,15 +11,11 @@ import {
 } from "./_utils/tocUtils";
 
 interface FloatingTocProps {
-  // Scroll container holding the rendered headings. Doubles as the scroll root
-  // for active-section tracking.
   containerRef: RefObject<HTMLElement | null>;
-  // Re-scan headings whenever the document content changes.
   content: string;
   className?: string;
 }
 
-/** Offset from the top of the scroll container when picking / scrolling to a section. */
 const SCROLL_SPY_OFFSET = 96;
 
 function headingTopInContainer(
@@ -52,7 +48,6 @@ export function FloatingToc({
 
   const activeId = clickActiveId ?? scrollActiveId ?? items[0]?.id ?? null;
 
-  // Scan rendered headings whenever content changes.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;

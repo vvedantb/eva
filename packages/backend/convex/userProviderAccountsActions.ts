@@ -25,7 +25,6 @@ export const upsert = authAction({
   args: {
     accountId: v.optional(v.id("userProviderAccounts")),
     provider: aiProviderValidator,
-    /** Ignored — label is always the user's first name. */
     label: v.optional(v.string()),
     credentials: v.array(credentialInputValidator),
   },

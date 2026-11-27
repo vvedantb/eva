@@ -34,12 +34,8 @@ import {
 } from "./prDescriptionPrompt";
 import { errorMessage } from "@vvedantb/server";
 
-/** Claude CLI alias. Haiku (used for session summaries) misreads diffs when
- * asked to sketch their shape; the description is one short call per push. */
 const PR_DESCRIPTION_MODEL = "sonnet";
 const PROMPT_PATH = "/tmp/eva-pr-description-prompt.txt";
-/** The diff is already in the prompt, so one model turn is the budget; the
- * exec ceiling is generous because a cold CLI start can take a while. */
 const EXEC_TIMEOUT_SECONDS = 240;
 
 /**
@@ -61,9 +57,6 @@ export const generatePrDescription = internalAction({
     prUrl: v.string(),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /** Set by the quick-task review path, whose sandbox was stopped when the
-     * run ended. The action also restores on its own when the owner is
-     * stopped by the time it runs (idle pause before "Send for review"). */
     restoreStoppedSandbox: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -97,7 +90,6 @@ export const generatePrDescription = internalAction({
         return null;
       }
 
-      // Written now, on its own: the model step below may be skipped or fail.
       await patchPullRequest(octokit, pullRef, {
         body: insertMergeRisk(pr.body ?? "", assessMergeRisk(files)),
       });
@@ -119,9 +111,6 @@ export const generatePrDescription = internalAction({
         truncated: diff.truncated,
       });
 
-      // Any exec resumes a stopped VM (Vercel SDK `withResume`). Decide here,
-      // not when scheduled: the owner may have stopped since. A stopped owner
-      // gets one short resume for the model call and a stop afterwards.
       const restore =
         args.restoreStoppedSandbox === true ||
         !(await sandboxStillWanted(ctx, args.sandboxId, undefined));
@@ -129,8 +118,6 @@ export const generatePrDescription = internalAction({
       let text: string;
       try {
         if (restore) {
-          // User-initiated (they moved the task to code_review), so a stop
-          // still in flight is waited out rather than refusing the resume.
           await ensureSandboxRunning(sandbox, { resumeAfterStop: true });
         }
         await Promise.all([
@@ -139,18 +126,12 @@ export const generatePrDescription = internalAction({
           ),
           writeSandboxFile(sandbox, PROMPT_PATH, prompt),
         ]);
-        // Prompt goes in on stdin: it carries the whole diff, which is far past
-        // what belongs on a command line. No tools — the diff is the input.
         text = await execHandle(
           sandbox,
           `bin="$(command -v claude || echo ${quote([CLAUDE_FALLBACK_BIN_PATH])})"; "$bin" -p --model ${quote([PR_DESCRIPTION_MODEL])} --output-format text --allowedTools "" --max-turns 1 < ${quote([PROMPT_PATH])}`,
           EXEC_TIMEOUT_SECONDS,
         );
       } finally {
-        // Put the sandbox back the way we found it, on the failure path too —
-        // a failed description must not leave a stopped owner's VM running.
-        // Re-check first: a reviewer who started it meanwhile keeps it. The
-        // owner row still reads "closed", so no UI state to unwind.
         if (
           restore &&
           !(await sandboxStillWanted(ctx, args.sandboxId, undefined))
@@ -173,9 +154,6 @@ export const generatePrDescription = internalAction({
         return null;
       }
 
-      // Re-read the body right before writing: a later push may have refreshed
-      // the static sections while the model was working, and we must not
-      // overwrite them with the copy we read at the start.
       const latest = await getPullRequest(octokit, {
         owner: target.owner,
         repo: target.repo,

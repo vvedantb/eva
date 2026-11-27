@@ -6,7 +6,6 @@ export type RepoWithLogo = FunctionReturnType<
   typeof api.githubRepos.list
 >[number];
 
-// Shared with the phone app's chat header (its repo tile and label).
 export { appLeafName, repoDisplayLabel } from "@eva/shared";
 
 /** Matches a monorepo app row to the URL `appName` segment. */

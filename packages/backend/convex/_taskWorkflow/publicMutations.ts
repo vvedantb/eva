@@ -30,7 +30,6 @@ import { findWorkSession } from "../_sessions/owner";
 import { abandonTaskRunSandbox } from "../_sessions/sandbox";
 import { closeTaskReports, runEndedOnAsk } from "../_projects/reports";
 
-/** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -40,7 +39,6 @@ async function getActiveWorkflowId(
   return workflowId === undefined ? null : toWorkflowId(workflowId);
 }
 
-/** Returns the most recently started running task run for a task, or null if none remain. */
 async function getLatestRunningTaskRun(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -56,7 +54,6 @@ async function getLatestRunningTaskRun(
   );
 }
 
-/** Logs and ignores a completion callback that belongs to a run which is no longer active. */
 function ignoreStaleCompletionCallback(reason: string): null {
   console.warn(`[taskWorkflow] Ignoring stale completion callback: ${reason}`);
   return null;
@@ -123,15 +120,12 @@ export const handleCompletion = authMutation({
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
     });
-    // Every run has a turn now, and its callback always sends the lease.
     if (turn.status !== "current") {
       return ignoreStaleCompletionCallback(
         `run ${String(args.runId)} completion holds no current lease`,
       );
     }
     await advanceTurn(ctx, turn.turn, "finalizing");
-    // Push, PR and deployment tracking run after the agent exits, and no
-    // heartbeat renews the lease then. Keep the sandbox up for them.
     if (turn.turn.sandboxId !== undefined) {
       await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
         sandboxId: turn.turn.sandboxId,
@@ -144,8 +138,6 @@ export const handleCompletion = authMutation({
       finalizingAt: Date.now(),
     });
 
-    // A project task that asked its coordinator ended its turn on purpose:
-    // a clean outcome, even when the commit gate failed the turn.
     const endedOnAsk = await runEndedOnAsk(ctx.db, latestRunningRun);
     try {
       await sendCompletionEvent(ctx, taskCompleteEvent, workflowId, {
@@ -200,14 +192,8 @@ export async function cancelTaskRun(
       finishedAt: Date.now(),
     });
     await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
-    // The cancelled status is written here, not through finalizeRunStatus, so
-    // this is the one terminal transition that hook cannot see.
     await scheduleTaskOrchestratorNotify(ctx, task._id, "cancelled");
 
-    // workflow.cancel() aborts execution before the workflow's own sandbox
-    // cleanup step runs, so we stop the execution sandbox here.
-    // A run borrowed its own session's sandbox: fail the start it claimed (or
-    // finish the VM it attached) through the session lifecycle.
     const session = await findWorkSession(ctx.db, task);
     if (session) {
       await abandonTaskRunSandbox(ctx, session._id, run);
@@ -222,14 +208,10 @@ export async function cancelTaskRun(
   await clearStreamingActivity(ctx, String(task._id));
 
   await ctx.db.patch(task._id, {
-    // Same rule as run completion: only the run's own `in_progress` resets.
-    ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
+      ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
     updatedAt: Date.now(),
   });
   await finishTaskRun(ctx, task._id, undefined);
-  // The task left `in_progress`: its project may start the next ones (the
-  // stopped task itself waits for a person). A stop also closes the task's
-  // open question to its coordinator.
   if (task.projectId !== undefined) {
     await closeTaskReports(ctx, task._id);
     await onProjectTasksChanged(ctx, task.projectId);

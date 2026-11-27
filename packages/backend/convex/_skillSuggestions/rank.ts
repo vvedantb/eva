@@ -1,11 +1,3 @@
-/**
- * Pure helpers for the skill-suggestion action: what Jev is allowed to see,
- * and how its per-option probabilities turn back into skill ids.
- *
- * Runtime-free so the `"use node"` action stays a thin wrapper and the ranking
- * rules can be tested without a gateway call.
- */
-
 /** Draft text cap — Jev judges the request, it does not read a document. */
 export const MAX_SUGGESTION_TEXT_CHARS = 4000;
 /** Jev allows 255 choice options; a composer list past this is noise anyway. */
@@ -45,8 +37,6 @@ export function dedupeCandidates(
     if (out.length >= MAX_CANDIDATES) break;
     const label = candidate.label.trim();
     if (label.length === 0) continue;
-    // Case-insensitively: a skill literally called "None" would otherwise
-    // become a second option Jev cannot tell from the escape hatch.
     if (label.toLowerCase() === NONE_OPTION) continue;
     const key = label.toLowerCase();
     if (seen.has(key)) continue;

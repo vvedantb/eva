@@ -16,8 +16,6 @@ import {
   pickToolCallId,
 } from "./toolResultCapture.js";
 
-// Shared step builders. Every mapper below (Claude, Codex, Cursor, OpenCode)
-// returns one of these, so a step kind has one shape and one label.
 
 type StepExtra = Partial<Omit<ProgressStep, "type" | "label" | "status">>;
 
@@ -25,7 +23,6 @@ function stringOrUndefined(value: JsonValue | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/** File step: the display detail is the shortened path, `path` the raw one. */
 function fileStep(
   type: "read" | "write" | "edit",
   label: string,
@@ -42,7 +39,6 @@ function fileStep(
   };
 }
 
-/** Bash step: a one-line `detail` capped for the row, the full command capped for `command`. */
 function bashStep(
   command: string,
   label = "Running command...",
@@ -211,7 +207,6 @@ function cursorSearchCodeStep(fields: CursorToolFields): ProgressStep {
   return searchStep("code", fields.query || fields.path || undefined);
 }
 
-/** Known Cursor SDK tool kinds, matched by exact name. */
 const CURSOR_KNOWN_TOOL_STEPS = new Map<
   string,
   (fields: CursorToolFields) => ProgressStep
@@ -248,7 +243,6 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
   ["mcp", cursorMcpStep],
 ]);
 
-/** Heuristic fallbacks for renamed/unknown tools, checked in order against the lowercased name. */
 const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
   {
     matches: (tool) => tool.includes("read"),
@@ -274,7 +268,6 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
     matches: (tool) => tool.includes("glob") || tool.includes("list"),
     toStep: (f) => searchStep("files", f.query || f.path || undefined),
   },
-  // Before grep/search: every web-search name also contains "search".
   {
     matches: (tool) =>
       tool.includes("websearch") || tool.includes("web_search"),
@@ -387,14 +380,8 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
         status: "active",
       };
     }
-    // Subagent spawn. Named `Agent` since claude-code v2.1.63; older CLIs emit
-    // `Task`. Match both so subagent runs are always recognised (a bare `Task`
-    // previously fell through to the generic "Using Task..." row).
     case "Agent":
     case "Task": {
-      // The prompt the subagent was spawned with: the opening message of its
-      // child thread view. Trimmed from the chat transcript query like any
-      // other preview, so it costs nothing until a reader opens it.
       const prompt = trimmedString(input.prompt);
       return {
         ...subtaskStep(
@@ -507,7 +494,6 @@ function codexFileChangeStep(fields: CodexItemFields): ProgressStep {
 function codexMcpToolStep(fields: CodexItemFields): ProgressStep {
   const { descriptionValue } = fields;
   const normalizedDescription = descriptionValue.toLowerCase();
-  // Codex MCP calls keep their own labels: the detail is the tool name, not a path.
   if (normalizedDescription.includes("fetch_file")) {
     return {
       type: "read",
@@ -526,7 +512,6 @@ function codexMcpToolStep(fields: CodexItemFields): ProgressStep {
   return toolStep("Using MCP...", descriptionValue || undefined);
 }
 
-/** Codex item kinds, checked in order against the lowercased item type. */
 const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   {
     matches: (type) => type.includes("file_change") || type === "filechange",
@@ -576,7 +561,6 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
       type.includes("shell") ||
       type.includes("bash") ||
       type.includes("exec"),
-    // The row detail is capped like every other provider's bash step.
     toStep: (f) =>
       bashStep(
         f.commandValue,

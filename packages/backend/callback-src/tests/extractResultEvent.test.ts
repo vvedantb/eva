@@ -3,8 +3,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { tryParseJsonObject } from "../utils.js";
 
-// PROVIDER picks the stream format extractResultEvent reads; set per test.
-// Bun copies a mocked module's exports once, so re-mock on every change.
 const originalConfig = { ...(await import("../config.js")) };
 function setProvider(provider: string): void {
   mock.module("../config.js", () => ({
@@ -30,11 +28,6 @@ function assistantText(text: string): object {
   return { type: "assistant", message: { content: [{ type: "text", text }] } };
 }
 
-/**
- * Cursor and OpenCode runners end each turn with a synthetic `{type:"result"}`
- * line; completion reads it and reports a Claude-shaped result event so the
- * server bills and stores every provider the same way.
- */
 describe("Cursor and OpenCode synthetic results", () => {
   test("a Cursor run reports its result and usage under the configured model", () => {
     setProvider("cursor");
@@ -118,11 +111,6 @@ describe("Cursor and OpenCode synthetic results", () => {
     ).toMatchObject({ result: "Renamed the button.", isError: false });
   });
 
-  /**
-   * A run that streamed its answer but died before the runner emitted the
-   * result line still has an answer; the attempt outcome decides whether a
-   * kill or timeout overrides it.
-   */
   test("a Cursor run without a result line reports its streamed text", () => {
     setProvider("cursor");
     expect(

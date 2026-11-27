@@ -15,7 +15,6 @@ export type LinkedRepo = {
   baseBranch: string;
 };
 
-/** Narrows a parsed JSON array entry into `LinkedRepo` — all five fields required. */
 function isLinkedRepo(value: JsonValue): value is LinkedRepo {
   if (!isJsonObject(value)) {
     return false;
@@ -44,8 +43,6 @@ function isLinkedRepo(value: JsonValue): value is LinkedRepo {
  */
 export function parseLinkedReposEnv(raw: string | undefined): LinkedRepo[] {
   if (!raw) return [];
-  // JSON.parse's return type is `any`; assigning straight into the `JsonValue`
-  // boundary type below is the narrowing step (no cast).
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(raw);

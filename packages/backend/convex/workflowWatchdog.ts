@@ -15,9 +15,6 @@ import {
 } from "./_chat/stallWatchdog";
 import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
 
-// Re-exported so importers keep resolving these names from
-// "./workflowWatchdog"; the implementations live in
-// _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts.
 export { RUN_TIMEOUT_MS, trackSessionChatWorkflow };
 
 /** Records a workflow as the active workflow for a doc and schedules a stale handler. */

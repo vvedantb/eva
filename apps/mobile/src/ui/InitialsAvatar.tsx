@@ -3,7 +3,6 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
-/** The 16 and 20 discs: initials 8 / 10 and 9 / 12. */
 const SIZES = {
   16: { box: "size-4", text: { fontSize: 8, lineHeight: 10 } },
   20: { box: "size-5", text: { fontSize: 9, lineHeight: 12 } },

@@ -30,7 +30,6 @@ export function mentionsEva(content: string): boolean {
 
 export function chatMessageRoute(message: {
   mentionsEva: boolean;
-  /** Teammates `@`-mentioned, not counting the author. */
   mentionedPeople: number;
 }): ChatMessageRoute {
   return message.mentionedPeople > 0 && !message.mentionsEva ? "quiet" : "wake";

@@ -68,20 +68,15 @@ export interface SandboxTurnPorts {
 /** The composer settings a turn runs on. */
 export interface SandboxTurnSettings {
   model: AIModel;
-  /** The effort shown in the picker; the turn and its rows record this one. */
   effortLevel: ReasoningLevel | undefined;
   executionTraits: ModelTraitsExecutionArgs;
-  /** Already resolved from the picker id; undefined = Team credential. */
   providerAccountId: Id<"userProviderAccounts"> | undefined;
 }
 
 export interface SandboxTurnInput {
-  /** What the agent receives. */
   message: string;
-  /** Compact chat text when `message` is a rich prompt (preview annotations). */
   displayContent?: string;
   attachmentStorageIds?: Id<"_storage">[];
-  /** Sessions: the proposed plan this turn implements. Dropped when queued. */
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
@@ -97,8 +92,6 @@ export async function sendSandboxTurn(
   mode: "queue" | "start",
 ): Promise<void> {
   const { model, effortLevel, executionTraits, providerAccountId } = settings;
-  // The picker's effort wins. The execution payload leaves out the provider
-  // default, so it is only the fallback.
   const reasoningLevel = effortLevel ?? executionTraits.reasoningLevel;
   if (mode === "queue") {
     await ports.enqueue({
@@ -112,10 +105,6 @@ export async function sendSandboxTurn(
     });
     return;
   }
-  // Fired together, not one after the other: `startExecute`'s optimistic
-  // status must apply at once, so a second send before the server answers
-  // queues. Convex runs one client's mutations in order, so the user row
-  // still lands first.
   await Promise.all([
     ports.add({
       content: input.displayContent ?? input.message,
@@ -170,7 +159,6 @@ export function sandboxAnnotationSender(
  */
 export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
   parentId: Id<"sessionChats"> | undefined;
-  /** The chat's streaming row (not the first-run row). */
   streamingEntityId: string | undefined;
   draftTarget: ChatDraftTarget | undefined;
 } {

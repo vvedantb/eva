@@ -83,11 +83,6 @@ export default function NewQuickTaskScreen() {
   return <NewQuickTaskForm repos={repos} initialRepo={first} projectParam={params.projectId} initialDraft={initialDraft} onLeave={leave} />;
 }
 
-/**
- * The form, once the repos are in: the screen's repo starts as the link's
- * (else the first), and the project as the link's (a project's To Do "+").
- * With `initialDraft` the form starts with that draft loaded (`loadDraft`).
- */
 function NewQuickTaskForm({
   repos,
   initialRepo,

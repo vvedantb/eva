@@ -71,18 +71,10 @@ export function buildTools(
 ): EvaTool[] {
   const { clerkUserId, scopedRepoId, entityId, entityKind } = credentials;
   const { aveThreadId } = credentials;
-  // Where this sandbox's chat content lands: a session daemon's own chat row,
-  // otherwise the task or project itself (`resolveChatParent` takes both).
   const chatContentId = credentials.chatId ?? entityId;
   const isAve = aveThreadId !== undefined;
   const tools: EvaTool[] = [];
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Helper functions
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Repo and chat resolution live in the shared leaf so every tool that acts on
-  // an existing entity — here and in entityTools — runs the same access checks.
   const { assertRepoAccess, resolveRepoRef, resolveEntityTarget } =
     entityAccess(ctx, credentials);
 
@@ -124,10 +116,6 @@ export function buildTools(
       'Which Convex deployment to query. "prod" (default) reads from PROD_CONVEX_URL/PROD_CONVEX_DEPLOY_KEY. "staging" reads from NEXT_PUBLIC_CONVEX_URL/CONVEX_DEPLOY_KEY.',
     );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // list_repos
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "list_repos",
@@ -139,8 +127,6 @@ export function buildTools(
         const { userId } = await getContext();
         const repos = await getUserRepos(userId);
 
-        // Advertise which repos have a Postgres read replica configured, so the
-        // agent can pick a postgres_query target without probing each repo.
         const [replicaRepoIdList, savedGroups] = await Promise.all([
           ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
             repoIds: repos.map((r) => r.id),
@@ -158,9 +144,6 @@ export function buildTools(
           ...(r.mcpRootPrompt ? { mcpRootPrompt: r.mcpRootPrompt } : {}),
         }));
 
-        // A group whose primary repo has since been deleted has nothing to open
-        // a multi-repo session against, so it is dropped rather than shown with
-        // a missing primary.
         const groups = savedGroups.flatMap((g) => {
           if (!g.primaryRepo) return [];
           return [
@@ -201,10 +184,6 @@ export function buildTools(
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // list_tables
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "list_tables",
@@ -237,10 +216,6 @@ export function buildTools(
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // query_table
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -307,10 +282,6 @@ export function buildTools(
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // get_document
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "get_document",
@@ -359,10 +330,6 @@ export function buildTools(
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // run_query
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -416,10 +383,6 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // count_table
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "count_table",
@@ -459,10 +422,6 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // postgres_query
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -518,24 +477,12 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // evaluate — typed decisions from TypeSafe Jev via AI Gateway
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // No repo or entity access check: the tool reads nothing of the user's and
-  // only forwards what the caller hands it, so every MCP caller gets it.
   tools.push(
     evaluateTool((input) =>
       ctx.runAction(internal.mcp.evaluate.runEvaluate, input),
     ),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // render_ui — an agent-composed panel rendered inline in the chat
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Scoped to a sandbox token: the panel has to land in *this* chat, so a
-  // caller without an entity (the user's own OAuth connector) has no target.
   if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       renderUiTool(async (input) => {
@@ -577,11 +524,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // render_html — an agent-authored HTML page rendered inline in the chat
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Scoped like render_ui: the page has to land in *this* chat.
   if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       renderHtmlTool((input) =>
@@ -594,11 +536,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // submit_feedback — frustration or praise, shown under the current reply
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Scoped like render_ui: the feedback has to land in *this* chat.
   if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       submitFeedbackTool(async (input) => {
@@ -614,12 +551,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // Scoped like render_ui: the request is relayed through *this* chat's open
-  // Eva tab, so a caller without an entity has no preview to reach.
   if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       ...previewTools({
@@ -636,10 +567,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Task creation tools
-  // ─────────────────────────────────────────────────────────────────────────────
-
   async function resolveRepoByName(
     repoName: string,
     app: string | undefined,
@@ -648,10 +575,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return matchRepoByName(await getUserRepos(userId), repoName, app);
   }
 
-  /**
-   * Registers a task Manager Ave just created so it is woken when that task
-   * finishes. No-op for every caller that is not Ave's own run.
-   */
   async function watchTaskAsAve(taskId: string): Promise<void> {
     if (aveThreadId === undefined) return;
     await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
@@ -687,10 +610,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .describe(
         'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos. Required, except in a project coordinator chat, where it defaults to the project\'s home repo and may name any repo you can access.',
       ),
-    // No `model` here on purpose: a task runs on the repo's configured default
-    // model (createQuickTask: `args.model ?? repo.defaultModel`). The picker
-    // used to be a Claude-only enum, which steered every MCP caller into
-    // overriding repos that run other providers.
     baseBranch: z
       .string()
       .optional()
@@ -731,11 +650,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
   const caller = projectCallerOf(credentials.owner);
 
-  /**
-   * The project a task tool creates into on the coordinator's behalf: its own
-   * project when the call names none or names it. Undefined for any other
-   * caller or project. A child task may not create tasks in its project.
-   */
   function coordinatorProject(
     projectId: string | undefined,
   ): string | ReturnType<typeof toolErrorResult> | undefined {
@@ -753,7 +667,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return caller.projectId;
   }
 
-  /** The repo id a coordinator task targets: named, or the home repo (undefined). */
   async function coordinatorRepoId(
     repoName: string | undefined,
     app: string | undefined,
@@ -765,11 +678,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return { repoId: resolved.repo.id };
   }
 
-  /**
-   * A coordinator task's linked repos (`linkedRepoNames`), resolved like
-   * `repoName`. Only the coordinator may pass them; the backend checks access
-   * and refuses the home repo or a repeat.
-   */
   async function coordinatorLinkedRepoIds(
     names: readonly string[] | undefined,
     userId: string,
@@ -790,11 +698,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return { linkedRepoIds };
   }
 
-  /**
-   * The coordinator creates tasks in its project: `todo` and approved, in any
-   * repo the user can access, so the scheduler starts them at once. One call is one
-   * batch card in the coordinator chat.
-   */
   async function createProjectTasks(
     projectId: string,
     userId: string,
@@ -836,12 +739,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     if ("content" in resolved) return resolved;
     const { repo } = resolved;
 
-    // Task and session creation deliberately send no model. The mutations
-    // behind them fall back to `repo.defaultModel`, and that per-repo choice
-    // (provider, cost, plan limits) is the one the MCP surface must not
-    // override. Per-turn sends (orchestratorSendMessage) keep their override.
-    // A project task from an agent outside the coordinator waits in Triage
-    // for a person's approval (`createAgentTask`).
     const taskId = await ctx.runMutation(
       internal._agentTasks.mutations.createAgentTask,
       {
@@ -991,7 +888,6 @@ In a project coordinator chat the batch joins this project (do not pass projectT
           .describe(
             "If provided, creates a project with this title and assigns all tasks to it",
           ),
-        // Same as taskArgs: every task in the batch runs on the repo default.
         baseBranch: z
           .string()
           .optional()
@@ -1089,19 +985,6 @@ In a project coordinator chat the batch joins this project (do not pass projectT
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // send_chat_message
-  //
-  // The one write tool that targets work already in flight. Every caller gets
-  // it — an OAuth connector, a sandbox token, the master session — because it
-  // grants nothing beyond what the user can already do in that chat: the
-  // repo-access check below is the same one the web mutations run.
-  //
-  // All three sandbox chat surfaces are reachable (session, quick task,
-  // project), because all three are somewhere a person can type in the app and
-  // all three run their turn on their own branch.
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "send_chat_message",
@@ -1149,10 +1032,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 
-        // The coordinator messages only its project's tasks
-        // (`projectTargetRefusal` already refused anything outside it). A
-        // message to a task waiting on its question is the answer: it starts
-        // the task's next run, unless a person answered first.
         if (caller?.role === "coordinator") {
           if (target.kind !== "task") {
             return toolErrorResult(
@@ -1184,8 +1063,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           if (answer !== null) return answer;
         }
 
-        // A session daemon may message a sibling chat of its own session, but
-        // never the chat it is running in.
         if (entityId !== undefined && target.targetId === entityId) {
           if (target.kind !== "session" || chat === undefined) {
             return toolErrorResult(
@@ -1210,8 +1087,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
               ? { excludeChatId: credentials.chatId }
               : {}),
             aveThreadId,
-            // Any MCP send — Manager Ave or a user OAuth connector — stamps the
-            // "via MCP" chat badge so it is not mistaken for a composer-typed turn.
             sentViaOrchestrator: true,
           },
         );
@@ -1225,13 +1100,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Eva document tools (the `docs` table — design docs/PRDs stored on Eva)
-  //
-  // NOTE: distinct from `get_document`, which reads a row from a CONNECTED
-  // repo's database. These operate on Eva's own docs.
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -1300,8 +1168,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           .describe("The Eva doc ID (from create_eva_doc or list_eva_docs)"),
       },
       handler: async ({ docId }) => {
-        // Resolve identity first (ensures the Eva user row exists) so the
-        // as-user query can authenticate.
         await getContext();
         const doc = await mcpCallAsUser(
           ctx,
@@ -1419,10 +1285,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Team + artifact tools
-  // ─────────────────────────────────────────────────────────────────────────────
 
   async function getUserTeams(
     userId: string,
@@ -1641,7 +1503,6 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
               : {}),
           },
         );
-        // Anchor it to this chat's turn, so it shows as a card under the reply.
         if (entityKind !== undefined && chatContentId !== undefined) {
           await ctx.runMutation(internal.artifacts.anchorToChat, {
             artifactId: result.artifactId,
@@ -1727,10 +1588,6 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Media tools (host a sandbox file at a public URL for PR comments/Linear issues)
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "upload_media",
@@ -1771,10 +1628,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       },
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Browser tools (shared desktop Chrome via CDP — session/task/project sandboxes)
-  // ─────────────────────────────────────────────────────────────────────────────
 
   function requireBrowserEntity():
     | { entityKind: "session" | "task" | "project"; entityId: string }
@@ -1856,10 +1709,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // request_local_computer — Grok Bot webhook (every MCP caller)
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "request_local_computer",
@@ -1890,12 +1739,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // send_email — mails the calling user only (every MCP caller)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  // No recipient argument: the address is looked up from the token owner, so an
-  // agent can only ever mail the user it is running for.
   tools.push(
     sendEmailTool(async (input) => {
       const { userId } = await getContext();
@@ -1905,10 +1748,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       });
     }),
   );
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // get_skill
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -1968,32 +1807,9 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
     }),
   );
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Fleet tools — every MCP caller (OAuth connector included). Authz is the
-  // same hasRepoAccess checks the backing actions already run as the user.
-  // send_agent_message stays behind the Ave gate: it is Manager Ave speaking,
-  // and only Ave's own server-side run carries `aveThreadId`.
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(...fleetTools(credentials, ctx));
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Entity tools — list_entities, start_sandbox, stop_sandbox,
-  // get_preview_url and cancel_queued_message. Same audience and same authz as send_chat_message:
-  // every caller gets them, and each one resolves its target through the
-  // shared repo-access check above.
-  // ─────────────────────────────────────────────────────────────────────────────
-
   tools.push(...entityTools(credentials, ctx));
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Chat control tools — the caller's own chat (context, dev server, env var
-  // names, Preview), chat content (titles, plans, comments, artifact/doc
-  // deletes), project builds and task lifecycle, automations, custom tabs,
-  // queued messages, sandbox services and in-app notifications. Each calls
-  // the UI's own public function as the user (mcpCallAsUser) or resolves its
-  // target through the shared access check; deletes require `confirmed`.
-  // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(...chatSelfTools(credentials, ctx));
   tools.push(...chatContentTools(credentials, ctx));
@@ -2005,12 +1821,8 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
 
   if (isAve) {
     tools.push(...orchestratorTools(credentials, ctx));
-    // Answering a child's question speaks for the user, so only Manager Ave
-    // (which already relays for them) gets it.
     tools.push(...orchestratorQuestionTools(credentials, ctx));
   }
 
-  // The project hub rules (`mcp/projectScope.ts`): hide or refuse by who
-  // the caller speaks for.
   return applyProjectToolPolicy(tools, caller);
 }

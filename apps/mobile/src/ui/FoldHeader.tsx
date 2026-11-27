@@ -27,7 +27,6 @@ export function FoldHeader({
   color: string;
   label: string;
   count: number;
-  /** What the count counts, for the screen reader: "task" or "project". */
   noun: string;
   open: boolean;
   onToggle: () => void;
@@ -74,7 +73,6 @@ export function FoldBandHeader({
 }: {
   label: string;
   count: number;
-  /** What the count counts, for the screen reader: "task" or "PR". */
   noun: string;
   open: boolean;
   onToggle: () => void;

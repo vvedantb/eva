@@ -1,6 +1,3 @@
-// Small, dependency-free statistics for the load test report.
-// Latency samples are skewed and heavy-tailed, so everything here is
-// non-parametric: medians, percentiles, bootstrap CIs and Mann-Whitney U.
 
 export function quantile(sorted: ReadonlyArray<number>, q: number): number {
   if (sorted.length === 0) return Number.NaN;
@@ -52,7 +49,6 @@ export function bootstrapMedianCi(
 }
 
 function normalCdf(z: number): number {
-  // Abramowitz & Stegun 7.1.26 erf approximation (|error| < 1.5e-7).
   const t = 1 / (1 + 0.3275911 * Math.abs(z / Math.SQRT2));
   const poly =
     t *
@@ -98,7 +94,6 @@ export function mannWhitney(
   const varU = ((n1 * n2) / 12) * (n + 1 - tieTerm / (n * (n - 1)));
   const z = varU > 0 ? (u1 - meanU - Math.sign(u1 - meanU) * 0.5) / Math.sqrt(varU) : 0;
   const p = varU > 0 ? 2 * (1 - normalCdf(Math.abs(z))) : u1 === meanU ? 1 : 0;
-  // Cliff's delta from U: P(a > b) - P(a < b).
   const cliffsDelta = (2 * u1) / (n1 * n2) - 1;
   return { u: u1, p, cliffsDelta };
 }

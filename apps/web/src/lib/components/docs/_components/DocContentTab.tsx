@@ -42,11 +42,6 @@ import { baseDocEditorExtensions, useDocSync } from "../_utils/useDocSync";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
-/**
- * How long editing has to stop before a version is snapshotted. Two minutes
- * outlived most editing sessions, so a doc could be closed having never been
- * snapshotted at all.
- */
 const VERSION_IDLE_MS = 15_000;
 
 export function DocContentTab({
@@ -75,15 +70,11 @@ export function DocContentTab({
   const touchDraft = useMutation(api.docVersions.touchDraft);
   const saveVersion = useMutation(api.docVersions.saveVersion);
 
-  // Attribute new suggestions to the current user; a stable ref avoids
-  // recreating the editor when auth resolves.
   const currentUserId = useQuery(api.auth.me);
   const userIdRef = useRef<string | null>(null);
   useEffect(() => {
     userIdRef.current = currentUserId ?? null;
   }, [currentUserId]);
-  // Clicking a highlight routes here; the ref lets the (memoized once) editor
-  // extension reach the latest handler without recreating the editor.
   const anchorClickRef = useRef<(anchorId: string) => void>(() => undefined);
   const extensions = [
     ...baseDocEditorExtensions,
@@ -109,8 +100,6 @@ export function DocContentTab({
     () => new Set(),
   );
 
-  // Cached query (shared with the panel). Open anchors = unresolved thread
-  // roots plus the anchor currently being composed.
   const comments =
     useQuery(api.docComments.listByDoc, { docId: doc._id }) ?? [];
   const openAnchorIds = (() => {
@@ -149,7 +138,6 @@ export function DocContentTab({
     [sync.extension ? "ready" : "loading"],
   );
 
-  // Update editable when mode changes
   useEffect(() => {
     if (editor) {
       editor.setEditable(effectiveMode !== "viewing");
@@ -159,8 +147,6 @@ export function DocContentTab({
   /* eslint-disable no-effect/no-event-handler --
      Reconfigures the TipTap instance, which lives outside React state and is
      only available after it mounts. */
-  // Toggle suggestion tracking with the mode. Editing/Viewing apply edits
-  // directly; Suggesting converts them into tracked-change marks.
   useEffect(() => {
     if (!editor) return;
     if (isPrRecap) {
@@ -172,7 +158,6 @@ export function DocContentTab({
   }, [editor, effectiveMode, isPrRecap]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Surface the pending-suggestion count so the header toggle can show it.
   const suggestionCount =
     useEditorState({
       editor,
@@ -191,7 +176,6 @@ export function DocContentTab({
      TipTap emits "update" on its own bus and has no immutable snapshot to hand
      useSyncExternalStore; re-serialising markdown per render would be far
      costlier than mirroring it on change. */
-  // Keep the outline in sync with live editor content.
   useEffect(() => {
     if (!editor) return;
 

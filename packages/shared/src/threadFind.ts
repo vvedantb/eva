@@ -1,8 +1,3 @@
-// Find in a chat's transcript, web and phone: the matches of a query in each
-// message's text, the active match as the reader steps through them, and the
-// count the find bar shows. Moved to `@eva/shared` so the phone app's "Find in
-// chat" counts and steps the same way as the web's `ThreadFindBar`.
-
 export interface ThreadFindDocument {
   readonly messageId: string;
   readonly text: string;

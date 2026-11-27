@@ -183,13 +183,9 @@ export default function ChatScreen() {
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   const [seenRows] = useState(createSeenRows);
-  // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
   const messageMenu = useMessageMenu(restore.request);
-  // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
   const quotes = useQuotes();
-  // "Find in chat" (the web `ThreadFindBar`): the bar under the header while open, and the message of its active match.
-  // Kept per chat: a tab switch to another chat of the session (the same screen) closes it.
   const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
@@ -210,10 +206,8 @@ export default function ChatScreen() {
 
   const working = turn !== undefined && turn !== null;
   const { canReply } = chat;
-  // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
   const runningCount = runningChats?.length ?? 0;
   const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
-  // The web empty state follows the sandbox: awake, waking, going to sleep, or asleep (a send wakes it).
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
   const emptyTitle = sandboxAwake
     ? "No messages yet. Start the conversation!"
@@ -223,7 +217,6 @@ export default function ChatScreen() {
         ? SANDBOX_CHAT_COPY.startingTitle
         : SANDBOX_CHAT_COPY.asleepTitle;
   const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
-  // Why a closed chat takes no message: its task or project is archived, or its session's PR merged or closed, or it was archived (the web banner).
   const closedReason = chat.archived
     ? archiveCopy(chat.archived).readOnly
     : chat.session
@@ -232,25 +225,19 @@ export default function ChatScreen() {
   const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
-  // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
   const bubbleGroups = findBubbleGroups(visible, {
     currentUserId: me ?? undefined,
     assistantBubbles: chat.project !== undefined,
     breaksBefore: newBoundaryId === undefined ? dayStarts : new Set([...dayStarts, newBoundaryId]),
   });
-  // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
-  // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
-  // A question the agent saved on its last reply, as the web: it stays after the turn (and the sandbox)
-  // stops, and its answer goes as a chat message, which wakes the sandbox.
   const savedRaw = visible[visible.length - 1]?.pendingQuestion;
   const savedQuestions = parsePendingQuestion(savedRaw);
   const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
-  // The web recovery card reads every message, so a later system alert also hides it.
   const newestMessage = messages?.[messages.length - 1];
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
@@ -273,9 +260,6 @@ export default function ChatScreen() {
     stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
   };
 
-  // The transcript a fork carries. With history above the loaded rows, the
-  // server builds it, as the web does. (Outside the try below: the React
-  // Compiler cannot compile a conditional inside a try.)
   const forkPrefix = (messageId: string) =>
     transcript.hasOlder && parentId
       ? convex.query(api.messages.forkPrefixByParent, { parentId, throughMessageId: messageId })
@@ -285,7 +269,6 @@ export default function ChatScreen() {
             messageId,
           ),
         );
-  // Fork: a new session that starts from the transcript up to this message, as the web.
   const handleFork = async (messageId: string) => {
     try {
       const prefix = await forkPrefix(messageId);
@@ -296,14 +279,11 @@ export default function ChatScreen() {
       toast.error("Couldn't fork the chat");
     }
   };
-  // One function each for every row (see `ChatMessageRow`).
   const forkFrom = chat.kind === "session" ? (messageId: string) => void handleFork(messageId) : undefined;
   const rateReply = (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => {
     rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
   };
 
-  // A session reply that changed code: its Changes chip (Diff this turn, Restore), as the web's
-  // turn checkpoint actions, which simple view hides.
   const session = chat.session;
   const turnFor = (message: ChatMessage): TurnChangesTarget | undefined => {
     const checkpoint = session && !simpleView ? turnCheckpoint(message) : null;
@@ -349,12 +329,10 @@ export default function ChatScreen() {
       onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
     });
   };
-  // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
   const findDocuments = collectThreadFindDocuments(
     visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
   );
   const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
-  // The web "Recap chat": a recap of the whole chat, as the "Recap" card under the newest message.
   if (parentId && visible.length > 0) {
     leadingMenu.push({
       label: "Recap chat",
@@ -414,11 +392,8 @@ export default function ChatScreen() {
           onViewableItemsChanged={seenRows.onViewableItemsChanged}
           data={newestFirst}
           keyExtractor={(message) => message._id}
-          // The side padding is in each row: Android flips an inverted list on both axes, which would swap it here.
           contentContainerClassName="px-0"
-          // Web: messages `gap-3`.
           ItemSeparatorComponent={MessageGap}
-          // Inverted, the end is the top: the next page of older history as the reader nears it.
           onEndReached={transcript.loadOlder}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
@@ -576,22 +551,14 @@ function ChatDock({
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
   questions: ParsedQuestion[] | null;
-  /** The last reply's saved question (`messages.pendingQuestion`), when no blocking one is open. */
   savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
-  /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
   messagesNewestFirst: ChatMessage[];
-  /** The chat takes a message (`chat.canReply`). */
   canReply: boolean;
-  /** Why the chat is closed (an archived task or project, `getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
-  /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
   banners: ReactNode;
-  /** The live tasks, then the queued messages, flush on the composer only (not over a question card), as the web dock. */
   panels: ReactNode;
-  /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
-  /** Quotes from replies: chips over the field, sent after the prompt. */
   quotes: Pick<Quotes, "items" | "remove" | "drop">;
 }) {
   const scheme = useScheme();
@@ -611,28 +578,21 @@ function ChatDock({
       draft.save(tokenized);
       if (tokenized) typing.onActivity();
     },
-    // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
     chat.project !== undefined ? [EVA_MENTION_ITEM] : [],
   );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
   const router = useRouter();
-  // The diff comments drafted on this chat's pull request: chips on the composer, sent with the next prompt.
   const prNumber = chat.prUrl === undefined ? undefined : prNumberFromGithubUrl(chat.prUrl);
   const review = usePendingLineComments(chat.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber });
 
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
-  // limit, sends queue until just after the reset (the server holds them on the same model and account).
-  // The clock ticks once a minute, here only, so the hold lifts at the reset without redrawing the chat.
   const now = useNow(60_000);
   const usageLimitHeld = isHeldByUsageLimit(
     findUsageLimitHold(messagesNewestFirst, now),
     normalizeAIModel(chat.model),
     chat.providerAccountId ?? null,
   );
-  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
-  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
   const composerState = sandboxComposerState({
     isSandboxActive: chat.sandboxActive,
     isSwitchingAccount: modelPick.switching,
@@ -650,18 +610,14 @@ function ChatDock({
       toast.error("Wait for the attachments to upload");
       return;
     }
-    // The web composer is locked while the new account's daemon starts.
     if (modelPick.switching) {
       toast.error("Wait for the account switch");
       return;
     }
     const attachmentStorageIds = attachments.storageIds;
-    // As the web: the comments go as `<review_comment>` blocks and leave the chips once the send lands.
     const sentComments = review.comments;
     attachments.clear();
     typing.stopTyping();
-    // The quotes, then the review comments, go after the prompt, as the web
-    // (`ChatBody`, then `useChatSend`); each leaves only once the send lands, so a retry keeps them.
     const sentQuotes = quotes.items;
     send({
       target: chat.target,
@@ -676,14 +632,11 @@ function ChatDock({
     );
   };
 
-  // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-  // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
   const questionDock = (key: string, asked: ParsedQuestion[], onSubmit: (answers: Record<string, string>) => Promise<void>) => (
     <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
       <ChoiceQuestion key={key} questions={asked} buttonWeight="semibold" onSubmit={onSubmit} />
     </View>
   );
-  // A blocking question wins: it holds the turn open and its answer resumes the run.
   const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && canReply ? savedQuestion : null;
 
   return pending && questions ? (
@@ -697,7 +650,6 @@ function ChatDock({
     })
   ) : saved ? (
     questionDock(saved.raw, saved.questions, async (answers) => {
-      // Hidden at once, as the web, until the reply moves on.
       setAnsweredSaved(saved.raw);
       try {
         await send({ target: chat.target, message: formatQuestionAnswers(saved.questions, answers), attachmentStorageIds: [] });
@@ -707,9 +659,6 @@ function ChatDock({
       }
     })
   ) : canReply ? (
-    // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
-    // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
-    // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
       {banners}
       {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
@@ -760,7 +709,6 @@ function ChatDock({
             />
           ) : null,
         )}
-        // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
           <ComposerFooter
@@ -826,44 +774,28 @@ function ChatMessageRow({
 }: {
   message: ChatMessage;
   dayStart: boolean;
-  /** The first reply you had not seen: the "NEW" divider goes above it. */
   newStart: boolean;
-  /** The message of Find's active match: a tinted band marks it. */
   findActive: boolean;
   fromTeammate: boolean;
-  /** The project coordinator chat: Eva's replies sit in a bubble with her mark (the web `assistantBubbles`). */
   evaBubble: boolean;
-  /** This row continues the run of one sender's bubbles above it: it sits 4 under it, not 12. */
   joinsPrevious: boolean;
-  /** The run goes on below: the avatar and the footer wait for its last bubble. */
   joinsNext: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
-  /** The streaming row's entity id while this is the live reply. */
   live: string | undefined;
-  /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
-  /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
   menuFor: (messageId: string) => MessageMenu;
-  /** The agent's cards placed under this message (`render_ui`, `render_html`). */
   cards: readonly InlineCard[] | undefined;
-  /** The artifacts and reports placed under this message. */
   outputs: readonly TurnOutput[] | undefined;
-  /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
-  /** The coordinator chat: opens a message's reply thread ("N replies"). */
   onOpenThread?: (rootId: string) => void;
-  /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
-  /** A reply that changed code: its Changes chip, over the footer. */
   changes?: ReactNode;
 }) {
   const scheme = useScheme();
-  // Find's active match: the message on a primary tint, as the web paints its active match.
   const findBand = findActive ? { backgroundColor: withAlpha(EVA_THEME[scheme].primary, 0.1) } : undefined;
-  // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
   if (message.isSystemAlert === true) {
     return (
       <View className={`gap-3 ${THREAD_INSET}`}>
@@ -874,7 +806,6 @@ function ChatMessageRow({
     );
   }
   const isUser = message.role === "user";
-  // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
   const failure = isUser
     ? null
     : turnErrorTitle({ errorType: message.errorType, turnModel: turn?.model, messageModel: message.model, providerLabel });
@@ -883,17 +814,14 @@ function ChatMessageRow({
     cards && cards.length > 0 ? (
       <InlineCards cards={cards} rowKey={message._id} onReply={onPanelReply} onOpenWebChat={onOpenWebChat} />
     ) : null;
-  // The web `panelTabs`: a settled reply with prose trades places with its cards.
   const tabbed = !isUser && cardList !== null && live === undefined && message.content.trim() !== "";
   const outputList = outputs && outputs.length > 0 ? <TurnOutputs outputs={outputs} /> : null;
-  // The user turn: attachments above the text, as the web.
   const userBody = (
     <>
       <UserAttachments attachments={attachments} />
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  // The coordinator chats like a person: "Eva is typing…" while it works, then the reply only.
   const replyBody = isUser ? null : live && evaBubble ? (
     <EvaTypingText />
   ) : live ? (
@@ -911,9 +839,7 @@ function ChatMessageRow({
       stopped={message.stopped === true}
     />
   );
-  // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
-  // "N replies" in the footer line, always shown (the web footer's thread control).
   const threadControl =
     onOpenThread && (message.replyCount ?? 0) > 0 ? (
       <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
@@ -922,12 +848,8 @@ function ChatMessageRow({
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
-                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
-                {/* A press and hold opens the message's menu (user choice, as iMessage): the kit `Message`
-                    lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
-                  // The coordinator chat caps every person's bubble at 70%, as the web (Eva's is capped in `EvaBubble`).
                   className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
                   style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
@@ -940,13 +862,10 @@ function ChatMessageRow({
                   ) : evaReply ? (
                     <EvaBubble joinsNext={joinsNext}>{replyBody}</EvaBubble>
                   ) : (
-                    // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
-                    // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
                     <MessageContent bubble="tint" className={isUser ? undefined : "px-1 py-2"}>
                       {isUser ? userBody : replyBody}
                     </MessageContent>
                   )}
-                  {/* The web user turn: its cards, then its outputs. A reply: outputs, then the cards the tabs did not take. */}
                   {isUser && cardList ? <View className="mt-1 w-full">{cardList}</View> : null}
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
@@ -960,7 +879,6 @@ function ChatMessageRow({
                       leading={threadControl}
                     />
                   ) : threadControl ? (
-                    // A grouped bubble has no footer: the replies keep their own line.
                     <View className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
@@ -969,10 +887,8 @@ function ChatMessageRow({
   );
 }
 
-/** The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`. */
 const THREAD_INSET = "pl-[22px] pr-8";
 
-/** The web `gap-3` between two messages. */
 function MessageGap() {
   return <View className="h-3" />;
 }

@@ -34,7 +34,6 @@ const DEFAULTS: SessionListSettings = {
   sessionPreviewCount: DEFAULT_SESSION_PREVIEW_COUNT,
 };
 
-// Parsed field by field, so a stored value from an older build falls back to its default alone.
 const settingsSchema = z.object({
   appSortOrder: z.enum(APP_SORT_ORDERS).catch(DEFAULTS.appSortOrder),
   sessionSortOrder: z.enum(SESSION_SORT_ORDERS).catch(DEFAULTS.sessionSortOrder),
@@ -42,7 +41,6 @@ const settingsSchema = z.object({
   sessionPreviewCount: z.number().transform(clampSessionPreviewCount).catch(DEFAULTS.sessionPreviewCount),
 });
 
-/** Kept on the device, as the web keeps them in the browser (`eva:sessions-sidebar-settings`). */
 const settingsStore = persistedStore<SessionListSettings>("sessionListSettings", DEFAULTS, jsonParser(settingsSchema));
 
 /** The list options and a setter that changes one or more of them. */
@@ -148,7 +146,6 @@ export function SessionListOptionsButton() {
   );
 }
 
-/** A 44 round − or + for the Visible threads count. */
 function StepButton({ label, icon: Icon, disabled, onPress }: { label: string; icon: typeof IconPlus; disabled: boolean; onPress: () => void }) {
   const theme = EVA_THEME[useScheme()];
   return (

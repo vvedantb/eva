@@ -11,7 +11,6 @@ import type {
 import { cursorAdapter, cursorParseLine } from "../providers/cursor.js";
 import { opencodeAdapter, opencodeParseLine } from "../providers/opencode.js";
 
-/** Session-store writes the stream hooks fire, captured instead of persisted. */
 const sessionCalls: string[] = [];
 
 mock.module("../session/cursorSession.js", () => ({
@@ -33,7 +32,6 @@ beforeEach(() => {
   sessionCalls.length = 0;
 });
 
-/** The result a terminal Cursor `tool_call` event completes its step with. */
 function cursorToolResult(
   status: string,
   result?: JsonValue,
@@ -51,11 +49,6 @@ function fixtureEvents(name: string): JsonObject[] {
     .map((line): JsonObject => JSON.parse(line));
 }
 
-/**
- * Every shape a stream line must survive: padded, blank, wrong-typed, missing
- * and array-where-an-object-belongs. A parser that throws here kills the rest
- * of the turn's activity feed, so this list is asserted against both parsers.
- */
 const MALFORMED_EVENTS: JsonObject[] = [
   {},
   { type: null },
@@ -97,13 +90,9 @@ describe("the Cursor SDK parser", () => {
       "stream_text_delta",
       "update_reasoning",
       "push_step",
-      // The repeated `running` and the repeated `completed` for call_cursor1
-      // are dropped, so the feed shows one shell step, completed once.
       "complete_tool",
       "push_step",
       "complete_tool",
-      // The failing shell never sent `running`: its terminal event pushes the
-      // step before completing it so no tool goes missing.
       "push_step",
       "complete_tool",
       "mark_last_complete",
@@ -129,8 +118,6 @@ describe("the Cursor SDK parser", () => {
   });
 
   test("keeps the result field a malformed sibling would have lost", () => {
-    // A duration with an unusable diff, and a diff with an unusable duration:
-    // one bad field must never cost the other.
     expect(
       cursorToolResult("completed", {
         status: "success",
@@ -143,14 +130,12 @@ describe("the Cursor SDK parser", () => {
         value: { diffString: " -a ", executionTime: "99" },
       }),
     ).toEqual({ output: { text: "-a" } });
-    // Only finite numbers are durations.
     expect(
       cursorToolResult("completed", {
         status: "success",
         value: { executionTime: Number.NaN },
       }),
     ).toBeUndefined();
-    // A blank `{message}` is not output, but the failure still reads as one.
     expect(
       cursorToolResult("error", {
         status: "error",
@@ -163,7 +148,6 @@ describe("the Cursor SDK parser", () => {
         error: { message: "tool exploded" },
       }),
     ).toEqual({ output: { text: "tool exploded" }, isError: true });
-    // A non-string message falls through to the shared multi-key probe.
     expect(
       cursorToolResult("error", {
         status: "error",
@@ -173,15 +157,12 @@ describe("the Cursor SDK parser", () => {
   });
 
   test("an envelope missing its payload is probed as a plain result", () => {
-    // `{status:"success"}` carries nothing to unwrap, so the envelope itself is
-    // the payload — and it holds no output, error or files.
     expect(
       cursorToolResult("completed", { status: "success" }),
     ).toBeUndefined();
     expect(
       cursorToolResult("completed", { status: "success", value: null }),
     ).toBeUndefined();
-    // A status of "error" on the event is enough on its own.
     expect(cursorToolResult("error", { status: "success" })).toEqual({
       isError: true,
     });
@@ -189,7 +170,6 @@ describe("the Cursor SDK parser", () => {
       isError: true,
     });
     expect(cursorToolResult("completed", undefined)).toBeUndefined();
-    // Unenveloped payloads still read through, bare strings included.
     expect(cursorToolResult("completed", "raw output")).toEqual({
       output: { text: "raw output" },
       isError: undefined,
@@ -221,7 +201,6 @@ describe("the Cursor SDK parser", () => {
         trackingId: "call_pad",
       },
     ]);
-    // The SDK re-sends `running` on every mutation of the call.
     expect(
       cursorParseLine({
         type: "tool_call",
@@ -232,8 +211,6 @@ describe("the Cursor SDK parser", () => {
       }),
     ).toEqual([]);
 
-    // A blank id cannot be tracked, so the step is pushed untracked rather
-    // than dropped — and cannot be deduplicated either.
     const blank = cursorParseLine({
       type: "tool_call",
       status: "running",
@@ -250,7 +227,6 @@ describe("the Cursor SDK parser", () => {
       },
     });
 
-    // An unseen id reaching a terminal status pushes, completes, then dedupes.
     const terminal = cursorParseLine({
       type: "tool_call",
       status: "error",
@@ -294,7 +270,6 @@ describe("the Cursor SDK parser", () => {
       { kind: "stream_text_delta", text: "second" },
       { kind: "stream_text_delta", text: "  " },
     ]);
-    // Content that is not an array, and a message that is one, carry nothing.
     expect(
       cursorParseLine({
         type: "assistant",
@@ -327,11 +302,9 @@ describe("the Cursor SDK parser", () => {
     expect(S.activeCursorSessionId).toBe("agent_9");
     expect(sessionCalls).toEqual(["cursor:write"]);
 
-    // The same id again is not a rotation, so nothing is rewritten.
     expect(
       cursorAdapter.onStreamLine("", { type: "system", agent_id: "agent_9" }),
     ).toEqual({});
-    // A blank or wrong-typed id leaves the saved session alone.
     expect(
       cursorAdapter.onStreamLine("", { type: "system", agent_id: "   " }),
     ).toEqual({});
@@ -350,7 +323,6 @@ describe("the Cursor SDK parser", () => {
     expect(cursorParseLine({ type: "mystery" })).toEqual([]);
     expect(cursorParseLine({ type: " tool_call " })).toEqual([]);
     expect(cursorParseLine({})).toEqual([]);
-    // A compaction type is matched exactly, in both spellings.
     expect(cursorParseLine({ type: "summary_started" })).toEqual([
       {
         kind: "update_thinking",
@@ -421,14 +393,12 @@ describe("the OpenCode parser", () => {
     expect(opencodeParseLine(part("running"))).toHaveLength(1);
     expect(opencodeParseLine(part("completed"))).toHaveLength(1);
     expect(opencodeParseLine(part("error"))).toHaveLength(1);
-    // Padded, unknown, wrong-typed and missing statuses are all silent.
     expect(opencodeParseLine(part(" running"))).toEqual([]);
     expect(opencodeParseLine(part("pending"))).toEqual([]);
     expect(opencodeParseLine(part(5))).toEqual([]);
     expect(
       opencodeParseLine({ type: "tool_use", part: { id: "p", tool: "bash" } }),
     ).toEqual([]);
-    // A part that is not an object has no tool to report at all.
     expect(opencodeParseLine({ type: "tool_use", part: [] })).toEqual([]);
   });
 
@@ -447,7 +417,6 @@ describe("the OpenCode parser", () => {
     expect(S.resultEventSeen).toBe(true);
     expect(sessionCalls).toEqual(["opencode:sync"]);
 
-    // A malformed id must not cost the turn its ending.
     resetStateForTests();
     S.opencodeFinalMessageId = "";
     sessionCalls.length = 0;
@@ -459,7 +428,6 @@ describe("the OpenCode parser", () => {
     expect(S.opencodeFinalMessageId).toBe("");
     expect(sessionCalls).toEqual(["opencode:sync"]);
 
-    // Any other reason leaves the turn open.
     resetStateForTests();
     sessionCalls.length = 0;
     expect(

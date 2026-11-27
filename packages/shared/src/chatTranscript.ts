@@ -1,12 +1,4 @@
 /**
- * How a chat transcript loads, shared by the web (`useChatTranscript`) and
- * the phone so both read the same, small results from `messages.listByParent`:
- * the newest {@link TRANSCRIPT_TAIL_MESSAGES} first, then live `since` the
- * tail's oldest row, then older history in pages that double. A whole
- * 400-message chat reads about 3.2 MB, so neither client asks for it at once.
- */
-
-/**
  * Messages a chat opens with. 10 covers the last turn (the only one in the
  * viewport on open) and a few turns above it. Each assistant row carries an
  * activity log, so the tail is what makes switching chats slow: 10 rows read

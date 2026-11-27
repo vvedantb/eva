@@ -24,7 +24,6 @@ import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
 
 type DocComment = FunctionReturnType<typeof api.docComments.listByDoc>[number];
 
-/** 24px beside a pointer, a full 40px tap target below `sm`. */
 const THREAD_ACTION_CLASS = "h-6 px-1.5 text-xs max-sm:h-10 max-sm:px-3";
 
 export function DocCommentThread({
@@ -47,8 +46,6 @@ export function DocCommentThread({
   const [replyContent, setReplyContent] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // A notification for a reply carries the reply's id, but the whole thread
-  // renders as one card — so the card is what scrolls and flashes.
   const { ref: anchorRef, isAnchored } = useCommentAnchor(
     root._id,
     (anchorId) => replies.some((reply) => reply._id === anchorId),
@@ -59,7 +56,6 @@ export function DocCommentThread({
   /* eslint-disable no-effect/no-event-handler --
      The click happens on a highlight inside the editor, in a different subtree;
      all this thread can do is scroll itself once it learns it is active. */
-  // Bring the thread into view when its highlight is clicked in the editor.
   useEffect(() => {
     if (isActive) {
       rootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -82,7 +78,6 @@ export function DocCommentThread({
       setReplyContent("");
       setIsReplying(false);
     } catch {
-      // toast already shown
     }
   };
 
@@ -99,9 +94,6 @@ export function DocCommentThread({
         isAnchored && "t-anchor-flash",
       )}
     >
-      {/* A real button stretched across the thread rather than `onClick` on the
-          wrapper, which had no role and no keyboard path. The thread's own
-          controls sit above it with `LIST_ROW_CONTROL_CLASS`. */}
       <button
         type="button"
         aria-label="Scroll to the commented text"

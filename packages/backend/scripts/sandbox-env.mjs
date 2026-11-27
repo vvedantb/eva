@@ -1,24 +1,3 @@
-// The env vars an Eva sandbox's local Convex backend gets when it is seeded from
-// a cloud deployment (`sync-to-local.mjs --sandbox-env`), read from
-// `.eva/sandbox-env.json` at the repo root. That file maps each Convex app, by
-// its path from the repo root ("apps/web"), to its vars. Allowlist: a source var
-// that is not named there never reaches a sandbox, and the seed removes it.
-//
-// Rules:
-//   "copy"                    the source deployment's value; only when sharing
-//                             it is harmless (a public URL, a sender address)
-//   "eva"                     the sandbox's own env var of the same name: an Eva
-//                             repo env var with a test value, ideally Seed only.
-//                             Left unset when Eva has none.
-//   { "value": "..." }        a fixed, non-secret value
-//   { "generate": "secret" }  32 random bytes as hex, new on every seed
-//   { "generate": "es256-private-jwk", "kid": "...", "pair"?: "<name>" }
-//   { "generate": "es256-jwks", "pair": "<name>" }  public half of that pair
-// Object rules may add "why"; { "from": "copy" | "eva", "why": "..." } is the
-// string form with a reason.
-//
-// Shared word for word by eva (packages/backend/scripts) and carepulse-ts
-// (scripts); keep any fix appliable to both by diffing them.
 
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -26,7 +5,6 @@ import { dirname, join, relative, sep } from "node:path";
 
 const GENERATORS = new Set(["secret", "es256-private-jwk", "es256-jwks"]);
 
-/** The nearest directory at or above `dir` that holds `.eva/`. */
 function findEvaRoot(dir) {
   let current = dir;
   while (!existsSync(join(current, ".eva"))) {
@@ -37,7 +15,6 @@ function findEvaRoot(dir) {
   return current;
 }
 
-/** "copy" and "eva" may be written as { "from": ..., "why": ... }. */
 function normalize(rule) {
   return typeof rule === "object" && rule !== null && "from" in rule
     ? rule.from
@@ -76,7 +53,6 @@ export function loadSandboxEnv(appDir) {
 
 /** An ES256 key pair as JWKs, both carrying `kid`. */
 export async function createEs256KeyPair(kid) {
-  // Only repos with an es256 rule need jose installed.
   const { exportJWK, generateKeyPair } = await import("jose");
   const { publicKey, privateKey } = await generateKeyPair("ES256", {
     extractable: true,

@@ -253,7 +253,6 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
   const hiddenCount = section.rows.length - section.data.length;
   return (
     <View className="pb-1">
-      {/* Past "Visible threads" rows: rows are hidden, or were and Show less folds them again. */}
       {section.expanded || hiddenCount > 0 ? (
         <Pressable
           accessibilityRole="button"
@@ -290,13 +289,9 @@ export function SessionListRow({
   onSwipe,
 }: {
   row: SessionRow;
-  /** The user has an unsent message in this chat (`drafts.listMarks`): a pencil in the unread dot's place. */
   hasDraft: boolean;
-  /** A long press: the row menu. The same function for every row, so an unchanged row keeps its output. */
   onOpenMenu: (row: SessionRow) => void;
-  /** The look of the row menu's Archive (or Unarchive), revealed by a swipe left. */
   swipe: Omit<SwipeAction, "onPress">;
-  /** Runs that action on this row; the same function for every row. */
   onSwipe: (row: SessionRow) => ReturnType<SwipeAction["onPress"]>;
 }) {
   const { session, repo, inGroup } = row;
@@ -313,7 +308,6 @@ export function SessionListRow({
         accessibilityLabel={inGroup ? `${displayTitle(session.title)}, ${repoDisplayLabel(repo)}` : displayTitle(session.title)}
         onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session._id } })}
         onLongPress={onLongPress}
-        // VoiceOver and TalkBack reach the menu and the swipe action through the actions rotor.
         accessibilityActions={[{ name: "longpress", label: "Session actions" }, ...swipeA11y.accessibilityActions]}
         onAccessibilityAction={(event) => {
           if (event.nativeEvent.actionName === "longpress") onLongPress();
@@ -324,12 +318,9 @@ export function SessionListRow({
         <RowStatus
           awaitingAnswer={session.isAwaitingAnswer}
           working={session.isExecuting}
-          // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
           tone={session.status === "active" ? "active" : "cancelled"}
         />
-        {/* A linked-group row names its app, as the web row's app mark. */}
         {inGroup ? <RepoAppMark repo={repo} scheme={scheme} /> : null}
-        {/* The Inbox row title: `text-sm` (14 / 20) in the foreground. */}
         <Text
           numberOfLines={1}
           className="font-instrument-sans flex-1 text-sm"
@@ -337,7 +328,6 @@ export function SessionListRow({
         >
           {displayTitle(session.title)}
         </Text>
-        {/* The web `UnreadDot`: a reply you have not read, while Eva is not working. One mark: unread wins over the unsent-message pencil. */}
         {session.hasUnread && !session.isExecuting ? (
           <View accessibilityLabel="Unread" className="size-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].primary }} />
         ) : hasDraft ? (

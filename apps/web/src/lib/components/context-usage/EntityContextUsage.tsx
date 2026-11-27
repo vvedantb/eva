@@ -28,7 +28,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 const UNKNOWN_WINDOW_TITLE = "Context window unknown for this model";
 
-/** One formatter for every compact token figure rendered below. */
 const compactNumber = new Intl.NumberFormat("en-US", { notation: "compact" });
 const compactFormat = (value: number) => compactNumber.format(value);
 
@@ -45,7 +44,6 @@ export function ContextUsageDisplay({
   const { maxTokens } = aggregated;
   const overloaded =
     contextUsedRatio(aggregated.usedTokens, maxTokens) > CONTEXT_OVERLOAD_RATIO;
-  // Only a known window has a meaningful "left" figure.
   const remainingLabel =
     maxTokens === null
       ? null

@@ -260,15 +260,10 @@ function SessionsSection() {
   );
 }
 
-/**
- * One repo's rows out of the `useQueries` map, as the web sidebar reads it:
- * a failed query (an `Error` value) has no rows.
- */
 function listedSessions(result: SessionListItem[] | Error | undefined): SessionListItem[] | undefined {
   return result === undefined || result instanceof Error ? undefined : result;
 }
 
-/** One repo's `drafts.listMarks` session ids out of the `useQueries` map: none while loading or failed. */
 function markedSessionIds(result: FunctionReturnType<typeof api.drafts.listMarks> | Error | undefined): Id<"sessions">[] {
   return result === undefined || result instanceof Error ? [] : result.sessionIds;
 }

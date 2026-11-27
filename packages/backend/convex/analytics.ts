@@ -61,30 +61,19 @@ export const getImpactStats = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     startTime: v.optional(v.number()),
-    /** Start of the equal-length window before `startTime`. */
     previousStartTime: v.optional(v.number()),
   },
   returns: v.object({
     prsShipped: v.number(),
-    /** Tasks in a terminal outcome (done/merged + cancelled). */
     tasksRan: v.number(),
     totalSessions: v.number(),
     sessionsWithPr: v.number(),
-    /** done / (done + cancelled), as a percent. */
     shipRate: v.number(),
     tasksCompleted: v.number(),
-    /** Distinct session PRs whose live state is "merged". */
     prsMerged: v.number(),
-    /** prsMerged / distinct session PRs, as a percent. */
     mergeRate: v.number(),
-    /**
-     * Median task-created-to-PR latency. Absent when no task in the window
-     * produced a PR from a finished run.
-     */
     medianTimeToPrMs: v.optional(v.number()),
-    /** Done tasks that needed exactly one run, as a percent of done tasks that ran. */
     firstTryRate: v.number(),
-    /** Summed wall-clock time of runs that finished in the window. */
     agentWorkMs: v.number(),
     prevPrsShipped: v.optional(v.number()),
     prevTasksRan: v.optional(v.number()),
@@ -154,14 +143,12 @@ export const getImpactStats = authQuery({
             )
             .collect();
 
-    // Runs are only consulted for tasks that can appear in either the current
-    // or previous window. Skip older tasks' runs — agentRuns carry large logs.
+    // Skip older tasks' runs: agentRuns carry large logs.
     const tasksNeedingRuns = allTasks.filter((task) => task.status !== "draft");
     const runsByTaskId = new Map<
       string,
       Array<{ startedAt?: number; finishedAt?: number }>
     >();
-    // Every PR a task opened, project PRs included (they name their task).
     const prsByTaskId = new Map<
       string,
       Array<{ prUrl: string; createdAt: number }>
@@ -205,8 +192,6 @@ export const getImpactStats = authQuery({
     /** Computes stats for sessions/tasks/runs starting from an optional timestamp. */
     function computeStats(from: number | undefined) {
       const prUrls = new Set<string>();
-      // Merge state only exists on sessions, so the merge rate is measured
-      // against session PRs rather than every PR counted in `prsShipped`.
       const sessionPrUrls = new Set<string>();
       const mergedPrUrls = new Set<string>();
       const filtered =

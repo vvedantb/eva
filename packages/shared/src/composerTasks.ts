@@ -1,10 +1,3 @@
-/**
- * The live to-do panel above the composer (web `ComposerTasksPanel`, phone
- * `ComposerTasksPanel`): the running turn's newest task list, its headline
- * step and its done count. Platform-free; each app parses the streaming
- * activity its own way and hands the steps here.
- */
-
 /** One row of the agent's task list: the activity trace's todo item. */
 export interface ComposerTaskStep {
   readonly content: string;
@@ -34,7 +27,6 @@ export function keyedComposerTaskSteps<Step extends ComposerTaskStep>(
 }
 
 export interface ComposerTaskProgress {
-  /** Headline step: the first in progress, else the last completed, else the first. */
   step: string;
   completedSteps: number;
   totalSteps: number;

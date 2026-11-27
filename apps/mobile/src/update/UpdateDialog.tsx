@@ -2,18 +2,12 @@ import { UpdateChecker } from "@vvedantb/native-ui/primitives";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
-/** `app.config.ts`'s `DEFAULT_VERSION_NAME`: a local or preview build, which has no release to compare with. */
 const UNRELEASED_VERSION = "0.1.0";
-/**
- * V Store knows the newest release, also when this repository is private.
- * Download opens the APK of that release (`apps/mobile/RELEASE.md`).
- */
 const RELEASES = {
   packageName: "com.projectvdotuk.eva",
   downloadUrl: (version: string) =>
     `https://github.com/vvedantb/eva/releases/download/eva-apk-${version}/eva-${version}-android.apk`,
 };
-/** Where Later keeps the version it hid. */
 const DISMISSED = { getItem: SecureStore.getItemAsync, setItem: SecureStore.setItemAsync };
 
 /**

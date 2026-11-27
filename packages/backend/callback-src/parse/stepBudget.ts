@@ -3,19 +3,14 @@ import type { ProgressStep } from "../types.js";
 /** Per-field caps at capture time (chars unless noted). */
 export const STEP_FIELD_CAPS = {
   command: 600,
-  /** One-line bash `detail` on the step row (the full text rides `command`). */
   commandDetail: 300,
   output: 1200,
   editSide: 1000,
   editsMax: 4,
   filesMax: 10,
   contentPreview: 1000,
-  /** Reasoning prose per burst; head-capped so one turn's thinking cannot
-   * dominate the payload. Prose rides `detail` (see applyReasoningSnapshot). */
   reasoning: 6000,
-  /** Reply text the agent writes between tool runs, per run; head-capped. */
   response: 4000,
-  /** Soft ceiling for the whole steps JSON payload (under Convex 1 MiB). */
   jsonBytes: 600 * 1024,
 } as const;
 
@@ -65,7 +60,6 @@ function stripHeavyField(step: ProgressStep, field: HeavyField): boolean {
   return false;
 }
 
-/** A subagent's own message: only its child thread view reads it. */
 function isSubagentText(step: ProgressStep): boolean {
   return step.type === "response" && step.parentToolUseId !== undefined;
 }
@@ -122,8 +116,6 @@ export function serializeFinalSteps(
   const final = finalText.trim();
   const kept = final
     ? steps.filter((step) => {
-        // Only the agent's own text can echo the final message; subagent text
-        // (`parentToolUseId`, prose in `output`) belongs to its child thread.
         if (step.type !== "response" || step.parentToolUseId !== undefined) {
           return true;
         }

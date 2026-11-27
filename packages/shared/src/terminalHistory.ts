@@ -1,6 +1,4 @@
-/** Lines kept in an entity's `terminalHistoryTail` (console history synced to Convex). */
 const TERMINAL_HISTORY_TAIL_LINES = 500;
-/** Char cap on the same tail, so one huge line cannot inflate the doc. */
 const TERMINAL_HISTORY_TAIL_MAX_CHARS = 100_000;
 
 /**
