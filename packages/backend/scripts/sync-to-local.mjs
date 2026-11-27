@@ -411,7 +411,9 @@ const SPLIT_PY = [
   "            continue",
   "        doc = json.loads(line)",
   "        out.append(json.dumps(doc, ensure_ascii=False) if settle(table, doc) else line)",
-  "    return ('\\n'.join(out) + '\\n').encode('utf-8')",
+  // An empty table must stay an empty file: a lone newline is a blank row 1,
+  // which the import rejects ("Row 1 wasn't valid JSON").
+  "    return ('\\n'.join(out) + '\\n').encode('utf-8') if out else b''",
   "root_tmp = src + '.root'",
   "buckets = {}",
   "stats = {'component': 0, 'storage': 0, 'root': 0}",
