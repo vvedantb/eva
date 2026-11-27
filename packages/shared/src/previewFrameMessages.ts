@@ -19,7 +19,6 @@ export const PREVIEW_FRAME_MESSAGE = {
   annotateSelected: "eva-preview-annotate-selected",
   annotateRect: "eva-preview-annotate-rect",
   annotateDismissed: "eva-preview-annotate-dismissed",
-  annotateFrozen: "eva-preview-annotate-frozen",
   screenshot: "eva-preview-screenshot",
   screenshotError: "eva-preview-screenshot-error",
   snapshot: "eva-preview-snapshot",
@@ -27,12 +26,13 @@ export const PREVIEW_FRAME_MESSAGE = {
   webMcpTools: "eva-preview-webmcp-tools",
   webMcpResult: "eva-preview-webmcp-result",
   webMcpError: "eva-preview-webmcp-error",
+  toolbarAction: "eva-preview-toolbar-action",
   // Eva → annotation script.
   annotateMode: "eva-preview-annotate-mode",
-  annotateFreeze: "eva-preview-annotate-freeze",
   annotateClear: "eva-preview-annotate-clear",
   screenshotCapture: "eva-preview-screenshot-capture",
   snapshotCapture: "eva-preview-snapshot-capture",
   webMcpList: "eva-preview-webmcp-list",
   webMcpInvoke: "eva-preview-webmcp-invoke",
+  toolbarState: "eva-preview-toolbar-state",
 } as const;

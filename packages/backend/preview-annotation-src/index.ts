@@ -11,24 +11,25 @@
  * without the helper, so the injected copy dies with a ReferenceError before
  * installing a single listener.
  *
- * Runs in the previewed app's page, cross-origin from Eva. No runtime
- * imports: the one import below is type-only and erased, so the message
- * names stay inline literals that the shared protocol type checks.
+ * Runs in the previewed app's page, cross-origin from Eva. The message names
+ * stay inline literals that the type-only protocol import checks; the
+ * floating toolbar (`toolbar.ts`) is the one runtime import and is bundled in.
  */
 
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+import { mountToolbar, type Toolbar } from "./toolbar";
 
 type Msg = typeof PREVIEW_FRAME_MESSAGE;
 
 /** Message names Eva sends into the page. */
 type InboundType = Msg[
   | "annotateMode"
-  | "annotateFreeze"
   | "annotateClear"
   | "screenshotCapture"
   | "snapshotCapture"
   | "webMcpList"
-  | "webMcpInvoke"];
+  | "webMcpInvoke"
+  | "toolbarState"];
 
 interface EvaAnnotationContext {
   tagName: string;
@@ -369,6 +370,7 @@ function evaPreviewAnnotationScript(): void {
   let overlay: HTMLDivElement | null = null;
   let labelEl: HTMLDivElement | null = null;
   let rectRaf = 0;
+  let toolbar: Toolbar | null = null;
 
   function post(
     payload:
@@ -393,7 +395,10 @@ function evaPreviewAnnotationScript(): void {
           } | null;
         }
       | { type: Msg["annotateDismissed"] }
-      | { type: Msg["annotateFrozen"]; frozen: boolean }
+      | {
+          type: Msg["toolbarAction"];
+          action: "select" | "comments" | "sketch" | "screenshot";
+        }
       | {
           type: Msg["screenshot"];
           requestId: string;
@@ -806,6 +811,7 @@ function evaPreviewAnnotationScript(): void {
 
   function setMode(active: boolean): void {
     modeActive = active;
+    toolbar?.update({ selecting: active });
     document.documentElement.style.cursor = active ? "crosshair" : "";
     if (!active) {
       clearAll();
@@ -867,6 +873,15 @@ function evaPreviewAnnotationScript(): void {
     const context = captureContext(target);
     const rect = target.getBoundingClientRect();
     paintBox(target, chipLabel(target), true);
+    if (!embedded) {
+      // No Eva to take the annotation: hand the element's context to the
+      // clipboard, so it can be pasted into a chat or an issue.
+      void copyToClipboard(formatContextForClipboard(context)).then((ok) => {
+        toolbar?.update({ notice: ok ? "Element copied" : "Couldn't copy" });
+      });
+      setMode(false);
+      return;
+    }
     post({
       type: "eva-preview-annotate-selected",
       context,
@@ -949,7 +964,7 @@ function evaPreviewAnnotationScript(): void {
       frozenAnimations = [];
       frozenMedia = [];
     }
-    post({ type: "eva-preview-annotate-frozen", frozen });
+    toolbar?.update({ frozen });
   }
 
   function onScrollOrResize(): void {
@@ -1494,6 +1509,7 @@ function evaPreviewAnnotationScript(): void {
   function restoreCaptureChrome(): void {
     if (overlay) overlay.style.display = overlayDisplayForCapture;
     if (labelEl) labelEl.style.display = labelDisplayForCapture;
+    toolbar?.setHiddenForCapture(false);
   }
 
   let overlayDisplayForCapture = "";
@@ -1554,10 +1570,69 @@ function evaPreviewAnnotationScript(): void {
     labelDisplayForCapture = labelEl?.style.display ?? "";
     if (overlay) overlay.style.display = "none";
     if (labelEl) labelEl.style.display = "none";
+    toolbar?.setHiddenForCapture(true);
     return loadHtml2Canvas()
       .then(renderViewportCanvas)
       .then((canvas) => canvas.toDataURL("image/png"))
       .finally(restoreCaptureChrome);
+  }
+
+  /** True inside Eva's iframe; false on a direct sandbox link. */
+  const embedded = window !== window.top;
+
+  function copyToClipboard(text: string): Promise<boolean> {
+    return navigator.clipboard.writeText(text).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  /** Short, paste-ready summary of a picked element for a direct link. */
+  function formatContextForClipboard(context: EvaAnnotationContext): string {
+    const lines = [
+      `Element: ${context.selector}`,
+      `Page: ${context.pageUrl}`,
+      `Path: ${context.fullPath}`,
+    ];
+    if (context.reactComponents.length > 0) {
+      lines.push(`React: ${context.reactComponents.join(" > ")}`);
+    }
+    if (context.textContent) lines.push(`Text: ${context.textContent}`);
+    if (context.stylesSummary) lines.push(`Styles: ${context.stylesSummary}`);
+    lines.push(`HTML: ${context.outerHTML}`);
+    return lines.join("\n");
+  }
+
+  /** Direct link: copy the screenshot, or download it when copy is blocked. */
+  function saveScreenshotLocally(): void {
+    toolbar?.update({ capturing: true });
+    captureViewport()
+      .then((dataUrl) => fetch(dataUrl))
+      .then((response) => response.blob())
+      .then(async (blob) => {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type || "image/png"]: blob }),
+          ]);
+          toolbar?.update({ notice: "Screenshot copied" });
+        } catch {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "preview-screenshot.png";
+          link.click();
+          URL.revokeObjectURL(link.href);
+          toolbar?.update({ notice: "Screenshot downloaded" });
+        }
+      })
+      .catch((error) => {
+        toolbar?.update({
+          notice:
+            error instanceof Error
+              ? error.message
+              : "Couldn't render this page as an image",
+        });
+      })
+      .finally(() => toolbar?.update({ capturing: false }));
   }
 
   window.addEventListener("message", (event) => {
@@ -1570,12 +1645,20 @@ function evaPreviewAnnotationScript(): void {
       setMode(active);
       return;
     }
-    if (type === ("eva-preview-annotate-freeze" satisfies InboundType)) {
-      setFrozen(Reflect.get(data, "active") === true);
-      return;
-    }
     if (type === ("eva-preview-annotate-clear" satisfies InboundType)) {
       clearAll();
+      return;
+    }
+    if (type === ("eva-preview-toolbar-state" satisfies InboundType)) {
+      const count = Reflect.get(data, "commentCount");
+      toolbar?.update({
+        selectEnabled: Reflect.get(data, "selectEnabled") === true,
+        commentsEnabled: Reflect.get(data, "commentsEnabled") === true,
+        commentsActive: Reflect.get(data, "commentsActive") === true,
+        commentCount: typeof count === "number" ? count : 0,
+        sketchEnabled: Reflect.get(data, "sketchEnabled") === true,
+        sketchActive: Reflect.get(data, "sketchActive") === true,
+      });
       return;
     }
     if (type === ("eva-preview-screenshot-capture" satisfies InboundType)) {
@@ -1683,6 +1766,40 @@ function evaPreviewAnnotationScript(): void {
   document.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("scroll", onScrollOrResize, true);
   window.addEventListener("resize", onScrollOrResize);
+
+  // One toolbar per tab: the top page of a direct link, or the document Eva
+  // frames directly. A page's own same-origin iframes get none.
+  const ownsToolbar =
+    window === window.top ||
+    (window.parent === window.top && parentOrigin !== window.location.origin);
+  if (ownsToolbar) {
+    toolbar = mountToolbar(
+      {
+        select: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "select" });
+          } else {
+            setMode(!modeActive);
+          }
+        },
+        comments: () =>
+          post({ type: "eva-preview-toolbar-action", action: "comments" }),
+        freeze: () => setFrozen(!frozen),
+        sketch: () =>
+          post({ type: "eva-preview-toolbar-action", action: "sketch" }),
+        screenshot: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "screenshot" });
+          } else {
+            saveScreenshotLocally();
+          }
+        },
+      },
+      // Embedded, Eva's state message turns the tools on; until it arrives
+      // only the ones that need no parent are shown.
+      { selectEnabled: !embedded },
+    );
+  }
 
   post({ type: "eva-preview-annotate-ready" });
 }
