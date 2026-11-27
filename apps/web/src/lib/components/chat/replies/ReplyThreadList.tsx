@@ -46,9 +46,9 @@ export function ReplyThreadRows({
     );
   }
   return (
-    <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+    <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
       {threads.map((thread) => (
-        <li key={thread.rootId} className="rounded-control p-2 hover:bg-accent-soft">
+        <li key={thread.rootId} className="rounded-surface bg-muted p-3 transition-colors hover:bg-accent-soft">
           <div className="flex items-center gap-2 pb-1 text-xs text-muted-foreground">
             {thread.authorId ? (
               <UserMessageAvatar userId={thread.authorId} />
@@ -65,7 +65,7 @@ export function ReplyThreadRows({
           >
             <span className="line-clamp-2">{thread.preview}</span>
           </Button>
-          <div className="mt-1">
+          <div className="mt-2">
             <ThreadSummary
               rootId={thread.rootId}
               replyCount={thread.replyCount}
