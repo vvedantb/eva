@@ -1,6 +1,3 @@
-// The File Viewer's load state machine and its pure helpers. Split out of the
-// panel so the header and the body can both name the state without importing
-// the component that owns it.
 
 import type { MediaFile } from "./-fileViewerMedia";
 
@@ -41,9 +38,6 @@ export function editBlockedReason(
   if (state.kind === "media") return "Media files are read-only here";
   if (state.kind === "binary") return "Binary files are read-only";
   if (state.kind !== "loaded") return "Wait for the file to load";
-  // A truncated read only holds the first 512 KB, so saving it would delete
-  // the rest of the file. The write action refuses the same size for the same
-  // reason.
   if (state.truncated) return "Files over 512 KB are read-only";
   return null;
 }

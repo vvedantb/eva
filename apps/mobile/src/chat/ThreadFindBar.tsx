@@ -35,7 +35,6 @@ export function ThreadFindBar({
 }: {
   documents: readonly ThreadFindDocument[];
   rowIndex: (messageId: string) => number;
-  /** The message of the active match, or null when nothing matches. */
   onActiveChange: (messageId: string | null) => void;
   onClose: () => void;
 }) {

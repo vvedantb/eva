@@ -101,43 +101,12 @@ import {
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 import { trackClaudeGoalFrame } from "./claudeGoalSync.js";
 
-// Entity-scoped daemon marker paths (see daemonPaths.ts). Legacy session paths
-// are cleaned up on exit when this daemon is session-scoped.
 const daemonPaths = resolveDaemonPaths();
 
-// Exit if no new turn arrives for this long, so the sandbox can be reclaimed.
-// Kept generous so a normal work session never pays a mid-session respawn (the
-// respawn — re-upload + boot — is the ~20s "slow hi" users feel). Matches the
-// keep-warm window of comparable agents (t3code reaps at 30min).
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-// Poll interval for the claim mutation. Low enough to keep handoff→turn-start
-// latency to ~one poll; the turn itself dominates so this only trims the tail.
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-// Idle backoff for that poll. At 50ms an idle daemon burns ~20 Convex mutation
-// calls/s (~54k per 45-min idle window) purely to notice a turn that is not
-// coming, and those silent executions flood `convex logs`. Once no turn is in
-// flight and nothing has happened for the fast window, `selectClaimPollIntervalMs`
-// polls at the idle interval instead — worst case adds ~1s before an idle daemon
-// claims a fresh send, invisible next to model time-to-first-token. An in-flight
-// turn polls at the busy interval (250ms) so cancel/stop-task drains (which ride
-// the same mutation) stay prompt even through long-silent tool runs.
-
-// Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
-// emitting a result would never send a completion event, so the workflow's
-// awaitEvent hangs until the `RUN_TIMEOUT_MS` stale-session timeout (empty "Working…" bubble).
-// Mirrors the one-shot path (claudeSdk.ts): fail the turn if it produces no SDK
-// message for a while, or exceeds the hard runtime cap. Silence while a tool is
-// in flight (S.inFlightToolUses > 0) is exempt — the SDK emits nothing during a
-// tool run, so a long bash call would otherwise be killed as a hang (seen in
-// prod). On a fire we send a failure completion (resolving awaitEvent) and exit
-// so the next turn respawns a clean daemon rather than reusing a wedged query.
-// Silence limit: NO_MESSAGE_TIMEOUT_MS (config.ts).
 const WATCHDOG_TICK_MS = 5000;
 
-// Safety net for a cancel whose interrupted `result` never arrives (SDK
-// interrupt() hung, or silently dropped it). The normal per-turn watchdog
-// above is disarmed at cancel time (endWatchedTurn already ran), so without
-// this a lost interrupt would wedge the supervisor in `cancelling` forever.
 const CANCEL_SETTLE_TIMEOUT_MS = 30_000;
 
 let turnActive = false;
@@ -146,24 +115,18 @@ let lastMessageAtMs = 0;
 
 type DaemonMessage = Record<string, JsonValue>;
 
-/** The SDK's live query handle — inferred so no SDK type is named here. */
 type AgentQuery = ReturnType<SdkModule["query"]>;
 
 type DaemonTurn = { kind: "real" } | { kind: "synthetic"; messageId: string };
 
 type WarmRunner = {
-  /** `priority: "next"` injects a steer into the live turn at its next boundary. */
   push: (text: string, priority?: "next") => void;
   waitMessage: () => Promise<DaemonMessage | null>;
   drainPending: () => DaemonMessage[];
   hasPending: () => boolean;
   stopTask: (taskId: string) => Promise<void>;
-  /** Interrupts the in-flight turn (cancel). Logs and no-ops when the SDK
-   * query handle does not support it. */
   interrupt: () => Promise<void>;
-  /** Reads the SDK's experimental plan-usage data; null when unavailable. */
   readUsage: () => Promise<ClaudeUsageResponseLike | null>;
-  /** Claude-native plan mode. No-ops when the SDK handle lacks the method. */
   setPermissionMode: (mode: "plan" | "default") => Promise<void>;
 };
 
@@ -184,14 +147,6 @@ let agentTurnOutput = "";
 let agentTurnStartedAt = 0;
 let sawFirstMessageThisTurn = { value: false };
 let sawAssistantThisTurn = { value: false };
-// Cancel state machine: set when a claim response drains a user cancel for
-// the in-flight turn (see handleCancelRequested); cleared once that turn's
-// result settles in runDaemonMessagePump, or force-exited by the safety net
-// in startTurnWatchdog if it never does. While true: the per-turn watchdog is
-// already disarmed (endWatchedTurn ran at cancel time), the claim watcher
-// parks — rather than discards — any turn the same claim also carried, and
-// the message pump drops the interrupted turn's tail instead of streaming or
-// finalizing it.
 let turnCancelRequestedAtMs = 0;
 
 const recognisedSubagentToolUseIds = new Set<string>();
@@ -200,7 +155,6 @@ const unsettledBackgroundAgents = new Map<string, BackgroundAgentEntry>();
 const pendingAgentStops = new Set<string>();
 let currentAgentRunner: WarmRunner | null = null;
 let usageRefreshInFlight = false;
-/** Resolves the message pump's idle wait; set only while it sleeps. */
 let wakeIdlePump: (() => void) | null = null;
 
 function beginWatchedTurn(): void {
@@ -213,8 +167,6 @@ function noteWatchedMessage(): void {
   lastMessageAtMs = Date.now();
 }
 
-// Called as soon as a turn's result is in hand (before finalize) and between
-// turns, so the watchdog only guards a turn that is genuinely in flight.
 function endWatchedTurn(): void {
   turnActive = false;
 }

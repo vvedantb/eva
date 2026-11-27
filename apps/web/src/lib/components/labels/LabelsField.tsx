@@ -21,12 +21,9 @@ import {
 } from "@/lib/components/fields/FieldsSection";
 
 interface LabelsFieldProps {
-  /** Labels on the record. */
   tags: string[] | undefined;
-  /** Every label already used in this repo — the pick list. */
   allTags: string[];
   onChange: (tags: string[]) => void;
-  /** Read-only: the labels show, the picker does not open. */
   disabled?: boolean;
 }
 

@@ -1,12 +1,6 @@
-// Path presentation for the File Viewer header. `?file=` always carries the
-// absolute sandbox path (that is what the read/write actions take), but the
-// breadcrumb and the highlighter both want the repo-relative path: the header
-// should read `apps/web/src/App.tsx`, not `/vercel/sandbox/apps/web/…`, and
-// `@pierre/diffs` infers the language from the name it is given.
 
 export interface FileBreadcrumbSegment {
   label: string;
-  /** True for the last segment, which is the file itself. */
   isFile: boolean;
 }
 
@@ -14,7 +8,6 @@ function normalizeSlashes(path: string): string {
   return path.replace(/\\/g, "/");
 }
 
-/** Trailing slashes make `${root}/` prefix matching double up. */
 function normalizeRoot(root: string | null): string | null {
   if (root === null) return null;
   const trimmed = normalizeSlashes(root).replace(/\/+$/, "");

@@ -1,8 +1,3 @@
-/**
- * Instructions for the event-triggered system automations. Each is appended to
- * the event details Eva sends: into the PR's own chat for the first two, into
- * the new quick task's description for the others.
- */
 
 export const CI_AUTOFIX_PROMPT = `CI failed on this chat's pull request. The failing checks and the tail of their logs are above.
 

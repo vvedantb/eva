@@ -922,14 +922,11 @@ function ChatBodyInner({
                   {displayMessages
                     .slice(lastUserMessageIndex)
                     .map((message) => renderMessage(message))}
-                  {/* Inside the last turn, which pads to the viewport height:
-                      after it, the card would sit a screen below the reply. */}
                   {recapCard}
                 </div>
               </ChatLastTurn>
             </>
           )}
-          {/* No last turn (no user message yet): the recap follows the rows. */}
           {lastUserMessageIndex < 0 ? recapCard : null}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
@@ -944,13 +941,9 @@ function ChatBodyInner({
           />
         ) : null}
         <ConversationScrollButton resetKey={conversationId} />
-        {/* A reply glides only once the chat has opened: the rows it opens
-            with land at the bottom without a scroll. */}
         <ChatBottomPin
           glide={streamingTargetId !== undefined && rowsAnimateIn}
         />
-        {/* Mounted with the backlog, so a linked row above the last turn is
-            already in the DOM when this scrolls to it. */}
         {backlogReady && linkedMessageId !== undefined ? (
           <ChatMessageScroll
             key={linkedMessageId}
@@ -958,7 +951,6 @@ function ChatBodyInner({
             block="center"
           />
         ) : null}
-        {/* A rail jump: mounts in the commit that renders its row. */}
         {ownWindow?.scrollTo ? (
           <ChatMessageScroll
             key={ownWindow.scrollTo.messageId}
@@ -967,10 +959,6 @@ function ChatBodyInner({
             smooth
           />
         ) : null}
-        {/* Mounted with the backlog: the rail resolves its ticks by querying
-            `[data-message-id]` from an effect keyed on the (memoised) tick
-            array, so binding it before those rows exist would observe nothing
-            and never retry. */}
         {backlogReady && !hideJumpRail ? (
           <ChatJumpRail
             messages={jumpRailTicks}

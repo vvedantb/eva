@@ -31,8 +31,6 @@ export function useRefreshUsage(repoId: Id<"githubRepos">) {
       const response = await refreshAll({ repoId });
       results = response.results;
     } catch {
-      // A server throw carries Convex internals (request id, stack), which is
-      // not copy for a toast — every named failure already arrives as a reason.
       toast.error(USAGE_REFRESH_FAILED);
     }
     setPending(false);
