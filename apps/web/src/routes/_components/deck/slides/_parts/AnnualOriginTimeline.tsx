@@ -57,7 +57,7 @@ const MILESTONES: readonly Milestone[] = [
   { day: 0, label: "Empty repository", date: "11 January", above: true, lane: 1, anchor: "start", step: 0, order: 0 },
   { day: 13, label: "First session", date: "24 January", above: false, lane: 0, anchor: "start", step: 1, order: 0 },
   { day: 21, label: "First quick task", date: "1 February", above: true, lane: 0, anchor: "start", step: 1, order: 1 },
-  { day: 171, label: "Work moves to the cloud", date: "July", above: false, lane: 0, anchor: "start", step: 2, order: 0 },
+  { day: 59, label: "Work moves to the cloud", date: "March", above: false, lane: 1, anchor: "start", step: 2, order: 0 },
   { day: 202, label: "Eva starts opening its own work", date: "August", above: true, lane: 0, anchor: "end", step: 2, order: 1 },
 ];
 
