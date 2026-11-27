@@ -19,6 +19,7 @@ import {
 import { syncCheckRunLater } from "./checkRun";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 import { startAgentJob } from "../_agentJobs/slot";
+import { canRunByHand } from "../_automationEvents/labels";
 
 /**
  * True when the automation already has an agent run executing. An event run
@@ -135,7 +136,7 @@ export const runNow = authMutation({
     if (!automation.description) {
       throw new Error("Automation has no description/prompt configured");
     }
-    if (automationAction(automation) !== "run") {
+    if (!canRunByHand(automation.trigger)) {
       throw new Error("This automation only runs when its event happens");
     }
 

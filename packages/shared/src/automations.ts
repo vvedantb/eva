@@ -1,6 +1,8 @@
 import { DEFAULT_ISSUE_LABEL, REPO_EVENT_LABELS, type AutomationTrigger } from "@eva/backend";
 import cronstrue from "cronstrue";
 
+export { canRunByHand } from "@eva/backend";
+
 // Automations, web and phone: the trigger and schedule in words, and a run's
 // status tone. A schedule is stored in UTC and read in the viewer's time zone.
 

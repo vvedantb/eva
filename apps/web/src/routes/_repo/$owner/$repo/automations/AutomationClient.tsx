@@ -33,6 +33,7 @@ import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
 import { EmailSettingsRows } from "./_components/EmailSettingsRows";
 import { TriggerSection } from "./_components/TriggerSection";
+import { canRunByHand } from "@eva/shared/automations";
 import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
@@ -98,9 +99,8 @@ export function AutomationClient({
         </div>
       }
       headerRight={
-        // Event presets act on a PR or issue, so there is nothing to run by hand.
-        automation.systemKey !== undefined &&
-        automationTriggerOf(automation).kind === "event" ? null : (
+        // An event automation acts on the PR or issue its event names.
+        !canRunByHand(automation.trigger) ? null : (
           <Button
             size="sm"
             variant="outline"
