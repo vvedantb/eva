@@ -1196,6 +1196,11 @@ export const automationFields = {
   // The account runs bill to: the creator's own, or a teammate's shared one.
   // Missing means the team credential.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
+  // Run traits, as in the composer. Missing means the repo's default.
+  reasoningLevel: v.optional(reasoningLevelValidator),
+  thinkingEnabled: v.optional(v.boolean()),
+  use1mContext: v.optional(v.boolean()),
+  fastMode: v.optional(v.boolean()),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),

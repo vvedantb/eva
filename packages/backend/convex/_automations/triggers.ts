@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
+import {
+  DEFAULT_AI_MODEL,
+  launchTraitsFromStored,
+  normalizeAIModel,
+} from "../validators";
 import { authMutation } from "../functions";
 import { workflow } from "../workflowManager";
 import {
@@ -141,6 +145,14 @@ async function startAutomationRun(
         title: automation.title,
         model,
         providerAccountId,
+        // Unset traits follow the repo's defaults, as a new quick task does.
+        ...launchTraitsFromStored(model, {
+          reasoningLevel: automation.reasoningLevel ?? repo.defaultReasoningLevel,
+          thinkingEnabled:
+            automation.thinkingEnabled ?? repo.defaultThinkingEnabled,
+          use1mContext: automation.use1mContext ?? repo.defaultUse1mContext,
+          fastMode: automation.fastMode ?? repo.defaultFastMode,
+        }),
         rootDirectory: repo.rootDirectory ?? "",
         userId: automation.createdBy,
         readOnly: automation.readOnly === true,

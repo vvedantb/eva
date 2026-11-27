@@ -4,6 +4,7 @@ import {
   aiModelValidator,
   automationFields,
   automationTriggerValidator,
+  reasoningLevelValidator,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible } from "../numId";
@@ -173,6 +174,10 @@ export const update = authMutation({
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
+    reasoningLevel: v.optional(reasoningLevelValidator),
+    thinkingEnabled: v.optional(v.boolean()),
+    use1mContext: v.optional(v.boolean()),
+    fastMode: v.optional(v.boolean()),
     enabled: v.optional(v.boolean()),
     readOnly: v.optional(v.boolean()),
     actionsEnabled: v.optional(v.boolean()),
@@ -232,6 +237,12 @@ export const update = authMutation({
     if (args.cronSchedule !== undefined) patch.cronSchedule = args.cronSchedule;
     if (args.trigger !== undefined) patch.trigger = args.trigger;
     if (args.model !== undefined) patch.model = args.model;
+    if (args.reasoningLevel !== undefined)
+      patch.reasoningLevel = args.reasoningLevel;
+    if (args.thinkingEnabled !== undefined)
+      patch.thinkingEnabled = args.thinkingEnabled;
+    if (args.use1mContext !== undefined) patch.use1mContext = args.use1mContext;
+    if (args.fastMode !== undefined) patch.fastMode = args.fastMode;
     // Runs use the creator's credentials whoever edits, so the account must
     // be one the creator may run on: their own, or shared by a teammate.
     if (args.providerAccountId !== undefined) {

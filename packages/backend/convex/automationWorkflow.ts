@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
-import { aiModelValidator } from "./validators";
+import { aiModelValidator, reasoningLevelValidator } from "./validators";
 import { buildPrBody } from "./prBody";
 import {
   buildAutomationPrompt,
@@ -26,6 +26,11 @@ export const automationExecutionWorkflow = workflow.define({
     title: v.string(),
     model: aiModelValidator,
     providerAccountId: v.optional(v.id("userProviderAccounts")),
+    // Only non-default traits (see `launchTraitsFromStored`).
+    reasoningLevel: v.optional(reasoningLevelValidator),
+    thinkingEnabled: v.optional(v.boolean()),
+    use1mContext: v.optional(v.boolean()),
+    fastMode: v.optional(v.boolean()),
     rootDirectory: v.string(),
     userId: v.id("users"),
     readOnly: v.optional(v.boolean()),
@@ -106,6 +111,10 @@ export const automationExecutionWorkflow = workflow.define({
           runId: String(args.runId),
           requireTaskCommit: !isReadOnly,
           providerAccountId: args.providerAccountId,
+          reasoningLevel: args.reasoningLevel,
+          thinkingEnabled: args.thinkingEnabled,
+          use1mContext: args.use1mContext,
+          fastMode: args.fastMode,
         },
         prompt,
         onSandboxReady: async (sandboxId) => {
