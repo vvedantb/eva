@@ -14,7 +14,10 @@ import { ProjectTaskPageRedirect } from "./ProjectTaskPageRedirect";
 import { TaskFooter } from "./_components/TaskFooter";
 import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
-import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
+import {
+  TaskChatUsageLimits,
+  TaskSandboxChatPanel,
+} from "./TaskSandboxChatPanel";
 import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
@@ -75,8 +78,9 @@ export function TaskDetailInline({
   // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
   // it, so a reload lands back on Files / Review. A tab the user picks
   // afterwards overrides that for this mount.
-  const [pickedSandboxTab, setEmbeddedSandboxTab] =
-    useState<SandboxTab | null>(null);
+  const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<SandboxTab | null>(
+    null,
+  );
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,
@@ -390,37 +394,40 @@ export function TaskDetailInline({
 
   const quickTaskHeaderActions =
     isQuickTask && actionsSlotElement ? (
-      <TaskFooter
-        variant="header"
-        taskId={taskId}
-        task={task}
-        chatId={chatId}
-        isAgentActive={isAgentActive}
-        status={status}
-        hasActiveRun={hasActiveRun}
-        hasRuns={hasRuns}
-        latestPrUrl={latestPrUrl}
-        deploymentStatus={deploymentStatus}
-        executionError={executionError}
-        isStarting={isStarting}
-        canStartSandbox={canStartSandbox}
-        isSandboxActive={isSandboxActive}
-        isSandboxStarting={isSandboxStarting}
-        isSandboxStopping={isSandboxStopping}
-        sandbox={sandbox}
-        canCreatePr={canCreatePr}
-        isCreatingPr={isCreatingPr}
-        onCreatePr={handleCreatePr}
-        onStartSandbox={handleStartSandbox}
-        onStopSandbox={handleStopSandbox}
-        onStartExecution={handleStartExecution}
-        onResolveConfirm={() =>
-          requestConfirm(
-            () => setShowResolveConfirm(true),
-            handleResolveConflicts,
-          )
-        }
-      />
+      <>
+        <TaskChatUsageLimits taskId={taskId} />
+        <TaskFooter
+          variant="header"
+          taskId={taskId}
+          task={task}
+          chatId={chatId}
+          isAgentActive={isAgentActive}
+          status={status}
+          hasActiveRun={hasActiveRun}
+          hasRuns={hasRuns}
+          latestPrUrl={latestPrUrl}
+          deploymentStatus={deploymentStatus}
+          executionError={executionError}
+          isStarting={isStarting}
+          canStartSandbox={canStartSandbox}
+          isSandboxActive={isSandboxActive}
+          isSandboxStarting={isSandboxStarting}
+          isSandboxStopping={isSandboxStopping}
+          sandbox={sandbox}
+          canCreatePr={canCreatePr}
+          isCreatingPr={isCreatingPr}
+          onCreatePr={handleCreatePr}
+          onStartSandbox={handleStartSandbox}
+          onStopSandbox={handleStopSandbox}
+          onStartExecution={handleStartExecution}
+          onResolveConfirm={() =>
+            requestConfirm(
+              () => setShowResolveConfirm(true),
+              handleResolveConflicts,
+            )
+          }
+        />
+      </>
     ) : null;
 
   // Navigation, so it goes next to the breadcrumb rather than into the header's

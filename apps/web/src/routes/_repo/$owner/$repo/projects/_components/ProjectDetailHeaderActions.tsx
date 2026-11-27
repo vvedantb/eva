@@ -8,6 +8,7 @@ import {
 import type { Id } from "@eva/backend";
 import { IconDots } from "@tabler/icons-react";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
+import { ProjectChatUsageLimits } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 import { useNavigate } from "@tanstack/react-router";
@@ -81,6 +82,10 @@ export function ProjectDetailHeaderActions({
             Eva and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
+          <ProjectChatUsageLimits
+            projectId={projectId}
+            projectSession={sandbox.projectSession}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon-sm" aria-label="More">
@@ -109,8 +114,8 @@ export function ProjectDetailHeaderActions({
           />
           {/* One control for both directions — see `SandboxStartStopButton`.
             Inert while a chat turn is in flight. This is the
-            only wake/sleep control now, the sandbox chat header carries
-            usage alone. The coordinator is read-only: no Commit & push. */}
+            only wake/sleep control. The coordinator is read-only: no
+            Commit & push. */}
           {isArchived ? null : (
             <SandboxStartStopButton
               isActive={isSandboxActive}

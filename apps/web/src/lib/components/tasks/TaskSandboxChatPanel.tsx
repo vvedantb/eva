@@ -8,6 +8,7 @@ import {
   type SandboxChatPanelProps,
 } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
+import { SandboxChatUsageLimits } from "@/lib/components/chat/SandboxChatUsageLimits";
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { ProjectTaskPromptCard } from "@/lib/components/projects/ProjectTaskPromptCard";
@@ -34,6 +35,11 @@ export function TaskSandboxChatPanel({
       {...panel}
     />
   );
+}
+
+/** The task chat's plan usage, for the quick task page header. */
+export function TaskChatUsageLimits({ taskId }: { taskId: Id<"agentTasks"> }) {
+  return <SandboxChatUsageLimits binding={useTaskChatBinding(taskId)} />;
 }
 
 /**

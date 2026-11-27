@@ -7,6 +7,7 @@ import {
   type SandboxChatPanelProps,
 } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
+import { SandboxChatUsageLimits } from "@/lib/components/chat/SandboxChatUsageLimits";
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
@@ -32,6 +33,21 @@ export function ProjectSandboxChatPanel({
       assistantBubbles
       replyThreads
       onThreadOpen={onThreadOpen}
+    />
+  );
+}
+
+/** Eva's project chat plan usage, for the project page header. */
+export function ProjectChatUsageLimits({
+  projectId,
+  projectSession,
+}: {
+  projectId: Id<"projects">;
+  projectSession: OwnedSession;
+}) {
+  return (
+    <SandboxChatUsageLimits
+      binding={useProjectChatBinding(projectId, projectSession)}
     />
   );
 }
