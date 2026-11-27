@@ -5,7 +5,6 @@ import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { sandboxChatEmptyState, sandboxComposerState } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   useOlderTranscript,
@@ -59,7 +58,7 @@ export interface SandboxChatPanelProps {
   onSandboxToggle?: (action: "start" | "stop") => void;
   /** The owner is archived: the chat is read-only (no composer, no wake). */
   isArchived?: boolean;
-  /** Left of the usage chip, on the same row (a project's chat tabs). */
+  /** A row above the chat (a project's chat tabs). */
   headerLeft?: ReactNode;
 }
 
@@ -82,7 +81,7 @@ export interface SandboxChatState {
 interface SandboxChatSlots {
   /**
    * Wraps the chat in the host's own page header (a session's header, tabs
-   * and read-only banner). Default: the plan usage chip above the chat.
+   * and read-only banner). Default: `headerLeft` above the chat.
    */
   frame?: (chat: ReactNode, state: SandboxChatState) => ReactNode;
   /** Rows above the usage-limit card (a session's publish recovery). */
@@ -396,13 +395,7 @@ export function SandboxChatPanel({
         frame(chat, state)
       ) : (
         <>
-          <SandboxChatHeaderActions
-            left={headerLeft}
-            repoId={repo._id}
-            model={model}
-            providerAccountId={binding.providerAccountId}
-            usageAccountLabel={state.usageAccountLabel}
-          />
+          {headerLeft}
           {chat}
         </>
       )}

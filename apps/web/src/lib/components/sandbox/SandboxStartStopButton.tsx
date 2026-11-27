@@ -1,13 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import { Button, CrossfadeIconSlot, Spinner } from "@vvedantb/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { useQuery } from "convex/react";
-import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   SleepControlTooltip,
@@ -98,49 +95,5 @@ export function SandboxStartStopButton({
         </CrossfadeIconSlot>
       </Button>
     </SleepControlTooltip>
-  );
-}
-
-/**
- * Plan usage for project and task sandbox chat headers. Start/stop lives in the
- * task and project page headers only — one control per action, so the chat
- * header carries usage alone. Sessions keep their own start/stop in the session
- * chat header. Collapse lives on the sandbox rail.
- */
-export function SandboxChatHeaderActions({
-  left,
-  repoId,
-  model,
-  providerAccountId,
-  usageAccountLabel,
-}: {
-  /** On the left of the same row (a project's chat tabs); the chip stays right. */
-  left?: ReactNode;
-  repoId: Id<"githubRepos">;
-  model: string | null | undefined;
-  providerAccountId: Id<"userProviderAccounts"> | null | undefined;
-  usageAccountLabel: string;
-}) {
-  const actions = (
-    <div className={CHAT_HEADER_ACTIONS_CLASS}>
-      <UsageLimitsIndicator
-        repoId={repoId}
-        model={model}
-        providerAccountId={providerAccountId}
-        accountLabel={usageAccountLabel}
-      />
-    </div>
-  );
-  if (left === undefined) {
-    // `pt-2` matches the side panel's `md:my-2`, so the chip's top lines up with the panel's.
-    return <div className="flex shrink-0 justify-end px-2 pt-2 pb-1">{actions}</div>;
-  }
-  return (
-    // Top-aligned: the tabs carry their own `pt-2`, and the chip takes the
-    // same, so both start on the side panel's top edge.
-    <div className="flex min-w-0 shrink-0 items-start gap-2 pr-2">
-      <div className="min-w-0 flex-1">{left}</div>
-      <div className="shrink-0 pt-2">{actions}</div>
-    </div>
   );
 }
