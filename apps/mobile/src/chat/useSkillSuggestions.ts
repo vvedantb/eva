@@ -40,7 +40,6 @@ export function useSkillSuggestions(skills: readonly MentionItem[], text: string
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
 
   const noteDraft = (next: string) => {
-    // A draft that no longer asks (sent, cleared, too short) drops the waiting call: it would cost an evaluation for nothing.
     if (!enabled || skills.length === 0 || !shouldSuggestFor(next)) {
       cancel();
       return;
@@ -51,7 +50,6 @@ export function useSkillSuggestions(skills: readonly MentionItem[], text: string
         candidates: skills.map((item) => ({ id: item.id, label: item.label, description: item.description ?? "" })),
       })
         .then((response) => setEvaluated({ forText: next, response }))
-        // A background hint: a failed evaluation leaves the chips hidden.
         .catch(() => undefined);
     });
   };

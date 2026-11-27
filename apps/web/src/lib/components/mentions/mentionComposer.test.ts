@@ -14,8 +14,6 @@ import {
 import type { Id } from "@eva/backend";
 import { z } from "zod";
 
-// The picker logic the web `MentionEditor` and the phone composer share.
-
 const ADA = z.custom<Id<"users">>().parse("k17ada0000000000000000000000ad01");
 const DOC = "k17doc000000000000000000000000d1";
 

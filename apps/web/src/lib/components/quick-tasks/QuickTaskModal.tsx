@@ -107,7 +107,8 @@ interface QuickTaskModalProps {
   projectId?: Id<"projects">;
   users?: User[];
   projects?: Project[];
-  allTags?: string[];  initialDraft?: QuickTaskDraft;
+  allTags?: string[];
+  initialDraft?: QuickTaskDraft;
 }
 
 type Repo = ReturnType<typeof useRepo>["repo"];
@@ -155,7 +156,8 @@ function useDraftAttachmentHydration(
   const [hydratedDraftId, setHydratedDraftId] =
     useState<Id<"agentTasks"> | null>(null);
   if (activeDraftId && draftAttachments && hydratedDraftId !== activeDraftId) {
-    setHydratedDraftId(activeDraftId);    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
+    setHydratedDraftId(activeDraftId);
+    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
   }
   return setHydratedDraftId;
 }
@@ -163,7 +165,8 @@ function useDraftAttachmentHydration(
 function useModelAndAccount(repo: Repo) {
   const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
   const defaultTraits = storedTraitsFromRepoDefaults(repo);
-  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);  const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
+  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
+  const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
     {},
   );
   const model = pickedModel ?? defaultModel;
