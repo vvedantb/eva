@@ -98,6 +98,9 @@ const TOOL_ICONS: Record<ToolName, string[]> = {
   ],
 };
 
+/** `@tabler/icons-react` IconX outline paths. */
+const CLOSE_ICON = ["M18 6l-12 12", "M6 6l12 12"];
+
 const TOOL_LABELS: Record<ToolName, string> = {
   select: "Select element",
   comments: "Comments",
@@ -309,7 +312,11 @@ export function mountToolbar(
   const handle = document.createElement("button");
   handle.type = "button";
   handle.className = "handle";
-  handle.appendChild(evaMark());
+  // Closed: the Eva mark. Open: an X, so the mark reads as "close".
+  const mark = evaMark();
+  const closeIcon = svgElement("svg", { viewBox: "0 0 24 24", class: "icon" });
+  for (const d of CLOSE_ICON) closeIcon.appendChild(svgElement("path", { d }));
+  handle.append(mark, closeIcon);
 
   const tools = document.createElement("div");
   tools.className = "tools";
@@ -345,6 +352,8 @@ export function mountToolbar(
     );
     handle.setAttribute("aria-expanded", String(expanded));
     tools.hidden = !expanded;
+    mark.style.display = expanded ? "none" : "";
+    closeIcon.style.display = expanded ? "" : "none";
     // A collapsed circle has no padding ring.
     bar.style.padding = expanded ? "4px" : "0";
     const pressed: Record<ToolName, boolean> = {

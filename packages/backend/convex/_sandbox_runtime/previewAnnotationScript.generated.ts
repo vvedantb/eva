@@ -45,6 +45,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       "M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"
     ]
   };
+  var CLOSE_ICON = ["M18 6l-12 12", "M6 6l12 12"];
   var TOOL_LABELS = {
     select: "Select element",
     comments: "Comments",
@@ -216,7 +217,10 @@ svg.mark { width: 32px; height: 32px; }
     const handle = document.createElement("button");
     handle.type = "button";
     handle.className = "handle";
-    handle.appendChild(evaMark());
+    const mark = evaMark();
+    const closeIcon = svgElement("svg", { viewBox: "0 0 24 24", class: "icon" });
+    for (const d of CLOSE_ICON) closeIcon.appendChild(svgElement("path", { d }));
+    handle.append(mark, closeIcon);
     const tools = document.createElement("div");
     tools.className = "tools";
     const buttons = /* @__PURE__ */ new Map();
@@ -249,6 +253,8 @@ svg.mark { width: 32px; height: 32px; }
       );
       handle.setAttribute("aria-expanded", String(expanded));
       tools.hidden = !expanded;
+      mark.style.display = expanded ? "none" : "";
+      closeIcon.style.display = expanded ? "" : "none";
       bar.style.padding = expanded ? "4px" : "0";
       const pressed = {
         select: view.selecting,
