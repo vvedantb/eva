@@ -244,7 +244,7 @@ svg.mark { width: 32px; height: 32px; }
     notice.className = "notice";
     tools.appendChild(notice);
     withTip(handle, () => expanded ? "Collapse" : "Eva tools");
-    bar.append(handle, tools, tip);
+    bar.append(tools, handle, tip);
     shadow.append(style, bar);
     function render() {
       handle.setAttribute(
@@ -338,8 +338,11 @@ svg.mark { width: 32px; height: 32px; }
         dragged = false;
         return;
       }
+      const markLeft = handle.getBoundingClientRect().left;
       expanded = !expanded;
       render();
+      const rect = host.getBoundingClientRect();
+      place(rect.left + markLeft - handle.getBoundingClientRect().left, rect.top);
       clampIntoView();
       save();
     });

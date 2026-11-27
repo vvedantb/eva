@@ -342,7 +342,7 @@ export function mountToolbar(
   tools.appendChild(notice);
 
   withTip(handle, () => (expanded ? "Collapse" : "Eva tools"));
-  bar.append(handle, tools, tip);
+  bar.append(tools, handle, tip);
   shadow.append(style, bar);
 
   function render(): void {
@@ -453,8 +453,13 @@ export function mountToolbar(
       dragged = false;
       return;
     }
+    // The mark sits at the right end: keep it under the pointer, so the
+    // tools open and close towards the left.
+    const markLeft = handle.getBoundingClientRect().left;
     expanded = !expanded;
     render();
+    const rect = host.getBoundingClientRect();
+    place(rect.left + markLeft - handle.getBoundingClientRect().left, rect.top);
     clampIntoView();
     save();
   });
