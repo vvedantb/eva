@@ -36,7 +36,10 @@ import { TriggerSection } from "./_components/TriggerSection";
 import { canRunByHand } from "@eva/shared/automations";
 import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
-import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import {
+  useAutomationOwnerProviderAccounts,
+  useAvailableAiModels,
+} from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
@@ -221,12 +224,25 @@ function SettingsForm({
   ).withOptimisticUpdate((localStore, args) => {
     if (automation.numId === undefined) return;
     const q = { repoId, numId: automation.numId };
-    const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
+    const {
+      id: _id,
+      contextRepoId: _contextRepoId,
+      providerAccountId,
+      ...fields
+    } = args;
     patchLoadedQuery(
       localStore,
       api.automations.getByNumId,
       q,
-      (current) => current && { ...current, ...fields },
+      (current) =>
+        current && {
+          ...current,
+          ...fields,
+          // Null in the mutation clears the field on the row.
+          ...(providerAccountId === undefined
+            ? {}
+            : { providerAccountId: providerAccountId ?? undefined }),
+        },
     );
   });
   const removeAutomation = useMutation(
@@ -243,6 +259,7 @@ function SettingsForm({
   const promptFieldId = useId();
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
   const { options: modelOptions } = useAvailableAiModels(repoId, model);
+  const accounts = useAutomationOwnerProviderAccounts(automation._id);
 
   // Persist a single field change and confirm with one deduped toast.
   const commit = (
@@ -374,6 +391,11 @@ function SettingsForm({
             value={model}
             options={modelOptions}
             onValueChange={(m) => commit({ model: m })}
+            accounts={accounts.options}
+            accountId={automation.providerAccountId ?? null}
+            onAccountChange={(id) =>
+              commit({ providerAccountId: accounts.resolveId(id) ?? null })
+            }
           />
         </SettingsField>
       </SettingsSection>

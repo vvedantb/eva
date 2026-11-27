@@ -20,6 +20,7 @@ import {
 import { syncCheckRunLater } from "./checkRun";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 import { startAgentJob } from "../_agentJobs/slot";
+import { reconcileProviderAccountForModel } from "../_userProviderAccounts/defaults";
 import { canRunByHand } from "../_automationEvents/labels";
 
 /**
@@ -103,6 +104,20 @@ async function startAutomationRun(
       : `${automation.description}\n\n## Trigger event\n${event.context}`;
 
   const branchName = buildAutomationRunBranchName(automation._id, runId);
+  const model = normalizeAIModel(
+    automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+  );
+  // A picked account that no longer fits (other provider, or unshared) falls
+  // back to the creator's own default, as chats do. No pick stays Team.
+  const providerAccountId =
+    automation.providerAccountId === undefined
+      ? undefined
+      : await reconcileProviderAccountForModel(
+          ctx.db,
+          automation.createdBy,
+          model,
+          automation.providerAccountId,
+        );
 
   await startAgentJob(ctx, runId, () =>
     workflow.start(
@@ -116,9 +131,8 @@ async function startAutomationRun(
         branchName,
         description,
         title: automation.title,
-        model: normalizeAIModel(
-          automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-        ),
+        model,
+        providerAccountId,
         rootDirectory: repo.rootDirectory ?? "",
         userId: automation.createdBy,
         readOnly: automation.readOnly === true,

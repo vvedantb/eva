@@ -15,6 +15,7 @@ import {
   resolveAutomationRepoId,
 } from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
+import { assertProviderAccountUsableBy } from "../_userProviderAccounts/defaults";
 import { CHANGELOG_AUTOMATION_TITLE } from "../_changelog/entry";
 import {
   automationCronspec,
@@ -145,6 +146,10 @@ export const update = authMutation({
     cronSchedule: v.optional(v.string()),
     trigger: v.optional(automationTriggerValidator),
     model: v.optional(aiModelValidator),
+    /** Null switches back to the team credential. */
+    providerAccountId: v.optional(
+      v.union(v.id("userProviderAccounts"), v.null()),
+    ),
     enabled: v.optional(v.boolean()),
     readOnly: v.optional(v.boolean()),
     actionsEnabled: v.optional(v.boolean()),
@@ -202,6 +207,15 @@ export const update = authMutation({
     if (args.cronSchedule !== undefined) patch.cronSchedule = args.cronSchedule;
     if (args.trigger !== undefined) patch.trigger = args.trigger;
     if (args.model !== undefined) patch.model = args.model;
+    // Runs use the creator's credentials whoever edits, so the account must
+    // be one the creator may run on: their own, or shared by a teammate.
+    if (args.providerAccountId !== undefined) {
+      patch.providerAccountId = await assertProviderAccountUsableBy(
+        ctx.db,
+        args.providerAccountId,
+        automation.createdBy,
+      );
+    }
     if (args.enabled !== undefined) patch.enabled = args.enabled;
     if (args.readOnly !== undefined) patch.readOnly = args.readOnly;
     if (args.actionsEnabled !== undefined)

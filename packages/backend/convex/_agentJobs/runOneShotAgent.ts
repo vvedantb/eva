@@ -40,6 +40,7 @@ type AgentJobAgent = Pick<
   | "fastMode"
   | "runId"
   | "requireTaskCommit"
+  | "providerAccountId"
 >;
 
 type RunOneShotAgentSpec = {

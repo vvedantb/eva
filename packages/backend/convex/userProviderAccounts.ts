@@ -134,6 +134,26 @@ export const listForSessionOwner = authQuery({
 });
 
 /**
+ * Lists the accounts an automation's creator can run on (masked), for its
+ * model picker. Runs use the creator's credentials whoever edits it, so
+ * teammates pick from the creator's accounts, shared ones included.
+ */
+export const listForAutomationOwner = authQuery({
+  args: { automationId: v.id("automations") },
+  returns: v.array(accountListItemValidator),
+  handler: async (ctx, args) => {
+    const automation = await ctx.db.get(args.automationId);
+    if (
+      !automation ||
+      !(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))
+    ) {
+      return [];
+    }
+    return await listSelectableAccountsFor(ctx, automation.createdBy);
+  },
+});
+
+/**
  * Returns a single account with raw (encrypted) credentials for launch-time
  * injection. Includes `userId` so the caller can assert ownership before
  * decrypting. Internal only.

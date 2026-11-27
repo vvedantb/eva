@@ -25,6 +25,7 @@ export const automationExecutionWorkflow = workflow.define({
     description: v.string(),
     title: v.string(),
     model: aiModelValidator,
+    providerAccountId: v.optional(v.id("userProviderAccounts")),
     rootDirectory: v.string(),
     userId: v.id("users"),
     readOnly: v.optional(v.boolean()),
@@ -104,6 +105,7 @@ export const automationExecutionWorkflow = workflow.define({
             : "Read,Write,Edit,Bash,Glob,Grep",
           runId: String(args.runId),
           requireTaskCommit: !isReadOnly,
+          providerAccountId: args.providerAccountId,
         },
         prompt,
         onSandboxReady: async (sandboxId) => {

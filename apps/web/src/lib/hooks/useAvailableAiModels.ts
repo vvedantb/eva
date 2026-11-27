@@ -95,6 +95,24 @@ export function useTaskOwnerProviderAccounts(
   return toModelAccounts(accounts);
 }
 
+/**
+ * Accounts an automation's creator can run on, teammates' shared ones
+ * included (same shape as `useProviderAccounts`). Runs bill to the creator's
+ * pick whoever edits, so everyone sees the creator's accounts.
+ */
+export function useAutomationOwnerProviderAccounts(
+  automationId: Id<"automations">,
+): {
+  options: ReadonlyArray<ModelAccount>;
+  resolveId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
+  ready: boolean;
+} {
+  const accounts = useQuery(api.userProviderAccounts.listForAutomationOwner, {
+    automationId,
+  });
+  return toModelAccounts(accounts);
+}
+
 /** Accounts the project owner can run on (same shape as `useProviderAccounts`). */
 export function useProjectOwnerProviderAccounts(
   projectId: Id<"projects">,
