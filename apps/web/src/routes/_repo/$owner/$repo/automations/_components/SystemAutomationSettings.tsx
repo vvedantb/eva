@@ -1,11 +1,11 @@
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { api, normalizeAIModel, triggerHasEvent } from "@eva/backend";
+import { api, triggerHasEvent } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
+import { Button, Switch, toast, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
 import { AutomationCronField } from "./AutomationCronField";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import { AutomationModelSection } from "./AutomationModelSection";
 import { AlertWebhookFields } from "./AlertWebhookFields";
 import { EmailSettingsRows } from "./EmailSettingsRows";
 import { IssueLabelField } from "./TriggerSection";
@@ -31,13 +31,11 @@ export function SystemAutomationSettings({
   repoOwner: string;
   repoName: string;
 }) {
-  const { repo, repoId } = useRepo();
+  const { repoId } = useRepo();
   const navigate = useNavigate();
   const updateAutomation = useMutation(api.automations.update);
   const uninstall = useMutation(api.automations.uninstallSystemAutomation);
   const trigger = automationTriggerOf(automation);
-  const model = normalizeAIModel(automation.model ?? repo.defaultModel);
-  const { options: modelOptions } = useAvailableAiModels(repoId, model);
 
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
@@ -95,22 +93,9 @@ export function SystemAutomationSettings({
         </p>
       </SettingsSection>
 
+      {/* On/off is the switch next to the title, as on custom automations. */}
+      {createsTasks(trigger) || trigger.kind === "cron" ? (
       <SettingsSection title="Behaviour" bodyVariant="list">
-        <SettingsToggleRow
-          title="Enabled"
-          description={
-            trigger.kind === "cron"
-              ? "Run this automation on its schedule for this app."
-              : "Run this automation whenever its event happens in this app."
-          }
-          action={
-            <Switch
-              checked={automation.enabled}
-              onCheckedChange={(next) => commit({ enabled: next })}
-              aria-label="Enabled"
-            />
-          }
-        />
         {createsTasks(trigger) ? (
           <SettingsToggleRow
             title="Start tasks automatically"
@@ -130,16 +115,9 @@ export function SystemAutomationSettings({
           <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}
       </SettingsSection>
+      ) : null}
 
-      <SettingsSection title="Model">
-        <SettingsField label="Provider and model">
-          <ModelPicker
-            value={model}
-            options={modelOptions}
-            onValueChange={(m) => commit({ model: m })}
-          />
-        </SettingsField>
-      </SettingsSection>
+      <AutomationModelSection automation={automation} commit={commit} />
 
       <SettingsSection
         title="Uninstall"

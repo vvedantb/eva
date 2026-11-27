@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { api, normalizeAIModel } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { AutomationCronField } from "./_components/AutomationCronField";
@@ -14,7 +14,6 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  ModelPicker,
   toast,
   tokenTransition,
   ConfirmSkipHint,
@@ -31,15 +30,12 @@ import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
+import { AutomationModelSection } from "./_components/AutomationModelSection";
 import { EmailSettingsRows } from "./_components/EmailSettingsRows";
 import { TriggerSection } from "./_components/TriggerSection";
 import { canRunByHand } from "@eva/shared/automations";
 import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
-import {
-  useAutomationOwnerProviderAccounts,
-  useAvailableAiModels,
-} from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
@@ -257,9 +253,6 @@ function SettingsForm({
   const { request: requestConfirm } = useRequestConfirm();
   const titleFieldId = useId();
   const promptFieldId = useId();
-  const model = normalizeAIModel(automation.model ?? repo.defaultModel);
-  const { options: modelOptions } = useAvailableAiModels(repoId, model);
-  const accounts = useAutomationOwnerProviderAccounts(automation._id);
 
   // Persist a single field change and confirm with one deduped toast.
   const commit = (
@@ -385,20 +378,7 @@ function SettingsForm({
         <EmailSettingsRows automation={automation} commit={commit} />
       </SettingsSection>
 
-      <SettingsSection title="Model">
-        <SettingsField label="Provider and model">
-          <ModelPicker
-            value={model}
-            options={modelOptions}
-            onValueChange={(m) => commit({ model: m })}
-            accounts={accounts.options}
-            accountId={automation.providerAccountId ?? null}
-            onAccountChange={(id) =>
-              commit({ providerAccountId: accounts.resolveId(id) ?? null })
-            }
-          />
-        </SettingsField>
-      </SettingsSection>
+      <AutomationModelSection automation={automation} commit={commit} />
 
       <SettingsSection
         title="Delete automation"
