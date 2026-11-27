@@ -38,5 +38,6 @@ export function resolveExperimentalFlags(
     draftReadiness: flags?.draftReadiness ?? false,
     skillSuggestions: flags?.skillSuggestions ?? false,
     workspaceTabs: flags?.workspaceTabs ?? false,
+    viewPrsChip: flags?.viewPrsChip ?? false,
   };
 }

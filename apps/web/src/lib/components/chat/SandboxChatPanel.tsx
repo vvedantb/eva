@@ -31,6 +31,7 @@ import {
 } from "./sandboxChatSurface";
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
+import { ViewPrsChip } from "./ViewPrsChip";
 import { useQueryState } from "nuqs";
 import type { ReactNode } from "react";
 import { replyThreadParser } from "@/lib/search-params";
@@ -356,6 +357,7 @@ export function SandboxChatPanel({
         }
         composerChips={
           <SandboxChatStatusChips surface={chatSurface}>
+            <ViewPrsChip owner={binding.prOwner} />
             {statusChips}
           </SandboxChatStatusChips>
         }

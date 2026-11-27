@@ -7,6 +7,7 @@ import {
   type AIModel,
   type Id,
   type ModelTraitsExecutionArgs,
+  type PrOwnerRef,
   type StoredModelTraits,
 } from "@eva/backend";
 import type { ModelAccount } from "@vvedantb/ui";
@@ -36,6 +37,8 @@ export interface SandboxChatBinding {
   entity: ChatEntityRef | undefined;
   /** What the chat speaks for, for copy. */
   ownerLabel: "session" | "task" | "project";
+  /** Whose pull requests the chat shows (the session, task or project). */
+  prOwner: PrOwnerRef;
   /**
    * False while a cached session shell is hidden: the chat's live reads skip
    * (and hold their last paint) so a background turn re-renders nothing.

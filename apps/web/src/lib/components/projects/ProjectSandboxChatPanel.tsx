@@ -53,6 +53,7 @@ export function useProjectChatBinding(
   return useOwnedChatBinding({
     ownedSession: projectSession,
     ownerLabel: "project",
+    prOwner: { kind: "project", projectId },
     title: project?.title,
     common: { accounts, resolveAccountId },
   });

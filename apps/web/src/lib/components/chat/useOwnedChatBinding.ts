@@ -33,12 +33,14 @@ export type OwnedChatBindingCommon = Pick<
 export function useOwnedChatBinding({
   ownedSession,
   ownerLabel,
+  prOwner,
   title,
   common,
   stopTarget,
 }: {
   ownedSession: OwnedSession;
   ownerLabel: SandboxChatBinding["ownerLabel"];
+  prOwner: SandboxChatBinding["prOwner"];
   /** The owner's title; undefined while it loads. */
   title: string | undefined;
   common: OwnedChatBindingCommon;
@@ -68,6 +70,7 @@ export function useOwnedChatBinding({
         ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
         : undefined,
     ownerLabel,
+    prOwner,
     active: true,
     doc: title === undefined
       ? undefined
