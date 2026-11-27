@@ -1164,6 +1164,8 @@ export const repoEventKindValidator = v.union(
   v.literal("pr_opened"),
   v.literal("pr_merged"),
   v.literal("pr_updated"),
+  // Trigger choice only: matches both `pr_opened` and `pr_updated` events.
+  v.literal("pr_opened_or_updated"),
   v.literal("production_alert"),
 );
 

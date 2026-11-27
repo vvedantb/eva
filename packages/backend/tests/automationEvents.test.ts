@@ -197,7 +197,7 @@ describe("triggers", () => {
     expect(triggerMatchesEvent(undefined, labelled)).toBe(false);
   });
 
-  test("a pr_updated trigger also matches the PR opening, not the reverse", () => {
+  test("pr_opened_or_updated matches both PR events; the single triggers match one each", () => {
     const pr = {
       owner: "acme",
       name: "eva",
@@ -209,7 +209,10 @@ describe("triggers", () => {
     const opened = { kind: "pr_opened", ...pr } as const;
     const onUpdated = { kind: "event", event: "pr_updated" } as const;
     const onOpened = { kind: "event", event: "pr_opened" } as const;
-    expect(triggerMatchesEvent(onUpdated, opened)).toBe(true);
+    const onBoth = { kind: "event", event: "pr_opened_or_updated" } as const;
+    expect(triggerMatchesEvent(onBoth, opened)).toBe(true);
+    expect(triggerMatchesEvent(onBoth, updated)).toBe(true);
+    expect(triggerMatchesEvent(onUpdated, opened)).toBe(false);
     expect(triggerMatchesEvent(onUpdated, updated)).toBe(true);
     expect(triggerMatchesEvent(onOpened, updated)).toBe(false);
   });
