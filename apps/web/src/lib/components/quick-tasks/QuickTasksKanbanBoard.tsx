@@ -33,7 +33,8 @@ interface QuickTasksKanbanBoardProps {
   onToggleSelect: (
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
-  ) => void;  archived?: boolean;
+  ) => void;
+  archived?: boolean;
 }
 
 export function QuickTasksKanbanBoard({
@@ -103,7 +104,8 @@ export function QuickTasksKanbanBoard({
     return null;
   }
 
-  const handleStatusChange = async (id: string, status: TaskStatus) => {    if (archived) return;
+  const handleStatusChange = async (id: string, status: TaskStatus) => {
+    if (archived) return;
     const task = tasks.find((t) => t._id === id);
     if (task) await updateStatus({ id: task._id, status });
   };

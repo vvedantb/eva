@@ -1,5 +1,3 @@
-/** Cursor-style mention picker layout (compact width, flip above/below). */
-
 export interface MentionPopupPlacement {
   top: number;
   left: number;
@@ -47,9 +45,6 @@ export function computeMentionPopupPlacement(
   anchor: DOMRect,
   estimatedHeight = POPUP_ESTIMATED_HEIGHT,
 ): MentionPopupPlacement {
-  // The visual viewport is what is actually visible: on a phone the on-screen
-  // keyboard shrinks it while `window.innerHeight` stays put, so measuring
-  // against `innerHeight` would place the list behind the keyboard.
   const visual = window.visualViewport;
   const viewportWidth = visual?.width ?? window.innerWidth;
   const viewportHeight = visual?.height ?? window.innerHeight;

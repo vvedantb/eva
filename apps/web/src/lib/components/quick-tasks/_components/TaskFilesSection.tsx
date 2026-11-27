@@ -19,7 +19,8 @@ interface TaskFilesSectionProps {
   attachments: TaskAttachment[];
   onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
-  onReplace: (key: string, file: File) => void;  draftTaskId: Id<"agentTasks"> | null;
+  onReplace: (key: string, file: File) => void;
+  draftTaskId: Id<"agentTasks"> | null;
 }
 
 type OpenTextAttachment = {
@@ -48,7 +49,8 @@ export function TaskFilesSection({
   draftTaskId,
 }: TaskFilesSectionProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const removeAttachment = useMutation(api.agentTasks.removeAttachment);  const [pending, setPending] = useState<{
+  const removeAttachment = useMutation(api.agentTasks.removeAttachment);
+  const [pending, setPending] = useState<{
     key: string;
     storageId: Id<"_storage">;
     label: string;
@@ -57,7 +59,8 @@ export function TaskFilesSection({
   const { request: requestConfirm } = useRequestConfirm();
   const [open, setOpen] = useState<OpenTextAttachment | null>(null);
 
-  const requestRemove = (attachment: TaskAttachment) => {    if (!attachment.storageId || !draftTaskId) {
+  const requestRemove = (attachment: TaskAttachment) => {
+    if (!attachment.storageId || !draftTaskId) {
       onRemove(attachment.key);
       return;
     }
@@ -80,7 +83,8 @@ export function TaskFilesSection({
     label: string;
   }) => {
     if (!draftTaskId) return;
-    setIsRemoving(true);    try {
+    setIsRemoving(true);
+    try {
       await withMutationToast(
         removeAttachment({
           taskId: draftTaskId,
@@ -108,7 +112,8 @@ export function TaskFilesSection({
     void (async () => {
       const title = labelForAttachment(attachment.name, attachment.contentType);
       const filename = attachment.name ?? "pasted-text.txt";
-      const mediaType = attachment.contentType || "text/plain";      const readOnly =
+      const mediaType = attachment.contentType || "text/plain";
+      const readOnly =
         attachment.file === null && attachment.storageId !== null;
 
       try {
@@ -190,7 +195,8 @@ export function TaskFilesSection({
           accept={CHAT_ATTACHMENT_ACCEPT}
           className="hidden"
           onChange={(e) => {
-            onAdd(Array.from(e.target.files ?? []));            e.target.value = "";
+            onAdd(Array.from(e.target.files ?? []));
+            e.target.value = "";
           }}
         />
       </div>

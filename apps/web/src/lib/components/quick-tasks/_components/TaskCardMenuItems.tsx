@@ -59,14 +59,19 @@ export interface TaskCardMenuItemsProps {
   variant: "context" | "dropdown";
   id: Id<"agentTasks">;
   title: string;
-  status: TaskStatus;  href?: string;  showOpenInNewTab?: boolean;  leading?: ReactNode;  showRunEva?: boolean;
+  status: TaskStatus;
+  href?: string;
+  showOpenInNewTab?: boolean;
+  leading?: ReactNode;
+  showRunEva?: boolean;
   assignedTo?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   groupedCodebases?: GroupedCodebase[];
   users?: User[];
   currentUserId?: Id<"users">;
-  projects?: Project[];  archived?: boolean;
+  projects?: Project[];
+  archived?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
   onMove: (targetId: Id<"githubRepos">) => void;
@@ -124,10 +129,12 @@ export function TaskCardMenuItems({
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });  const projectPrUrl =
+  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
+  const projectPrUrl =
     taskPrs.length === 0
       ? projects?.find((project) => project._id === projectId)?.prUrl
-      : undefined;  const branchName = taskPrs[0]?.headBranch;
+      : undefined;
+  const branchName = taskPrs[0]?.headBranch;
   const canRun =
     (status === "todo" && runs !== undefined && runs.length === 0) ||
     status === "in_progress";
@@ -280,7 +287,8 @@ export function TaskCardMenuItems({
             <IconClipboard size={iconSize} />
             Title
           </Item>
-          {href ? (            <Item
+          {href ? (
+            <Item
               onSelect={() => {
                 void navigator.clipboard.writeText(
                   window.location.origin + href,
@@ -332,7 +340,8 @@ export function TaskCardMenuItems({
             Move to codebase
           </SubTrigger>
           <SubContent className="max-h-80 overflow-y-auto">
-            {moveTargets.map((codebase) => {              const availableApps = codebase.apps.filter(
+            {moveTargets.map((codebase) => {
+              const availableApps = codebase.apps.filter(
                 (app) => app._id !== repoId,
               );
               if (availableApps.length === 0) return null;

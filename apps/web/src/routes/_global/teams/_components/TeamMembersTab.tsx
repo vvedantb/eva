@@ -149,8 +149,6 @@ export function TeamMembersTab({
                           )
                         }
                       >
-                        {/* 28px is under the comfortable tap floor, so the
-                          trigger grows to 40px on touch only. */}
                         <SelectTrigger className="h-10 w-[100px] border-0 bg-secondary text-xs sm:h-7">
                           <SelectValue />
                         </SelectTrigger>

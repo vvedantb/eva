@@ -61,7 +61,8 @@ export function RunTasksModal({
 
   const handleRun = async () => {
     setIsLoading(true);
-    setRunError(null);    const successMessage = `Started ${count} task${count === 1 ? "" : "s"}`;
+    setRunError(null);
+    const successMessage = `Started ${count} task${count === 1 ? "" : "s"}`;
     try {
       const { startedCount } = await runSelected(selectedTaskIds);
       if (startedCount === count) {

@@ -32,6 +32,7 @@ type Draft = {
 
 const EMPTY_DRAFT: Draft = { text: "", mentionMap: new Map(), skillMap: new Map(), inserted: null, dismissed: false };
 
+/** A pick still in the draft text: an `@` mention or a `/` skill, by its label. */
 export type ComposerPick = { kind: MentionChipKind; label: string };
 
 function labelsIn(text: string, map: ReadonlyMap<string, string>, pattern: (labels: string[]) => RegExp): string[] {
@@ -42,9 +43,7 @@ function labelsIn(text: string, map: ReadonlyMap<string, string>, pattern: (labe
 export type MentionMenuState = {
   trigger: MentionTrigger;
   rows: MentionItem[];
-  /** Ids of teammates among the `@` rows (people and data tokens look alike). */
   peopleIds: ReadonlySet<string>;
-  /** Whether there is anything to list at all, before the query filters it. */
   hasAny: boolean;
 };
 
@@ -61,13 +60,10 @@ export type MentionMenuState = {
 export function useMentionComposer(
   repoId: Id<"githubRepos"> | undefined,
   provider: AIProvider | undefined,
-  /** Called with the wire text after each edit by the person (typing, a pick, a restore, the clear after a send); not after `load`. */
   onChange?: (tokenized: string) => void,
-  /** People-like picks offered first, e.g. `@Eva` in a project coordinator chat (`chatMessageRoute`), as the web. */
   extraPeople: readonly MentionItem[] = [],
 ) {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  /** An edit by the person: the new draft, and `onChange` when its text changed. */
   const edit = (next: Draft) => {
     setDraft(next);
     if (next.text !== draft.text) onChange?.(tokenizeMentionText(next.text, next));
@@ -115,12 +111,10 @@ export function useMentionComposer(
       pick(first);
       return;
     }
-    // An emptied field (cleared, or sent) drops the picks, as the web editor.
     if (text === "") {
       edit(EMPTY_DRAFT);
       return;
     }
-    // The guard holds only while the chip it names is still there.
     const inserted = draft.inserted && text.startsWith(draft.inserted.token, draft.inserted.startIndex) ? draft.inserted : null;
     edit({ ...draft, text, inserted, dismissed: false });
   };
@@ -137,10 +131,8 @@ export function useMentionComposer(
     });
   };
 
-  /** Closes the picker until the next edit, as the web Escape (`closeTrigger`). */
   const dismiss = () => setDraft({ ...draft, dismissed: true });
 
-  /** Adds stored tokenized text (a stash entry) after the draft, as the web stash restore. */
   const restore = (tokenized: string) => {
     const restored = tokenizedToEditable(tokenized);
     edit({
@@ -152,7 +144,6 @@ export function useMentionComposer(
     });
   };
 
-  /** Takes a pick out: each `@Label` (or `/Label`) and the space after it, and its id. */
   const removePick = (pick: ComposerPick) => {
     const pattern = (pick.kind === "slash" ? buildSkillPattern : buildMentionPattern)([pick.label]);
     const without = (map: ReadonlyMap<string, string>) => new Map([...map].filter(([label]) => label !== pick.label));
@@ -170,7 +161,6 @@ export function useMentionComposer(
     });
   };
 
-  /** Replaces the draft with stored tokenized text (a saved draft), its picks as chips. */
   const load = (tokenized: string) => {
     const loaded = tokenizedToEditable(tokenized);
     setDraft({
@@ -189,7 +179,6 @@ export function useMentionComposer(
 
   return {
     text: draft.text,
-    /** The picks still in the text, `@` mentions first, as chips above the field. */
     picks,
     removePick,
     setText,
@@ -197,11 +186,9 @@ export function useMentionComposer(
     pick,
     dismiss,
     restore,
-    /** The `/` skills this chat offers, for the skill suggestion chips. */
     skills,
     insertSkill,
     load,
-    /** The wire text for a send: each `@Label` / `/Label` picked becomes its token. */
     tokenize: (text: string) => tokenizeMentionText(text, draft),
   };
 }

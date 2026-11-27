@@ -12,7 +12,8 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 export function useMoveAgentTask() {
   const { repoId } = useRepo();
   return useMutation(api.agentTasks.update).withOptimisticUpdate(
-    (localStore, args) => {      if (args.repoId) {
+    (localStore, args) => {
+      if (args.repoId) {
         patchLoadedQuery(
           localStore,
           api.agentTasks.getAllTasks,
@@ -27,7 +28,8 @@ export function useMoveAgentTask() {
 interface MoveTaskDialogProps {
   targetId: Id<"githubRepos"> | null;
   targetAppName: string;
-  onClose: () => void;  onDone?: () => void;
+  onClose: () => void;
+  onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;
 }

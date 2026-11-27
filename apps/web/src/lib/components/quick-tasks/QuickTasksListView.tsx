@@ -66,7 +66,9 @@ interface QuickTasksListViewProps {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
-  selectedTaskId?: string | null;  onOpenTask?: (id: Id<"agentTasks">) => void;  archived?: boolean;
+  selectedTaskId?: string | null;
+  onOpenTask?: (id: Id<"agentTasks">) => void;
+  archived?: boolean;
 }
 
 export function QuickTasksListView({
@@ -206,7 +208,8 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
-            const drafts = status === "todo" ? todoDrafts : [];            const sectionIds = items.map((t) => t._id);
+            const drafts = status === "todo" ? todoDrafts : [];
+            const sectionIds = items.map((t) => t._id);
             const Icon = cfg.icon;
 
             return [

@@ -66,7 +66,8 @@ export function useTaskArchive() {
 
 interface ArchiveTaskDialogProps {
   open: boolean;
-  onClose: () => void;  onDone?: () => void;
+  onClose: () => void;
+  onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;
 }

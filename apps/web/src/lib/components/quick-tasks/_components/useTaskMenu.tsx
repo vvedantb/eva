@@ -13,7 +13,8 @@ import type {
 type TaskMenuArgs = Omit<
   TaskCardMenuItemsProps,
   "variant" | "onArchive" | "onUnarchive" | "onMove"
-> & {  onRemoved?: () => void;
+> & {
+  onRemoved?: () => void;
 };
 
 function moveTargetName(

@@ -236,7 +236,8 @@ function VoiceInputButton({
           type="button"
           size="icon"
           variant={isListening && !isConnecting ? "destructive" : "secondary"}
-          onClick={onToggle}          disabled={isLoading || isPolishing}
+          onClick={onToggle}
+          disabled={isLoading || isPolishing}
           className="h-8 w-8"
           aria-label={
             isPolishing
@@ -465,7 +466,8 @@ function DraftRow({
         </div>
       </div>
     );
-  }  return (
+  }
+  return (
     <div className="group relative flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
       <button
         type="button"
@@ -554,7 +556,8 @@ export function QuickTaskModal({
     baseBranch,
     setBaseBranch,
     repoDefaultBranch: defaultBranch,
-  } = useBaseBranchState(initialDraft?.baseBranch);  const [description, setDescription] = useState(() =>
+  } = useBaseBranchState(initialDraft?.baseBranch);
+  const [description, setDescription] = useState(() =>
     initialDraft ? tokenizedToEditable(draftPrompt(initialDraft)).displayText : "",
   );
   const [isLoading, setIsLoading] = useState(false);
@@ -668,7 +671,8 @@ export function QuickTaskModal({
     if (!canSubmit) return;
 
     const taskDescription = getDescription();
-    const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;    const taskAccountId = resolveAccountId(providerAccountId) ?? null;
+    const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;
+    const taskAccountId = resolveAccountId(providerAccountId) ?? null;
     const taskTags = undefinedIfEmpty(selectedTags);
     const taskTraits = toRunTraitArgs(traits);
     setIsLoading(true);
@@ -726,7 +730,8 @@ export function QuickTaskModal({
     setBaseBranch(draft.baseBranch ?? defaultBranch);
     setActiveDraftId(draft._id);
     setSelectedProjectId(draft.projectId ?? projectId);
-    setSelectedTags(draft.tags ?? []);    readiness.reset();
+    setSelectedTags(draft.tags ?? []);
+    readiness.reset();
   };
 
   const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
@@ -779,7 +784,8 @@ export function QuickTaskModal({
         }}
       >
         <DialogContent
-          className="max-w-3xl gap-0 p-0"          onOpenAutoFocus={(event) => {
+          className="max-w-3xl gap-0 p-0"
+          onOpenAutoFocus={(event) => {
             event.preventDefault();
             editorRef.current?.focus();
           }}
@@ -807,7 +813,8 @@ export function QuickTaskModal({
               e.preventDefault();
               attachments.add(dropped);
             }}
-          >            <div className="scrollbar px-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
+          >
+            <div className="scrollbar px-5 min-h-[160px] max-h-[50dvh] overflow-y-auto">
               <DescriptionMentionEditor
                 ref={editorRef}
                 value={description}

@@ -8,11 +8,6 @@ interface EditorChipSegment {
   value: string;
 }
 
-/**
- * Link source is listed first so a full URL is consumed as one match before an
- * `@`/`/` label alternative could match a fragment inside it (e.g. the `/design`
- * segment of a Figma URL). Always includes the link source, so it is never null.
- */
 function buildEditorChipPattern(
   mentionLabels: string[],
   skillLabels: string[],
@@ -80,17 +75,9 @@ function renderEditorChipSpan(
   return `​<span data-${dataKind}="true" ${labelAttr}="${escapeHtml(label)}" contenteditable="false" class="${escapeHtml(className)}">${escapeHtml(segment.value)}</span>​`;
 }
 
-/** Tabler `brand-github` (what chat's `MarkdownLink` shows for GitHub). */
 const GITHUB_ICON_HTML =
   '<svg class="markdown-link-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/></svg>';
 
-/**
- * Same look as chat's `MarkdownLink` (`markdown-link` underline + the host's
- * own favicon, GitHub glyph for github.com), as markup: the composer renders
- * via `innerHTML`, so there is no React tree. A favicon that fails to load is
- * hidden by `MentionEditor`'s `onErrorCapture`. `<wbr>` after separators lets
- * a long URL wrap where a reader expects.
- */
 function renderEditorLinkHtml(url: string): string {
   const host = URL.canParse(url) ? new URL(url).host : "";
   const icon =
@@ -173,8 +160,6 @@ export function extractEditableText(el: Element): string {
     } else if (node instanceof Element) {
       const linkUrl = node.getAttribute("data-link-url");
       if (linkUrl !== null) {
-        // Links round-trip to the raw URL from the attribute, so the favicon
-        // and `<wbr>` markup never leak into the editor value.
         out += linkUrl;
       } else if (node.tagName === "BR") {
         out += "\n";

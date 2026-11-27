@@ -13,8 +13,13 @@ import { useUploadBlobs } from "@/lib/components/attachments/useUploadBlobs";
 
 /** One file in the quick task composer, either picked locally or already stored. */
 export type TaskAttachment = {
-  key: string;  name?: string;
-  contentType: string | null;  url: string | null;  isObjectUrl: boolean;  storageId: Id<"_storage"> | null;  file: File | null;
+  key: string;
+  name?: string;
+  contentType: string | null;
+  url: string | null;
+  isObjectUrl: boolean;
+  storageId: Id<"_storage"> | null;
+  file: File | null;
 };
 
 type RejectionCode = "max_files" | "max_file_size" | "accept";
@@ -52,7 +57,8 @@ export function useTaskAttachments() {
         if (current.length + accepted.length >= MAX_CHAT_ATTACHMENTS) {
           rejections.add("max_files");
           continue;
-        }        const isImage = isImageContentType(file.type);
+        }
+        const isImage = isImageContentType(file.type);
         accepted.push({
           key: crypto.randomUUID(),
           name: file.name,
