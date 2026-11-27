@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v43";
+const SCRIPT_VERSION = "stream-v44";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -498,7 +498,11 @@ function authorize(clientReq, clientRes) {
           setCookies.push(
             COMMENTS_COOKIE + "=" +
               bufToB64url(
-                Buffer.from(JSON.stringify({ token: claims.ct, site: claims.site })),
+                Buffer.from(JSON.stringify({
+                  token: claims.ct,
+                  site: claims.site,
+                  view: typeof claims.view === "string" ? claims.view : "",
+                })),
               ) +
               cookieAttrs,
           );

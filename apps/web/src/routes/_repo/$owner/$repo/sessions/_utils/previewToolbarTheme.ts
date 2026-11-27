@@ -31,6 +31,17 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
   const border = probe("border border-border");
   const primary = probe("bg-primary text-primary-foreground");
   const field = probe("bg-background");
+  const popover = probe("bg-popover");
+  const muted = probe("bg-muted");
+  const warning = probe("text-warning");
+  // The segmented tabs use the trough `--default` in light, `--surface-card`
+  // in dark, and the pill `--segment` (globals.css `.tabs-segmented`).
+  const tabTrack = probe("");
+  tabTrack.style.backgroundColor = document.documentElement.classList.contains("dark")
+    ? "var(--surface-card)"
+    : "var(--default)";
+  const tabPill = probe("");
+  tabPill.style.backgroundColor = "var(--segment)";
   const probes = [
     surface,
     tip,
@@ -43,6 +54,11 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
     border,
     primary,
     field,
+    popover,
+    muted,
+    warning,
+    tabTrack,
+    tabPill,
   ];
   document.body.append(...probes);
   try {
@@ -70,6 +86,11 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
       primary: getComputedStyle(primary).backgroundColor,
       primaryText: getComputedStyle(primary).color,
       field: getComputedStyle(field).backgroundColor,
+      popover: getComputedStyle(popover).backgroundColor,
+      muted: getComputedStyle(muted).backgroundColor,
+      warning: getComputedStyle(warning).color,
+      tabTrack: getComputedStyle(tabTrack).backgroundColor,
+      tabPill: getComputedStyle(tabPill).backgroundColor,
     };
   } finally {
     for (const element of probes) element.remove();

@@ -75,6 +75,15 @@ export interface PreviewToolbarTheme {
   /** `bg-primary` and `text-primary-foreground`, the card's main button. */
   primary: string;
   primaryText: string;
-  /** `bg-background`, the card's text field. */
+  /** `bg-background`, the drawer and the card's text field. */
   field: string;
+  /** `bg-popover` (solid), the note card. */
+  popover: string;
+  /** `bg-muted` (solid), a reply box. */
+  muted: string;
+  /** `text-warning`, a queued comment. */
+  warning: string;
+  /** The segmented tabs: the trough and the active pill. */
+  tabTrack: string;
+  tabPill: string;
 }
