@@ -1265,6 +1265,11 @@ export const automationRunFields = {
   // the GitHub check run Eva shows on it (see `_automations/checkRun.ts`).
   headSha: v.optional(v.string()),
   checkRunId: v.optional(v.number()),
+  // PR branch runs: the commit the run pushed to the PR, so the push event it
+  // fires does not start another run (see `startEventRun`).
+  pushedSha: v.optional(v.string()),
+  // The run's result comment on the PR; the next run's comment hides it.
+  commentNodeId: v.optional(v.string()),
 };
 
 // One row per (changelog run, user, item): the latest feedback from the email.

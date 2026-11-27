@@ -1343,6 +1343,16 @@ export const pushSandboxBranch = internalAction({
   },
 });
 
+/** The sandbox's checked-out commit, e.g. the tip a push just published. */
+export const readSandboxHead = internalAction({
+  args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    return (await execHandle(sandbox, "git rev-parse HEAD", 15)).trim();
+  },
+});
+
 /**
  * Per-turn auto-publish policy, written before the agent runs. With the
  * sender's `manualSideBranchPublish` flag on, only `branchName` (the chat

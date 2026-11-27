@@ -29,6 +29,7 @@ export {
   checkoutBaseBranch,
   setupSandboxBranch,
   pushSandboxBranch,
+  readSandboxHead,
   applyBranchPublishPolicy,
   commitAndPushSandbox,
   pushLinkedRepoBranches,

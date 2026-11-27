@@ -20,6 +20,7 @@ import { queueRunEmail } from "./email";
 import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
 import { stopAgentJob } from "../_agentJobs/slot";
 import { syncCheckRunLater } from "./checkRun";
+import { postRunCommentLater } from "./prComment";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
 export const listRuns = authQuery({
@@ -196,6 +197,7 @@ export const updateRunStatus = internalMutation({
     }
     await ctx.db.patch(args.runId, patch);
     await syncCheckRunLater(ctx, current);
+    if (args.status === "success") await postRunCommentLater(ctx, current);
 
     // Findings land unranked and possibly duplicating open work. Triage runs
     // out of band so the run finishes at the same speed either way.
