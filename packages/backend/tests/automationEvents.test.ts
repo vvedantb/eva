@@ -197,6 +197,23 @@ describe("triggers", () => {
     expect(triggerMatchesEvent(undefined, labelled)).toBe(false);
   });
 
+  test("a pr_updated trigger also matches the PR opening, not the reverse", () => {
+    const pr = {
+      owner: "acme",
+      name: "eva",
+      prUrl: "https://github.com/acme/eva/pull/1",
+      prNumber: 1,
+      title: "t",
+    };
+    const updated = { kind: "pr_updated", ...pr, headSha: "abc" } as const;
+    const opened = { kind: "pr_opened", ...pr } as const;
+    const onUpdated = { kind: "event", event: "pr_updated" } as const;
+    const onOpened = { kind: "event", event: "pr_opened" } as const;
+    expect(triggerMatchesEvent(onUpdated, opened)).toBe(true);
+    expect(triggerMatchesEvent(onUpdated, updated)).toBe(true);
+    expect(triggerMatchesEvent(onOpened, updated)).toBe(false);
+  });
+
   test("CI keys are per commit so a new push is a new attempt", () => {
     const failure = (headSha: string): RepoEvent => ({
       kind: "ci_failed",
