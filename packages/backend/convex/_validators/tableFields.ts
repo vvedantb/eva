@@ -1163,6 +1163,7 @@ export const repoEventKindValidator = v.union(
   v.literal("issue_labeled"),
   v.literal("pr_opened"),
   v.literal("pr_merged"),
+  v.literal("pr_updated"),
   v.literal("production_alert"),
 );
 

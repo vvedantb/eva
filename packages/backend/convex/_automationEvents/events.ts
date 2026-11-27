@@ -71,6 +71,14 @@ export const repoEventValidator = v.union(
     prNumber: v.number(),
     title: v.string(),
   }),
+  v.object({
+    kind: v.literal("pr_updated"),
+    ...repoRef,
+    prUrl: v.string(),
+    prNumber: v.number(),
+    title: v.string(),
+    headSha: v.string(),
+  }),
   v.object({ ...alertFields, ...repoRef }),
 );
 
@@ -99,6 +107,8 @@ export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
   issue_labeled: 0,
   pr_opened: 0,
   pr_merged: 0,
+  // Pushes often come in bursts; one run covers the final head.
+  pr_updated: 60_000,
   // A match monitor sends one alert per matching event; gather the burst.
   production_alert: 30_000,
 };
@@ -131,6 +141,7 @@ export function repoEventKey(event: RepoEvent): string {
     case "pr_feedback":
     case "pr_opened":
     case "pr_merged":
+    case "pr_updated":
       return event.prUrl;
     case "production_alert":
       return `${event.source}:${event.monitorId}`;
@@ -174,6 +185,8 @@ export function describeRepoEvent(event: RepoEvent): string {
       return `PR opened: ${event.prUrl} — ${event.title}`;
     case "pr_merged":
       return `PR merged: ${event.prUrl} — ${event.title}`;
+    case "pr_updated":
+      return `PR updated: ${event.prUrl} — ${event.title}\nNew head commit: ${event.headSha}`;
     case "production_alert":
       return describeAlert(event);
   }
@@ -291,6 +304,7 @@ const pullRequestSchema = z.object({
     html_url: z.string(),
     title: z.string(),
     merged: z.boolean().nullable().catch(null),
+    head: z.object({ sha: z.string() }).nullable().catch(null),
   }),
   repository: repositorySchema,
   sender: senderSchema,
@@ -514,6 +528,9 @@ function parseRepoEventsOrThrow(
         title: pr.title,
       };
       if (action === "opened") return [{ kind: "pr_opened", ...base }];
+      if (action === "synchronize" && pr.head !== null) {
+        return [{ kind: "pr_updated", ...base, headSha: pr.head.sha }];
+      }
       if (action === "closed" && pr.merged === true) {
         return [{ kind: "pr_merged", ...base }];
       }
