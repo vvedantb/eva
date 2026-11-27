@@ -24,8 +24,14 @@ import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
-import { useProjectTaskTabs } from "@/lib/components/projects/useProjectTaskTabs";
-import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
+import {
+  useProjectTaskTabRows,
+  useProjectTaskTabs,
+} from "@/lib/components/projects/useProjectTaskTabs";
+import {
+  ProjectDetailHeaderActions,
+  type ProjectShownChat,
+} from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
 
@@ -113,6 +119,20 @@ export function ProjectDetailClient({
     sandboxTab,
     onShowPanel: () => setExpandRightSignal((n) => n + 1),
   });
+  const taskTabRows = useProjectTaskTabRows(projectId, repo._id, taskTabs);
+  // The chat the coordinator view shows: Eva's, or an open task tab's. Task
+  // tabs exist only once the project's session does (`ProjectChatTabs`).
+  const onCoordinatorChat =
+    mainTab === "work" &&
+    selectedTaskStatus === undefined &&
+    sandbox.sandbox.owner !== undefined;
+  const shownChat: ProjectShownChat = !onCoordinatorChat
+    ? { kind: "eva" }
+    : taskTabRows.selectedRow
+      ? { kind: "task", taskId: taskTabRows.selectedRow._id }
+      : taskTabRows.selectedLoading
+        ? { kind: "loading" }
+        : { kind: "eva" };
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
@@ -203,6 +223,7 @@ export function ProjectDetailClient({
           sandbox={sandbox}
           chatId={chatId}
           chatTurnOpen={chatTurnOpen}
+          shownChat={shownChat}
         />
       }
     >
@@ -225,6 +246,7 @@ export function ProjectDetailClient({
             onThreadOpen={openThread}
             onCloseThread={closeThread}
             taskTabs={taskTabs}
+            taskTabRows={taskTabRows}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}
