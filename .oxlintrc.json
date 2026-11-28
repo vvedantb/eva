@@ -46,6 +46,10 @@
     "no-effect/no-external-store-subscription": "error",
     "no-effect/no-initialize-state": "error",
     "vvedantb/no-is-record": "error",
+    "vvedantb/no-tab-search-param": "error",
+    "vvedantb/convex-no-collect-in-query": "warn",
+    "vvedantb/convex-no-filter-in-query": "warn",
+    "vvedantb/convex-no-time-or-random-in-queries": "warn",
     "vvedantb/no-json-parse": "warn",
     "vvedantb/no-double-cast": "warn",
     "vvedantb/no-value-block-in-try": "off",
@@ -80,6 +84,15 @@
     "complexity": ["warn", { "max": 20 }]
   },
   "overrides": [
+    {
+      "files": ["**/*.test.{ts,tsx}", "**/tests/**"],
+      "rules": {
+        "vvedantb/no-tab-search-param": "off",
+        "vvedantb/convex-no-collect-in-query": "off",
+        "vvedantb/convex-no-filter-in-query": "off",
+        "vvedantb/convex-no-time-or-random-in-queries": "off"
+      }
+    },
     {
       "files": ["apps/web/src/**"],
       "rules": {

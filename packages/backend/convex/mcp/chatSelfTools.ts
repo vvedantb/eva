@@ -517,7 +517,7 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
           .string()
           .max(2000)
           .optional()
-          .describe('Route to show, e.g. "/dashboard?tab=usage".'),
+          .describe('Route to show, e.g. "/dashboard/usage".'),
         port: z
           .number()
           .int()
