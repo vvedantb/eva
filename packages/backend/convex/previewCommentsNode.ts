@@ -3,7 +3,6 @@
 import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import {
   annotationRef,
@@ -44,8 +43,7 @@ export const handle = internalAction({
     });
     const claims = await verifyPreviewCommentsToken(args.token);
     if (!claims) return fail(401, "This preview link has expired. Reload it.");
-    const userId = claims.userId as Id<"users">;
-    const chatId = claims.chatId as Id<"sessionChats">;
+    const { userId, chatId } = claims;
     try {
       if (args.op === "list") {
         // Typed `unknown` on purpose: the api type that would name it
@@ -75,7 +73,7 @@ export const handle = internalAction({
       const body = resolveBody.parse(raw);
       await ctx.runMutation(internal.previewComments.setResolvedForUser, {
         userId,
-        id: body.id as Id<"messages">,
+        id: body.id,
         resolved: body.resolved,
       });
       return { status: 200, json: JSON.stringify({ ok: true }) };

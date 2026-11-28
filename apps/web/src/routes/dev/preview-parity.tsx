@@ -38,6 +38,7 @@ const CONTEXT: PreviewAnnotationContext = {
   selector: "button.btn-primary",
   textContent: "Save changes",
   outerHTML:
+    // design-check-ignore-next-line — sample element HTML in a string, not a rendered button
     '<button class="btn-primary" aria-label="Save changes">Save changes</button>',
   attributes: {},
   boundingRect: { top: 0, left: 0, width: 100, height: 30 },

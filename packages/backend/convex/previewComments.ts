@@ -5,7 +5,12 @@ import {
 } from "@eva/shared/previewAnnotationDisplay";
 import { getUserDisplayName } from "@eva/shared/taskDetail";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  normalizeIdOrThrow,
+} from "./functions";
 import { sendChatMessage } from "./chats";
 import { resolveMobileChat } from "./_mobile/chatTarget";
 import { findMainChat, getSessionChatWithAccess } from "./_sessionChats/helpers";
@@ -279,28 +284,39 @@ export const linkTarget = authQuery({
   },
 });
 
+// The direct-link action passes the ids from its signed token as strings.
 export const listForUser = internalQuery({
-  args: { userId: v.id("users"), chatId: v.id("sessionChats") },
+  args: { userId: v.string(), chatId: v.string() },
   returns: v.array(previewCommentValidator),
-  handler: (ctx, args) => listComments(ctx, args.chatId, args.userId),
+  handler: (ctx, args) =>
+    listComments(
+      ctx,
+      normalizeIdOrThrow(ctx.db, "sessionChats", args.chatId, "Chat"),
+      normalizeIdOrThrow(ctx.db, "users", args.userId, "User"),
+    ),
 });
 
 export const setResolvedForUser = internalMutation({
   args: {
-    userId: v.id("users"),
-    id: v.id("messages"),
+    userId: v.string(),
+    id: v.string(),
     resolved: v.boolean(),
   },
   returns: v.null(),
   handler: (ctx, args) =>
-    setCommentResolved(ctx, args.userId, args.id, args.resolved),
+    setCommentResolved(
+      ctx,
+      normalizeIdOrThrow(ctx.db, "users", args.userId, "User"),
+      normalizeIdOrThrow(ctx.db, "messages", args.id, "Comment"),
+      args.resolved,
+    ),
 });
 
 /** Sends a comment from a direct link: the same path as the Eva page's card. */
 export const sendForUser = internalMutation({
   args: {
-    userId: v.id("users"),
-    chatId: v.id("sessionChats"),
+    userId: v.string(),
+    chatId: v.string(),
     feedback: v.string(),
     /** The agent prompt, built from the element context. */
     prompt: v.string(),
@@ -314,10 +330,11 @@ export const sendForUser = internalMutation({
   handler: async (ctx, args) => {
     const feedback = args.feedback.trim();
     if (!feedback) throw new Error("Write a note first");
+    const userId = normalizeIdOrThrow(ctx.db, "users", args.userId, "User");
     return sendChatMessage(
-      { ...ctx, userId: args.userId },
+      { ...ctx, userId },
       {
-        target: String(args.chatId),
+        target: args.chatId,
         message: args.prompt,
         displayContent: buildAnnotationDisplay(feedback, args.ref),
         annotation: args.ref,
