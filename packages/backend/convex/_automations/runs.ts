@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
-import { internalMutation, internalQuery } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   automationRunFields,
@@ -15,8 +19,10 @@ import {
   gatherAccessibleRepos,
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
-import { automationAction } from "./systemAutomations";
+import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 import { queueRunEmail } from "./email";
+import { createNotification } from "../notifications";
+import { repoBasePath } from "@eva/shared";
 import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
 import { stopAgentJob } from "../_agentJobs/slot";
 import { syncCheckRunLater } from "./checkRun";
@@ -160,6 +166,27 @@ export const getAutomationData = internalQuery({
   },
 });
 
+/** Tells the automation's creator a run finished, with a link to its latest run. */
+async function notifyRunFinished(
+  ctx: MutationCtx,
+  run: Doc<"automationRuns">,
+  automation: Doc<"automations">,
+): Promise<void> {
+  const title = resolveAutomationDoc(automation).title;
+  const repo = await ctx.db.get(automation.repoId);
+  const failed = run.status === "error";
+  await createNotification(ctx, {
+    userId: automation.createdBy,
+    title: failed ? `Automation failed: ${title}` : `Automation finished: ${title}`,
+    message: failed ? run.error : run.resultSummary?.slice(0, 200),
+    repoId: automation.repoId,
+    href:
+      repo && automation.numId !== undefined
+        ? `${repoBasePath(repo)}/automations/${automation.numId}/latest`
+        : undefined,
+  });
+}
+
 /** Updates an automation run's status and optional metadata fields (sandbox, error, PR URL, etc). */
 export const updateRunStatus = internalMutation({
   args: {
@@ -209,19 +236,19 @@ export const updateRunStatus = internalMutation({
       );
     }
 
-    // When a run succeeds and the automation opts into email, draft (or, with
-    // auto-send, send) its result summary for every email recipient.
-    if (args.status === "success") {
+    if (args.status === "success" || args.status === "error") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
-      // Event presets settle through `settleEventRun` and never email; this
-      // guards a preset row reaching here by any other path.
-      if (
-        run &&
-        automation?.sendEmail === true &&
-        automationAction(automation) === "run"
-      ) {
-        await queueRunEmail(ctx, run, automation);
+      // Event presets settle through `settleEventRun`; this guards a preset
+      // row reaching here by any other path.
+      if (run && automation && automationAction(automation) === "run") {
+        // When a run succeeds and the automation opts into email, draft (or,
+        // with auto-send, send) its result summary for every email recipient.
+        const emails = args.status === "success" && automation.sendEmail === true;
+        if (emails) await queueRunEmail(ctx, run, automation);
+        // A draft email already notifies its creator to review it.
+        const draftNotifies = emails && automation.emailAutoSend !== true;
+        if (!draftNotifies) await notifyRunFinished(ctx, run, automation);
       }
     }
     return null;
