@@ -19,6 +19,7 @@ import {
 import type { DeckBrand } from "./_components/deckTone";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
 import {
+  autoStepDelay,
   handleStepKey,
   isTypingTarget,
   useDeckNavigation,
@@ -98,11 +99,6 @@ const slideVariants = {
         },
 };
 
-/** Seconds before an auto-playing build starts, so the slide's entrance lands first. */
-const AUTO_FIRST_MS = 1100;
-/** Gap between auto-played build steps. */
-const AUTO_STEP_MS = 1500;
-
 export function Deck({
   slides,
   slide,
@@ -165,9 +161,7 @@ export function Deck({
   const advance = nav.next;
   useEffect(() => {
     if (!autoNext) return;
-    const wait =
-      entry.autoMs?.[step] ?? (step === 0 ? AUTO_FIRST_MS : AUTO_STEP_MS);
-    const timer = setTimeout(advance, wait);
+    const timer = setTimeout(advance, autoStepDelay(entry, step));
     return () => clearTimeout(timer);
   }, [autoNext, advance, step, entry]);
 

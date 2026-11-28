@@ -107,15 +107,16 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 3,
   },
   {
-    id: "04-sessions",
-    title: "Sessions grew up",
-    Component: Slide04Sessions,
-    steps: 3,
-  },
-  {
     id: "a02-origin",
     title: "The story so far",
     Component: AnnualOrigin,
+    steps: 3,
+  },
+  { id: "a07-how", title: "How it works", Component: AnnualHow, steps: 2 },
+  {
+    id: "04-sessions",
+    title: "Sessions grew up",
+    Component: Slide04Sessions,
     steps: 3,
   },
   {
@@ -148,7 +149,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualImpact,
     steps: 3,
   },
-  { id: "a07-how", title: "How it works", Component: AnnualHow, steps: 2 },
   {
     id: "annual-c01-providers",
     title: "Not tied to one supplier",
@@ -294,6 +294,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
+    id: "annual-g05-today",
+    title: "The Today page",
+    Component: AnnualToday,
+    steps: 2,
+  },
+  {
     id: "friday-b18-limits",
     title: "Same problems",
     Component: FridayLimits,
@@ -334,12 +340,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Every chat teaches Eva",
     Component: AnnualFeedback,
     steps: 3,
-  },
-  {
-    id: "annual-g05-today",
-    title: "The Today page",
-    Component: AnnualToday,
-    steps: 2,
   },
   {
     id: "a08-ahead",

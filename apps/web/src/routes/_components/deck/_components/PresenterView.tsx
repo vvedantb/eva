@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { KeyboardEvent } from "react";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
@@ -17,6 +18,7 @@ import { DeckAmbient } from "./DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./DeckCamera";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
 import {
+  autoStepDelay,
   handleStepKey,
   isTypingTarget,
   useDeckNavigation,
@@ -55,7 +57,13 @@ export function PresenterView({
   // Destructured: reading `scale` off the object passed as a ref would make the
   // React Compiler treat it as a ref read during render.
   const { scale: stageScale, measure: measureStage } = useStageScale();
-  const syncRef = deckSyncRef(basePath, nav.applyRemote);
+  // The stage's messages only ever move the preview forward. Its timers are
+  // throttled whenever its window is hidden or covered, so a late step would
+  // otherwise pull the preview back.
+  const syncRef = deckSyncRef(basePath, (remoteSlide, remoteStep) => {
+    if (remoteSlide === slide && remoteStep <= nav.step) return;
+    nav.applyRemote(remoteSlide, remoteStep);
+  });
 
   // Next and back move whole slides, each starting from its first step: the
   // stage plays the build itself.
@@ -66,6 +74,21 @@ export function PresenterView({
   };
 
   const { entry, step, total } = nav;
+
+  // The preview plays each build on its own clock, the same one the stage uses,
+  // so it never sits on step 0 waiting for a hidden stage. These local steps
+  // are not broadcast (`applyRemote` does not post), so the windows never fight.
+  // A timer is outside React, so this is an effect.
+  const autoNext = (nav.direction > 0 || step === 0) && step < entry.steps;
+  const applyStep = nav.applyRemote;
+  useEffect(() => {
+    if (!autoNext) return;
+    const timer = setTimeout(
+      () => applyStep(slide, step + 1),
+      autoStepDelay(entry, step),
+    );
+    return () => clearTimeout(timer);
+  }, [autoNext, applyStep, slide, step, entry]);
   const upcoming = slide < total ? slides[slide] : undefined;
   // The preview has to match the stage, including a light slide's surface.
   const theme = entry.theme ?? "dark";
