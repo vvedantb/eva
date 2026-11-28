@@ -1,9 +1,9 @@
 {
   "$schema": "../../node_modules/oxlint/configuration_schema.json",
   "plugins": [],
-  "jsPlugins": [{ "name": "no-comments", "specifier": "./no-comments.mjs" }],
+  "jsPlugins": [{ "name": "vvedantb", "specifier": "@vvedantb/config/oxlint/plugin.mjs" }],
   "categories": {},
-  "rules": { "no-comments/no-comments": "error" },
+  "rules": { "vvedantb/no-comments": "error" },
   "ignorePatterns": [
     "**/node_modules/**",
     "**/*.gen.ts",

@@ -7,8 +7,7 @@
     {
       "name": "no-effect",
       "specifier": "@vvedantb/config/oxlint/no-effect.mjs"
-    },
-    { "name": "no-comments", "specifier": "./scripts/oxlint/no-comments.mjs" }
+    }
   ],
   "categories": {
     "correctness": "error",
@@ -16,7 +15,7 @@
     "perf": "warn"
   },
   "rules": {
-    "no-comments/no-comments": "error",
+    "vvedantb/no-comments": "error",
     "react/rules-of-hooks": "error",
     "react/capitalized-calls": "error",
     "react/exhaustive-deps": "warn",
@@ -266,7 +265,7 @@
         "scripts/check-shared-backend.mjs",
         "scripts/design-check.mjs"
       ],
-      "rules": { "no-comments/no-comments": "off" }
+      "rules": { "vvedantb/no-comments": "off" }
     }
   ],
   "ignorePatterns": [

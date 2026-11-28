@@ -14,7 +14,7 @@ Defer to Comment Sicko's fresh perspective.
 
 ## Lint rule
 
-`no-comments/no-comments` (`scripts/oxlint/no-comments.mjs`) is an error for the whole repo. Its keep-list is the mechanical form of Comment Sicko's: lint and tool directives (`oxlint-disable`, `@ts-expect-error`, `*-ignore` pragmas), license headers, `/** */` doc comments on exports, and comments with an issue or RFC link.
+`vvedantb/no-comments` (from `@vvedantb/config`) is an error for the whole repo. Its keep-list is the mechanical form of Comment Sicko's: lint and tool directives (`oxlint-disable`, `@ts-expect-error`, `*-ignore` pragmas), license headers, `/** */` doc comments on exports, and comments with an issue or RFC link.
 
 Ratchet: the last override in `.oxlintrc.json` turns the rule off for files that still hold untriaged comments. After you clean a file, remove it from that list. Never add a file.
 
