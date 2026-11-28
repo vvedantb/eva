@@ -7,7 +7,6 @@ const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 const PREFIX = "enc:";
 
-/** Reads and validates the 32-byte AES-256 encryption key from the ENCRYPTION_KEY env var. */
 function getKey(): Buffer {
   const hex = process.env.ENCRYPTION_KEY;
   if (!hex) {

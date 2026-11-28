@@ -5,15 +5,10 @@ import { useMotionCue } from "../deckContext";
 import { DUR, EASE } from "./tokens";
 
 export interface TickerProps {
-  /** The chips (or anything inline) to scroll. Rendered twice for a seamless loop. */
   items: readonly ReactNode[];
-  /** Seconds for one full lap. Larger is calmer; 30–60 reads as ambient. */
   duration?: number;
-  /** Scroll left to right instead. */
   reverse?: boolean;
-  /** Gap between items, in pixels. Also used between the two copies. */
   gap?: number;
-  /** Build step to fade in on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
   className?: string;

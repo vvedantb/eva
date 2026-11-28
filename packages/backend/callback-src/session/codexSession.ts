@@ -60,19 +60,6 @@ function tomlInlineTable(record: Record<string, string>): string {
   return `{ ${entries} }`;
 }
 
-/**
- * Eva's MCP servers (HTTP and repo stdio) as `[mcp_servers.*]` sections.
- *
- * Codex only reads MCP config from `CODEX_HOME/config.toml`, and both codex
- * paths point at the same CODEX_HOME (the SDK CLI and the app-server daemon,
- * which spawns after this file is written), so this is the one wiring point for
- * both. Table headers rather than dotted keys, appended last: a `[table]` in
- * the preserved account config can then never capture these keys.
- *
- * The bearer token rides in the config file next to `auth.json` rather than in
- * a `bearer_token_env_var`, because the callback deliberately scrubs the
- * transport credentials out of the environment agent tools inherit.
- */
 function codexMcpServerSections(servers: McpServers): string[] {
   return Object.entries(servers).flatMap(([name, server]) => {
     const header = ["", `[mcp_servers.${JSON.stringify(name)}]`];
@@ -106,9 +93,7 @@ export function buildCodexRuntimeConfig(
         return (
           !trimmed.startsWith("sandbox_mode") &&
           !trimmed.startsWith("approval_policy") &&
-          // Eva owns the Fast toggle; account config must not silently opt in.
           !trimmed.startsWith("service_tier") &&
-          // Drop any configured reasoning effort; the session lever wins when set.
           !(
             codexReasoningEffort && trimmed.startsWith("model_reasoning_effort")
           )

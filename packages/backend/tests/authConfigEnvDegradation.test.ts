@@ -1,22 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 
-/** Both modules read env at import time, so each test evaluates them afresh. */
 function resetAuthModules(): void {
   delete require.cache[require.resolve("../convex/sandboxAuthConfig")];
   delete require.cache[require.resolve("../convex/auth.config")];
 }
 
-/**
- * `auth.config.ts` is evaluated during module analysis, so anything it throws
- * fails the whole push. A freshly created local backend has no env vars until
- * the snapshot seed copies them in, and the seed runs after the gate that waits
- * on that push — so a throw here was unrecoverable, and every scheduled
- * snapshot build sat at the gate for fifteen minutes and failed (fix e5c1f018).
- *
- * The rule these tests hold: a missing auth env var costs the deployment that
- * one provider, never the push.
- */
 describe("auth config with no auth env vars", () => {
   beforeEach(() => {
     resetAuthModules();
@@ -55,8 +44,6 @@ describe("auth config with no auth env vars", () => {
   });
 
   test("a provider is omitted rather than half-configured", async () => {
-    // The CLI rejects a provider whose domain or jwks is undefined, which fails
-    // the push just as hard as a throw would.
     stubEnv("SANDBOX_JWT_JWKS", undefined);
     stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.eva.dev");
     const { default: config } = await import("../convex/auth.config");

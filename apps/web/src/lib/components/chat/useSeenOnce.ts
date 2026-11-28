@@ -9,7 +9,6 @@ import { useState } from "react";
  */
 export type SeenOnceStatus = "pending" | "above" | "seen";
 
-/** Nearest ancestor that scrolls vertically, the right IntersectionObserver root. */
 function findScrollParent(node: HTMLElement): HTMLElement | null {
   for (let el = node.parentElement; el; el = el.parentElement) {
     const { overflowY } = getComputedStyle(el);

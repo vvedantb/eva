@@ -15,7 +15,6 @@ interface Patch {
   fix: string;
 }
 
-/** One package per build step. The patches themselves are cited in the notes. */
 const PATCHES: readonly Patch[] = [
   {
     logo: "/brands/vercel-dark.svg",
@@ -41,7 +40,6 @@ export function AnnualPatchPackages() {
       <div className="mt-10 flex flex-col gap-5">
         {PATCHES.map((patch, index) => (
           <Reveal key={patch.name} step={index + 1}>
-            {/* p-7 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="rounded-[28px] p-7">
               <div className="flex items-center gap-3">
                 <img src={patch.logo} alt="" className="size-7" />

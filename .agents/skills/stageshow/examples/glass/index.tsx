@@ -1,10 +1,6 @@
 import { Badge, Bar, Chart, Icon, Popover, Menu, Stage, Window } from '../../kit'
 import './glass.css'
 
-// The glass theme: frosted, translucent surfaces over a soft color field
-// drawn from the accent. Window, popovers and anything with class ss-glass
-// blur what's behind them; text and icons stay opaque.
-
 export default function Glass() {
   return (
     <Stage specimen width={640} height={400} compact={{ below: 560, width: 350, height: 400 }} theme="glass" className="gl">

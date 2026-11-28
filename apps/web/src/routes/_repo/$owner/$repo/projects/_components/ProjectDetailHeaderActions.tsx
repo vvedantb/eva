@@ -41,10 +41,8 @@ interface ProjectDetailHeaderActionsProps {
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
-  /** The project's main chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
-  /** The start/stop control acts on this chat's sandbox. */
   shownChat: ProjectShownChat;
 }
 
@@ -70,7 +68,6 @@ export function ProjectDetailHeaderActions({
   const projectsPath = `${basePath}/projects`;
   const segment = entityPathSegment(project);
   const isArchived = project.archivedAt !== undefined;
-  // Archived: back to the list, as a session archive does.
   const projectArchive = useProjectArchive(repoId, () => {
     void navigate({ to: toInternalRepoHref(projectsPath) });
   });
@@ -90,8 +87,6 @@ export function ProjectDetailHeaderActions({
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         {isArchived ? <ArchivedLabel /> : null}
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
-        {/* The controls share the chat header track. Tasks start through
-            Eva and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
           <ProjectChatUsageLimits
@@ -116,7 +111,6 @@ export function ProjectDetailHeaderActions({
               />
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Siblings of the menu: Radix unmounts menu content on close. */}
           {projectMenu.dialogs}
           <ProjectArchiveDialog
             target={projectArchive.target}
@@ -124,11 +118,6 @@ export function ProjectDetailHeaderActions({
             onConfirm={projectArchive.confirm}
             isArchiving={projectArchive.isArchiving}
           />
-          {/* One control for both directions — see `SandboxStartStopButton`.
-            Inert while a chat turn is in flight. This is the only
-            wake/sleep control, and it follows the shown chat tab: a project
-            task runs on its own sandbox. The coordinator is read-only: no
-            Commit & push. */}
           {isArchived || shownChat.kind === "loading" ? null : shownChat.kind === "task" ? (
             <ProjectTaskSandboxButton
               key={shownChat.taskId}
@@ -151,11 +140,6 @@ export function ProjectDetailHeaderActions({
   );
 }
 
-/**
- * Start/stop for an open task tab's own sandbox (its session, not the
- * project's). Same rule as the task's chat: stop while active, start when
- * the task may start one.
- */
 function ProjectTaskSandboxButton({ taskId }: { taskId: Id<"agentTasks"> }) {
   const {
     isLoading,

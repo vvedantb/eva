@@ -23,11 +23,9 @@ const TOTAL = 141;
 interface Segment {
   label: string;
   count: number;
-  /** Bar fill. The done segment carries the brand gradient. */
   fill: string;
 }
 
-/** Left to right, in the order the bar reads. The full split is in the notes. */
 const SEGMENTS: readonly Segment[] = [
   {
     label: "Done",
@@ -44,7 +42,6 @@ const REVIEW_INDEX = 1;
 
 const percent = (count: number) => (count / TOTAL) * 100;
 
-/** Where the review segment sits, so the glow and its label line up with it. */
 const sumPercent = (segments: readonly Segment[]) =>
   segments.reduce((total, segment) => total + percent(segment.count), 0);
 
@@ -53,10 +50,8 @@ const REVIEW_WIDTH = sumPercent(SEGMENTS.slice(REVIEW_INDEX, REVIEW_INDEX + 1));
 
 const BAR_COLUMN = 640;
 const GRID_GAP = 64;
-/** The bar's top edge inside the grid: number, label and margins above it. */
 const BAR_TOP = 140;
 const REVIEW_CENTRE = ((REVIEW_LEFT + REVIEW_WIDTH / 2) / 100) * BAR_COLUMN;
-/** Soft light under the review segment. A painted gradient, never a blur. */
 const REVIEW_GLOW =
   "radial-gradient(closest-side, rgba(139,63,184,0.55), rgba(59,125,216,0.25) 55%, transparent)";
 
@@ -105,7 +100,6 @@ function QueueBar({ focused }: { focused: boolean }) {
           style={{ left: `${REVIEW_LEFT}%`, width: `${REVIEW_WIDTH}%` }}
         >
           <Sheen hero step={1} delay={0.2} className="size-full">
-            {/* The only segment worth naming, named where it sits. */}
             <m.div
               className="flex size-full items-center justify-center text-sm font-medium text-[var(--deck-on-ink,rgb(0_0_0/0.7))] tabular-nums"
               initial={{ opacity: 0 }}
@@ -154,7 +148,6 @@ export function Slide11WhatsNext() {
           </div>
 
           <Reveal step={1} from="right" delay={0.15} distance={40}>
-            {/* The waiting 43 grow into the review board on the next slide. */}
             <m.div layoutId={SHARED.review} transition={{ layout: MORPH }}>
               <Card>
                 <CountRoll
@@ -170,8 +163,6 @@ export function Slide11WhatsNext() {
             </m.div>
           </Reveal>
 
-          {/* The 43 in the bar and the 43 in the card are the same queue. */}
-          {/* Gated so the zero-length round cap never shows as a dot at rest. */}
           <m.div
             className="pointer-events-none absolute inset-0"
             initial={{ opacity: 0 }}

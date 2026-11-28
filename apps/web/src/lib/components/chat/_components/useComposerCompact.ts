@@ -31,10 +31,6 @@ export function useComposerCompact({
   const pillWidthRef = useRef(0);
   const wasCompactRef = useRef(true);
 
-  // An empty draft or attached files settle the layout without measuring, so
-  // skip the DOM reads then: read mid-render they force a synchronous layout
-  // of the whole page, ~100 ms when a session switch reveals a long chat.
-  // The pill width is still cached on the first keystroke's render.
   const needsMeasure = fileCount === 0 && !isEditorValueEmpty(value);
   const editorNode = needsMeasure
     ? chromeRef.current?.querySelector("[data-slot=input-group-control]")

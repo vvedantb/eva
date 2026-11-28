@@ -1,15 +1,5 @@
 "use node";
 
-/**
- * Provisions one `sessionRepos` row into its slot under `/tmp/workspace` —
- * the sandbox-side half of "multi-repo sessions" (see `workspaceLayout.ts`
- * and `_sessions/repos.ts` for the shared concept). Runs once per linked
- * repo, sequentially, from `sessionSandboxStartupWorkflow` after the primary
- * sandbox is up; the workflow clears `sandboxSetupPending` once every row has
- * been attempted (success or failure), so a linked repo can never wedge the
- * first turn forever.
- */
-
 import { v } from "convex/values";
 import type { GenericActionCtx } from "convex/server";
 import { internalAction } from "../_generated/server";
@@ -44,7 +34,6 @@ function logLinkedRepo(message: string): void {
   console.log(`[sandbox][linkedRepos] ${message}`);
 }
 
-/** Streams clone/install progress for one linked repo onto the session's startup timeline. */
 async function setLinkedRepoProgress(
   ctx: ActionCtx,
   sessionId: Id<"sessions">,
@@ -68,14 +57,12 @@ export const prepareLinkedRepo = internalAction({
     sessionId: v.id("sessions"),
     sessionRepoId: v.id("sessionRepos"),
     sandboxId: v.string(),
-    /** The primary repo, for resolving sandbox credentials. */
     repoId: v.id("githubRepos"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const details = `sessionId=${args.sessionId}, sessionRepoId=${args.sessionRepoId}`;
     await runLoggedGitStep("prepareLinkedRepo", details, async () => {
-      // Independent reads: fetch together, then check in the original order.
       const [row, primaryRepo, stillWanted] = await Promise.all([
         ctx.runQuery(internal.sessions.getSessionRepoInternal, {
           id: args.sessionRepoId,
@@ -94,8 +81,6 @@ export const prepareLinkedRepo = internalAction({
           `prepareLinkedRepo: primary repo ${args.repoId} not found`,
         );
       }
-      // Workflow retries can land after the user stopped the session; the
-      // first exec would resume the stopped VM and leave it billing.
       if (!stillWanted) {
         logLinkedRepo(
           `prepareLinkedRepo: sandbox stopped, skipping (${details})`,
@@ -104,8 +89,6 @@ export const prepareLinkedRepo = internalAction({
       }
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-      // 1. The workspace root + the primary's symlink into it. Idempotent —
-      // every linked repo's prep re-asserts the same link.
       await execHandle(
         sandbox,
         `mkdir -p /tmp/workspace && ln -sfn /tmp/repo ${primaryLinkPath(primaryRepo.name)}`,
@@ -113,8 +96,6 @@ export const prepareLinkedRepo = internalAction({
         "/",
       );
 
-      // 2. Credentials: linked repos can live under a different GitHub App
-      // installation than the primary, so the helper must mint tokens for both.
       await ensureGitCredentialHelper(
         ctx,
         sandbox,
@@ -123,9 +104,6 @@ export const prepareLinkedRepo = internalAction({
         [row.installationId],
       );
 
-      // 3. Clone (fresh sandbox) or catch the existing clone up to the base
-      // branch and make sure the session branch is checked out (resumed
-      // sandbox — this row was already cloned in a previous run).
       const hasGitDir =
         (
           await execHandle(
@@ -139,8 +117,6 @@ export const prepareLinkedRepo = internalAction({
       const completed: ProgressStep[] = [];
       const cloneLabel = `Cloning ${row.name}...`;
       const installLabel = `Installing ${row.name} dependencies...`;
-      // A fresh clone has no node_modules yet, so its install stage is certain
-      // and shows as pending; a resumed clone may skip it, so it is not planned.
       const plan =
         freshlyCloned && row.installDependencies
           ? [cloneLabel, installLabel]
@@ -208,7 +184,6 @@ export const prepareLinkedRepo = internalAction({
       }
       completed.push({ type: "tool", label: cloneLabel, status: "complete" });
 
-      // 4. Dependencies, once — only when this clone has never installed them.
       if (row.installDependencies) {
         const hasNodeModules =
           (
@@ -240,8 +215,6 @@ export const prepareLinkedRepo = internalAction({
       }
       await setLinkedRepoProgress(ctx, args.sessionId, completed);
 
-      // 5. This repo's own env vars, written at its own clone root — never
-      // merged into the sandbox-wide env file.
       const envVars = await resolveEnvVars(ctx, row.repoId);
       const envFileContent = formatEnvFile(envVars);
       if (envFileContent) {
@@ -255,14 +228,6 @@ export const prepareLinkedRepo = internalAction({
         clonedAt: Date.now(),
       });
 
-      // 6. Dev server, if this row configures one. The primary's dev server
-      // (launched earlier in `prepareSessionSandboxInternal`) never reaches
-      // this repo since it wasn't cloned yet at that point — this is the
-      // first point in the fresh-create flow where it can actually start.
-      // Only on a fresh clone: a resumed sandbox already relaunched every
-      // cloned row's server in `reuseSessionSandbox`, and
-      // `launchDevServerInVercelConsole` reuses an existing tmux session, so
-      // a second call would start a duplicate process in the same window.
       if (freshlyCloned && row.devCommand && row.devPort !== undefined) {
         await launchLinkedRepoDevServerInVercelConsole(
           sandbox,

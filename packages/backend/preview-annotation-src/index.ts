@@ -1,21 +1,3 @@
-/**
- * Select-element annotation tool injected into previewed pages by the sandbox
- * auth proxy (alongside nav-sync).
- *
- * Lives outside `convex/` and is bundled by `scripts/build-annotation-script.mjs`
- * into `convex/_sandbox_runtime/previewAnnotationScript.generated.ts`. It cannot
- * be embedded via `Function.prototype.toString()` from a Convex module: Convex
- * bundles `convex/` with esbuild `keepNames: true` + `minifyIdentifiers: true`,
- * which rewrites nested functions into `<minified>(fn, "fn")` calls against a
- * module-scope helper. Stringifying only the function body ships those calls
- * without the helper, so the injected copy dies with a ReferenceError before
- * installing a single listener.
- *
- * Runs in the previewed app's page, cross-origin from Eva. The message names
- * stay inline literals that the type-only protocol import checks; the
- * floating toolbar (`toolbar.ts`) is the one runtime import and is bundled in.
- */
-
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { openSelectionCard, type SelectionCard } from "./commentCard";
 import { openCommentsDrawer, type CommentsDrawer } from "./commentsDrawer";
@@ -30,7 +12,6 @@ import { mountToolbar, type Toolbar } from "./toolbar";
 
 type Msg = typeof PREVIEW_FRAME_MESSAGE;
 
-/** Message names Eva sends into the page. */
 type InboundType = Msg[
   | "annotateMode"
   | "annotateClear"
@@ -67,15 +48,10 @@ interface EvaAnnotationContext {
     borderRadius: string;
   };
   reactComponents: string[];
-  /** Role / aria / focusability summary, e.g. `role="button", focusable`. */
   accessibility: string;
-  /** Trimmed text of the parent element (<=150 chars). */
   nearbyText: string;
-  /** Up to four sibling identifiers, e.g. `button "Save", div.row (7 total)`. */
   nearbyElements: string;
-  /** Readable ancestor path below `html`, crossing shadow boundaries. */
   fullPath: string;
-  /** Tag-aware computed styles, e.g. `color: rgb(0, 0, 0); font-size: 14px`. */
   stylesSummary: string;
   environment: {
     viewportWidth: number;
@@ -123,7 +99,6 @@ interface EvaWebMcpDiscovery {
 
 function evaPreviewAnnotationScript(): void {
   const ATTR = "data-eva-annotate";
-  /** Computed values that carry no signal, so they never reach the agent. */
   const STYLE_DEFAULTS = [
     "rgba(0, 0, 0, 0)",
     "rgb(0, 0, 0)",
@@ -186,7 +161,6 @@ function evaPreviewAnnotationScript(): void {
     annotations?: { readOnlyHint?: boolean };
   };
   const compatibilityTools = new Map<string, RegisteredWebMcpTool>();
-  /** Our own shim, once installed — never mistaken for the page's own. */
   let compatibilityContext: object | null = null;
 
   function normalizeToolName(value: unknown): string | null {
@@ -195,21 +169,11 @@ function evaPreviewAnnotationScript(): void {
     return /^[A-Za-z0-9_.-]{1,128}$/.test(name) ? name : null;
   }
 
-  /**
-   * Reads a `modelContext` implementation off a host object. `Reflect.get`
-   * rather than a cast: `modelContext` is not in lib.dom yet and the repo bans
-   * type assertions.
-   */
   function modelContextOn(host: object): object | null {
     const value = Reflect.get(host, "modelContext");
     return value !== null && typeof value === "object" ? value : null;
   }
 
-  /**
-   * The implementation the previewed page itself provides, if any. Our shim is
-   * installed at `</head>` before app code runs, so it would otherwise always
-   * win and a page registering tools the spec way would list none.
-   */
   function pageModelContext(): object | null {
     for (const host of [navigator, document, window]) {
       const ctx = modelContextOn(host);
@@ -258,8 +222,6 @@ function evaPreviewAnnotationScript(): void {
             new DOMException("The WebMCP tool is stale", "InvalidStateError"),
           );
         }
-        // Forward the caller's signal so an Eva-side timeout actually reaches
-        // the tool; a fresh controller here could never be aborted.
         return Promise.resolve(
           registered.execute(input, {
             signal: options?.signal ?? new AbortController().signal,
@@ -268,10 +230,6 @@ function evaPreviewAnnotationScript(): void {
       },
     };
     try {
-      // `navigator` is the surface the spec (and the official polyfill) uses.
-      // `writable` matters: a module doing `navigator.modelContext = impl` runs
-      // in strict mode, so a non-writable property would throw a TypeError and
-      // take the previewed app down with it.
       Object.defineProperty(navigator, "modelContext", {
         value: ctx,
         configurable: true,
@@ -279,8 +237,6 @@ function evaPreviewAnnotationScript(): void {
       });
       compatibilityContext = ctx;
     } catch {
-      // A locked-down navigator is not worth breaking annotation over; form
-      // tools still work and `implementation` reports "none".
     }
   }
   ensureModelContext();
@@ -350,25 +306,12 @@ function evaPreviewAnnotationScript(): void {
     }
   }
 
-  /**
-   * Eva's origin, handed over by the proxy at injection time. `document.referrer`
-   * alone is not usable: the proxy sends `referrer-policy: no-referrer`, so on an
-   * authenticated load the referrer is empty (guard disabled, replies broadcast
-   * to "*"), and after an in-app navigation it becomes the preview's own origin
-   * (Eva's messages silently dropped). Read once, then removed so the previewed
-   * page keeps its own global scope.
-   */
   function injectedParentOrigin(): string {
     const raw = Reflect.get(window, "__evaPreviewParentOrigin");
     Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
     return typeof raw === "string" && raw ? originOf(raw) : "";
   }
 
-  /**
-   * Eva's origin, or "" when unknown (ungated proxy with no Eva URL, and a
-   * browser without `ancestorOrigins` or a referrer). Unknown means silent:
-   * the bridge never posts to "*" and never trusts a message of any origin.
-   */
   const parentOrigin =
     injectedParentOrigin() ||
     originOf(window.location.ancestorOrigins?.item(0) ?? "") ||
@@ -380,9 +323,7 @@ function evaPreviewAnnotationScript(): void {
   let labelEl: HTMLDivElement | null = null;
   let rectRaf = 0;
   let toolbar: Toolbar | null = null;
-  /** Direct link only: the note card for the picked element. */
   let selectionCard: SelectionCard | null = null;
-  /** Direct link only: set when the proxy handed over a preview-comments token. */
   let evaSession: EvaSession | null = null;
   let commentsDrawer: CommentsDrawer | null = null;
 
@@ -452,8 +393,6 @@ function evaPreviewAnnotationScript(): void {
           message: string;
         },
   ): void {
-    // Payloads carry page text, console output and failing request URLs, so
-    // they go to Eva's exact origin, never "*".
     if (!parentOrigin) return;
     window.parent.postMessage(payload, parentOrigin);
   }
@@ -553,11 +492,6 @@ function evaPreviewAnnotationScript(): void {
     return names;
   }
 
-  /**
-   * Drops CSS-module hash suffixes: `card_a1b2c3` -> `card`. Underscore only —
-   * a hyphen rule would eat ordinary utility classes (`items-center` ->
-   * `items`).
-   */
   function stripClassHash(className: string): string {
     return className.replace(/_[a-zA-Z0-9]{5,}$/, "");
   }
@@ -805,12 +739,9 @@ function evaPreviewAnnotationScript(): void {
     labelEl.style.left = Math.max(0, rect.left) + "px";
   }
 
-  /** `<tag.firstClass>`, without the React name `chipLabel` puts in front. */
   function elementChip(el: Element): string {
     const tag = el.tagName.toLowerCase();
     const rawClass = el.classList.item(0);
-    // Fall back to the raw class when the strip consumes all of it (a class
-    // that is nothing but a hash), rather than rendering "<div.>".
     const stripped = rawClass ? stripClassHash(rawClass) : "";
     const cls =
       el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
@@ -884,7 +815,6 @@ function evaPreviewAnnotationScript(): void {
     paintBox(target, chipLabel(target), false);
   }
 
-  /** `prop: value; prop: value` as pairs, for the card's details. */
   function styleLines(summary: string): { prop: string; value: string }[] {
     const out: { prop: string; value: string }[] = [];
     for (const entry of summary.split("; ")) {
@@ -900,7 +830,6 @@ function evaPreviewAnnotationScript(): void {
     return out;
   }
 
-  /** A picked element is done: clear it and tell the toolbar what happened. */
   function finishSelection(notice: string): void {
     clearAll();
     setMode(false);
@@ -925,8 +854,6 @@ function evaPreviewAnnotationScript(): void {
     const rect = target.getBoundingClientRect();
     paintBox(target, chipLabel(target), true);
     if (!embedded) {
-      // No Eva to take the annotation: a card takes the note and copies it
-      // with the element's context, to paste into a chat or an issue.
       selectionCard?.close();
       const session = evaSession;
       selectionCard = openSelectionCard({
@@ -982,9 +909,6 @@ function evaPreviewAnnotationScript(): void {
       post({ type: "eva-preview-annotate-dismissed" });
       return;
     }
-    // F freezes motion mid-transition, so the user can then click the state
-    // they want to comment on. A key, because reaching for a menu takes longer
-    // than most transitions last.
     const typing =
       event.target instanceof HTMLElement &&
       (event.target.isContentEditable ||
@@ -1007,11 +931,6 @@ function evaPreviewAnnotationScript(): void {
   let frozenMedia: HTMLMediaElement[] = [];
   let freezeStyle: HTMLStyleElement | null = null;
 
-  /**
-   * Pauses every running animation, transition and playing media element in
-   * place, and holds CSS animations that start later. JS loops that draw each
-   * frame themselves (canvas, requestAnimationFrame) cannot be paused here.
-   */
   function setFrozen(next: boolean): void {
     if (next === frozen) return;
     frozen = next;
@@ -1033,11 +952,9 @@ function evaPreviewAnnotationScript(): void {
       freezeStyle?.remove();
       freezeStyle = null;
       for (const animation of frozenAnimations) {
-        // A node removed while frozen leaves an animation that cannot play.
         try {
           animation.play();
         } catch {
-          // Nothing to resume.
         }
       }
       for (const media of frozenMedia) void media.play().catch(() => {});
@@ -1087,12 +1004,6 @@ function evaPreviewAnnotationScript(): void {
     return tag;
   }
 
-  /**
-   * Never reads `element.value`. The snapshot is shown in Eva and sent to the
-   * model, and unlabelled fields are common in small dev apps, so falling back
-   * to the live value would ship whatever the user had typed — a password, an
-   * API key, an email address — straight into the conversation.
-   */
   function accessibleName(element: HTMLElement): string {
     const labelled = element.getAttribute("aria-label");
     if (labelled) return labelled.replace(/\s+/g, " ").trim().slice(0, 80);
@@ -1187,7 +1098,6 @@ function evaPreviewAnnotationScript(): void {
     };
   }
 
-  /** Page implementation first, our compatibility shim only as a fallback. */
   function modelContextRoot(): object | null {
     return pageModelContext() ?? compatibilityContext;
   }
@@ -1264,10 +1174,6 @@ function evaPreviewAnnotationScript(): void {
     };
   }
 
-  /**
-   * The fields a declarative form tool advertises. Shared by listing and
-   * invoking so an invoke can only ever fill what the agent was shown.
-   */
   function declaredFormFields(form: HTMLFormElement): {
     properties: Record<string, unknown>;
     required: string[];
@@ -1364,8 +1270,6 @@ function evaPreviewAnnotationScript(): void {
     for (const tool of [...fromApi, ...fromForms]) {
       if (!byName.has(tool.name)) byName.set(tool.name, tool);
     }
-    // Reported verbatim in the prompt sent to the agent, so it has to be
-    // honest about where the tools actually came from.
     const implementation = pageModelContext()
       ? "native"
       : fromApi.length > 0
@@ -1390,8 +1294,6 @@ function evaPreviewAnnotationScript(): void {
       const formName = normalizeToolName(
         node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool"),
       );
-      // Same rule as listing: a form without a description is never shown to
-      // the agent, so it must not be submittable either.
       if (formName === name && formToolDescription(node)) return node;
     }
     return null;
@@ -1401,9 +1303,6 @@ function evaPreviewAnnotationScript(): void {
     form: HTMLFormElement,
     args: Record<string, unknown>,
   ): void {
-    // Only the fields listing advertised. `namedItem` also matches by id, so
-    // an unchecked key could reach controls the tool never declared before
-    // `requestSubmit()` fires the page's real handler.
     const declared = new Set(Object.keys(declaredFormFields(form).properties));
     for (const key of Object.keys(args)) {
       if (!declared.has(key)) continue;
@@ -1411,8 +1310,6 @@ function evaPreviewAnnotationScript(): void {
       const value = args[key];
       const text =
         typeof value === "string" ? value : JSON.stringify(value ?? "");
-      // A radio group comes back as a RadioNodeList; its `value` setter checks
-      // the matching radio.
       if (
         control instanceof HTMLInputElement ||
         control instanceof HTMLTextAreaElement ||
@@ -1426,12 +1323,6 @@ function evaPreviewAnnotationScript(): void {
 
   const PAGE_TOOL_TIMEOUT_MS = 25_000;
 
-  /**
-   * Runs page-provided WebMCP code under a deadline. The web executor waits
-   * ~30 s and the backend ~40 s, so the page must give up first with a clear
-   * error rather than leave both hanging. The signal is aborted on timeout so
-   * well-behaved tools can stop work too.
-   */
   function withPageTimeout(
     timeoutMessage: string,
     run: (signal: AbortSignal) => unknown,
@@ -1443,8 +1334,6 @@ function evaPreviewAnnotationScript(): void {
         controller.abort(error);
         reject(error);
       }, PAGE_TOOL_TIMEOUT_MS);
-      // `.then(run)` so a synchronous throw from page code becomes a rejection
-      // instead of escaping into the page.
       Promise.resolve(controller.signal)
         .then(run)
         .then(
@@ -1499,9 +1388,6 @@ function evaPreviewAnnotationScript(): void {
     name: string,
     args: Record<string, unknown>,
   ): Promise<unknown> {
-    // One deadline for lookup and execution together: either can hang.
-    // A native `<form toolname>` without `toolautosubmit` is filled and then
-    // waits for a person to press submit, so say that rather than "timed out".
     const form = findDeclarativeForm(name);
     const waitsForUser = form !== null && !form.hasAttribute("toolautosubmit");
     const timeoutMessage = waitsForUser
@@ -1512,7 +1398,6 @@ function evaPreviewAnnotationScript(): void {
     );
   }
 
-  /** Native tool results arrive as JSON text; unwrap them when they parse. */
   function parseJsonText(value: unknown): unknown {
     if (typeof value !== "string") return value;
     try {
@@ -1553,9 +1438,6 @@ function evaPreviewAnnotationScript(): void {
         );
       });
       if (typeof executeTool === "function" && match) {
-        // Chrome's native ModelContext takes the arguments as JSON text and
-        // answers with JSON text; it also reports `inputSchema` as a string,
-        // which is how a native tool is told apart from a polyfill's.
         const native = typeof Reflect.get(match, "inputSchema") === "string";
         const result: unknown = await executeTool.call(
           ctx,
@@ -1661,7 +1543,6 @@ function evaPreviewAnnotationScript(): void {
       .finally(restoreCaptureChrome);
   }
 
-  /** Eva sends its resolved token colours; anything malformed is ignored. */
   function parseToolbarTheme(value: unknown): ToolbarTheme | null {
     if (typeof value !== "object" || value === null) return null;
     const read = (key: string): string => {
@@ -1700,7 +1581,6 @@ function evaPreviewAnnotationScript(): void {
     return Object.values(theme).some((entry) => entry === "") ? null : theme;
   }
 
-  /** True inside Eva's iframe; false on a direct sandbox link. */
   const embedded = window !== window.top;
 
   function copyToClipboard(text: string): Promise<boolean> {
@@ -1710,7 +1590,6 @@ function evaPreviewAnnotationScript(): void {
     );
   }
 
-  /** Short, paste-ready summary of a picked element for a direct link. */
   function formatContextForClipboard(
     context: EvaAnnotationContext,
     note: string,
@@ -1730,7 +1609,6 @@ function evaPreviewAnnotationScript(): void {
     return lines.join("\n");
   }
 
-  /** Direct link: copy the screenshot, or download it when copy is blocked. */
   function saveScreenshotLocally(): void {
     toolbar?.update({ capturing: true });
     captureViewport()
@@ -1896,8 +1774,6 @@ function evaPreviewAnnotationScript(): void {
   window.addEventListener("scroll", onScrollOrResize, true);
   window.addEventListener("resize", onScrollOrResize);
 
-  // One toolbar per tab: the top page of a direct link, or the document Eva
-  // frames directly. A page's own same-origin iframes get none.
   const ownsToolbar =
     window === window.top ||
     (window.parent === window.top && parentOrigin !== window.location.origin);
@@ -1944,14 +1820,10 @@ function evaPreviewAnnotationScript(): void {
           }
         },
       },
-      // Embedded, Eva's state message turns the tools on; until it arrives
-      // only the ones that need no parent are shown.
       { selectEnabled: !embedded },
     );
   }
 
-  // Direct link: the proxy may hold a token for this sandbox's chat. With it
-  // the Comments button, the drawer and "Send to Eva" appear.
   if (ownsToolbar && !embedded) {
     void loadEvaSession().then(async (session) => {
       if (!session) return;
@@ -1963,7 +1835,6 @@ function evaPreviewAnnotationScript(): void {
           commentCount: existing.filter((c) => c.resolved === null).length,
         });
       } catch {
-        // The drawer shows the failure when it is opened.
       }
     });
   }
@@ -1971,8 +1842,6 @@ function evaPreviewAnnotationScript(): void {
   post({ type: "eva-preview-annotate-ready" });
 }
 
-// A throw here would silently disable annotations, exactly the failure mode the
-// build step exists to prevent. Log loudly so the iframe console names it.
 try {
   evaPreviewAnnotationScript();
 } catch (error) {

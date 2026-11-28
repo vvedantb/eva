@@ -24,11 +24,8 @@ export function MessageFooter({
 }: {
   at: number;
   finishedAt?: number;
-  /** Agent replies: the user turn before it (`buildPrecedingUserTurns`), which holds the model it ran on. */
   turn?: { model?: string; reasoningLevel?: string; credentialSourceLabel?: string };
-  /** Extra classes for the row, such as a teammate's inset. */
   className?: string;
-  /** First in the row: a coordinator message's "N replies". */
   leading?: ReactNode;
 }) {
   const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);

@@ -3,18 +3,12 @@ import { cn } from "@eva/ui";
 import { Message, MessageContent, ProviderIcon } from "@vvedantb/ui";
 import { useAppScheme, Reveal } from "../../_components/DeckPrimitives";
 
-/** What the one person types. Short enough to sit on a single line. */
 const MESSAGES: readonly string[] = [
   "Ship the referral export fix",
   "Review overnight bug reports",
   "Draft the September changelog",
 ];
 
-/**
- * The composer bottom row: the app's compact prompt pill plus the muted bar
- * that carries the model picker. Static copies of `ChatComposer`'s markup —
- * the real components need a Convex repo, a draft and a submit handler.
- */
 function EvaComposer() {
   return (
     <div className="p-3">

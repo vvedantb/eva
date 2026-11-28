@@ -24,7 +24,6 @@ export interface EvaNavItem {
   icon: NavIcon;
   active?: boolean;
   badge?: string;
-  /** Rows `RepoNavSections` drops when the Simple Mode flag is on. */
   simpleHidden?: boolean;
 }
 

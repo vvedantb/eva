@@ -1,11 +1,6 @@
 import { Bar, Field, Popover, Stage, Window, type Act, type Layout, BrandMark, Toast } from '../../kit'
 import './gcal.css'
 
-// Google Calendar, week view. Context: a quiet week with today marked.
-// Action: drag across an empty Thursday afternoon, the quick-create popup
-// opens, a title is typed and saved. Result: the event settles into the grid
-// and the "Event saved" snackbar offers Undo, which is the loop's reset.
-
 type S = {
   draft: { show: boolean; start: number; end: number }
   saved: boolean
@@ -24,10 +19,8 @@ const initial: S = {
   snack: false,
 }
 
-// Reduced motion shows the payoff: the event saved into the grid
 const poster: S = { ...initial, draft: { show: true, start: 780, end: 870 }, saved: true, title: 'Design review' }
 
-// Geometry per layout. Minutes are from midnight.
 const GEO = {
   wide: { stage: { w: 800, h: 460 }, gutter: 36, hour: 44, from: 10 * 60, rows: 10, today: 4, popW: 352 },
   compact: { stage: { w: 400, h: 380 }, gutter: 16, hour: 40, from: 10 * 60, rows: 9, today: 0, popW: 220 },
@@ -42,10 +35,8 @@ const WEEK = [
   { d: 'FRI', n: 23 },
   { d: 'SAT', n: 24 },
 ]
-// 4-day view starts on today, as Google Calendar's does
 const FOUR = WEEK.slice(4).concat([{ d: 'SUN', n: 25 }])
 
-// Existing events, by date: [date, start, end, bar widths]
 const EVENTS: [number, number, number, number[]][] = [
   [19, 600, 660, [44, 28]],
   [20, 690, 750, [52, 30]],
@@ -89,11 +80,9 @@ async function script(a: Act<S>) {
 
   await a.wait(700)
 
-  // 1. Drag down Thursday afternoon, 1:00 to 2:30
   a.mark('drag')
   const from = { x: col.x + col.width * 0.8, y: y(780) + 3 }
   const to = { x: col.x + col.width * 0.8, y: y(870) - 2 }
-  // Google Calendar keeps the arrow through the press and drag-creation.
   await a.move(from)
   await a.wait(250)
   await a.drag(
@@ -107,7 +96,6 @@ async function script(a: Act<S>) {
   await a.set({ draft: { show: true, start: 780, end: 870 } })
   await a.wait(200)
 
-  // 2. The quick-create popup opens beside the new block
   a.mark('popup')
   const block = a.rect('draft')
   const pop = a.rect('popup', { layout: true })
@@ -117,11 +105,9 @@ async function script(a: Act<S>) {
   await a.set({ pop: { show: true, x: px, y: py }, focused: true })
   await a.wait(500)
 
-  // 3. Type a title
   await a.type('title', 'Design review', { interval: 70 })
   await a.wait(500)
 
-  // 4. Save: the popup closes and the block settles into the grid
   a.mark('save')
   await a.move({ at: 'save', x: 0.82, y: 0.62 })
   await a.wait(250)
@@ -131,7 +117,6 @@ async function script(a: Act<S>) {
   await a.set({ snack: true })
   await a.wait(2400)
 
-  // 5. Undo, the caused reset
   a.mark('undo')
   await a.move({ at: 'undo', x: 0.9, y: 0.88 })
   await a.wait(300)
@@ -142,8 +127,6 @@ async function script(a: Act<S>) {
   await a.snap({ ...initial })
   await a.wait(300)
 }
-
-/* ---- Material icons (the product's set), 24 grid ---- */
 
 const MI = {
   menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',

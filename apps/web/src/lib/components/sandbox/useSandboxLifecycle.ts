@@ -6,7 +6,6 @@ import { sandboxStartupEntityId } from "@eva/shared";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
-/** Same union for sessions, quick tasks and projects. */
 type SandboxStatus = Doc<"sessions">["status"];
 
 type SandboxAction = "start" | "stop";
@@ -29,13 +28,10 @@ export function useSandboxControls({
   onStarted,
 }: {
   status: SandboxStatus | undefined;
-  /** Keys the startup steps; undefined before the owner's session exists. */
   owner: SandboxOwner | undefined;
-  /** False in a hidden cached session shell: skip the startup stream. */
   active?: boolean;
   start: () => Promise<unknown>;
   stop: () => Promise<unknown>;
-  /** After a start that did not fail (a quick task opens its sandbox view). */
   onStarted?: () => void;
 }) {
   const [pending, setPending] = useState<SandboxAction | null>(null);
@@ -46,11 +42,8 @@ export function useSandboxControls({
       : "skip",
   );
 
-  /** Runs `request` with `action` pending; the toast is the error report. */
   const run = async (action: SandboxAction, request: () => Promise<void>) => {
     setPending(action);
-    // `.finally`, not a `try`/`finally` statement: React Compiler bails on
-    // the whole file for a `try` without a `catch`.
     await request()
       .catch(() => undefined)
       .finally(() => setPending(null));
@@ -70,7 +63,6 @@ export function useSandboxControls({
     isSandboxActive: status === "active",
     isSandboxStarting: pending === "start" || status === "starting",
     isSandboxStopping: pending === "stop" || status === "stopping",
-    /** Startup steps while the sandbox wakes; undefined otherwise. */
     sandboxStartupActivity: startupStreaming?.currentActivity,
     handleStartSandbox,
     handleStopSandbox,

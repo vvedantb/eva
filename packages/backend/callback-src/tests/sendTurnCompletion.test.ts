@@ -7,7 +7,6 @@ import {
 } from "../runtime/turnLease.js";
 import type { JsonObject } from "../types.js";
 
-// Only the network call is faked.
 const realClient = { ...(await import("../http/convexClient.js")) };
 const callConvexWithRetry = mock<typeof realClient.callConvexWithRetry>();
 mock.module("../http/convexClient.js", () => ({
@@ -36,7 +35,6 @@ test("sends a redacted completion after the lease is released", async () => {
     return null;
   });
   beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 2 });
-  // Built at runtime so secret scanners do not flag a fake token in the source.
   const token = ["ghs", "A1b2C3d4E5f6G7h8I9j0"].join("_");
 
   await sendTurnCompletion("sessionWorkflow:completeTurn", {
@@ -59,8 +57,6 @@ test("sends a redacted completion after the lease is released", async () => {
         turnId: "turn-1",
         leaseGeneration: 2,
       },
-      // A heartbeat answered `closed` after this point must not read as a
-      // takeover (session 225), so the lease is gone before the send.
       leaseAtSend: null,
     },
   ]);

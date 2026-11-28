@@ -32,8 +32,6 @@ export function useSessionTurnPorts(
           expected === "start"
             ? send.withOptimisticUpdate((localStore) => {
                 insertSentTurnOptimistically(localStore, chatId, args, accounts);
-                // A second send before the server answers then queues behind
-                // this one instead of racing it.
                 openChatTurnOptimistically(localStore, chatId);
               })
             : send;

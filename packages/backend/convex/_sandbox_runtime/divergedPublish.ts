@@ -71,11 +71,6 @@ export function rewrittenBranchIsOwnHistory(
   return tip.length > 0 && localBranchReflogShas.includes(tip);
 }
 
-/**
- * The message and its detector live together: the web app offers a one-click
- * force-push recovery for exactly this refusal, so the wording and the
- * `publishErrorNeedsForcePush` check must never drift apart.
- */
 const REWRITTEN_BRANCH_MARKER = "into a rewritten local branch";
 
 /**

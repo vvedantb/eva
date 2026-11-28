@@ -50,7 +50,6 @@ export function ActivityTimeline({
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
-  /** An archived task: comments show, but nobody can add, reply, edit or delete. */
   readOnly: boolean;
 }) {
   const [deletingCommentId, setDeletingCommentId] =
@@ -92,7 +91,6 @@ export function ActivityTimeline({
 
   const userComments = comments?.filter((c) => c.authorId) ?? [];
   const repliesByParentId = buildRepliesByParentId(userComments);
-  // Comments and task updates only: agent runs live in the sandbox chat.
   const segments = buildTaskTimeline({
     createdAt,
     activity: taskActivity,
@@ -165,12 +163,8 @@ export function ActivityTimeline({
                   )
                   .join("-")}`}
                 index={segmentIndex}
-                // Indented by the comment card's own row padding (14px) so rail
-                // avatars sit in the same column as avatars inside the cards.
                 className="relative flex flex-col gap-4 pl-3.5"
               >
-                {/* Rail only through non-comment events in this contiguous block.
-                    22px = 14px indent + half of the 16px avatar slot. */}
                 <div
                   aria-hidden
                   className="pointer-events-none absolute bottom-2 left-[22px] top-2 w-px -translate-x-1/2 bg-border"

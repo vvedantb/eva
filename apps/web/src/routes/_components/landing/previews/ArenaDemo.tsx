@@ -13,15 +13,6 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./ArenaDemo.css";
 
-// Testing Arena: the code checked against a spec. Beats: the requirements of
-// checkout-rework.md are checked one by one, each passing or failing; every
-// failure opens as a gap in the list beside it, slotted in by severity (the
-// critical one lands above the minor one found first); then the visitor
-// turns the top gap into a task in one click (the payoff).
-//
-// Real strings: the document, the six requirements, the met count, the
-// three gaps with their severities, and the Create task button.
-
 type Severity = "critical" | "major" | "minor";
 
 interface Requirement {
@@ -30,7 +21,6 @@ interface Requirement {
   gap?: { title: string; severity: Severity };
 }
 
-/** In the document's order: the order they are checked. */
 const REQUIREMENTS: readonly Requirement[] = [
   { id: "1.2", text: "Saved addresses" },
   {
@@ -63,21 +53,15 @@ const SEVERITY: Record<
   minor: { label: "Minor", tone: "neutral" },
 };
 
-/** The gaps as the list shows them: most severe first. */
 const GAPS = REQUIREMENTS.flatMap((req, index) =>
   req.gap ? [{ ...req.gap, id: req.id, index }] : [],
 ).toSorted((a, b) => RANK[a.severity] - RANK[b.severity]);
 
-/**
- * The phone column has room for two gaps: it keeps the two most severe, and
- * the minor one is only in the wide design.
- */
 const COMPACT_GAPS = GAPS.slice(0, 2);
 
 type Task = "idle" | "busy" | "done";
 
 type S = {
-  /** Requirements checked so far, in order; the next one is being checked. */
   checked: number;
   scanning: boolean;
   task: Task;

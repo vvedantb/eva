@@ -7,12 +7,6 @@ import {
   type FeedbackItem,
 } from "../_automationEvents/messages";
 
-/**
- * Pure rules of the agent's PR watch: which webhooks matter, what changed since
- * the agent was last told, and the message that wakes it. Unit-tested in
- * tests/prWatch.test.ts.
- */
-
 export type PrWatch = Infer<typeof prWatchValidator>;
 
 /**
@@ -31,7 +25,6 @@ const LISTED_CHECKS = 10;
 export interface WatchedCheck {
   name: string;
   state: "pending" | "passed" | "failed";
-  /** GitHub's word for a failure that is not a plain "failure" (cancelled, …). */
   conclusion: string | null;
   required: boolean;
   url: string | null;
@@ -44,9 +37,7 @@ export interface PrSnapshot {
   headSha: string;
   checks: ReadonlyArray<WatchedCheck>;
   mergeability: Mergeability;
-  /** Trusted human comments newer than the watch's `remarksThrough`. */
   remarks: ReadonlyArray<FeedbackItem>;
-  /** GitHub time of the newest of `remarks`, null when there are none. */
   remarksNewestAt: number | null;
 }
 
@@ -57,11 +48,8 @@ export type PrWatchChange =
   | { kind: "conflicting" };
 
 export interface PrWatchReport {
-  /** What the agent has not been told yet. Empty means no wake. */
   changes: PrWatchChange[];
-  /** The watch to store, whether or not anything is reported. */
   next: PrWatch;
-  /** This wake spends the last one before the cap, so the watch ends after it. */
   exhausted: boolean;
 }
 
@@ -113,7 +101,6 @@ export function evaluatePrWatch(
 
   let failedChecks = headMoved ? [] : watch.failedChecks;
   let passed = headMoved ? false : watch.passed;
-  // No checks at all keeps the last state: GitHub may not have queued them yet.
   if (snapshot.checks.length > 0) {
     const failed = snapshot.checks.filter((check) => check.state === "failed");
     const newlyFailed = failed.filter(
@@ -122,7 +109,6 @@ export function evaluatePrWatch(
     if (newlyFailed.length > 0) {
       changes.push({ kind: "checks_failed", failed: newlyFailed });
     }
-    // A check that runs again leaves the list, so failing again is news.
     failedChecks = failed.map((check) => check.name);
 
     const required = snapshot.checks.filter((check) => check.required);
@@ -145,14 +131,10 @@ export function evaluatePrWatch(
   if (snapshot.mergeability === "conflicting" && !watch.conflicting) {
     changes.push({ kind: "conflicting" });
   }
-  // The first read is the baseline: checks and conflicts that were already
-  // there when the watch started are not news. Comments are, since the cursor
-  // starts at the watch's start.
   const reported =
     watch.headSha === undefined
       ? changes.filter((change) => change.kind === "remarks")
       : changes;
-  // "unknown" is GitHub still computing; only a clear answer changes the state.
   const conflicting =
     snapshot.mergeability === "unknown"
       ? watch.conflicting
@@ -189,7 +171,6 @@ function checkLine(check: WatchedCheck): string {
       ? ""
       : ` (${check.conclusion})`;
   const link = check.url === null ? "" : ` ([details](${check.url}))`;
-  // Check names come from workflow files a PR can edit: keep each on one line.
   const name = check.name.replace(/\s+/g, " ").trim();
   return `  - ${name}${how}${link}`;
 }

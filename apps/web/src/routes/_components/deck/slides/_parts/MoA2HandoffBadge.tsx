@@ -5,7 +5,6 @@ import { DUR, EASE, Pulse } from "../../_components/motion";
 const BADGE_W = 240;
 const BADGE_H = 64;
 
-/** The provider's name, with a painted ring (not a box-shadow) when it holds the job. */
 function BadgeFace({ name, lit }: { name: string; lit: boolean }) {
   return (
     <m.div
@@ -44,10 +43,8 @@ export function MoA2HandoffBadge({
 }: {
   name: string;
   lit: boolean;
-  /** Centre of the badge in the handoff stage, in pixels. */
   x: number;
   receives?: boolean;
-  /** Seconds after step 1 when the conversation lands, for the ring to start. */
   landAt: number;
 }) {
   return (

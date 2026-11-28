@@ -28,7 +28,6 @@ export function ProjectTaskPromptCard({
 }: {
   task: ProjectTaskRow;
   repoId: Id<"githubRepos">;
-  /** The task or its project is archived. */
   readOnly: boolean;
 }) {
   const theme = EVA_THEME[useScheme()];

@@ -14,7 +14,6 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/** Grey bars standing in for text the room is not meant to read. */
 function Bars({ widths }: { widths: readonly number[] }) {
   return (
     <div className="flex flex-col gap-2.5">
@@ -165,7 +164,6 @@ export function MoF2BrowserTab() {
           style={{ background: BRAND_GRADIENT }}
         />
         <span className="text-[12px] text-white/70">Eva</span>
-        {/* The chime: one ring of the bell, as the count lands. */}
         <m.span
           aria-hidden
           className="origin-top text-white/55"

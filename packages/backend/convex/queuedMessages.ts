@@ -10,10 +10,6 @@ import type { DatabaseReader } from "./_generated/server";
 const parentIdValidator = queuedMessageFields.parentId;
 type QueueParentId = Infer<typeof parentIdValidator>;
 
-/**
- * A session's queue lives on its chats. A bare session id (an MCP caller
- * naming the session) reads its Main chat's queue.
- */
 async function resolveQueueParent(
   db: DatabaseReader,
   parentId: QueueParentId,
@@ -80,11 +76,9 @@ export const update = authMutation({
       throw new Error("Queued message cannot be empty");
     }
 
-    // Editing a queued annotation degrades it to a plain message.
     await ctx.db.patch(args.id, {
       content,
       displayContent: undefined,
-      // The edit replaces the prompt that carried the element context.
       annotation: undefined,
     });
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });

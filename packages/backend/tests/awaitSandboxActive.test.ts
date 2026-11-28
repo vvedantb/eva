@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { awaitSandboxActive } from "../convex/mcp/orchestratorDelivery";
 
-/**
- * The start-and-wait loop shared by the MCP `start_sandbox` path and the
- * `/p/…` wake link. Driven with fake I/O so the race handling (a stop settling
- * to closed, a start that never comes up) is pinned without a sandbox.
- */
-
 function harness(statuses: Array<string | undefined>) {
   let reads = 0;
   let starts = 0;

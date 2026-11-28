@@ -12,7 +12,6 @@ export type VmMemory = {
   swapUsedMb: number;
 };
 
-/** One sample per window keeps log volume low; heartbeats can fire every second. */
 const VM_MEMORY_SAMPLE_INTERVAL_MS = 30_000;
 let lastSampleAt = 0;
 
@@ -57,7 +56,6 @@ function readVmMemory(): VmMemory | null {
   try {
     return parseMeminfo(readFileSync("/proc/meminfo", "utf8"));
   } catch {
-    // Not Linux, or /proc unreadable.
     return null;
   }
 }
@@ -83,7 +81,6 @@ export function appendVmMemory(body: URLSearchParams, now = Date.now()): void {
   if (oomKills !== null) body.set("oomKills", String(oomKills));
 }
 
-/** Below this much free RAM, a cold `tsc` or build can push the VM into swap thrash. */
 const LOW_MEMORY_AVAILABLE_MB = 1024;
 
 /**

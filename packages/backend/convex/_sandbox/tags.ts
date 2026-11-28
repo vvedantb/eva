@@ -1,11 +1,3 @@
-/**
- * Computes Vercel sandbox tags from caller-supplied labels.
- *
- * Vercel allows at most 5 tags per sandbox. Auto-tagging runs only when
- * `ENVIRONMENT` is set on the Convex deployment; otherwise caller labels
- * pass through unchanged (pre-tagging behaviour).
- */
-
 export const SANDBOX_TAG = {
   managed: "eva.managed",
   env: "eva.env",
@@ -16,7 +8,6 @@ export const SANDBOX_TAG = {
 
 const MAX_SANDBOX_TAGS = 5;
 
-/** Preferred order when trimming past the 5-tag Vercel limit. */
 const TAG_PRIORITY: ReadonlyArray<string> = [
   SANDBOX_TAG.managed,
   SANDBOX_TAG.env,
@@ -100,7 +91,6 @@ export function buildSandboxLabels(args: {
   return capSandboxTags(merged);
 }
 
-/** Keeps at most 5 tags, preferring Eva's standard keys. */
 function capSandboxTags(tags: Record<string, string>): Record<string, string> {
   const entries = Object.entries(tags).filter(
     ([key, value]) => key.length > 0 && value.length > 0,

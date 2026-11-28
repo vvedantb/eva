@@ -33,8 +33,6 @@ export default function DocScreen() {
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
   const leave = () => goBackOrReplace(router, "/projects?section=docs");
-  // Route params are strings: the repo and the doc resolve through the lists
-  // that hold them, so their ids keep their table types.
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const docs = useQuery(api.docs.list, repo ? { repoId: repo._id } : "skip");
@@ -48,13 +46,11 @@ export default function DocScreen() {
         {loading ? (
           <CenteredSpinner label="Loading document" />
         ) : (
-          // The web `EntityNotFound` for a document.
           <EmptyState icon={IconFileText} title="Document not found" description="It was deleted, or you no longer have access." />
         )}
       </Screen>
     );
   }
-  // PR recaps moved to Reviews — keep old links working (the web redirect).
   if (doc.kind === "pr-recap" && doc.prNumber !== undefined) {
     return <Redirect href={{ pathname: "/review/[repoId]/[prNumber]", params: { repoId: repo._id, prNumber: String(doc.prNumber) } }} />;
   }
@@ -71,7 +67,6 @@ export default function DocScreen() {
       }
     >
       <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24 }}>
-        {/* The web toolbar: the `text-lg` semibold title, then its age (`RelativeDateTime`). */}
         <View className="flex-row items-start gap-3">
           <Text
             accessibilityRole="header"
@@ -93,7 +88,6 @@ export default function DocScreen() {
               {doc.content}
             </Markdown>
           ) : (
-            // An empty doc.
             <Text className="font-instrument-sans text-sm italic" style={{ color: theme.mutedForeground }}>
               No content
             </Text>
@@ -104,7 +98,6 @@ export default function DocScreen() {
   );
 }
 
-/** The stack header (back, "Documents", an optional end button) over the screen body. */
 function Screen({ onBack, headerRight, children }: { onBack: () => void; headerRight?: ReactNode; children: ReactNode }) {
   return (
     <View className="flex-1">
@@ -114,11 +107,6 @@ function Screen({ onBack, headerRight, children }: { onBack: () => void; headerR
   );
 }
 
-/**
- * The web "Options" button (icon only below `sm`) as the header "…", and
- * its menu items a phone can use as a sheet: Copy PRD, and View Tests PR
- * once test generation has made one.
- */
 function DocOptions({ content, testsPrUrl }: { content: string; testsPrUrl: string | undefined }) {
   const muted = EVA_THEME[useScheme()].mutedForeground;
   const [open, setOpen] = useState(false);

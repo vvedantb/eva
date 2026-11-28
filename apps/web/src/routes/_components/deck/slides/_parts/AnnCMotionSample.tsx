@@ -2,23 +2,18 @@ import { m } from "motion/react";
 import type { TargetAndTransition, Transition } from "motion/react";
 import { BRAND_GRADIENT, DUR, EASE } from "../../_components/motion";
 
-/** A sample pose. Keep to transform and opacity. */
 type SamplePose = TargetAndTransition;
 
 export interface AnnCMotionSampleSpec {
   label: string;
-  /** The timing this sample ran on before the house defaults landed. */
   free: number;
-  /** Bouncy samples keep their spring; the rest ride the house curve. */
   bounce?: number;
   from: SamplePose;
   to: SamplePose;
 }
 
-/** Every sample settles on this once the house defaults are applied. */
 const HOUSE_DURATION = 0.55;
 const HOUSE_REST = 0.45;
-/** On the sync, all ten hold still together for this long before moving as one. */
 const ANN_C_SYNC_HOLD = 0.55;
 
 /**
@@ -93,14 +88,12 @@ export function AnnCMotionSample({
       }}
       transition={{ duration: DUR.slow, ease: EASE.out }}
     >
-      {/* The tile's own track: a faint rail the sample moves along. */}
       <span
         aria-hidden
         className="absolute inset-x-6 top-[38px] h-px bg-white/[0.06]"
       />
       <div className="flex h-9 w-full items-center justify-center">
         <m.div
-          // Remounting on the boundary restarts all ten from the same pose.
           key={synced ? "house" : "free"}
           className="size-7 rounded-[8px] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
           style={{ background: BRAND_GRADIENT }}

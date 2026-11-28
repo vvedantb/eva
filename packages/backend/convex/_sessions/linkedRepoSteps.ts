@@ -3,15 +3,6 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { errorMessage } from "@vvedantb/server";
 
-/**
- * The workflow steps a session's linked repos (`sessionRepos`) take: clone
- * them into the sandbox, then after a turn push each one and open its draft
- * PR. One copy for a multi-repo session's startup and turns
- * (`_sessions/workflow.ts`) and a multi-repo task's runs
- * (`_taskWorkflow/workflowDefinition.ts`).
- */
-
-/** Where a step's failure is posted: a turn's chat, or the session's Main chat. */
 type AlertTarget =
   | { chatId: Id<"sessionChats"> }
   | { sessionId: Id<"sessions"> };
@@ -19,7 +10,6 @@ type AlertTarget =
 type LinkedRepoStepArgs = {
   sessionId: Id<"sessions">;
   sandboxId: string;
-  /** The session's primary repo. */
   repoId: Id<"githubRepos">;
 };
 
@@ -44,8 +34,6 @@ export async function prepareLinkedRepoSteps(
         repoId: args.repoId,
       });
     } catch (error) {
-      // Keep provisioning the rest — one repo failing to clone must not
-      // strand every other linked repo uncloned too.
       await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
         sessionId: args.sessionId,
         content: `Failed to prepare linked repo ${linkedRepo.name}`,
@@ -85,10 +73,8 @@ export async function publishLinkedRepoSteps(
     });
   }
   for (const linkedPush of linkedPushes) {
-    // Nothing new on the branch — no PR to open (and none to recover).
     if (!linkedPush.pushed && !linkedPush.published) continue;
     try {
-      // Idempotent: returns the existing prUrl when the row already has one.
       await step.runAction(internal.github.createDraftSessionRepoPr, {
         sessionRepoId: linkedPush.sessionRepoId,
       });

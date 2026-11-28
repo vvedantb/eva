@@ -26,7 +26,6 @@ export type TimelineEvent =
       readonly comment: PrComment;
     }
   | {
-      /** A review summary with no verdict — just something said. */
       readonly kind: "review-comment";
       readonly key: string;
       readonly at: number;
@@ -37,7 +36,6 @@ export type TimelineEvent =
       readonly key: string;
       readonly at: number;
       readonly review: PrReviewEvent;
-      /** Commits landed after it, so it speaks for code the branch no longer has. */
       readonly stale: boolean;
     }
   | {
@@ -58,10 +56,6 @@ export type TimelineRow =
 
 const VERDICTS = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
 
-/**
- * Within one timestamp: the opening first, pushes before what was said about
- * them, a verdict before the remarks that are not part of it, and the merge last.
- */
 const KIND_RANK: Record<TimelineEvent["kind"], number> = {
   opened: 0,
   commit: 1,
@@ -120,8 +114,6 @@ export function buildPrTimeline(overview: PrOverview): TimelineEvent[] {
           },
         ];
       }
-      // An empty shell (inline comments, no summary) says nothing on its own;
-      // its inline comments are already events.
       if (review.body.trim().length === 0) return [];
       return [{ kind: "review-comment", key: `review-${review.id}`, at, review }];
     }),
@@ -135,7 +127,6 @@ export function buildPrTimeline(overview: PrOverview): TimelineEvent[] {
       actor: overview.mergedByLogin,
     });
   } else if (overview.status === "closed") {
-    // GitHub's overview carries no close time; the last update is the close.
     events.push({
       kind: "closed",
       key: "closed",

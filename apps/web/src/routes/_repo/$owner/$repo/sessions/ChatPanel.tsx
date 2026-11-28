@@ -18,28 +18,17 @@ import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 import { useSessionChatBinding } from "./_components/useSessionChatBinding";
 
 interface ChatPanelProps {
-  /** The session row; the header "…" menu reads its fields. */
   session: Doc<"sessions">;
-  /** The session's chat; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
   sandboxStartupActivity?: string;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
-  /** True while status is stopping / stop mutation in flight — not a start. */
   isSandboxStopping: boolean;
   onSandboxToggle: (action: "start" | "stop") => void;
-  /** Archived: hides the composer and shows the read-only banner. */
   isArchived: boolean;
-  /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
-  /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
   onViewDiff?: (repoRelativePath?: string) => void;
-  /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
-  /**
-   * False while this session shell is cached-hidden. Skips chat-local
-   * subscriptions that would otherwise keep a background turn warm.
-   */
   isRouteActive: boolean;
 }
 
@@ -155,9 +144,6 @@ export function ChatPanel({
         )
       }
       afterMessage={(messageId, state) => {
-        // Only plans captured on a message render in the transcript, so a
-        // plan stays where it was proposed. Unanchored plan content (Edit,
-        // update_plan, a seeded implementation session) lives in the Plan tab.
         const plan = proposedPlanForMessage(capturedPlans, messageId);
         if (!plan) return null;
         const canImplement = !isArchived && plan.implementedAt === undefined;

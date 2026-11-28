@@ -21,7 +21,6 @@ export default function OpenLinkScreen() {
   const params = useLocalSearchParams<{ href: string; repo?: string }>();
   const href = params.href ?? "";
   const target = parseAppHref(href);
-  // The repo resolves through the user's list, so its id keeps its table type.
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const args = (kind: string) => (repo && target?.kind === kind && "numId" in target ? { repoId: repo._id, numId: target.numId } : "skip");
@@ -35,7 +34,6 @@ export default function OpenLinkScreen() {
   if (session) return <Redirect href={{ pathname: "/chat/[target]", params: { target: session._id } }} />;
   if (repo && doc) return <Redirect href={{ pathname: "/doc/[docId]", params: { docId: doc._id, repo: repo._id } }} />;
 
-  // The lookup for this link's kind: undefined while it loads, null when the item is gone.
   const looked =
     target?.kind === "task" ? task : target?.kind === "project" ? project : target?.kind === "session" ? session : target?.kind === "doc" ? doc : null;
   const loading = repos === undefined || (repo !== undefined && target !== null && looked === undefined);

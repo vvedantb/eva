@@ -6,10 +6,8 @@ import { toast, Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 interface SandboxBranchChipProps {
-  /** Branch the sandbox worktree is on, from the entity doc's `sandboxBranch`. */
   branch: string | undefined;
   isSandboxActive: boolean;
-  /** Eva's stored branch for this chat, when it has one; a mismatch is hinted. */
   intendedBranch?: string;
 }
 
@@ -24,13 +22,8 @@ export function SandboxBranchChip({
   intendedBranch,
 }: SandboxBranchChipProps) {
   const simpleView = useSimpleView();
-  // Simple view hides git plumbing. A stopped sandbox has no worktree, so the
-  // last reported branch is stale; showing it would state a false live fact.
   if (simpleView || !isSandboxActive || !branch) return null;
 
-  // Eva booted the sandbox on `intendedBranch`, but something inside it (a
-  // checkout, a rebase, a stacked branch) moved the worktree. Worth surfacing,
-  // not worth shouting about.
   const isMismatched =
     intendedBranch !== undefined && intendedBranch !== branch;
 

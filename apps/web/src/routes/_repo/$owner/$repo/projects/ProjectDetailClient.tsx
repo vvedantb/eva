@@ -45,12 +45,9 @@ export function ProjectDetailClient({
 }: {
   projectId: Id<"projects">;
   projectNumId?: number;
-  /** The coordinator rail's tab (Tasks on the project index). */
   sandboxTab: ProjectSandboxTab;
-  /** Primary tab. `work` is the index route, so deep links keep working. */
   mainTab?: ProjectMainTab;
   selectedTaskId?: Id<"agentTasks">;
-  /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
 }) {
   const navigate = useNavigate();
@@ -68,7 +65,6 @@ export function ProjectDetailClient({
     isSandboxStopping,
     sandboxId: projectSandboxId,
   } = sandbox;
-  // The project chats in its session's Main chat; nothing before it exists.
   const chatId = sandbox.projectSession.owned?.chatId;
   const chatTurnOpen = useChatTurnOpen(chatId);
   const chatUnread = useChatUnread(chatId);
@@ -84,7 +80,6 @@ export function ProjectDetailClient({
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
-  // A reply thread opens in the rail's Replies tab (`?thread=`), selected.
   const openThread = (messageId: string) => {
     if (!projectPathSegment) return;
     void navigate({
@@ -96,7 +91,6 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  // ✕ closes the thread and shows the Replies list.
   const closeThread = () => {
     if (!projectPathSegment) return;
     void navigate({
@@ -108,7 +102,6 @@ export function ProjectDetailClient({
     });
   };
 
-  // Tasks open as chat tabs beside Eva (`?tasks=`, `?task=`).
   const taskTabs = useProjectTaskTabs({
     basePath,
     projectPathSegment,
@@ -116,8 +109,6 @@ export function ProjectDetailClient({
     onShowPanel: () => setExpandRightSignal((n) => n + 1),
   });
   const taskTabRows = useProjectTaskTabRows(projectId, repo._id, taskTabs);
-  // The chat the coordinator view shows: Eva's, or an open task tab's. Task
-  // tabs exist only once the project's session does (`ProjectChatTabs`).
   const onCoordinatorChat =
     mainTab === "work" &&
     selectedTaskStatus === undefined &&
@@ -130,7 +121,6 @@ export function ProjectDetailClient({
         ? { kind: "loading" }
         : { kind: "eva" };
 
-  // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
     if (!projectPathSegment) return;
@@ -168,8 +158,6 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   });
 
-  // Chat sub-agent CTA row → Agents tab + expand the sandbox pane (same shape
-  // as SessionDetailClient's onOpenAgentsTab; the tab is a route segment here).
   const openAgentsTab = () => {
     if (!projectPathSegment) return;
     void navigate({
@@ -196,7 +184,6 @@ export function ProjectDetailClient({
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
-      /* Project / Sandbox live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs

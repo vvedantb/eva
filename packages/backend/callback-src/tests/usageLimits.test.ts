@@ -17,7 +17,6 @@ import {
   unwrapUsagePayload,
 } from "../runtime/usageLimits.js";
 
-/** Breadcrumb mutations the module fires, captured instead of sent. */
 const convexCalls: { path: string; args: JsonObject }[] = [];
 
 mock.module("../http/convexClient.js", () => ({
@@ -31,10 +30,6 @@ mock.module("../http/convexClient.js", () => ({
   },
 }));
 
-/**
- * Fake time that lets promise callbacks run between timers, like Vitest's
- * `advanceTimersByTimeAsync`: a timer that starts after an await still fires.
- */
 async function advanceTimersByTimeAsync(ms: number): Promise<void> {
   for (let elapsed = 0; elapsed < ms; elapsed += 10) {
     vi.advanceTimersByTime(Math.min(10, ms - elapsed));
@@ -47,7 +42,6 @@ beforeEach(() => {
   convexCalls.length = 0;
 });
 
-/** A never-answering `/usage` lookup: the torn-down control channel. */
 function neverAnswers(): Promise<ClaudeUsageResponseLike | null> {
   return new Promise<ClaudeUsageResponseLike | null>(() => {});
 }
@@ -91,7 +85,6 @@ test("mergeClaudeRateLimitEvent merges per window without clobbering the others"
       utilization: 40,
     },
   });
-  // A second reading for a window already seen replaces only that window.
   mergeClaudeRateLimitEvent({
     rate_limit_info: {
       status: "rejected",
@@ -165,7 +158,6 @@ test("readClaudeUsageWindows builds every populated window in display order", ()
           resets_at: "2026-08-22T10:00:00.000Z",
         },
         seven_day: { utilization: 55, resets_at: null },
-        // Reported but entirely null — nothing to show, so no window.
         seven_day_opus: { utilization: null, resets_at: null },
         seven_day_sonnet: null,
         seven_day_overage_included: {
@@ -175,7 +167,6 @@ test("readClaudeUsageWindows builds every populated window in display order", ()
         overage: { utilization: 1.03, resets_at: null },
         model_scoped: [
           { display_name: "Fable", utilization: 3, resets_at: null },
-          // No display name means no label and no stable key.
           { utilization: 9, resets_at: null },
         ],
       },
@@ -194,7 +185,6 @@ test("readClaudeUsageWindows builds every populated window in display order", ()
       utilization: 8,
       resetsAt: Date.parse("2026-08-29T00:00:00.000Z"),
     },
-    // A model-scoped window reads like its fixed-key siblings, not "Fable".
     { key: "model_scoped:Fable", label: "Weekly (Fable)", utilization: 3 },
     { key: "overage", label: "Extra usage", utilization: 1.03 },
   ]);
@@ -263,16 +253,9 @@ test("an unavailable usage read records a refusal instead of staying silent", as
     rate_limits_available: false,
     rate_limits: null,
   }));
-  // "refused" is its own state: the account still gets a Convex row and the UI
-  // can say Claude declined, rather than guessing from an empty window list.
-  // Not "complete" — that would wipe later windows if a subsequent turn treated
-  // this as authoritative.
   expect(S.usageLimitSnapshot).toEqual({ completeness: "refused" });
 });
 
-// Every phrase `isUsageLimitError` in convex/_queues/usageLimitReset.ts
-// matches. A partial status-only reading patches the row without wiping its
-// last valid windows.
 test.each([
   "You're out of extra usage · resets 3pm",
   "API Error: rate limit exceeded",
@@ -327,7 +310,6 @@ test("buildUsageLimitReportArgs omits every field the snapshot did not observe",
     status: "allowed",
     windows: [{ key: "five_hour", label: "5h", utilization: 12 }],
   });
-  // A reading with nothing but a status sends nothing but a status.
   expect(
     buildUsageLimitReportArgs("repo-1", "claude", "", {
       completeness: "partial",
@@ -339,7 +321,6 @@ test("buildUsageLimitReportArgs omits every field the snapshot did not observe",
     completeness: "partial",
     status: "rejected",
   });
-  // A refusal reaches the server as its own state, not as a partial.
   expect(
     buildUsageLimitReportArgs("repo-1", "claude", "", {
       completeness: "refused",
@@ -363,11 +344,8 @@ test("buildUsageLimitReportArgs keys two accounts apart on one repo", () => {
   const team = buildUsageLimitReportArgs("repo-1", "claude", "acc-b", {
     ...snapshot,
   });
-  // Identical readings on the same repo and provider must still differ, or the
-  // dedup fingerprint would suppress the second account's report entirely.
   expect(kezia).not.toEqual(team);
   expect(kezia.providerAccountId).toBe("acc-a");
-  // A run on the shared team credential sends no account at all.
   expect(
     "providerAccountId" in
       buildUsageLimitReportArgs("repo-1", "claude", "", { ...snapshot }),
@@ -400,8 +378,6 @@ test("a nested usage payload still captures", async () => {
 });
 
 test("unwrapUsagePayload keeps the outer reading when `value` carries none", () => {
-  // Envelopes carry other metadata under `value` too. Unwrapping on the mere
-  // presence of the key would throw away the reading sitting beside it.
   const enveloped = {
     rate_limits_available: true,
     rate_limits: { five_hour: { utilization: 12, resets_at: null } },
@@ -411,19 +387,12 @@ test("unwrapUsagePayload keeps the outer reading when `value` carries none", () 
   expect(unwrapUsagePayload({ value: null })).toEqual({ value: null });
 });
 
-/**
- * The chip's refresh button asks a live daemon for a reading, and the SDK
- * answers only once it has initialized — which a cold query routinely takes
- * longer than the 5s budget a turn's best-effort telemetry gets. Sharing that
- * budget is what made the button appear to do nothing.
- */
 test("an unforced usage lookup gives up at the turn budget and says nothing", async () => {
   vi.useFakeTimers();
   try {
     const capture = captureClaudeUsage(neverAnswers);
     await advanceTimersByTimeAsync(5_000);
     expect(await capture).toBe(false);
-    // Turn telemetry is silent by design: no breadcrumb, no Convex write.
     expect(convexCalls).toEqual([]);
   } finally {
     vi.useRealTimers();
@@ -451,7 +420,6 @@ test("a forced refresh keeps waiting past the turn budget", async () => {
     );
 
     await advanceTimersByTimeAsync(6_000);
-    // Past the unforced budget, and still waiting rather than reporting a miss.
     expect(S.usageLimitSnapshot).toBeNull();
 
     await advanceTimersByTimeAsync(4_000);
@@ -477,8 +445,6 @@ test("a forced refresh that never answers leaves a breadcrumb", async () => {
     const capture = captureClaudeUsage(neverAnswers, true);
     await advanceTimersByTimeAsync(20_000);
     expect(await capture).toBe(false);
-    // Without this the only record of a failed on-demand refresh was a log
-    // line on the VM, which nobody sees once the sandbox is gone.
     expect(convexCalls).toEqual([
       {
         path: "usageLimits:noteRefreshAttempt",

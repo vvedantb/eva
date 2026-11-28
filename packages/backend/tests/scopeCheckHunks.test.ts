@@ -6,7 +6,6 @@ import {
   splitDiffIntoHunks,
 } from "../convex/_scopeCheck/hunks";
 
-/** A one-hunk diff touching `path`, enough to see whether it is judged. */
 function oneHunkDiff(path: string): string {
   return `diff --git a/${path} b/${path}
 index 1111111..2222222 100644
@@ -18,11 +17,6 @@ index 1111111..2222222 100644
 `;
 }
 
-/**
- * The motivating case: a file the prompt did ask about, plus a hunk in it that
- * swaps an icon nobody asked for. The splitter has to hand the icon swap over
- * as its own hunk or the whole feature is pointless.
- */
 const ICON_SWAP_DIFF = `diff --git a/apps/web/src/components/SettingsPanel.tsx b/apps/web/src/components/SettingsPanel.tsx
 index 1111111..2222222 100644
 --- a/apps/web/src/components/SettingsPanel.tsx
@@ -71,7 +65,6 @@ describe("splitDiffIntoHunks", () => {
     const [iconHunk] = splitDiffIntoHunks(ICON_SWAP_DIFF);
     expect(iconHunk.body).toContain("-import { IconSettings }");
     expect(iconHunk.body).toContain("+import { IconSparkles }");
-    // The legitimate edit lower in the same file must not ride along.
     expect(iconHunk.body).not.toContain("<p>{description}</p>");
   });
 
@@ -206,7 +199,6 @@ ${long}
     expect(hunk.body.endsWith("\n… (hunk truncated)")).toBe(true);
     const kept = hunk.body.slice(0, -"\n… (hunk truncated)".length);
     expect(kept.length).toBeLessThanOrEqual(MAX_HUNK_CHARS);
-    // Clipped between lines, never mid-line.
     for (const bodyLine of kept.split("\n")) {
       expect(bodyLine).toBe(line);
     }

@@ -21,11 +21,8 @@ const INK = "#2a1e0c";
 const HEX = "50,37 57.79,41.5 57.79,50.5 50,55 42.21,50.5 42.21,41.5";
 const SPARK =
   "M0 -4.5Q0.7 -0.7 4.5 0Q0.7 0.7 0 4.5Q-0.7 0.7 -4.5 0Q-0.7 -0.7 0 -4.5Z";
-// Generated once; React hoists the <style> by href, so many logos share one copy.
 const MOTION_CSS = logoMotionCss();
-// Amber, not ink, so the antennae read on the dark surface and on white.
 const ANTENNA = "#d0901a";
-// Glassy white wings vanish on a light background, so `tone="light"` draws them grey with a darker outline.
 const WINGS = {
   dark: {
     from: "#ffffff",
@@ -62,11 +59,9 @@ export function BeeLogo({
   size?: number;
   state?: LogoState;
   tone?: "dark" | "light";
-  /** The soft honey halo behind the orb. */
   glow?: boolean;
   className?: string;
 }) {
-  // useId holds characters that are awkward inside url(#…).
   const uid = useId().replace(/[^\w-]/g, "");
   const ref = (part: string) => `bee-${uid}-${part}`;
   const detail = logoDetail(size);
@@ -85,7 +80,6 @@ export function BeeLogo({
     "--orbit-x": `${motion.orbitX}px`,
     "--loop-r": `${motion.loopR}px`,
     "--mute": `url(#${ref("mute")})`,
-    // A sub-pixel blur is invisible in the tiny view, so it is not paid for there.
     ...(detail.glow ? { "--blur": `url(#${ref("blur")})` } : {}),
   };
   const halo =
@@ -156,7 +150,6 @@ export function BeeLogo({
         </g>
       ) : null}
       <circle cx="32" cy="35" r="20" fill={`url(#${ref("body")})`} />
-      {/* Stripes bow downward to follow the sphere. */}
       <g clipPath={`url(#${ref("orb")})`} fill={INK}>
         <path d="M10 36Q32 45 54 36V41Q32 50 10 41Z" />
         <path d="M10 45Q32 54 54 45V49.5Q32 58.5 10 49.5Z" />

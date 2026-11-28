@@ -4,11 +4,8 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, type RefObject } from "react";
 import { z } from "zod";
 
-// A subpath (`@eva/shared/artifactBridge`), not the root: the backend imports the root, and this is React.
 export { buildArtifactSrcDoc } from "./artifactShim";
 
-// Messages the sandboxed artifact may post. Parsed at the boundary: the page
-// runs untrusted code, so anything that does not match is ignored.
 const stateScope = z.enum(ARTIFACT_STATE_SCOPES);
 const bridgeMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("eva-bridge-hello") }),
@@ -16,7 +13,6 @@ const bridgeMessage = z.discriminatedUnion("type", [
     type: z.literal("eva-mcp-call"),
     id: z.number(),
     name: z.string(),
-    // JSON text: the shim serialises the args, and callTool parses them per tool.
     args: z.string(),
   }),
   z.object({ type: z.literal("eva-state-set"), id: z.number(), scope: stateScope, key: z.string(), value: z.string() }),
@@ -28,7 +24,6 @@ type BridgeRequest = Exclude<z.infer<typeof bridgeMessage>, { type: "eva-bridge-
 /** Where the host's replies go: the web iframe's window, or the phone's `HtmlView` handle. Takes JSON text. */
 export type ArtifactBridgeTarget = { postMessage: (json: string) => void };
 
-/** The page's message, checked: the WebView delivers JSON text, the iframe an object. */
 function parseBridgeMessage(data: unknown) {
   if (typeof data !== "string") return bridgeMessage.safeParse(data);
   try {
@@ -38,7 +33,6 @@ function parseBridgeMessage(data: unknown) {
   }
 }
 
-/** Patches the live state snapshot so the page sees its own write at once. */
 function patchStateSnapshot(
   localStore: OptimisticLocalStore,
   artifactId: Id<"artifacts">,
@@ -81,13 +75,10 @@ export function useArtifactBridge(artifactId: Id<"artifacts">, target: RefObject
 
   const post = (message: object) => target.current?.postMessage(JSON.stringify(message));
 
-  // The page is an external system: push each new snapshot into it. Before its
-  // shim is up the post is dropped; the hello reply re-sends it.
   useEffect(() => {
     if (snapshot) target.current?.postMessage(JSON.stringify({ type: "eva-state-snapshot", ...snapshot }));
   }, [snapshot, target]);
 
-  // Runs one request. State writes resolve to null; the page reads the new value from the next snapshot.
   const run = (message: BridgeRequest) => {
     switch (message.type) {
       case "eva-mcp-call":
@@ -115,7 +106,6 @@ export function useArtifactBridge(artifactId: Id<"artifacts">, target: RefObject
     }
   };
 
-  /** Handles one message from the page (an object, or JSON text). */
   const onMessage = (data: unknown) => {
     void handle(data);
   };

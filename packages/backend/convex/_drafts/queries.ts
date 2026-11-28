@@ -48,7 +48,6 @@ export const listForRepo = authQuery({
       contextTitle: string;
       taskProjectId: Id<"projects"> | undefined;
     };
-    // Surfaces are independent reads; a gone surface yields null (skipped).
     const items = await Promise.all(
       rows.map(async (draft): Promise<DraftListItem | null> => {
         if (draft.kind === "taskComment" && draft.taskId) {
@@ -76,7 +75,6 @@ export const listForRepo = authQuery({
       (item): item is DraftListItem => item !== null,
     );
 
-    // Sort newest draft first.
     return results.sort((a, b) => b.updatedAt - a.updatedAt);
   },
 });

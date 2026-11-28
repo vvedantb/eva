@@ -19,17 +19,11 @@ export function rememberOwnSave(
   return [...history.slice(-(ECHO_HISTORY_LIMIT - 1)), tokenized];
 }
 
-/** Why a remote draft write was left alone — one per guard, for debugging. */
 type DraftPullSkipReason =
-  /** Subscription has not resolved yet. */
   | "loading"
-  /** Row deleted or emptied; the editor is never wiped from under the user. */
   | "cleared"
-  /** This client's own write coming back around. */
   | "echo"
-  /** The editor already holds exactly this text. */
   | "unchanged"
-  /** Taking it would delete characters the user typed. */
   | "not-additive";
 
 export type DraftPullDecision =
@@ -57,11 +51,8 @@ export type DraftPullDecision =
  * which is exactly the shape `useSeedChatDraft` writes.
  */
 export function decideDraftPull(args: {
-  /** `undefined` while the subscription loads, `null` when the row is gone. */
   remoteContent: string | null | undefined;
-  /** The display text currently in the editor. */
   editorValue: string;
-  /** Tokenized contents this client has saved, from `rememberOwnSave`. */
   ownSaves: readonly string[];
 }): DraftPullDecision {
   const { remoteContent, editorValue, ownSaves } = args;

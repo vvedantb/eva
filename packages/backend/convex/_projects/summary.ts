@@ -9,12 +9,6 @@ import { replaceDocBody } from "../_docs/body";
 import { docValidator } from "../docs";
 
 /**
- * The project summary (the "ledger" the coordinator keeps): one `docs` row
- * for each project, named by `projects.summaryDocId` and filed under the
- * project as its chat source, so it also lists in the project's Documents.
- */
-
-/**
  * Writes a project's summary doc. The first call creates it in the home repo;
  * later calls replace its whole body (`replaceDocBody`). A deleted summary
  * doc is replaced by a new one. No access check: callers check first.

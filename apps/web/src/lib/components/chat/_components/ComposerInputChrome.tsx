@@ -49,10 +49,6 @@ import {
   decodePullRequestDragPayload,
 } from "@/lib/components/chat/pullRequestContext";
 
-// `whitespace-pre!` rather than `nowrap`: both keep the pill on one line, but
-// `nowrap` still collapses whitespace, and Chrome then eats the trailing space
-// that accepting a mention/skill inserts — the next keystroke landed against
-// the chip and re-opened the picker as if the trigger were still being typed.
 const COMPACT_EDITOR =
   "flex min-h-9 max-h-9 min-w-0 w-auto flex-1 items-center self-center overflow-hidden whitespace-pre! rounded-none px-1 py-2 text-left leading-5 scrollbar-none transition-[min-height,padding] duration-[var(--motion-base)] focus-visible:outline-hidden";
 const EXPANDED_EDITOR =
@@ -92,7 +88,6 @@ export function ComposerInputChrome({
   onDraftChange,
 }: {
   repo?: ChatRepo;
-  /** A project coordinator chat: `@Eva` is in the mention picker. */
   mentionEva?: boolean;
   mentionRef: RefObject<MentionTextareaHandle | null>;
   skillItems: SlashItem[];
@@ -100,11 +95,8 @@ export function ComposerInputChrome({
   placeholder: string;
   isExecuting: boolean;
   isInputDisabled: boolean;
-  /** Attachments are being uploaded: the submit button spins and stops accepting. */
   isUploading?: boolean;
-  /** Why the composer will not send, for the toast on a blocked Enter. */
   disabledReason?: string;
-  /** Wakes the sandbox; gives that toast its action. */
   onStartSandbox?: () => void;
   hasPendingContext: boolean;
   onPromptSubmit: (message: PromptInputMessage) => void | Promise<void>;
@@ -114,30 +106,18 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
-  /** Amber border while the draft-readiness nudge is up for this text; it beats the focus border. */
   warnFor?: (text: string) => boolean;
-  /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
   const warn = warnFor?.(textInput.value) ?? false;
-  // A PR row dropped here becomes a context chip. Absent outside ChatBody
-  // (Manager Ave), where the drop is left to the browser.
   const pullRequests = usePendingPullRequests();
-  // `layoutId` is global unless a LayoutGroup namespaces it, and several
-  // composers stay mounted at once (cached session shells, Manager Ave). Two
-  // composers sharing an id put one in the follower slot of Motion's shared
-  // stack, which hides its tools (opacity 0) and flings them at the hidden
-  // lead's 0x0 box — the pill renders with no buttons.
   const layoutScope = useId();
   const { chromeRef, compact } = useComposerCompact({
     value: textInput.value,
     fileCount: attachments.files.length,
   });
 
-  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
-  // registered here fires once per mounted composer. Only the one on screen
-  // may act — see composerVisibility.ts.
   const isVisibleComposer = () =>
     isComposerVisible(mentionRef.current?.getElement());
 
@@ -153,9 +133,6 @@ export function ComposerInputChrome({
     mentionRef.current?.focus();
   });
 
-  // Enter on a disabled composer swallows the keystroke either way; this is the
-  // difference between "nothing happened" and being told Eva is asleep, with
-  // the way out attached. An empty draft needs no explanation.
   const handleBlockedSubmit = () => {
     if (!isInputDisabled) return;
     toast.info(disabledReason ?? "You can't send right now", {
@@ -200,9 +177,6 @@ export function ComposerInputChrome({
             exit={{ opacity: 0, scale: 0.96 }}
             transition={tokenTransition.fast}
           >
-            {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
-                that follows the user's own setting, and a title attribute can
-                only hold a string. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -261,13 +235,10 @@ export function ComposerInputChrome({
                 : undefined
             }
             inputGroupClassName={cn(
-              // Height interpolates to/from `auto` so the conversation viewport
-              // grows with the composer instead of jumping when the pill snaps.
               "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
               compact
                 ? "h-12 items-center rounded-full py-1"
                 : "h-auto rounded-surface",
-              // `!`: the InputGroup focus state sets its own border and ring colour.
               warn && "border-warning! ring-warning/40!",
             )}
           >
@@ -330,7 +301,6 @@ function ChatBodySubmit({
 }: {
   disabled: boolean;
   isExecuting: boolean;
-  /** Attachments are still uploading, so the send has not left yet. */
   isUploading: boolean;
   hasPendingContext: boolean;
   allowEmptySubmit?: boolean;
@@ -355,8 +325,6 @@ function ChatBodySubmit({
             : "Send message"
       }
     >
-      {/* Fetch uploads report no bytes, so a spinner is the honest signal — a
-          percentage would be made up. */}
       <CrossfadeIconSlot iconKey={isUploading ? "uploading" : "send"}>
         {isUploading ? <Spinner /> : <SendQueueIcon queued={isExecuting} />}
       </CrossfadeIconSlot>

@@ -58,7 +58,6 @@ export const inspectSnapshotRetention = internalAction({
   args: {
     limit: v.optional(v.number()),
     applyUpdate: v.optional(v.boolean()),
-    /** Also Snapshot.get each deleted tombstone and log sizeBytes (billing signal). */
     probeTombstones: v.optional(v.boolean()),
   },
   returns: v.object({
@@ -383,8 +382,6 @@ export const bulkUpdateSnapshotRetention = internalAction({
           name: vercel.name,
         });
         for await (const meta of listed) {
-          // keep-last soft-deletes leave tombstones in list() with the old
-          // expiresAt — only live snaps matter for retention.
           if (String(meta.status) !== "created") continue;
           const expiresAt =
             "expiresAt" in meta && typeof meta.expiresAt === "number"
@@ -410,8 +407,6 @@ export const bulkUpdateSnapshotRetention = internalAction({
           return { outcome: "stillExpiring", cycled: false };
         }
 
-        // Mint a fresh snapshot under the new policy; keep-last-1 evicts old.
-        // No Docker / exec probe — we only need a successful start+stop.
         await ensureSandboxRunning(handle, {
           timeoutSeconds: 120,
           resumeAfterStop: true,
@@ -608,9 +603,6 @@ export const inspectSnapshotsByIds = internalAction({
   handler: async (ctx, args) => {
     const tryDelete = args.tryDelete === true;
     const now = Date.now();
-    // Group seeded snapshots (repoGroups.seededSnapshotName) are not any live
-    // sandbox's currentSnapshotId, so the `protectedBy` check below would
-    // otherwise wave a manual tryDelete straight through one.
     const groupSnapshotIds = new Set(
       await ctx.runQuery(internal.repoGroups.listAllGroupSnapshotNames, {}),
     );
@@ -725,7 +717,6 @@ export const inspectSnapshotsByIds = internalAction({
           remaining.delete(snapshotId);
           console.log(`[inspectSnapshotsByIds] ${JSON.stringify(row)}`);
         } catch {
-          // wrong project — keep searching
         }
       }
     }

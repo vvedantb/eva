@@ -20,8 +20,6 @@ export function LandingFooter() {
           </p>
         </div>
 
-        {/* `hit-target` on every link: at `text-sm` these are 20px tall, which is
-            half a comfortable thumb. It grows the pressable box, not the layout. */}
         <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
           {LANDING_NAV_LINKS.map((link) => (
             <a

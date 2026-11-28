@@ -6,7 +6,6 @@ import { BRAND_GRADIENT, DUR, EASE } from "../../_components/motion";
 
 /** Proof lines land in reading order, this far apart. */
 export const MO_A4_TICK_GAP = 0.07;
-/** The first proof waits for the camera to start straightening. */
 const TICK_LEAD = 0.25;
 
 /** A proof line; `credit` names the colleague whose idea it was. */
@@ -37,8 +36,6 @@ export function MoA4CapabilityCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: DUR.slow, ease: EASE.expo, delay: enter }}
     >
-      {/* Its own viewing distance, so the hover tilts the card about its own
-          centre rather than the grid's. */}
       <m.div
         style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
         whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}

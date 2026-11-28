@@ -35,7 +35,6 @@ export function ChatDocCard({
   basePath,
 }: {
   doc: ChatDocCardDoc;
-  /** The chat's repo route prefix; without it there is no doc page to open. */
   basePath: string | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -99,7 +98,6 @@ export function ChatDocCard({
   );
 }
 
-/** The doc body, loaded on first open; the card rows carry only a preview. */
 function DocBody({ docId }: { docId: Id<"docs"> }) {
   const doc = useQuery(api.docs.get, { id: docId });
   if (doc === undefined) {

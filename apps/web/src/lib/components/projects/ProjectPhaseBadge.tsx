@@ -24,17 +24,12 @@ export interface PhaseStyle {
   bg: string;
   cardBg: string;
   bar: string;
-  /** CSS colour of `bar`, for the timeline's Gantt status. */
   barColor: string;
   text: string;
   label: string;
   icon: typeof IconCircle;
 }
 
-/**
- * Each shared tone's classes (`ProjectTone`); the phone maps the same tones in
- * `phaseAppearance.ts`. To Do matches the quick-task To Do column.
- */
 const TONE_STYLE: Record<ProjectTone, Omit<PhaseStyle, "label">> = {
   todo: {
     bg: "bg-secondary",

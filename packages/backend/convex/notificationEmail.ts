@@ -7,7 +7,6 @@ import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
 import { buildNotificationDigestHtml } from "./emailTemplates";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 /**
  * Sends the instant notification email for a user, debounced via the scheduler
  * delay in createNotification. It re-reads the user's unread, not-yet-emailed,
@@ -30,8 +29,6 @@ export const sendUnreadForUser = internalAction({
     const count = data.notifications.length;
     const [first] = data.notifications;
 
-    // A single item leads with its own title for immediacy; a burst is summarised
-    // by count. The `if` narrows `first` to defined for the single-item branch.
     let subject: string;
     let heading: string | undefined;
     if (count === 1 && first !== undefined) {

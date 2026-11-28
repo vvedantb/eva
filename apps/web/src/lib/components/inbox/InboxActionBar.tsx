@@ -24,9 +24,7 @@ export function InboxActionBar({
   row: InboxRow;
   onAnswer: () => void;
   onReply: () => void;
-  /** Undefined when the row has no page to open. */
   onOpen: (() => void) | undefined;
-  /** Undefined when Done cannot act on the row: it leaves once someone acts on it. */
   onDone: (() => void) | undefined;
 }) {
   const retry = useMutation(api.agentTasks.startExecution);

@@ -1,13 +1,3 @@
-/**
- * Pure decision logic for the idle-pause sweep (`sandboxIdlePause.ts`). No
- * Convex imports so the policy is unit-testable and the sweep stays a thin
- * read → decide → stop loop.
- *
- * Rule (Amp-orb style): a sandbox pauses once BOTH graces have elapsed —
- * `afterAgent` since the last agent turn finished AND `afterInteraction` since
- * the last human interaction — and nothing is busy or present right now.
- */
-
 export type SandboxIdlePauseMode = "off" | "on";
 
 /**
@@ -119,11 +109,8 @@ export type IdlePauseDecision =
 export interface IdlePauseInput {
   now: number;
   mode: SandboxIdlePauseMode;
-  /** Entity sandbox status: only `"active"` is eligible. */
   status: string | undefined;
-  /** An agent turn / run / build is in flight or queued. */
   busy: boolean;
-  /** Someone has a sandbox tab open right now (presence room). */
   present: boolean;
   lastUserActivityAt: number;
   lastAgentFinishedAt: number | undefined;

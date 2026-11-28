@@ -7,12 +7,6 @@ export const Route = createFileRoute("/_global/ave")({
   component: AveRoute,
 });
 
-/**
- * Manager Ave full screen, at a stable per-user URL. The floating launcher
- * (`AveLauncherProvider`) mounts the same chat as a popover; this is where its
- * expand button lands. `_global.tsx` clamps this route to the viewport, which
- * the chat's scroll container needs.
- */
 function AveRoute() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">

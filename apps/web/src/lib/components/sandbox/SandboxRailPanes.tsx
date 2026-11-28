@@ -30,16 +30,12 @@ export function SandboxRailPanes({
   agents,
 }: {
   activeTab: string;
-  /** Whose artifacts and documents the tabs list. */
   artifactSource: ChatSourceArg;
-  /** A project's own documents, listed with its session's. */
   projectDocuments?: ProjectDocumentsContext;
-  /** The Files tab body; omitted where the rail has no Files tab. */
   files?: ReactNode;
   agents: {
     entity: ChatEntityRef | undefined;
     list: SubagentView[];
-    /** Read-only owner: no per-agent stop. */
     isReadOnly: boolean;
   };
 }) {

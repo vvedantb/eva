@@ -2,17 +2,12 @@ import { AppWindow, ArrowLeft, BookOpen, Globe, Search, Calculator, Calendar, Ch
 import { Bar, Collapse, Stage, Text, type Act, type Layout } from '../../kit'
 import './raycast.css'
 
-// Raycast over a blurred desktop. Type "clip", Clipboard History is the first
-// result, Enter pushes the command, the list opens with its preview pane,
-// Down moves to a copied color, Esc pops back to root search (the loop).
-
 type S = { query: string; view: 'root' | 'clip'; sel: number }
 
 const initial: S = { query: '', view: 'root', sel: 0 }
 
 type Row = { id: string; icon: LucideIcon; tile: string; title: number; sub: number; acc: number }
 
-// Root rows. Clipboard History is its own row; the rest are placeholders.
 const ROWS: Row[] = [
   { id: 'r1', icon: Folder, tile: '#3d8bfd', title: 52, sub: 0, acc: 56 },
   { id: 'r2', icon: Calendar, tile: '#ff5f57', title: 64, sub: 40, acc: 50 },
@@ -24,7 +19,6 @@ const ROWS: Row[] = [
   { id: 'r8', icon: Folder, tile: '#3d8bfd', title: 66, sub: 0, acc: 56 },
 ]
 
-// Which rows survive each query, in the order Raycast ranks them.
 function shown(q: string): string[] {
   if (q === '') return ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
   if (q === 'c') return ['ch', 'r2', 'r6', 'r3']

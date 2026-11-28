@@ -11,12 +11,6 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/**
- * The first two beats of the database slide (c08): where the retries came
- * from, and why — two writers landing on the same row.
- */
-
-/** Retry counts from three days of live traffic, by where they came from. */
 const SOURCES: readonly { label: string; value: number }[] = [
   { label: "Presence heartbeats", value: 30 },
   { label: "Streaming touches", value: 24 },
@@ -28,13 +22,11 @@ const MAX_BAR = 540;
 const PEAK = 30;
 const LABEL_W = 230;
 const ROW_GAP = 24;
-/** Label, bar and figure, so the chart can sit centred on the stage. */
 const CHART_W = LABEL_W + ROW_GAP + MAX_BAR + ROW_GAP + 40;
 const HEAD_GLOW =
   "radial-gradient(circle, rgba(255,255,255,0.95) 0 14%, rgba(59,125,216,0.5) 32%, transparent 70%)";
 
 const BAR_RUN = 1;
-/** Faint guides at a third, two thirds and the peak, so the bars read as measured. */
 const GUIDES = [1 / 3, 2 / 3, 1];
 
 export function MoA3CollisionChart({ filled }: { filled: boolean }) {
@@ -87,7 +79,6 @@ export function MoA3CollisionChart({ filled }: { filled: boolean }) {
                   animate={{ scaleX: filled ? 1 : 0 }}
                   transition={run}
                 />
-                {/* A lit head rides the fill out to its value. */}
                 <m.span
                   aria-hidden
                   className="absolute top-1/2 left-0 -mt-4 -ml-4 size-8 rounded-full"
@@ -129,7 +120,6 @@ export function MoA3CollisionChart({ filled }: { filled: boolean }) {
   );
 }
 
-/** When the two writers reach the row and collide. */
 const IMPACT = 1.05;
 
 function Writer({
@@ -145,7 +135,6 @@ function Writer({
     <m.div
       className="flex h-[74px] w-[200px] items-center justify-center gap-2.5 rounded-[16px] bg-white/[0.06] text-base text-white/75"
       initial={{ x: 0, opacity: 0 }}
-      // In, a hard stop against the row, and a small recoil: two writes, one row.
       animate={
         active
           ? { x: [0, travel, travel * 0.82], opacity: 1 }
@@ -182,7 +171,6 @@ export function MoA3CollisionCause({ active }: { active: boolean }) {
       <Writer label="One writer" active={active} travel={64} />
 
       <div className="relative">
-        {/* The shock of the collision leaves the row once. */}
         <m.span
           aria-hidden
           className="absolute inset-0 rounded-[20px]"

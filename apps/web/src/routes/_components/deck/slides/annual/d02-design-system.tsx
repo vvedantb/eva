@@ -10,14 +10,9 @@ import { DUR, EASE, MaskedText, Sheen } from "../../_components/motion";
 import { MoA3AccentRoll } from "../_parts/MoA3AccentRoll";
 import { MOA3_TILES } from "../_parts/MoA3DesignTiles";
 
-/** Sources: shared component library, 110 files and 18,197 lines, measured 23 September 2026. */
 const COLUMNS = 6;
 const FIGURE = "text-6xl leading-none font-semibold";
 
-/**
- * Where each tile starts before the set assembles: a small, fixed scatter so
- * the pieces read as loose decisions that snap into one grid.
- */
 function scatter(index: number): { x: number; y: number; rotate: number } {
   return {
     x: (((index * 37) % 9) - 4) * 10,
@@ -26,7 +21,6 @@ function scatter(index: number): { x: number; y: number; rotate: number } {
   };
 }
 
-/** The set assembles from the middle out, so it reads as one move, not twelve. */
 function assembleDelay(index: number): number {
   const column = index % COLUMNS;
   const row = Math.floor(index / COLUMNS);
@@ -35,7 +29,6 @@ function assembleDelay(index: number): number {
 
 export function AnnualDesignSystem() {
   const step = useDeckStep();
-  // The figures take the stage on step 1; the set comes back lit for the close.
   const dimmed = step === 1;
 
   return (
@@ -69,7 +62,6 @@ export function AnnualDesignSystem() {
                   : { duration: DUR.slow, ease: EASE.out }
               }
             >
-              {/* Once assembled, and again on the close, light runs across the set. */}
               <Sheen
                 step={2}
                 delay={0.5 + column * 0.06}

@@ -18,12 +18,6 @@ import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 
-/**
- * Reads the ES256 preview-grant keypair from the env. The grant is asymmetric
- * on purpose: only the private half lives in Convex, while the public half is
- * embedded in the in-sandbox proxy. App code running inside a sandbox can read
- * the public key but cannot forge a grant with it.
- */
 function readPrivateJwk(): JWK {
   const json = process.env.PREVIEW_GRANT_PRIVATE_KEY;
   if (!json) {
@@ -117,7 +111,6 @@ export async function signPreviewGrant(params: {
   sandboxId: string;
   port: number;
   sub: string;
-  /** Preview comments token and the Convex site URL it works against. */
   comments?: { token: string; site: string; view: string };
 }): Promise<string> {
   const privateJwk = readPrivateJwk();
@@ -161,7 +154,6 @@ export const mintPreviewGrant = action({
     sandboxId: v.string(),
     port: v.number(),
     repoId: v.string(),
-    /** Path, query and hash to open on the preview origin. */
     path: v.string(),
   },
   returns: v.string(),
@@ -175,8 +167,6 @@ export const mintPreviewGrant = action({
       throw new Error("Not authenticated");
     }
 
-    // `githubRepos.getByIdString` returns the repo only for the connector or a team
-    // member, otherwise null — null means the user may not preview it.
     const repo = await ctx.runQuery(api.githubRepos.getByIdString, {
       repoId: args.repoId,
     });
@@ -187,9 +177,6 @@ export const mintPreviewGrant = action({
 
     const handle = await getSandboxHandle(ctx, repo._id, args.sandboxId);
     const preview = await handle.previewUrl(args.port);
-    // A link to a sandbox that has a chat also carries a token for that
-    // chat's preview comments. The proxy keeps it in a cookie the page reads
-    // through the proxy, never in the URL.
     const site = process.env.CONVEX_SITE_URL;
     const commentsTarget = await ctx.runQuery(api.previewComments.linkTarget, {
       repoId: repo._id,
@@ -200,7 +187,6 @@ export const mintPreviewGrant = action({
       site && commentsTarget
         ? {
             site,
-            // Where "View in chat" goes; empty when Eva's URL is unknown.
             view: webUrl && commentsTarget.webPath ? webUrl + commentsTarget.webPath : "",
             token: await signPreviewCommentsToken({
               userId: commentsTarget.userId,
@@ -216,8 +202,6 @@ export const mintPreviewGrant = action({
       comments,
     });
 
-    // Parse against a placeholder base, then copy only the path parts: the
-    // caller's input can never change the origin, even as `//host/...`.
     const requested = new URL(args.path, "https://eva.invalid");
     const target = new URL(preview.url);
     target.protocol = "https:";

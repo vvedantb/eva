@@ -18,17 +18,12 @@ import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import { useScheme } from "@/ui/theme";
 
-// The web turn checkpoint actions (`useTurnCheckpointActions`): Diff this
-// turn and Restore to before this turn, for a session reply that changed code,
-// from its Changes chip and from the message's hold menu.
-
 /** What the turn actions act on: the reply, its session, its repo and its checkpoints. */
 export type TurnChangesTarget = {
   checkpoint: TurnCheckpoint;
   messageId: string;
   sessionId: Id<"sessions">;
   repoId: Id<"githubRepos">;
-  /** The chat's route target, so the diff screen's Back returns here. */
   target: string;
   sandboxRunning: boolean;
 };
@@ -117,7 +112,6 @@ export function TurnChangesChip({ turn }: { turn: TurnChangesTarget }) {
         accessibilityLabel="Changes in this turn"
         accessibilityHint="Opens Diff this turn and Restore to before this turn"
         onPress={() => setOpen(true)}
-        // 32 high on screen, slop to a 44 target.
         hitSlop={6}
         className="h-8 flex-row items-center gap-1.5 self-start rounded-full px-3 active:opacity-70"
         style={{ backgroundColor: theme.muted }}

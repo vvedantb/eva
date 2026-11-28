@@ -26,14 +26,8 @@ export async function firstPresentUserInRoom(
   return members[0]?.userId ?? null;
 }
 
-/** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */
 const LAST_SEEN_ROOM_ID = "platform";
 
-/**
- * True for an app-internal path: starts with one `/`, no backslash, no control
- * characters. FollowOverlay navigates a follower's client to this value.
- * TODO: replace with `@eva/shared/safeUrl.isInternalAppHref` once PR #1153 lands.
- */
 function isAppInternalPath(path: string): boolean {
   if (!path.startsWith("/") || path.startsWith("//")) return false;
   if (path.includes("\\")) return false;
@@ -63,9 +57,6 @@ export const heartbeat = authMutation({
       sessionId,
       interval,
     );
-    // Cursor/typing rooms also heartbeat this mutation. Reading users from
-    // those rooms put lastSeenAt writes in every room's conflict set (30 OCC
-    // in 72h on one user doc). Only the app-wide room owns lastSeenAt.
     if (roomId === LAST_SEEN_ROOM_ID) {
       const row = await getUserPresenceRow(ctx.db, ctx.userId);
       if (shouldWriteLastSeenAt(row?.lastSeenAt, Date.now())) {

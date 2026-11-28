@@ -6,13 +6,6 @@ import schema from "../convex/schema";
 import { findOpenTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * MCP's send once picked send or queue from its own read, so a burst of sends
- * could all start before any saw the first turn, and two turns ran at once.
- * Now the server decides (`sendSessionChatMessage`): a send that lands behind
- * a running turn queues, and stores no user row of its own.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|send-burst";
 const BURST_MESSAGE = "and also rename the button";
@@ -35,7 +28,6 @@ async function baseFixture() {
 type Fixture = Awaited<ReturnType<typeof baseFixture>>;
 type Row = { role: "user" | "assistant"; content: string; finished?: true };
 
-/** A session chat with a running turn and `rows` stored oldest first. */
 function busySessionChat(f: Fixture, rows: Row[]) {
   return f.t.run(async (ctx) => {
     const sessionId = await ctx.db.insert("sessions", {
@@ -120,7 +112,6 @@ describe("a send that lands behind a running turn", () => {
         },
       );
 
-      // Queued, with no user row yet: the dequeue writes it when it starts.
       expect(outcome).toBe("queued");
       expect(await chatState(f.t, chatId)).toEqual({
         queued: [BURST_MESSAGE],

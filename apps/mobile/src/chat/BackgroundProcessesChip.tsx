@@ -12,7 +12,6 @@ import { FOOTER_CHIP, FooterSheet, useFooterChipColor, useSimpleView } from "@/c
 import { useNow } from "@/ui/clock";
 import { useScheme } from "@/ui/theme";
 
-/** How often a live chip asks the sandbox which processes still run, as the web. */
 const RECONCILE_MS = 15_000;
 
 /**
@@ -34,13 +33,10 @@ export function BackgroundProcessesChip({ sessionId }: { sessionId: Id<"sessions
   const [killing, setKilling] = useState<ReadonlySet<string>>(() => new Set());
   const live = sessionId !== undefined && rows.length > 0;
 
-  // An effect because the sandbox is outside Convex's subscriptions: a timer
-  // asks it, only while the app is in front, as the web skips hidden tabs.
   useEffect(() => {
     if (!live) return;
     const run = () => {
       if (AppState.currentState !== "active") return;
-      // A failed check waits for the next tick.
       reconcile({ sessionId }).catch(() => undefined);
     };
     run();
@@ -48,7 +44,6 @@ export function BackgroundProcessesChip({ sessionId }: { sessionId: Id<"sessions
     return () => clearInterval(timer);
   }, [live, reconcile, sessionId]);
 
-  // The last process ended: the sheet shuts, and stays shut when the next one starts.
   if (!live && open) setOpen(false);
   if (!live) return null;
 
@@ -70,7 +65,6 @@ export function BackgroundProcessesChip({ sessionId }: { sessionId: Id<"sessions
     <>
       <PromptInputChip
         icon={<IconTerminal2 size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
-        // As the Agents chip: a label that gives way when squeezed, and a count that stays.
         label={rows.length === 1 ? "Process" : "Processes"}
         count={rows.length}
         chevron={false}
@@ -89,7 +83,6 @@ export function BackgroundProcessesChip({ sessionId }: { sessionId: Id<"sessions
   );
 }
 
-/** One process: the command in mono, how long it has run (ticking each second while the sheet shows), and Stop. */
 function ProcessRow({ row, stopping, onStop }: { row: Doc<"backgroundProcesses">; stopping: boolean; onStop: () => void }) {
   const theme = EVA_THEME[useScheme()];
   const now = useNow(1000);

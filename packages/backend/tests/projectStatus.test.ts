@@ -9,12 +9,6 @@ import {
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
 
-/**
- * The derived project status and the scheduler's pick, shared by web, phone
- * and `scheduleReadyTasks`: approved todo tasks start in task-number order,
- * at most the parallel limit at once; a failed task stops nobody.
- */
-
 function task(
   id: string,
   taskNumber: number,
@@ -42,7 +36,6 @@ describe("tasksToStart", () => {
     const running = [task("run1", 1, { status: "in_progress" })];
     const waiting = [task("w9", 9), task("w5", 5), task("w7", 7)];
     expect(tasksToStart([...running, ...waiting])).toEqual(["w5", "w7", "w9"]);
-    // A second call on the state after those starts picks nothing.
     const started = waiting.map((w) =>
       task(w.id, w.taskNumber ?? 0, { status: "in_progress" }),
     );
@@ -57,7 +50,6 @@ describe("tasksToStart", () => {
         task("retrying", 3, { runPending: true }),
       ]),
     ).toEqual([]);
-    // The project's account is at its limit: nothing new starts.
     expect(
       tasksToStart([task("limited", 1, { usageLimited: true }), task("x", 2)]),
     ).toEqual([]);
@@ -88,7 +80,6 @@ describe("project status", () => {
         task("b", 2, { status: "cancelled" }),
       ]).stage,
     ).toBe("done");
-    // A new task reopens it: some launched while others remain.
     const reopened = projectStatus([
       task("a", 1, { status: "done", prState: "merged" }),
       task("c", 3, { approved: false }),
@@ -105,7 +96,6 @@ describe("project status", () => {
       projectStatus([task("a", 1, { status: "in_progress" }), task("b", 2)])
         .stage,
     ).toBe("in_progress");
-    // A task in review alone keeps the project in progress.
     const reviewing = projectStatus([
       task("a", 1, { status: "code_review" }),
       task("b", 2),
@@ -141,8 +131,6 @@ describe("project status", () => {
         task("a", 1, { status: "code_review", prState: "open" }),
       ),
     ).toBe("review");
-    // A task from before the coordinator: in review, but its work went into
-    // the project's PR, so it has none of its own.
     expect(
       projectTaskNeedsYou(task("a", 1, { status: "code_review" })),
     ).toBeUndefined();
@@ -155,7 +143,6 @@ describe("project status", () => {
     });
     expect(projectTaskWaitsForCoordinator(waiting)).toBe(true);
     expect(projectTaskNeedsYou(waiting)).toBeUndefined();
-    // The waiting task keeps its slot: its stage stays in progress.
     expect(projectTaskStage(waiting)).toBe("in_progress");
     expect(projectStatus([waiting]).stage).toBe("in_progress");
 

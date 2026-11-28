@@ -19,19 +19,8 @@ import {
   type RepoCache,
 } from "./_chatSource/helpers";
 
-/**
- * Feedback on Eva turns and chat recaps. Two writers share one table:
- * - the user, through thumbs up / down on a finished turn (`rateTurn`) or on
- *   their recap of a chat (`rateRecap`);
- * - the agent, through the `submit_feedback` MCP tool (`createFromAgent`)
- *   when the user shows clear frustration or praise.
- * The transcript reads one chat's rows (`listForChat`); the global Feedback
- * page reads the newest rows across every chat the caller can open (`list`).
- */
-
 /** Longest comment kept; feedback is a short note, not a report. */
 export const FEEDBACK_COMMENT_MAX = 2_000;
-/** Newest rows the Feedback page scans before access checks. */
 const FEEDBACK_SCAN_LIMIT = 500;
 
 const feedbackRowValidator = v.object({
@@ -66,8 +55,6 @@ export const listForChat = authQuery({
  */
 export const rateTurn = authMutation({
   args: {
-    // A plain string: the transcript keys rows by string ids (optimistic
-    // turns have no real id yet), so the id is checked here.
     messageId: v.string(),
     sentiment: v.union(feedbackSentimentValidator, v.null()),
     comment: v.optional(v.string()),
@@ -95,7 +82,6 @@ export const rateTurn = authMutation({
     const comment =
       args.comment === undefined ? existing?.comment : cleanComment(args.comment);
     if (existing) {
-      // `comment: undefined` unsets the field (an emptied comment box).
       await ctx.db.patch(existing._id, { sentiment: args.sentiment, comment });
       return null;
     }
@@ -203,7 +189,6 @@ export const createFromAgent = internalMutation({
   args: {
     entityKind: chatEntityKindValidator,
     entityId: v.string(),
-    // The MCP context carries the users id as a plain string.
     userId: v.string(),
     sentiment: feedbackSentimentValidator,
     comment: v.string(),

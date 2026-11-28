@@ -2,11 +2,6 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Badge, Check, Icon, Roll, Segmented, Stage, Toggle, Window, type Act } from '../../kit'
 import './grid.css'
 
-// An image-led hero: one drafting surface, with four quieter pictures.
-// Orange keycaps and violet glass balance the neutral sheet and dark player.
-// Every tile is its own Stage. The grid never scales as one large picture.
-// Only the drafting tile moves: once in view, then it holds the result.
-
 type Draft = { tab: number; sent: 'idle' | 'busy' | 'done'; selected: boolean; gap: number }
 const INITIAL: Draft = { tab: 0, sent: 'idle', selected: false, gap: 24 }
 const POSTER: Draft = { tab: 1, sent: 'done', selected: true, gap: 25 }
@@ -55,9 +50,6 @@ function Drafting({ w, h }: { w: number; h: number }) {
             {['Design', 'Build', 'Ship'].map((label, i) => <span className="hg-task" key={label}><Check on={i < 2} size={18} />{label}</span>)}
           </div>
           <span className="hg-publish" data-target="publish" data-cursor="hand" style={compact ? at(w - 120, 76, 104, 44) : at(336, 86, 128, 48)}>
-            {/* Each state is a centered layer in one cell, crossfading:
-                Publish, then the pending check alone, then the done check
-                with Live. Nothing resizes or slides across the button */}
             <span className="hg-layer" data-on={s.sent === 'idle' || undefined}>Publish</span>
             <span className="hg-layer" data-on={s.sent === 'busy' || undefined}><Check on={false} pending size={18} /></span>
             <span className="hg-layer" data-on={s.sent === 'done' || undefined}><Check on={s.sent === 'done'} size={18} />Live</span>
@@ -108,7 +100,6 @@ const KEY_ROWS = [
   [['Z', 'つ'], ['X', 'さ'], ['C', 'そ'], ['V', 'ひ'], ['B', 'こ']],
 ]
 
-// Choose a substantial crop through a blank cap edge, never a narrow sliver.
 function keySize(w: number, h: number) {
   for (let size = 36; size <= 48; size++) {
     const gap = Math.round(size * 0.17)

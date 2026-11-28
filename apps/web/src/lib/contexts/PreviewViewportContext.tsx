@@ -1,6 +1,5 @@
 "use client";
 
-// useEffect: publish the preview pane's size to the chat, which sits in another subtree.
 import {
   createContext,
   useContext,
@@ -13,7 +12,6 @@ import {
 export interface PublishedPreviewViewport {
   width: number;
   height: number;
-  /** A device name ("iPhone 12 Pro") when the size came from a preset. */
   label: string | undefined;
 }
 

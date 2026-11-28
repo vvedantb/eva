@@ -2,15 +2,6 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { teamMentionRecipients } from "../_mentions/mentionRecipients";
 
-/**
- * Who takes part in a reply thread (plan `notifications-v2-5.md`, part A):
- * the root's author, every person who replies, everyone mentioned in the
- * root or a reply, and the person Eva answers. Participants follow the
- * thread (its replies notify them) until they unfollow; an unfollow stays
- * when they join again, as a `taskSubscribers` opt-out does.
- */
-
-/** Most participants one thread's reply notifies. A team is smaller. */
 const MAX_THREAD_PARTICIPANTS = 200;
 
 /** Most new replies counted for the "N new" pill. */
@@ -65,7 +56,6 @@ export async function joinThreadOnReply(
     root: Doc<"messages">;
     reply: Doc<"messages">;
     replierId: Id<"users">;
-    /** People the reply mentions (their mention notification is sent). */
     mentionedIds: readonly Id<"users">[];
     repoId: Id<"githubRepos">;
   },
@@ -83,7 +73,6 @@ export async function joinThreadOnReply(
     ...params.mentionedIds,
   ]);
   others.delete(replierId);
-  // Read up to their own reply: what came before it is not new to them.
   await joinThread(ctx, root._id, replierId, params.reply._creationTime);
   await Promise.all(
     [...others].map((userId) => joinThread(ctx, root._id, userId)),

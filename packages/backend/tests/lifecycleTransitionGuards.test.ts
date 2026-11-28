@@ -6,13 +6,6 @@ import schema from "../convex/schema";
 import { requestSessionSandboxStart } from "../convex/_sessions/sandbox";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Behaviour of the sandbox lifecycle: a start never overrides a stop in
- * flight, and a start failure only closes a sandbox that is still
- * `starting`. (A project's status is derived from its tasks; see
- * `projectStatus.test.ts`.)
- */
-
 const TIMEOUT_MS = 30_000;
 
 type SandboxStatus = Doc<"sessions">["status"];
@@ -52,8 +45,6 @@ async function sessionWithStatus(
 }
 
 describe("sandbox lifecycle guards", () => {
-  // Ready and start schedule follow-up jobs; fake timers keep them from
-  // running after the test's transaction has closed.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -139,7 +130,6 @@ describe("sandbox lifecycle guards", () => {
         startAttempt: 1,
       });
       expect(await s.status()).toBe("starting");
-      // The stale attempt's own VM is not tracked by the row, so it is deleted.
       expect(await s.scheduledNames()).toContain("sandbox:deleteSandbox");
     },
     TIMEOUT_MS,

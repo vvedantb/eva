@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Keeps the preview card and comments drawer that the proxy injects into a
  * direct sandbox link the same as Eva's own React ones.
@@ -32,8 +31,6 @@ const THEMES = [
 ];
 
 const verbose = process.env.PARITY_VERBOSE === "1";
-// Async on purpose: the stub page server runs in this process, so a blocking
-// call would stop it answering the page the browser is loading.
 function ab(...args) {
   if (verbose) console.error("agent-browser", args.join(" ").slice(0, 100));
   return new Promise((resolve, reject) => {
@@ -43,7 +40,6 @@ function ab(...args) {
     });
   });
 }
-/** Runs `js` in the page; the CLI prints the value as JSON. */
 async function evalJson(js) {
   const raw = await ab("eval", js);
   if (!raw) throw new Error(`The page returned nothing for: ${js.slice(0, 60)}`);
@@ -52,8 +48,6 @@ async function evalJson(js) {
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// What both sides are asked about. Sizes of boxes (`width`, `height`) are not
-// compared: the injected copy uses content-box. Everything the eye reads is.
 const MEASURE = String.raw`(() => {
   const PX = ['paddingTop','paddingRight','paddingBottom','paddingLeft','marginTop','marginBottom','fontSize','lineHeight','letterSpacing','borderTopWidth','columnGap'];
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
@@ -103,11 +97,7 @@ const MEASURE = String.raw`(() => {
   return JSON.stringify(out);
 })()`;
 
-// Known, deliberate differences: the injected copy paints no border colour
-// on the textarea label chip text etc. Add a "key.prop" here with a reason.
 const IGNORE = new Set([
-  // Eva's tab trough is `h-8` with a pill the same height; ours is a 24px pill
-  // in a 32px trough, so the idle tab itself is shorter in padding terms.
   "tabIdle.paddingTop",
   "tabIdle.paddingBottom",
 ]);

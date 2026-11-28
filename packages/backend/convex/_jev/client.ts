@@ -1,21 +1,5 @@
 "use node";
 
-/**
- * The one place Eva calls TypeSafe Jev. Every caller — the `evaluate` MCP tool
- * action and in-repo features like task tagging — goes through
- * {@link evaluateDecision}, so the caps, the timeout, the zero-data-retention
- * flag and the error mapping are defined once.
- *
- * Built on the AI SDK's `experimental_decide`, which (unlike the deprecated
- * `experimental_evaluate`) carries image file parts and TypeSafe's
- * `longContext` option through AI Gateway.
- *
- * Imports stay confined to the SDK, the leaf modules beside this file and the
- * shared gateway-error helpers in `@vvedantb/server/ai`;
- * reaching into `mcp/*` or `functions.ts` would put a `"use node"` chunk in an
- * import cycle, which breaks the Convex prod push.
- */
-
 import {
   experimental_decide as decide,
   Experimental_DecisionRefusalError,
@@ -35,9 +19,7 @@ import type { LoadedImage } from "./images";
 import { jsonValue } from "./jsonValue";
 import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
 
-/** Jev answers in well under a second; anything past this is the gateway stalling. */
 const REQUEST_TIMEOUT_MS = 30_000;
-/** One retry on transient gateway failures; callers see `retryable` for the rest. */
 const MAX_RETRIES = 1;
 
 type Failure = Extract<EvaluateOutcome, { ok: false }>;
@@ -50,11 +32,6 @@ function failure(
   return { ok: false, errorCode, error, retryable };
 }
 
-/**
- * Maps SDK and gateway failures onto the three caller-facing error codes. The
- * gateway classification itself is shared (`@vvedantb/server/ai`); only
- * Jev's own codes and copy live here.
- */
 function classifyError(error: unknown): Failure {
   if (Experimental_DecisionUnsupportedQuestionTypeError.isInstance(error)) {
     return failure("invalid_request", errorMessageOf(error));
@@ -106,7 +83,6 @@ function classifyError(error: unknown): Failure {
   }
 }
 
-/** Copies only the fields callers are promised, so SDK extras never leak through. */
 function normaliseAnswers(
   answers: Record<string, EvaluateAnswer>,
 ): Record<string, EvaluateAnswer> {
@@ -150,13 +126,6 @@ function describeWarning(warning: {
   return warning.details ? `${feature}: ${warning.details}` : feature;
 }
 
-/**
- * The decide state: plain `state` when it is a string or object with no
- * images, otherwise the state as one part followed by each image under a text
- * label carrying its name, so a question can say "`after`" and Jev knows
- * which picture it means. A JSON array always becomes a part: `decide` reads a
- * bare array as a list of parts.
- */
 function buildState(
   state: EvaluateInputRaw["state"],
   images: readonly LoadedImage[],
@@ -212,7 +181,6 @@ export async function evaluateDecision(
         ...(parsed.data.longContext ? { typesafe: { longContext: true } } : {}),
       },
     });
-    // Provider metadata is JSON on the wire; parse rather than trust the type.
     const metadata = jsonValue.safeParse(result.providerMetadata ?? null);
     return {
       ok: true,

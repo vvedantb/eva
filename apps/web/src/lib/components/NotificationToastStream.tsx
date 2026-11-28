@@ -38,7 +38,6 @@ import {
 const TOAST_LIMIT = 4;
 const TOAST_TTL_MS = 9000;
 
-/** Matches `--motion-base` / `--motion-ease-out` in globals.css. */
 const TOAST_DURATION_S = 0.22;
 
 type ToastEntry = {
@@ -47,8 +46,6 @@ type ToastEntry = {
 };
 
 export function NotificationToastStream() {
-  // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
-  // flag, and toasts only ever announce live notifications.
   const notifications = useQuery(api.notifications.list, {});
   const flags = useQuery(api.auth.getExperimentalFlags);
   const isBellEnabled = flags?.notificationBell === true;
@@ -78,8 +75,6 @@ export function NotificationToastStream() {
     }
     dismissToast(notification._id);
     if (notification.href && isInternalAppHref(notification.href)) {
-      // Same treatment as the inbox: the `repo--app` rewrite plus the search
-      // split the router needs to see a comment anchor at all.
       navigate(hrefToNavigateOptions(notification.href));
       return;
     }
@@ -90,9 +85,6 @@ export function NotificationToastStream() {
     if (!notifications) {
       return;
     }
-    // A chat mention is written before routing has judged it, and its urgency
-    // decides whether it announces itself at all: it is held back until
-    // routing lands seconds later. Every other row is complete on insert.
     const arrived = notifications.filter(
       (notification) => !isAwaitingRouting(notification),
     );
@@ -108,23 +100,15 @@ export function NotificationToastStream() {
     );
     seenNotificationIdsRef.current = currentIds;
 
-    // The routing table (and urgency on top) decides what announces itself;
-    // the rest is seen (it will not toast later) but stays in the inbox only.
     const announced = newlyArrived.filter(notificationToasts);
     if (announced.length === 0) {
       return;
     }
 
-    // One bell per batch (behind the `notificationBell` flag), however many
-    // landed together, and only for unread arrivals. `list` returns the newest 100, so pruning an old notification
-    // pulls the next one into the window and it reads as newly arrived — but
-    // anything resurfacing that way is long since read.
     if (isBellEnabled && announced.some((notification) => !notification.read)) {
       playNotificationBell();
     }
 
-    // The in-app toast is enough while Eva is focused; otherwise also raise an
-    // OS pop-up so it reaches someone working in another app.
     if (!document.hasFocus() && isDesktopNotificationsEnabled()) {
       for (const notification of announced) {
         if (notification.read) continue;
@@ -156,7 +140,6 @@ export function NotificationToastStream() {
       }
       return next.slice(0, TOAST_LIMIT);
     });
-    // Re-running on a flag flip is harmless: nothing is newly arrived then.
   }, [notifications, isBellEnabled]);
 
   useEffect(() => {
@@ -174,7 +157,6 @@ export function NotificationToastStream() {
     return () => window.clearTimeout(timeoutId);
   }, [toasts]);
 
-  // Keep the fixed host mounted so AnimatePresence can play exit animations.
   const toastTransition = { duration: TOAST_DURATION_S, ease: motionEase };
   const toastEnter = { opacity: 0, y: -8 };
   const toastRest = { opacity: 1, y: 0 };
@@ -190,8 +172,6 @@ export function NotificationToastStream() {
         {toasts.map((entry) => {
           const notification = entry.notification;
           const config = getNotificationAppearance(notification);
-          // Same two-line split as the inbox row, so a toast and the row it
-          // becomes read the same way.
           const { subject, event } = splitNotificationTitle(notification);
           return (
             <m.div

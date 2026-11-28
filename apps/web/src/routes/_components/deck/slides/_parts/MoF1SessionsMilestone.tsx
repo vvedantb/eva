@@ -35,7 +35,6 @@ export function MoF1Milestone({ item, run }: { item: Placed; run: Run }) {
         transition={enter(0.05)}
       />
 
-      {/* One ring as the head passes, then the dot holds. */}
       <m.span
         aria-hidden
         className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full"

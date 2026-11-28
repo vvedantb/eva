@@ -38,12 +38,10 @@ import { Fri2Chip } from "../_parts/Fri2Chip";
 interface Feature {
   icon: Icon;
   label: string;
-  /** The condition Jev is given, close to the wording in the code. */
   asks: string;
   kind: string;
 }
 
-/** The three the room will recognise, each with the question Jev answers. */
 const FEATURES: readonly Feature[] = [
   {
     icon: IconFileCheck,
@@ -70,7 +68,6 @@ interface More {
   label: string;
 }
 
-/** Every other place Eva asks Jev, in the order they shipped. */
 const MORE: readonly More[] = [
   { icon: IconTag, label: "Tags tasks" },
   { icon: IconFilter, label: "Sorts findings by severity" },
@@ -113,7 +110,6 @@ const toCard = (index: number) => {
 function JevNode() {
   const step = useDeckStep();
   return (
-    // Arrives from the Jev panel on the slide before, so it starts visible.
     <m.div
       layoutId={SHARED.jev}
       className="absolute flex items-center justify-center rounded-[28px] ring-1 ring-white/15 ring-inset"

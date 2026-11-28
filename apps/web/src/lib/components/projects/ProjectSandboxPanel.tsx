@@ -45,7 +45,6 @@ import {
 import { ProjectTaskPane } from "./ProjectTaskPane";
 import { projectTaskRailTabs } from "./useProjectTaskTabs";
 
-/** Sandbox tabs a task's sandbox has but the coordinator's does not. */
 const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "preview",
   "browser",
@@ -55,7 +54,6 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "files",
 ]);
 
-/** The rail tab of the reply threads; same descriptor shape as Tasks. */
 const REPLIES_TAB: SandboxTabDescriptor = {
   value: "replies",
   label: "Replies",
@@ -64,7 +62,6 @@ const REPLIES_TAB: SandboxTabDescriptor = {
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
-  /** The project's session: its chat feeds the Agents tab and annotations. */
   projectSession: OwnedSession;
   projectNumId?: number;
   sandboxId: string | undefined;
@@ -79,28 +76,16 @@ interface ProjectSandboxPanelProps {
   sandboxTab: ProjectSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /** `sandboxAutoWakeEligible`; combined in SandboxPaneSlots with the setting. */
   autoWakeEligible?: boolean;
-  /** The project is archived: no per-agent stop. */
   isArchived: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
-  /** Mini-player title; Expand returns to this project's Preview tab. */
   title: string;
-  /** ✕ on an open thread: back to the Replies list. */
   onCloseThread: () => void;
-  /**
-   * The selected chat tab's task (`?task=`): the panel shows its tabs only.
-   * Undefined on Eva's tab.
-   */
   selectedTask: ProjectTaskListRow | undefined;
-  /** A task tab is selected but its row is still loading. */
   selectedTaskLoading: boolean;
-  /** The tasks open as chat tabs: the Tasks tab marks their rows. */
   openTaskIds: ReadonlySet<string>;
-  /** Opens a task as a chat tab (a Tasks tab row). */
   onOpenTask: (taskNumId: number) => void;
-  /** The Tasks tab's "+": Eva's tab with her composer focused. */
   onAskEva: () => void;
 }
 
@@ -132,10 +117,7 @@ export function ProjectSandboxPanel({
   onOpenTask,
   onAskEva,
 }: ProjectSandboxPanelProps) {
-  // The Replies tab always shows: the thread list, or the open `?thread=`.
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
-  // ↑ and ↓ in a thread also point the chat at that message (`?message=`),
-  // which scrolls it into view.
   const [, setLinkedMessage] = useQueryState(
     MESSAGE_LINK_PARAM,
     messageLinkParser,
@@ -160,15 +142,8 @@ export function ProjectSandboxPanel({
     projectId,
     repoId,
   );
-  // A selected task tab shows its own tabs only: Review, else Preview, by
-  // default (`defaultProjectTaskTab`). A task with none (it has not run, its
-  // sandbox sleeps and it has no PR) shows the coordinator's Tasks.
   const taskSelected = selectedTask !== undefined || selectedTaskLoading;
   const taskTabs = selectedTask ? visibleProjectTaskTabs(selectedTask) : [];
-  // The coordinator only reads code and delegates: no dev server, no edits,
-  // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
-  // those lands on Tasks; a task's own sandbox keeps them all.
-  // A task tab on Eva's tab lands on Tasks too.
   const activeTab: ProjectSandboxTab = taskSelected
     ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
       ? sandboxTab
@@ -179,7 +154,6 @@ export function ProjectSandboxPanel({
       ? "tasks"
       : sandboxTab;
   const needsYouCount = taskStatus?.counts.blocked ?? 0;
-  // Tasks leads the rail; its badge counts its Needs you group.
   const tasksTab: SandboxTabDescriptor = {
     value: "tasks",
     label: "Tasks",
@@ -191,8 +165,6 @@ export function ProjectSandboxPanel({
         : undefined,
   };
 
-  // Artifacts stay on the project: the backend files its session's
-  // artifacts under it.
   const artifactSource = { kind: "project" as const, projectId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
@@ -213,14 +185,12 @@ export function ProjectSandboxPanel({
       to: toInternalRepoHref(
         `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
       ),
-      // Keep diffFile across sandbox tabs.
       search: true,
     });
   };
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
-  // This surface has no custom tabs, so the tab bar only emits builtin ids.
   const handleTabChange = (tab: string) => {
     if (isProjectSandboxTab(tab)) navigateToSandboxTab(tab);
   };
@@ -254,7 +224,6 @@ export function ProjectSandboxPanel({
             collapsed={collapsed}
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
-            // A task tab's rail holds its own tabs only.
             enabledTabs={taskSelected ? [] : enabledTabs}
             leadingTabs={
               taskTabs.length > 0
@@ -327,7 +296,6 @@ export function ProjectSandboxPanel({
               )
             ) : null}
           </KeepAlivePane>
-          {/* The coordinator has no Files tab. */}
           <SandboxRailPanes
             activeTab={activeTab}
             artifactSource={artifactSource}
@@ -348,9 +316,7 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
-              // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
-              // A collapsed rail keeps its preview parked.
               miniPlayer={
                 projectPathSegment && !collapsed
                   ? {

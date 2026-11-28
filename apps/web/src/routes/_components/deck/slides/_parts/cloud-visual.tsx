@@ -15,11 +15,9 @@ const CHIPS = [
   "Chrome extension",
 ];
 
-/** The orbit swings this far into place, so the chips arrive on a curve. */
 const SWING = 38;
 const SWIRL = { duration: 1.6, ease: EASE.expo, delay: 0.35 };
 
-/** Evenly spaced around the circle, starting at the top and going clockwise. */
 function orbitPoint(index: number): { x: number; y: number } {
   const angle = (index / CHIPS.length) * Math.PI * 2 - Math.PI / 2;
   return {
@@ -111,7 +109,6 @@ export function CloudVisual() {
       </Layer>
 
       <Layer depth={30} className="absolute inset-0">
-        {/* The whole orbit swings in; each chip counter-turns to stay upright. */}
         <m.div
           className="absolute inset-0"
           initial={{ rotate: -SWING }}

@@ -7,21 +7,11 @@ import { colorScheme } from "nativewind";
 import { useEffect, useSyncExternalStore } from "react";
 import { applyEvaTheme } from "@/ui/evaTheme";
 
-/**
- * The appearance mode, as the web `ThemeModeProvider`: the account's saved
- * mode (`auth.getTheme`) once it loads, and this phone's last mode
- * (SecureStore) until then, so the app starts in it with no flash.
- */
 const KEY = "eva.colorScheme";
 let current: ThemeMode = "system";
-/** True once the account or a pick set the mode: a slow SecureStore read must not undo it. */
 let chosen = false;
 const listeners = new Set<() => void>();
 
-/**
- * Paints `mode` now. Neutral is the dark scheme with the Neutral palette in
- * the kit's dark slot (`applyEvaTheme`), set first so the redraw reads it.
- */
 function apply(mode: ThemeMode) {
   current = mode;
   applyEvaTheme(mode === "neutral" ? "neutral" : "dark");
@@ -29,7 +19,6 @@ function apply(mode: ThemeMode) {
   for (const listener of listeners) listener();
 }
 
-/** Paints `mode` and keeps it for the next start. The secure store is missing on the web preview build; the mode then lasts the session. */
 function applyAndRemember(mode: ThemeMode) {
   chosen = true;
   if (mode !== current) apply(mode);
@@ -60,7 +49,6 @@ export function useThemeMode(): ThemeMode {
  */
 export function AccountThemeSync() {
   const saved = useQuery(api.auth.getTheme, {});
-  // Effect: NativeWind and the kit palette are outside React.
   useEffect(() => {
     if (saved) applyAndRemember(saved);
   }, [saved]);

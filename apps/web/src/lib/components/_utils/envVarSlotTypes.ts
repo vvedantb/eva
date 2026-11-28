@@ -7,7 +7,6 @@ interface ProviderLogoProps {
 
 /** Shared shape for coding-agent and infrastructure env paste-in slots. */
 export interface EnvVarSlotEntry {
-  /** Stable id for React keys and local draft state. */
   id: string;
   label: string;
   primaryKey: string;
@@ -16,12 +15,7 @@ export interface EnvVarSlotEntry {
   hint: string;
   placeholder: string;
   multiline: boolean;
-  /** When true, slot is hidden on the team env tab (repo-only keys). */
   repoOnly?: boolean;
-  /**
-   * When set, overrides the slots component's `defaultSandboxExclude` for
-   * new upserts from this slot (e.g. deploy keys stay out of sandboxes).
-   */
   sandboxExclude?: boolean;
 }
 

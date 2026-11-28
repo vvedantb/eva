@@ -9,15 +9,6 @@ import { hasUnreadByPointRead } from "../convex/chatReads";
 import { findNewMessageIds } from "@eva/shared/chatReadState";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Chat unread for people's messages (plan `notifications-v2-5.md`, part B):
- * a person's post in a chat's main transcript lights the chat for its other
- * readers, not for the author; a thread reply does not; a post with no
- * mention creates no notification.
- */
-
-// convex-test ids look like `10000;users`, which the real token pattern never
-// matches. This reads any `@[Name](id)` token, as `coordinatorChatRouting`.
 mock.module("../convex/_mentions/extractMentionedUserIds", () => ({
   extractMentionedUserIds: (
     ctx: { db: { normalizeId: (table: "users", id: string) => Id<"users"> | null } },
@@ -36,7 +27,6 @@ const TIMEOUT_MS = 30_000;
 type Name = "Ana" | "Ben" | "Cat" | "Dan";
 const NAMES: readonly Name[] = ["Ana", "Ben", "Cat", "Dan"];
 
-// A started turn runs a workflow; keep its steps from running.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -44,7 +34,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A project owned by Ana with Ben as a member. Cat and Dan are on the team only. */
 async function fixture() {
   const t = convexTest(schema, modules);
   workflow.register(t);
@@ -93,7 +82,6 @@ async function fixture() {
     api.sessions.ensureOwned,
     { owner: { kind: "project", projectId: ids.projectId } },
   );
-  // Eva is awake, so a message for her starts a turn at once.
   await t.run((ctx) =>
     ctx.db.patch(sessionId, { status: "active", sandboxId: "sbx-test" }),
   );
@@ -104,7 +92,6 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 const mention = (f: Fixture, name: Name) => `@[${name}](${f.users[name]})`;
 
-/** A person's send on the shared send path; returns what became of it. */
 function send(f: Fixture, name: Name, message: string) {
   return f.t.mutation(internal._sessions.execution.sendFromMcp, {
     clerkUserId: `clerk|${name}`,
@@ -115,7 +102,6 @@ function send(f: Fixture, name: Name, message: string) {
   });
 }
 
-/** The open chat's dot, and the project card's dot, for one person. */
 async function unread(f: Fixture, name: Name) {
   const chat = await f.as(name).query(api.chatReads.isUnread, {
     parentId: f.chatId,
@@ -139,13 +125,9 @@ describe("chat unread for people's messages", () => {
       expect(await send(f, "Ben", "The promo box is hard to find.")).toBe(
         "started",
       );
-      // Ana owns the project: her chat and card light up.
       expect(await unread(f, "Ana")).toEqual({ chat: true, card: true });
-      // Ben wrote it: he has read it.
       expect(await unread(f, "Ben")).toEqual({ chat: false, card: false });
-      // Cat never opened, posted in or was mentioned in the chat.
       expect(await unread(f, "Cat")).toEqual({ chat: false, card: false });
-      // No mention: an unread dot only (decision 1).
       expect(await allNotifications(f)).toEqual([]);
     },
     TIMEOUT_MS,
@@ -179,8 +161,6 @@ describe("chat unread for people's messages", () => {
     "a quiet comment in a coordinator chat lights the dot for its participants, with the NEW line on it",
     async () => {
       const f = await fixture();
-      // Ben, a project member, read the chat a while ago. A row written
-      // here, not by `markRead`, so the post is never in the same millisecond.
       await f.t.run(async (ctx) => {
         const chat = await ctx.db.get(f.chatId);
         if (!chat) throw new Error("chat missing");
@@ -196,7 +176,6 @@ describe("chat unread for people's messages", () => {
 
       expect(await unread(f, "Ana")).toEqual({ chat: false, card: false });
       expect(await unread(f, "Ben")).toEqual({ chat: true, card: true });
-      // Mentioned: Dan joins the chat's readers from just before the post.
       expect(await unread(f, "Dan")).toEqual({ chat: true, card: true });
       expect(await unread(f, "Cat")).toEqual({ chat: false, card: false });
 

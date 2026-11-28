@@ -13,9 +13,6 @@ interface LinearIssue {
   description: string;
 }
 
-// Boundary schema for the Linear GraphQL response. Each aliased issue may be
-// null (missing/unknown id) or fail validation (wrong shape) — `.catch(null)`
-// turns any per-issue failure into a skip, matching the old guard behaviour.
 const linearIssueSchema = z.object({
   identifier: z.string(),
   title: z.string(),

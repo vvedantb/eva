@@ -6,18 +6,10 @@ import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 type EnsureSandboxStartedArgs = {
   sandboxId?: string;
   repoId: Id<"githubRepos">;
-  /** When set, a "restoring…" activity is surfaced to this streaming entity. */
   streamingEntityId?: string;
-  /**
-   * True when the caller already knows the sandbox is running (e.g. the
-   * session/project/task status is "active"). Suppresses the cosmetic
-   * "Resuming sandbox…" activity so it does not flash on every message for an
-   * already-running sandbox.
-   */
   sandboxRunning?: boolean;
 };
 
-/** Surfaces a single-tool "active" activity to a streaming entity. */
 async function setResumeActivity(
   step: WorkflowCtx,
   entityId: string,

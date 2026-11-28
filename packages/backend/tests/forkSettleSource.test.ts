@@ -5,23 +5,7 @@ import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Fix #870 (Fork session). `forkSession` stops a running source so Vercel's
- * fork restores from a fresh snapshot, and the fork's first boot calls
- * `settleForkSource` once the fork has been taken or has failed. Two bugs this
- * guards:
- *
- * - A source sandbox deleted before the fork's first boot left
- *   `forkSourceSandboxId` set, so every Start retried a fork that could never
- *   work. `sourceGone` must drop it; a transient failure must keep it so a
- *   retry forks the same source again.
- * - The source must restart only while it is still parked by the fork. A
- *   source the user already woke, or archived since, must be left alone, and
- *   settling twice must not restart it twice.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 async function fixture(source: {
@@ -64,7 +48,6 @@ async function fixture(source: {
   return { t, ...ids };
 }
 
-/** Keeps the zero-delay sandbox start the restart schedules from firing. */
 async function settle(
   f: Awaited<ReturnType<typeof fixture>>,
   sourceGone: boolean,
@@ -121,7 +104,6 @@ describe("settling a fork's source", () => {
       await settle(f, false);
       expect((await read(f)).source?.status).toBe("starting");
 
-      // The user stops it again; a repeat settle must not wake it.
       await f.t.run((ctx) => ctx.db.patch(f.sourceId, { status: "closed" }));
       await settle(f, false);
       expect((await read(f)).source?.status).toBe("closed");
@@ -148,7 +130,6 @@ describe("settling a fork's source", () => {
 
       const { source } = await read(f);
       expect(source?.status).toBe("active");
-      // A restart would have re-seeded the startup step for the source.
       const seeded = await f.t.run((ctx) =>
         ctx.db
           .query("streamingActivity")

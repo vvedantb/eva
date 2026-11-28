@@ -29,7 +29,6 @@ export function resolvePublicConvexSiteUrl(
   return cloud.replace(".convex.cloud", ".convex.site");
 }
 
-/** Convex Cloud API hosts, e.g. `happy-animal-123.convex.cloud` or a regional `….eu-west-1.convex.cloud`. */
 const CONVEX_CLOUD_HOST = /^([a-z0-9-]+\.)+convex\.cloud$/;
 
 /**

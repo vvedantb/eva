@@ -21,31 +21,14 @@ import { THERMO_NUCLEAR_CODE_REVIEW_PROMPT } from "./prompts/thermoNuclearCodeRe
  * the user's to change, like any other automation.
  */
 export interface SystemAutomationDefinition {
-  /** Stable identifier stored on the install row as `systemKey`. */
   key: string;
   title: string;
-  /**
-   * One line for the Hub card, which line-clamps to two. Separate from the
-   * prompt so prompts can open with instructions rather than a description.
-   */
   blurb: string;
-  /** Prompt the agent runs each time. */
   description: string;
-  /**
-   * Standard 5-field cron expression in UTC, seeded onto new installs. Empty
-   * for event-triggered entries.
-   */
   defaultCronSchedule: string;
-  /** Cron or repo event. For an event, `label` is the only install-owned part. */
   trigger: AutomationTrigger;
-  /**
-   * What firing does: start an agent run, post the event into the chat that
-   * owns the PR, or create a quick task (see `_automationEvents/flush.ts`).
-   */
   action: AutomationAction;
-  /** Report-only runs never push a branch or open a PR. */
   readOnly: boolean;
-  /** Whether the run parses actionable findings that can become tasks. */
   actionsEnabled: boolean;
 }
 

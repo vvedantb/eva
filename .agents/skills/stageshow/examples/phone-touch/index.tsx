@@ -1,29 +1,13 @@
 import { Stage, Phone, Expand, Bar, Avatar, Icon, Meter, Roll, States, type Act } from '../../kit'
 import './fitness.css'
 
-// Two of the cards in view say what they are; the rest are art with bars
 const CARD_NAMES: Record<number, string> = { 0: 'Morning Ride', 2: 'Hill Repeats' }
-
-// A fitness app's landing-page demo, phone only. Story in three beats:
-// the Workouts list (context), a tap on "Tempo Run" expands its card into the
-// workout detail the way iOS cards open (action), then Start sets the timer
-// running (result). It loops by being put back: pause, close, and the card
-// folds back into its place in the list, so no frame is ever empty.
-//
-// The expanded detail is the same element as the card in the list: closed, it
-// is clipped to the card's rect and its header art is slid down so only the
-// bottom of the art (title and duration) shows; open, the clip and the slide
-// release together. Nothing swaps, so there is no seam at the hand-over.
-//
-// Real strings: Workouts, Tempo Run, 32 min, Start/Pause/Resume, Warm up,
-// the timer. Everything else is a line or a shape.
 
 type Phase = 'idle' | 'running' | 'paused'
 type S = { open: boolean; phase: Phase; t: number }
 
 const START: S = { open: false, phase: 'idle', t: 0 }
 
-// The card has equal screen-point gutters; Expand measures the current Phone.
 const CARD = { x: 16, h: 132 }
 const TOPS = [150, 296, 442, 588]
 const PICK = 1
@@ -62,9 +46,7 @@ const script = async (a: Act<S>) => {
   await a.click('close')
   a.put({ open: false })
   await a.wait(900)
-  // Hidden behind the card's clip now: reset the workout unseen
   await a.snap({ phase: 'idle', t: 0 })
-  // The finger lifts away; the touch style shows nothing between taps
   await a.move(REST)
   await a.wait(300)
 }
@@ -135,7 +117,6 @@ export default function MobileApp() {
                 </nav>
               </div>
 
-              {/* The picked card and its detail are one element */}
               <div className="fx-press" style={{ transformOrigin: `50% ${top + CARD.h / 2}px` }}>
                 <Expand
                   className="fx-detail"

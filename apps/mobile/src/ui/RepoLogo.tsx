@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Image } from "react-native";
 import { useScheme } from "@/ui/theme";
 
-/** Eva's web `rounded-md` (14), which rounds every logo up to 28 into a circle. */
 const ROUNDED_MD = 14;
 
 /**

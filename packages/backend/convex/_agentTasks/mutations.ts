@@ -63,9 +63,6 @@ import { handTasksToCoordinator } from "../_projects/scheduler";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { startTaskExecution } from "./execution";
 
-// Status transitions that notify subscribers. Mid-run automated transitions
-// (todo/in_progress) are intentionally excluded; those patch status directly
-// elsewhere and never flow through this user-facing mutation anyway.
 const STATUS_CHANGE_NOTIFY: ReadonlySet<string> = new Set([
   "code_review",
   "business_review",
@@ -82,7 +79,6 @@ export const update = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await assertTaskNotArchived(ctx.db, task);
-    // Moving a task needs access to where it lands, not only where it is.
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     }
@@ -92,8 +88,6 @@ export const update = authMutation({
       );
     }
     const updates = await buildTaskUpdates(ctx, task, args);
-    // A task moved to another repo gets a fresh session there; moving into
-    // a project keeps its own session (`workSessionOwner`).
     if (taskMoveDetachesSession(task, args)) {
       await detachOwnedSession(ctx, task._id);
     }
@@ -105,7 +99,6 @@ export const update = authMutation({
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
-    // A task moved into a project goes to its coordinator, unless it started.
     if (args.projectId && args.projectId !== task.projectId) {
       await handTasksToCoordinator(ctx, args.projectId, [task._id]);
     }
@@ -127,14 +120,12 @@ export const updateStatus = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await assertTaskNotArchived(ctx.db, task);
-    // Only a todo task runs from a schedule, so leaving todo drops it.
     if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
     await ctx.db.patch(args.id, {
       status: args.status,
       updatedAt: Date.now(),
     });
-    // A project task back in todo that nobody approved goes to the coordinator.
     if (task.projectId !== undefined && args.status === "todo") {
       await handTasksToCoordinator(ctx, task.projectId, [task._id]);
     }
@@ -157,17 +148,10 @@ export const updateStatus = authMutation({
     );
     await reconcileTaskCloseTimes(ctx, args.id);
 
-    // Sync the task's GitHub PR state (a quick task's or a project child
-    // task's: each owns its PR).
-    //   entering code_review → mark PR ready for review
-    //   leaving code_review (not to done/cancelled) → convert PR back to draft
-    //   entering cancelled → close PR (mirrors the PR-closed → task-cancelled webhook)
-    //   leaving cancelled (not to done) → reopen PR; ready for code_review, draft otherwise
     const enteringCodeReview =
       args.status === "code_review" && previousStatus !== "code_review";
     const enteringCancelled =
       args.status === "cancelled" && previousStatus !== "cancelled";
-    // A cancelled task's open question to its coordinator closes with it.
     if (enteringCancelled) await closeTaskReports(ctx, task._id);
     const leavingCancelled =
       previousStatus === "cancelled" &&
@@ -200,14 +184,6 @@ export const updateStatus = authMutation({
         await applyPrLifecycleTransition(ctx, owner, transition);
       }
 
-      // Write the reviewer-facing description here rather than at the end of
-      // every run: this is the moment the work is offered for review, so the
-      // diff is final and it costs one model call per review instead of one
-      // per run (mirrors a session's "Send for review"). Scheduled, not
-      // awaited, and best-effort — a failure leaves the static PR body in
-      // place. The run stops the sandbox on its way out, so the action resumes
-      // it for the model call and stops it again unless the reviewer already
-      // has it open.
       const session = await findOwnedSession(ctx.db, {
         kind: "task",
         taskId: task._id,
@@ -322,7 +298,6 @@ export const archive = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    // A draft is unsent text: `deleteDraft` deletes it.
     if (task.status === "draft") throw new ConvexError("Delete the draft instead");
     await archiveAgentTask(ctx, args.id);
     await retireOwnedSession(ctx, { kind: "task", taskId: args.id });
@@ -357,12 +332,10 @@ export const unarchive = authMutation({
   },
 });
 
-/** A new task's fields, apart from its title and prompt. */
 const newTaskFields = {
   repoId: v.id("githubRepos"),
   baseBranch: v.optional(v.string()),
   model: v.optional(aiModelValidator),
-  // null = Team; omitted = default to creator's personal account for model.
   providerAccountId: v.optional(
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
@@ -374,17 +347,10 @@ const newTaskFields = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
 
-/**
- * What `createTodoTask` makes a task from. People's forms send the prompt
- * (`description`) alone and the title comes from it (`initialTitle`); agents
- * (MCP, the coordinator) may pass their own `title`.
- */
 type NewTodoTask = ObjectType<typeof newTaskFields> & {
   title?: string;
   description?: string;
-  /** A project task's phase label (`agentTasks.phaseLabel`). */
   phaseLabel?: string;
-  /** Repos besides `repoId` (`agentTasks.linkedRepoIds`); the caller checks access. */
   linkedRepoIds?: Id<"githubRepos">[];
 };
 
@@ -401,7 +367,6 @@ export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: NewTodoTask,
   options: {
-    /** A project task starts at once; else it is handed to the coordinator. */
     start: boolean;
   },
 ): Promise<Id<"agentTasks">> {
@@ -638,7 +603,6 @@ export const assignToProject = authMutation({
         updatedAt: Date.now(),
       });
     }
-    // A moved task that has not started goes to the coordinator at once.
     await handTasksToCoordinator(ctx, args.projectId, moved);
     return null;
   },
@@ -648,7 +612,6 @@ export const assignToProject = authMutation({
 export const createTasksBatch = authMutation({
   args: {
     repoId: v.id("githubRepos"),
-    /** A task without a title takes one from its description (`initialTitle`). */
     tasks: v.array(
       v.object({
         title: v.optional(v.string()),
@@ -694,7 +657,6 @@ export const createTasksBatch = authMutation({
         numId,
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
-      // Without a pick the chat starts on the repo's defaults when first needed.
       if (args.model !== undefined) {
         await seedNewTaskChat(ctx, taskId, repo, { model: args.model });
       }

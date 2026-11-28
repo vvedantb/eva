@@ -4,27 +4,17 @@ import { internal } from "../_generated/api";
 import { findWorkSession } from "../_sessions/owner";
 import { findMainChat } from "../_sessionChats/helpers";
 
-/**
- * The status side of a task's task-mode turns (`taskRunTurn.ts`), for quick
- * and project tasks alike: what the card, the inbox, the scheduler and the
- * Run button read, and the status change when a turn opens or ends. Reads,
- * plus those patches and scheduler calls, so `closeTurn` can call it.
- */
-
 /** How a task's latest run (its newest closed task-mode turn) ended. */
 export type TaskRunOutcome = {
-  /** Stable id for wake-up keys: the turn's. */
   id: string;
   state: "done" | "error" | "cancelled";
   startedAt: number;
   finishedAt: number;
   error?: string;
-  /** A usage limit stopped it (the reply's or run's `errorType`). */
   usageLimited: boolean;
   limitResetAt?: number;
 };
 
-/** The task's own session's closed reply turns, newest first. */
 function closedReplyTurns(db: DatabaseReader, sessionId: Id<"sessions">) {
   return db
     .query("turns")
@@ -34,7 +24,6 @@ function closedReplyTurns(db: DatabaseReader, sessionId: Id<"sessions">) {
     .order("desc");
 }
 
-/** Whether the session has an open reply turn. */
 async function hasOpenReplyTurn(
   db: DatabaseReader,
   sessionId: Id<"sessions">,
@@ -48,7 +37,6 @@ async function hasOpenReplyTurn(
   return open !== null;
 }
 
-/** A closed task-mode turn as an outcome; its reply carries the usage limit. */
 async function turnOutcome(
   db: DatabaseReader,
   turn: Doc<"turns">,
@@ -160,7 +148,6 @@ export async function hasActiveTaskRun(
   return queued.some((row) => row.taskRun !== undefined);
 }
 
-/** The task a session serves, or null for any other session. */
 async function sessionTask(
   db: DatabaseReader,
   sessionId: Id<"sessions"> | undefined,
@@ -171,7 +158,6 @@ async function sessionTask(
   return await db.get(owner.taskId);
 }
 
-/** The task's open question to its coordinator, filed at or after `since`. */
 async function askFiledSince(
   db: DatabaseReader,
   taskId: Id<"agentTasks">,
@@ -242,7 +228,6 @@ export async function onTaskRunTurnClosed(
       .collect();
     for (const row of open) await ctx.db.patch(row._id, { state: "closed" });
   }
-  // The reply lands before the turn closes, so a usage limit is on it now.
   const reply =
     turn.placeholderMessageId !== undefined
       ? await ctx.db.get(turn.placeholderMessageId)

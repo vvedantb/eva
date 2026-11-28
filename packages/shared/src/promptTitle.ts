@@ -1,9 +1,7 @@
 import { tokenizedToDisplayText } from "./mentionText";
 
-/** The longest fallback title, before the word-boundary cut. */
 const PROMPT_TITLE_MAX = 60;
 
-/** One markdown line as plain text: no block markers, emphasis, code ticks or link targets. */
 function plainMarkdownLine(line: string): string {
   return line
     .replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/, "")
@@ -28,7 +26,6 @@ export function titleFromPrompt(prompt: string): string {
   if (line.length <= PROMPT_TITLE_MAX) return line;
   const cut = line.slice(0, PROMPT_TITLE_MAX + 1);
   const space = cut.lastIndexOf(" ");
-  // A first word longer than half the limit is cut mid-word rather than left alone.
   const end = space > PROMPT_TITLE_MAX / 2 ? space : PROMPT_TITLE_MAX;
   return `${cut.slice(0, end).replace(/[\s.,;:!?-]+$/, "")}…`;
 }

@@ -1,16 +1,3 @@
-/**
- * Provider-neutral sandbox contract.
- *
- * WHY: eva runs managed codebases in remote sandboxes. The only backend today
- * is Vercel Sandbox (sub-second snapshot restores). This contract stays
- * provider-neutral in shape so a future provider swap does not require
- * touching every `_sandbox_runtime/` consumer.
- *
- * These types are a hand-written contract, NOT Convex documents — they describe
- * an external SDK surface, so they are defined here rather than imported from
- * generated Convex types.
- */
-
 /** Which backend fulfils sandbox operations. Vercel is the only implementation. */
 export type SandboxProviderKind = "vercel";
 
@@ -41,9 +28,7 @@ export interface SandboxExecResult {
 export interface SandboxExecOptions {
   cwd?: string;
   env?: Record<string, string>;
-  /** Command timeout in seconds (server-enforced). */
   timeoutSeconds?: number;
-  /** Run with root privileges. */
   sudo?: boolean;
 }
 
@@ -69,9 +54,7 @@ export interface SandboxLifecycleParams {
  * policy that decides which role a sandbox gets.
  */
 export interface SandboxMount {
-  /** Absolute path to mount at. Must not overlap another mount. */
   path: string;
-  /** Provider-scoped volume name; created on first use. */
   volumeName: string;
   mode: "read-write" | "snapshot";
 }
@@ -85,45 +68,20 @@ export const COORDINATOR_VCPUS = 2;
 
 /** Parameters to create a sandbox, optionally seeded from a snapshot. */
 export interface SandboxCreateParams {
-  /** Vercel snapshotId. Omit for a bare sandbox. */
   snapshot?: string;
-  /**
-   * Fork this existing sandbox (by id) instead: the provider restores the new
-   * sandbox from the source's current snapshot ("Fork session"). Takes
-   * precedence over `snapshot` and `image`.
-   */
   forkFrom?: string;
-  /**
-   * Vercel Container Registry image to boot from (e.g. the managed
-   * `vercel/sandbox/universal:latest`). Ignored when `snapshot` is set — a
-   * snapshot restore already carries its own image. Omit for the legacy
-   * `runtime` boot.
-   */
   image?: string;
   envVars: Record<string, string>;
   lifecycle: SandboxLifecycleParams;
-  /** Ports to expose publicly (Vercel needs these declared up front). */
   ports?: number[];
-  /** Override the create-ready wait; large seeded snapshots need longer. */
   readyTimeoutSeconds?: number;
-  /**
-   * Persistent volumes to attach. Best-effort by contract: a provider that
-   * cannot honour a mount MUST create the sandbox without it rather than fail,
-   * because the caller's fallback is a cold cache, not an error.
-   */
   mounts?: SandboxMount[];
-  /**
-   * vCPUs for the sandbox (Vercel gives 2 GB of memory for each). Omit for
-   * the app's size setting (`SandboxCredentials.vcpus`). A project
-   * coordinator passes `COORDINATOR_VCPUS`.
-   */
   vcpus?: number;
 }
 
 /** Narrowed view of a snapshot record. */
 export interface SandboxSnapshotInfo {
   id: string;
-  /** Normalised: "ready" (usable), "pending" (still building), "error" (rebuild needed). */
   status: "ready" | "pending" | "error";
   errorReason: string | null;
   raw: string;
@@ -131,11 +89,6 @@ export interface SandboxSnapshotInfo {
 
 /** Parameters to capture a snapshot from a running sandbox. */
 export interface CreateSnapshotParams {
-  /**
-   * Desired snapshot name. Vercel is id-addressed and ignores this for
-   * addressing, so it is used only for logging and error messages. Callers must
-   * use the returned `snapshotId`, never this name, to poll or persist.
-   */
   name?: string;
 }
 
@@ -144,11 +97,6 @@ export interface PreviewUrl {
   url: string;
   port: number;
 }
-
-// ---------------------------------------------------------------------------
-// Optional capability sub-interfaces (wired last; a provider may omit them
-// until implemented, hence optional on SandboxHandle).
-// ---------------------------------------------------------------------------
 
 /** In-sandbox git operations, backed by shell git. */
 export interface SandboxGit {
@@ -168,10 +116,6 @@ export interface SandboxDesktop {
   stop(): Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// Core interfaces
-// ---------------------------------------------------------------------------
-
 /**
  * A handle to a single running (or resumable) sandbox. Wraps the provider's
  * per-instance SDK object. Property getters expose identity and normalised
@@ -179,110 +123,39 @@ export interface SandboxDesktop {
  */
 export interface SandboxHandle {
   readonly id: string;
-  /** Allocated vCPUs, if the provider reports it. */
   readonly cpu?: number;
-  /** Allocated memory in MB, if reported. */
   readonly memory?: number;
-  /** Allocated disk in GB, if reported. */
   readonly disk?: number;
 
-  /** Last-known normalised state. Call {@link refresh} to update. */
   readonly state: SandboxState;
   readonly errorReason: string | null;
 
-  /**
-   * Liveness class for stale-active reconcile / prewarm.
-   *
-   * Unlike {@link state}, this may call the provider (e.g. listSessions) when
-   * the attached session is missing. On Vercel a hard-timeouted VM makes
-   * `status` throw and {@link state} reports `"starting"` (so mid-stop start
-   * paths do not treat it as idle-stopped) — that same mapping left the
-   * reconcile sweep treating dead sandboxes as transient forever. Use this
-   * when deciding whether to flip eva's "active" status to "closed".
-   *
-   * - `"alive"` — session is running; leave status alone
-   * - `"dead"` — definitely stopped / gone / empty; safe to flip
-   * - `"transient"` — mid-start, mid-stop, or unknown; ask again later
-   */
   classifyForReconcile(): Promise<"alive" | "dead" | "transient">;
 
   exec(cmd: string, opts?: SandboxExecOptions): Promise<SandboxExecResult>;
 
-  /**
-   * Launch a command detached and return immediately, without holding the exec
-   * stream for the process's lifetime. Used to kick off long-running daemons /
-   * the seed-run script. Must use native detached exec — a shell `&` inside a
-   * synchronous exec keeps Vercel's stream open until it times out.
-   */
   execDetached(cmd: string, opts?: SandboxExecOptions): Promise<void>;
 
-  /**
-   * Write a file into the sandbox filesystem at an absolute path, creating
-   * parent directories as needed (Vercel: `writeFiles`).
-   */
   writeFile(path: string, content: string | Uint8Array): Promise<void>;
 
-  /**
-   * Start/resume the sandbox, waiting up to `timeoutSeconds` for readiness.
-   *
-   * `resumeAfterStop` encodes caller intent when a stop is still in flight
-   * (`stopping`/`snapshotting` while the snapshot is written). Explicit
-   * user-initiated starts pass true: wait the stop out, then resume from the
-   * fresh snapshot. Background callers (prewarm, watchdog, lazy resume) omit
-   * it: the start is refused so a stale in-flight resume cannot resurrect a
-   * sandbox the user just stopped.
-   */
   start(
     timeoutSeconds: number,
     opts?: { resumeAfterStop?: boolean },
   ): Promise<void>;
   stop(): Promise<void>;
   archive(): Promise<void>;
-  /**
-   * Push the provider's hard session deadline out by `durationMs`. Vercel's
-   * `timeout` is a hard runtime cap per session — without extension a turn
-   * that outlives it is killed mid-work with no snapshot (observed twice in
-   * prod: turns dead ~60min after resume, filesystem rolled back). The chat
-   * stall watchdog calls this on every not-stale tick of an active turn, so a
-   * live turn keeps its VM alive while idle sandboxes still stop on schedule.
-   * Best-effort: callers must tolerate failure.
-   */
   extendTimeout(durationMs: number): Promise<void>;
-  /**
-   * Permanently remove the sandbox. On Vercel, also deletes snap_* objects for
-   * this sandbox name (SDK delete does not reliably cascade). Pass
-   * `preserveSnapshotIds` when a seed capture must survive prep-sandbox teardown.
-   */
   delete(options?: {
     preserveSnapshotIds?: ReadonlyArray<string>;
   }): Promise<void>;
-  /** Re-read live state/errorReason from the provider. */
   refresh(): Promise<void>;
 
-  /** Public/signed URL for a port. */
   previewUrl(port: number, ttlSeconds?: number): Promise<PreviewUrl>;
 
-  /**
-   * Register a filesystem snapshot of this sandbox and return its id.
-   *
-   * Returns as soon as the snapshot is registered, NOT when the capture
-   * finishes — a seeded snapshot carrying a whole DB volume keeps building
-   * server-side for minutes. Poll {@link SandboxClient.getSnapshot} with the
-   * returned id for readiness. Callers that need completion must do so across
-   * separate steps; awaiting the capture inline would exceed Convex's ~600s
-   * per-action ceiling.
-   *
-   * Note the sandbox is stopped as part of capture.
-   */
   createSnapshot(params: CreateSnapshotParams): Promise<{ snapshotId: string }>;
 
   readonly git: SandboxGit;
 
-  /**
-   * Present only on providers that support it. Vercel's interactive PTY is
-   * wired one layer up in `../pty.ts` / `../_pty/vercel.ts` rather than
-   * through this interface, so this stays undefined by design.
-   */
   readonly desktop?: SandboxDesktop;
 }
 
@@ -306,11 +179,6 @@ export type SandboxCredentials = {
   token: string;
   teamId: string;
   projectId: string;
-  /**
-   * vCPUs for sandboxes created with these credentials: the size of the app
-   * they were resolved for (`githubRepos.sandboxSize`). It rides here because
-   * credentials are the one thing every create path resolves per app.
-   */
   vcpus: number;
 };
 
@@ -330,13 +198,7 @@ export type SandboxCredentials = {
  * is gone". See `_sandbox_runtime/sandboxErrors.ts`.
  */
 export class SandboxProviderError extends Error {
-  /** HTTP status from the provider API, when it reported one. */
   readonly httpStatus: number | undefined;
-  /**
-   * The provider's own error text (API response body / SDK message). Never
-   * command stdout/stderr and never a caller-supplied command string — those
-   * belong in {@link Error.message}, which is not pattern-matched.
-   */
   readonly detail: string;
 
   constructor(

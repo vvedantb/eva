@@ -20,7 +20,6 @@ import {
 } from "@eva/shared";
 import { SummarySection } from "./SummarySection";
 
-/** What a first render carries; the recent remarks are the ones worth arriving for. */
 const COMMENT_PAGE = 10;
 
 /**
@@ -119,8 +118,6 @@ function CommentEntry({ comment }: { comment: SummaryComment }) {
     />
   );
 }
-
-/** Bot remarks, folded behind one row naming who wrote them and when. */
 function BotGroup({ comments }: { comments: readonly SummaryComment[] }) {
   const authors = [
     ...new Map(

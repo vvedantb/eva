@@ -74,10 +74,6 @@ export function finishSdkAttempt(p: {
   });
 }
 
-/**
- * SDK runners that do not report first-event / zombie / tool-stall flags
- * still have to fill the shared ProviderAttemptResult shape.
- */
 function buildStandardSdkAttemptResult(params: {
   code: number;
   output: string;

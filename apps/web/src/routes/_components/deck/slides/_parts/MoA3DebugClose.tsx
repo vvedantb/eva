@@ -8,8 +8,6 @@ import {
 } from "../../_components/motion";
 import { MoA3AccentRoll } from "./MoA3AccentRoll";
 
-/** The debugging slide's (a10) closing figures and its case pager. */
-
 const BIG_NUMBER =
   "relative top-[0.09em] text-5xl font-semibold tracking-[-0.02em]";
 const ENTER = { duration: DUR.hero, ease: EASE.expo };
@@ -49,7 +47,6 @@ export function MoA3DebugClosing() {
           launches — found by searching live traffic.
         </MaskedText>
       </p>
-      {/* The two figures as one bar: restarts filling their share of launches. */}
       <div
         aria-hidden
         className="relative mt-10 h-1.5 overflow-hidden rounded-full bg-white/10"
@@ -67,7 +64,6 @@ export function MoA3DebugClosing() {
   );
 }
 
-/** Each case owns a slot; the pill glides between slots over the resting dots. */
 const SLOT = 30;
 const PILL = 24;
 

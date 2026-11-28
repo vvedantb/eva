@@ -5,11 +5,6 @@ import {
   isMissingRemoteRefFetchFailure,
 } from "../convex/_git/remoteRef";
 
-/**
- * Prod (2026-09-01): sandbox:fetchBaseBranch threw Uncaught
- * SandboxCommandFailedError for a deleted eva/automation-* ref. Git exit 128
- * "couldn't find remote ref" is expected, not a function failure.
- */
 describe("missing remote ref is a handled git outcome", () => {
   const axiomFingerprint =
     "Uncaught SandboxCommandFailedError: Sandbox command failed (exit 128): fatal: couldn't find remote ref eva/automation-ts7a18s257e0ktzfcvj416b0ts8b3jsw-tn71c3mydagm4hfstgd8sxrxy58dj636";

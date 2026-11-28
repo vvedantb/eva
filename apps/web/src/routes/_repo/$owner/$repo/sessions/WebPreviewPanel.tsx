@@ -75,35 +75,15 @@ interface WebPreviewPanelProps {
   onRefresh: () => void;
   port: number;
   onPortChange: (port: number) => void;
-  /** Multi-repo sessions: one dev-server port per checked-out repo. */
   portOptions?: readonly PreviewPortOption[];
-  /**
-   * Per-pane identity: hosted iframe key and sessionStorage prefix for the
-   * device viewport. The path itself lives on Convex (`path`).
-   */
   pathStorageKey: string;
-  /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
   toolCallParentId: PreviewToolCallParentId;
-  /**
-   * This pane's sticky Preview path from Convex. `undefined` while the view
-   * state loads: the iframe waits so it never opens at the wrong path.
-   */
   path: string | undefined;
   onPathChange: (path: string) => void;
-  /** When set (sessions), Preview empty state shows a Wake up Eva button. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The owner chat's preview annotations: Select element sends into it, the
-   * Comments drawer lists it. When absent, both tools are hidden.
-   */
   annotation?: PreviewAnnotationTarget;
-  /**
-   * Set while this pane is the visible preview: lets it float into the
-   * mini-player when the user leaves the preview or pops it out.
-   */
   miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
-  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }
 
@@ -131,8 +111,6 @@ export function WebPreviewPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
-  // One subscription per chat: every pane of it shares the cached result.
-  // Skipped while the sandbox is asleep: the toolbar is not on screen then.
   const comments =
     useQuery(
       api.previewComments.list,
@@ -143,10 +121,7 @@ export function WebPreviewPanel({
     messageLinkParser,
   );
   const [sketchMode, setSketchMode] = useState(false);
-  // Sketch hands its image to a composer through this context; without one
-  // there is nowhere for it to go.
   const canSketch = usePendingPreviewSnapshots() !== undefined;
-  // The mini-player is a desktop affordance: on a phone there is no "beside".
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const floating = usePreviewMiniPlayer();
   const isFloating = floating?.entryKey === pathStorageKey;
@@ -154,20 +129,14 @@ export function WebPreviewPanel({
     miniPlayer !== undefined && isDesktop && sandboxId !== undefined
       ? { ...miniPlayer, sandboxId }
       : undefined;
-  // The live iframe lives in the global PreviewIframeHost (fixed overlay),
-  // so it survives route changes. Nav bar / annotation consumers get the
-  // element via this subscription instead of an in-tree ref.
   const iframeElement = usePreviewIframeElement(pathStorageKey);
   const screenshot = usePreviewScreenshot(iframeElement);
-  // The toolbar is drawn inside the page by the preview proxy; this hands it
-  // Eva's state and runs the tools that need Eva.
   usePreviewToolbarBridge({
     iframeElement,
     state: {
       selectEnabled: annotation !== undefined,
       commentsEnabled: annotation !== undefined,
       commentsActive: commentsOpen,
-      // Open only: a resolved comment needs nothing more.
       commentCount: comments.filter((comment) => !isResolved(comment)).length,
       sketchEnabled: canSketch,
       sketchActive: sketchMode,
@@ -177,7 +146,6 @@ export function WebPreviewPanel({
       comments: () => setCommentsOpen(!commentsOpen),
       sketch: () => {
         setSketchMode(!sketchMode);
-        // One tool at a time: both read pointer input on the page.
         setAnnotationMode(false);
       },
       screenshot: screenshot.capture,
@@ -185,13 +153,9 @@ export function WebPreviewPanel({
   });
   const fullscreenElement = useFullscreenElement();
   const [fullscreenRequested, setFullscreenRequested] = useState(false);
-  // Esc exits fullscreen without going through our toggle — resync in render.
   if (fullscreenRequested && fullscreenElement === null) {
     setFullscreenRequested(false);
   }
-  // `containerRef.requestFullscreen` would blank the preview: fixed-position
-  // elements outside the fullscreen element (the host overlay) are not
-  // rendered. Fullscreen the document instead and fake-expand this panel.
   const isFullscreen =
     fullscreenRequested && fullscreenElement === document.documentElement;
   const toggleFullscreen = () => {
@@ -237,7 +201,6 @@ export function WebPreviewPanel({
     contain,
     containSize,
   );
-  // The agent hears the size of a custom frame with every message.
   usePublishPreviewViewport(
     isActive && framedViewport.mode !== "fill"
       ? {
@@ -253,12 +216,6 @@ export function WebPreviewPanel({
   const pathLoaded = path !== undefined;
   const previewPath = normalizePreviewPath(path ?? "/");
 
-  // iframeSrc is recomputed only at remount points (previewInfo change,
-  // storage-key change, path first loaded, or iframeKey bump from a refresh).
-  // previewPath is intentionally NOT part of the key so the src stays stable
-  // while the user navigates inside the iframe — otherwise we'd fight the
-  // iframe with declarative src updates. Render-phase state adjustment, not
-  // useMemo.
   const srcKey = `${previewInfo?.url ?? ""}|${pathStorageKey}|${iframeKey}|${pathLoaded}`;
   const buildSrc = () =>
     previewInfo && pathLoaded
@@ -278,9 +235,6 @@ export function WebPreviewPanel({
     onPathChange(normalizePreviewPath(next));
   }
 
-  // The chat follows `?message=` (scroll + flash). Fullscreen hides the chat,
-  // so leave it first. Re-linking the same row clears the param once so the
-  // chat scrolls to it again.
   function viewInChat(messageId: Id<"messages">) {
     if (isFullscreen) toggleFullscreen();
     if (linkedMessageId === messageId) {
@@ -325,8 +279,6 @@ export function WebPreviewPanel({
     applyFraming(togglePreviewContain({ viewport, contain, containSize }));
   }
 
-  // Manual pop-out: the pane hands its anchor to the mini-player and shows a
-  // placeholder until the preview comes back (one anchor per hosted iframe).
   const popOut =
     miniPlayerSource !== undefined && iframeSrc !== undefined
       ? {
@@ -470,8 +422,6 @@ export function WebPreviewPanel({
               onSubmit={annotation.submit}
             />
           ) : null}
-          {/* The floating mini-player takes the iframe; the drawer stays
-              behind with the pane instead of covering the small player. */}
           {annotation && commentsOpen && !sketchMode && !isFloating ? (
             <PreviewCommentsDrawer
               iframeElement={iframeElement}

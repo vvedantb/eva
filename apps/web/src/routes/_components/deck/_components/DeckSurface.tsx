@@ -6,9 +6,7 @@ import type { DeckTheme } from "./deckContext";
 import { ACCENT, EASE, accentMix } from "./motion/tokens";
 
 interface CardLight {
-  /** The soft wash under the top edge, always there. */
   highlight: string;
-  /** The travelling edge light, seen once on entry. */
   edge: string;
 }
 
@@ -23,7 +21,6 @@ const LIGHT: Record<DeckTheme, CardLight> = {
   },
 };
 
-/** The edge light waits for the card to settle, then crosses in just over a second. */
 const EDGE_LEAD = 0.3;
 const EDGE_DURATION = 1.2;
 

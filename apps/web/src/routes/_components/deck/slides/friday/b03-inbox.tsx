@@ -29,7 +29,6 @@ interface Row {
   icon: Icon;
 }
 
-/** Newest first, the way the real list reads. */
 const ROWS: readonly Row[] = [
   { title: "Referral export ready", kind: "Review", icon: IconGitPullRequest },
   { title: "Overnight checks finished", kind: "Routine", icon: IconClockHour3 },

@@ -3,10 +3,6 @@ import type { LucideIcon } from 'lucide-react'
 import { Stage } from '../kit'
 import './style.css'
 
-// Style pairs: the same deploys card twice. The good side is identical in
-// every pair; each bad side carries one fault agents reach for, so a
-// builder can match a fault in its own still to the pair that names it.
-
 export const styleLessons = [
   { id: 'style-purple', title: 'Take the color from the product', note: 'The same deploys card. A purple-to-pink gradient, gradient text and a tinted card say “generated” before anything is read. Use the product’s own neutrals and one accent on the thing that matters.', bad: 'Purple gradient ground, gradient title, tinted everything', good: 'Product neutrals; the accent only on the live deploy' },
   { id: 'style-tiny', title: 'Set text at reading size', note: 'The same card. Shrinking type to fit more in reads as a wireframe at launch-page size. Rows at 13 to 14px with 11 to 12px metadata, and fewer of them.', bad: '9 to 10px text that only reads zoomed in', good: '14px names, 12px metadata' },
@@ -30,7 +26,6 @@ const DEPLOYS: Deploy[] = [
 
 const ICON: Record<Deploy['state'], LucideIcon> = { live: Globe, building: LoaderCircle, failed: CircleX }
 
-/** Invented glyphs, the kind a builder draws when it has no set */
 function MadeUp({ state }: { state: Deploy['state'] }) {
   const d = { live: 'M4 10.5 8 14l8-9', building: 'M10 3a7 7 0 1 1-6.2 3.8M3 3v4h4', failed: 'M10 2.5 18 17H2zM10 8v4M10 14.5v.5' }[state]
   const fill = state === 'failed'

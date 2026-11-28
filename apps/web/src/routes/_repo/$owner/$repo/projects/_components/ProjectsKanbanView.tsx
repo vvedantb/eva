@@ -31,7 +31,6 @@ interface ProjectsSelectionProps {
 interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
   projectsByPhase: Record<ProjectStage, Project[]>;
   visiblePhases: Set<ProjectStage>;
-  /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
   owner: string;
   name: string;
@@ -108,7 +107,6 @@ function VirtualProjectColumn({
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/kanban/${phase}`,
   );
-  // Shift-click spans this column only.
   const columnIds = projects.map((p) => p._id);
 
   return (

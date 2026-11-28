@@ -12,7 +12,6 @@ import {
 import { IconTrash } from "@tabler/icons-react";
 
 export interface RemoveMemberTarget {
-  /** Full name when we have one, email otherwise — whatever the row showed. */
   label: string;
   teamName: string;
 }

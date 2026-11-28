@@ -6,11 +6,6 @@ import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
 import type { McpCallerOwner } from "./projectScope";
 
-// Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
-// tools.ts so the orchestrator registration does not close an import cycle
-// (tools -> orchestratorTools -> tools), which would land in the "use node"
-// action chunk and break the prod push.
-
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
  * (`claude:claude-fable-5-2`); opus/sonnet/haiku keep their existing aliases.
@@ -36,26 +31,9 @@ export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  /** Set when `entityId` is a session; a one-shot agent's token has none. */
   entityKind?: "session";
-  /**
-   * The session chat a session daemon runs in. Chat content (panels, HTML,
-   * preview tool calls, env var cards) lands here; `entityId` is the session.
-   */
   chatId?: string;
-  /**
-   * Set only by Manager Ave's own server-side run (`mcp/aveRun.ts`) — no token
-   * path can carry it. Unlocks `send_agent_message` and makes the tools that
-   * start or message agents register a watch on this thread.
-   */
   aveThreadId?: string;
-  /**
-   * The task or project the sandbox chat speaks for (`chatOwner`), resolved
-   * once for each request (`mcp.projectQueries.resolveCallerOwner`). "This
-   * chat" means this owner (`withSelfDefault`), and the project tool rules
-   * read it (`mcp/projectScope.ts`). Absent for a standalone session and for
-   * callers with no sandbox chat.
-   */
   owner?: McpCallerOwner;
 }
 
@@ -82,7 +60,6 @@ export interface RepoInfo {
   mcpRootPrompt: string | null;
 }
 
-/** Strips the HTTP client's request-id and stack noise from a Convex error. */
 function cleanErrorMessage(error: Error): string {
   const uncaught = /Uncaught Error: ([^\n]*)/.exec(error.message);
   return uncaught ? uncaught[1] : error.message;
@@ -248,9 +225,6 @@ export function matchRepoByName(
   }
 
   if (!repo) {
-    // App-qualified: a monorepo is several repo rows sharing one name, so the
-    // bare `owner/name` list repeated the same string a dozen times and told
-    // the caller nothing about which app to ask for.
     const available = repos.map(repoRefLabel).join(", ");
     return toolErrorResult(
       `Repo "${repoName}" not found. Your repos: ${available}`,

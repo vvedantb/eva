@@ -3,14 +3,8 @@ import { EvaDiscMark } from "../../_components/EvaDiscMark";
 import { Accent, Shell } from "../../_components/DeckPrimitives";
 import { BRAND, EASE, MaskedText } from "../../_components/motion";
 
-/** Painted once; only its transform and opacity move. */
 const HALO = `radial-gradient(circle, ${BRAND.purple}2e, ${BRAND.purple}14 30%, ${BRAND.blue}08 48%, transparent 64%)`;
 
-/**
- * The mark arrives first: it turns into place out of a small scale while a
- * soft halo opens behind it and one ring spreads out as it lands. Then the
- * title rises word by word.
- */
 function Emblem() {
   return (
     <div className="relative mb-12 grid size-[88px] place-items-center">

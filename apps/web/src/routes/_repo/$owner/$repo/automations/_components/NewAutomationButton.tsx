@@ -41,8 +41,6 @@ export function NewAutomationButton() {
     try {
       const id = await createAutomation({ repoId, title: title.trim() });
       const created = await convex.query(api.automations.get, { id });
-      // Guarded with an if rather than a ternary: React Compiler bails on the
-      // whole file when a conditional expression sits inside a try/catch.
       if (!created) {
         setIsCreating(false);
         return;

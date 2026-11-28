@@ -7,8 +7,6 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 
-// Eva reads the Clerk issuer from CLERK_JWT_ISSUER_DOMAIN, with the package
-// default as fallback. The metadata routes and the JWT check share it.
 export const clerkIssuer = {
   name: "CLERK_JWT_ISSUER_DOMAIN",
   fallback: "CLERK_FRONTEND_API_URL",
@@ -20,7 +18,6 @@ export type McpPrincipal = {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  /** Launches mint only session tokens (`mintSandboxSessionTokens`). */
   entityKind?: "session";
   chatId?: string;
 };

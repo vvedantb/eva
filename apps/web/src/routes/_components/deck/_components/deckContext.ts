@@ -54,7 +54,6 @@ export function useMotionCue(step?: number, delay = 0): MotionCue {
   return { on: cue.on, delay: cue.delay + delay };
 }
 
-/** The foreground ink per surface, as an `r,g,b` triple. */
 const INK_RGB: Record<DeckTheme, string> = {
   dark: "255,255,255",
   light: "24,24,27",

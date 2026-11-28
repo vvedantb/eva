@@ -19,11 +19,8 @@ interface RepoLabelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoId: Id<"githubRepos">;
-  /** Current custom label, if any. */
   label: string | undefined;
-  /** Placeholder / default shown when label is empty (GitHub name or leaf). */
   fallbackName: string;
-  /** When set, optimistically patches `listByTeam` for this team too. */
   teamId?: Id<"teams">;
 }
 
@@ -39,7 +36,6 @@ export function RepoLabelDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        {/* Remount when opened so the draft resets from the latest label. */}
         {open ? (
           <RepoLabelForm
             key={`${repoId}:${label ?? ""}`}

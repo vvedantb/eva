@@ -22,7 +22,6 @@ export type TranscriptMessage = FunctionReturnType<
   typeof api.messages.listByParent
 >[number];
 
-// The load plan (tail, live `since`, doubling older pages) is shared with the phone.
 export { transcriptLiveArgs, transcriptTailArgs };
 
 /**
@@ -52,8 +51,6 @@ export function useChatTranscript(parentId: TranscriptParentId | "skip") {
   >(undefined);
   const ownArgs =
     !skipped && liveArgs?.parentId === parentId ? liveArgs : undefined;
-  // Anchored once per chat, during render: re-anchoring on every tail change
-  // would slide the window this exists to pin.
   if (!skipped && tail !== undefined && ownArgs === undefined) {
     setLiveArgs(transcriptLiveArgs(parentId, tail));
   }
@@ -69,7 +66,6 @@ export type TranscriptReach = { messageId: string } | { search: string };
 
 interface OlderState {
   parentId: TranscriptParentId | undefined;
-  /** 0: none loaded yet. Past `OLDER_TRANSCRIPT_PAGED_STEPS`: everything. */
   steps: number;
   reach: TranscriptReach | undefined;
 }
@@ -95,9 +91,7 @@ export function useOlderTranscript({
   active,
 }: {
   parentId: TranscriptParentId | "skip";
-  /** `useChatTranscript`'s rows. */
   live: TranscriptMessage[] | undefined;
-  /** The chat is on screen: only it follows a shared message link. */
   active: boolean;
 }) {
   const skipped = parentId === "skip";
@@ -120,12 +114,8 @@ export function useOlderTranscript({
       ? "skip"
       : olderTranscriptArgs(parentId, before, own.steps);
   const loaded = useQuery(api.messages.listByParent, args);
-  // Held across step changes, so a new step keeps the rows painted. Dropped
-  // while hidden, like the live rows (`useChatTranscript`): the steps are
-  // kept, so the rows load again on return.
   const heldOlder = useHeldResult(loaded, skipped ? null : parentId);
   const older = skipped ? undefined : heldOlder;
-  // Before any step, one row read says whether there is history at all.
   const probeArgs =
     skipped || before === undefined || own.steps > 0
       ? "skip"
@@ -139,7 +129,6 @@ export function useOlderTranscript({
     (args !== "skip" && loaded === undefined) ||
     (probeArgs !== "skip" && probe === undefined);
 
-  // A held page from an earlier anchor may reach into the live rows.
   const olderRows =
     older === undefined || before === undefined
       ? []
@@ -151,8 +140,6 @@ export function useOlderTranscript({
         ? [...olderRows, ...live]
         : live;
 
-  // A find query asks the server for its oldest match above the loaded rows,
-  // then reaches that row like any other.
   const firstLoaded = messages?.[0]?._creationTime;
   const searchArgs =
     !skipped &&
@@ -164,8 +151,6 @@ export function useOlderTranscript({
       : "skip";
   const searchHit = useQuery(api.messages.searchOlderByParent, searchArgs);
 
-  // Load the next step while a target is still missing. One step per landed
-  // result: the step only moves while nothing is loading.
   const linkedId = useLinkedMessageId();
   const linkedReach: TranscriptReach | undefined =
     active && linkedId !== null ? { messageId: linkedId } : undefined;

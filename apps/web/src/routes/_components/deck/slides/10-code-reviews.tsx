@@ -20,7 +20,6 @@ import {
   cueTransition,
 } from "../_components/motion";
 
-/** The old way, one phrase a line. What each one meant lives in the notes. */
 const BEFORE: readonly string[] = [
   "A person reads every line",
   "Comments back and forth",
@@ -34,18 +33,15 @@ interface Statement {
   text: string;
 }
 
-/** The two halves of the new arrangement. The lists behind them are in the notes. */
 const NOW: readonly Statement[] = [
   { icon: IconRobot, text: "Model reviews first" },
   { icon: IconShieldLock, text: "People guard the irreversible" },
 ];
 
-/** The strike draws left to right, one line after the next. */
 const STRIKE_STAGGER = 0.14;
 const STRIKE_DRAW = 0.5;
 const STRUCK_AT = STRIKE_STAGGER * 4 + STRIKE_DRAW;
 
-/** The light moves from the new arrangement to the closing line. */
 const LIGHT = [
   null,
   null,
@@ -139,7 +135,6 @@ export function Slide10CodeReviews() {
       </Reveal>
 
       <div className="mt-16 grid grid-cols-[460px_1fr] gap-12">
-        {/* Once every line is struck, the old lane recedes. */}
         <m.div
           className="flex origin-left flex-col gap-3.5"
           initial={false}
@@ -172,7 +167,6 @@ export function Slide10CodeReviews() {
               visible={step >= 2}
             />
           ))}
-          {/* One rail joins the two halves: they are one arrangement. */}
           <DrawPath
             d="M24 54 L24 88"
             width={48}

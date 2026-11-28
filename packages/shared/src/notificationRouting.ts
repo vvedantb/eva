@@ -22,42 +22,33 @@ type Urgency = NonNullable<Doc<"notifications">["urgency"]>;
 export type NotificationEmail = "instant" | "digest" | "none";
 
 export type NotificationRoute = {
-  /** The Inbox view that asks you to act. Every row is also in Updates. */
   inbox: "needs_you" | "updates";
-  /** Web toast, chime and desktop pop-up. */
   toast: boolean;
-  /** Phone push. */
   push: boolean;
   email: NotificationEmail;
 };
 
 export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
   {
-    // @mention of you (chat or comment).
     mention: { inbox: "needs_you", toast: true, push: true, email: "instant" },
-    // Eva asks you / a routed question or its reply.
     routed_question: {
       inbox: "needs_you",
       toast: true,
       push: true,
       email: "instant",
     },
-    // Eva answered the question you asked her in a reply thread. In Needs
-    // you with the questions: it answers something you asked.
     thread_answer: {
       inbox: "needs_you",
       toast: true,
       push: true,
       email: "digest",
     },
-    // Reply to your comment.
     comment_reply: {
       inbox: "updates",
       toast: true,
       push: true,
       email: "instant",
     },
-    // A reply in a thread you follow.
     thread_reply: {
       inbox: "updates",
       toast: true,
@@ -70,14 +61,12 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: true,
       email: "instant",
     },
-    // Comment on a task or doc you follow.
     comment_added: {
       inbox: "updates",
       toast: true,
       push: false,
       email: "digest",
     },
-    // A "Make changes" comment re-runs Eva: in-app only.
     changes_requested: {
       inbox: "updates",
       toast: true,
@@ -96,15 +85,12 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: false,
       email: "digest",
     },
-    // A session archived because its PR merged or closed: inbox only.
     session_archived: {
       inbox: "updates",
       toast: false,
       push: false,
       email: "none",
     },
-    // An agent's `notify_user`, an automation's email draft. An agent message
-    // about a chat also asks for you (`isNeedsYouNotification`).
     system: { inbox: "updates", toast: true, push: false, email: "digest" },
   };
 
@@ -116,10 +102,6 @@ export type RoutableNotification = {
   chatTarget?: string;
 };
 
-/**
- * A chat mention: Jev judges it after it is written (`mentionRouting`).
- * Comment mentions carry their comment and are not judged.
- */
 function isChatMention(notification: RoutableNotification): boolean {
   return (
     notification.type === "mention" && notification.commentId === undefined
@@ -167,10 +149,8 @@ type StoredNotificationPrefs = Doc<"users">["notificationPrefs"];
 
 /** A person's notification channels with the defaults filled in. */
 export type NotificationPrefs = {
-  /** Notification email on (urgent at once, the rest in the digest). */
   email: boolean;
   push: boolean;
-  /** The changelog broadcast, apart from notifications: opt-in. */
   productUpdates: boolean;
 };
 

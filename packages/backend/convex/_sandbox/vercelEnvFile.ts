@@ -52,7 +52,6 @@ export function tmuxNewSessionWithEvaEnv(
   sessionName: string,
   cwd: string,
 ): string {
-  // Single-quoted -c body: EVA_ENV_SOURCE_CMD has no quotes.
   return `tmux new-session -d -s ${sessionName} -c ${cwd} -- bash -c '${EVA_ENV_SOURCE_CMD}; exec bash -i'`;
 }
 
@@ -68,12 +67,6 @@ export function ensureEvaEnvInteractiveHookScript(): string {
   return [
     `printf '%s\\n' '${EVA_ENV_SOURCE_CMD}' | sudo tee /etc/profile.d/eva-sandbox-env.sh >/dev/null`,
     `sudo chmod 644 /etc/profile.d/eva-sandbox-env.sh`,
-    // `$HOME/.bashrc` is listed because the sandbox user is not the same on
-    // every base image: AL2023 runs as `vercel-sandbox` (HOME=/home/vercel-sandbox)
-    // and the Ubuntu managed image as `ubuntu` (HOME=/vercel), so neither reads
-    // /home/eva/.bashrc — that path is an eva-created directory, not anyone's
-    // real home. It stays in the list for snapshots that already have it.
-    // Entire for-loop is one statement so join("; ") cannot produce `do;`.
     `for rc in "$HOME/.bashrc" /home/eva/.bashrc /root/.bashrc; do grep -qF '${marker}' "$rc" 2>/dev/null || printf '%s\\n' '' '${marker}' '${EVA_ENV_SOURCE_CMD}' >> "$rc" 2>/dev/null || true; done`,
   ].join("; ");
 }

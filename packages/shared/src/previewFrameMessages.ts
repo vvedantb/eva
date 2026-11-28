@@ -8,13 +8,10 @@
  * script's tsconfig resolves it directly.
  */
 export const PREVIEW_FRAME_MESSAGE = {
-  // Nav-sync script → Eva.
   navigation: "navigation",
   unload: "eva-preview-unload",
-  // Eva → nav-sync script.
   historyBack: "eva-preview-history-back",
   historyForward: "eva-preview-history-forward",
-  // Annotation script → Eva.
   annotateReady: "eva-preview-annotate-ready",
   annotateSelected: "eva-preview-annotate-selected",
   annotateRect: "eva-preview-annotate-rect",
@@ -27,7 +24,6 @@ export const PREVIEW_FRAME_MESSAGE = {
   webMcpResult: "eva-preview-webmcp-result",
   webMcpError: "eva-preview-webmcp-error",
   toolbarAction: "eva-preview-toolbar-action",
-  // Eva → annotation script.
   annotateMode: "eva-preview-annotate-mode",
   annotateClear: "eva-preview-annotate-clear",
   screenshotCapture: "eva-preview-screenshot-capture",
@@ -45,51 +41,30 @@ export const PREVIEW_FRAME_MESSAGE = {
  */
 export interface PreviewToolbarTheme {
   fontFamily: string;
-  /** `bg-popover/95` of the bar and the tooltip. */
   surface: string;
-  /** `text-popover-foreground` of the tooltip. */
   surfaceText: string;
-  /** `smooth-shadow-ring-lg` of the bar. */
   barShadow: string;
-  /** `smooth-shadow-ring-md` of the tooltip. */
   tipShadow: string;
-  /** `rounded-surface` of the tooltip. */
   tipRadius: string;
-  /** Ghost button: `text-muted-foreground`. */
   idleText: string;
-  /** Ghost button hover: `bg-muted/60 text-foreground`. */
   hoverBg: string;
   hoverText: string;
-  /** Pressed toggle: `bg-secondary text-primary`. */
   activeBg: string;
   activeText: string;
-  /** Count badge: `bg-foreground text-background`. */
   badgeBg: string;
   badgeText: string;
-  /** `bg-card`, the disc behind the Eva mark. */
   disc: string;
-  /** `text-destructive`, the close X. */
   destructive: string;
-  /** `border-border`, the selection card's outlines. */
   border: string;
-  /** `bg-primary` and `text-primary-foreground`, the card's main button. */
   primary: string;
   primaryText: string;
-  /** `bg-background`, the drawer and the card's text field. */
   field: string;
-  /** `bg-popover` (solid), the note card. */
   popover: string;
-  /** `bg-muted` (solid), a reply box. */
   muted: string;
-  /** `text-warning`, a queued comment. */
   warning: string;
-  /** `border-input` as a `<textarea>` paints it, the note card's text field. */
   inputBorder: string;
-  /** `border-ring/50`, that field while it has focus. */
   focusBorder: string;
-  /** `text-secondary-foreground`, the secondary buttons. */
   secondaryText: string;
-  /** The segmented tabs: the trough and the active pill. */
   tabTrack: string;
   tabPill: string;
 }

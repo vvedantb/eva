@@ -60,7 +60,6 @@ describe("buildStubMarkdown", () => {
     expect(stub).toContain(SYSTEM_SKILL_MARKER);
     expect(stub).toContain("get_skill");
     expect(stub).toContain('{"name": "eva-capture"}');
-    // The stub must not stand in for the real instructions when MCP is down.
     expect(stub).toContain("Do not improvise a replacement");
   });
 });

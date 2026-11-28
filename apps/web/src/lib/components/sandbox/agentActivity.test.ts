@@ -50,7 +50,6 @@ describe("deriveSubagents", () => {
       streamingActivity: log(streaming),
     });
     expect(agents).toHaveLength(1);
-    // Streaming is ahead of the persisted log, so its longer step list wins.
     expect(agents[0].steps.map((s) => s.toolUseId)).toEqual(["c1", "c2"]);
     expect(agents[0].status).toBe("running");
   });

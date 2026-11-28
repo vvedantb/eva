@@ -1,48 +1,20 @@
-// eva's look for the @vvedantb/ui overlay family: Dialog, Popover, HoverCard,
-// Tooltip, DropdownMenu, ContextMenu, Select and Command. The class strings
-// are the ones the old @eva/ui components rendered. Keys equal to the package
-// defaults are left out, so the package renders them.
 import { createElement } from "react";
 import { IconChevronDown, IconSearch } from "@tabler/icons-react";
 import { triggerZoomAnimateClass, type UiConfig } from "@vvedantb/ui";
 
-/**
- * Radix defaults to 700ms open / 300ms close. Call sites had drifted to 0, 200,
- * 250 and 400 — the same gesture felt different depending on which chip you
- * hovered. One pair of values here; sites only override to opt out (0) or to
- * ask for a longer wait where the card is easy to trip over.
- */
 const HOVER_CARD_OPEN_DELAY_MS = 250;
 const HOVER_CARD_CLOSE_DELAY_MS = 100;
 
-/**
- * Radix defaults to a 700ms open delay. On a desktop tool with a precise
- * pointer that reads as lag, and most providers in the app never passed a
- * value — so the house default is set here rather than at 23 call sites.
- */
 const TOOLTIP_DELAY_MS = 300;
 
 const overlayClass =
   "fixed inset-0 z-50 bg-black/80 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
 
-/** Hover card and select panels slide in from the side they open on. */
 const floatingMotionClass =
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:data-[side=bottom]:slide-out-to-top-2 data-[state=closed]:data-[side=left]:slide-out-to-right-2 data-[state=closed]:data-[side=right]:slide-out-to-left-2 data-[state=closed]:data-[side=top]:slide-out-to-bottom-2";
 
-/**
- * Menu panel classes: eva's menu surface plus the package's
- * `triggerZoomAnimateClass` (grow out of the trigger at 40%, as modals do;
- * open 150ms, close 100ms so a menu never lingers after a selection).
- *
- * `maxHeight` must be the Radix available-height var class for the specific
- * primitive — pass it literally so Tailwind can see it.
- */
 function menuContentClass(maxHeight: string): string {
   return [
-    // Height cap at the space Radix measured between the trigger and the
-    // viewport edge, with internal scroll, so a long menu (e.g. many PR links)
-    // never runs off screen. A width cap so `min-w-48` cannot widen the page at
-    // a 320px viewport.
     "z-50 min-w-48 overflow-x-hidden overflow-y-auto scrollbar max-sm:max-w-[calc(100vw-2rem)] bg-popover/95 p-1 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
     "rounded-menu",
     maxHeight,
@@ -57,12 +29,6 @@ const contextMenuContentClass = menuContentClass(
   "max-h-(--radix-context-menu-content-available-height)",
 );
 
-/**
- * `min-h-10` below `sm` puts menu rows at the 40px comfortable-tap floor while
- * desktop keeps the tighter intrinsic height. Growing the box instead of its
- * padding keeps a call site's `py-*` in control above the breakpoint
- * (`tailwind-merge` only resolves conflicts within one variant group).
- */
 const menuRowClasses = {
   subTrigger:
     "flex cursor-pointer items-center gap-1.5 rounded-menu-item px-2.5 py-1.5 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted data-[state=open]:bg-muted [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -80,13 +46,10 @@ const menuRowClasses = {
 
 export const overlaysConfig = {
   Dialog: {
-    // A centred dialog at every size; eva has no mobile bottom sheet.
     viewportAware: false,
     classes: {
       trigger: "cursor-pointer",
       overlay: overlayClass,
-      // `dvh`, not `vh`: mobile browser chrome makes `100vh` taller than the
-      // visible area, so a `90vh` dialog runs off the bottom of the screen.
       content:
         "t-modal fixed left-[50%] top-[50%] z-50 flex flex-col w-[92vw] max-sm:w-[calc(100vw-2rem)] max-w-lg max-h-[90dvh] gap-4 rounded-surface bg-card p-6 smooth-shadow-ring-xl overflow-hidden",
       centered: "",
@@ -94,17 +57,12 @@ export const overlaysConfig = {
         "max-sm:hit-target absolute right-4 top-4 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground motion-press active:scale-[0.94] hover:bg-muted hover:text-foreground focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none",
       header: "flex shrink-0 flex-col gap-1.5 text-center sm:text-left",
       body: "flex-1 min-h-0 overflow-y-auto -mx-6 px-6",
-      // From the package default: clear the iPhone home indicator, and 44px
-      // footer buttons on phones.
       footer:
         "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end pb-[max(0px,env(safe-area-inset-bottom,0px))] [&_button]:max-sm:min-h-11",
       title: "text-lg font-semibold leading-none tracking-[-0.02em]",
       description: "text-sm text-muted-foreground",
     },
   },
-  // Eva's confirm dialog before the library swap: 448px wide, the question
-  // right under the title, the detail line 12px below it, and no extra
-  // padding around the footer.
   ConfirmDialog: {
     classes: {
       content: "sm:max-w-md",
@@ -119,8 +77,6 @@ export const overlaysConfig = {
     collisionPadding: 8,
     classes: {
       trigger: "cursor-pointer",
-      // Caps its height and scrolls internally so a long popover cannot run
-      // off a phone screen; `max-w` keeps `w-72` inside a 320px viewport.
       content: `z-50 w-72 max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:scrollbar bg-popover/95 p-4 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg outline-hidden rounded-surface ${triggerZoomAnimateClass}`,
     },
   },
@@ -159,7 +115,6 @@ export const overlaysConfig = {
     },
   },
   Select: {
-    // ButtonGroup's CSS finds select triggers by this slot.
     triggerSlot: true,
     collisionPadding: 8,
     icons: {
@@ -169,8 +124,6 @@ export const overlaysConfig = {
       }),
     },
     classes: {
-      // 16px below `sm` matches Input/Textarea: iOS zooms the page when a form
-      // control smaller than that takes focus.
       trigger:
         "flex h-10 w-full max-sm:min-w-0 cursor-pointer items-center justify-between whitespace-nowrap border border-input bg-card px-3.5 py-2 text-base sm:text-sm ring-offset-background motion-press active:scale-[0.98] placeholder:text-muted-foreground focus:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 rounded-control",
       scrollButton: "flex cursor-pointer items-center justify-center py-1",
@@ -182,7 +135,6 @@ export const overlaysConfig = {
     },
   },
   Command: {
-    // eva's CommandEmpty took a `className` as its whole class list.
     emptyClassNameReplaces: true,
     icons: {
       search: createElement(IconSearch, {
@@ -195,12 +147,8 @@ export const overlaysConfig = {
       dialogCommand:
         "**:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em] **:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 **:[[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-5 **:[[cmdk-input]]:h-12 **:[[cmdk-item]]:px-3 **:[[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:size-4",
       inputWrapper: "flex items-center gap-2 border-b border-border px-3.5",
-      // 16px below `sm` — see the note in input.tsx.
       input:
         "flex h-11 w-full max-sm:min-w-0 rounded-none bg-transparent py-3 text-base sm:text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-      // `dvh` cap so the list never pushes the palette past the visible area on
-      // a phone, where 320px of results plus the input exceeds the keyboard-free
-      // space.
       list: "max-h-[320px] max-sm:max-h-[60dvh] overflow-y-auto overflow-x-hidden scrollbar",
       empty: "py-6 text-center text-sm",
       group:

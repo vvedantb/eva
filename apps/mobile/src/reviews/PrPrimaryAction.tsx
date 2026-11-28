@@ -50,14 +50,6 @@ export function PrPrimaryAction({
   return <MergeAction repoId={repoId} overview={overview} onDone={onDone} />;
 }
 
-/**
- * The web header's Merge (`PrPrimaryAction` on an open pull request): one
- * button that GitHub's verdict enables, and the web confirmation, here a
- * bottom sheet that also holds the merge method (the web dropdown beside the
- * button; squash by default). Merging is irreversible, so nothing reaches
- * `github.mergePullRequest` without the confirm press, and a GitHub refusal
- * is shown as GitHub words it.
- */
 function MergeAction({
   repoId,
   overview,
@@ -108,7 +100,6 @@ function MergeAction({
       <Dialog
         open={confirming}
         onOpenChange={(open) => {
-          // Closing mid-merge would hide the only progress the user sees.
           if (!merging) setConfirming(open);
         }}
       >
@@ -185,11 +176,6 @@ function ReopenAction({ repoId, overview, onDone }: { repoId: Id<"githubRepos">;
   );
 }
 
-/**
- * Revert as work, not as an API call, as the web: GitHub has no "undo this
- * merge" call, so after the confirm this starts a session on the base branch
- * with the revert asked for (`revertSessionRequest`) and opens its chat.
- */
 function RevertAction({ repoId, overview }: { repoId: Id<"githubRepos">; overview: PrOverview }) {
   const theme = EVA_THEME[useScheme()];
   const { start, starting } = useStartReviewSession(repoId);

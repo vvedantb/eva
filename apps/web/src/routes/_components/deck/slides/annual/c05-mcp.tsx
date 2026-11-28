@@ -23,14 +23,12 @@ const RINGS: readonly number[] = [150, 205, 240];
 const CORE = 104;
 
 interface Chip {
-  /** Which ring, and therefore which build step lights it. */
   ring: number;
   label: string;
   dx: number;
   dy: number;
 }
 
-/** Placed by hand: every chip sits on its ring and clears its neighbours. */
 const CHIPS: readonly Chip[] = [
   { ring: 0, label: "List the work", dx: -150, dy: 0 },
   { ring: 0, label: "See what it is doing", dx: 150, dy: 0 },
@@ -41,10 +39,6 @@ const CHIPS: readonly Chip[] = [
   { ring: 2, label: "Show panels in chat", dx: 194, dy: 141 },
 ];
 
-/**
- * The diagram starts tipped back like a map on a table and squares up one
- * notch per ring, so each step reads as the reach of Eva growing towards you.
- */
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 9, scale: 0.95, y: 8 },
   { rotateX: 6, scale: 0.97, y: 4 },
@@ -52,12 +46,10 @@ const SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-/** Where along its ring a chip sits, for the order it lights in. */
 function orderInRing(chip: Chip): number {
   return CHIPS.filter((other) => other.ring === chip.ring).indexOf(chip);
 }
 
-/** A spoke leaves the core's edge and stops at the chip's centre, under it. */
 function spokeFrom(chip: Chip) {
   const length = Math.hypot(chip.dx, chip.dy) || 1;
   const edge = CORE / 2 + 8;
@@ -120,7 +112,6 @@ export function AnnualMcp() {
             <ChipNode key={chip.label} chip={chip} />
           ))}
 
-          {/* Eva is live throughout: two slow rings breathe out of the core. */}
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{ left: CENTRE_X, top: CENTRE_Y }}

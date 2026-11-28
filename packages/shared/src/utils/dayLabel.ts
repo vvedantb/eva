@@ -1,10 +1,5 @@
 import dayjs from "dayjs";
 
-/**
- * Chat day and clock labels, shared by the web and mobile chats. Only dayjs
- * here: `./dates` also pulls in `@vvedantb/ui`, which the mobile app cannot load.
- */
-
 /** Today / Yesterday / weekday (this week) / full date — day section headers. */
 export function formatDayLabel(date: number | string | Date): string {
   const at = dayjs(date);

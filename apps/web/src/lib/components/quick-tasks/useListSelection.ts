@@ -24,10 +24,8 @@ export function useListSelection<T extends string>(
 ): ListSelection<T> {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<T>>(new Set());
-  // Where the next shift-click measures from: the last row toggled on its own.
   const [anchorId, setAnchorId] = useState<T | null>(null);
 
-  // Drop selections for rows that disappeared (adjust during render).
   if (isSelecting) {
     const existing = new Set<string>(existingIds);
     if ([...selectedIds].some((id) => !existing.has(id))) {
@@ -36,8 +34,6 @@ export function useListSelection<T extends string>(
   }
 
   const toggle = (id: T, options?: SelectionToggleOptions<T>) => {
-    // A range only ever adds: shift-clicking back over a span you just selected
-    // should not punch holes in it.
     if (options?.range) {
       const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
       setSelectedIds((prev) => new Set([...prev, ...range]));

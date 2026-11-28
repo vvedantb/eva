@@ -11,11 +11,6 @@ import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 
 const MENTION_LIMIT = 8;
 
-/**
- * Past @mentions of you, newest first. Mounts only while the card is open, so
- * the feed (`notifications.list` History: read and archived rows too) is
- * subscribed on hover and not for the life of the rail.
- */
 function MentionsList({ onNavigate }: { onNavigate: () => void }) {
   const navigate = useNavigate();
   const feed = useQuery(api.notifications.list, { history: true });

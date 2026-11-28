@@ -1,11 +1,5 @@
 import type { Transition } from "motion/react";
 
-/**
- * The deck's motion vocabulary. Every primitive and every slide draws from
- * these, so the whole deck moves with one hand. See `README.md` for when to
- * reach for which.
- */
-
 type Bezier = [number, number, number, number];
 
 /** Decelerating curve, no overshoot — the deck's everyday ease. */
@@ -17,13 +11,9 @@ export const EASE: {
   readonly inOut: Bezier;
   readonly in: Bezier;
 } = {
-  /** Everyday entrances: cards, chips, rows. */
   out: EASE_OUT,
-  /** Long, film-like deceleration for hero moves: titles, masks, big numbers. */
   expo: [0.16, 1, 0.3, 1],
-  /** Things that travel across and leave: sheens, washes, camera pans. */
   inOut: [0.65, 0, 0.35, 1],
-  /** Exits: quick to get going, then gone. */
   in: [0.5, 0, 0.75, 0],
 };
 
@@ -34,13 +24,9 @@ export const DUR: {
   readonly slow: number;
   readonly hero: number;
 } = {
-  /** Exits, dims, colour changes. */
   fast: 0.18,
-  /** Small elements: chips, labels, icons. */
   base: 0.35,
-  /** Cards, rows, panels. */
   slow: 0.6,
-  /** Hero moves: titles, statements, the one thing on the step. */
   hero: 0.9,
 };
 
@@ -51,13 +37,9 @@ export const STAGGER: {
   readonly item: number;
   readonly block: number;
 } = {
-  /** Characters inside a hero word. */
   char: 0.028,
-  /** Words inside a title or statement. */
   word: 0.07,
-  /** Items in a list or grid. */
   item: 0.08,
-  /** Big blocks: panels, columns. */
   block: 0.14,
 };
 

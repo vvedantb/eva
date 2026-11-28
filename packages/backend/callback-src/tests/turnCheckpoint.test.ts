@@ -5,8 +5,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { JsonObject } from "../types.js";
 
-// A throwaway repo stands in for the sandbox workspace so the checkpoint reads
-// real shas without touching this checkout.
 const workspace: {
   dir: string;
   entityIdField: string;
@@ -18,11 +16,6 @@ const workspace: {
 };
 
 const originalConfig = { ...(await import("../config.js")) };
-// Bun copies a mocked module's exports once, so re-mock after each change.
-// Single-repo by default (no EVA_LINKED_REPOS): the primary is the only
-// checked-out repo, so REPO_CHECKOUT_DIRS tracks WORK_DIR rather than the real
-// module's own value (computed from the /tmp/repo checkout this suite runs
-// inside of). Multi-repo tests set workspace.checkoutDirs.
 function mockConfig(): void {
   const { dir, entityIdField, checkoutDirs } = workspace;
   mock.module("../config.js", () => ({
@@ -109,8 +102,6 @@ describe("appendTurnCheckpoint", () => {
   });
 
   test("skips entity kinds with no persistence path", () => {
-    // Nothing downstream of these reads the shas, so they are left off the
-    // payload rather than written and ignored.
     for (const entityIdField of ["entityId"]) {
       workspace.entityIdField = entityIdField;
       mockConfig();

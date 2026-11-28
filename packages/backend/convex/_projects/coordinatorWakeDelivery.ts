@@ -7,10 +7,6 @@ import { ensureOwnerChat } from "../_sessions/ownedSession";
 import { queueSystemChatMessage } from "../_sessions/execution";
 import { undeliveredWakes } from "./coordinatorWake";
 
-// The delivery half of the coordinator's wake-ups (`coordinatorWake.ts`).
-// Apart because it sends through the chat queue (`_sessions/execution.ts`),
-// whose import graph the scheduler and the prompt builder must not load.
-
 /** The message one delivery puts in the coordinator chat. */
 export function coordinatorWakeMessage(
   rows: ReadonlyArray<Pick<Doc<"projectCoordinatorWakes">, "text">>,
@@ -47,7 +43,6 @@ export async function deliverPendingCoordinatorWakes(
     context,
     userId: project.userId,
     content: coordinatorWakeMessage(pending),
-    // A wake runs on Eva's chat picks, as a turn you start there does.
     settings: {
       model: normalizeAIModel(context.chat.lastModel ?? repo?.defaultModel),
       providerAccountId: context.chat.providerAccountId,

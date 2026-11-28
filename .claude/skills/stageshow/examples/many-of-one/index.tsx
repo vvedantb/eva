@@ -1,22 +1,6 @@
 import { Badge, Bar, Stage, Text } from '../../kit'
 import './many.css'
 
-// Many of one: a grid of the same small thing, one of them in focus. Here,
-// preview deployments, one per branch. A still.
-//
-// What makes repetition read as an image, not a wall:
-// - Every tile is the same anatomy at the same size: a thumbnail, a line, a
-//   status. The sameness is the point; vary only the bar lengths.
-// - The grid runs off every edge, so it reads as going on. Every edge cuts a
-//   tile by a third or more, never to a sliver. The focus tile sits off
-//   center, a column right of the middle: centered, the outer columns would be
-//   slivers.
-// - The focus tile is the only one with words and color. It stays in its
-//   cell, the same size, and comes forward by depth: the hero shadow and a
-//   ring in the accent. The others are quiet, not faded or blurred.
-//
-// Real strings: the focus tile's branch, its commit and its status.
-
 const COLS = 5
 const ROWS = 4
 const FOCUS = { col: 2, row: 1 }

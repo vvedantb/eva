@@ -5,7 +5,6 @@ import { base64ToBytes } from "@vvedantb/server";
  * (Convex isolate / browser-safe).
  */
 export function decodeGitHubContentBytes(content: string): Uint8Array {
-  // atob ignores the newlines GitHub wraps the payload with.
   return base64ToBytes(content);
 }
 

@@ -92,10 +92,6 @@ export async function setSessionChatModel(
   await onChatAccountChanged(ctx, { chat, session }, providerAccountId);
 }
 
-/**
- * Eva's chat holds her project's account: a new one there lifts a task's
- * usage-limit hold, so the project's scheduler goes on.
- */
 async function onChatAccountChanged(
   ctx: MutationCtx,
   { chat, session }: SessionChatContext,

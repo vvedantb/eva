@@ -8,12 +8,6 @@ import schema from "../convex/schema";
 import { createNotification } from "../convex/notifications";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Mobile push (apps/mobile): which events reach the phone, and that the push
- * carries the chat the app should open. Pushes are scheduled `push.send`
- * actions, so the tests read the scheduler queue instead of calling Expo.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|mobile-push";
 const TOKEN = "ExponentPushToken[test-device]";
@@ -53,7 +47,6 @@ async function fixture() {
   return { t, ids, asUser: t.withIdentity({ subject: CLERK_ID }) };
 }
 
-/** Scheduled `push.send` calls, oldest first. */
 async function scheduledPushes(t: Awaited<ReturnType<typeof fixture>>["t"]) {
   return await t.run(async (ctx) => {
     const jobs = await ctx.db.system.query("_scheduled_functions").collect();
@@ -62,8 +55,6 @@ async function scheduledPushes(t: Awaited<ReturnType<typeof fixture>>["t"]) {
 }
 
 describe("pushTokens schema", () => {
-  // schema.ts cannot import the package (NoImportModuleInSchema), so the table
-  // is local. It is deployed: this test stops it drifting from the package.
   test("matches the @vvedantb/server table", () => {
     const local = schema.tables.pushTokens;
     const shared = pushTokensTable(defineTable, v, v.id("users"));
@@ -73,7 +64,6 @@ describe("pushTokens schema", () => {
 });
 
 describe("mobile push", () => {
-  // Keep scheduled `push.send` jobs queued: they would call the Expo API.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -151,7 +141,6 @@ describe("mobile push", () => {
       await t.run((ctx) =>
         createNotification(ctx, { userId: ids.userId, type: "routed_question", title: "question", sessionId: ids.sessionId }),
       );
-      // Routing has not answered yet: only the routed question pushed.
       expect((await scheduledPushes(t)).map((push) => push.title)).toEqual(["question"]);
 
       await t.mutation(internal.notifications.setUrgency, { notificationId: low, urgency: "low" });
@@ -190,7 +179,6 @@ describe("mobile push", () => {
       });
       const post = { entityId: ids.chatId, toolUseId: "tool-1", payload };
       await asUser.mutation(api.pendingQuestions.post, post);
-      // A retried post of the same question must not push again.
       await asUser.mutation(api.pendingQuestions.post, post);
       expect(await scheduledPushes(t)).toEqual([
         expect.objectContaining({ title: "Fix the login bug", body: "Which colour?", data: { target: ids.chatId } }),

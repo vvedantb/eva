@@ -6,13 +6,6 @@ import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * PR 1b: a quick task runs on one owned session. Guards the rules that keep
- * that session a single, hidden engine: one session per task, never listed
- * as a session, chat sends queue behind the task's run, and the migration
- * moves the task's sandbox and transcript onto it (and waits on busy tasks).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|quick-task-sessions";
 
@@ -42,7 +35,6 @@ async function fixture() {
 }
 
 describe("quick tasks on sessions", () => {
-  // Scheduled stops and drains stay queued instead of running after a test.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -130,7 +122,6 @@ describe("quick tasks on sessions", () => {
         api.sessions.ensureOwned,
         { owner: { kind: "task", taskId: f.taskId } },
       );
-      // The task's run is a task-mode turn in its chat.
       await f.t.run((ctx) =>
         openSessionChatTurn(ctx, {
           chatId,

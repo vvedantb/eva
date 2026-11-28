@@ -1,31 +1,3 @@
-/**
- * Typed sandbox errors and the one classifier the resume/reuse paths use to
- * decide "is this sandbox gone?".
- *
- * WHY THIS EXISTS
- * The decision used to be a substring match over an error *message*
- * ("not found" / "does not exist" / "404"). A Postgres error raised by a
- * command running INSIDE a healthy VM (`relation "X" does not exist`) matched,
- * so eva minted a replacement sandbox while the original was still running and
- * billed two VMs against one session. Narrowing the regexes bought time; it did
- * not fix the shape of the bug, because any novel provider or in-VM message is
- * one string away from the next double-VM incident.
- *
- * THE INVARIANT
- * Only two things can ever classify as `sandbox-gone`:
- *   1. a {@link SandboxProviderError} carrying a structured signal from the
- *      provider client (HTTP status, provider error code), or
- *   2. a {@link SandboxGoneError} — a verdict eva itself already reached.
- * Everything else is `unknown`. In particular a {@link SandboxCommandFailedError}
- * (non-zero exit of a command run inside a live sandbox) returns early before
- * any message is inspected, and a plain `Error` carrying stdout/stderr can
- * never reach the message fallback at all — the fallback only runs over a
- * provider error's API-response detail, never over command output.
- *
- * So: in-VM output is *structurally* unable to condemn a live sandbox, rather
- * than merely being excluded by a regex someone has to remember to maintain.
- */
-
 import { z } from "zod";
 import { SandboxProviderError } from "../_sandbox/provider";
 
@@ -47,7 +19,6 @@ export type SandboxErrorKind =
 
 export type SandboxErrorClassification = {
   kind: SandboxErrorKind;
-  /** Which signal produced {@link kind}, for logs. */
   signal:
     | "in-vm-command"
     | "http-status"
@@ -55,7 +26,6 @@ export type SandboxErrorClassification = {
     | "eva-verdict"
     | "provider-message"
     | "unclassified";
-  /** Provider HTTP status when one was available. */
   httpStatus?: number;
 };
 
@@ -69,7 +39,6 @@ export type SandboxErrorClassification = {
  */
 export class SandboxCommandFailedError extends Error {
   readonly exitCode: number;
-  /** Combined stdout/stderr, trimmed. Empty when the provider discarded it. */
   readonly output: string;
 
   constructor(
@@ -133,31 +102,20 @@ export function isSandboxUnresponsiveError(error: unknown): boolean {
   return error instanceof SandboxExecTimeoutError;
 }
 
-/** APIError from `@vercel/sandbox`: `.response` is a fetch `Response`. */
 const apiErrorShape = z.object({
   response: z.object({ status: z.number().int() }),
 });
 
-/** `NotOk` from the SDK's auth client: `.response.statusCode`. */
 const authNotOkShape = z.object({
   name: z.literal("NotOk"),
   response: z.object({ statusCode: z.number().int() }),
 });
 
-/** `StreamError` from the SDK: a command stream died, code says why. */
 const streamErrorShape = z.object({
   name: z.literal("StreamError"),
   code: z.string(),
 });
 
-/**
- * Pulls an HTTP status out of a provider-client error.
- *
- * Handles the three shapes `@vercel/sandbox@3` actually throws (verified
- * against the SDK's `api-client/api-error.ts` and `auth/error.ts`) plus eva's
- * own {@link SandboxProviderError}, which carries the status the provider
- * adapter extracted before it wrapped the SDK error.
- */
 function extractSandboxHttpStatus(error: unknown): number | undefined {
   if (error instanceof SandboxProviderError) return error.httpStatus;
   const notOk = authNotOkShape.safeParse(error);
@@ -167,7 +125,6 @@ function extractSandboxHttpStatus(error: unknown): number | undefined {
   return undefined;
 }
 
-/** Provider error codes that mean the stream died, not that the VM vanished. */
 const LIVE_STREAM_ERROR_CODES = new Set([
   "stream_ended_early",
   "stream_closed",
@@ -226,8 +183,6 @@ export function classifyProviderDetail(detail: string): SandboxErrorKind {
 export function classifySandboxError(
   error: unknown,
 ): SandboxErrorClassification {
-  // A command that ran inside the sandbox answered us. Whatever it printed,
-  // the VM is alive. Return before anything can read its text.
   if (error instanceof SandboxCommandFailedError) {
     return { kind: "unknown", signal: "in-vm-command" };
   }
@@ -240,8 +195,6 @@ export function classifySandboxError(
 
   const stream = streamErrorShape.safeParse(error);
   if (stream.success && LIVE_STREAM_ERROR_CODES.has(stream.data.code)) {
-    // The NDJSON command stream dropped. The SDK raises this when a sandbox is
-    // stopped mid-command — and just as often when it is simply busy.
     return { kind: "transient", signal: "provider-code", httpStatus };
   }
 

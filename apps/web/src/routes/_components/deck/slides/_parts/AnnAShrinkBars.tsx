@@ -12,22 +12,15 @@ import {
 
 export interface AnnAShrinkRow {
   label: string;
-  /** Kilobytes before and after. */
   from: number;
   to: number;
-  /** The fall, as a whole percentage. */
   drop: number;
 }
 
 const FORMAT = new Intl.NumberFormat("en-GB").format;
 const RUN = 1.4;
-/** Static glow, painted once; only its position and opacity move. */
 const HEAD_GLOW = `radial-gradient(circle, #fff 0 3px, ${BRAND.blue}bb 5px, ${BRAND.purple}33 10px, transparent 16px)`;
 
-/**
- * Counts a figure downwards once the build reaches the shrink step. Written
- * straight to the DOM node, so the fall does not re-render the slide.
- */
 function CountDown({
   from,
   to,
@@ -61,7 +54,6 @@ function CountDown({
   );
 }
 
-/** The chip counts its fall up from zero as the bar collapses. */
 function Drop({
   drop,
   on,
@@ -107,9 +99,7 @@ function Row({
 }: {
   row: AnnAShrinkRow;
   active: boolean;
-  /** Seconds into the shrink step. */
   delay: number;
-  /** Seconds into the slide for the entrance. */
   enter: number;
 }) {
   const ratio = row.to / row.from;
@@ -150,7 +140,6 @@ function Row({
 
       <div className="relative mt-4 h-3 w-full">
         <div className="absolute inset-0 overflow-hidden rounded-full bg-white/[0.06]">
-          {/* Draws in on entry, then collapses to the new size on the step. */}
           <m.div
             aria-hidden
             className="h-full origin-left"
@@ -167,7 +156,6 @@ function Row({
             />
           </m.div>
         </div>
-        {/* A light rides the bar's end in as it collapses. */}
         <m.div
           aria-hidden
           className="pointer-events-none absolute inset-0"

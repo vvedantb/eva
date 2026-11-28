@@ -49,8 +49,6 @@ export function expiredTurnLeaseDecision(input: {
   if (!input.liveness.alive) {
     return { action: "finalize", cause: "process_dead" };
   }
-  // Alive, or the probe could not reach the sandbox to say otherwise — both
-  // get grace, bounded so a permanently wedged process still settles.
   if (
     input.silentSince !== undefined &&
     input.now - input.silentSince >= TURN_SILENT_ALIVE_GRACE_MS

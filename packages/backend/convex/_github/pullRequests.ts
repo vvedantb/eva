@@ -10,7 +10,6 @@ import { getActionRepoWithAccess } from "../functions";
 
 const MAX_LIST_PAGES = 3;
 
-/** Title/author barely move, and this sits on the Reviews page critical path. */
 const PR_HEADER_CACHE_TTL_MS = 60_000;
 
 const pullRequestListItemValidator = v.object({
@@ -141,8 +140,6 @@ export const fetchPullRequestHeader = internalAction({
   },
 });
 
-// V2: payload gained status, draft, avatar and diff stats for the chat hover
-// card — a bumped name drops V1 entries that lack them.
 const prHeaderCache = new ActionCache(components.actionCache, {
   action: internal._github.pullRequests.fetchPullRequestHeader,
   name: "prHeaderV2",

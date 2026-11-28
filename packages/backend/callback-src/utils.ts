@@ -24,7 +24,6 @@ import { git } from "./runtime/gitExec.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonObject, JsonValue } from "./types.js";
 
-/** Narrow JSON.parse / Response.json() payloads into JsonValue (null if invalid). */
 function narrowJsonValue(
   value: string | number | boolean | null | object,
 ): JsonValue | null {
@@ -80,7 +79,6 @@ export function log(msg: string): void {
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
   } catch {
-    /* ignore log write failures */
   }
 }
 

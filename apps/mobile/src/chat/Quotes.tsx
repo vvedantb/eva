@@ -37,13 +37,10 @@ export function useQuotes() {
   return {
     items,
     remove: (id: string) => setItems((current) => current.filter((item) => item.id !== id)),
-    /** After a send: drops only the quotes it carried, as the web, not any added while it was in flight. */
     drop: (sent: readonly AssistantCitation[]) => setItems((current) => current.filter((item) => !sent.includes(item))),
-    /** The hold menu's "Select text": opens the reply in the sheet. */
     select: (messageId: string, text: string) => setSelecting({ messageId, text }),
     sheet: (
       <SelectTextSheet
-        // A new reply starts with nothing highlighted.
         key={selecting?.messageId ?? "none"}
         target={selecting}
         onClose={() => setSelecting(null)}
@@ -58,12 +55,6 @@ export function useQuotes() {
 
 export type Quotes = ReturnType<typeof useQuotes>;
 
-/**
- * The reply's text in a field the person can highlight but not change: no
- * keyboard opens (`showSoftInputOnFocus`), and the value is fixed. Android
- * lets a field's text be selected only while it is editable, and only a field
- * reports what is selected (`onSelectionChange`), so not a selectable `Text`.
- */
 function SelectTextSheet({
   target,
   onClose,
@@ -101,7 +92,6 @@ function SelectTextSheet({
             multiline
             scrollEnabled={false}
             showSoftInputOnFocus={false}
-            // Fixed: a change (a paste, a hardware key) is dropped, as the value prop wins.
             onChangeText={() => undefined}
             onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
             accessibilityLabel="Reply text"

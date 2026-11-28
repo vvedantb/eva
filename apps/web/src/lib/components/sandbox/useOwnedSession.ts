@@ -19,21 +19,14 @@ type SandboxGitTarget = FunctionArgs<
 export interface OwnedSandboxFields {
   sandboxId: string | undefined;
   status: Doc<"sessions">["status"] | undefined;
-  /** Why the last start failed; auto-wake leaves a failed start alone. */
   sandboxError: string | undefined;
   devPort: number | undefined;
   devCommand: string | undefined;
   terminalPanes: Doc<"sessions">["terminalPanes"];
   agentBrowsingAt: number | undefined;
   sandboxGitSync: Doc<"sessions">["sandboxGitSync"];
-  /**
-   * Panes, preview and PTYs are keyed by the session; undefined before it
-   * exists (there is no sandbox yet either).
-   */
   owner: SandboxOwner | undefined;
-  /** Commit & push target for the sandbox checkout; undefined before the session exists. */
   gitTarget: SandboxGitTarget | undefined;
-  /** The session lookup is still loading: not yet known whether one exists. */
   sessionPending: boolean;
 }
 
@@ -53,7 +46,6 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   );
   const ensureOwned = useMutation(api.sessions.ensureOwned);
 
-  // A project task can work on its project's session before it has a chat.
   const chatId = owned?.chatId;
   const ensure = async () =>
     owned && chatId
@@ -62,8 +54,6 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   const chatSource: SessionChatSource =
     chatId ?? (async () => (await ensure()).chatId);
 
-  // Before the session exists there are no panes, preview or PTYs: the
-  // first Start creates the session.
   const sandboxOwner: SandboxOwner | undefined = owned
     ? { kind: "session", sessionId: owned.sessionId }
     : undefined;
@@ -82,17 +72,10 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   };
 
   return {
-    /** The session and the owner's chat (absent until it chats); null until first needed. */
     owned,
-    /**
-     * What the owner's chat starts on (`chatSeedSettings`); shown until the
-     * chat has its own picks. Undefined while loading.
-     */
     chatSeed: read?.chatSeed,
     session,
-    /** Returns the session, creating it (no sandbox start) when missing. */
     ensure,
-    /** The owner's chat, or a resolver that creates it on first use. */
     chatSource,
     sandbox,
   };

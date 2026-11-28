@@ -7,24 +7,12 @@ type Route = 'h' | 'v' | 'straight' | 'step' | 'curve'
 export interface ConnectorProps {
   from: Point
   to: Point
-  /** h: across, then down or up. v: down or up, then across. straight: a direct line.
-   * step: across, down or up halfway, then across again, so it enters `to`
-   * level. Use step when several lines meet one target: they merge into one
-   * shared run before it, instead of knotting at its edge. curve: the same
-   * leave-level, arrive-level path as step, as one soft S, for a looser
-   * diagram (a flow between nodes, a hand-off between two cards). */
   route?: Route
-  /** Draws on when it turns true, fades off (intact) when it turns false. */
   show: boolean
-  /** Corner radius at the elbow. */
   radius?: number
-  /** End dots. Defaults to 'end', or 'none' with an arrow. */
   dots?: 'end' | 'both' | 'none'
-  /** An arrowhead at `to`, for direction: a request going out, a response coming back. */
   arrow?: boolean
-  /** A label on the line: a short word ("POST", "200 OK") in a pill, or a number for a step marker. Arrives after the line draws. */
   label?: ReactNode
-  /** Where along the line the label sits, 0 (from) to 1 (to). */
   labelAt?: number
   dashed?: boolean
   className?: string
@@ -37,14 +25,9 @@ export interface ConnectorProps {
  * it draws over both ends.
  */
 export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow, label, labelAt = 0.5, dashed, className }: ConnectorProps) {
-  // A curve with an arrow ends a little short and runs straight in, so the
-  // head sits on a straight run. Over a short gap the curve only levels out in
-  // its last pixels, and a head laid on the bend kinks against the line
   const tip = arrow && route === 'curve' ? { x: to.x - Math.sign(to.x - from.x) * Math.min(8, Math.abs(to.x - from.x) / 3), y: to.y } : to
   const d = tip === to ? elbow(from, to, route, radius) : `${elbow(from, tip, route, radius)}L${to.x} ${to.y}`
   const ends = dots ?? (arrow ? 'none' : 'end')
-  // A dashed line ends on a dash, never a gap short of its target: stretch
-  // the 4/4 pattern a hair so a whole number of dashes fits
   const line = useRef<SVGPathElement>(null)
   const reveal = useRef<SVGPathElement>(null)
   const revealId = `ss-connector-${useId().replace(/:/g, '')}`
@@ -65,9 +48,6 @@ export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow
     const el = dashed ? reveal.current : line.current
     setArrived(false)
     if (!show || !el) return
-    // The endpoint belongs to the visible line, not a guessed delay. This
-    // also works when reduced motion removes the transition, or a host
-    // advances its CSS transition one frame at a time.
     const property = 'stroke-dashoffset'
     const check = () => {
       const style = getComputedStyle(el)
@@ -87,8 +67,6 @@ export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow
   }, [d, dashed, show])
   const pts = tip === to ? corners(from, to, route) : [...corners(from, tip, route), to]
   const q = pts[pts.length - 1]
-  // A straight horizontal/vertical elbow can end with a zero-length leg.
-  // Its arrow follows the last real segment, rather than collapsing to a dot.
   const p = pts.slice(0, -1).reverse().find(p => Math.hypot(q.x - p.x, q.y - p.y) > .001) ?? q
   const directionLength = Math.hypot(q.x - p.x, q.y - p.y)
   const len = directionLength || 1
@@ -99,8 +77,6 @@ export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow
   return (
     <>
       <svg className={`ss-connector${className ? ` ${className}` : ''}`} data-show={show || undefined} data-arrived={show && arrived || undefined} data-dashed={dashed || undefined} aria-hidden>
-        {/* The reveal has its own normalized path. The visible dashed line
-            keeps real dash spacing while its tip travels toward the target. */}
         {/* design-check-ignore-next-line — SVG mask must use opaque white */}
         {dashed && <defs><mask id={revealId} maskUnits="userSpaceOnUse"><path ref={reveal} className="ss-connector__reveal" d={d} pathLength="1" style={{ fill: 'none', stroke: '#fff', strokeWidth: 8 }} /></mask></defs>}
         <path ref={line} className="ss-connector__line" d={d} pathLength={dashed ? undefined : 1} mask={dashed ? `url(#${revealId})` : undefined} />
@@ -117,7 +93,6 @@ export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow
   )
 }
 
-// The S-curve's controls: level out of `a` and level into `b`, half way across
 function bend(a: Point, b: Point): [Point, Point] {
   const m = (a.x + b.x) / 2
   return [{ x: m, y: a.y }, { x: m, y: b.y }]
@@ -126,7 +101,6 @@ function bend(a: Point, b: Point): [Point, Point] {
 function corners(a: Point, b: Point, route: Route): Point[] {
   if (route === 'straight') return [a, b]
   if (route === 'curve') {
-    // Sampled, so a label and the arrow follow the curve itself
     const [c1, c2] = bend(a, b)
     return Array.from({ length: 25 }, (_, i) => {
       const t = i / 24

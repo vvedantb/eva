@@ -2,9 +2,6 @@ import { Bar, Stage, Text, Window, between, box, contains, inset, type Act, type
 import { Icon } from './icons'
 import './hero.css'
 
-// A dev tool's hero: annotate a dashboard three ways, copy the feedback,
-// paste it into Claude Code.
-
 type Tone = 'blue' | 'green' | 'orange'
 type Marker = { at: Point; show: boolean }
 
@@ -14,7 +11,6 @@ type S = {
   popup: { show: boolean; header: string; at: Point; tone: Tone }
   typed: string
   drag: Rect | null
-  /** The marquee shows while the drag runs, and fades on release */
   dragging: boolean
   area: { r: Rect; show: boolean }
   picked: string[]
@@ -72,7 +68,6 @@ async function annotate(a: Act<S>, header: string, tone: Tone, at: Point, text: 
 async function script(a: Act<S>) {
   await a.wait(600)
 
-  // Open the toolbar
   await a.move('toolbar')
   await a.wait(300)
   await a.click()
@@ -80,7 +75,6 @@ async function script(a: Act<S>) {
   await a.wait(400)
   await a.wait(200)
 
-  // 1. Click an element
   await a.move('export')
   await a.set({ highlight: true })
   await a.wait(400)
@@ -92,7 +86,6 @@ async function script(a: Act<S>) {
   await a.set({ m3: { at: a.center('export'), show: true } })
   await a.wait(600)
 
-  // 2. Drag over an area
   const icons = a.rect('icons')
   const from = { x: icons.x + icons.width + 2, y: icons.y + icons.height + 2 }
   const to = { x: icons.x - 2, y: icons.y - 2 }
@@ -109,7 +102,6 @@ async function script(a: Act<S>) {
   await a.set({ m4: { at: { x: from.x, y: to.y }, show: true } })
   await a.wait(400)
 
-  // 3. Select text
   const title = a.rect('title')
   const y = title.y + title.height / 2
   await a.move({ x: title.x, y })
@@ -122,7 +114,6 @@ async function script(a: Act<S>) {
   await a.set({ selection: null, m5: { at: { x: title.x + title.width + 2, y }, show: true } })
   await a.wait(400)
 
-  // Copy, then paste into the agent
   await a.move('copy')
   await a.wait(400)
   await a.click()
@@ -136,7 +127,6 @@ async function script(a: Act<S>) {
   await a.move('rest')
   await a.wait(2000)
 
-  // Put everything back, so the loop has no seam
   await a.set((s) => ({ ...initial, m3: hidden(s.m3), m4: hidden(s.m4), m5: hidden(s.m5), area: { ...s.area, show: false }, pasted: s.pasted, popup: s.popup }))
   await a.move('rest')
   await a.wait(400)
@@ -201,7 +191,6 @@ export function HeroDemo() {
                     <Bar w={45} tone={4} />
                     <Bar w={40} tone={4} />
                   </div>
-                  {/* Two real rows, one placeholder: a table, not a wireframe */}
                   {[
                     ['api-gateway', 'main', 48],
                     ['web', 'release-1.4', 42],
@@ -220,7 +209,6 @@ export function HeroDemo() {
             </div>
           </Window>
 
-          {/* Overlays, positioned from measured targets */}
           <div className="hd-highlight" data-show={s.highlight} style={box(inset(rect('export'), 4))} />
           <div className="hd-dragbox" data-show={s.dragging || undefined} style={s.drag ? box(s.drag) : undefined} />
           <div className="hd-area" data-show={s.area.show} style={box(s.area.r)} />
@@ -255,7 +243,6 @@ export function HeroDemo() {
           </div>
 
           <Window title="Maya's Project" className="hd-terminal" data-show={s.terminal}>
-            {/* A paste arrives as one operation after its keystroke. */}
             <div className="hd-terminal-body" data-target="terminal-input" data-cursor="ibeam" data-snap>
               <div className="hd-terminal-welcome">
                 <Welcome />
@@ -302,7 +289,6 @@ function Toolbar({ open, copied }: { open: boolean; copied: boolean }) {
   )
 }
 
-// Claude Code's welcome box, as drawn in the original.
 function Welcome() {
   const mono = 'ui-monospace, SFMono-Regular, monospace'
   return (

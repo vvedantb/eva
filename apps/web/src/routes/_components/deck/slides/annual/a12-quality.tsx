@@ -24,10 +24,6 @@ interface Stat {
   accent?: boolean;
 }
 
-/**
- * Left to right, biggest number first.
- * Source: Eva repository at 16 September 2026.
- */
 const STATS: readonly Stat[] = [
   { value: 303, label: "tests", delay: 0.45, accent: true },
   { value: 79, label: "contract tests", delay: 0.6 },
@@ -43,12 +39,9 @@ const RULES = [
   "Release notes",
 ];
 
-/** Content width inside the Shell gutters. */
 const WIDTH = 1088;
-/** The check light crosses the row in this long; each gate passes as it arrives. */
 const RUN = 1.3;
 const RUN_START = 0.1;
-/** When the light reaches the centre of gate `index`, on the in-out curve. */
 function gateAt(index: number): number {
   const t = (index + 0.5) / RULES.length;
   const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
@@ -119,8 +112,6 @@ export function AnnualQuality() {
         ))}
       </div>
 
-      {/* The gates: a check light runs the row and each rule passes as it arrives.
-          They step back for the closing line; the figures above hold. */}
       <m.div
         initial={false}
         animate={{ opacity: closing ? 0.55 : 1 }}

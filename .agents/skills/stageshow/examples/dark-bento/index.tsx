@@ -1,20 +1,6 @@
 import { Avatar, Bar, Facepile, Stage, Text, Window } from '../../kit'
 import './bento.css'
 
-// The bar for a dark, grayscale still: a bento card (360 × 280) for a music
-// app, in a dark section of the page. Feature: shared playlists.
-//
-// Why it works: "shared" is said once, by one link. One row carries Mara's
-// badge and the satellite explains it; nothing else repeats the idea. The rows
-// keep album art, the thing that makes it a music app. The header is compact
-// (cover beside title), so the list has room. Depth on dark comes from a
-// lighter raised surface, not shadow.
-//
-// Story: a playlist that more than one person fills. The window shows the
-// playlist with its listeners stacked beside the title; one row is new, and a
-// satellite over the sidebar names who added it. Real strings: the playlist
-// title and "Added by Mara". Everything else is a line or a shape.
-
 const TRACKS = [
   { title: 62, artist: 40, art: 1 },
   { title: 48, artist: 54, art: 2 },
@@ -45,7 +31,6 @@ export default function DarkBento() {
                   <div className="db-heading">
                     <Text className="db-title">Sunday Slow</Text>
                     <div className="db-people">
-                      {/* Cut out, not ringed: the gap shows the window behind */}
                       <Facepile names={['', '', '', '']} tones={['ink', 'ink', 'ink', 'ink']} size={18} overlap={4} className="db-pile" />
                     </div>
                   </div>
@@ -78,7 +63,6 @@ export default function DarkBento() {
               </div>
             </Window>
 
-            {/* Satellite: the song Mara just added, over the sidebar */}
             <div className="db-detail">
               <div className="db-detail-track">
                 <span className="db-art db-art--3 db-art--detail" />

@@ -38,7 +38,6 @@ export const set = authMutation({
       return null;
     }
 
-    // Build the insert payload by spreading only the FK fields that match the kind.
     const base = {
       userId: ctx.userId,
       repoId,

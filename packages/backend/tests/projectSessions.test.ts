@@ -13,13 +13,6 @@ import {
 } from "../convex/_git/branchNames";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A project owns one hidden session (its coordinator's), and each of its
- * child tasks owns its own session, branch and Main chat, exactly like a
- * quick task, so tasks of one project run in parallel without holding each
- * other or the project.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-sessions";
 
@@ -64,8 +57,6 @@ const ensureProjectSession = (f: Fixture) =>
   });
 
 describe("projects on sessions", () => {
-  // Scheduled follow-ups (VM delete, queue drain) stay parked: these tests
-  // check the writes, not the actions.
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -99,7 +90,6 @@ describe("projects on sessions", () => {
           await ctx.db.get(first.sessionId),
         ],
       );
-      // The task chats in its own session's Main chat, on its own branch.
       expect(chat?.sessionId).toBe(taskSession?._id);
       expect(chat?.taskId).toBeUndefined();
       expect(taskSession).toMatchObject({
@@ -197,7 +187,6 @@ describe("projects on sessions", () => {
     async () => {
       const f = await fixture();
       const { creatorId, accountId } = await f.t.run(async (ctx) => {
-        // The task was made by someone else; the project owner owns the account.
         const creatorId = await ctx.db.insert("users", {
           clerkId: "clerk|task-creator",
         });
@@ -210,7 +199,6 @@ describe("projects on sessions", () => {
           createdAt: now,
           updatedAt: now,
         });
-        // The project's account is the one Eva's chat runs on.
         const project = await ctx.db.get(f.projectId);
         if (!project) throw new Error("project missing");
         await ensureWorkSession(
@@ -221,7 +209,6 @@ describe("projects on sessions", () => {
         await ctx.db.patch(f.taskId, { createdBy: creatorId });
         return { creatorId, accountId };
       });
-      // The task chat starts on Eva's account before the task ever ran.
       const { sessionId, chatId } = await f.asUser.mutation(
         api.sessions.ensureOwned,
         { owner: { kind: "task", taskId: f.taskId } },
@@ -229,8 +216,6 @@ describe("projects on sessions", () => {
       const seeded = await f.t.run((ctx) => ctx.db.get(chatId));
       expect(seeded?.providerAccountId).toBe(accountId);
       expect(seeded?.lastModel).toBe(DEFAULT_AI_MODEL);
-      // The project's account unlocks as the project owner, like the runs;
-      // the team credential stays the task creator's.
       const holders = await f.t.run(async (ctx) => {
         const session = await ctx.db.get(sessionId);
         if (!session) throw new Error("session missing");
@@ -240,7 +225,6 @@ describe("projects on sessions", () => {
         ];
       });
       expect(holders).toEqual([f.userId, creatorId]);
-      // Picking it in the chat is allowed, though the creator does not own it.
       await f.asUser.mutation(api.sessionChats.setProviderAccountId, {
         chatId,
         providerAccountId: accountId,

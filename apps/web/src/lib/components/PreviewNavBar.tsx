@@ -52,36 +52,22 @@ export function buildUrlWithPath(baseUrl: string, path: string): string {
     const parsed = new URL(baseUrl);
     if (parsed.protocol === "http:") parsed.protocol = "https:";
     const fullPath = normalizePreviewPath(path);
-    // Carry the preview grant onto the rebuilt URL so the iframe's first load
-    // can establish the proxy session cookie instead of bouncing to sign-in.
     return carryPreviewGrant(baseUrl, `${parsed.origin}${fullPath}`);
   } catch {
     return baseUrl;
   }
 }
 
-/**
- * Reads the iframe's current location, or null when it is cross-origin.
- *
- * A module-level helper rather than an inline try/catch in the component: the
- * optional chaining has to sit outside the `try`, since React Compiler bails on
- * a whole file when expression-level control flow appears inside one.
- */
 function readIframeHref(iframe: HTMLIFrameElement | null): string | null {
   const frameWindow = iframe?.contentWindow;
   if (!frameWindow) return null;
   try {
     return frameWindow.location.href;
   } catch {
-    // cross-origin — cannot read iframe location
     return null;
   }
 }
 
-/**
- * Drives the iframe's own session history. Returns false when cross-origin
- * access is blocked, so the caller can fall back to a postMessage command.
- */
 function stepIframeHistory(
   iframe: HTMLIFrameElement | null,
   direction: "back" | "forward",
@@ -113,31 +99,18 @@ export interface PreviewPortOption {
 interface PreviewNavBarProps {
   previewUrl: string | null;
   iframeRef: RefObject<HTMLIFrameElement | null>;
-  /**
-   * Host-managed iframes (PreviewIframeHost) deliver the element as state, not
-   * a ref — the ref is often still null when the listener effect runs. Pass it
-   * here so the effect re-attaches when the element (re)appears. `undefined`
-   * keeps the legacy ref-only behavior.
-   */
   iframeElement?: HTMLIFrameElement | null;
   containerRef: RefObject<HTMLDivElement | null>;
-  /** Overrides the built-in container fullscreen (host iframes need document fullscreen). */
   onToggleFullscreen?: () => void;
   port: number;
   path?: string;
   onPortChange?: (port: number) => void;
-  /** Offered beside the port input; hidden when fewer than two are known. */
   portOptions?: readonly PreviewPortOption[];
   defaultPath?: string;
   onPathChange?: (path: string) => void;
   isLoading?: boolean;
   onRefresh?: () => void;
-  /** Rendered after fullscreen, e.g. an overflow menu of preview tools. */
   trailing?: ReactNode;
-  /**
-   * Idle pause on: builds the Eva wake link for "Open in new tab" from the
-   * current preview path, instead of the raw sandbox URL.
-   */
   externalHrefForPath?: (path: string) => string;
 }
 
@@ -166,28 +139,18 @@ export function PreviewNavBar({
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
   const simpleView = useSimpleView();
-  // Host-managed iframes only: a legacy ref can't be read during render.
   const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
-  // `path` is the owner's value; the draft only exists while the user edits
-  // the input. Uncontrolled bars (no `path`) keep the iframe path as a draft.
   const [pathDraft, setPathDraft] = useState<string | null>(null);
   const pathInput = pathDraft ?? path ?? defaultPath;
-  // Tracks the last value emitted via onPathChange so the three event sources
-  // (input commit, iframe load, in-iframe postMessage) don't fire redundant
-  // notifications for the same path. A controlled bar compares with `path`
-  // instead, so returning to a path after the owner moved it still reports.
   const lastNotifiedPathRef = useRef<string | null>(null);
 
-  // Adjust the port draft during render when the external port changes
-  // (React-recommended alternative to setState-in-effect).
   const [prevPort, setPrevPort] = useState(port);
   if (port !== prevPort) {
     setPrevPort(port);
     setPortInput(String(port));
   }
 
-  /** The iframe or a commit settled on `nextPath`: drop the edit draft. */
   function settlePath(nextPath: string) {
     setPathDraft(path === undefined ? nextPath : null);
   }
@@ -200,18 +163,12 @@ export function PreviewNavBar({
 
   function syncPathFromIframe() {
     const href = readIframeHref(currentIframe());
-    // Skip about:blank, data:, blob:, etc. — the iframe fires `load` for the
-    // initial empty document before the real URL is applied, and we don't
-    // want that captured as a navigable path.
     if (!href || !/^https?:/i.test(href)) return;
     const nextPath = getPathFromUrl(href);
     settlePath(nextPath);
     notifyPathChange(nextPath);
   }
 
-  // Latest-function refs for the long-lived iframe listeners below. Written in
-  // an effect (not during render) so React Compiler can compile the file; the
-  // listeners only fire after commit, so the effect-time write is equivalent.
   const syncPathFromIframeRef = useRef(syncPathFromIframe);
   const notifyPathChangeRef = useRef(notifyPathChange);
   const settlePathRef = useRef(settlePath);
@@ -228,10 +185,6 @@ export function PreviewNavBar({
   }
 
   useEffect(() => {
-    // Host-managed mode: the element arrives as state (possibly null on first
-    // run) — attach the load listener when it exists, but keep the window
-    // message listener regardless so in-iframe navigation events are never
-    // missed while the element is still materializing.
     const iframe =
       iframeElement !== undefined ? iframeElement : iframeRef.current;
     const onLoad = () => {
@@ -251,7 +204,6 @@ export function PreviewNavBar({
       ) {
         return;
       }
-      // The page is leaving for another document (link, form, location.href).
       if (event.data.type === PREVIEW_FRAME_MESSAGE.unload) {
         setPreviewDocumentLoading(source, true);
         return;
@@ -294,7 +246,6 @@ export function PreviewNavBar({
     const iframe = currentIframe();
     if (iframe) {
       setPreviewDocumentLoading(iframe, true);
-      // Reassigning the same src forces the iframe to reload its document.
       const currentSrc = iframe.src;
       iframe.src = currentSrc;
     }
@@ -319,10 +270,6 @@ export function PreviewNavBar({
     }
   }
 
-  // Strip the grant from the shareable "open in new tab" link: opening it is a
-  // top-level navigation that runs the sign-in handshake, and the link must not
-  // carry a bearer token. With idle pause on, the host hands over the Eva wake
-  // link instead, which keeps working after the sandbox is paused.
   const openInNewTabHref = externalHrefForPath
     ? externalHrefForPath(normalizePreviewPath(pathInput))
     : previewUrl
@@ -370,8 +317,6 @@ export function PreviewNavBar({
         onValueChange={setPathDraft}
         onCommit={commitPath}
       />
-      {/* The port is developer plumbing; simple view keeps path, reload,
-          open-in-tab and fullscreen. */}
       {simpleView ? null : (
         <>
           <Input

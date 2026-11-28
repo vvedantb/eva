@@ -27,7 +27,6 @@ const CARD_H = 68;
 const CARD_GAP = 8;
 export const BOARD_H = TOOLBAR_H + PAD * 2 + 296;
 
-/** When the cursor lands on the card, and how long the drag takes. */
 const GRAB_AT = 0.5;
 const DRAG = 0.95;
 export const DROP_AT = GRAB_AT + DRAG;
@@ -39,7 +38,6 @@ interface Column {
   cards: readonly { numId: number; title: string }[];
 }
 
-/** Left to right. The moving task is drawn on top, not listed here. */
 const COLUMNS: readonly Column[] = [
   {
     status: "in_progress",
@@ -60,7 +58,6 @@ const COLUMNS: readonly Column[] = [
 
 const HERO = { numId: 412, title: "Add export to reports" };
 
-/** Pixel position of a card's top-left inside the board, by column. */
 function slotX(column: number) {
   return PAD + column * (COL_W + COL_GAP) + COL_INSET;
 }
@@ -141,7 +138,6 @@ function ColumnHeader({
   );
 }
 
-/** Follows the card from grab to drop on step 1 only. */
 function Cursor({ dragging }: { dragging: boolean }) {
   const grab = { x: slotX(0) + CARD_W * 0.62, y: SLOT_Y + CARD_H * 0.55 };
   const drop = { x: slotX(1) + CARD_W * 0.62, y: SLOT_Y + CARD_H * 0.55 };
@@ -181,7 +177,6 @@ function Cursor({ dragging }: { dragging: boolean }) {
   );
 }
 
-/** The one task that moves: dragged into review, then merged by the bot. */
 function HeroCard() {
   const step = useDeckStep();
   const column = heroColumn(step);
@@ -240,7 +235,6 @@ function HeroCard() {
   );
 }
 
-/** Where the moving task will land: a dashed slot while it is in flight. */
 function DropSlot({ column }: { column: number }) {
   const step = useDeckStep();
   const target = heroColumn(step) === column;
@@ -272,7 +266,6 @@ export function Fri4ReviewBoard() {
   const column = heroColumn(step);
 
   return (
-    // Grows out of the "43 waiting" card on the slide before (see `SHARED`).
     <m.div
       layoutId={SHARED.review}
       transition={{ layout: MORPH }}

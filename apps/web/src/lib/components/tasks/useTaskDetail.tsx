@@ -22,15 +22,6 @@ import {
 type TaskRow = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type RepoRow = FunctionReturnType<typeof api.githubRepos.get> | undefined;
 
-/**
- * Read straight off the task row — never mirrored into local state. A mirror
- * had to be re-seeded whenever the row changed, and any render that seeded it
- * before `task` arrived took the repo default instead: that is how the
- * Properties column showed `staging` for a task whose own base branch is
- * `main`, until a reload happened to seed it in the right order. The picker
- * writes through `updateTask`, whose optimistic update patches this same
- * query, so the value still changes the instant it is picked.
- */
 function deriveTaskRowFields(
   task: TaskRow,
   repoForTask: RepoRow,
@@ -45,15 +36,10 @@ function deriveTaskRowFields(
   };
 }
 
-/**
- * Every query the task detail reads, in a fixed subscription order. Returns
- * only public fields: `useTaskDetail` spreads the result into its return.
- */
 function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
   const taskSession = useTaskSession(taskId, task);
-  // One read for both task kinds: the server knows how each one runs.
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId });
   const hasActiveRun = runFacts?.hasActiveRun ?? false;
   const hasRuns = runFacts?.hasRuns ?? false;
@@ -62,7 +48,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     api.projects.list,
     task?.repoId ? { repoId: task.repoId } : "skip",
   );
-  // A project archives with its tasks, so its task is read-only too.
   const project = useQuery(
     api.projects.get,
     task?.projectId ? { id: task.projectId } : "skip",
@@ -143,14 +128,12 @@ export function useTaskDetail(
   });
   const tab = useTaskDetailTab(routing);
 
-  // Each part returns only public fields, so the spreads are the API.
   return {
     ...data,
     ...deriveRunSummary(data),
     ...tab,
     ...execution,
     ...sandbox,
-    // An archived task opens read-only: no sandbox start.
     canStartSandbox: sandbox.canStartSandbox && !data.isArchived,
     layoutGridClass: "grid-cols-1 md:grid-cols-[1fr_1fr_200px]",
     modalWidthClass: "max-w-[calc(100vw-2rem)] md:max-w-6xl",

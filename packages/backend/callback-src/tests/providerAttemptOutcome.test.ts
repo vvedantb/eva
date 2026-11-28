@@ -7,14 +7,6 @@ import {
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type { ProviderAttemptResult, ResultEvent } from "../types.js";
 
-/**
- * `resolveProviderAttemptOutcome` is the single decision that turns a finished
- * agent process into "this turn succeeded" or "this turn failed with X", shared
- * by all four SDK runners. The existing guards read the source text, so an
- * inverted branch that keeps the same identifiers still passes them — these
- * exercise the rules instead.
- */
-
 const cleanAttempt: ProviderAttemptResult = {
   code: 0,
   terminatedBySignal: false,
@@ -99,11 +91,6 @@ describe("resolveProviderAttemptOutcome", () => {
     });
   });
 
-  /**
-   * Cursor's fallback result is built from the last streamed assistant text, so
-   * a killed run still arrives carrying a plausible-looking answer. Reporting
-   * that as success would mark an interrupted turn complete.
-   */
   test.each([
     ["a direct signal", { terminatedBySignal: true, code: 0 }],
     ["a shell-translated SIGKILL", { code: 137 }],
@@ -131,11 +118,6 @@ describe("resolveProviderAttemptOutcome", () => {
     expect(outcome.error).toContain("nothing was completed");
   });
 
-  /**
-   * The provider diagnosed itself; its wording reaches the user unchanged. A
-   * timeout cancels the run and the runner still emits an error result, so
-   * that event, not the timeout flag, names the failure.
-   */
   test.each([
     ["an exit", { code: 1 }],
     ["a timeout", { code: 1, timedOutForMaxRuntime: true }],
@@ -153,18 +135,12 @@ describe("resolveProviderAttemptOutcome", () => {
     },
   );
 
-  /**
-   * The agent answered, then its process exited badly on the way out (a flush
-   * or teardown failure). The answer is already persisted, so the turn is not
-   * failed for the exit code alone.
-   */
   test("a non-zero exit after a good result event is still a success", () => {
     expect(
       resolveProviderAttemptOutcome(attempt({ code: 1 }), resultEvent()),
     ).toEqual({ success: true, error: null });
   });
 
-  /** Same reasoning for a watchdog that fired after the result was in. */
   test("a watchdog that fired after a good result event does not fail the turn", () => {
     expect(
       resolveProviderAttemptOutcome(
@@ -222,7 +198,6 @@ describe("resolveProviderAttemptOutcome", () => {
     expect(outcome.error).toMatch(/^Turn lease lost\n\n/);
   });
 
-  /** Failures carry the captured output so a blank agent crash is diagnosable. */
   test("a failure appends the captured output tails", () => {
     S.rawOutput = "loading model";
     S.stderrOutput = "invalid model name";
@@ -233,11 +208,6 @@ describe("resolveProviderAttemptOutcome", () => {
     expect(outcome.error).toContain("invalid model name");
   });
 
-  /**
-   * A clean exit that never emitted a result event produced no answer, so the
-   * turn is not a success — but there is nothing to diagnose either, and the
-   * callers turn this into their own "no result" completion.
-   */
   test("a clean exit with no result event is neither success nor error", () => {
     expect(resolveProviderAttemptOutcome(attempt(), null)).toEqual({
       success: false,

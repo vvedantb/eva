@@ -22,19 +22,12 @@ export interface DeckSummary {
   path: DeckPath;
   slideCount: number;
   notedCount: number;
-  /**
-   * The thumbnail, already wrapped in whichever contexts its deck needs. The
-   * card only scales it: the two deck engines disagree about slide shape, so
-   * the caller is the only place that knows how to render one.
-   */
   preview: ReactNode;
-  /** Whose deck: tints the card's hover glow. Eva when absent. */
   brand?: DeckBrand;
 }
 
 interface DeckCardProps {
   deck: DeckSummary;
-  /** Position in the grid, used for the entrance stagger. */
   index: number;
 }
 
@@ -44,8 +37,6 @@ interface DeckCardProps {
  * never drift from the deck itself.
  */
 export function DeckCard({ deck, index }: DeckCardProps) {
-  // Destructured: reading `scale` off the object passed as a ref would make the
-  // React Compiler treat it as a ref read during render.
   const { scale: stageScale, measure: measureStage } = useStageScale();
 
   function stopCardClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -63,10 +54,6 @@ export function DeckCard({ deck, index }: DeckCardProps) {
       }}
       whileHover={{ y: -4, transition: springTransition }}
       whileTap={{ scale: 0.96, transition: springTransition }}
-      // Concentric: 28px outer corner = the 12px thumbnail corner plus the 16px
-      // of card padding around it. Explicit pixels on both sides of the pair,
-      // because the `rounded-*` scale is derived from a user-settable
-      // `--radius` and the relationship has to survive that.
       className={cn(
         "group relative rounded-[28px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm",
         BRAND_CLASS[deck.brand ?? "eva"],
@@ -74,14 +61,12 @@ export function DeckCard({ deck, index }: DeckCardProps) {
     >
       <div
         aria-hidden
-        // One pixel outside the card, so one pixel rounder.
         className="pointer-events-none absolute -inset-px rounded-[29px] opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-60"
         style={{
           background: `linear-gradient(120deg, ${ACCENT.a}, ${ACCENT.b})`,
         }}
       />
 
-      {/* Card-wide target, kept a sibling of the notes link so no anchor nests. */}
       <Link
         to={deck.path}
         aria-label={`Present ${deck.title}`}
@@ -106,8 +91,6 @@ export function DeckCard({ deck, index }: DeckCardProps) {
         </div>
       </div>
 
-      {/* No z-index here: an auto z-index keeps the notes link's z-20 in the
-          card's own stacking context, above the card-wide overlay link. */}
       <div className="relative px-1 pt-5 pb-1">
         <h2 className="text-2xl font-semibold tracking-[-0.01em]">
           {deck.title}

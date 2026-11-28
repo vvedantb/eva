@@ -8,12 +8,6 @@ import {
   isHarnessCatalogUnchanged,
 } from "./_harnessSkills/filter";
 
-/**
- * The built-in slash commands a harness CLI ships with, reported live from the
- * sandboxes that run it. One global row per provider — every sandbox boots from
- * the same image, so the CLI build is fleet-wide, not per repo.
- */
-
 const catalogValidator = v.object({
   cliVersion: v.string(),
   skills: v.array(harnessSkillValidator),

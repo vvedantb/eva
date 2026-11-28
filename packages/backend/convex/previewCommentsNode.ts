@@ -11,13 +11,6 @@ import {
 } from "@eva/shared/previewAnnotationContext";
 import { verifyPreviewCommentsToken } from "./previewGrant";
 
-/**
- * Runs one preview-comments request from a direct sandbox link. The HTTP route
- * (`previewCommentsHttp.ts`) passes the bearer token and JSON body here; this
- * checks the token and acts as the user and chat it names. The page can ask for
- * nothing else: the chat comes from the token, never from the body.
- */
-
 const sendBody = z.object({
   feedback: z.string().max(4_000),
   context: z.object({}).loose(),
@@ -46,8 +39,6 @@ export const handle = internalAction({
     const { userId, chatId } = claims;
     try {
       if (args.op === "list") {
-        // Typed `unknown` on purpose: the api type that would name it
-        // includes this action, which would make its own type circular.
         const comments: unknown = await ctx.runQuery(
           internal.previewComments.listForUser,
           { userId, chatId },
@@ -57,8 +48,6 @@ export const handle = internalAction({
       const raw: unknown = JSON.parse(args.body || "{}");
       if (args.op === "send") {
         const body = sendBody.parse(raw);
-        // The same context object the Eva page gets from the injected script,
-        // read and turned into a prompt by the same shared code.
         const context = parseAnnotationContext(body.context);
         if (!context) return fail(400, "Invalid request");
         await ctx.runMutation(internal.previewComments.sendForUser, {
@@ -79,7 +68,6 @@ export const handle = internalAction({
       return { status: 200, json: JSON.stringify({ ok: true }) };
     } catch (error) {
       if (error instanceof z.ZodError) return fail(400, "Invalid request");
-      // A Convex error message carries a stack; the page shows the first line.
       const message =
         error instanceof Error
           ? (error.message.split("\n")[0] ?? "").replace(/^Uncaught Error: /, "")

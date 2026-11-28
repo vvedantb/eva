@@ -18,17 +18,10 @@ import type { SpotlightShot } from "../../_components/motion";
 
 interface Shelved {
   plan: string;
-  /** Absent where the written plan records no closing date. */
   date?: string;
-  /** The verdict the plan was closed with, stamped over it. */
   verdict: string;
 }
 
-/**
- * One per build step, in the order they were closed.
- * Source: Eva written plans (seven cancelled in total); replacement mode for
- * design sessions removed 23 August 2026.
- */
 const PLANS: readonly Shelved[] = [
   { plan: "Move the workers", verdict: "Not needed" },
   {
@@ -43,14 +36,11 @@ const PLANS: readonly Shelved[] = [
   },
 ];
 
-/** Content width inside the Shell gutters, and the card row below the title. */
 const WIDTH = 1088;
 const CARD_HEIGHT = 250;
 const COLUMN = (WIDTH - 2 * 24) / 3;
 
-/** The glow's box overhangs the row by this much, so its falloff is never clipped. */
 const SPOT_BLEED = 128;
-/** Glow behind the plan being closed on each step; off for the closing line. */
 const SPOT_SHOTS: readonly (SpotlightShot | null)[] = [
   ...PLANS.map((_, column) => ({
     x: SPOT_BLEED + COLUMN / 2 + column * (COLUMN + 24),
@@ -60,14 +50,12 @@ const SPOT_SHOTS: readonly (SpotlightShot | null)[] = [
   null,
 ];
 
-/** The beats inside one card, in seconds from its step. */
 const LAND = 0.5;
 const STRIKE = 0.6;
 const STAMP = 1.15;
 const SHELVE = 1.65;
 const TOTAL = 2.7;
 
-/** Lands crisp, takes the stamp with a small thud, then settles onto the shelf. */
 const CARD_BEATS = {
   duration: TOTAL,
   times: [
@@ -82,7 +70,6 @@ const CARD_BEATS = {
 };
 const HIDDEN = { opacity: 0, y: 24, rotate: 0, scale: 0.96 };
 
-/** Faint lines of the written plan under its heading. */
 const BODY_LINES = ["92%", "80%", "64%"];
 
 function ShelvedCard({ item, index }: { item: Shelved; index: number }) {
@@ -115,7 +102,6 @@ function ShelvedCard({ item, index }: { item: Shelved; index: number }) {
         className="mb-4 text-white/35"
         aria-hidden
       />
-      {/* Inline-block so the rule is the width of the words, not the card. */}
       <p className="relative inline-block self-start text-2xl leading-snug font-medium text-balance text-white">
         {item.plan}
         <m.span
@@ -156,7 +142,6 @@ function ShelvedCard({ item, index }: { item: Shelved; index: number }) {
         <div className="h-4 text-xs tracking-[0.18em] text-white/30 uppercase">
           {item.date ?? ""}
         </div>
-        {/* The stamp: comes down from above the page and lands hard. */}
         <m.span
           className="inline-block rounded-lg px-3.5 py-1.5 text-sm font-medium text-white/75 ring-1 ring-white/30"
           initial={{ opacity: 0, scale: 1.6, rotate: -9 }}
@@ -191,14 +176,12 @@ export function AnnualAbandoned() {
       </Reveal>
 
       <div className="relative isolate mt-16">
-        {/* Follows the plan being closed; goes out for the closing line. */}
         <Spotlight shots={SPOT_SHOTS} className="-inset-32" />
         <div className="flex gap-6">
           {PLANS.map((item, index) => (
             <ShelvedCard key={item.plan} item={item} index={index} />
           ))}
         </div>
-        {/* The shelf the closed plans come to rest on. */}
         <DrawPath
           d={`M0 1 L${WIDTH} 1`}
           width={WIDTH}

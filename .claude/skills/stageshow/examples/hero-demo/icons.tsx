@@ -1,5 +1,3 @@
-// The toolbar's icons, copied from the real product's toolbar.
-
 const P = { stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
 
 const PATHS: Record<string, React.ReactNode> = {

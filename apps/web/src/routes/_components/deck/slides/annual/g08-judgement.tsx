@@ -15,13 +15,6 @@ interface Option {
   why: string;
 }
 
-/**
- * Travel-time search on the nursing home referral portal, shipped 12 October
- * 2026 (carepulse-ts). Figures are estimates from the Eva session's own sizing,
- * 2 October 2026, in US dollars: Google driving at $10 per 1,000 elements,
- * about $685 to $1,330 a month; TfL 500 requests a minute per key; Mapbox free
- * for the first 100,000 elements a month, against about 73,450 expected.
- */
 const OPTIONS: readonly Option[] = [
   {
     name: "Google APIs",
@@ -58,7 +51,6 @@ export function AnnualJudgement() {
       <div className="mt-10 grid grid-cols-3 gap-4">
         {OPTIONS.map((option, index) => (
           <Reveal key={option.name} step={index + 1}>
-            {/* p-7 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[240px] flex-col rounded-[28px] p-7">
               <div className={LABEL}>{option.verdict}</div>
               <div className="mt-3 text-2xl font-semibold text-white">

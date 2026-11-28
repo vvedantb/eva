@@ -5,7 +5,6 @@ import type { MutationCtx } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { arenaScenarioFields } from "./validators";
 
-/** Title and instructions are free text; caps keep one scenario prompt-sized. */
 const MAX_TITLE_LENGTH = 200;
 const MAX_INSTRUCTIONS_LENGTH = 4000;
 
@@ -15,7 +14,6 @@ const scenarioValidator = v.object({
   ...arenaScenarioFields,
 });
 
-/** Loads a doc the caller may edit, or throws the same not-found for both cases. */
 async function requireDocAccess(
   ctx: MutationCtx,
   docId: Id<"docs">,
@@ -120,7 +118,6 @@ export const setPrRuns = authMutation({
   },
 });
 
-// --- Agent drafting (called from arenaActions.draftScenarios) ---
 
 export const getDraftContext = internalQuery({
   args: { docId: v.id("docs") },

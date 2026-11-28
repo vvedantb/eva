@@ -13,10 +13,8 @@ const LOST = 2;
 
 const W = 1088;
 const H = 470;
-/** Down the middle of the search bar. */
 const ARROW_X = 220;
 
-/** Your notes, scattered: the answer is in here somewhere. Names are examples. */
 const NOTES = [
   { name: "Provider onboarding.md", x: 620, y: 20, r: -6 },
   { name: "Pricing ideas.md", x: 860, y: 70, r: 5 },
@@ -45,7 +43,6 @@ export function BeeProblem() {
 
       <Camera shots={SHOTS} className="mt-6">
         <div className="relative" style={{ width: W, height: H }}>
-          {/* 1 — someone says it in the meeting. */}
           <m.div
             className="absolute top-0 left-0 max-w-[460px] rounded-[28px] rounded-bl-md px-7 py-6 text-[26px] leading-snug font-medium"
             style={{ background: BEE.surface, color: BEE.text }}
@@ -61,7 +58,6 @@ export function BeeProblem() {
             it?”
           </m.div>
 
-          {/* The thread down the left: question, then search, then the clock. */}
           {[
             { from: 168, to: 214, delay: 0.1 },
             { from: 294, to: 340, delay: 1 },
@@ -78,7 +74,6 @@ export function BeeProblem() {
             </div>
           ))}
 
-          {/* 2 — searching by hand, mid-meeting. */}
           <m.div
             className={`${BEE_CARD} absolute top-[226px] left-0 flex h-14 w-[440px] items-center gap-3 rounded-full px-5 text-lg text-[#2a1e0c]/60`}
             initial={{ opacity: 0, y: 14 }}
@@ -99,7 +94,6 @@ export function BeeProblem() {
             </m.span>
           </m.div>
 
-          {/* 3 — the meeting clock keeps running while you search. */}
           <m.div
             className="absolute top-[352px] left-0 flex items-center gap-4"
             initial={{ opacity: 0, y: 10 }}
@@ -131,7 +125,6 @@ export function BeeProblem() {
             </m.span>
           </m.div>
 
-          {/* The notes that hold the answer, out of reach. */}
           {NOTES.map((note, index) => (
             <m.div
               key={note.name}

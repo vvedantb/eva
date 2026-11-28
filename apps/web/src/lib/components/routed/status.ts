@@ -8,8 +8,6 @@ type RoutedThreadStatus = RoutedThread["status"];
 const STATUS_LABELS: Record<RoutedThreadStatus, string> = {
   open: "Open",
   waiting_human: "Needs reply",
-  // Everyone asked has answered and Eva has been woken with the replies.
-  // Not "Waiting on Eva": that reads as a person called Eva.
   waiting_eva: "Answered",
   resolved: "Resolved",
   cancelled: "Cancelled",

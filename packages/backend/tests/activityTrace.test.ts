@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseActivityLog } from "@eva/shared/activityTrace";
 
-/** The mobile chat reads `messages.activityLog` with Zod, then draws it with the native-ui copy of the web timeline. */
 describe("activity log", () => {
   test("keeps every step kind in order and drops malformed steps", () => {
     const steps = parseActivityLog(

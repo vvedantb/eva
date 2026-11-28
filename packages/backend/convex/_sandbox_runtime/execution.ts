@@ -79,9 +79,6 @@ async function probePreviewReady(
   port: number,
 ): Promise<boolean> {
   try {
-    // Prefer a listen check: Next/Vite often bind before the first route
-    // finishes compiling. A short HTTP curl times out mid-compile and used to
-    // trigger remount → kill → relaunch loops (session 41 / CarePulse web).
     const listening = (
       await execHandle(handle, buildPortListenProbeCommand(port), 5)
     ).trim();
@@ -133,11 +130,6 @@ import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
 import { sleep } from "../_shared/async";
 
-/**
- * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
- * the deployment has no `ENCRYPTION_KEY` or no reachable site URL, which
- * simply disables the heartbeat (the sweep then relies on tab presence).
- */
 function previewActivityParams(sandboxId: string): {
   activityUrl: string;
   activityHmac: string;
@@ -153,7 +145,6 @@ function previewActivityParams(sandboxId: string): {
   };
 }
 
-// A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
@@ -161,10 +152,6 @@ const sessionPersistenceIdValidator = v.union(
   v.id("agentTasks"),
 );
 
-// Must outlast DAEMON_LAUNCH_LEASE_MS (30s in daemonEntitySnapshot.ts) so a
-// dead holder unblocks us at expiry, and long enough that a holder still
-// running docker bootstrap (~30s on Ave's Ubuntu image) can finish and
-// release. Losers then re-check alive / optsmismatch instead of giving up.
 const PREWARM_LAUNCH_LEASE_WAIT_MS = 90_000;
 const PREWARM_LAUNCH_LEASE_POLL_MS = 500;
 
@@ -173,7 +160,6 @@ export const validateSandbox = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /** The caller knows another step provisions swap and Docker. */
     skipDocker: v.optional(v.boolean()),
   },
   returns: v.object({ healthy: v.boolean() }),
@@ -181,18 +167,12 @@ export const validateSandbox = internalAction({
     let sandbox: SandboxHandle | undefined;
     try {
       sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      // Start the sandbox if it's stopped (fast resume ~3-5s)
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
         skipDocker: args.skipDocker,
       });
       return { healthy: true };
     } catch (e) {
-      // Exit 137 on the `echo 1` probe / an exec that never answered: the VM
-      // reports running but cannot execute commands (OOM meltdown, dead guest
-      // agent). start() no-ops on a "running" VM, so re-validating as-is can
-      // never recover — stop+resume once, and only if that also fails report
-      // unhealthy so the caller falls back to recreating.
       if (sandbox !== undefined && isSandboxUnresponsiveError(e)) {
         console.warn(
           `[sandbox] validateSandbox: sandbox ${args.sandboxId} is unresponsive (${errorMessage(e, "exec failed")}); attempting stop+resume`,
@@ -213,10 +193,6 @@ export const validateSandbox = internalAction({
   },
 });
 
-/**
- * The startup commands this sandbox should run: the checked-out branch's own
- * `.eva/config.json` entry when present, else the cached default-branch ones.
- */
 async function resolveStartupCommands(
   ctx: ActionCtx,
   sandbox: SandboxHandle,
@@ -285,9 +261,6 @@ export async function runStartupCommandsDirect(
 
   const fingerprint = computeStartupFingerprint(commands);
   if (!args.force) {
-    // Skip when these exact commands already ran (marker carries their
-    // fingerprint). A branch that edited them reruns here, even on a sandbox
-    // booted from a seeded snapshot.
     if (startupMarkerMatches(await readStartupMarker(sandbox), fingerprint)) {
       console.log(
         `[sandbox] runStartupCommands: marker matches, skipping ${commands.length} commands`,
@@ -302,11 +275,9 @@ export async function runStartupCommandsDirect(
 
   const errors: string[] = [];
   for (const command of commands) {
-    // Repo-configured commands can embed tokens; logs and errors show this.
     const shown = redactSecrets(command);
     console.log(`[sandbox] runStartupCommands: running: ${shown}`);
     try {
-      // 10 minute timeout per command (supabase start can take a while)
       const output = await execHandle(sandbox, command, 600);
       console.log(`[sandbox] runStartupCommands: completed: ${shown}`);
       if (output.trim()) {
@@ -316,19 +287,13 @@ export async function runStartupCommandsDirect(
       const msg = errorMessage(e, "command failed");
       console.error(`[sandbox] runStartupCommands: failed: ${shown}`, msg);
       errors.push(`${shown}: ${msg}`);
-      // Continue with other commands even if one fails
     }
   }
 
-  // Create the marker only when every command succeeded. Writing it after a
-  // failed run permanently branded the sandbox as seeded: every resume then
-  // marker-skipped the seed and the DB stayed empty forever. Leaving the
-  // marker absent lets the next resume retry the full startup sequence.
   if (errors.length === 0) {
     try {
       await writeStartupMarker(sandbox, fingerprint);
     } catch {
-      // Non-fatal
     }
   } else {
     console.error(
@@ -348,8 +313,6 @@ export const runStartupCommands = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    // When true, skip the marker file check and re-run commands even if they
-    // previously ran. Used by the retry flow to recover from failed runs.
     force: v.optional(v.boolean()),
   },
   returns: v.object({
@@ -360,23 +323,6 @@ export const runStartupCommands = internalAction({
   handler: (ctx, args) => runStartupCommandsDirect(ctx, args),
 });
 
-/**
- * Classifies a failure from one of runBackgroundCommands' cheap launcher execs
- * (pid check, cleanup, daemon fork — none run real work inline):
- *
- * - `"command-failed"` — the VM is fine; only this command lost. Record it and
- *   carry on with the rest.
- * - `"unresponsive"` — the provider says `running` but the VM cannot execute
- *   (exit 137 / hung exec — OOM meltdown). Safe to stop+resume once.
- * - `"not-running"` — the VM is stopped/stopping/gone. Launching or restarting
- *   would either fail again or resurrect a sandbox the user just stopped, so
- *   only abort.
- *
- * A provider 400 alone proves nothing (see sandboxErrors.ts) — but execs
- * against a dead VM do surface as `Status code 400 is not ok`, so a 400 is
- * confirmed with a trivial probe. The probe is only run after the state check
- * says `running`, so it can never lazily resume a stopped VM.
- */
 async function classifyBackgroundLaunchFailure(
   sandbox: SandboxHandle,
   error: unknown,
@@ -401,24 +347,6 @@ async function classifyBackgroundLaunchFailure(
   }
 }
 
-/**
- * Shell lines reading `/tmp/bg-<i>.pid` into `$pid`, blanking it unless that
- * process is still *our* daemon wrapper.
- *
- * Pid files are baked into seeded snapshots (the seed run writes them and /tmp
- * survives restore — the same reason `/tmp/.startup-commands-done` works), so
- * on a freshly restored VM the recorded number is from an earlier boot. Pids
- * are dense on a fresh boot, so it can now belong to something unrelated and
- * alive (dockerd, containerd, the eva daemon): trusting it made the heal skip a
- * relaunch forever, and signalling its process group would take out that whole
- * service. One /proc read settles it — the wrapper is `bash -l
- * /tmp/bg-cmd-<i>.sh` after setsid/nohup exec, Convex wrapper included, so the
- * script path must appear in its cmdline.
- *
- * A zombie has an empty cmdline and so never qualifies. That is the behaviour
- * we already had (signalling a zombie did nothing), and the Convex `pkill`
- * lines still reap any orphans it left behind.
- */
 const ownedBgPidLines = (i: number): string[] => [
   `pid=$(cat /tmp/bg-${i}.pid 2>/dev/null || true)`,
   `if [ -n "$pid" ] && ! tr '\\0' ' ' < /proc/"$pid"/cmdline 2>/dev/null | grep -qF "/tmp/bg-cmd-${i}.sh"; then pid=; fi`,
@@ -437,16 +365,7 @@ export const runBackgroundCommands = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    /**
-     * When true, skip daemons whose `/tmp/bg-<i>.pid` is still alive. Used by
-     * the preview heal path so we do not double-start Convex.
-     */
     onlyRestartDead: v.optional(v.boolean()),
-    /**
-     * When set, a fire-and-forget readiness watcher is scheduled for any
-     * Convex daemon launched here, surfacing a non-fatal warning on the
-     * session if `convex dev` never becomes ready.
-     */
     sessionId: v.optional(v.id("sessions")),
   },
   returns: v.object({
@@ -465,8 +384,6 @@ export const runBackgroundCommands = internalAction({
     if (!cached) return { ran: false, commandCount: 0, errors: [] };
 
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Background daemons run on every boot, so the checked-out branch's own
-    // `.eva/config.json` entry wins over the cached default-branch commands.
     const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
     const commands = branch?.background ?? cached.backgroundCommands;
 
@@ -478,33 +395,18 @@ export const runBackgroundCommands = internalAction({
       `[sandbox] runBackgroundCommands: launching ${commands.length} background command(s)${args.onlyRestartDead ? " (onlyRestartDead)" : ""}`,
     );
 
-    // Last gate before the memory-hungry daemons (`convex dev` restoring a
-    // large snapshot, `next dev` cold compile). ensureSandboxRunning normally
-    // provisioned swap already, so this is a single cheap no-op exec — but it
-    // also covers relaunch paths that reach here without a fresh boot
-    // (onlyRestartDead heal, preview repair).
     await ensureSwapFile(sandbox);
 
     const errors: string[] = [];
     let launched = 0;
     let launchedConvex = false;
-    // One stop+resume per run: exit 137 / hung execs on these cheap launcher
-    // commands mean the VM itself is wedged (OOM meltdown, dead guest agent),
-    // and every further launch would cascade through the same 20s+ failure.
     let restartAttempted = false;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
-      // Repo-configured commands can embed tokens; logs and errors show this.
       const shown = redactSecrets(command);
       const isConvexCommand = isConvexBackendCommand(command);
-      // Everything per command runs in one try — including the pid check and
-      // cleanup execs, which used to throw uncaught out of the whole action
-      // (prod 2026-09-01: exit 137 on the heal pid check surfaced as an
-      // uncaught failure to every scheduled caller).
       try {
         if (args.onlyRestartDead) {
-          // `kill -0` is true for zombies (state Z). After `npx convex dev`
-          // dies, a defunct bash PID left heal permanently skipping relaunch.
           const alive = (
             await execHandle(
               sandbox,
@@ -524,20 +426,6 @@ export const runBackgroundCommands = internalAction({
             continue;
           }
         }
-        // Drop a stale pid / leftover Convex before (re)launch so a zombie or
-        // half-dead backend cannot keep :3210 / ExportInProgress wedged.
-        //
-        // Kill the whole process group (`-- -$pid`), not just the recorded pid:
-        // the launch below uses `setsid`, so that pid is a session/group leader
-        // and the actual work (`pnpm start-db` → `supabase start` → docker CLI)
-        // lives in its group. Killing the leader alone left those children
-        // orphaned, still holding their fd to /tmp/bg-<i>.log — after the
-        // relaunch truncated it they kept writing at the old offset (multi-KB
-        // NUL hole in the log) and raced the new daemon (prod 2026-09-01). The
-        // bare-pid fallback covers pid files from an older launch form, and the
-        // TERM → poll → KILL grace lets supabase/docker exit cleanly. A pid
-        // that fails the ownership check leaves `$pid` empty, so a stale
-        // snapshot-baked file is only removed, never signalled.
         const cleanup = [
           ...ownedBgPidLines(i),
           `if [ -n "$pid" ]; then kill -TERM -- -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true`,
@@ -546,7 +434,6 @@ export const runBackgroundCommands = internalAction({
           `rm -f /tmp/bg-${i}.pid`,
         ];
         if (isConvexCommand) {
-          // Use `[c]onvex` so pkill does not match this cleanup shell's cmdline.
           cleanup.push(
             `pkill -TERM -f '[c]onvex-local-backend' 2>/dev/null || true`,
             `pkill -TERM -f '[c]onvex dev' 2>/dev/null || true`,
@@ -559,37 +446,16 @@ export const runBackgroundCommands = internalAction({
         await execHandle(sandbox, cleanup.join("; "), 15);
         const logPath = `/tmp/bg-${i}.log`;
         const scriptPath = `/tmp/bg-cmd-${i}.sh`;
-        // Run the command from a script file rather than inlining it via
-        // `bash -lc '<command>'`: the inline form puts the whole command text
-        // into the wrapper shell's cmdline, so a user guard like
-        // `pgrep -f "[c]onvex dev" || npx convex dev` matches its own wrapper
-        // (the unguarded "npx convex dev" launch text) and silently never starts
-        // the daemon. With a script file the cmdline is just the file path, and
-        // user quoting cannot break out of anything.
-        //
-        // CarePulse local backends: plant glibc-safe binary + unset agent mode.
-        // See convexLocalBackend.ts (anonymous mode rejects --local-backend-version).
         const scriptBody = `${PREFER_OOM_KILL_LINE}\n${
           isConvexCommand ? buildConvexBackgroundScriptBody(command) : command
         }`;
         console.log(
           `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
-        // The file API, not `echo <base64> | base64 -d`. The command is
-        // repo-supplied and the Convex wrapper adds a multi-KB preamble, so an
-        // inline transport puts unbounded content (base64-inflated by 4/3) into
-        // one `bash -lc` argument — the same 128 KB MAX_ARG_STRLEN cliff that
-        // broke the preview proxy. writeFile has no such limit.
         await writeSandboxFile(sandbox, scriptPath, scriptBody, {
           executable: true,
         });
-        // setsid + </dev/null fully detaches the daemon into its own session, so
-        // it survives the exec session teardown even when the user's command
-        // self-backgrounds. A trailing `&` would otherwise let bash -lc exit
-        // immediately, letting a process-group SIGTERM reach the daemon (nohup
-        // only blocks SIGHUP).
         const launchCmd = `(setsid nohup bash -l ${scriptPath} </dev/null > ${logPath} 2>&1 & echo $! > /tmp/bg-${i}.pid) && echo LAUNCHED`;
-        // Short timeout — we only wait for the shell to fork the daemon.
         await execHandle(sandbox, launchCmd, 10);
         launched += 1;
         if (isConvexCommand) launchedConvex = true;
@@ -597,8 +463,6 @@ export const runBackgroundCommands = internalAction({
         const verdict = await classifyBackgroundLaunchFailure(sandbox, e);
         if (
           verdict === "unresponsive" &&
-          // The preview heal poll must never stop/resume a VM the user may be
-          // mid-turn in; it only reports, and the lifecycle paths recover.
           !args.onlyRestartDead &&
           !restartAttempted
         ) {
@@ -608,10 +472,6 @@ export const runBackgroundCommands = internalAction({
           );
           try {
             await restartUnresponsiveSandbox(sandbox);
-            // The stop killed every daemon launched earlier in this run —
-            // start over from the first command on the recovered VM. The
-            // cleanup step makes relaunching already-attempted commands
-            // idempotent.
             errors.length = 0;
             launched = 0;
             launchedConvex = false;
@@ -630,10 +490,6 @@ export const runBackgroundCommands = internalAction({
         );
         errors.push(`${shown}: ${msg}`);
         if (verdict !== "command-failed") {
-          // The VM cannot run commands (wedged, or no longer running). Stop
-          // cascading: record the skip and return a handled result — heal
-          // polls and scheduled restarts get `errors`, not an uncaught action
-          // failure, and no further 20s+ timeouts pile onto a dead VM.
           const remaining = commands.length - i - 1;
           if (remaining > 0) {
             errors.push(
@@ -648,10 +504,6 @@ export const runBackgroundCommands = internalAction({
       }
     }
 
-    // Fire-and-forget readiness watcher: the session unlocks immediately, and
-    // if `convex dev` never becomes ready the watcher surfaces a warning
-    // instead of blocking startup on a grep loop (which also used to die at
-    // undici's 300s headersTimeout when run as a single long exec).
     if (launchedConvex) {
       const sessionId = args.sessionId;
       if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
@@ -675,7 +527,6 @@ export const runBackgroundCommands = internalAction({
   },
 });
 
-/** Poll cadence / budget for the fire-and-forget Convex readiness watcher. */
 const CONVEX_READY_POLL_INTERVAL_MS = 10_000;
 const CONVEX_READY_TIMEOUT_MS = 360_000;
 
@@ -750,7 +601,6 @@ export const watchConvexReadiness = internalAction({
       throw e;
     }
     const logPaths = convexIndexes.map((i) => `/tmp/bg-${i}.log`);
-    // One short exec per poll: ready only when every Convex log has the line.
     const probeCmd = [
       "ok=yes",
       ...logPaths.map(
@@ -783,7 +633,6 @@ export const watchConvexReadiness = internalAction({
           );
           return null;
         }
-        // Transient exec failures (resume races, stream closes) — keep polling.
         console.log(
           `[sandbox] watchConvexReadiness: probe failed, retrying: ${errorMessage(e, "probe failed")}`,
         );
@@ -808,7 +657,6 @@ export const watchConvexReadiness = internalAction({
         10,
       );
     } catch {
-      // Tail is best-effort context only.
     }
     const detail =
       `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${redactSecrets(logTail)}`.slice(
@@ -852,20 +700,6 @@ interface PreviewUrlRequest {
   repoId: Id<"githubRepos">;
 }
 
-/**
- * Builds a signed preview URL for a sandbox port, optionally checking
- * readiness. Access is the caller's job: the public action below gates on the
- * signed-in identity plus the sandbox↔repo binding, and the MCP path resolves
- * the chat as its user first, so the sandbox id it passes came off a document
- * that user can already read. `subject` is who the short-lived grant is minted
- * for.
- *
- * `customTabPort` serves a user-defined tab (e.g. Supabase Studio on 54323).
- * Vercel exposes only four ports and the proxy owns the public one, so tabs do
- * not get their own proxy: `port` stays the app's Preview port (same proxy
- * target, no clobbering) and the URL points at the proxy's `/__tab/<port>/`
- * prefix, which forwards to that in-sandbox port.
- */
 async function buildPreviewUrl(
   ctx: ActionCtx,
   args: PreviewUrlRequest,
@@ -873,7 +707,6 @@ async function buildPreviewUrl(
 ): Promise<{ url: string; port: number; ready: boolean }> {
   const customTabPort = args.customTabPort;
   if (customTabPort !== undefined) {
-    // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
     const reserved =
       customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
       customTabPort === DESKTOP_PORT ||
@@ -891,13 +724,8 @@ async function buildPreviewUrl(
   }
   const responsePort = customTabPort ?? args.port;
 
-  // getSandboxHandle resolves (and validates) the repo's Vercel credentials,
-  // throwing before it touches the sandbox if they are missing.
   const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-  // Services listen on internal ports and the auth proxy owns the exposed
-  // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
-  // the upstream service port for readiness, not the proxy port.
   const upstreamPort =
     args.port === DESKTOP_PORT
       ? VERCEL_DESKTOP_INTERNAL_PORT
@@ -907,11 +735,6 @@ async function buildPreviewUrl(
 
   let ready = true;
   if (args.checkReady) {
-    // Ordering rules live in `pollPreviewReadiness`; this only binds them to
-    // this sandbox. Background daemons (e.g. `npx convex dev`) only relaunch
-    // on sandbox start/resume, so a dead one leaves Preview loading a
-    // frontend with a dead backend until the heal restarts it.
-    // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
     const poll = await pollPreviewReadiness(
       {
         sandboxRunning: handle.state === "running",
@@ -930,7 +753,6 @@ async function buildPreviewUrl(
             onlyRestartDead: true,
           });
         },
-        // A custom tab's readiness is its own port, not the app's dev server.
         probeReady: () =>
           probePreviewReady(handle, customTabPort ?? upstreamPort),
         scheduleRecovery: async () => {
@@ -955,9 +777,6 @@ async function buildPreviewUrl(
     }
     ready = poll.ready;
   } else if (customTabPort === undefined && handle.state === "running") {
-    // No readiness wait (the `/p` link's fast path), so nothing would notice a
-    // dead dev server. Queue the same recovery the readiness poll uses; it
-    // does nothing when the port already answers, and never delays the link.
     await ctx.scheduler.runAfter(
       0,
       internal.sandbox.ensureSessionPreviewServices,
@@ -969,22 +788,10 @@ async function buildPreviewUrl(
     );
   }
 
-  // Always front the service with the in-sandbox auth proxy so open-in-new-tab
-  // is gated the same way for Preview, Computer, and Editor.
-  //
-  // Vercel exposes a fixed 4-port set. Map:
-  //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
-  //   editor  → proxy on 8080  (upstream 18080)
-  //   desktop → proxy on 6080  (upstream 16080)
   const previewPublicJwk = getPreviewGrantPublicJwk();
   const fixedVercelProxyPort = previewProxyPort(args.port);
-  // Public route port: on Vercel app/dev previews this is always 3000, never
-  // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
   let previewPort = fixedVercelProxyPort;
-  // Same upstream mapping used for the readiness probe above.
   const proxyTargetPort = upstreamPort;
-  // The proxy fronts the app, so a custom tab gates it on the sandbox being
-  // up rather than on `ready` (which describes the tab's own port).
   const proxyUsable =
     customTabPort === undefined ? ready : handle.state === "running";
   if (proxyUsable) {
@@ -998,7 +805,6 @@ async function buildPreviewUrl(
           repoId: args.repoId,
           webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
-          // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort,
           sessionSecret: previewSessionSecret(
             args.sandboxId,
@@ -1013,10 +819,6 @@ async function buildPreviewUrl(
       console.warn(
         `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
       );
-      // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
-      // If the reserved proxy port fails to start while a preview grant
-      // key is configured, silently falling back to the unproxied service
-      // port would serve with no auth gate at all. Fail loudly instead.
       if (previewPublicJwk) {
         throw new Error(
           `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
@@ -1029,21 +831,15 @@ async function buildPreviewUrl(
   const parsedUrl = new URL(signedPreview.url);
   parsedUrl.protocol = "https:";
 
-  // Append a fresh short-lived grant so the in-app iframe (and the authed
-  // user's "open in new tab") loads without a login round-trip. The proxy
-  // exchanges it for a session cookie on first load. Only when gating is
-  // configured — otherwise the URL stays a plain proxied URL.
   if (previewPublicJwk && proxyUsable) {
     const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
-      // Grant must match AUTH_PORT (public proxy on Vercel app previews).
       port: fixedVercelProxyPort,
       sub: subject,
     });
     parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
   }
 
-  // Custom tabs are served by the same proxy under its per-port prefix.
   if (customTabPort !== undefined) {
     parsedUrl.pathname = `${PREVIEW_TAB_PREFIX}/${customTabPort}/`;
   }
@@ -1062,10 +858,6 @@ export const getPreviewUrl = action({
       throw new Error("Not authenticated");
     }
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    // Not an interaction for idle pause: every sandbox rail resolves this URL
-    // on mount, on start and every 3s until ready, even with Preview hidden
-    // and nobody at the screen. Real use is the presence beacon (tab on
-    // screen and in use) and the proxy's input ping (`preview-page`).
     return await buildPreviewUrl(ctx, args, identity.subject);
   },
 });
@@ -1085,16 +877,10 @@ export const previewUrlForAuthorizedSandbox = internalAction({
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
 
-/** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
   return (
     isSandboxNetworkIssue(message) ||
-    // Transport only: setup deletes and recreates the VM, so a permanent auth
-    // failure or a bare "network" substring must not trigger it.
     isTransientTransportError(message) ||
-    // Exit code -1 typically means the command was terminated abnormally
-    // (sandbox not yet accepting commands, transport error, killed mid-exec) —
-    // this is transient, unlike non-zero exit codes from real command failures.
     message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
@@ -1263,10 +1049,6 @@ export const fetchBaseBranch = internalAction({
       },
     );
     if (!result.fetched) {
-      // Deleted `eva/automation-*` refs and never-pushed task branches are
-      // expected. Returning here keeps Convex from recording status=failure
-      // plus an Uncaught SandboxCommandFailedError. Checkout/setup already
-      // falls back to local snapshot refs via resolveBaseTarget.
       console.warn(
         `[sandbox] fetchBaseBranch: remote ref ${args.baseBranch} is gone; continuing with local snapshot refs`,
       );
@@ -1316,8 +1098,6 @@ export const pushSandboxBranch = internalAction({
     branchName: v.string(),
     repoId: v.id("githubRepos"),
   },
-  // `pushed` records whether this action moved the ref. `published` also
-  // recognises a matching remote branch written by the pre-completion callback.
   returns: v.object({ pushed: v.boolean(), published: v.boolean() }),
   handler: async (
     ctx,
@@ -1336,8 +1116,6 @@ export const pushSandboxBranch = internalAction({
       console.error(
         `[sandbox][execution] pushSandboxBranch failed sandbox=${args.sandboxId} repo=${args.repoOwner}/${args.repoName} branch=${args.branchName}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      // Rethrow so callers can surface the failure and preserve the sandbox for
-      // recovery. Swallowing here made every caller's error handling dead code.
       throw error;
     }
   },
@@ -1413,7 +1191,6 @@ export const commitAndPushSandbox = action({
         target.repoName,
       );
     } catch (error) {
-      // Production redacts plain Error messages; the reason is the point here.
       throw new ConvexError(errorMessage(error, "Couldn't push the branch"));
     }
     await ctx.runMutation(internal.sandboxGit.setSandboxGitStateInternal, {
@@ -1560,8 +1337,6 @@ function buildDaemonOptsSig(
 ): string {
   const fastMode =
     traits.fastMode === undefined ? "" : traits.fastMode ? "1" : "0";
-  // A daemon started with other system prompt text must respawn, or the turn
-  // would leave out instructions the prompt expects the system prompt to hold.
   const systemPromptSig = systemPrompt
     ? createHash("sha256").update(systemPrompt).digest("hex").slice(0, 12)
     : "";
@@ -1614,7 +1389,6 @@ type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
   entityTable: "sessionChats";
 };
 
-/** The implementation behind `prewarmSessionDaemon`. */
 async function runPrewarmEntityDaemon(
   ctx: ActionCtx,
   args: PrewarmEntityDaemonParams,
@@ -1625,16 +1399,6 @@ async function runPrewarmEntityDaemon(
   }
   try {
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Never exec on a sandbox that is not running. On Vercel, any exec — even
-    // the daemon alive-check below — lazily resumes a stopped VM, resurrecting
-    // it WITHOUT its dev server, Convex backend, or Console tmux session
-    // (services only launch in the startup workflow). Prewarm is best-effort:
-    // skip instead, and flip a stale "active" status to "closed" so the UI
-    // offers Start — which also stops connectPty from resurrecting it.
-    //
-    // Use classifyForReconcile (not sandbox.state): a hard-timeouted Vercel VM
-    // makes status throw and state reports "starting", which would skip the
-    // flip forever while the UI still says active.
     const classification = await sandbox.classifyForReconcile();
     if (classification !== "alive") {
       console.log(
@@ -1662,8 +1426,6 @@ async function runPrewarmEntityDaemon(
       );
       return { prewarmed: false };
     }
-    // Every caller is a session chat (`entityTable: "sessionChats"`), whose
-    // turn prompt `buildSessionPrompt` shapes for this system prompt.
     const systemPrompt = chatSystemPrompt(normalizedModel);
     const providerAccountCredentialRevision = args.providerAccountId
       ? await resolveProviderAccountCredentialRevision(
@@ -1696,11 +1458,6 @@ async function runPrewarmEntityDaemon(
       return alive.trim().split("\n").pop()?.trim() ?? "cold";
     };
 
-    /**
-     * Runs `decide` with turn claims fenced off, so the daemon this prewarm is
-     * about to kill cannot claim a turn (and its 2-minute running lease)
-     * between the decision and the process dying. Always clears the fence.
-     */
     const withClaimPaused = async (
       decide: () => Promise<{ prewarmed: boolean } | null>,
     ): Promise<{ prewarmed: boolean } | null> => {
@@ -1753,9 +1510,6 @@ async function runPrewarmEntityDaemon(
         console.log(
           `[sandbox][execution] prewarmEntityDaemon: stale callback script — uploading bundle entityId=${entityIdStr}`,
         );
-        // Safe before the mid-turn check: this only touches disk. The live
-        // daemon notices the new fingerprint and exits for respawn itself once
-        // its work settles (callbackScriptWentStaleOnDisk).
         await uploadCallbackScriptBundle(sandbox);
         return await withClaimPaused(async () => {
           const snapshot = await readTurnSnapshot();
@@ -1765,9 +1519,6 @@ async function runPrewarmEntityDaemon(
             );
             return { prewarmed: false };
           }
-          // Disk now matches the expected fingerprint, so a follow-up probe
-          // would report "alive" while the old process is still running the
-          // previous bundle. Kill so this prewarm falls through to launch.
           await killDaemon();
           return null;
         });
@@ -1775,11 +1526,6 @@ async function runPrewarmEntityDaemon(
       return null;
     };
 
-    // The alive classification above is a point-in-time read. A Stop can land
-    // while this prewarm waits on the launch lease (up to minutes), and every
-    // later exec — or ensureSandboxRunning — would lazily resume the stopped VM
-    // (task 262: stopped 12:47:11, prewarm resumed it 8s later). Poll the
-    // user's stop intent before each step that can wake the sandbox.
     const stopRequested = () =>
       ctx.runQuery(internal.sandboxDaemon.isEntitySandboxStopRequested, {
         entityTable: args.entityTable,
@@ -1796,16 +1542,6 @@ async function runPrewarmEntityDaemon(
     const initialReady = await settleIfReady(await probeAliveState());
     if (initialReady !== null) return initialReady;
 
-    // Single-flight the kill+launch: prewarm bursts (page opens, doc-patch
-    // refires) all reach here seeing "cold" during the multi-second launch
-    // window; only the lease claimant proceeds. The in-sandbox spawn flock is
-    // the hard guarantee — this just stops losers paying a full launch.
-    //
-    // Losers used to return immediately. That stranded a pending-turn prewarm
-    // when page-open had already claimed the lease with a stale lastModel:
-    // send/workflow fire once, lose the race, and nothing retried, so the
-    // wrong daemon mismatch-polled claimPendingTurn until a later prewarm
-    // happened to run (observed: ~3 minutes on Manager Ave).
     const claimLease = () =>
       ctx.runMutation(internal.sandboxDaemon.claimDaemonLaunchLease, {
         entityId: entityIdStr,
@@ -1831,9 +1567,6 @@ async function runPrewarmEntityDaemon(
       }
     }
     try {
-      // Re-probe after claiming: the holder may have finished as a different
-      // model during the wait, and the first probe is stale even on the
-      // no-wait path (TOCTOU between alive-check and lease).
       const aliveState = await probeAliveState();
       const claimedReady = await settleIfReady(aliveState);
       if (claimedReady !== null) return claimedReady;
@@ -1856,12 +1589,6 @@ async function runPrewarmEntityDaemon(
             );
             return { prewarmed: false };
           }
-          // Log both sigs so the diverging field is visible (the bare
-          // "respawning" line hid the reasoning-level mismatch behind the
-          // session-166 hang). Read the on-disk sig only on this rare path so
-          // alive/cold probes pay no extra exec. The sig carries model, tools,
-          // trait flags, account id, revision and entity id — no secrets.
-          // Best-effort: a failed read must not abort the respawn.
           const onDiskSig = await execHandle(
             sandbox,
             `cat ${JSON.stringify(entityDaemonPaths(args.entityIdField, entityIdStr).opts)} 2>/dev/null || true`,
@@ -1877,10 +1604,6 @@ async function runPrewarmEntityDaemon(
       }
 
       if (await skipIfStopped()) return { prewarmed: false };
-      // skipDocker: the agent daemon needs neither swap nor dockerd, and the
-      // sandbox's own startup path already provisions both. On a new session
-      // this wait (~4s measured) sat before the launch, racing the
-      // createSandbox bootstrap of the same dockerd.
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
         skipDocker: true,
@@ -1977,8 +1700,6 @@ export const extendSandboxDeadline = internalAction({
   },
 });
 
-// Reconcile sweep cap per tick: one provider GET per entity, so bound the
-// worst case. Anything past the cap is caught on the next interval.
 const RECONCILE_SWEEP_MAX_ENTITIES = 50;
 
 /**
@@ -2051,7 +1772,6 @@ export const killEntityDaemon = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      // No daemon survives a stop, and an exec would resume the VM.
       const sandbox = await getRunningSandboxHandle(
         ctx,
         args.repoId,
@@ -2064,24 +1784,11 @@ export const killEntityDaemon = internalAction({
         10,
       );
     } catch {
-      /* sandbox may be deleted */
     }
     return null;
   },
 });
 
-/**
- * Pre-warm a session's provider daemon so the user's FIRST message is warm.
- *
- * The ~20s "slow hi" is a cold respawn: after the daemon idle-exits (or a
- * fresh/resumed sandbox), the first message pays token mint + 132KB script
- * upload + node/CLI boot before any token. This action, fired when the session
- * page opens, does that boot ahead of time: it launches the provider runtime
- * and waits for the first prompt via the handoff protocol. By
- * the time the user types, tryWarmDaemonHandoff finds a live daemon and the turn
- * skips the boot entirely. No-op if a daemon is already alive for this session.
- * Best-effort: any failure is swallowed (the normal path still works).
- */
 /**
  * Warms the daemon of one session chat. Chats of a session share the sandbox
  * but each runs its own agent process, keyed by the chat id.
@@ -2133,7 +1840,6 @@ export const prewarmSessionDaemon = internalAction({
   },
 });
 
-/** Arguments of every agent launch on an existing sandbox. */
 const launchArgs = {
   sandboxId: v.string(),
   entityId: v.string(),
@@ -2154,7 +1860,6 @@ const launchArgs = {
   sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
   requireTaskCommit: v.optional(v.boolean()),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /** Entity owner for personal-credential decrypt; defaults to `userId`. */
   credentialOwnerUserId: v.optional(v.id("users")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
@@ -2175,8 +1880,6 @@ async function launchAgentOnSandbox(
   );
   const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-  // Download any user-attached input images into the sandbox and point the
-  // agent at them via a prompt note (the CLI providers read files by path).
   let prompt = args.prompt;
   if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
     const paths = await materializeAttachmentsToSandbox(
@@ -2212,8 +1915,6 @@ async function launchAgentOnSandbox(
     extraEnvVars.TURN_ID = String(args.turnId);
     extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
   }
-  // Session-wide trait overrides. Only non-default values are sent from the UI;
-  // the runner maps effort to each provider's native control (see config.ts).
   Object.assign(
     extraEnvVars,
     buildTraitEnvVars({

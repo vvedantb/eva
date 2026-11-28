@@ -1,8 +1,3 @@
-// What a web app link inside a repo points at, so the phone can open its own
-// screen for it (notification links, pushes). Links are
-// `/<owner>/<name>[/<app>]/<section>/<number>…`, as `repoBasePath` and
-// `entityHref` build them; a query or `#comment-…` anchor is ignored.
-
 import { repoBasePath, type RepoPathFields } from "./repoPath";
 
 export type AppLinkTarget =
@@ -29,7 +24,6 @@ const isNumber = (segment: string | undefined): segment is string => segment !==
  */
 export function parseAppHref(href: string): AppLinkTarget | null {
   const path = href.split(/[?#]/)[0] ?? "";
-  // Past `/<owner>/<name>`: the app folder, when there is one, is not a section followed by a number.
   const segments = path.split("/").filter(Boolean).slice(2);
   for (let index = 0; index < segments.length; index += 1) {
     const kind = SECTIONS[segments[index] ?? ""];

@@ -1,15 +1,3 @@
-/**
- * The screenshot pass: the turn's own captures, read by Jev against the prompt
- * and against the flagged hunks.
- *
- * Two questions a diff cannot answer. Is an unrequested change one the user
- * will actually see — the trophy icon was in the screenshot the agent posted?
- * And do the screenshots show what was asked for, or a different screen?
- *
- * Runtime-free so the question set and the read-back are testable without a
- * deployment.
- */
-
 import type { z } from "zod";
 import { MAX_IMAGES, type booleanQuestion } from "../_jev/schema";
 import { hunkKey, type JudgedHunk } from "./verdict";
@@ -46,7 +34,6 @@ export function buildVisualQuestions(
   flagged: readonly JudgedHunk[],
 ): {
   questions: Record<string, BooleanQuestion>;
-  /** Question id → {@link hunkKey} of the hunk it asks about. */
   hunkByQuestion: Map<string, string>;
 } {
   const cited = citeAll(names);

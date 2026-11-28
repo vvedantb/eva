@@ -1,22 +1,11 @@
-// Named curves, as numbers (for tweens on the clock) and as CSS. The video
-// ones are measured from product launch films: one house curve for moves
-// inside a shot, a steeper one for moves that end in a cut, and an expo-out
-// settle for the shot that picks the move up.
-
 export type Bezier = readonly [number, number, number, number]
 
 export const EASE = {
-  /** Moves inside a shot (push-in, pan, a long cursor trip): peak at about 40%, long soft tail. 1.4 to 2.7 s. */
   house: [0.65, 0, 0.1, 1],
-  /** The outgoing half of a move that ends in a cut: accelerates into it. */
   through: [0.8, 0, 0.1, 1],
-  /** The incoming half after a cut: arrives at speed, settles. 0.6 to 0.8 s (1.6 s for a big pull-out). */
   settle: [0.05, 0.85, 0.3, 1],
-  /** A cursor arriving from off-frame, already moving. */
   enter: [0.1, 0.8, 0.3, 0.95],
-  /** One long cursor trip across the frame. */
   trip: [0.78, 0, 0.17, 1],
-  /** The kit's camera push-in (Camera). */
   camera: [0.45, 0, 0.1, 1],
 } as const satisfies Record<string, Bezier>
 
@@ -37,7 +26,6 @@ export function bezier(e: EaseName | Bezier): (t: number) => number {
   return (t: number) => {
     if (t <= 0) return 0
     if (t >= 1) return 1
-    // Newton, falling back to bisection where the slope is flat
     let u = t
     for (let i = 0; i < 8; i++) {
       const d = dx(u)

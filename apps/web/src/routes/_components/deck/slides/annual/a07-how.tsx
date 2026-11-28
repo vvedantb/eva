@@ -31,23 +31,16 @@ interface Stage {
   heading: string;
 }
 
-/** Left to right: the whole loop, once. What each stage involves is in the notes. */
 const STAGES: Stage[] = [
   { icon: IconMessage, number: "1", heading: "You describe it" },
   { icon: IconCloudComputing, number: "2", heading: "Eva builds it" },
   { icon: IconChecks, number: "3", heading: "You review it" },
 ];
 
-/** Names only. The difference between them is a speaking point, not a slide. */
 const WAYS = ["Sessions", "Quick tasks", "Projects", "Automations"];
 
 const TRACK_W = 1038;
 const DRAW = 1.5;
-/**
- * When the drawing tip passes under each card's centre. The draw runs on
- * `EASE.inOut`, which reaches 16%, 50% and 84% of the line at about 30%, 50%
- * and 70% of its duration.
- */
 const PASS_AT = [0.3, 0.5, 0.7].map((share) => share * DRAW);
 
 function StageCard({ stage, index }: { stage: Stage; index: number }) {
@@ -55,7 +48,6 @@ function StageCard({ stage, index }: { stage: Stage; index: number }) {
   const at = PASS_AT[index] ?? 0;
 
   return (
-    // p-8 inside a 32px outer radius keeps the corners concentric.
     <Card className="flex h-[220px] w-[330px] flex-col rounded-[32px] p-8">
       <m.div
         className="w-fit origin-left"
@@ -126,8 +118,6 @@ export function AnnualHow() {
           ))}
         </Stagger>
 
-        {/* The flow line runs under the three cards: it draws left to right,
-            lighting each stage as its tip passes, then work keeps moving. */}
         <div aria-hidden className="relative mt-6 h-2">
           <DrawPath
             d={`M0 4 L${TRACK_W} 4`}

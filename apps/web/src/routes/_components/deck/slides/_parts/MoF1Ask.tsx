@@ -10,9 +10,7 @@ import {
 } from "../../_components/motion";
 import { FriTyped, FriWindow } from "./FriMock";
 
-/** The one thing the room types. Short enough to sit on a single line. */
 const ASK = "Add a decline reason to referrals";
-/** When the typed line finishes, the send button answers. */
 const SENT_AT = 1.8;
 
 export function MoF1AskPanel() {
@@ -60,12 +58,10 @@ const BUILD_ROWS: readonly string[] = [
   "Decline reasons",
   "Tests",
 ];
-/** Rows complete in sequence across the bar's run. */
 const ROW_GAP = 0.42;
 const BUILD_START = 0.35;
 const BUILD_RUN = 1.6;
 
-/** A tick that draws itself inside a ring, like a job completing. */
 function Tick({ on, delay }: { on: boolean; delay: number }) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -141,7 +137,6 @@ export function MoF1BuildPanel() {
             }
           />
         </div>
-        {/* The light on the bar's tip rides the same tween as the fill. */}
         <m.div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-1.5"

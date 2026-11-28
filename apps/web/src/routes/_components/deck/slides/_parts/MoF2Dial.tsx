@@ -2,11 +2,9 @@ import { useInk } from "../../_components/DeckPrimitives";
 import { m } from "motion/react";
 import { BRAND, DUR, EASE, Sheen } from "../../_components/motion";
 
-/** Clock-hand angles, with twelve o'clock at zero. 03:00 is 90°, 05:00 is 150°. */
 const HAND_START = 90;
 const HAND_END = 150;
 
-/** One sixth of the dial: the window the routines are staggered across. */
 const ARC_SWEEP = 1 / 6;
 
 const DIAL = 210;
@@ -79,7 +77,6 @@ export function MoF2Dial({ running }: { running: boolean }) {
           />
         </svg>
 
-        {/* The tip light turns with the hand, so it always sits on the arc's end. */}
         <m.div
           aria-hidden
           className="absolute inset-0"

@@ -23,13 +23,11 @@ import type { ChatDetails } from "./chatSelfQueries";
 const DEFAULT_LOG_LINES = 200;
 const MAX_LOG_LINES = 2000;
 
-/** Sandbox states in which the VM is not safe to exec on or relaunch into. */
 const UNSETTLED_SANDBOX_STATUSES = new Set(["starting", "stopping", "closed"]);
 
 const envVarScope = z.enum(["repo", "team"]);
 type EnvVarScope = z.infer<typeof envVarScope>;
 
-/** Only the name and flag survive: the UI's list also carries a masked value. */
 const envVarNames = z.array(
   z.object({
     key: z.string(),
@@ -38,7 +36,6 @@ const envVarNames = z.array(
   }),
 );
 
-/** Eva's settings page for one scope's env vars, as a path and, when configured, a full link. */
 function envSettingsLink(
   target: EntityTarget,
   scope: EnvVarScope,
@@ -55,17 +52,11 @@ function envSettingsLink(
   }
 }
 
-/** PR number parsed off a GitHub pull request link. */
 function prNumber(prUrl: string | undefined): number | undefined {
   const match = prUrl?.match(/\/pull\/(\d+)/);
   return match ? Number(match[1]) : undefined;
 }
 
-/**
- * The `{ kind: "session", sessionId }` owner shape `sandboxPanes` mutations
- * take: the session itself, or the one a task or project works on. Null for
- * a task or project with no session yet.
- */
 function sandboxOwner(target: EntityTarget): Record<string, string> | null {
   const sessionId =
     target.kind === "session" ? target.targetId : target.sandboxSessionId;
@@ -86,10 +77,6 @@ export function chatSelfTools(
   const { clerkUserId } = credentials;
   const { resolveEntityTarget, resolveChat } = entityAccess(ctx, credentials);
 
-  /**
-   * The sandbox id when the chat's sandbox is active and its VM is running
-   * right now, otherwise an error naming why. Read without waking the VM.
-   */
   async function runningSandboxId(
     target: EntityTarget,
     action: string,
@@ -111,7 +98,6 @@ export function chatSelfTools(
     return target.sandboxId;
   }
 
-  /** The session that holds the target's sandbox (its own, or its owner's). */
   async function sessionRow(target: EntityTarget) {
     const sessionId =
       target.kind === "session" ? target.targetId : target.sandboxSessionId;
@@ -120,7 +106,6 @@ export function chatSelfTools(
       : await ctx.runQuery(internal.sessions.getInternal, { id: sessionId });
   }
 
-  /** Resolves the named chat (or the caller's own) plus its details row. */
   async function resolveChatDetails(
     ref: EntityRef,
   ): Promise<
@@ -139,10 +124,6 @@ export function chatSelfTools(
     }
     return { target, details };
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // get_chat_context
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -187,10 +168,6 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // get_dev_server_logs
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -272,10 +249,6 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // restart_dev_server
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "restart_dev_server",
@@ -331,10 +304,6 @@ Name no chat and it restarts your own. Refused while the sandbox is starting, st
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_env_vars
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "list_env_vars",
@@ -379,7 +348,6 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
           name: row.key,
           scope: row.scope,
           excludedFromSandbox: row.sandboxExclude,
-          // Only snapshot seed runs get it; reference it in seed commands.
           seedOnly: row.seedOnly ?? false,
         }));
 
@@ -397,10 +365,6 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // request_env_var
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -445,8 +409,6 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           internal.envVarRequests.create,
           {
             entityKind: target.kind,
-            // The caller's own session: the card lands in the chat it runs
-            // in, not the session's Main chat.
             entityId:
               target.targetId === credentials.entityId
                 ? (credentials.chatId ?? target.targetId)
@@ -476,10 +438,6 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // propose_session
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -523,8 +481,6 @@ The new session knows nothing about this chat, so the brief must stand alone. Na
           internal.sessionProposals.create,
           {
             entityKind: target.kind,
-            // The caller's own session: the card lands in the chat it runs
-            // in, not the session's Main chat.
             entityId:
               target.targetId === credentials.entityId
                 ? (credentials.chatId ?? target.targetId)
@@ -547,10 +503,6 @@ The new session knows nothing about this chat, so the brief must stand alone. Na
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // set_preview_path
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -622,10 +574,6 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // restart_background_commands
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "restart_background_commands",
@@ -656,8 +604,6 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
           ...entitySummary(target),
           backgroundCommands: details.backgroundCommands,
         };
-        // Sessions have no public mutation for this; resolveChat has already
-        // access-checked the chat, so the launcher is called directly.
         const session = await sessionRow(target);
         const result = await ctx.runAction(
           internal.sandbox.runBackgroundCommands,
@@ -679,10 +625,6 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // rerun_startup_commands
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -715,9 +657,6 @@ Name no chat and it runs for your own. Only on an active sandbox with a running 
         );
         if (typeof sandboxId !== "string") return sandboxId;
 
-        // Sessions have no startup workflow to restart, so the forced run is
-        // scheduled on its own (the action is too long to await in-line).
-        // resolveChat has already access-checked the chat.
         await ctx.scheduler.runAfter(0, internal.sandbox.runStartupCommands, {
           sandboxId,
           repoId: target.repoId,
@@ -732,11 +671,6 @@ Name no chat and it runs for your own. Only on an active sandbox with a running 
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // watch_pull_request / unwatch_pull_request
-  // ───────────────────────────────────────────────────────────────────────────
-
-  /** The chat this agent runs in. Watches always wake the chat that asked. */
   async function ownChat(): Promise<
     EntityTarget | ReturnType<typeof toolErrorResult>
   > {
@@ -754,7 +688,6 @@ Name no chat and it runs for your own. Only on an active sandbox with a running 
     return "content" in resolved ? resolved : resolved.target;
   }
 
-  /** The canonical link, undefined for "default", or null when malformed. */
   function watchPrUrl(prUrl: string | undefined): string | undefined | null {
     return prUrl === undefined ? undefined : canonicalPrUrl(prUrl);
   }

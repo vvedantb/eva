@@ -34,19 +34,13 @@ export type SystemSkillHydration = {
   devCommand?: string;
   startupCommands?: string[];
   baseBranch: string;
-  /** `.eva/config.json` built from today's Convex commands (eva-setup only). */
   evaConfigDraft?: string;
 };
 
 export type SystemSkillDefinition = {
   name: SystemSkillName;
-  /** Frontmatter description — drives harness auto-trigger. Keep single-line. */
   description: string;
   buildContent: (hydration: SystemSkillHydration) => string;
-  /**
-   * Every repo has it; it cannot be uninstalled. For skills Eva's own UI
-   * starts (the "Set up with Eva" button runs eva-setup).
-   */
   alwaysInstalled?: true;
 };
 

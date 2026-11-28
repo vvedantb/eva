@@ -2,8 +2,6 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Icon, Stage } from '../../kit'
 import './backgrounds.css'
 
-// The object stays constant so the ground's contribution is easy to see.
-// These are authored examples, not a fixed set of themes or presets.
 const studies = [
   { id: 'diagonal', title: 'Diagonal gradient', note: 'Violet moves through pink into coral. A white surface keeps the content quiet.' },
   { id: 'radial', title: 'Radial light', note: 'A broad yellow light meets orange and rose at the edges, without a glow around the card.' },
@@ -35,8 +33,6 @@ function Digest() {
   </div>
 }
 
-// A real halftone: one dot per cell on a 10px grid, each sized by its distance
-// from the top right corner, down to nothing before it reaches the card
 function Halftone() {
   const dots: { x: number; y: number; r: number }[] = []
   for (let y = 5; y < 252; y += 10) for (let x = 5; x < 400; x += 10) {

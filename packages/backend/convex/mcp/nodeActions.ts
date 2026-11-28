@@ -57,29 +57,16 @@ import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
 import { sleep } from "../_shared/async";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// JWT Claim Schemas (boundary parsing for verified payloads)
-// ─────────────────────────────────────────────────────────────────────────────
-
 const internalTokenClaims = z.object({
   sub: z.string(),
   iss: z.literal("eva"),
   aud: z.literal("mcp-internal"),
   repoId: z.string(),
   entityId: z.string().optional(),
-  // Launches mint only session tokens (`mintSandboxSessionTokens`).
   entityKind: z.literal("session").optional(),
   chatId: z.string().optional(),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal Actions
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Sandbox tokens: HS256, `aud: "mcp-internal"`, signed with
- * `MCP_INTERNAL_SECRET`. Carry the repo, entity and chat scope.
- */
 async function verifyInternalToken(token: string) {
   const internalSecret = process.env.MCP_INTERNAL_SECRET;
   if (!internalSecret) return null;
@@ -105,7 +92,6 @@ async function verifyInternalToken(token: string) {
         : {}),
     };
   } catch {
-    // Not a valid sandbox token. The caller tries Clerk next.
     return null;
   }
 }
@@ -126,10 +112,6 @@ export const verifyAccessToken = internalAction({
     const sandbox = await verifyInternalToken(token);
     if (sandbox) return sandbox;
 
-    // Clerk OAuth access token (or session token). `getClerkClient` reads
-    // CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY. `authenticateRequest` needs
-    // both. A missing key throws inside `verifyClerkAccessToken`, which logs it
-    // and returns null.
     const verified = await verifyClerkAccessToken(
       () => getClerkClient(createClerkClient),
       token,
@@ -141,10 +123,6 @@ export const verifyAccessToken = internalAction({
     return verified ? { clerkUserId: verified.userId } : null;
   },
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Convex API Helpers (for calling target Convex deployments)
-// ─────────────────────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -188,23 +166,12 @@ function wrapQueryHandler(handlerBody: string): string {
   ].join("\n");
 }
 
-// In-memory caches (reset on action cold starts)
 const repoCredentialsCache = new Map<
   string,
   { convexUrl: string; deployKey: string; expiresAt: number }
 >();
 const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 
-/**
- * Eva's own Convex API URL, used for the `runAsUser` calls below.
- *
- * Prefer `CONVEX_CLOUD_URL`, which every deployment sets and which is correct
- * by construction. The `.convex.site` → `.convex.cloud` rewrite only works on
- * hosted URLs: on a local or self-hosted backend the site URL is a plain
- * `host:site-proxy-port` with no substring to replace, so the rewrite silently
- * returned the site-proxy URL and every call 404'd ("No matching routes
- * found") — the whole MCP tool layer was unusable against such deployments.
- */
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
@@ -248,10 +215,6 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   return jwt;
 }
 
-/**
- * POSTs one request to a Convex HTTP API endpoint and parses the reply. Throws
- * on a non-2xx status or a Convex error result.
- */
 async function postConvex(
   url: string,
   headers: Record<string, string>,
@@ -268,11 +231,6 @@ async function postConvex(
   return parseConvexResponse(jsonValue.parse(await response.json()));
 }
 
-/**
- * Calls one public Eva function as the given user. Signs the user JWT, so the
- * function's auth wrapper and access checks (hasRepoAccess/hasTeamAccess)
- * apply automatically.
- */
 async function runAsUser(
   type: "query" | "mutation" | "action",
   clerkUserId: string,
@@ -326,10 +284,6 @@ async function ensureUserExists(clerkUserId: string): Promise<string> {
   return parsed.userId;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal Actions for MCP Tools
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const getContext = internalAction({
   args: { clerkUserId: v.string() },
   returns: v.object({ userId: v.string() }),
@@ -347,13 +301,6 @@ interface EnvVar {
   value: string;
 }
 
-/**
- * Lookup keys for Convex credentials, per environment.
- *
- * Staging keys are the canonical/legacy keys (also consumed by the sandbox and
- * the deployed app). Prod keys are MCP-only and should be stored with
- * `sandboxExclude: true` so they never reach the sandbox.
- */
 const CONVEX_CRED_KEYS = {
   staging: {
     url: ["NEXT_PUBLIC_CONVEX_URL", "VITE_CONVEX_URL", "CONVEX_URL"],
@@ -402,8 +349,6 @@ export const getRepoConvexCredentials = internalAction({
     if (!urlEntry || !keyEntry) return null;
 
     const creds: { convexUrl: string; deployKey: string; expiresAt: number } = {
-      // Every deploy-key request (listTables, queryTable, runTestQuery) uses
-      // this URL, so this is the one place it is checked.
       convexUrl: customerConvexOrigin(urlEntry.value.trim()),
       deployKey: keyEntry.value,
       expiresAt: Date.now() + CACHE_TTL_MS,
@@ -425,7 +370,6 @@ export const listTables = internalAction({
   args: { convexUrl: v.string(), deployKey: v.string() },
   returns: v.array(v.any()),
   handler: async (_ctx, { convexUrl, deployKey }) => {
-    // Fetch shapes
     const shapesResponse = await fetch(`${convexUrl}/api/shapes2`, {
       headers: authHeaders(deployKey),
     });
@@ -438,7 +382,6 @@ export const listTables = internalAction({
       .record(z.string(), jsonValue)
       .parse(await shapesResponse.json());
 
-    // Fetch declared schema
     const schemaResult = await postConvex(
       `${convexUrl}/api/query`,
       authHeaders(deployKey),
@@ -541,10 +484,6 @@ export const runTestQuery = internalAction({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Team + artifact actions
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const createArtifact = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -570,7 +509,6 @@ export const createArtifact = internalAction({
       sourceId,
     },
   ) => {
-    // 1. Get a short-lived storage upload URL (as the user).
     const uploadUrl = await runAsUser(
       "mutation",
       clerkUserId,
@@ -581,7 +519,6 @@ export const createArtifact = internalAction({
       throw new Error("Unexpected response from artifacts:generateUploadUrl");
     }
 
-    // 2. Upload the HTML bytes to Convex storage.
     const uploadResponse = await fetch(uploadUrl, {
       method: "POST",
       headers: { "Content-Type": "text/html" },
@@ -594,7 +531,6 @@ export const createArtifact = internalAction({
       .object({ storageId: z.string() })
       .parse(await uploadResponse.json());
 
-    // 3. Create the artifact record (as the user; enforces team membership).
     const createArgs: Record<string, JsonValue> = {
       name,
       boundTeamId,
@@ -664,20 +600,6 @@ export const listArtifacts = internalAction({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Orchestrator actions (master session fleet control)
-//
-// Every call below goes through runAsUser, i.e. a
-// signed user JWT hitting authQuery/authMutation. Their hasRepoAccess checks
-// are the ONLY authorisation for orchestrator tools — unlike the repo-scoped
-// tools these deliberately skip the sandbox token's single-repo pin, so the
-// master can reach every agent the user can reach and nothing more.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// State, stop and watch reach all three chat surfaces, including a project's
-// sandbox chat. Listing still only enumerates sessions and tasks.
-
-/** The user-authorised read that proves the caller may reach each surface. */
 const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
   session: "_sessions/queries:get",
   task: "_agentTasks/queries:get",
@@ -708,7 +630,6 @@ interface OrchestratorAgent {
   updatedAt: number;
 }
 
-/** Slim projection of `_sessions/queries:list` rows. */
 const sessionListItemSchema = z.object({
   _id: z.string(),
   _creationTime: z.number(),
@@ -720,7 +641,6 @@ const sessionListItemSchema = z.object({
   isExecuting: z.boolean(),
 });
 
-/** Slim projection of an `agentTasks` document. */
 const agentTaskSchema = z.object({
   _id: z.string(),
   _creationTime: z.number(),
@@ -732,7 +652,6 @@ const agentTaskSchema = z.object({
   projectId: z.string().optional(),
 });
 
-/** One row of `getActiveTasksSlim`: the busy state is computed server-side. */
 const agentTaskListItemSchema = z.object({
   _id: z.string(),
   numId: z.number().optional(),
@@ -743,7 +662,6 @@ const agentTaskListItemSchema = z.object({
   isExecuting: z.boolean(),
 });
 
-/** Slim projection of a `projects` document (its chat mirrors a task's). */
 const projectDocSchema = z.object({
   _id: z.string(),
   _creationTime: z.number(),
@@ -752,18 +670,15 @@ const projectDocSchema = z.object({
   updatedAt: z.number().optional(),
 });
 
-/** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
   chatId: z.string(),
   lastModel: z.string().optional(),
 });
 
-/** `sessionChats:resolveForSession`, as much as the fleet tools read. */
 const sessionChatRowSchema = z
   .object({ _id: z.string(), lastModel: z.string().optional() })
   .nullable();
 
-/** A session's one chat (Main); null before it exists. */
 async function loadSessionChatAsUser(clerkUserId: string, sessionId: string) {
   return sessionChatRowSchema.parse(
     await runAsUser("query", clerkUserId, "sessionChats:resolveForSession", {
@@ -772,7 +687,6 @@ async function loadSessionChatAsUser(clerkUserId: string, sessionId: string) {
   );
 }
 
-/** Slim projection of a `sessions` document. */
 const sessionDocSchema = z.object({
   _id: z.string(),
   _creationTime: z.number(),
@@ -806,15 +720,8 @@ const createdSessionSchema = z.object({
   numId: z.number(),
 });
 
-/** Longest message body kept per transcript entry in `get_agent_state`. */
 const TRANSCRIPT_CHAR_LIMIT = 2000;
 
-/**
- * Points a child session/task/project at a Manager Ave thread so a later completion
- * can wake it, or clears the pointer when `aveThreadId` is omitted. Only
- * `unwatch_agent` wants the clearing behaviour — implicit registration must go
- * through `registerWatchIfAve`.
- */
 async function setWatchedByAve(
   clerkUserId: string,
   kind: ChatEntityKind,
@@ -827,20 +734,12 @@ async function setWatchedByAve(
   await runAsUser("mutation", clerkUserId, fn, args);
 }
 
-/** The watch-pointer mutation per surface, and the id argument it takes. */
 const WATCH_MUTATION: Record<ChatEntityKind, { fn: string; idArg: string }> = {
   session: { fn: "orchestratorWatch:setSessionWatchedBy", idArg: "sessionId" },
   task: { fn: "orchestratorWatch:setTaskWatchedBy", idArg: "taskId" },
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-/**
- * Implicit watch registration for create/send: only Ave's own run, which passes
- * its thread. Other senders (sandbox agents, OAuth connectors, PR-watch and
- * automation-event deliveries) must not fall back to the user's live thread —
- * that made Ave watch every chat they touched, so each turn end woke it.
- * Explicit `watch_agent` keeps that fallback. Never clears an existing watch.
- */
 async function registerWatchIfAve(
   clerkUserId: string,
   kind: ChatEntityKind,
@@ -873,9 +772,6 @@ export const orchestratorListAgents = internalAction({
           }),
         ),
       ),
-      // Already user-wide, so one call covers every repo. The slim projection
-      // keeps the fleet list cheap: full task docs measured up to 38KB each
-      // (backgroundAgents, description), all of it discarded below.
       runAsUser(
         "query",
         clerkUserId,
@@ -900,7 +796,6 @@ export const orchestratorListAgents = internalAction({
       }
     }
     for (const task of z.array(agentTaskListItemSchema).parse(rawTasks)) {
-      // Keep tasks inside the requested repo scope (all repos, or one).
       if (task.repoId === undefined) continue;
       const repoName = repoNameById.get(task.repoId);
       if (repoName === undefined) continue;
@@ -923,14 +818,6 @@ export const orchestratorListAgents = internalAction({
   },
 });
 
-/**
- * `get_agent_state`'s result. Named (rather than inline) so the handler can be
- * annotated with its own shape: an action's registered type comes from the
- * handler's *inferred* return type, so a handler that reads back through
- * `internal` — as the session branch does for its linked repos — would
- * otherwise make `internal` depend on itself.
- */
-/** A linked-session group as MCP callers see it: name and members across repos. */
 const mcpSessionGroupValidator = v.object({
   id: v.string(),
   name: v.optional(v.string()),
@@ -945,7 +832,6 @@ const mcpSessionGroupValidator = v.object({
   ),
 });
 
-/** `sessions:listGroup` as read over HTTP; null when the session is in no group. */
 const sessionGroupSchema = z
   .object({
     _id: z.string(),
@@ -966,7 +852,6 @@ const sessionGroupSchema = z
   })
   .nullable();
 
-/** The session's linked-session group, read as the calling user. */
 async function readSessionGroup(
   clerkUserId: string,
   sessionId: string,
@@ -1013,9 +898,7 @@ const orchestratorAgentStateValidator = v.object({
       truncated: v.boolean(),
     }),
   ),
-  /** Every PR the chat holds, primary first, then newest first. */
   pullRequests: v.array(mcpPullRequestValidator),
-  /** Sessions only, and only when it has linked repos beside its primary. */
   linkedRepos: v.optional(
     v.array(
       v.object({
@@ -1027,7 +910,6 @@ const orchestratorAgentStateValidator = v.object({
       }),
     ),
   ),
-  /** Sessions only, and only when it is in a linked-session group. */
   sessionGroup: v.optional(mcpSessionGroupValidator),
 });
 
@@ -1043,17 +925,8 @@ export const orchestratorGetAgentState = internalAction({
     ctx,
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
-    // The access check runs first, on its own. `messages:listByParent` *throws*
-    // "Not authorized" while the entity read merely returns null, so in a
-    // Promise.all the raw throw won the race and the agent saw a stack instead
-    // of the sentence below.
     const rawDoc = await readChatDocAsUser(clerkUserId, kind, id);
 
-    // A session's transcript is its chat's; a task's or project's is the chat
-    // it talks in on its session (none before it first chatted). The
-    // streaming row is that chat's too.
-    // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
-    // daemon `/loop` continuations included.
     const ownedRead =
       kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
     const owned = ownedRead?.session;
@@ -1198,10 +1071,6 @@ export const orchestratorUpdateSessionGroup = internalAction({
   },
 });
 
-/**
- * Reads one chat's own document as the calling user, so the read doubles as
- * the access check. Throws one plain sentence when it is missing or hidden.
- */
 async function readChatDocAsUser(
   clerkUserId: string,
   kind: ChatTargetKind,
@@ -1216,13 +1085,6 @@ async function readChatDocAsUser(
   return raw;
 }
 
-/**
- * Reads one session's sandbox status as the calling user, so the read doubles
- * as the access check.
- *
- * Deliberately not "is a turn running" — that answer needs the `turns` table,
- * which no per-entity read exposes (see `mcp.queries.entityIsExecuting`).
- */
 async function readSessionSandboxStatus(
   clerkUserId: string,
   sessionId: string,
@@ -1231,15 +1093,6 @@ async function readSessionSandboxStatus(
   return sessionDocSchema.parse(raw).status;
 }
 
-/**
- * Brings one session's sandbox up and waits until it is actually `active`. A
- * retired session tears its sandbox down, and resuming the closed id
- * in-place hangs on "Resuming sandbox…", so this drives the same Start-button
- * mutation the Eva UI does and then polls.
- *
- * Returns whether it had to issue a start; throws — rather than returning a
- * half-started sandbox — when the VM never comes up.
- */
 async function ensureSessionSandboxActive(
   clerkUserId: string,
   sessionId: string,
@@ -1261,11 +1114,6 @@ const ownedSessionRefSchema = z.object({
   chatId: z.string(),
 });
 
-/**
- * `sessions:getOwnedWithSeed`: `session` is null before the session exists, its chat
- * absent while a project task has not chatted. `chatSeed` is what the chat
- * starts on (`chatSeedSettings`).
- */
 const ownedSessionReadSchema = z.object({
   session: z
     .object({ sessionId: z.string(), chatId: z.string().optional() })
@@ -1282,11 +1130,6 @@ function ownerArg(
     : { kind: "project", projectId: id };
 }
 
-/**
- * The session and chat a task or project talks in, created on first use
- * (`sessions.ensureOwned`): a quick task's or project's Main chat, a project
- * task's own chat.
- */
 async function ensureOwnedChatAsUser(
   clerkUserId: string,
   kind: "task" | "project",
@@ -1299,7 +1142,6 @@ async function ensureOwnedChatAsUser(
   );
 }
 
-/** `ensureOwnedChatAsUser` without creating it; null when the owner is not visible. */
 async function readOwnedChatAsUser(
   clerkUserId: string,
   kind: "task" | "project",
@@ -1312,10 +1154,6 @@ async function readOwnedChatAsUser(
   );
 }
 
-/**
- * Where a message to `kind`/`id` is delivered: a session, with the chat a
- * task or project talks in on it. A session is delivered to itself.
- */
 async function resolveSessionTarget(
   clerkUserId: string,
   kind: ChatTargetKind,
@@ -1332,23 +1170,12 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
-    /** The caller's own chat: a daemon must not message the chat it runs in. */
     excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
-    /**
-     * Stamps the "via MCP" chat badge. True for every MCP send — master
-     * sandbox and user OAuth connector alike — so the row is not mistaken
-     * for a composer-typed turn.
-     */
     sentViaOrchestrator: v.boolean(),
-    /**
-     * Account pick: an id, its owner's first name, or "team". Absent keeps
-     * the chat's current account (see `resolveMcpProviderAccount`).
-     */
     account: v.optional(v.string()),
   },
   returns: v.object({
-    /** The server's pick (`sendSessionChatMessage`); `posted` is a quiet comment, no turn. */
     delivered: v.union(
       v.literal("started"),
       v.literal("queued"),
@@ -1373,9 +1200,6 @@ export const orchestratorSendMessage = internalAction({
     delivered: "started" | "queued" | "posted";
     model: string;
   }> => {
-    // A task or project chats in its session's chat, so its message is
-    // delivered there; the Ave watch below stays on the task or project.
-    // From here on `targetId` is that chat.
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
     const rawDoc = await runAsUser(
       "query",
@@ -1394,7 +1218,6 @@ export const orchestratorSendMessage = internalAction({
     }
     const targetId = deliveryChat.chatId;
 
-    // The stored model is the fallback when the caller names none.
     const sendModel = resolveAgentModel(model, deliveryChat.lastModel);
     const resolvedAccount = await ctx.runQuery(
       internal.mcp.queries.resolveMcpProviderAccount,
@@ -1404,7 +1227,6 @@ export const orchestratorSendMessage = internalAction({
       },
     );
     if (!resolvedAccount.ok) throw new Error(resolvedAccount.error);
-    // The apps' send path: the server decides whether it runs now or queues.
     const delivered: "started" | "queued" | "posted" = await ctx.runMutation(
       internal._sessions.execution.sendFromMcp,
       {
@@ -1412,7 +1234,6 @@ export const orchestratorSendMessage = internalAction({
         chatId: targetId,
         message,
         model: sendModel,
-        // Null is Team, which the send spells as no account.
         providerAccountId: resolvedAccount.providerAccountId ?? undefined,
         sentViaOrchestrator,
       },
@@ -1432,7 +1253,6 @@ export const orchestratorStopAgent = internalAction({
   returns: v.null(),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     if (kind === "session") {
-      // The session's chat: a stop means the agent goes quiet.
       await runAsUser(
         "mutation",
         clerkUserId,
@@ -1441,20 +1261,10 @@ export const orchestratorStopAgent = internalAction({
       );
       return null;
     }
-    // The apps' chat Stop (`chats.stop`): a task's run and chat, a project's
-    // own chat.
     await runAsUser("mutation", clerkUserId, "chats:stop", { target: id });
     return null;
   },
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Preview sandbox start/stop and queued-message cancellation.
-//
-// Every write here is one the user can already make in the Eva UI, run through
-// the same public mutation as that button. None of them touch status or review
-// state — a person still owns where a task sits in the workflow.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export const mcpStartEntitySandbox = internalAction({
   args: {
@@ -1467,14 +1277,11 @@ export const mcpStartEntitySandbox = internalAction({
     startRequested: v.boolean(),
   }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
-    // A task's or project's sandbox is its session's.
     const target = await resolveSessionTarget(clerkUserId, kind, id);
     const { startRequested } = await ensureSessionSandboxActive(
       clerkUserId,
       target.sessionId,
     );
-    // ensureEntitySandboxActive only returns once the VM is up, so there is no
-    // "resuming" limbo to report back.
     return { sandboxStatus: "active", startRequested };
   },
 });
@@ -1490,9 +1297,6 @@ export const mcpStopEntitySandbox = internalAction({
     stopRequested: v.boolean(),
   }),
   handler: async (_ctx, { clerkUserId, kind, id: entityId }) => {
-    // A task's or project's sandbox is its session's. Stopping never creates
-    // one: no session means no sandbox. Reading the owner as the user is the
-    // access check, so it comes first.
     let id = entityId;
     if (kind !== "session") {
       await readChatDocAsUser(clerkUserId, kind, entityId);
@@ -1505,14 +1309,10 @@ export const mcpStopEntitySandbox = internalAction({
       return { sandboxStatus: "closed", stopRequested: false };
     }
 
-    // The app's sandbox Stop: refused while an agent works in the sandbox
-    // (a turn or a run). Stop it first with stop_agent.
     await runAsUser("mutation", clerkUserId, "sessions:stopWorkSandbox", {
       target: { sessionId: id },
     });
 
-    // Teardown finalizes in a scheduled action, so poll for the settled state
-    // rather than reporting "stopped" the instant the mutation returns.
     const deadline = Date.now() + SANDBOX_STOP_SETTLE_TIMEOUT_MS;
     let settled = "stopping";
     while (Date.now() < deadline) {
@@ -1520,8 +1320,6 @@ export const mcpStopEntitySandbox = internalAction({
       settled = await readSessionSandboxStatus(clerkUserId, id);
       if (settled !== "stopping") break;
     }
-    // A still-`stopping` status is reported as-is: the stop was accepted and
-    // will finalize, and claiming "closed" here would be a guess.
     return { sandboxStatus: settled, stopRequested: true };
   },
 });
@@ -1533,7 +1331,6 @@ const queuedMessageSchema = z.object({
   order: z.number().optional(),
 });
 
-/** One chat's pending queue, read as the user (the read is the access check). */
 async function listQueuedAsUser(clerkUserId: string, parentId: string) {
   return z.array(queuedMessageSchema).parse(
     await runAsUser("query", clerkUserId, "queuedMessages:listByParent", {
@@ -1546,7 +1343,6 @@ export const mcpCancelQueuedMessages = internalAction({
   args: {
     clerkUserId: v.string(),
     id: v.string(),
-    /** One queued message to drop. Omitted with `all`, which drops every one. */
     queuedMessageId: v.optional(v.string()),
     all: v.boolean(),
   },
@@ -1576,10 +1372,6 @@ export const mcpCancelQueuedMessages = internalAction({
       });
     }
 
-    // Re-read rather than subtracting: the chat may have drained a message of
-    // its own while this action was deleting others. A drained message is also
-    // gone from the queue, which is why the tool tells the caller that a
-    // same-instant dequeue cannot be taken back.
     const remaining = await listQueuedAsUser(clerkUserId, id);
     const stillQueued = new Set(remaining.map((message) => message._id));
     return {
@@ -1599,14 +1391,10 @@ export const orchestratorCreateSession = internalAction({
     message: v.string(),
     baseBranch: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
-    /** Extra repos to clone beside `repoId`. Mutually exclusive with `repoGroupId`. */
     linkedRepoIds: v.optional(v.array(v.string())),
-    /** Saved codebase group whose members prefill the selection. */
     repoGroupId: v.optional(v.string()),
     installDependencies: v.optional(v.boolean()),
-    /** Calling session; the new session joins its linked-session group. */
     fromSessionId: v.optional(v.string()),
-    /** Resolved by `resolveMcpProviderAccount`; null = Team, absent = own default. */
     providerAccountId: v.optional(v.union(v.string(), v.null())),
   },
   returns: v.object({
@@ -1630,10 +1418,6 @@ export const orchestratorCreateSession = internalAction({
       providerAccountId,
     },
   ) => {
-    // The apps' start (`chats.start`). No model: it resolves
-    // `repo.defaultModel`. Passing normalizeAIModel(undefined) here used to
-    // force claude:sonnet on every MCP-created session regardless of the
-    // repo's configured default.
     const createArgs: Record<string, JsonValue> = {
       repoId,
       prompt: message,
@@ -1695,10 +1479,6 @@ export const orchestratorSetWatch = internalAction({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Supabase Proxy Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
 const supabaseCredentialsCache = new Map<
   string,
   { token: string; projects: SupabaseProject[]; expiresAt: number }
@@ -1749,10 +1529,6 @@ export const resolveSupabaseCredentials = internalAction({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MCP Request Handler
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const handleMcpRequest = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -1775,8 +1551,6 @@ export const handleMcpRequest = internalAction({
       Transport: WebStandardStreamableHTTPServerTransport,
       createServer: async () => {
         const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
-        // Register tools with credentials (including optional scoped repo /
-        // session entity for browser tools).
         const owner =
           entityId !== undefined || chatId !== undefined
             ? await ctx.runQuery(
@@ -1811,8 +1585,6 @@ export const handleMcpRequest = internalAction({
           );
         }
         const allTools = [...tools, ...supabase];
-        // Code mode is additive: `execute` and `search_tools` sit beside the
-        // flat tools and dispatch to the same definitions.
         mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
         return server;
       },

@@ -102,15 +102,12 @@ export function TaskActivity({
   onReply: (comment: TaskComment) => void;
   onEdit: (comment: TaskComment) => void;
   onDelete: (id: Id<"taskComments">) => void;
-  /** An archived task (or one in an archived project): the hold menu keeps reactions and Copy only. */
   readOnly: boolean;
 }) {
   const theme = EVA_THEME[useScheme()];
-  // The held comment and where it is on screen, for the hold menu.
   const [held, setHeld] = useState<{ comment: TaskComment; anchor: HeldRect } | null>(null);
   const menuFor = held?.comment ?? null;
   const [deleting, setDeleting] = useState<TaskComment | null>(null);
-  // "More reactions" outlives the menu it opens from, so it lives here.
   const [pickingFor, setPickingFor] = useState<TaskComment | null>(null);
   const pickingReactions = pickingFor
     ? reactionsFor("comment", pickingFor._id)
@@ -142,7 +139,6 @@ export function TaskActivity({
           <ReactionChips groups={reaction.groups} onToggle={reaction.toggle} />
         ) : null}
         {(replies.get(comment._id) ?? []).length > 0 ? (
-          // Replies indent under their parent with a hairline, as the web thread.
           <View
             className="gap-3 pl-3"
             style={{
@@ -170,7 +166,6 @@ export function TaskActivity({
         <ReactableMenu
           anchor={held.anchor}
           onClose={() => setHeld(null)}
-          // The held comment, drawn again on the card colour: the measured box is the comment, not its padded card.
           preview={
             <View style={{ backgroundColor: theme.card }}>
               <CommentBody comment={menuFor} users={users} onMenu={undefined} />
@@ -233,7 +228,6 @@ export function TaskActivity({
   );
 }
 
-/** One rail event: the actor's initials (or a dot), the sentence, and how long ago. */
 function RailRow({
   item,
   creator,
@@ -316,10 +310,6 @@ function RailRow({
   );
 }
 
-/**
- * A comment's author, age and text; a deleted one reads the web placeholder.
- * Its "…" (or a long press) opens the comment menu.
- */
 function CommentBody({
   comment,
   users,
@@ -327,13 +317,11 @@ function CommentBody({
 }: {
   comment: TaskComment;
   users: User[] | undefined;
-  /** Opens the comment's hold menu at where the comment is on screen. */
   onMenu: ((anchor: HeldRect) => void) | undefined;
 }) {
   const theme = EVA_THEME[useScheme()];
   const author = users?.find((user) => user._id === comment.authorId);
   const deleted = isCommentDeleted(comment);
-  // Measured at the hold (imperative), so the menu draws the comment where it is.
   const box = useRef<View>(null);
   const openMenu = () => {
     if (onMenu) measureHeld(box.current, onMenu);

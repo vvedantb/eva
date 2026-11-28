@@ -10,7 +10,6 @@ import {
   SETTLE,
 } from "../../_components/motion";
 
-/** How far each incident card stands off the rail joining them. */
 const CARD_DEPTH = 20;
 const RAIL = 60;
 
@@ -18,10 +17,8 @@ interface MoA4IncidentCardProps {
   icon: Icon;
   heading: string;
   date: string;
-  /** Position in the row; the card lands on this build step. */
   index: number;
   step: number;
-  /** The card that landed most recently. It stays lit and live. */
   newest: number;
 }
 
@@ -61,7 +58,6 @@ export function MoA4IncidentCard({
                   : { duration: DUR.fast }
               }
             />
-            {/* The light that carries the thread to the new card. */}
             <m.span
               aria-hidden
               className="absolute top-1/2 left-0 -mt-[5px] -ml-[5px] size-2.5 rounded-full"

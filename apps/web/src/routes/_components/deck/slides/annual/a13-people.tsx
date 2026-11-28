@@ -17,10 +17,6 @@ import {
 } from "../../_components/DeckPrimitives";
 import { DUR, EASE, MaskedText } from "../../_components/motion";
 
-/**
- * The camera leans towards whichever incident has just landed, left then
- * centre then right, and pulls back as the closing line takes over.
- */
 const PEOPLE_SHOTS: readonly CameraShot[] = [
   { rotateY: 6, translateZ: 20, x: 30 },
   { translateZ: 20 },
@@ -34,10 +30,6 @@ interface Incident {
   date: string;
 }
 
-/**
- * Left to right, one per build step, in the order they were found.
- * Source: Eva release notes, August and September 2026.
- */
 const INCIDENTS: readonly Incident[] = [
   { icon: IconAlertCircle, heading: "Two hours, no reply", date: "Aug" },
   { icon: IconMessageOff, heading: "Two messages dropped", date: "Sep" },
@@ -47,7 +39,6 @@ const INCIDENTS: readonly Incident[] = [
 export function AnnualPeople() {
   const step = useDeckStep();
   const closing = step >= 3;
-  // Nobody is live once the closing line takes over.
   const newest = closing ? -1 : step;
 
   return (

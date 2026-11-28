@@ -4,7 +4,6 @@ import type { DatabaseWriter } from "../_generated/server";
 import { authMutation, getSessionWithAccess } from "../functions";
 import { assertStandaloneSession } from "./owner";
 
-/** The group a session belongs to; throws when it is in none. */
 function requireGroupId(session: {
   sessionGroupId?: Id<"sessionGroups">;
 }): Id<"sessionGroups"> {
@@ -28,10 +27,6 @@ export async function ensureSessionGroup(
   return groupId;
 }
 
-/**
- * Takes a session out of its group. A group left with one member dissolves,
- * so a group always links two or more sessions.
- */
 async function leaveSessionGroup(
   db: DatabaseWriter,
   session: Doc<"sessions">,

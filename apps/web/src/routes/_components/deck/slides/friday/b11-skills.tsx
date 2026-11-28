@@ -22,7 +22,6 @@ import {
 } from "../../_components/motion";
 import { Fri2Panel } from "../_parts/Fri2Panel";
 
-/** Real commands from this codebase, shortest first so the list reads quickly. */
 const SKILLS: readonly string[] = [
   "/ship",
   "/commit",
@@ -34,17 +33,11 @@ const SKILLS: readonly string[] = [
 
 const ROW_HEIGHT = 44;
 
-/**
- * Step 0 frames the composer alone, lower-middle of the stage. On the slash the
- * camera settles down to its resting shot as the picker rises out of the
- * composer above it, the way the real slash menu opens.
- */
 const SHOTS = [{ y: -120 }, {}];
 
 function Row({ skill, index }: { skill: string; index: number }) {
   const open = useDeckStep() >= 1;
   const first = index === 0;
-  // The menu opens upward, so the row nearest the composer lands first.
   const at = 0.18 + (SKILLS.length - 1 - index) * 0.05;
 
   return (
@@ -92,7 +85,6 @@ function Composer() {
 
   return (
     <div className="relative flex h-16 shrink-0 items-center rounded-full bg-white/[0.06] py-1 pr-1.5 pl-6 ring-1 ring-white/10">
-      {/* The focus ring is its own layer, so only its opacity changes. */}
       <m.span
         aria-hidden
         className="pointer-events-none absolute -inset-px rounded-full ring-1 ring-[#3B7DD8]/60"

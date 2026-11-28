@@ -20,7 +20,6 @@ import { modules } from "./_helpers/convexModules";
 const TIMEOUT_MS = 30_000;
 const PR_URL = "https://github.com/acme/eva/pull/7";
 
-// Fake timers keep scheduled flushes (GitHub calls) from ever running.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -66,7 +65,6 @@ const labelled: RepoEvent = {
   body: "",
 };
 
-/** A monorepo (root + web app) with an Eva session owning PR #7 on the app. */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -252,7 +250,6 @@ describe("event dispatch", () => {
         kind: "event",
         events: ["ci_failed"],
       });
-      // Three fixes and the "stopping here" note, all delivered.
       await t.run(async (ctx) => {
         for (const sha of ["a", "b", "c", "d"]) {
           await ctx.db.insert("automationRuns", {
@@ -383,7 +380,6 @@ describe("event run lifecycle", () => {
         kind: "event",
         events: ["pr_updated"],
       });
-      // The automation is mid-run, so the queued run waits instead of starting.
       await t.run(async (ctx) => {
         await ctx.db.insert("automationRuns", {
           automationId,
@@ -548,7 +544,6 @@ describe("alert webhook", () => {
       );
 
       expect(await receive(secretHash)).toBe("deduped");
-      // A different monitor is a different problem.
       expect(await receive(secretHash, { ...alert, monitorId: "mon_2" })).toBe(
         "queued",
       );

@@ -4,11 +4,6 @@ import type {
   repoEventKindValidator,
 } from "../_validators/tableFields";
 
-/**
- * Event-trigger vocabulary shared with the web app. Kept apart from
- * `events.ts` so the client does not bundle the webhook parsers.
- */
-
 export type RepoEventKind = Infer<typeof repoEventKindValidator>;
 export type AutomationTrigger = Infer<typeof automationTriggerValidator>;
 

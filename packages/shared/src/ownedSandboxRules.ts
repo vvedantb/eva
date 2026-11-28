@@ -1,10 +1,6 @@
 import type { SandboxStatus } from "./sandboxStatus";
 import type { TaskStatus } from "./taskMeta";
 
-// When a task's sandbox and git actions are offered, web and phone: the task
-// page footer and menu. A project's coordinator is read-only: it offers no
-// git actions.
-
 /** Task statuses whose review sandbox can be woken at any time (the preview of the work). */
 export const PREVIEW_SANDBOX_ALLOWED_STATUSES: TaskStatus[] = [
   "code_review",
@@ -64,10 +60,8 @@ export function sandboxAutoWakeEligible({
 }: {
   status: SandboxStatus | undefined;
   sandboxId: string | undefined;
-  /** The last start's failure; set and non-empty means it failed. */
   sandboxError: string | undefined;
   canStart: boolean;
-  /** A run or turn owns the sandbox; undefined while that loads. */
   isBusy: boolean | undefined;
 }): boolean {
   return (

@@ -19,7 +19,6 @@ export const PAGE_HEIGHT = 372;
 const FILE_WIDTH = 300;
 const FILE_HEIGHT = 200;
 
-/** Relative bar heights for the page's chart. Shape only, no figures. */
 const CHART: readonly number[] = [42, 58, 50, 72, 64, 86, 78, 96];
 const CHART_W = 488;
 const CHART_H = 112;
@@ -28,14 +27,12 @@ const BAR_GAP = 10;
 const BAR_W = (CHART_W - CHART_PAD * 2 - BAR_GAP * (CHART.length - 1)) / 8;
 const PLOT_H = CHART_H - CHART_PAD;
 
-/** The trend line through the bar tops, in the chart box's own pixels. */
 const TREND = CHART.map((height, index) => {
   const x = CHART_PAD + index * (BAR_W + BAR_GAP) + BAR_W / 2;
   const y = CHART_H - (height / 100) * PLOT_H + 10;
   return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
 }).join(" ");
 
-/** Table rows: a status tone and two widths per row. Shape only. */
 const ROWS: readonly { tone: string; name: number; value: number }[] = [
   { tone: "bg-emerald-400/80", name: 150, value: 56 },
   { tone: "bg-[#3B7DD8]", name: 118, value: 44 },
@@ -128,7 +125,6 @@ function HostedPage({ hosted }: { hosted: boolean }) {
   );
 }
 
-/** Step 0: the file the agent saved. It hands over to the page on step 1. */
 function SavedFile({ hosted }: { hosted: boolean }) {
   return (
     <m.div

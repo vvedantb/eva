@@ -30,8 +30,6 @@ export async function resolvePageEntity(
   }
   const repo = await findRepoByPath(db, link);
   if (!repo || !(await hasRepoAccess(db, repo._id, userId))) return null;
-  // A project task page names the task; fall back to its project when the
-  // task lives in another repo.
   return (
     (await findEntity(db, userId, repo._id, target)) ??
     (target.kind === "task" && link.section === "projects"
@@ -70,7 +68,6 @@ async function findEntity(
         : null;
     }
     case "project": {
-      // An archived project still opens by URL, so it still resolves.
       const row = await db
         .query("projects")
         .withIndex("by_repo_and_numId", (q) =>

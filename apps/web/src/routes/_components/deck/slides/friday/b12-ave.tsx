@@ -28,9 +28,7 @@ import {
 interface Node {
   icon: Icon;
   label: string;
-  /** Vertical centre inside the 300px diagram. */
   y: number;
-  /** True for the two that come back finished on the last step. */
   reports?: boolean;
 }
 
@@ -43,7 +41,6 @@ const NODES: readonly Node[] = [
   { icon: IconRobot, label: "Session", y: 275 },
 ];
 
-/** Where the lines leave the hub and where they meet a node. */
 const HUB_X = 200;
 const NODE_X = 620;
 const HUB_Y = 150;
@@ -58,7 +55,6 @@ const out = (y: number) =>
 const back = (y: number) =>
   `M ${NODE_X} ${y} C 430 ${y}, 390 ${HUB_Y}, ${HUB_X} ${HUB_Y}`;
 
-/** The order the two finished jobs report in, for their share of the stagger. */
 const REPORT_ORDER = NODES.filter((node) => node.reports);
 
 function NodePill({ node, index }: { node: Node; index: number }) {
@@ -130,7 +126,6 @@ export function FridayAve() {
             className="-inset-8"
           />
 
-          {/* Out: each wire draws from the hub with a light riding its tip. */}
           {NODES.map((node, index) => (
             <div key={`out-${node.y}`} className="absolute inset-0">
               <DrawPath
@@ -145,7 +140,6 @@ export function FridayAve() {
             </div>
           ))}
 
-          {/* Back: the two finished jobs send a green light home. */}
           {REPORT_ORDER.map((node, order) => (
             <div key={`back-${node.y}`} className="absolute inset-0">
               <DrawPath

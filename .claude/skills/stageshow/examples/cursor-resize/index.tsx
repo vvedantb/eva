@@ -1,13 +1,6 @@
 import { Stage, type Act } from '../../kit'
 import './cursor-resize.css'
 
-// The resize cursors, on one selected frame. The cursor starts as the arrow
-// and turns into the triangles the moment it crosses a handle: north-south
-// on the bottom edge, east-west on the right edge, and the two diagonals on
-// the corners. Each handle says its kind with data-cursor; the script only
-// moves and drags, and every drag is undone by another, so the loop starts
-// where it ends.
-
 type S = { x: number; y: number; w: number; h: number; held: string | null }
 const START: S = { x: 120, y: 70, w: 200, h: 140, held: null }
 

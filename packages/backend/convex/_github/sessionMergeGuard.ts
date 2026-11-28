@@ -60,17 +60,12 @@ export const verifySessionPrMerged = internalAction({
         });
       associatedPrNumbers = data.map((candidate) => candidate.number);
     } catch (error) {
-      // Fail safe: if we can't verify, leave the session merged (today's
-      // behavior) rather than risk incorrectly reopening a genuinely merged
-      // session.
       console.error(
         `[verifySessionPrMerged] failed to check association for sessionId=${sessionId} sha=${args.mergeCommitSha}: ${errorMessage(error)}`,
       );
       return null;
     }
 
-    // No PRs associated at all is unusual but not evidence of a foreign
-    // merge — treat it as an intentional merge and leave the session as-is.
     if (associatedPrNumbers.length === 0) return null;
 
     const isForeign = !associatedPrNumbers.includes(pr.prNumber);

@@ -8,7 +8,6 @@ interface AnnBCountDownProps {
   decimals?: number;
   duration?: number;
   delay?: number;
-  /** The build step that starts the count. */
   step?: number;
   className?: string;
 }

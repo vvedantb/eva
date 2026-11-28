@@ -16,20 +16,10 @@ import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { findWorkChat } from "../convex/_sessions/ownerState";
 import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
-/**
- * The project as an orchestrator, through the real Convex functions: the
- * scheduler and its cap, the coordinator's tasks (start at once) against
- * a person's task (handed to the coordinator at once), the coordinator's one retry and its wake-ups,
- * the repos the coordinator may use, locked rows, the roll-up of docs, artifacts and
- * log, the copy of the project's model and account, the coordinator's
- * delete rule, project delete, and the coordinator's sandbox.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-scheduler";
 const OTHER_CLERK_ID = "clerk|project-scheduler-other";
 
-// Runs start workflows; keep their steps from running after the test.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -49,14 +39,12 @@ async function fixture(taskCount: number) {
       installationId: 1,
       connectedBy: userId,
     });
-    // A repo the user can open that is not the project's home repo.
     const outsideRepoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",
       name: "outside",
       installationId: 1,
       connectedBy: userId,
     });
-    // Only the other user can open it.
     const lockedRepoId = await ctx.db.insert("githubRepos", {
       owner: "someone",
       name: "private",
@@ -118,11 +106,6 @@ const factsOf = async (f: Fixture, taskId: Id<"agentTasks">) => {
   return facts;
 };
 
-/**
- * Ends the task's run as a task-mode turn would: any queued run message goes,
- * and a closed task-mode turn in `state` goes through the real `closeTurn`
- * (which moves the task's status). Returns the turn's id.
- */
 async function endRun(
   f: Fixture,
   taskId: Id<"agentTasks">,
@@ -161,14 +144,12 @@ async function endRun(
   });
 }
 
-/** The task's latest run ended in an error and it went back to todo. */
 async function failLatestRun(f: Fixture, taskId: Id<"agentTasks">) {
   const turnId = await endRun(f, taskId, "error");
   await f.t.run((ctx) => ctx.db.patch(taskId, { status: "todo", run: undefined }));
   return turnId;
 }
 
-/** The run ended and the task sits done with its PR in `prState`. */
 async function finishTask(
   f: Fixture,
   taskId: Id<"agentTasks">,
@@ -195,7 +176,6 @@ describe("project scheduler", () => {
       expect(owners).toHaveLength(5);
       expect(owners.every((owner) => owner.kind === "task")).toBe(true);
 
-      // A second call on the same state starts nothing new.
       await schedule(f);
       const again = await f.t.run(async (ctx) =>
         (await ctx.db.query("sessions").collect()).length,
@@ -269,8 +249,6 @@ describe("who starts project tasks", () => {
         "in_progress",
       ]);
 
-      // A person's task without "Start now" goes to the coordinator, and
-      // only the coordinator starts it.
       const personTaskId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: f.repoId,
         projectId: f.projectId,
@@ -298,7 +276,6 @@ describe("who starts project tasks", () => {
           tasks: [{ title: "Home" }, { title: "Elsewhere", repoId: f.lockedRepoId }],
         }),
       ).rejects.toThrow("has no access to its repository");
-      // Checked before any task is written.
       const tasks = await f.t.run((ctx) => ctx.db.query("agentTasks").collect());
       expect(tasks).toEqual([]);
     },
@@ -354,7 +331,6 @@ describe("the coordinator's retry and wake-ups", () => {
       await failLatestRun(f, taskId);
       await schedule(f);
       expect(projectTaskNeedsYou(await factsOf(f, taskId))).toBe("failed");
-      // No wake-up for a failure the coordinator may not retry.
       const after = await f.t.run((ctx) =>
         ctx.db.query("projectCoordinatorWakes").collect(),
       );
@@ -534,7 +510,6 @@ describe("archiving project work", () => {
       await expect(check(running)).rejects.toThrow("has started");
       await expect(check(inReview)).rejects.toThrow("has started");
 
-      // A todo task with a run pending (queued in its chat) has started too.
       await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
       await f.asUser.mutation(api.agentTasks.startExecution, { id: running });
       await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
@@ -570,13 +545,11 @@ describe("archiving project work", () => {
         expect(task.taskNumber).toBe(before[index]?.taskNumber);
         expect(task.archivedAt).toBeUndefined();
       }
-      // Unarchive brings the project back with the same tasks.
       await f.asUser.mutation(api.projects.unarchive, { id: f.projectId });
       expect((await f.t.run((ctx) => ctx.db.get(f.projectId)))?.archivedAt).toBeUndefined();
       expect(
         (await f.asUser.query(api.agentTasks.listByProject, { projectId: f.projectId })).map((t) => t._id),
       ).toEqual(f.tasks);
-      // Their sessions stay theirs.
       const owners = await f.t.run(async (ctx) =>
         (await ctx.db.query("sessions").collect()).map((s) => s.owner),
       );
@@ -605,7 +578,6 @@ test(
 );
 
 describe("people's tasks go to the coordinator", () => {
-  /** A person's project task: handed to the coordinator at creation. */
   const personTask = (f: Fixture, title: string) =>
     f.asUser.mutation(api.agentTasks.createQuickTask, {
       repoId: f.repoId,
@@ -634,7 +606,6 @@ describe("people's tasks go to the coordinator", () => {
       expect(rows.map((row) => row.reason)).toEqual(["triage"]);
       expect(rows[0]?.text).toContain("Promo box is hard to find");
 
-      // A second ask is its own wake-up.
       await personTask(f, "Rename Basket to Cart");
       expect(await wakes(f)).toHaveLength(2);
     },
@@ -691,7 +662,6 @@ describe("people's tasks go to the coordinator", () => {
         "Old ask B",
       );
 
-      // A re-run, even with the stamps cleared, wakes no one again.
       await migrate();
       await f.t.run((ctx) =>
         ctx.db.patch(a, { approvedAt: undefined, handedToCoordinatorAt: undefined }),
@@ -717,7 +687,6 @@ describe("people's tasks go to the coordinator", () => {
           intoTaskId,
         });
 
-      // Not into itself, not into a finished task.
       await expect(merge(item, item)).rejects.toThrow("into itself");
       await f.t.run((ctx) => ctx.db.patch(open, { status: "done" }));
       await expect(merge(item, open)).rejects.toThrow("finished");
@@ -728,9 +697,7 @@ describe("people's tasks go to the coordinator", () => {
       expect(merged.status).toBe("cancelled");
       expect(merged.mergedIntoTaskId).toBe(open);
       expect(merged.handedToCoordinatorAt).toBeUndefined();
-      // A merged item cannot be merged or started again.
       await expect(merge(item, open)).rejects.toThrow("not started");
-      // Nor into a merged (cancelled) item.
       await expect(merge(other, item)).rejects.toThrow("finished");
     },
     TIMEOUT_MS,

@@ -5,11 +5,6 @@ import schema from "../convex/schema";
 import { SANDBOX_HELD_ERROR } from "../convex/_sessions/stop";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The one Stop every surface calls (`_sessions/stop.ts`). These are the rules
- * the web, mobile and MCP Stops used to disagree on.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|stop-owner";
 
@@ -20,9 +15,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/**
- * A project with an active session, and a project task running.
- */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -59,7 +51,6 @@ async function fixture() {
       updatedAt: 0,
       createdBy: userId,
     });
-    // A quick task that has never needed a session.
     const quickTaskId = await ctx.db.insert("agentTasks", {
       title: "Bump deps",
       status: "todo",
@@ -88,7 +79,6 @@ describe("stopWorkSandbox", () => {
       await f.t.run(async (ctx) => {
         const repoId = (await ctx.db.get(f.sessionId))?.repoId;
         if (!repoId) throw new Error("fixture session missing");
-        // A project task runs on its own session, like a quick task.
         const taskSessionId = await ctx.db.insert("sessions", {
           owner: { kind: "task", taskId: f.taskId },
           repoId,
@@ -97,7 +87,6 @@ describe("stopWorkSandbox", () => {
           status: "active",
           sandboxId: "sbx_task",
         });
-        // Its run is a task-mode turn in its own chat.
         await ctx.db.insert("turns", {
           entityId: taskSessionId,
           sessionId: taskSessionId,

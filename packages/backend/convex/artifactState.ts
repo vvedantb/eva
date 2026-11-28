@@ -7,21 +7,12 @@ import {
   type ArtifactStateScope,
 } from "./validators";
 
-// Persistent state for hosted artifacts (`window.cowork.state` in the iframe
-// shim). Two scopes:
-//  - "user":   private to the signed-in viewer (ownerId = viewer)
-//  - "shared": one copy for every member of the artifact's bound team
-// Values are JSON text. Limits keep one artifact from filling the database and
-// keep the live snapshot query small, because the parent pushes the whole
-// snapshot into the iframe on every change.
-
 export const MAX_STATE_KEY_LENGTH = 200;
 export const MAX_STATE_VALUE_BYTES = 64 * 1024;
 export const MAX_STATE_KEYS_PER_SCOPE = 200;
 
 const entryValidator = v.object({ key: v.string(), value: v.string() });
 
-/** True when the artifact exists and the caller is a member of its bound team. */
 async function canAccessArtifact(
   ctx: QueryCtx,
   artifactId: Id<"artifacts">,

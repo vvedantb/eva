@@ -2,21 +2,15 @@ import { Eye, Frame, Image as ImageIcon, MessageCircle, Minus, MousePointer2, Pe
 import { Bar, Facepile, Follow, Popover, Stage, Text, Window, box, type Act, type Point, BrandMark } from '../../kit'
 import './figma.css'
 
-// Figma: select a button layer, drag its fill's hue in the color picker and
-// watch the button change live, while Maya's cursor drifts around nearby.
-// Loops by undoing the change (cmd+z) and deselecting.
-
 type S = {
   hover: boolean
   selected: boolean
   picker: boolean
   hue: number
   dragging: boolean
-  /** Maya's cursor; null is her resting spot */
   maya: Point | null
 }
 
-// The fill keeps its saturation and brightness; only the hue is dragged
 const SAT = 0.66
 const VAL = 0.97
 const HUE_FROM = 252
@@ -30,7 +24,6 @@ function hex(h: number) {
   return [f(5), f(3), f(1)].map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('').toUpperCase()
 }
 
-// Maya's cursor waypoints, in canvas fractions resolved against the canvas rect
 const MAYA = {
   rest: { x: 0.8, y: 0.3 },
   a: { x: 0.86, y: 0.46 },
@@ -51,7 +44,6 @@ async function script(a: Act<S>) {
   await a.wait(500)
   maya(MAYA.a)
 
-  // 1. Select the button on the canvas
   a.mark('select')
   await a.move({ at: 'button', x: 0.82, y: 0.7 })
   await a.set({ hover: true })
@@ -61,7 +53,6 @@ async function script(a: Act<S>) {
   maya(MAYA.b)
   await a.wait(900)
 
-  // 2. Open its fill
   a.mark('fill')
   await a.move('fill-swatch')
   await a.wait(150)
@@ -70,7 +61,6 @@ async function script(a: Act<S>) {
   maya(MAYA.c)
   await a.wait(700)
 
-  // 3. Drag the hue; the button follows live
   a.mark('drag')
   await a.move('hue-thumb')
   await a.wait(200)
@@ -85,14 +75,12 @@ async function script(a: Act<S>) {
   maya(MAYA.d)
   await a.wait(900)
 
-  // 4. Click away: the picker closes, the change holds
   a.mark('done')
   await a.click('blank')
   await a.set({ picker: false, selected: false })
   maya(MAYA.e)
   await a.wait(2200)
 
-  // 5. Undo, so the loop starts where it began
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ hue: HUE_FROM })
@@ -137,9 +125,6 @@ export default function FigmaDemo() {
         const color = `#${hex(s.hue)}`
         const fill = rect('fill-row')
         const props = rect('props')
-        // Wide: the picker sits beside the panel, lifted so its sliders stay in
-        // view. Compact: there is no room beside it without covering the
-        // button, so it opens over the panel, under the fill row.
         const picker =
           layout === 'compact'
             ? { left: props.x + 8, top: fill.y + fill.height + 6, width: props.width - 16 }
@@ -300,7 +285,6 @@ export default function FigmaDemo() {
                     </span>
                   </div>
                   <div className="fg-props-body">
-                    {/* Nothing selected: the page */}
                     <div className="fg-props-layer" data-show={!s.selected || undefined}>
                       <section className="fg-section">
                         <div className="fg-section-head">
@@ -324,7 +308,6 @@ export default function FigmaDemo() {
                       ))}
                     </div>
 
-                    {/* The button */}
                     <div className="fg-props-layer" data-show={s.selected || undefined}>
                       {layout === 'wide' && (
 <section className="fg-section">
@@ -382,7 +365,6 @@ export default function FigmaDemo() {
               </div>
             </Window>
 
-            {/* Hover and selection on the canvas, from the measured button */}
             <div className="fg-hover" data-show={(s.hover && !s.selected) || undefined} style={box(btn)} />
             <div className="fg-select" data-show={s.selected || undefined} style={box(btn)}>
               <i data-c="tl" />
@@ -391,7 +373,6 @@ export default function FigmaDemo() {
               <i data-c="br" />
             </div>
 
-            {/* Maya, on the canvas with us */}
             <Follow className="fg-maya" to={{ ...(s.maya ?? mayaAt(rect('canvas'), MAYA.rest)), width: 0, height: 0 }} stiffness={0.012}>
               <svg width="16" height="17" viewBox="0 0 16 17" className="fg-maya-arrow" aria-hidden>
                 <path d="M1.5 1.5 14 7.2l-5.6 1.6-2.3 5.6Z" />
@@ -399,7 +380,6 @@ export default function FigmaDemo() {
               <span className="fg-maya-name">Maya</span>
             </Follow>
 
-            {/* The color picker, beside the properties panel */}
             <Popover
               show={s.picker}
               origin="top right"

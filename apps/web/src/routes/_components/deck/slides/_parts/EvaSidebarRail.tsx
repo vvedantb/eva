@@ -10,10 +10,8 @@ import {
 import { LogoMark } from "@/lib/components/LogoMark";
 import { EASE_OUT } from "../../_components/DeckPrimitives";
 
-/** The rail's active tile, as the app drew it before the November rail redesign. */
 const railTileActiveClass = "bg-sidebar-accent text-sidebar-primary";
 
-/** Copied from `RepoRail`, which cannot be reused here: it is router-driven. */
 const RAIL_TILE_CLASS =
   "relative flex size-11 items-center justify-center rounded-lg border";
 

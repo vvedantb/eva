@@ -1,10 +1,4 @@
 /**
- * The live turn of a chat: the `streamingActivity` row it streams to, and the
- * bubble that row belongs to. Shared by the web chat (`ChatBody`) and the
- * mobile chat, so both draw the same turn from the same row.
- */
-
-/**
  * `api.streaming.get` entity id for a session chat's turn: the chat id itself.
  * Same as the backend's `sessionChatStreamingEntityId`.
  */

@@ -52,9 +52,7 @@ export function useProjectActions({
   onArchived,
   extraRows,
 }: {
-  /** Rows that lead the menu (the project page's sandbox and git actions); given the menu's `close`. */
   extraRows?: (close: () => void) => ReactNode;
-  /** The repo's path fields, for Copy link. */
   repo: { owner: string; name: string; rootDirectory?: string };
   users: User[] | undefined;
   onArchived?: () => void;
@@ -91,7 +89,6 @@ export function useProjectActions({
       () => toast.error(archiveText.unarchiveFailed, { id: "project-unarchive" }),
     );
   };
-  // The session archive toast's shape: what happened, and Undo.
   const archive = (projectId: Id<"projects">) => {
     archiveProject({ id: projectId }).then(
       () => {
@@ -101,7 +98,6 @@ export function useProjectActions({
         });
         onArchived?.();
       },
-      // It refuses while a child task runs: say why.
       (error: Error) => toast.error(readableServerError(error, archiveText.archiveFailed), { id: "project-archive" }),
     );
   };
@@ -201,7 +197,6 @@ export function useProjectActions({
       >
         {target ? body(target) : null}
       </MenuSheet>
-      {/* The web `ProjectArchiveDialog` (one project). */}
       <ConfirmDialog
         open={archiveTarget !== null}
         onOpenChange={(open) => {
@@ -222,12 +217,10 @@ export function useProjectActions({
   );
 
   return {
-    /** Opens the project menu (the web right-click, kebab and header "…" menu). */
     openSheet: (project: ProjectMenuTarget) => {
       setPage("root");
       setTarget(project);
     },
-    /** Unarchive, with its toast: the archived page's `ArchivedBar`. */
     unarchive,
     dialogs,
   };

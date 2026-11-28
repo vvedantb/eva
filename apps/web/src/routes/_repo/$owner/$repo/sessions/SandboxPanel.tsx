@@ -39,13 +39,8 @@ import { designVariationPrompt } from "./_utils/composerPrompts";
 
 interface SandboxPanelProps {
   session: Doc<"sessions">;
-  /** The active chat tab; annotations, plan sends and agent stops route to it. */
   chat: Doc<"sessionChats">;
   isActive: boolean;
-  /**
-   * False while another session is shown but this shell stays mounted.
-   * Preview freezes instead of clearing on shared URL search churn.
-   */
   isRouteActive: boolean;
   devPort?: number;
   devCommand?: string;
@@ -53,16 +48,13 @@ interface SandboxPanelProps {
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
   isArchived: boolean;
-  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /** `sandboxAutoWakeEligible`; combined in SandboxPaneSlots with the setting. */
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
-  /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
   miniPlayer: { returnTo: string; title: string } | undefined;
 }
 export function SandboxPanel({
@@ -104,7 +96,6 @@ export function SandboxPanel({
     sessionId,
     chatId: chat._id,
   });
-  // The Plan tab seeds the composer rather than sending.
   const seedDraft = (content: string) => {
     void seedChatDraft(content);
   };
@@ -121,12 +112,9 @@ export function SandboxPanel({
     isSaving,
     isSavingDoc,
   } = useSessionPlanDocument(sessionId);
-  // The chat's own reads (`SandboxChatPanel`), so both read one turn status.
   const { messages, isExecuting: isDesignExecuting } =
     useSandboxChatTranscript(binding);
   const latestVariations = getLatestVariations(messages ?? []);
-  // Both tabs are content-keyed: they appear once the session has produced the
-  // artefact they show, whatever prompt or skill produced it.
   const hasPlanContent =
     typeof planContent === "string" && planContent.trim().length > 0;
   const capturedPlan = hasPlanContent
@@ -138,8 +126,6 @@ export function SandboxPanel({
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = rail.roster;
-  // Multi-repo sessions: which checkout the Files tab browses. "" is the
-  // primary repo; a linked repo's `sessionRepos.path` otherwise.
   const [filesRoot, setFilesRoot] = useQueryState("filesRoot", filesRootParser);
   const sessionRepos = useHeldQuery(api.sessions.listRepos, { sessionId });
   const fileList = useSandboxFileList({
@@ -148,14 +134,11 @@ export function SandboxPanel({
     isActive,
     rootPath: filesRoot || undefined,
   });
-  // User-defined tabs for this app, in display order, enabled only.
   const allCustomTabs = useHeldQuery(
     api.appTabs.list,
     isRouteActive ? { repoId } : "skip",
   );
   const customTabs = (allCustomTabs ?? []).filter((tab) => tab.enabled);
-  // If the URL points at a custom tab that no longer exists (deleted / disabled /
-  // renamed), fall back to preview. Wait for the query to load before deciding.
   useEffect(() => {
     const tabId = sandboxTabIdFromParam(activeTab);
     if (tabId === "terminal") {
@@ -304,18 +287,12 @@ export function SandboxPanel({
             customTabs={simpleView ? undefined : customTabs}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
-            // Only the session on screen holds the idle-pause presence beacon;
-            // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
             autoWakeEligible={autoWakeEligible}
-            // Multi-repo sessions run a dev server per repo; the Preview port
-            // control offers each one instead of only the primary's.
             previewPortOptions={previewPortOptions(
               sessionRepos,
               devPort ?? DEFAULT_PREVIEW_PORT,
             )}
-            // Only the session on screen may float; cached siblings and a
-            // collapsed rail keep their preview parked.
             miniPlayer={
               miniPlayer !== undefined && isRouteActive && !collapsed
                 ? { ...miniPlayer, owner: { kind: "session", sessionId } }

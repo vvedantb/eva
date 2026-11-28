@@ -7,7 +7,6 @@ import { PendingCommentCount, PrDiffGate, TruncatedNote } from "@/diff/PrFileDif
 import { usePendingLineComments, useViewedFiles, type DiffRef, type PrDiffState } from "@/diff/prDiffStore";
 import { textColor, useScheme } from "@/ui/theme";
 
-/** The web `FileStatusChip`: a lifecycle chip, none for an ordinary modified file. */
 const STATUS_CHIP: Record<DiffFileStatus, { label: string; variant: "success" | "destructive" | "secondary" } | null> = {
   added: { label: "Added", variant: "success" },
   deleted: { label: "Deleted", variant: "destructive" },
@@ -27,7 +26,6 @@ export function ReviewCode({ pr, state, onOpenFile }: { pr: DiffRef; state: PrDi
   return (
     <PrDiffGate
       state={state}
-      // Rows shaped as `FileRow`: the name over its folder, the counts.
       loading={
         <SkeletonList
           label="Loading pull request diff"
@@ -63,7 +61,6 @@ function FileRow({ pr, entry, onOpen }: { pr: DiffRef; entry: DiffFileEntry; onO
       accessibilityLabel={entry.path}
       accessibilityHint="Opens the file's diff"
       onPress={onOpen}
-      // The two-line list row a thumb taps: 64, as the Inbox.
       className="min-h-16 flex-row items-center gap-2 py-1 pr-1 pl-4 active:opacity-70"
     >
       <View className="min-w-0 flex-1 gap-0.5 py-2">
@@ -76,7 +73,6 @@ function FileRow({ pr, entry, onOpen }: { pr: DiffRef; entry: DiffFileEntry; onO
           </Text>
         ) : null}
       </View>
-      {/* `self-center`: the badge's own `self-start` would lift it to the row's top. */}
       {chip === null ? null : (
         <Badge variant={chip.variant} className="self-center" textClassName="text-xs">
           {chip.label}

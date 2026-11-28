@@ -14,7 +14,6 @@ const TIPS = 3;
 const W = 1088;
 const H = 460;
 
-/** Middle of the matching note, where the thread lands. */
 const NOTE_Y = 266;
 
 const NOTES = [
@@ -23,12 +22,10 @@ const NOTES = [
   { name: "Provider onboarding.md", best: false },
 ];
 
-// The camera follows the phrase: left, then middle, then right.
 const SHOTS: readonly CameraShot[] = [
   { rotateY: 8, x: 320, translateZ: -40 },
   { rotateY: 6, x: 300, scale: 1.15 },
   { rotateY: 0, x: 0, scale: 1.1 },
-  // Pull back at the end, so the question, the note and the tip are all in view.
   { rotateY: -4, x: 0, scale: 1 },
 ];
 
@@ -42,7 +39,6 @@ export function BeeListens() {
     <Shell className="justify-center py-14">
       <Camera shots={SHOTS}>
         <div className="relative" style={{ width: W, height: H }}>
-          {/* The three stages, named as on the original slide. */}
           {[
             { text: "Hears", left: 0, on: step >= HEARS },
             { text: "Finds", left: 400, on: finds },
@@ -60,7 +56,6 @@ export function BeeListens() {
             </m.div>
           ))}
 
-          {/* A speaker in the call. */}
           <div className="absolute top-[180px] left-0 flex flex-col items-center gap-3">
             <span className="flex size-24 items-center justify-center rounded-full bg-[#d9d1c1] text-3xl font-semibold text-[#2a1e0c]/60">
               A
@@ -68,7 +63,6 @@ export function BeeListens() {
             <span className="text-[15px] text-[#2a1e0c]/60">
               Alex is talking
             </span>
-            {/* Sound leaving the speaker. */}
             {[0, 1, 2].map((ring) => (
               <m.span
                 key={ring}
@@ -88,7 +82,6 @@ export function BeeListens() {
             ))}
           </div>
 
-          {/* What was heard: stays under the speaker for the whole slide. */}
           <m.div
             className="absolute top-[330px] left-0 z-10 flex w-[300px] flex-col gap-1 rounded-2xl rounded-tl-md px-4 py-3 text-[18px] leading-snug font-medium shadow-lg shadow-black/10"
             style={{ background: BEE.surface, color: BEE.text }}
@@ -110,7 +103,6 @@ export function BeeListens() {
             “…the provider onboarding we talked about last time…”
           </m.div>
 
-          {/* The thread through all three, as on the slide before. */}
           <div className="absolute inset-0 -z-10">
             <DrawPath
               d={`M 306 372 C 360 372, 350 ${NOTE_Y}, 394 ${NOTE_Y}`}
@@ -132,7 +124,6 @@ export function BeeListens() {
             />
           </div>
 
-          {/* Your notes; the right one lights up as the phrase lands. */}
           <div className="absolute top-[150px] left-[400px] flex w-[260px] flex-col gap-3">
             {NOTES.map((note, index) => (
               <m.div
@@ -162,7 +153,6 @@ export function BeeListens() {
             ))}
           </div>
 
-          {/* The tip, in the bar. */}
           <div className="absolute top-[150px] left-[740px]">
             <m.div
               initial={{ opacity: 0, x: -20 }}
@@ -182,7 +172,6 @@ export function BeeListens() {
                 <BeeTip shown={tips} delay={0.5}>
                   Joins the AQP list if their forms are back by Friday
                 </BeeTip>
-                {/* Where the tip came from, as Bee shows it. */}
                 <m.span
                   className="mt-4 inline-block"
                   initial={{ opacity: 0, y: 6 }}

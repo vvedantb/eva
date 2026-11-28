@@ -10,28 +10,19 @@ export interface AnnABar {
 
 interface AnnABarChartProps {
   bars: readonly AnnABar[];
-  /** Column width in pixels. The gap sits between columns. */
   colWidth: number;
   gap: number;
-  /** Pixel height of the tallest column. */
   barMax: number;
-  /** Build step the columns grow on. */
   step?: number;
-  /** Seconds before the first column starts. */
   delay?: number;
-  /** Column indices that stay lit while `focused` is true. */
   focus?: readonly number[];
   focused?: boolean;
-  /** Build step on which a band of light crosses the focused columns. */
   sheenStep?: number;
   className?: string;
 }
 
-/** Seconds between one column starting and the next. */
 const STAGGER = 0.06;
-/** A very short column still reads as a column rather than a hairline. */
 const MIN_H = 4;
-/** Columns grow on the deck's long expo, so the tall ones feel heavy. */
 const GROW = 1.1;
 const LABEL_H = 20;
 
@@ -67,7 +58,6 @@ function Column({
         background: `linear-gradient(to top, ${BRAND.blue}, ${BRAND.purple})`,
       }}
     >
-      {/* A lit top edge, so each column reads as a solid with a face. */}
       <span className="absolute inset-x-0 top-0 h-px bg-white/45" />
       <span className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/15 to-transparent" />
     </div>
@@ -79,14 +69,12 @@ function Column({
       style={{ width: colWidth }}
       initial={false}
       animate={{ opacity: dim ? 0.26 : 1 }}
-      // Dimming is quick; relighting runs left to right as a wave.
       transition={{
         duration: dim ? DUR.base : DUR.slow,
         ease: EASE.out,
         delay: dim ? 0 : index * 0.04,
       }}
     >
-      {/* The value rides up on the top of its column, counting as it goes. */}
       <m.div
         className="text-center tabular-nums"
         style={{ height: LABEL_H }}

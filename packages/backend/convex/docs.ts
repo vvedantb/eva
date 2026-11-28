@@ -70,13 +70,8 @@ export const docValidator = v.object({
   ...docFields,
 });
 
-/** Soft-limit matching sidebar hover preview — avoid shipping full bodies on list. */
 const DOC_LIST_PREVIEW_MAX = 280;
 
-/**
- * Sidebar / picker list shape. Full `content`, `html`, and interview history are
- * loaded via `docs.get` on the detail page.
- */
 const docListItemValidator = v.object({
   _id: v.id("docs"),
   _creationTime: v.number(),
@@ -86,9 +81,7 @@ const docListItemValidator = v.object({
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
   title: v.string(),
-  /** Truncated description-or-content for sidebar hover cards. */
   contentPreview: v.union(v.string(), v.null()),
-  /** True when `content.trim()` is non-empty (Testing Arena "test all"). */
   hasContent: v.boolean(),
   prUrl: v.optional(v.string()),
   prNumber: v.optional(v.number()),
@@ -165,7 +158,6 @@ export const list = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     kind: v.optional(docKindValidator),
-    /** When true, hide Eva-origin sandbox PR recaps from the Documents sidebar. */
     excludeEvaRecaps: v.optional(v.boolean()),
   },
   returns: v.array(docListItemValidator),
@@ -205,7 +197,6 @@ export const list = authQuery({
       }
     }
 
-    // PR recaps: newest PRs first. Other docs: most recently created first.
     const repoCache: RepoCache = new Map();
     return Promise.all(
       docs
@@ -301,7 +292,6 @@ export const listForChat = authQuery({
         _id: doc._id,
         numId: doc.numId,
         title: doc.title,
-        // Agents open a doc with `# Title`; the card already shows the title.
         contentPreview: docListPreview({
           description: doc.description,
           content: doc.content.replace(/^\s*#\s+[^\n]*\n/, ""),
@@ -312,10 +302,6 @@ export const listForChat = authQuery({
   },
 });
 
-/**
- * Docs for a chat's Documents tab. Sessions also include Plan → Save as
- * document (`sessionId`); `getBySession` still reads only `sessionId`.
- */
 async function listDocsForSource(
   ctx: QueryCtx & { userId: Id<"users"> },
   source: ChatSourceArg,
@@ -525,9 +511,6 @@ export const createFromSession = authMutation({
     const planJson = markdownToDocJson(session.planContent ?? "");
 
     if (existing) {
-      // "Update Document": overwrite the live synced doc with the latest plan.
-      // An explicit, infrequent overwrite, so clobbering in-flight edits is
-      // acceptable.
       await replaceDocBody(ctx, existing._id, session.planContent ?? "");
       return existing._id;
     }
@@ -635,16 +618,11 @@ export const getByPrUrl = internalQuery({
   },
 });
 
-/** The run setup a ready recap records: shown in the badge, reused to revise. */
 const recapRunValidator = v.object({
   model: aiModelValidator,
   ...modelTraitsExecutionFields,
 });
 
-/**
- * Every field is written, so a trait the run did not set is cleared rather
- * than left over from an older run.
- */
 function recapRunPatch(run: Infer<typeof recapRunValidator>) {
   return {
     prRecapModel: run.model,
@@ -655,7 +633,6 @@ function recapRunPatch(run: Infer<typeof recapRunValidator>) {
   };
 }
 
-/** Creates or updates a system-owned PR recap doc and resets its ProseMirror content. */
 async function upsertPrRecapDocImpl(
   ctx: MutationCtx,
   args: {
@@ -666,12 +643,10 @@ async function upsertPrRecapDocImpl(
     headSha: string;
     content: string;
     recapWalkthrough?: RecapWalkthroughStep[];
-    /** Model and traits of the run that produced this recap (ready writes). */
     run?: Infer<typeof recapRunValidator>;
     prRecapStatus: "pending" | "ready" | "error";
     prRecapError?: string;
     clearActiveWorkflowId?: boolean;
-    /** Set only when provided — never cleared on refresh, so Eva origin survives a regen. */
     prRecapOrigin?: "eva";
   },
 ): Promise<Id<"docs">> {
@@ -686,10 +661,6 @@ async function upsertPrRecapDocImpl(
 
   const markdownJson = markdownToDocJson(args.content);
 
-  // A run starting on an existing recap only flips it to pending. The recap on
-  // show — summary, walkthrough and the commit it was written for — stays
-  // until the run's ready write replaces it, so a failed run leaves it intact
-  // instead of a "Generating…" placeholder and a commit it never covered.
   if (existing && args.prRecapStatus === "pending") {
     await ctx.db.patch(existing._id, {
       title: args.title,
@@ -708,8 +679,6 @@ async function upsertPrRecapDocImpl(
   }
 
   if (existing) {
-    // Status no longer says whether the content is a real recap (a pending or
-    // failed run keeps the last one), so history is kept for any stored recap.
     const shouldSnapshot =
       hasStoredRecap(existing) &&
       existing.content.trim().length > 0 &&
@@ -740,9 +709,6 @@ async function upsertPrRecapDocImpl(
       });
     }
     await prosemirrorSync.create(ctx, existing._id, markdownJson);
-    // The invariant is about the row that ends up stored, so it is checked
-    // against the walkthrough this write leaves behind — a preserved one
-    // included.
     const resolved = resolvePrRecapWrite({
       prRecapStatus: args.prRecapStatus,
       recapWalkthrough: args.recapWalkthrough ?? existing.recapWalkthrough,
@@ -760,9 +726,6 @@ async function upsertPrRecapDocImpl(
       headSha: args.headSha,
       prRecapStatus: resolved.prRecapStatus,
       prRecapError: resolved.prRecapError,
-      // Only overwrite the walkthrough when the agent produced one, so a failed
-      // regen does not wipe the previous one. A new walkthrough retires the
-      // legacy HTML page it replaces.
       ...(args.recapWalkthrough !== undefined
         ? { recapWalkthrough: args.recapWalkthrough, html: undefined }
         : {}),
@@ -836,8 +799,6 @@ export const patchPrRecapStatus = internalMutation({
     const doc = await ctx.db.get(args.docId);
     if (!doc) return null;
 
-    // A status patch carries no walkthrough, so "ready" is judged against the
-    // doc's stored one: without it the row would claim a recap it cannot show.
     const resolved = resolvePrRecapWrite({
       prRecapStatus: args.prRecapStatus,
       recapWalkthrough: doc.recapWalkthrough,
@@ -898,7 +859,6 @@ export const startPrRecap = internalMutation({
     pendingPlaceholder: v.optional(v.string()),
     reviewerFeedback: v.optional(v.array(reviewerFeedbackItemValidator)),
     consumeAgentCommentIds: v.optional(v.array(v.id("docComments"))),
-    /** Absent falls back to the repo default; resolved here so the run (and its ready write) carries the real model. */
     model: v.optional(aiModelValidator),
     ...modelTraitsExecutionFields,
   },
@@ -926,8 +886,6 @@ export const startPrRecap = internalMutation({
         ? "_Revising recap from feedback…_"
         : "_Generating recap…_");
 
-    // Tag Eva-managed PRs so the docs Reviews sidebar hides them; those recaps
-    // belong on the sandbox Review tab instead.
     const prRecapOrigin = (await isEvaOwnedPullRequest(ctx, args.prUrl))
       ? "eva"
       : undefined;
@@ -947,10 +905,6 @@ export const startPrRecap = internalMutation({
       ...(prRecapOrigin !== undefined ? { prRecapOrigin } : {}),
     });
 
-    // The model and traits are recorded by the ready write (`recapRunPatch`),
-    // not here: a run that fails must not relabel the recap still on show.
-
-    // A recap already running on this doc keeps its slot: this start throws.
     const workflowId = await startAgentJob(ctx, docId, () =>
       workflow.start(ctx, internal.prRecapWorkflow.prRecapWorkflow, {
         docId,
@@ -1034,7 +988,6 @@ export const reviseRecapFromFeedback = authMutation({
       headSha: doc.headSha,
       reviewerFeedback,
       consumeAgentCommentIds: pendingIds,
-      // A revision reruns on the setup that produced the recap being revised.
       model: doc.prRecapModel,
       reasoningLevel: doc.reasoningLevel,
       thinkingEnabled: doc.thinkingEnabled,

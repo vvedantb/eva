@@ -16,11 +16,9 @@ export function ReviewTabNav({
   onTabChange,
   controlsRef,
 }: {
-  /** The surface's tabs, in `REVIEW_TAB_ORDER`. */
   tabs: readonly ReviewTab[];
   activeTab: ReviewTab;
   onTabChange: (tab: ReviewTab) => void;
-  /** Receives the right-hand slot element, for a tab to portal into. */
   controlsRef: (element: HTMLElement | null) => void;
 }) {
   return (
@@ -36,8 +34,6 @@ export function ReviewTabNav({
       >
         <TabsList
           size="sm"
-          // Body size, like the branch line above: the small preset (12px)
-          // made the tabs the smallest text in the header.
           className="h-8 shrink-0 gap-0.5 p-0 shadow-none [&_.t-tab]:text-sm"
         >
           {tabs.map((tab) => (

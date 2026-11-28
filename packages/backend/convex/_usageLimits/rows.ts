@@ -150,14 +150,6 @@ export function presentReading(
       next.windows = activeWindows;
     } else {
       delete next.windows;
-      // A status observed alongside windows expires when all of those windows
-      // reset. Windowless status-only events remain until the row's captured-at
-      // freshness limit above.
-      //
-      // The discriminant goes with it: "complete" described a reading whose
-      // windows have all since reset, and leaving it would have the UI report
-      // that the provider has no plan windows at all. A reading that never
-      // carried windows keeps it — that is the case it exists for.
       if (reportedWindows.length > 0) {
         delete next.status;
         delete next.completeness;

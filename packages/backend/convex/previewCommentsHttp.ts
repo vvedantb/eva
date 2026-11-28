@@ -2,13 +2,6 @@ import type { HttpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
-/**
- * Preview comments for a direct sandbox link (`/preview-comments/{list,send,
- * resolve}`). The page sends the bearer token Eva minted at the link handshake
- * (`previewGrant.mintPreviewGrant`). CORS is open to any origin because the
- * token, not the origin, is the credential and no cookie is involved.
- */
-
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "authorization, content-type",

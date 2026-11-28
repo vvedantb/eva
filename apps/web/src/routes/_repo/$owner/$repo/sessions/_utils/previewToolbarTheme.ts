@@ -1,6 +1,5 @@
 import type { PreviewToolbarTheme } from "@eva/shared/previewFrameMessages";
 
-/** Throwaway element carrying the same classes Eva's own controls use. */
 function probe(className: string, text = "x"): HTMLElement {
   const element = document.createElement("div");
   element.className = className;
@@ -32,7 +31,6 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
   const popover = probe("bg-popover");
   const muted = probe("bg-muted");
   const warning = probe("text-warning");
-  // A real <textarea>: element rules in globals.css change its border.
   const input = document.createElement("textarea");
   input.className = "border border-input";
   input.style.cssText = "position:fixed;left:-9999px;top:0;pointer-events:none";
@@ -40,8 +38,6 @@ export function readPreviewToolbarTheme(): PreviewToolbarTheme {
   focus.className = "border border-ring/50";
   focus.style.cssText = input.style.cssText;
   const secondary = probe("text-secondary-foreground");
-  // The segmented tabs use the trough `--default` in light, `--surface-card`
-  // in dark, and the pill `--segment` (globals.css `.tabs-segmented`).
   const tabTrack = probe("");
   tabTrack.style.backgroundColor = document.documentElement.classList.contains("dark")
     ? "var(--surface-card)"

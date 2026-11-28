@@ -30,7 +30,6 @@ describe("the shared claimed-turn lifecycle", () => {
   });
 
   test("a prompt without a durable lease is no claim", () => {
-    // Every chat turn is durable; the server drops a slot without a turn.
     expect(
       readClaimedTurn({ prompt: "Fix it", turnLifecycle: "legacy" }),
     ).toBeNull();
@@ -56,8 +55,6 @@ describe("the shared claimed-turn lifecycle", () => {
   });
 
   test("fences the completion from the same state that gates heartbeats", () => {
-    // The completion fence and the heartbeat gate used to be separate globals
-    // and drifted apart. One ownership state cannot disagree with itself.
     const turn = readClaimedTurn({
       prompt: "Fix it",
       turnLifecycle: "durable",
@@ -159,7 +156,6 @@ describe("routeClaimedTurn", () => {
   });
 
   test("parks a claim that a cancel hands back while a turn runs", () => {
-    // A cancel response can carry the next queued prompt, even the same turn.
     startClaimedTurn(claim("turn-1"));
     const next = claim("turn-1");
     expect(

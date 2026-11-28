@@ -46,11 +46,6 @@ import { usePendingLineComments, useViewedFiles, type DiffRef, type PrDiffState 
 
 type ReadyDiff = Extract<PrDiffState, { status: "ready" }>;
 
-/**
- * Lines of one file drawn at a time. A diff line is three views and the diff
- * scrolls sideways as one block, so it is not a virtualised list; a longer
- * file shows this many more on each "Show more lines".
- */
 const DIFF_LINE_CHUNK = 400;
 
 /**
@@ -64,7 +59,6 @@ export function PrDiffGate({
   children,
 }: {
   state: PrDiffState;
-  /** Drawn while the diff loads, in place of the spinner line (a list's placeholder rows). */
   loading?: ReactNode;
   children: (diff: ReadyDiff) => ReactNode;
 }) {
@@ -136,7 +130,6 @@ export function PrFileDiff({
 }: {
   pr: DiffRef;
   diff: ReadyDiff;
-  /** The file to show. One the PR does not touch (or none) opens the first, as the web list starts there. */
   path: string | undefined;
   onPathChange: (path: string) => void;
   commentable: boolean;
@@ -147,13 +140,9 @@ export function PrFileDiff({
   const pending = usePendingLineComments(pr);
   const [shownLines, setShownLines] = useState<{ path: string; count: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  /** The rows the comment sheet is open on (`from` is the first tap); null while it is closed. */
   const [commentRange, setCommentRange] = useState<{ from: number; to: number } | null>(null);
-  /** While set, the bar asks for the range's other end; the sheet is closed. */
   const [rangeAnchor, setRangeAnchor] = useState<number | null>(null);
   const muted = textColor(scheme, "muted");
-  // Android back leaves the range bar first, as it closes a sheet first. An
-  // effect because the hardware back button is a subscription outside React.
   useEffect(() => {
     if (rangeAnchor === null) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -175,7 +164,6 @@ export function PrFileDiff({
   const hidden = lines.length - shown;
   const fileComments = pending.comments.filter((comment) => comment.path === entry.path);
   const targets = lines.map(lineCommentTarget);
-  // A comment shows under its last line, as the web draws it.
   const commentsAt = (row: number) => {
     const target = targets[row];
     return target ? fileComments.filter((comment) => comment.line === target.line && comment.side === target.side) : [];
@@ -209,11 +197,9 @@ export function PrFileDiff({
     onPathChange(next.path);
   };
 
-
   return (
     <View className="flex-1">
       {diff.truncated ? <TruncatedNote /> : null}
-      {/* The web file bar: the whole path (wrapping), the counts, the menu and the tick. */}
       <View className="flex-row items-center gap-1 py-1 pr-1 pl-4" style={{ borderBottomWidth: 1, borderColor: EVA_THEME[scheme].border }}>
         <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-x-3 gap-y-1 py-2">
           <FilePath entry={entry} />
@@ -243,9 +229,6 @@ export function PrFileDiff({
           <FileNote text={entry.renamedFrom ? "File renamed without content changes." : "No content changes in this file."} />
         ) : (
           <>
-            {/* The line rows stay the kit's 22, below the 44 rule on purpose:
-                taller rows would spread the code apart, and each tap opens the
-                comment sheet, which names the lines ("Comment on lines ..."). */}
             <UnifiedDiff
               lines={hidden > 0 ? lines.slice(0, shown) : lines}
               onLinePress={commentable ? pressLine : undefined}
@@ -278,7 +261,6 @@ export function PrFileDiff({
           <Text className="min-w-0 flex-1 text-sm" style={textColor(scheme)}>
             {`Tap the other end of the range from ${targets[rangeAnchor]?.label ?? ""}`}
           </Text>
-          {/* A 44 high target without slop, which would reach the step bar's buttons below. */}
           <Pressable
             accessibilityRole="button"
             onPress={() => setRangeAnchor(null)}
@@ -356,11 +338,6 @@ export function FilePath({ entry, className = "min-w-0 shrink text-sm" }: { entr
   );
 }
 
-/**
- * The web file card's right-click menu, as a sheet: Copy path and View file on
- * GitHub. The web "Load full file context" needs a diff of two whole files,
- * which the phone does not draw, and "Open in Files" a sandbox file pane.
- */
 function FileMenu({
   open,
   onOpenChange,
@@ -395,7 +372,6 @@ function FileMenu({
   );
 }
 
-/** Where a comment on rows `from` to `to` anchors on GitHub, and its excerpt for a chat prompt. */
 function lineTargetAt(lines: readonly UnifiedDiffLine[], from: number, to: number) {
   const anchor = lineRangeCommentTarget(lines, from, to);
   const excerpt = reviewCommentExcerpt(lines, from, to);
@@ -404,13 +380,6 @@ function lineTargetAt(lines: readonly UnifiedDiffLine[], from: number, to: numbe
 
 type LineTarget = NonNullable<ReturnType<typeof lineTargetAt>>;
 
-/**
- * The web review comment box (`DiffCommentDraftBox`, with the last line's
- * `DiffCommentPendingCard`s above it) as a sheet: open while `target` is set.
- * Closing drops the draft, as the web Cancel does, so it does not carry to
- * another line; "Select more lines" (`onSelectRange`) closes it and keeps the
- * draft for the range.
- */
 function LineCommentSheet({
   target,
   comments,
@@ -429,7 +398,6 @@ function LineCommentSheet({
   const scheme = useScheme();
   const muted = textColor(scheme, "muted");
   const [text, setText] = useState("");
-  // The field, focused once the sheet is on screen (`onShow`): focus is imperative.
   const field = useRef<TextInput>(null);
   const trimmed = text.trim();
   const close = () => {
@@ -485,7 +453,6 @@ function LineCommentSheet({
             variant="ghost"
             fullWidth={false}
             className="self-start"
-            // 46 high, kept inside half the 12 gap to the field and the footer.
             hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
             leftIcon={<IconArrowsVertical size={14} color={muted.color} />}
             onPress={onSelectRange}
@@ -506,7 +473,6 @@ function LineCommentSheet({
   );
 }
 
-/** The web body note for a file with nothing to draw (`px-3 py-4 text-xs`, muted). */
 function FileNote({ text }: { text: string }) {
   const scheme = useScheme();
   return (
@@ -516,7 +482,6 @@ function FileNote({ text }: { text: string }) {
   );
 }
 
-/** A 44 square step to the previous or next changed file. */
 function StepButton({ direction, disabled, onPress }: { direction: "previous" | "next"; disabled: boolean; onPress: () => void }) {
   const scheme = useScheme();
   const Icon = direction === "previous" ? IconChevronLeft : IconChevronRight;

@@ -34,7 +34,6 @@ export async function isEvaOwnedPullRequest(
 interface PrChatOwner {
   numId?: number;
   userId: Id<"users">;
-  /** The app row the PR's code lives in; undefined for a repo-less task. */
   repoId?: Id<"githubRepos">;
 }
 

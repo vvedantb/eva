@@ -98,7 +98,6 @@ export function AutomationClient({
         </div>
       }
       headerRight={
-        // An event automation acts on the PR or issue its event names.
         !canRunByHand(automation.trigger) ? null : (
           <Button
             size="sm"
@@ -142,7 +141,6 @@ export function AutomationClient({
       }
     >
       <div className="flex flex-col gap-4">
-        {/* Keep panes mounted so Settings form state survives tab switches. */}
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "latest" ? 1 : 0 }}
@@ -234,7 +232,6 @@ function SettingsForm({
         current && {
           ...current,
           ...fields,
-          // Null in the mutation clears the field on the row.
           ...(providerAccountId === undefined
             ? {}
             : { providerAccountId: providerAccountId ?? undefined }),
@@ -254,7 +251,6 @@ function SettingsForm({
   const titleFieldId = useId();
   const promptFieldId = useId();
 
-  // Persist a single field change and confirm with one deduped toast.
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
   ) =>

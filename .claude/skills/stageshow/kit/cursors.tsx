@@ -1,6 +1,3 @@
-// macOS system cursors. Hotspots are listed in HOTSPOT in stage.tsx.
-// The hands draw a little larger than the arrow, as they do on macOS.
-
 export function MacPointer() {
   return (
     <svg height="24" width="24" viewBox="0 0 32 32" fill="none">
@@ -15,7 +12,6 @@ export function MacPointer() {
 export function MacIbeam() {
   return (
     <svg width="10" height="16" viewBox="0 0 10 16" fill="none" overflow="visible">
-      {/* A thin edge in the opposite tone, as macOS draws it, so it reads on any surface */}
       <path d="M3 1H7M3 15H7M5 1V15" style={{ stroke: 'var(--ss-cursor-edge, #fff)' }} strokeWidth="2.6" strokeLinecap="round" />
       <path d="M3 1H7M3 15H7M5 1V15" style={{ stroke: 'var(--ss-cursor-line, #000)' }} strokeWidth="1" strokeLinecap="round" />
     </svg>
@@ -31,8 +27,6 @@ export function MacCrosshair() {
   )
 }
 
-// The pointing hand, for links and buttons: a white glove, index finger up,
-// the other three fingers folded, thumb along the left. Hotspot at the fingertip.
 export function MacPointingHand() {
   return (
     <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
@@ -48,7 +42,6 @@ export function MacPointingHand() {
   )
 }
 
-// The open hand: over something that can be dragged, before it's pressed.
 export function MacOpenHand() {
   return (
     <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
@@ -85,10 +78,6 @@ export function MacWait() {
   )
 }
 
-// The resize cursors, measured from macOS's own: two rounded black
-// triangles, a 6pt gap between them, each with a 1pt white edge. The pair
-// points north-south, and turns for east-west and the two diagonals. Drawn
-// at the pointer's scale (a 28pt box at 21px), hotspot at the center.
 const RESIZE_TIP = 'M0-8.4 2.55-3.65H-2.55ZM0 8.4 2.55 3.65H-2.55Z'
 function MacResize({ turn }: { turn: number }) {
   return (

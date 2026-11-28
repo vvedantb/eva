@@ -37,9 +37,7 @@ import { useScheme } from "@/ui/theme";
 
 type QueuedRow = FunctionReturnType<typeof api.queuedMessages.listByParent>[number];
 
-/** One row: 56 high, as a phone list row (the web row is a 24 high desktop line). */
 const ROW_HEIGHT = 56;
-/** Three rows show before the list scrolls, as the web list's `max-h-48`, so the transcript keeps most of the screen. */
 const VISIBLE_ROWS = 3;
 
 /**
@@ -59,7 +57,6 @@ export function QueuedMessagesPanel({
   isExecuting,
   isSandboxActive,
 }: {
-  /** The session chat (`getChat`'s `parentId`); undefined before a task's or project's chat exists. */
   parentId: Id<"sessionChats"> | undefined;
   isExecuting: boolean;
   isSandboxActive: boolean;
@@ -73,7 +70,6 @@ export function QueuedMessagesPanel({
   const [editing, setEditing] = useState<QueuedRow | null>(null);
   const [deleting, setDeleting] = useState<QueuedRow | null>(null);
 
-  // The web's own queue edits: each shows at once and rolls back if the server refuses it.
   const {
     updateQueuedMessage: update,
     deleteQueuedMessage: remove,
@@ -95,8 +91,6 @@ export function QueuedMessagesPanel({
   };
 
   return (
-    // Web: a `bg-muted/50` card with a 16 top radius, flush on the input below (`rounded-b-none`), inset 12 each side.
-    // It runs 8 into the composer's top padding, so it sits on the pill.
     <View
       className="-mb-2 mx-6 rounded-t-2xl border border-b-0 px-1.5 pt-0.5"
       style={{
@@ -114,7 +108,6 @@ export function QueuedMessagesPanel({
         <Text className="font-instrument-sans-medium text-sm" style={{ fontWeight: "500", color: theme.mutedForeground }}>
           {rows.length} {label}
         </Text>
-        {/* After the text, pointing right, turning 90° while the list is open, as the web. */}
         <View style={open ? { transform: [{ rotate: "90deg" }], opacity: 0.7 } : { opacity: 0.7 }}>
           <IconChevronRight size={14} color={theme.mutedForeground} />
         </View>
@@ -177,7 +170,6 @@ export function QueuedMessagesPanel({
 
       <EditQueuedSheet row={editing} onClose={() => setEditing(null)} onSave={(id, content) => update({ id, content })} />
 
-      {/* The web "Delete queued message" dialog. */}
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(next) => {
@@ -196,12 +188,6 @@ export function QueuedMessagesPanel({
   );
 }
 
-/**
- * One queued message: the author's initials and the model mark (or the web's
- * empty dot for a row without a model), two lines of text in the phone's 14,
- * and Steer at the end, or "Steering…" once pressed (then no actions, as the
- * web). A tap or a long press on the text opens the row's sheet.
- */
 function QueueRow({
   row,
   author,
@@ -215,7 +201,6 @@ function QueueRow({
 }) {
   const theme = EVA_THEME[useScheme()];
   const text = queuedMessagePreview(row.displayContent ?? row.content);
-  // While it steers, the web row has no actions: the agent is taking it.
   const steering = row.steer !== undefined;
   return (
     <View className="flex-row items-center" style={{ minHeight: ROW_HEIGHT }}>
@@ -231,7 +216,6 @@ function QueueRow({
         }}
         className="min-w-0 flex-1 flex-row items-center gap-2.5 self-stretch rounded-lg px-1 active:opacity-70"
       >
-        {/* Who asked, then on what, as the web: a shared chat's queue mixes teammates' prompts. */}
         <InitialsAvatar user={author} size={16} />
         {row.model ? (
           <ModelIcon model={row.model} reasoningLevel={row.reasoningLevel} size={14} />
@@ -266,10 +250,6 @@ function QueueRow({
   );
 }
 
-/**
- * The web "Edit queued message" dialog as a sheet: the whole message in a
- * field focused on open, Cancel, and Save, which waits for some text.
- */
 function EditQueuedSheet({
   row,
   onClose,

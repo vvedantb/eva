@@ -8,16 +8,6 @@ import {
 } from "../_sessions/owner";
 import { findWorkChat } from "../_sessions/ownerState";
 
-/**
- * A chat's model, traits and account live on the chat alone
- * (`sessionChats.lastModel`, `providerAccountId`, `last*`). A project's are
- * the ones picked in Eva's chat (its coordinator session's Main chat): a
- * child task's chat starts on them (`chatSeedSettings`), and takes them again
- * after a usage limit stopped it, so a changed account takes over. The
- * project's account is the account Eva's chat runs on; its holder is the
- * project's owner, whoever sends the turn.
- */
-
 /** Eva's chat settings for a project, or null before her chat exists. */
 export async function evaChatSettings(
   db: DatabaseReader,

@@ -14,7 +14,6 @@ export interface SendEmailPayload {
   replyTo?: string;
 }
 
-/** Lowercases and de-duplicates a single email or list of emails. */
 function normalizeEmails(emails: string | string[] | undefined): string[] {
   if (!emails) return [];
   const emailArray = Array.isArray(emails) ? emails : [emails];
@@ -31,7 +30,6 @@ function normalizeEmails(emails: string | string[] | undefined): string[] {
  */
 export async function sendEmail(data: SendEmailPayload): Promise<void> {
   sendgrid.setApiKey(requiredEnv("SENDGRID_API_KEY"));
-  // SendGrid renders { email, name } as the sender display name in the inbox.
   const from = {
     email: data.from ?? requiredEnv("SENDGRID_FROM_EMAIL"),
     name: "Eva",
@@ -57,7 +55,6 @@ export async function sendEmail(data: SendEmailPayload): Promise<void> {
     return;
   }
 
-  // Non-production: redirect everything to the test inbox.
   await sendgrid.send({
     from,
     subject: `[dev] ${data.subject}`,

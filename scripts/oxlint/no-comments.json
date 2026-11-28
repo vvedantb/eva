@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "jsPlugins": [{ "name": "no-comments", "specifier": "./no-comments.mjs" }],
+  "categories": {},
+  "rules": { "no-comments/no-comments": "error" },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/*.gen.ts",
+    "**/_generated/**",
+    "**/*.d.ts",
+    "**/stageshow/**"
+  ]
+}

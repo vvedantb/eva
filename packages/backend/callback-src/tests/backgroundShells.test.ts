@@ -16,7 +16,6 @@ mock.module("../http/convexClient.js", () => ({
   },
 }));
 
-/** A fresh module per test: config reads the entity env at import time. */
 async function loadForSession() {
   stubEnv("AI_PROVIDER", "claude");
   stubEnv("ENTITY_ID_FIELD", "chatId");

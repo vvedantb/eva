@@ -7,7 +7,6 @@ import {
   readUnifiedRateLimitHeaders,
 } from "../convex/_usageLimits/claudeUsage";
 
-/** A literal response body, parsed the way the action parses a real one. */
 function parse(body: object) {
   const parsed = claudeUsageBodySchema.safeParse(body);
   if (!parsed.success) throw new Error("expected the body to parse");
@@ -16,9 +15,6 @@ function parse(body: object) {
 
 describe("hasPlanRateLimits", () => {
   test("an HTTP 200 error envelope reports no rate limits", () => {
-    // The endpoint answers a rejected or wrong-scope token with 200 and an
-    // error body, which parses cleanly against an all-optional shape — so the
-    // key test is whether it named any window at all.
     expect(
       hasPlanRateLimits(parse({ error: { type: "invalid_request" } })),
     ).toBe(false);
@@ -106,7 +102,6 @@ describe("readClaudeUsageWindows", () => {
           {
             kind: "weekly_scoped",
             percent: 40,
-            // Epoch SECONDS here, unlike the ISO string above.
             resets_at: resetsAtMs / 1000,
             scope: { model: { display_name: "Opus 5" } },
           },
@@ -166,8 +161,6 @@ describe("readClaudeUsageWindows", () => {
   });
 
   test("extra usage is excluded — it meters spend, not headroom", () => {
-    // A spend meter reading high says nothing about whether the plan is about
-    // to refuse work, so it must never reach the windows the chip measures.
     expect(
       readClaudeUsageWindows(
         parse({
@@ -209,8 +202,6 @@ describe("unified inference headers", () => {
   });
 
   test("the 7d_oi claim becomes Weekly (Fable)", () => {
-    // The chip bar picks the weekly window that meters the active model, so a
-    // Fable chat's refresh has to produce a `model_scoped:Fable` key.
     const resetsAtMs = Date.UTC(2026, 7, 25, 12, 0, 0);
     const headers: Record<string, string> = {
       "anthropic-ratelimit-unified-5h-utilization": "0.5",
@@ -246,8 +237,6 @@ describe("unified inference headers", () => {
   });
 
   test("the probe sees no weekly beyond all-models and Fable", () => {
-    // Which is why a probe reading is stored as a partial merge: replacing the
-    // row would drop the Opus/Sonnet weeklies only `/usage` reports.
     expect(
       readUnifiedRateLimitHeaders((name) =>
         name.endsWith("-utilization") ? "0.5" : undefined,
@@ -262,12 +251,6 @@ describe("unified inference headers", () => {
   });
 });
 
-/**
- * Current `/usage` bodies null out the legacy `five_hour` / `seven_day` keys
- * and report the same numbers as `limits[]` entries instead. Without this
- * fallback a refresh stores only the model-scoped weeklies, so the chip loses
- * the two windows that actually gate work.
- */
 describe("limits[] stands in for the legacy top-level windows", () => {
   test("session and weekly_all fill 5h and Weekly (all models)", () => {
     const resetsAtMs = Date.UTC(2026, 7, 25, 12, 0, 0);
@@ -294,15 +277,12 @@ describe("limits[] stands in for the legacy top-level windows", () => {
   });
 
   test("a body carrying only limits[] is still a usage report", () => {
-    // Nothing at the top level, so `hasPlanRateLimits` has to read `limits[]`
-    // or a good stored row gets discarded as "Claude reported nothing".
     expect(
       hasPlanRateLimits(parse({ limits: [{ kind: "session", percent: 4 }] })),
     ).toBe(true);
   });
 
   test("a top-level window wins over the same window in limits[]", () => {
-    // Both shapes in one body must not draw the window twice.
     expect(
       readClaudeUsageWindows(
         parse({

@@ -16,10 +16,6 @@ export interface CountUpProps {
   className?: string;
   prefix?: string;
   suffix?: string;
-  /**
-   * Odometer mode: every digit column rolls up to its value, rightmost first.
-   * Off by default, so existing counters keep their smooth count.
-   */
   roll?: boolean;
 }
 
@@ -77,9 +73,7 @@ export function CountUp({
   );
 }
 
-/** Two laps of 0–9, so every column travels at least one full turn. */
 const CELLS = Array.from({ length: 20 }, (_, index) => index % 10);
-/** Each column to the left starts this much later than the one to its right. */
 const COLUMN_STAGGER = 0.07;
 
 interface RollDigitsProps {
@@ -90,7 +84,6 @@ interface RollDigitsProps {
   className?: string;
 }
 
-/** Columns fade out at the top and bottom edge, like the window of a mechanical counter. */
 const COLUMN_WINDOW =
   "linear-gradient(transparent, black 14%, black 86%, transparent)";
 

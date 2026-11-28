@@ -23,7 +23,6 @@ export function clerkFrontendApiHost(publishableKey: string = PUBLISHABLE_KEY): 
   let body = match[1];
   while (body.length % 4 !== 0) body += "=";
   try {
-    // atob is available in Hermes / React Native.
     const decoded = atob(body);
     const dollar = decoded.indexOf("$");
     const host = (dollar === -1 ? decoded : decoded.slice(0, dollar)).trim();

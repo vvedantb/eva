@@ -20,7 +20,6 @@ export function DiffOptions({ pr, refreshing, onRefresh }: { pr: DiffRef; refres
   const pending = usePendingLineComments(pr).comments.length;
   const toggleWhitespace = () => {
     setOpen(false);
-    // The web refusal: pending comments are pinned to the lines on screen, and this rewrites them.
     if (pending > 0) {
       toast.info("Submit or delete pending review comments first — they are pinned to the lines on screen.");
       return;

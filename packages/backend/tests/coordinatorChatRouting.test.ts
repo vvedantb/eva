@@ -8,16 +8,6 @@ import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { chatMessageRoute, EVA_MENTION_ID, mentionsEva } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * v2 PR A (`projects-v2-chat.md`, decisions 1 and 3): in a project's
- * coordinator chat, a message that `@`-mentions only teammates is a quiet
- * comment (stored, no Eva turn); `@Eva` or no mention still wakes her. The
- * mentioned teammate sees it in Inbox → Needs you until they post there.
- */
-
-// convex-test ids look like `10000;users`, which the real token pattern
-// (`[a-z0-9_]{16,40}`) never matches. This reads any `@[Name](id)` token, so
-// teammate mentions resolve here as they do on a real deployment.
 mock.module("../convex/_mentions/extractMentionedUserIds", () => ({
   extractMentionedUserIds: (
     ctx: { db: { normalizeId: (table: "users", id: string) => Id<"users"> | null } },
@@ -36,7 +26,6 @@ const TIMEOUT_MS = 30_000;
 const AUTHOR = "clerk|routing-author";
 const TEAMMATE = "clerk|routing-teammate";
 
-// A started turn runs a workflow; keep its steps from running.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -108,7 +97,6 @@ async function fixture() {
     api.sessions.ensureOwned,
     { owner: { kind: "project", projectId: ids.projectId } },
   );
-  // Eva is awake, so a message for her starts a turn at once.
   await t.run((ctx) =>
     ctx.db.patch(sessionId, { status: "active", sandboxId: "sbx-test" }),
   );
@@ -117,7 +105,6 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** A person's send on the shared send path; returns what became of it. */
 function send(f: Fixture, clerkUserId: string, message: string) {
   return f.t.mutation(internal._sessions.execution.sendFromMcp, {
     clerkUserId,
@@ -170,7 +157,6 @@ describe("coordinator chat routing", () => {
         turns: 0,
       });
 
-      // The apps' send (`chats.send`) stores it once, and queues nothing.
       await f.author.mutation(api.chats.send, {
         target: f.chatId,
         message: `${mentionToken("Tom Mate", f.teammateId)} and the colours`,
@@ -220,13 +206,11 @@ describe("mentions in Needs you", () => {
       expect(mention?.source).toBe("project");
       expect(mention?.projectTitle).toBe("Checkout");
       expect(mention?.chatTarget).toBe(f.projectId);
-      // The author is not mentioned: nothing for them.
       const authorRows = await f.author.query(api.needsYou.list, {});
       expect(authorRows.some((row) => row.key.startsWith("notification:"))).toBe(
         false,
       );
 
-      // The teammate answers the author quietly in the same chat.
       await send(
         f,
         TEAMMATE,

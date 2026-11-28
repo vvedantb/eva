@@ -21,8 +21,6 @@ export function DeckThemeScope({
     <DeckThemeContext value={theme}>
       <div
         className={theme === "light" ? "deck-ink-light contents" : "contents"}
-        // The package's light tokens, so app windows drawn on a light slide
-        // (`deck-app-light`) get light surfaces whatever the viewer's theme.
         data-theme={theme === "light" ? "light" : undefined}
       >
         {children}

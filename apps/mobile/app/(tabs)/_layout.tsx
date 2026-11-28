@@ -19,15 +19,12 @@ import { useAppBadge, usePush } from "@/push/push";
 
 type TabIconProps = { color: ColorValue; size: number };
 
-/** Tabler icons take a colour string; the tab bar passes plain strings. */
 const iconColor = (color: ColorValue) =>
   typeof color === "string" ? color : undefined;
 
 const renderTabBar = (props: FloatingTabBarProps) => (
   <FloatingTabBar {...props} />
 );
-// Same icons as the web rail: inbox arrow, terminal for Sessions, gear; the
-// web Projects empty state's board for Projects.
 const inboxIcon = ({ color, size }: TabIconProps) => (
   <IconInbox color={iconColor(color)} size={size} />
 );
@@ -41,7 +38,6 @@ const settingsIcon = ({ color, size }: TabIconProps) => (
   <IconSettings color={iconColor(color)} size={size} />
 );
 
-/** Mounted only when signed in, so push registers, the badge counts and crashes report for the right user. */
 function SignedInEffects() {
   usePush();
   useAppBadge();

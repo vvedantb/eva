@@ -25,17 +25,6 @@ import {
   renderChatLogMarkdown,
 } from "@eva/shared/chatLog";
 
-/**
- * A chat's Log: append-only decisions, changes, research, answered questions
- * and notes for one session, quick task or project. Shown pinned at the top of
- * the chat's Documents tab; never copied into `docs`.
- *
- * Writers: the agent (`log_entry` MCP tool) and the user (Add note) through
- * `append`; the system through `recordAnsweredQuestion` (blocking
- * AskUserQuestion) and `recordTurnChange` (a turn that committed).
- */
-
-/** User notes may run longer; agent and system entries stay skimmable. */
 const LIMITS: Record<
   Doc<"chatLogEntries">["author"],
   { title: number; body: number }
@@ -64,7 +53,6 @@ function clip(text: string, limit: number): string {
     : `${trimmed.slice(0, limit - 1)}…`;
 }
 
-/** One chat's entries, oldest first, stamped (`stampSupersededBy`). */
 async function loadRows(
   ctx: QueryCtx,
   source: ChatSourceArg,
@@ -74,9 +62,7 @@ async function loadRows(
   );
 }
 
-/** Oldest first, each row stamped with the newer entry that replaced it. */
 function stampSupersededBy(rows: Doc<"chatLogEntries">[]): ChatLogRow[] {
-  // _creationTime, not createdAt: two entries in one millisecond keep order.
   rows.sort((a, b) => a._creationTime - b._creationTime);
   const replacedBy = new Map<string, Id<"chatLogEntries">>();
   for (const row of rows) {
@@ -152,7 +138,6 @@ export async function deleteChatLogEntries(
   return rows.length;
 }
 
-/** Newest entries scanned for the repo list; older-only chats drop off. */
 const REPO_LOG_SCAN_LIMIT = 1_000;
 
 const repoChatLogValidator = v.object({
@@ -188,7 +173,6 @@ export const listForRepo = authQuery({
     }
     const cache: RepoCache = new Map();
     const result = [];
-    // Map order follows the scan: the chat with the newest entry comes first.
     for (const group of chats.values()) {
       const newest = group[0];
       if (!newest) continue;
@@ -286,7 +270,6 @@ export const saveQuote = authMutation({
       throw new Error("messageUrl must be an http(s) link.");
     }
     const link = `[Open in chat](${args.messageUrl})`;
-    // The quote is the title; the body repeats it only when the title clips.
     const body =
       quote.length > LIMITS.user.title
         ? `> ${quote.replace(/\n/g, "\n> ")}\n\n${link}`
@@ -377,7 +360,6 @@ export async function recordAnsweredQuestion(
   });
 }
 
-/** First sentence of the reply, without list or emphasis markup. */
 function turnHeadline(content: string): string {
   const line =
     content
@@ -415,8 +397,6 @@ export async function recordTurnChange(
   if (!source || !sourceArg) return;
   const rows = await listRowsForChatSource(ctx, "chatLogEntries", sourceArg);
   if (rows.some((row) => row.afterSha === afterSha)) return;
-  // Newest first; the reply row exists from the turn's start, so later agent
-  // entries belong to this turn.
   const agentChange = rows.find(
     (row) =>
       row.kind === "change" &&

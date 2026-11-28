@@ -13,21 +13,8 @@ import { evaChatSettings, takesEvaSettings } from "../_projects/projectAccount";
 import { setTaskLastRunStartedAt } from "./runSummary";
 import { hasActiveTaskRun } from "./taskRunStatus";
 
-/**
- * A task's run is a turn in its own session's Main chat, carried by the
- * session chat workflow like any message, for quick and project tasks alike.
- * It is marked `taskRun` from the queue to the turn; that marker is what
- * moves the task card (`taskRunStatus.ts`): In Progress when the run is
- * asked for, then Review or To Do when its turn closes. A plain chat message
- * in the same chat never changes the status.
- */
-
 type TaskRunMode = Infer<typeof runModeValidator>;
 
-/**
- * The task files the agent has not seen: all of them on the first run, then
- * the ones uploaded after the previous run started (each blob's upload time).
- */
 async function attachmentsAddedSince(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
@@ -78,13 +65,9 @@ export async function startTaskRunTurn(
   p: {
     mode?: TaskRunMode;
     userId: Id<"users"> | undefined;
-    /** A change request to act on; else the one parked on the task. */
     commentId?: Id<"taskComments">;
-    /** Text for the agent after the task prompt: a retry note or an answer. */
     note?: string;
-    /** What the chat shows, when it is not the task (an answer). */
     displayContent?: string;
-    /** The coordinator sent it (an answer to the task's question). */
     sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
@@ -100,7 +83,6 @@ export async function startTaskRunTurn(
     .query("agentTaskRunSummaries")
     .withIndex("by_task", (q) => q.eq("taskId", task._id))
     .unique();
-  // Comments after the previous run's start are new to the agent.
   const previousRunStartedAt = summary?.lastRunStartedAt;
   const commentId = p.commentId ?? task.pendingChangeRequestCommentId;
   const comment = commentId
@@ -108,9 +90,6 @@ export async function startTaskRunTurn(
     : undefined;
   const context = await ensureWorkSession(ctx, { kind: "task", task });
   let chat = context.mainChat;
-  // The run uses the task chat's own picks. A project task stopped by a
-  // usage limit takes Eva's model and account again, so a changed account
-  // takes over.
   const project =
     task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
   if (project && (await takesEvaSettings(ctx.db, task))) {
@@ -123,8 +102,6 @@ export async function startTaskRunTurn(
       chat = (await ctx.db.get(chat._id)) ?? chat;
     }
   }
-  // The project block rides every turn of a project task's chat
-  // (`ownerPromptContext`), so the task prompt leaves it out.
   const { prompt } = await buildTaskRunPrompt(ctx, {
     task,
     repo,

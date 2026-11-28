@@ -1,4 +1,3 @@
-// node --test scripts/check-schema-narrowing.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,7 +10,6 @@ const TABLE_FIELDS = "packages/backend/convex/_validators/tableFields.ts";
 const SCHEMA = "packages/backend/convex/schema.ts";
 const ENUMS = "packages/backend/convex/_validators/enums.ts";
 
-/** Build a minimal unified diff for one file. */
 function diffFor(file, body) {
   return [
     `diff --git a/${file} b/${file}`,
@@ -59,7 +57,6 @@ test("fails on the turnLifecycleVersion removal from the revert incident", () =>
   assert.equal(result.removals[0].name, "turnLifecycleVersion");
   assert.equal(result.removals[0].kind, "field");
   assert.equal(result.removals[0].file, TABLE_FIELDS);
-  // 374 is the first removed line; the field itself is three comment lines in.
   assert.equal(result.removals[0].line, 377);
 });
 
@@ -69,7 +66,6 @@ test("ignores a field that moved to the other watched file", () => {
       TABLE_FIELDS,
       ["@@ -20 +19,0 @@", "-  planContent: v.optional(v.string()),"].join("\n"),
     ),
-    // Still defined — it just lives in schema.ts now.
     newContent: "planContent: v.optional(v.string()),",
     migrationsSource: NO_MIGRATIONS,
   });
@@ -224,7 +220,6 @@ test("a migration deleted by this change still counts, via the base revision", (
       ].join("\n"),
     ),
     newContent: "export const sessionFields = {};",
-    // The runner concatenates head and base; head no longer has the migration.
     migrationsSource: `${NO_MIGRATIONS}\nexport const clearTurnLifecycleVersion = dataMigrations.define({});\n`,
   });
   assert.equal(result.ok, true);
@@ -290,8 +285,6 @@ test("a quoted field key is recognised", () => {
 });
 
 test("a marker that names its field still needs a real migration", () => {
-  // The #1574 gap: the comment keeps the field name in the file, so the
-  // removal is hidden and only the migration name proves the drain.
   const result = analyzeSchemaNarrowing({
     diff: diffFor(
       TABLE_FIELDS,
@@ -322,7 +315,6 @@ test("an existing marker outside the diff is checked too", () => {
 });
 
 test("git history resolves a one-off migration deleted after it ran", () => {
-  // clearLegacyFields lived in convex/_migrations/ and was deleted (#1574).
   const names = ["clearLegacyFields", "zzzNeverAMigration"];
   assert.deepEqual(
     unresolvedMigrations(names, historicMigrationExports(names)),

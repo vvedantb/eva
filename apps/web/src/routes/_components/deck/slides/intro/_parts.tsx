@@ -10,12 +10,6 @@ import {
   Title,
 } from "../../_components/DeckPrimitives";
 
-/**
- * The intro deck is the only one that alternates light and dark surfaces, and
- * the shared primitives are written for the dark stage. Rather than fork the
- * primitives, each intro slide lays these explicit classes over them, picked
- * from whichever theme the deck has put on `DeckThemeContext`.
- */
 interface IntroPalette {
   surface: string;
   title: string;

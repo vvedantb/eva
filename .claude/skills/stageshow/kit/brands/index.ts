@@ -104,8 +104,6 @@ export const brandMarks = {
   },
   'dropbox': {
     name: "Dropbox", category: 'Apps',
-    // The source artwork is the glyph on a square blue field; shown as the
-    // blue glyph alone, so it sits on a tile like the other app marks
     light: new URL('./dropbox-glyph.svg', import.meta.url).href,
     dark: new URL('./dropbox-glyph.svg', import.meta.url).href,
     proportion: 1, scale: 0.72,

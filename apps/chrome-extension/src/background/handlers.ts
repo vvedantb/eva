@@ -17,7 +17,6 @@ import {
   isStoredPinRecord,
 } from "../shared/messaging";
 
-/** Parses the JSON pin blob stored on the backend, tolerating bad data. */
 function parsePins(json: string | null): Record<string, StoredPin> {
   if (!json) return {};
   try {

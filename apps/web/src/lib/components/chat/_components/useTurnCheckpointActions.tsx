@@ -33,11 +33,6 @@ type RevertAction = ReturnType<
   typeof useAction<typeof api.sandbox.revertSessionToTurn>
 >;
 
-/**
- * Runs the restore and toasts the outcome. Lives outside the hook so the
- * `try`/`catch` never sits in a React Compiler-compiled function body.
- * Returns null when the call itself failed (the dialog stays open).
- */
 async function runRevert(
   revert: RevertAction,
   sessionId: Id<"sessions">,
@@ -81,8 +76,6 @@ export function useTurnCheckpointActions({
 }): { items: ChatMessageActionItem[]; dialogs: ReactNode } {
   const [diffOpen, setDiffOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
-  // Latches on first open and never clears, so closing keeps its exit
-  // animation. See `dialogs` below for why they are not mounted up front.
   const [dialogsMounted, setDialogsMounted] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const revert = useAction(api.sandbox.revertSessionToTurn);
@@ -123,9 +116,6 @@ export function useTurnCheckpointActions({
     },
   ];
 
-  // Every code-changing turn owns two Radix dialog roots, so opening a long
-  // transcript mounted hundreds of them to show none. Built on first open
-  // instead; the row's actions are what pay for them.
   const dialogs = !dialogsMounted ? null : (
     <>
       <TurnDiffDialog

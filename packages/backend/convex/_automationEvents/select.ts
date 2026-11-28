@@ -7,7 +7,6 @@ export interface EventMatch {
   systemKey: string | undefined;
   action: AutomationAction;
   repoId: Id<"githubRepos">;
-  /** True for a monorepo's root row, or a plain single-app repo. */
   isRootRow: boolean;
 }
 

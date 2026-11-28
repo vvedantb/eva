@@ -33,14 +33,7 @@ import { FridayPipeline } from "./friday/b19-pipeline";
 import { FridayJevWhat } from "./friday/b20-jev-what";
 import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
 
-/**
- * Friday session deck order — the last three months, for a non-technical
- * audience. Five acts: three months, using Eva, on its own, trust and reach,
- * and what's next; then the call to action. The index here is the slide
- * number minus one.
- */
 const SLIDES: DeckSlide[] = [
-  // ── Three months: where the work happens ─────────────────────────────────────
   {
     id: "01-title",
     title: "Three months of Eva",
@@ -60,7 +53,6 @@ const SLIDES: DeckSlide[] = [
     steps: 1,
   },
 
-  // ── Using Eva: small asks up to large ones ──────────────────────────
   {
     id: "friday-b01-ask",
     title: "Say what you want",
@@ -123,7 +115,6 @@ const SLIDES: DeckSlide[] = [
     steps: 3,
   },
 
-  // ── On its own: what runs without being asked ───────────────────────
   {
     id: "friday-b12-ave",
     title: "Manager Ave",
@@ -175,7 +166,6 @@ const SLIDES: DeckSlide[] = [
     morph: true,
   },
 
-  // ── Trust and reach: when it breaks, and everywhere it goes ─────────
   {
     id: "friday-b14-mobile",
     title: "On your phone",
@@ -190,7 +180,6 @@ const SLIDES: DeckSlide[] = [
   },
   { id: "08-more", title: "And more", Component: Slide08More, steps: 0 },
 
-  // ── What's next: the queue, and where this is heading ───────────────
   {
     id: "11-whats-next",
     title: "The bottleneck",
@@ -235,7 +224,6 @@ const SLIDES: DeckSlide[] = [
     steps: 3,
   },
 
-  // ── Call to action and close ────────────────────────────────────────
   {
     id: "friday-b16-close",
     title: "On Monday",

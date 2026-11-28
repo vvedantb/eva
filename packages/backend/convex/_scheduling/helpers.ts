@@ -10,6 +10,5 @@ export async function cancelScheduledFunction(
   try {
     await ctx.scheduler.cancel(id);
   } catch {
-    // may have already fired
   }
 }

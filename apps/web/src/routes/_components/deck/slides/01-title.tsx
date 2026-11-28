@@ -9,13 +9,11 @@ import {
   SplitReveal,
 } from "../_components/motion";
 
-/** The mark ignites first; the title rises out of its light. */
 const IGNITE = { duration: 1.3, ease: EASE.expo };
 
 function LogoIgnite() {
   return (
     <div className="relative mb-10 flex items-center justify-center">
-      {/* A painted radial, never a filter: it only scales and fades. */}
       <m.span
         aria-hidden
         className="pointer-events-none absolute size-[300px] rounded-full"
@@ -29,7 +27,6 @@ function LogoIgnite() {
           opacity: { duration: 2, times: [0, 0.35, 1], ease: "easeOut" },
         }}
       />
-      {/* One shockwave, once. */}
       <m.span
         aria-hidden
         className="pointer-events-none absolute size-[96px] rounded-full"
@@ -49,7 +46,6 @@ function LogoIgnite() {
         animate={{ opacity: 1, scale: 1, rotate: 0 }}
         transition={{ ...IGNITE, opacity: { duration: DUR.base } }}
       >
-        {/* The eight-second breath the speaker notes mention. */}
         <m.div
           animate={{ scale: [1, 1.03, 1] }}
           transition={{
@@ -69,7 +65,6 @@ function LogoIgnite() {
 export function Slide01Title() {
   return (
     <Shell center>
-      {/* The whole frame settles a touch, like a lens finding focus. */}
       <m.div
         className="flex flex-col items-center"
         initial={{ scale: 1.035, y: 8 }}

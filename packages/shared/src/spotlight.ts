@@ -1,14 +1,10 @@
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 
-// Spotlight search (`spotlight.search`), web and phone: the result groups,
-// their order and labels. Each app keeps its own icons.
-
 export type SpotlightHit = FunctionReturnType<typeof api.spotlight.search>[number];
 
 export type HitType = SpotlightHit["type"];
 
-/** Render order of the result groups. Pull requests sit next to their work. */
 const GROUP_ORDER: HitType[] = ["page", "repo", "team", "project", "task", "draft", "session", "pr", "doc", "automation", "artifact"];
 
 export const GROUP_LABEL: Record<HitType, string> = {

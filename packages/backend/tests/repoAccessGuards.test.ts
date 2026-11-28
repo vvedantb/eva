@@ -6,18 +6,10 @@ import schema from "../convex/schema";
 import { cancelTrackedWorkflow } from "../convex/workflowManager";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `authMutation` / `authQuery` only authenticate. Each public function below
- * took an id and acted on it without checking the caller can access its
- * repo, so any signed-in user could edit, clear or run AI work on another
- * team's doc, project, session or task. A stranger must now be refused.
- */
-
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|access-owner";
 const STRANGER = "clerk|access-stranger";
 
-// Starts schedule workflow steps; keep them from running after the test.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -204,7 +196,6 @@ describe("the doc workflow slot", () => {
       await expect(
         f.owner.mutation(api.testGenWorkflow.startTestGen, { docId: f.docId }),
       ).rejects.toThrow("Another document task is still running");
-      // A second interview start is refused, not a second workflow.
       await expect(
         f.owner.mutation(api.docInterviewWorkflow.startGenerate, {
           docId: f.docId,
@@ -220,12 +211,6 @@ describe("the doc workflow slot", () => {
     TIMEOUT_MS,
   );
 
-  /**
-   * The busy guard asks the workflow component, not the slot field. A slot
-   * left behind by a workflow that ended without clearing it (crash, cancel,
-   * component cleanup) must read as free, or the user is locked out of every
-   * doc task until the 2h watchdog runs.
-   */
   test(
     "a slot left by an ended or unknown workflow does not block a new start",
     async () => {
@@ -240,7 +225,6 @@ describe("the doc workflow slot", () => {
       const interviewId = await slot();
       expect(interviewId).toBeDefined();
 
-      // The workflow ends, but its id stays in the slot.
       await f.t.run(async (ctx) => {
         await cancelTrackedWorkflow(ctx, interviewId);
         await ctx.db.patch(f.docId, { activeWorkflowId: interviewId });
@@ -252,7 +236,6 @@ describe("the doc workflow slot", () => {
       expect(testGenId).toBeDefined();
       expect(testGenId).not.toBe(interviewId);
 
-      // An id the component no longer knows also reads as free.
       await f.t.run(async (ctx) => {
         await cancelTrackedWorkflow(ctx, testGenId);
         await ctx.db.patch(f.docId, { activeWorkflowId: "wf_gone" });

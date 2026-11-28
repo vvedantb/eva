@@ -5,9 +5,7 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 
 const THROTTLE_MS = 150;
-/** Ignore jitter smaller than this share of the viewport (percent). */
 const MIN_MOVE_PCT = 0.25;
-/** Hide remote cursors that have not moved recently (presence can lag behind tab close). */
 const CURSOR_ACTIVE_MS = 45_000;
 
 export function cursorMovedEnough(
@@ -102,8 +100,6 @@ export function useLiveCursors(
   }, [hasRemoteOnline]);
   /* eslint-enable no-effect/no-external-store-subscription */
 
-  // `useMutation` returns a stable function, so no latest-ref is needed; the
-  // React Compiler memoises this on `roomId` and `updateCursor`.
   const sendUpdate = (x: number, y: number) => {
     if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
     lastPosRef.current = { x, y };

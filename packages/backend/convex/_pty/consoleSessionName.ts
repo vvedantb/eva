@@ -1,6 +1,3 @@
-// Runtime-neutral leaf (no "use node") so the agent prompt and MCP queries can
-// name the Preview Console tmux session exactly as the node-side launcher does.
-
 /** Stable tmux session name for a Console/terminal pane id. */
 export function tmuxSessionName(ptyInstanceId: string | undefined): string {
   const source =

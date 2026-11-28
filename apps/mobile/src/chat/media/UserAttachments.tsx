@@ -9,7 +9,6 @@ import { useState, type ComponentType } from "react";
 import { Image, Pressable, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
-/** The web `iconForAttachment`. */
 const FILE_ICONS: Record<AttachmentFileKind, ComponentType<IconProps>> = {
   markdown: IconMarkdown,
   html: IconHtml,
@@ -74,7 +73,6 @@ export function UserAttachments({ attachments }: { attachments: Array<{ url: str
               accessibilityLabel={label}
               accessibilityHint="Shows the file"
               onPress={() => void openText(item.url, label)}
-              // 44 high for touch; the web chip is `px-2.5 py-1.5`, `max-w-56`.
               className="min-h-11 max-w-56 flex-row items-center gap-2 rounded-2xl px-2.5 active:opacity-70"
               style={{ backgroundColor: theme.muted, borderWidth: 1, borderColor: theme.border }}
             >

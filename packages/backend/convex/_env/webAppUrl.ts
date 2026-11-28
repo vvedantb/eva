@@ -12,7 +12,6 @@ export function tryGetEvaBaseUrl(): string | null {
   return url ? url.replace(/\/$/, "") : null;
 }
 
-/** Absolute web URL of a repo: Eva's base URL plus `repoBasePath`. */
 function repoUrl(owner: string, name: string, rootDirectory?: string): string {
   return `${getEvaBaseUrl()}${repoBasePath({ owner, name, rootDirectory })}`;
 }

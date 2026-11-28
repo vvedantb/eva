@@ -67,7 +67,6 @@ export function PrRemedyButton({
       className={cn(
         "max-sm:hit-target motion-press inline-flex shrink-0 items-center gap-1 text-xs font-medium underline-offset-4 hover:underline active:scale-[0.98] disabled:no-underline disabled:opacity-70",
         TONE_TEXT_CLASS[tone],
-        // A muted link brightens on hover, so it still reads as a link.
         (tone === "pending" || tone === "neutral") && "hover:text-foreground",
       )}
     >

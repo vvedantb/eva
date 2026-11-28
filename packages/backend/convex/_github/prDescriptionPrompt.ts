@@ -6,8 +6,6 @@ import { stripBlock, upsertBlockAboveFooter } from "./prBodyBlocks";
 export const PR_DESCRIPTION_START = "<!-- eva-pr-description -->";
 export const PR_DESCRIPTION_END = "<!-- /eva-pr-description -->";
 
-/** Longest generated block we will accept — anything beyond this is a wall of
- * prose, which is exactly what the sectioned format exists to avoid. */
 const MAX_DESCRIPTION_CHARS = 6_000;
 
 /**

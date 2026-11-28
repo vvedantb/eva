@@ -22,7 +22,6 @@ import { defineTool, type EvaTool } from "./registry";
 import { projectCallerOf } from "./projectScope";
 import { siblingRowRefusal } from "./projectTools";
 
-/** The chat arg `chatLog:*` takes, from a resolved target. */
 function chatSourceArg(target: EntityTarget): { [key: string]: JsonValue } {
   if (target.kind === "session") {
     return { kind: "session", sessionId: target.targetId };
@@ -31,10 +30,8 @@ function chatSourceArg(target: EntityTarget): { [key: string]: JsonValue } {
   return { kind: "project", projectId: target.targetId };
 }
 
-/** Every public mutation below returns `null`; parsed so a drift is loud. */
 const nullReply = z.null();
 
-/** Public function that renames each surface. All three take `{ id, title }`. */
 const RENAME_PATH = {
   session: "sessions:update",
   task: "agentTasks:update",
@@ -72,10 +69,6 @@ export function chatContentTools(
   const { clerkUserId } = credentials;
   const { resolveChat } = entityAccess(ctx, credentials);
   const caller = projectCallerOf(credentials.owner);
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // delete_artifact / delete_eva_doc
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -141,10 +134,6 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // rename_chat
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -223,10 +212,6 @@ The reply is the chat's identity with the title it now has.`,
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // update_plan / mark_plan_implemented
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -346,10 +331,6 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // add_task_comment / list_task_comments
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "add_task_comment",
@@ -443,10 +424,6 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // log_entry / read_chat_log
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({

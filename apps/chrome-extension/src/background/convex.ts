@@ -16,7 +16,6 @@ if (!EVA_URL) {
   throw new Error("Missing VITE_EVA_URL in environment");
 }
 
-/** Thrown when there is no synced Clerk session (user not signed in to Eva). */
 class NotSignedInError extends Error {}
 
 /** Thrown when the current page's domain maps to no configured repo. */
@@ -26,11 +25,6 @@ type ClerkClient = Awaited<ReturnType<typeof createClerkClient>>;
 
 let clerkPromise: Promise<ClerkClient> | null = null;
 
-/**
- * Lazily creates (and memoises) the background Clerk client. `syncHost` lets
- * it inherit the session from the Eva web app, so the user signs in there and
- * the extension follows. Re-created automatically if the worker restarts.
- */
 function getClerk(): Promise<ClerkClient> {
   if (!clerkPromise) {
     clerkPromise = createClerkClient({
@@ -41,7 +35,6 @@ function getClerk(): Promise<ClerkClient> {
   return clerkPromise;
 }
 
-// Warm the client at worker start so the first request is faster.
 void getClerk();
 
 const convex = new ConvexHttpClient(CONVEX_URL);
@@ -56,12 +49,6 @@ export async function getCreatorInitials(): Promise<string> {
   );
 }
 
-/**
- * Returns the shared Convex client with a fresh Clerk JWT attached. A new
- * token is fetched per call so it survives token expiry and worker restarts.
- * The `convex` JWT template matches `applicationID: "convex"` in the backend
- * auth config — without it Convex rejects the token.
- */
 async function getAuthedClient(): Promise<ConvexHttpClient> {
   const clerk = await getClerk();
   const token = clerk.session

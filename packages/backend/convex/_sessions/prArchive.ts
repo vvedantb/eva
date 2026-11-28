@@ -65,7 +65,6 @@ export function sessionPrArchiveNotificationCopy(args: {
   };
 }
 
-/** Inbox-only notice to the session owner. Never emails (`@eva/shared/notificationRouting`). */
 async function notifySessionOwnerOfPrArchive(
   ctx: MutationCtx,
   session: Doc<"sessions">,
@@ -86,10 +85,6 @@ async function notifySessionOwnerOfPrArchive(
   });
 }
 
-/**
- * The session creator's experimental "Disable auto-archive" opt-out. It only
- * blocks the PR-driven archive; a reopened PR still unarchives as before.
- */
 async function ownerDisabledAutoArchive(
   ctx: MutationCtx,
   session: Doc<"sessions">,
@@ -109,8 +104,6 @@ export async function reconcileSessionArchiveState(
   sessionId: Id<"sessions">,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  // A task's or project's session follows its owner (`retireOwnedSession`),
-  // never its linked repos' PRs alone.
   if (!session || !isStandaloneSession(session)) return;
   const rows = await listOwnerPullRequests(ctx.db, {
     kind: "session",
@@ -125,8 +118,6 @@ export async function reconcileSessionArchiveState(
 
   if (needsArchive) {
     await archiveSession(ctx, session);
-    // Merged/closed sessions are read-only — stop any live sandbox so VMs
-    // aren't left running forever after the last PR the session opened lands.
     if (
       session.status === "active" ||
       session.status === "starting" ||
@@ -135,7 +126,6 @@ export async function reconcileSessionArchiveState(
     ) {
       await requestSessionSandboxStop(ctx, session._id);
     }
-    // Primary first, then in the order the PRs were opened.
     const ordered = [...rows].sort(
       (a, b) => Number(b.primary) - Number(a.primary) || a.createdAt - b.createdAt,
     );

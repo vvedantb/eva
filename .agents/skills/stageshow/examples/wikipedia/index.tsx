@@ -2,28 +2,12 @@ import { useCallback, type ReactNode } from 'react'
 import { Popover, Stage, Swap, Window, type Act, type Layout } from '../../kit'
 import './wiki.css'
 
-// Wikipedia (Vector 2022) in a browser, for a docs page (800 wide). Story:
-// search as you go. The reader is on Mount Fuji, clicks into the search
-// field and types "lake"; Wikipedia's typeahead drops under the field with
-// thumbnails and short descriptions. They keep typing, "kaw", and the list
-// refines in place until Lake Kawaguchi sits on top, with its photo. One
-// click and the page is the lake. The browser's back button returns to Mount
-// Fuji, which is the loop's caused reset.
-//
-// Realistic fidelity, as the prompt asks for "exactly like Wikipedia": the
-// suggestions are the ones Wikipedia really returns for "lake kaw", the
-// rows use Codex's geometry (60px rows, 40px thumbnails, a placeholder
-// thumbnail for an article without an image, the "Search for pages
-// containing" footer), and the icons are Codex's own paths.
-
 type Page = 'fuji' | 'lake'
 type S = {
   focus: boolean
   q: string
   menu: boolean
-  // Which result set each row shows, so the refine can ripple down the list
   rows: number[]
-  // The field after navigating: the query fades and the placeholder returns
   cleared: boolean
   page: Page
 }
@@ -34,7 +18,6 @@ const REST = { wide: { x: 300, y: 470 }, compact: { x: 200, y: 470 } }
 type Thumb = 'photo' | 'baikal' | 'tahoe' | 'victoria' | 'superior' | 'kaweah' | 'kawaupaka' | 'none'
 type Result = { title: string; desc: string; thumb: Thumb }
 
-// What Wikipedia suggests for "lake", then for "lake kaw" (October 2026).
 const RESULTS: Result[][] = [
   [
     { title: 'Lake Baikal', desc: 'Freshwater rift lake in Russia', thumb: 'baikal' },
@@ -50,7 +33,6 @@ const RESULTS: Result[][] = [
   ],
 ]
 
-// A person's typing: uneven, but the same every loop
 const RHYTHM = [1.1, 0.8, 1.3, 0.9, 1.6, 1, 0.75, 1.2]
 
 async function typeOn(a: Act<S>, from: string, to: string) {
@@ -64,26 +46,22 @@ async function script(a: Act<S>) {
   const rest = REST[a.layout]
   await a.wait(900)
 
-  // 1. Into the search field
   a.mark('search')
   await a.click({ at: 'field', x: 0.72, y: 0.55 })
   await a.set({ focus: true })
   await a.wait(350)
 
-  // 2. "lake": suggestions drop under the field
   await typeOn(a, '', 'lake')
   await a.wait(140)
   await a.set({ menu: true })
   await a.wait(900)
 
-  // 3. "kaw": the list refines in place, top row first
   a.mark('refine')
   await typeOn(a, 'lake', 'lake kaw')
   await a.wait(120)
   await a.stagger([0, 1, 2, 3], (i) => a.set((s) => ({ rows: s.rows.map((r, j) => (j === i ? 1 : r)) })), 50)
   await a.wait(900)
 
-  // 4. Pick Lake Kawaguchi: the menu closes and the page becomes the lake
   a.mark('pick')
   await a.move({ at: 'result', x: 0.74, y: 0.3 })
   await a.wait(250)
@@ -95,7 +73,6 @@ async function script(a: Act<S>) {
   await a.move({ x: rest.x + 40, y: rest.y - 20 })
   await a.wait(2600)
 
-  // 5. Back to Mount Fuji, the way a reader would
   a.mark('back')
   await a.click('back')
   await a.set({ page: 'fuji' })
@@ -124,8 +101,6 @@ export default function WikipediaSearch() {
 
 function Scene({ s, layout }: { s: S; layout: Layout }) {
   const compact = layout === 'compact'
-  // The kit's browser chrome draws its back arrow without a target; name it
-  // here so the script can aim at it (see the report: a kit gap).
   const nameBack = useCallback((el: HTMLSpanElement | null) => {
     el?.closest('.ss-stage')?.querySelector('.ss-window__nav .ss-window__chev')?.setAttribute('data-target', 'back')
   }, [])
@@ -146,8 +121,6 @@ function Scene({ s, layout }: { s: S; layout: Layout }) {
     </Window>
   )
 }
-
-/* ---- Header and search ---- */
 
 function Header({ s, compact }: { s: S; compact: boolean }) {
   const typed = s.q.length > 0 && !s.cleared
@@ -205,8 +178,6 @@ function Header({ s, compact }: { s: S; compact: boolean }) {
     </header>
   )
 }
-
-/* ---- The two articles ---- */
 
 function Titlebar({ title, langs, compact }: { title: string; langs: number; compact: boolean }) {
   return (
@@ -345,14 +316,6 @@ function Infobox({ name, tone, img, caption, rows }: { name: string; tone: 'moun
   )
 }
 
-/* ---- Thumbnails ---- */
-
-// Every suggestion has a photo, as on wikipedia.org. Lake Kawaguchi's is
-// the real one its article opens with; the others are tight crops of the
-// demo's two photos (a hillside, open water, a shoreline at dusk), which at
-// 40px read as their own photos. Kawaupaka's real thumbnail is black and
-// white, so its crop is too. The novel has Codex's placeholder, as an
-// article without an image does.
 const CROPS: Record<Exclude<Thumb, 'photo' | 'none'>, { img: 'lake' | 'fuji'; size: number; at: string; filter?: string }> = {
   baikal: { img: 'lake', size: 320, at: '0% 46%', filter: 'saturate(0.75)' },
   tahoe: { img: 'lake', size: 260, at: '100% 88%' },
@@ -374,10 +337,6 @@ function ThumbImage({ kind }: { kind: Thumb }) {
   return <span className="wk-thumb" data-img={c.img} style={{ backgroundSize: `${c.size}% auto`, backgroundPosition: c.at, filter: c.filter }} />
 }
 
-/* ---- Logo and icons ---- */
-
-/* Wikipedia's mark, drawn small and plain: a globe with a few puzzle seams,
-   next to the wordmark set in a serif. */
 function Logo({ compact }: { compact: boolean }) {
   return (
     <div className="wk-logo">
@@ -399,7 +358,6 @@ function Logo({ compact }: { compact: boolean }) {
   )
 }
 
-// Codex, Wikimedia's icon set (MIT), at its native 20px grid
 const CDX: Record<string, ReactNode> = {
   menu: <path d="M1 3h18v2H1zm0 6h18v2H1zm0 6h18v2H1z" />,
   search: <path d="M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3" />,

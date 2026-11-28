@@ -1,11 +1,3 @@
-// Classes defined by more than one demo's CSS. Two demos on one page that both
-// define .cp-nav restyle each other, and whichever loads last wins.
-//
-//   node scripts/class-clash.mjs                 this repo's examples, showcase and site demos
-//   node scripts/class-clash.mjs src/demos a.css  any folders or files in your project
-//
-// Checks namespaces, including nested CSS and @scope. It cannot prove that
-// arbitrarily composed roots never overlap; inspect those on the host page.
 import { readFileSync, statSync, readdirSync, existsSync } from 'node:fs'
 import { resolve, join, sep } from 'node:path'
 import { classDefinitions, findClashes } from './class-clash-core.mjs'

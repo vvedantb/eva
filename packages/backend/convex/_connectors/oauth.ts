@@ -23,9 +23,6 @@ import {
 const EXPIRY_SKEW_MS = 60 * 1000;
 const DEFAULT_ACCESS_TTL_MS = 24 * 60 * 60 * 1000;
 
-// Provider responses are parsed at the boundary. Fields are nullish because
-// providers send `null` for absent values; unknown fields are ignored.
-/** Maps a provider's `null` to `undefined`, the shape the token code expects. */
 function orUndefined<T>(value: T | null | undefined): T | undefined {
   return value ?? undefined;
 }
@@ -302,7 +299,6 @@ export const revokeAndDelete = internalAction({
           body: formBody({ token: decryptValue(stored.accessToken) }),
         });
       } catch {
-        // Revoke is best-effort; still drop the local row.
       }
     }
     await ctx.runMutation(internal._connectors.tokens.deleteStoredToken, {

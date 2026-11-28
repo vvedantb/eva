@@ -74,8 +74,6 @@ export async function waitForPullRequestHead(params: {
       if (comparison.data.ahead_by > 0) {
         return;
       }
-      // Compare succeeded: GitHub sees both tips and head is not ahead.
-      // Retrying won't create commits — fail immediately (plan-only turns).
       throw new Error(
         `${params.branchName} is not ahead of ${params.baseBranch}: every commit on it is already in ${params.baseBranch}, or the run committed locally and its push to GitHub failed`,
       );
@@ -83,7 +81,6 @@ export async function waitForPullRequestHead(params: {
       if (error instanceof Error && error.message.includes("is not ahead of")) {
         throw error;
       }
-      // Branch may not be visible yet right after push — keep retrying.
       lastError =
         error instanceof Error ? error.message : "GitHub compare failed";
     }
@@ -96,7 +93,6 @@ export async function waitForPullRequestHead(params: {
 export async function createPullRequestWithGitHub(
   args: PullRequestCreateParams,
 ): Promise<string> {
-  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
   const existingPr = await findOpenPullRequestForBranch(args);
   const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
@@ -135,7 +131,6 @@ export async function createPullRequestWithGitHub(
     prNumber = pr.data.number;
     prUrl = pr.data.html_url;
   } catch (error) {
-    // Concurrent create or list lag: adopt the existing PR instead of failing.
     if (isPullRequestAlreadyExistsError(error)) {
       for (const delayMs of [0, 1000, 2000]) {
         if (delayMs > 0) {
@@ -171,7 +166,6 @@ export async function createPullRequestWithGitHub(
 export async function refreshPullRequestBodyWithGitHub(
   args: PullRequestRefreshParams,
 ): Promise<string> {
-  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
   const pr = await findOpenPullRequestForBranch(args);
   if (!pr) {

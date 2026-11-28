@@ -27,7 +27,6 @@ import { RepoLogo } from "@/ui/RepoLogo";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 
-/** The session groups folded closed (a repo or a linked group), kept on the device. */
 const closedSessionGroups = persistedIdSet("sessionGroupsClosed");
 
 /** One row of the web `sessions.list` / `sessions.listArchived`. */
@@ -54,10 +53,8 @@ export function sessionActionTarget({ session, repo, inGroup }: SessionRow): Ses
   };
 }
 
-/** The web `text-2xs` (11 / 16, 0.01em). */
 const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
 
-/** The web PR icon colour (`text-success`, `text-status-code-review`, ...) for each tone. */
 const PR_TONE_COLOUR: Record<PrStateTone, keyof (typeof EVA_THEME)["light"]> = {
   success: "success",
   codeReview: "statusCodeReview",
@@ -69,16 +66,13 @@ const PR_TONE_COLOUR: Record<PrStateTone, keyof (typeof EVA_THEME)["light"]> = {
 export type SessionGroupSection = {
   key: string;
   entry: SessionEntry;
-  /** The app's display name, or the group's name (else its oldest member's title). */
   label: string;
   rows: SessionRow[];
-  /** The rows drawn: none while folded, three until "Show more", else all. */
   data: SessionRow[];
   open: boolean;
   expanded: boolean;
 };
 
-/** A section's rows, in the chosen "Sort threads" order (a linked group by activity, as the web). */
 function entryRows(entry: SessionEntry, order: SessionSortOrder): SessionRow[] {
   if (entry.kind === "repo") {
     return sortSessionsForSidebar(entry.sessions ?? [], order).map((session) => ({
@@ -87,7 +81,6 @@ function entryRows(entry: SessionEntry, order: SessionSortOrder): SessionRow[] {
       inGroup: false,
     }));
   }
-  // A sorted copy: Hermes has no `toSorted`.
   return [...entry.group.members]
     .sort((a, b) => sessionActivityAt(b.session) - sessionActivityAt(a.session))
     .map(({ session, repo }) => ({ session, repo, inGroup: true }));
@@ -105,7 +98,6 @@ export function useSessionGroups(
   entries: SessionEntry[] | undefined,
   { sessionSortOrder, sessionPreviewCount }: { sessionSortOrder: SessionSortOrder; sessionPreviewCount: number },
 ) {
-  // Kept on the device, as the web's `sessions-app-groups-open` and `linked-session-groups-open`.
   const [closed, toggleClosed] = closedSessionGroups.useSet("all");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const sections: SessionGroupSection[] = (entries ?? []).flatMap((entry) => {
@@ -156,9 +148,7 @@ export function SessionGroupHeader({
   section: SessionGroupSection;
   live: number;
   onToggle: () => void;
-  /** Set on an app in the Active list: the header "+". */
   onNew?: () => void;
-  /** Set on a linked group: its Rename group menu. */
   onLongPress?: () => void;
 }) {
   const scheme = useScheme();
@@ -166,9 +156,6 @@ export function SessionGroupHeader({
   const { entry, label, open } = section;
   const memberCount = entry.kind === "group" ? entry.group.members.length : 0;
   return (
-    // The web header (the 18 leading tile, then the medium muted name, its
-    // count and a 14 chevron), 44 high: a whole touch target. The name is
-    // `text-sm`, the phone floor for tappable text (the web is `text-xs`).
     <View className="flex-row items-center pr-2">
       <Pressable
         accessibilityRole="button"
@@ -183,7 +170,6 @@ export function SessionGroupHeader({
         className="min-h-11 flex-1 flex-row items-center gap-2 pl-4 active:opacity-70"
       >
         {entry.kind === "group" ? (
-          // The web link tile: an 18 `rounded-sm` square on `bg-muted` with a muted 12 link.
           <View
             className="h-[18px] w-[18px] items-center justify-center rounded-sm"
             style={{ backgroundColor: EVA_THEME[scheme].muted }}
@@ -199,7 +185,6 @@ export function SessionGroupHeader({
                 className="h-[18px] w-[18px] items-center justify-center rounded-full"
                 style={{ backgroundColor: EVA_THEME[scheme].muted }}
               >
-                {/* The web `text-3xs` (10 / 14, 0.01em). */}
                 <Text
                   className="font-instrument-sans-semibold"
                   style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.1, color: muted, fontWeight: "600" }}
@@ -210,7 +195,6 @@ export function SessionGroupHeader({
             }
           />
         )}
-        {/* `shrink`: a long name truncates, and the count, chevron and "+" stay on screen. */}
         <View className="min-w-0 shrink flex-row items-center gap-1.5">
           <Text
             numberOfLines={1}
@@ -220,7 +204,6 @@ export function SessionGroupHeader({
             {label}
           </Text>
           {entry.kind === "group" ? (
-            // The web member count: `text-2xs`, tabular, muted at 70%.
             <Text
               className="font-instrument-sans"
               style={{ ...TEXT_2XS, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}
@@ -244,7 +227,6 @@ export function SessionGroupHeader({
         </View>
       </Pressable>
       {onNew ? (
-        // The web group "+": a `size-10` ghost square (radius 8) with a muted 14 plus; the slop makes 44.
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`New session in ${label}`}
@@ -271,7 +253,6 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
   const hiddenCount = section.rows.length - section.data.length;
   return (
     <View className="pb-1">
-      {/* Past "Visible threads" rows: rows are hidden, or were and Show less folds them again. */}
       {section.expanded || hiddenCount > 0 ? (
         <Pressable
           accessibilityRole="button"
@@ -308,13 +289,9 @@ export function SessionListRow({
   onSwipe,
 }: {
   row: SessionRow;
-  /** The user has an unsent message in this chat (`drafts.listMarks`): a pencil in the unread dot's place. */
   hasDraft: boolean;
-  /** A long press: the row menu. The same function for every row, so an unchanged row keeps its output. */
   onOpenMenu: (row: SessionRow) => void;
-  /** The look of the row menu's Archive (or Unarchive), revealed by a swipe left. */
   swipe: Omit<SwipeAction, "onPress">;
-  /** Runs that action on this row; the same function for every row. */
   onSwipe: (row: SessionRow) => ReturnType<SwipeAction["onPress"]>;
 }) {
   const { session, repo, inGroup } = row;
@@ -331,7 +308,6 @@ export function SessionListRow({
         accessibilityLabel={inGroup ? `${displayTitle(session.title)}, ${repoDisplayLabel(repo)}` : displayTitle(session.title)}
         onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session._id } })}
         onLongPress={onLongPress}
-        // VoiceOver and TalkBack reach the menu and the swipe action through the actions rotor.
         accessibilityActions={[{ name: "longpress", label: "Session actions" }, ...swipeA11y.accessibilityActions]}
         onAccessibilityAction={(event) => {
           if (event.nativeEvent.actionName === "longpress") onLongPress();
@@ -342,12 +318,9 @@ export function SessionListRow({
         <RowStatus
           awaitingAnswer={session.isAwaitingAnswer}
           working={session.isExecuting}
-          // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
           tone={session.status === "active" ? "active" : "cancelled"}
         />
-        {/* A linked-group row names its app, as the web row's app mark. */}
         {inGroup ? <RepoAppMark repo={repo} scheme={scheme} /> : null}
-        {/* The Inbox row title: `text-sm` (14 / 20) in the foreground. */}
         <Text
           numberOfLines={1}
           className="font-instrument-sans flex-1 text-sm"
@@ -355,7 +328,6 @@ export function SessionListRow({
         >
           {displayTitle(session.title)}
         </Text>
-        {/* The web `UnreadDot`: a reply you have not read, while Eva is not working. One mark: unread wins over the unsent-message pencil. */}
         {session.hasUnread && !session.isExecuting ? (
           <View accessibilityLabel="Unread" className="size-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].primary }} />
         ) : hasDraft ? (

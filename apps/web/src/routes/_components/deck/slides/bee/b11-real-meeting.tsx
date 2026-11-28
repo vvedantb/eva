@@ -18,17 +18,11 @@ const RESULT = 3;
 
 interface Round {
   asked: string;
-  /** What you type into Google, one search after another. */
   searches: readonly string[];
   answer: string;
   source: string;
 }
 
-/**
- * The two questions from a real chat with Krzys. Answers checked against the
- * Convex agent-mode docs and the Claude Agent SDK TypeScript reference,
- * October 2026. The searches are illustrations, and nothing was timed.
- */
 const ROUNDS: readonly Round[] = [
   {
     asked: "Can Convex run more than one local deployment, so Eva can use it?",
@@ -56,17 +50,12 @@ const ROUNDS: readonly Round[] = [
   },
 ];
 
-/**
- * Seconds each search takes. Within it, as fractions: type the query, wait
- * for the page, show the results, read them, then clear for the next one.
- */
 const PER_SEARCH = 2.6;
 const TYPED = 0.4;
 const LOADED = 0.46;
 const SHOWN = 0.52;
 const CLEARED = 0.93;
 
-/** Same timing for a query and its results, so results never show mid-typing. */
 function searchTransition(index: number, times: number[]): Transition {
   return {
     duration: PER_SEARCH,
@@ -85,7 +74,6 @@ const SHOTS: readonly CameraShot[] = [
 
 const LABEL = "text-sm font-semibold tracking-[0.12em] uppercase";
 
-/** One round of searching by hand: type a query, skim the results, clear, try again. */
 function ByHand({ round }: { round: Round }) {
   return (
     <div className={`${BEE_CARD} flex h-[290px] flex-col gap-4 p-6`}>
@@ -124,7 +112,6 @@ function ByHand({ round }: { round: Round }) {
           );
         })}
       </div>
-      {/* Each query's results appear only once it is typed and the page has loaded. */}
       <div className="relative flex-1">
         {round.searches.map((query, index) => {
           const last = index === round.searches.length - 1;
@@ -176,7 +163,6 @@ export function BeeRealMeeting() {
       </Title>
       <Camera shots={SHOTS} className="mt-6">
         <div className="flex w-[1088px] flex-col items-center gap-7">
-          {/* The question being asked right now. */}
           <AnimatePresence mode="wait" initial={false}>
             <m.div
               key={round.asked}
@@ -191,7 +177,6 @@ export function BeeRealMeeting() {
           </AnimatePresence>
 
           <div className="flex w-full items-start justify-center gap-10">
-            {/* By hand: one Google search after another. */}
             <div className="flex w-[480px] flex-col gap-3">
               <div className={`${LABEL} text-[#2a1e0c]/50`}>By hand</div>
               {started ? (
@@ -201,7 +186,6 @@ export function BeeRealMeeting() {
               )}
             </div>
 
-            {/* With Bee: it searches for you; the answer arrives while you are still typing. */}
             <div className="flex w-[480px] flex-col gap-3">
               <div className={`${LABEL} text-[#a15f00]`}>
                 What Bee would have answered

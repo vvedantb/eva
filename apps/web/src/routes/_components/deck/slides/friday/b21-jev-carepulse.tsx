@@ -32,7 +32,6 @@ import { Fri2Chip } from "../_parts/Fri2Chip";
 const TYPE = 1;
 const GUARD = 2;
 
-/** Seconds per typed character, and when the flag lands after the last one. */
 const CHAR = 0.028;
 const TYPE_START = 0.45;
 
@@ -42,15 +41,10 @@ const H = 380;
 
 interface Field {
   label: string;
-  /** Placeholder text only. The flagged line is invented and identifies no one. */
   text: string;
   score: number;
 }
 
-/**
- * Three free-text fields from the referral form. Two are already filled and
- * checked; the broker types the middle one live.
- */
 const FIELDS: readonly Field[] = [
   {
     label: "Summary of care needs",
@@ -70,14 +64,9 @@ const FIELDS: readonly Field[] = [
 ];
 
 const TYPED = 1;
-/**
- * The flag line, 50%, is our own assumption (carepulse-ts pull request 2487,
- * merged 14 October 2026). Field scores here are illustrative, not real calls.
- */
 const LINE = 50;
 
 const typedText = FIELDS[TYPED]?.text ?? "";
-/** The flag lands just after the last character. */
 const FLAG_AT = TYPE_START + typedText.length * CHAR + 0.25;
 
 interface Guard {
@@ -103,7 +92,6 @@ const GLOW = [
   { x: FORM_W + 220, y: H / 2, size: 620 },
 ];
 
-/** A blinking caret: at the start while empty, at the end once typed. */
 function Caret({ shown, delay }: { shown: boolean; delay: number }) {
   return (
     <m.span
@@ -125,10 +113,6 @@ function Caret({ shown, delay }: { shown: boolean; delay: number }) {
   );
 }
 
-/**
- * The broker's typing, one character at a time. Untyped characters are
- * invisible but keep their width, so there is no caret while typing.
- */
 function TypedText({ typing }: { typing: boolean }) {
   return (
     <span>
@@ -155,8 +139,6 @@ function FieldRow({ field, index }: { field: Field; index: number }) {
   const step = useDeckStep();
   const live = index === TYPED;
   const typing = step >= TYPE;
-  // The filled fields were checked before the slide; the typed one is
-  // checked the moment typing stops.
   const scored = live ? typing : true;
   const flagged = live && typing;
   const at = live && step === TYPE ? FLAG_AT : 0.6 + index * 0.2;
@@ -270,7 +252,6 @@ function ReferralForm() {
   );
 }
 
-/** The one question asked of every field, beside the form. */
 function Question() {
   const step = useDeckStep();
   const asked = step >= TYPE;
@@ -281,7 +262,6 @@ function Question() {
       className="absolute top-0 flex flex-col gap-4"
       style={{ left: FORM_W + 40, width: W - FORM_W - 40 }}
     >
-      {/* Jev's tile from the slide before grows into this card. */}
       <m.div
         layoutId={SHARED.jev}
         className="rounded-[22px] p-5 ring-1 ring-white/10 ring-inset"

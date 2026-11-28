@@ -8,17 +8,6 @@ import {
 import type { Doc } from "./_generated/dataModel";
 import { presentationStatusValidator } from "./_validators/enums";
 
-/**
- * Live sharing for the `/slides` deck — "follow the presenter" (Teams-style),
- * without take-control. The presenter is the sole driver: only the browser
- * holding the secret `hostKey` (returned once from `createSession`) may move
- * the deck. Viewers are anonymous — they subscribe to `getSession` and either
- * follow `slide` live or detach to browse on their own.
- *
- * Every function is PUBLIC (the `/slides` route is reachable without sign-in).
- * Deliberately lean: no auth, no presence, no names — just a session row.
- */
-
 const CODE_LENGTH = 7;
 
 async function getSessionByCode(

@@ -18,7 +18,6 @@ interface Parked {
   learnt: string;
 }
 
-/** Two features built in Eva and parked. One card per build step. */
 const PARKED: readonly Parked[] = [
   {
     icon: <IconSwords size={26} stroke={1.6} className="text-white/80" />,
@@ -49,7 +48,6 @@ export function AnnualParked() {
       <div className="mt-10 grid grid-cols-2 gap-5">
         {PARKED.map((item, index) => (
           <Reveal key={item.name} step={index + 1}>
-            {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[330px] flex-col rounded-[28px] p-8">
               <div className="flex items-center gap-3">
                 {item.icon}

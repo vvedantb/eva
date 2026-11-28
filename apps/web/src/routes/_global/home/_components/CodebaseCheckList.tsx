@@ -2,10 +2,8 @@ import { Checkbox } from "@vvedantb/ui";
 
 export interface CodebaseCheckItem {
   key: string;
-  /** `owner/name` heading the item is grouped under. */
   codebase: string;
   label: string;
-  /** Shown on hover, e.g. the app's folder. */
   title?: string;
   checked: boolean;
 }

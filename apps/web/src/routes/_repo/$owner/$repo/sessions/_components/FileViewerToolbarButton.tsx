@@ -8,10 +8,8 @@ export const VIEWER_ICON_BUTTON_CLASS =
   "max-sm:hit-target size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground";
 
 interface FileViewerToolbarButtonProps {
-  /** Accessible name; also the tooltip unless `tooltip` overrides it. */
   label: string;
   tooltip?: string;
-  /** Renders the toggle-on fill, and reports the state to assistive tech. */
   pressed?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -34,8 +32,6 @@ export function FileViewerToolbarButton({
           shape="rounded"
           size="sm"
           variant="ghost"
-          // Radix wires TooltipContent as `aria-describedby` — a description,
-          // not a name — so icon-only controls still need their own label.
           aria-label={label}
           aria-pressed={pressed}
           disabled={disabled}

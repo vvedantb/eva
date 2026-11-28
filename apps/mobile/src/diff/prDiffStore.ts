@@ -22,26 +22,17 @@ export type DiffRef = PrRef | CompareRef;
 
 const prKey = (ref: DiffRef) => ("prNumber" in ref ? `${ref.repoId}.${ref.prNumber}` : `${ref.repoId}.${ref.base}...${ref.head}`);
 
-// ── The diff ────────────────────────────────────────────────────────────────
-
 type PrDiffPayload = { entries: DiffFileEntry[]; truncated: boolean; repoUrl: string; headSha: string };
 
 export type PrDiffState =
   | { status: "loading" }
   | { status: "error" }
-  /** `refreshing` keeps the diff on screen while a reload runs. */
   | ({ status: "ready"; refreshing: boolean } & PrDiffPayload);
 
 type DiffEntry = { state: PrDiffState; loadedAt: number };
 
 const diffs = keyedStore<DiffEntry | null>(null);
 
-/**
- * How long a read diff is reused by the next screen that opens it. The same
- * as the server's ActionCache TTL (`PR_DIFF_CACHE_TTL_MS`): a read sooner
- * returns the same payload anyway, so the file screen opens on the list's
- * diff instead of downloading it again.
- */
 const DIFF_FRESH_MS = 2 * 60_000;
 
 /**
@@ -64,8 +55,6 @@ export function usePrDiff(pr: DiffRef | null): { state: PrDiffState; reload: () 
     const previous = diffs.get(key)?.state;
     const shown = previous?.status === "ready" ? previous : null;
     diffs.set(key, { state: shown === null ? { status: "loading" } : { ...shown, refreshing: true }, loadedAt: Date.now() });
-    // Two commits read `github.getCompareDiff`, which names no repo URL or head: the ref carries them,
-    // for the per-file "View file" link. A commit GitHub does not have yet (a push pending) is an error.
     const read =
       "prNumber" in pr
         ? getPrDiff({ ...pr, force })
@@ -86,22 +75,18 @@ export function usePrDiff(pr: DiffRef | null): { state: PrDiffState; reload: () 
           },
           loadedAt: Date.now(),
         }),
-      // A failed reload keeps the diff that is on screen.
       () => diffs.set(key, { state: shown === null ? { status: "error" } : { ...shown, refreshing: false }, loadedAt: Date.now() }),
     );
   };
 
-  /** Reads the diff unless one is loading or was read in the last `DIFF_FRESH_MS`. */
   const loadIfStale = () => {
     const current = key === null ? null : diffs.get(key);
     const fresh = current !== null && (current.state.status === "loading" || Date.now() - current.loadedAt <= DIFF_FRESH_MS);
     if (!fresh) load(false);
   };
 
-  // An effect because an action read has no query to subscribe to: one check per key.
   useEffect(() => {
     loadIfStale();
-    // `key` names every input of `loadIfStale`, which is a new closure each render.
     // oxlint-disable-next-line react/exhaustive-deps
   }, [key]);
 
@@ -112,8 +97,6 @@ export function usePrDiff(pr: DiffRef | null): { state: PrDiffState; reload: () 
     reload: () => load(true),
   };
 }
-
-// ── Hide whitespace, Viewed ─────────────────────────────────────────────────
 
 const ignoreWhitespaceStore = persistedStore("prDiffIgnoreWs", false, (raw) => (raw === "true" ? true : raw === "false" ? false : null));
 
@@ -153,8 +136,6 @@ export function useViewedFiles(pr: DiffRef): {
   };
 }
 
-// ── Pending line comments ───────────────────────────────────────────────────
-
 /**
  * A line comment drafted on Code, waiting to be posted with a review: GitHub's
  * anchor (`lineRangeCommentTarget`), so a range carries its first line too.
@@ -162,16 +143,12 @@ export function useViewedFiles(pr: DiffRef): {
 export type PendingLineComment = {
   id: string;
   path: string;
-  /** The last line of the range, which carries the comment. */
   line: number;
   side: "LEFT" | "RIGHT";
-  /** The range's first line; null for a one-line comment. */
   startLine: number | null;
   startSide: "LEFT" | "RIGHT" | null;
-  /** The web range label: `+12`, `-4`, `9` or `+3 to +5`. */
   label: string;
   body: string;
-  /** The range's lines in the file's diff and their excerpt (`reviewCommentExcerpt`), for a chat prompt. */
   startIndex: number;
   endIndex: number;
   diff: string;
@@ -208,7 +185,6 @@ export function usePendingLineComments(pr: DiffRef | null): {
   remove: (id: string) => void;
   clear: () => void;
 } {
-  // No pull request (a chat before one opens): an empty list nothing writes to.
   const key = pr === null ? "" : prKey(pr);
   const comments = pendingComments.useValue(key);
   return {

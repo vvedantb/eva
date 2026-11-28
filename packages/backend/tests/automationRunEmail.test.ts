@@ -5,16 +5,6 @@ import schema from "../convex/schema";
 import { CHANGELOG_AUTOMATION_TITLE } from "../convex/_changelog/entry";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A successful run's email waits as a draft for review (#1104). Guards:
- * - review is the default, so nothing is delivered until someone sends it;
- * - only a `sent` email is delivered, and only a `draft` can change, so a
- *   double click cannot send twice and a discarded draft never sends;
- * - recipients are the opted-in members of the repo's team, not just the
- *   automation's creator and never other tenants; only the weekly changelog
- *   broadcasts to every opted-in user.
- */
-
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|automation-owner";
 const DELIVERY = "automationEmail:sendAutomationEmail";
@@ -50,7 +40,6 @@ async function succeededRun(
       email: "opted-out@example.com",
       notificationPrefs: { email: false },
     });
-    // Product updates on, but on another tenant's team.
     await ctx.db.insert("users", {
       clerkId: "clerk|outsider",
       email: "outsider@example.com",
@@ -159,8 +148,6 @@ describe("automation run email", () => {
         title: CHANGELOG_AUTOMATION_TITLE,
       });
       const delivery = await f.forDelivery();
-      // The teammate has notification email (the default) but never turned
-      // Product updates on.
       expect(delivery?.recipients.map((r) => r.email).sort()).toEqual([
         "outsider@example.com",
         "owner@example.com",

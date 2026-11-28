@@ -16,7 +16,6 @@ import {
   type AgentJobOwnerId,
 } from "./owner";
 
-/** Refusal text when the owner's slot is taken. The doc dialogs show it. */
 function busyMessage(owner: AgentJobOwner): string {
   return owner.kind === "doc"
     ? "Another document task is still running. Wait for it to finish."
@@ -36,8 +35,6 @@ export async function startAgentJob(
   const owner = agentJobOwner(ctx.db, ownerId);
   const row = await ctx.db.get(ownerId);
   if (!owner || !row) throw new Error("Not found");
-  // The component, not the field, says whether the slot is busy: a slot left
-  // by a workflow that ended without clearing it reads as free.
   if (await isTrackedWorkflowRunning(ctx, row.activeWorkflowId)) {
     throw new Error(busyMessage(owner));
   }
@@ -50,7 +47,6 @@ export async function startAgentJob(
   return workflowId;
 }
 
-/** The job's turn: the one its workflow opened, else the owner's open turn. */
 async function findJobTurn(
   ctx: MutationCtx,
   owner: AgentJobOwner,
@@ -63,12 +59,6 @@ async function findJobTurn(
     .first();
 }
 
-/**
- * The sandbox a stopped job leaves running. Every job but the doc interview
- * runs on an ephemeral sandbox; the interview keeps the doc's sandbox for the
- * next question. An automation records its sandbox before launch, so a run
- * stopped before its turn opened still finds it.
- */
 async function ephemeralJobSandbox(
   ctx: MutationCtx,
   owner: AgentJobOwner,

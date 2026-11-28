@@ -52,17 +52,11 @@ export function nextTaskRun(
   event: TaskRunEvent,
 ): TaskRunTransition {
   switch (event.type) {
-    /** A user schedule replaces any pending schedule. */
     case "schedule":
       return to({ state: "scheduled", at: event.at, jobId: event.jobId });
     case "cancelSchedule":
       if (current?.state !== "scheduled") return reject("Task is not scheduled");
       return to(undefined);
-    /**
-     * The job fired. It only owns a schedule that is still pending, due, and
-     * (when the job carries one) at the time it was scheduled for — a
-     * reschedule leaves the old job's run stale.
-     */
     case "fire":
       if (current?.state !== "scheduled") return reject("Task is not scheduled");
       if (current.at > event.now) return reject("Schedule is not due");
@@ -73,7 +67,6 @@ export function nextTaskRun(
   }
 }
 
-/** Applies `event` to the stored task and writes the result. */
 async function applyTaskRunEvent(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,

@@ -33,23 +33,14 @@ import {
  * annotation send do the rest.
  */
 export interface SandboxChatBinding {
-  /** The owner's chat on its session; undefined until the session exists. */
   entity: ChatEntityRef | undefined;
-  /** What the chat speaks for, for copy. */
   ownerLabel: "session" | "task" | "project";
-  /** Whose pull requests the chat shows (the session, task or project). */
   prOwner: PrOwnerRef;
-  /**
-   * False while a cached session shell is hidden: the chat's live reads skip
-   * (and hold their last paint) so a background turn re-renders nothing.
-   */
   active: boolean;
-  /** The entity's live doc; undefined while it loads. */
   doc:
     | (SandboxChatOwnerDoc & { title: string; sandboxBranch?: string })
     | null
     | undefined;
-  /** The branch Eva booted the sandbox on, when the entity pins one. */
   intendedBranch?: string;
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -57,25 +48,14 @@ export interface SandboxChatBinding {
   displayTraits: NonNullable<ChatModelPicker["displayTraits"]>;
   executionTraits: ModelTraitsExecutionArgs;
   onTraitsChange: (partial: Partial<StoredModelTraits>) => void;
-  /** The sticky account; null = Team, undefined while the chat loads. */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
-  /**
-   * The owner's accounts: the chat runs on the owner's credentials whoever
-   * sends, so any viewer picks from these (as in a session chat).
-   */
   accounts: ReadonlyArray<ModelAccount>;
   resolveAccountId: (
     id: string | null,
   ) => Id<"userProviderAccounts"> | undefined;
-  /**
-   * Persists a new sticky account, then waits for the replacement daemon
-   * (the chat model's one handoff, `useChatModel`).
-   */
   switchProviderAccount: (id: Id<"userProviderAccounts"> | null) => Promise<void>;
-  /** The handoff above is in flight: the composer waits for it. */
   isSwitchingAccount: boolean;
   ports: SandboxTurnPorts;
-  /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
 }
 
@@ -126,7 +106,6 @@ export function usageAccountLabel(binding: SandboxChatBinding): string {
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
   const live = binding.active ? parentId : undefined;
-  // Held: a hidden session shell keeps the status it last painted.
   const status = useHeldQuery(
     api.turns.getChatStatus,
     live ? { entityId: live } : "skip",

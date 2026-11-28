@@ -14,11 +14,6 @@ interface Column {
   items: readonly string[];
 }
 
-/**
- * The Today page: a daily stand-up written by an automation, per app, since
- * 20 August 2026. The second card is being built now: a personal live
- * dashboard (Eva session #1042, draft PR #1469, 23 November 2026).
- */
 const COLUMNS: readonly Column[] = [
   {
     label: "Today, now",
@@ -61,7 +56,6 @@ export function AnnualToday() {
               ]
             : []),
           <Reveal key={column.label} step={index + 1} className="flex-1">
-            {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[300px] flex-col gap-6 rounded-[28px] p-8">
               <div className={LABEL}>{column.label}</div>
               <ul className="flex flex-col gap-4">

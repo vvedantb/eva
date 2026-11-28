@@ -358,7 +358,6 @@ const getUserIdFromIdentityRef = makeFunctionReference<
   Id<"users"> | null
 >("auth:getUserIdFromIdentity");
 
-/** Resolves the authenticated user's ID from within an action context by running a query. */
 async function resolveActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
   const userId = await ctx.runQuery(getUserIdFromIdentityRef);
   if (!userId) {

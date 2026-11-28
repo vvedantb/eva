@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import { DUR, EASE, SETTLE } from "../../_components/motion";
 import { FriChip, FriTyped } from "./FriMock";
 
-/** What the search reaches, named in the room's words. */
 const RESULTS: readonly { title: string; kind: string }[] = [
   { title: "Referral portal", kind: "Codebase" },
   { title: "Decline reasons", kind: "Project" },
@@ -11,7 +10,6 @@ const RESULTS: readonly { title: string; kind: string }[] = [
   { title: "Zuza — admin pages", kind: "Session" },
 ];
 
-/** Search results are fixed-height rows, so the selection can glide between them. */
 const RESULT_H = 44;
 const MATCH_INDEX = 1;
 
@@ -44,7 +42,6 @@ export function MoF3SearchOverlay() {
           <FriChip>Cmd K</FriChip>
         </div>
         <div className="relative mt-2 flex flex-col">
-          {/* The selection lands on the first result, then glides to the match. */}
           <m.span
             aria-hidden
             className="absolute inset-x-0 top-0 rounded-[12px] bg-white/[0.07]"

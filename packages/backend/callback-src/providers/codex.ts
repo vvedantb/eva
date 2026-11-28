@@ -21,7 +21,6 @@ import { isJsonObject } from "../utils.js";
 const isCodexAgentMessageType = (type: JsonValue | undefined): boolean =>
   type === "agent_message" || type === "agentMessage";
 
-/** A non-empty string `delta`, or undefined. */
 function nonEmptyDelta(event: JsonObject): string | undefined {
   return typeof event.delta === "string" && event.delta
     ? event.delta
@@ -61,9 +60,6 @@ function codexItemEvents(
   if (type === "item.started" && isAgentMessage) {
     return [{ kind: "mark_message_start" }];
   }
-  // Reasoning items carry the model's actual thinking text. Skip on start
-  // (no tool step) and route the text on completion; without this they'd be
-  // misclassified as a generic "Using reasoning..." tool step.
   if (item.type === "reasoning" && type !== "item.failed") {
     return typeof item.text === "string" && item.text.trim()
       ? [{ kind: "update_reasoning", text: item.text }]

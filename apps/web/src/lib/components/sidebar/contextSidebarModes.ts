@@ -1,9 +1,3 @@
-/**
- * Shared context-sidebar mode type + the nav-name → mode lookup.
- * Extracted so both `Sidebar` and `RepoNavSections` can reference them
- * without creating an import cycle between the two components.
- */
-
 export type ContextSidebarMode =
   | "main"
   | "settings"
@@ -11,7 +5,6 @@ export type ContextSidebarMode =
   | "reviews"
   | "testing-arena";
 
-/** Nav items whose click swaps the whole sidebar into a focused drill-down view. */
 const CONTEXT_SIDEBAR_BY_NAV_NAME = new Map<string, ContextSidebarMode>([
   ["Settings", "settings"],
   ["Documents", "docs"],

@@ -97,13 +97,9 @@ export async function findOpenSessionTurn(
 
 type OpenTurnFields = {
   streamingEntityId: string;
-  /** Chat turns only: runs and one-shot agents have no placeholder message. */
   placeholderMessageId?: Id<"messages">;
-  /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
-  /** Thread turns only: who asked; Eva's answer notifies them. */
   askedBy?: Id<"users">;
-  /** Chat turns only: this turn runs its task (`taskRunTurn.ts`). */
   taskRun?: Doc<"turns">["taskRun"];
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
@@ -117,10 +113,6 @@ export async function openTurn(
   ctx: MutationCtx,
   params: OpenTurnFields & {
     entityId: TurnEntityId;
-    /**
-     * The session the turn holds: a chat's session, or the session whose
-     * sandbox a one-shot agent works on.
-     */
     sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {
@@ -170,7 +162,6 @@ export async function openSessionChatTurn(
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
   const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
-  // A quick task's run moves its card when its turn starts, as when it ends.
   if (turn.taskRun !== undefined) await onTaskRunTurnOpened(ctx, sessionId);
   return turnId;
 }
@@ -302,9 +293,6 @@ export async function renewTurnLease(
   }
   const state = turn.state === "finalizing" ? "finalizing" : "running";
   const durationMs = turnLeaseDurationMs(state);
-  // A turn the reconciler marked silent must always write, even when the
-  // renewal-throttle would skip it: the write is what clears `silentSince`,
-  // and without it a recovered daemon stays on the grace clock.
   if (
     turn.silentSince === undefined &&
     !shouldWriteTurnLeaseRenewal({
@@ -331,10 +319,6 @@ export async function renewTurnLease(
     leaseExpiresAt,
     silentSince: undefined,
   });
-  // A live turn keeps the sandbox's hard runtime cap ahead of it, or the
-  // provider kills it mid-work with no snapshot. Only on a written renewal
-  // (the throttle above), so at most once per half lease; two lease lengths
-  // keep the deadline ahead through a delayed renewal.
   if (turn.sandboxId !== undefined) {
     await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
       sandboxId: turn.sandboxId,
@@ -431,8 +415,6 @@ export async function closeTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  // Re-read: a caller's copy can be stale when an earlier step in the same
-  // mutation already closed the turn.
   const current = await ctx.db.get(turn._id);
   if (!current?.open || !canTransitionTurn(current.state, state)) return;
   const finishedAt = Date.now();
@@ -442,13 +424,9 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
-  // A quick task's run moves its card when its turn ends, however it ends.
   if (current.taskRun !== undefined) {
     await onTaskRunTurnClosed(ctx, current, state);
   }
-  // The unread clock read by `chatReads.ts`: chat turns, a task's runs
-  // included. `stampChatActivity` stamps the chat, its session and the session's task
-  // or project, and skips a chat that lease sweeps found hard-deleted.
   const chatParentId =
     chatParentIdOf(ctx.db, turn.entityId);
   if (chatParentId) {
@@ -456,9 +434,6 @@ export async function closeTurn(
       lastTurnFinishedAt: finishedAt,
     });
   }
-  // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished": any turn counts for the session that
-  // holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
     turn.sessionId ?? turn.entityId,
@@ -505,7 +480,6 @@ export async function settleAgentTurnCompletion(
     error: string | null;
   },
 ): Promise<Doc<"turns"> | null> {
-  // Every one-shot agent launches under a turn and always sends its lease.
   const resolution = await resolveCompletionTurn(ctx, params);
   if (resolution.status !== "current") return null;
   await closeTurn(

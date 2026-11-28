@@ -15,7 +15,7 @@ interface CacheEntry {
   timestamp: number;
 }
 
-const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_DURATION_MS = 60 * 60 * 1000;
 const branchCache = new Map<string, CacheEntry>();
 
 function getCacheKey(owner: string, repo: string): string {

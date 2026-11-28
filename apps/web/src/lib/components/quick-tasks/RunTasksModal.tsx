@@ -62,8 +62,6 @@ export function RunTasksModal({
   const handleRun = async () => {
     setIsLoading(true);
     setRunError(null);
-    // Built out here: a ternary inside the `try` bails the React Compiler out
-    // of this whole file. See CLAUDE.md.
     const successMessage = `Started ${count} task${count === 1 ? "" : "s"}`;
     try {
       const { startedCount } = await runSelected(selectedTaskIds);

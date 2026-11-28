@@ -22,15 +22,6 @@ export interface StoredPin {
 
 export const EVA_URL = import.meta.env.VITE_EVA_URL;
 
-/* ------------------------------------------------------------------ *
- * Background request/response protocol
- *
- * With the side panel removed, the content script talks directly to the
- * background service worker via request/response. Every backend call the
- * panel used to make now lives behind one of these message types. The
- * background does the Convex work and replies through `sendResponse`.
- * ------------------------------------------------------------------ */
-
 type BgErrorCode = "not_signed_in" | "no_repo_match" | "convex_error";
 
 export interface BgError {
@@ -120,7 +111,6 @@ export interface BgRequestMap {
 
 export type BgRequestType = keyof BgRequestMap;
 
-/** A request message as sent over the wire. */
 type BgRequestMessage<K extends BgRequestType> = {
   type: K;
   payload: BgRequestMap[K]["payload"];
@@ -166,8 +156,6 @@ export function requestBackground<K extends BgRequestType>(
     BgRequestMap[K]["response"]
   >({ type, payload });
 }
-
-/* --------------------------- runtime guards --------------------------- */
 
 export function isStoredPinRecord(
   value: unknown,

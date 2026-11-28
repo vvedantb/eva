@@ -15,7 +15,6 @@ import {
 
 interface SubagentRoster {
   agents: SubagentView[];
-  /** Content key for the Agents tab: it appears once agents exist. */
   hasAgents: boolean;
   hasRunningAgents: boolean;
 }
@@ -41,7 +40,6 @@ export function useSubagentRoster({
       : "skip",
   );
 
-  // Streaming payloads can outlive their turn; only fold them while one runs.
   const agents = deriveSubagents({
     activityLogs: (messages ?? []).map((message) => message.activityLog),
     streamingActivity: isExecuting ? streaming?.currentActivity : undefined,

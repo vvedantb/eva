@@ -33,11 +33,9 @@ import { MoF3Gardening } from "./_parts/MoF3Gardening";
 interface Archetype {
   name: string;
   icon: Icon;
-  /** Part of the Sweeper and Maintainer blend we call the Gardener. */
   gardener: boolean;
 }
 
-/** Boris Cherny's five archetypes, in his order. What each does is in the notes. */
 const ARCHETYPES: readonly Archetype[] = [
   { name: "Prototyper", icon: IconBulb, gardener: false },
   { name: "Builder", icon: IconHammer, gardener: false },
@@ -55,12 +53,10 @@ const SWEEPER = cardCentre(2);
 const MAINTAINER = cardCentre(4);
 const MIDDLE = (SWEEPER + MAINTAINER) / 2;
 
-/** The bracket draws in from both cards and meets under the label. */
 const BRACKET_H = 58;
 const BRACKET_LEFT = `M${SWEEPER} 0 V6 Q${SWEEPER} 14 ${SWEEPER + 8} 14 H${MIDDLE}`;
 const BRACKET_RIGHT = `M${MAINTAINER} 0 V6 Q${MAINTAINER} 14 ${MAINTAINER - 8} 14 H${MIDDLE}`;
 
-/** Soft light under a gardener card. A painted gradient, never a blur. */
 const CARD_GLOW =
   "radial-gradient(closest-side, rgba(139,63,184,0.5), rgba(59,125,216,0.2) 60%, transparent)";
 
@@ -167,7 +163,6 @@ export function Slide13Developer() {
       </div>
 
       <div className="mt-20 flex items-center gap-4 text-2xl text-pretty text-white/85">
-        {/* The seedling grows out of the soil line as the sentence rises. */}
         <m.span
           className="origin-bottom"
           initial={{ opacity: 0, scale: 0.3, rotate: -18 }}

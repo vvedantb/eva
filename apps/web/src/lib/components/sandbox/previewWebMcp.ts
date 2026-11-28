@@ -1,7 +1,6 @@
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { asRecord } from "@/lib/utils/looseRecord";
 
-/** A value that JSON.stringify is guaranteed to handle: no cycles, no BigInt. */
 type JsonValue =
   | string
   | number
@@ -30,11 +29,6 @@ export type WebMcpInbound =
   | { type: "result"; requestId: string; name: string; result: unknown }
   | { type: "error"; requestId: string; message: string };
 
-/**
- * The preview iframe hosts the user's own app, so every field below is
- * attacker-controlled. Caps are applied at parse time so nothing oversized is
- * retained in React state or re-serialised on every render.
- */
 const MAX_TOOLS = 64;
 const MAX_NAME_LENGTH = 128;
 const NAME_PATTERN = new RegExp(`^[A-Za-z0-9_.-]{1,${MAX_NAME_LENGTH}}$`);
@@ -47,9 +41,7 @@ const MAX_SCHEMA_NODES = 512;
 const MAX_SCHEMA_STRING_LENGTH = 512;
 const MAX_SCHEMA_ARRAY_ITEMS = 64;
 const MAX_SCHEMA_KEYS = 64;
-/** Source text a page may hand us for a schema, before it is JSON.parsed. */
 const MAX_SCHEMA_SOURCE_LENGTH = 64_000;
-/** Budget for the body of one <webmcp_tools> block, delimiters excluded. */
 const MAX_PROMPT_BODY_LENGTH = 32_000;
 
 const EMPTY_SCHEMA: { readonly [key: string]: JsonValue } = {
@@ -75,12 +67,6 @@ function isPlainObject(value: object): boolean {
   return proto === Object.prototype || proto === null;
 }
 
-/**
- * postMessage uses structured clone, which happily delivers cycles, BigInt,
- * Date, Map and Set — all of which make JSON.stringify throw or lie. Rebuild
- * the schema as plain JSON so stringifying it (in the prompt and on every
- * dialog render) is total. `undefined` means "drop this entry".
- */
 function toJsonValue(
   value: unknown,
   depth: number,
@@ -95,7 +81,6 @@ function toJsonValue(
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value;
   if (typeof value !== "object") return undefined;
-  // Already on the current path: following it again would never terminate.
   if (ancestors.has(value)) return undefined;
   ancestors.add(value);
   try {
@@ -104,14 +89,10 @@ function toJsonValue(
       const items: JsonValue[] = [];
       for (const entry of source.slice(0, MAX_SCHEMA_ARRAY_ITEMS)) {
         const parsed = toJsonValue(entry, depth + 1, ancestors, budget);
-        // JSON.stringify writes null for dropped array entries; do the same so
-        // positions stay meaningful.
         items.push(parsed === undefined ? null : parsed);
       }
       return items;
     }
-    // Date, Map, Set, RegExp and friends survive structured clone but do not
-    // round-trip through JSON; only plain objects are kept.
     const record = isPlainObject(value) ? asRecord(value) : null;
     return record ? toJsonRecord(record, depth, ancestors, budget) : undefined;
   } finally {
@@ -151,8 +132,6 @@ function parseInputSchema(value: unknown): {
   }
   const record = asRecord(value);
   if (!record) return EMPTY_SCHEMA;
-  // asRecord copies the top level, so seed the walk with the original object:
-  // a schema that points back at its own root is a cycle like any other.
   const ancestors = new Set<object>();
   if (typeof value === "object" && value !== null) ancestors.add(value);
   return toJsonRecord(record, 0, ancestors, {
@@ -294,11 +273,6 @@ function toRequestMessage(
   };
 }
 
-/**
- * A reply answers the request only if its kind fits: a "result" carrying a
- * list's requestId is not a discovery, so keep listening rather than ending
- * the request with nothing to show.
- */
 function answersRequest(
   request: WebMcpRequest,
   inbound: WebMcpInbound,
@@ -395,8 +369,6 @@ export function toPreviewToolCallOutcome(
   if (inbound.type === "error") return previewToolCallError(inbound.message);
   let resultJson: string | undefined;
   try {
-    // Discovery is plain JSON by construction; a tool result is whatever the
-    // page structured-cloned, so cycles and BigInt land in the catch.
     resultJson = JSON.stringify(
       inbound.type === "tools" ? inbound.discovery : inbound.result,
     );
@@ -405,7 +377,6 @@ export function toPreviewToolCallOutcome(
       "The page tool returned a value that is not JSON",
     );
   }
-  // JSON.stringify(undefined) is undefined: a tool that returns nothing.
   return { resultJson: resultJson ?? "null" };
 }
 
@@ -420,7 +391,6 @@ export function formatWebMcpPrompt(discovery: WebMcpDiscovery): string {
   const lines = discovery.tools.map((tool) => {
     const title = tool.title ? ` (${escapeWebMcpText(tool.title)})` : "";
     const readonly = tool.readOnly ? " [read-only]" : "";
-    // Total by construction: parseInputSchema guarantees plain JSON.
     const schema = escapeWebMcpText(JSON.stringify(tool.inputSchema));
     return `- ${tool.name}${title}${readonly}: ${escapeWebMcpText(tool.description)}\n  input: ${schema}`;
   });
@@ -429,13 +399,10 @@ export function formatWebMcpPrompt(discovery: WebMcpDiscovery): string {
     `implementation: ${escapeWebMcpText(discovery.implementation)}`,
     ...(lines.length > 0 ? lines : ["- (none)"]),
   ].join("\n");
-  // Backstop on the assembled block: 64 tools × their caps still leave room for
-  // a very large prompt. Truncating escaped text cannot resurrect a "<".
   const bounded =
     body.length > MAX_PROMPT_BODY_LENGTH
       ? `${body.slice(0, MAX_PROMPT_BODY_LENGTH)}\n(truncated)`
       : body;
-  // The instruction sits outside the budget so truncation can never drop it.
   return `<webmcp_tools>\n${bounded}\n${WEBMCP_CALL_INSTRUCTION}\n</webmcp_tools>`;
 }
 

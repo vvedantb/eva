@@ -3,11 +3,9 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 
-/** Discriminated target shapes accepted by the chat draft APIs. */
 type SessionChatTarget = {
   kind: "sessionChat";
   sessionId: Id<"sessions">;
-  /** Drafts are per chat (a project task tab has its own). */
   chatId: Id<"sessionChats">;
 };
 
@@ -40,8 +38,6 @@ export function useChatDraftSeed(target: ChatDraftTarget | undefined): {
     target ? { target } : "skip",
   );
 
-  // data === undefined → query still in flight. No target (a chat not
-  // created yet) has no draft to load.
   const isReady = target === undefined || data !== undefined;
 
   const { displayText, mentionMap, skillMap } = tokenizedToEditable(data ?? "");

@@ -6,13 +6,6 @@ import type { Id } from "../convex/_generated/dataModel";
 import { ensureMainChat } from "../convex/_sessionChats/helpers";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Chat-scoped rows hang off the sessionChats id since sessions hold several
- * chats. Rows written before that sit on the session id: they must move onto
- * the Main chat, a read of a chat must clear the session's sidebar dot, and
- * deleting a repo must take every chat's rows with it.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-legacy-rows";
 
@@ -42,7 +35,6 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** One of each chat-scoped row on `parentId`, plus a chat-less draft per user. */
 async function seedChatRows(
   f: Fixture,
   parentId: Id<"sessions"> | Id<"sessionChats">,
@@ -187,7 +179,6 @@ describe("legacy session rows move onto the Main chat", () => {
         if (!session) throw new Error("no session");
         return ensureMainChat(ctx, session);
       });
-      // The first mutation moves one bounded batch only.
       expect((await rowsOn(f, f.sessionId)).messages).toBeGreaterThan(0);
 
       await f.t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -202,7 +193,6 @@ describe("legacy session rows move onto the Main chat", () => {
     async () => {
       vi.useFakeTimers();
       const f = await fixture();
-      // Backfilled before the fix: Main chat exists, cards stayed behind.
       const chatId = await f.t.run((ctx) =>
         ctx.db.insert("sessionChats", {
           sessionId: f.sessionId,
@@ -259,7 +249,6 @@ describe("repo deletion", () => {
   test(
     "deletes every chat's rows, drafts and the chats themselves",
     async () => {
-      // Keeps the scheduled next step from running mid-assertion.
       vi.useFakeTimers();
       const f = await fixture();
       const chatIds = await f.t.run(async (ctx) => [

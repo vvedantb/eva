@@ -90,7 +90,6 @@ describe("harnessSlashItems", () => {
       "brand-new-skill",
       "loop",
     ]);
-    // Same merge path as the static list: badge, token id and shadowing.
     expect(items.every((item) => item.badge === "Claude")).toBe(true);
     expect(items[0]?.id).toBe(harnessSkillTokenId("brand-new-skill"));
     expect(
@@ -98,7 +97,6 @@ describe("harnessSlashItems", () => {
         (item) => item.label,
       ),
     ).toEqual(["brand-new-skill"]);
-    // Reported catalogs stay gated on the provider running the harness.
     expect(harnessSlashItems("cursor", [], reported)).toEqual([]);
   });
 
@@ -106,7 +104,6 @@ describe("harnessSlashItems", () => {
     const staticLabels = harnessSlashItems("claude", []).map(
       (item) => item.label,
     );
-    // undefined = query in flight, null = no sandbox has reported yet.
     expect(
       harnessSlashItems("claude", [], undefined).map((i) => i.label),
     ).toEqual(staticLabels);
@@ -127,7 +124,6 @@ describe("harnessSkillTokenId", () => {
       const matches = [...token.matchAll(SKILL_TOKEN_REGEX)];
       expect(matches).toHaveLength(1);
       expect(matches[0]?.[2]).toBe(id);
-      // Not a Convex id — the hover card must not query repoSkills with it.
       expect(isSkillTokenId(id)).toBe(false);
     }
   });

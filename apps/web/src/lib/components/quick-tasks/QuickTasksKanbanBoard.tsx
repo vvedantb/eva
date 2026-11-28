@@ -31,7 +31,6 @@ interface QuickTasksKanbanBoardProps {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
-  /** The Archived list: no drafts, no Run All, Unarchive in card menus. */
   archived?: boolean;
 }
 
@@ -51,8 +50,6 @@ export function QuickTasksKanbanBoard({
   const todoDrafts = archived ? [] : liveTodoDrafts;
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
 
-  // Respect the sort order applied by QuickTasksClient (default: updatedAt).
-  // Re-sorting here would override the user's chosen sort.
   const tasks = externalTasks;
   const {
     currentUserId,
@@ -64,8 +61,6 @@ export function QuickTasksKanbanBoard({
     runAllDialog,
   } = useQuickTaskBoardActions(tasks, archived);
 
-  // Shift-click spans one column. `KanbanBoard` groups by status in `tasks`
-  // order, so grouping the same way here reproduces each column's visible order.
   const idsByStatus = new Map<TaskStatus, Id<"agentTasks">[]>();
   for (const task of tasks) {
     const column = idsByStatus.get(task.status);

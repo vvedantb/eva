@@ -1,17 +1,6 @@
 import { z } from "zod";
 import { normalizePath } from "../repoUtils";
 
-/**
- * Repo-owned run config: `.eva/config.json` and `.eva/mcp.json`.
- *
- * The file on the repo's default branch is the source of truth. Eva caches it
- * onto the existing `githubRepos` / `repoSnapshots` command fields (see
- * `sync.ts`), so every runtime reader keeps working. A session branch that
- * edits the file is detected at boot through the fingerprints below.
- *
- * Pure module: runs in the Convex isolate and in Node actions.
- */
-
 export const EVA_CONFIG_PATH = ".eva/config.json";
 export const EVA_MCP_PATH = ".eva/mcp.json";
 
@@ -23,7 +12,6 @@ const snapshotCommandsSchema = z
 
 const evaAppSchema = z
   .object({
-    /** Repo-relative app folder; "" for a single-app repo or the repo root. */
     path: z.string().default(""),
     dev: z
       .object({
@@ -34,9 +22,7 @@ const evaAppSchema = z
       .optional(),
     startup: commandListSchema,
     background: commandListSchema,
-    /** Clean-shutdown commands; non-empty gives the app a seeded snapshot. */
     stop: commandListSchema,
-    /** This app's own snapshot commands; replaces the top-level block. */
     snapshot: snapshotCommandsSchema.optional(),
   })
   .strict();
@@ -45,7 +31,6 @@ const evaConfigSchema = z
   .object({
     $schema: z.string().optional(),
     version: z.literal(1),
-    /** Snapshot commands shared by every app without its own block. */
     snapshot: snapshotCommandsSchema.prefault({}),
     apps: z.array(evaAppSchema).min(1),
   })
@@ -77,7 +62,6 @@ function formatZodError(error: z.ZodError): string {
     .join("; ");
 }
 
-/** JSON text → schema, as one Zod pipeline (no untyped intermediate value). */
 function jsonText<T extends z.ZodTypeAny>(schema: T) {
   return z
     .string()
@@ -138,10 +122,6 @@ export function findEvaApp(
   );
 }
 
-// ---------------------------------------------------------------------------
-// MCP servers (display only — the sandbox callback reads the file itself)
-// ---------------------------------------------------------------------------
-
 const mcpServerSchema = z.union([
   z.object({
     type: z.enum(["http", "sse"]).optional(),
@@ -161,14 +141,9 @@ const mcpFileTextSchema = jsonText(
 export type EvaMcpServerSummary = {
   name: string;
   kind: "http" | "stdio";
-  /** URL for http servers, the command line for stdio servers. */
   target: string;
 };
 
-/**
- * Eva injects these itself; the sandbox callback drops repo entries with the
- * same name (`callback-src/evaMcp.ts` keeps its own copy — no shared import).
- */
 const RESERVED_MCP_SERVER_NAMES = new Set(["eva", "linear", "figma"]);
 
 /** Parses `.eva/mcp.json` into display summaries (no secrets resolved). */
@@ -197,11 +172,6 @@ export function parseEvaMcpSummary(
   return { ok: true, value: servers };
 }
 
-// ---------------------------------------------------------------------------
-// Fingerprints
-// ---------------------------------------------------------------------------
-
-/** djb2 — deterministic and dependency-free (isolates cannot use node:crypto). */
 function hashPayload(payload: string): string {
   let hash = 5381;
   for (let i = 0; i < payload.length; i++) {
@@ -257,10 +227,6 @@ export function evaAppFingerprints(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Draft from today's Convex fields (migration)
-// ---------------------------------------------------------------------------
-
 export type ConvexAppCommands = {
   rootDirectory?: string;
   devCommand?: string;
@@ -268,7 +234,6 @@ export type ConvexAppCommands = {
   startupCommands?: string[];
   backgroundCommands?: string[];
   stopCommands?: string[];
-  /** This app's own snapshot config commands, when it has one. */
   buildCommands?: string[];
   seedCommands?: string[];
 };

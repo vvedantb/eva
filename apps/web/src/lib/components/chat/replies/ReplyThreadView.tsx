@@ -62,27 +62,20 @@ export function ReplyThreadView({
   onClose,
 }: {
   rootId: string;
-  /** The chat the thread belongs to: its other threads for ↑ and ↓. */
   chatParentId: ChatParentId;
   repo: ChatRepo;
-  /** The chat's composer model: a reply that wakes Eva runs on it. */
   model: AIModel;
-  /** The panel is on screen: Escape anywhere on the page closes it. */
   isOpen: boolean;
   onOpen: (rootId: string) => void;
   onClose: () => void;
 }) {
   const thread = useQuery(api.messages.listReplies, { rootId });
-  // Eva's turn in this thread streams on the chat's row: her open bubble here
-  // shows it, as the chat shows a turn of its own.
   const streaming = useQuery(api.streaming.get, {
     entityId: chatStreamingEntityId(chatParentId),
   });
   const streamingTargetId = thread
     ? findStreamingTargetMessage(thread.replies)?._id
     : undefined;
-  // Eva's question from a turn in this thread is answered here, not in the
-  // chat: a blocking one resumes her turn, a saved one goes as an @Eva reply.
   const threadTurn = useQuery(api.messages.openThreadTurn, {
     parentId: chatParentId,
   });
@@ -98,8 +91,6 @@ export function ReplyThreadView({
         replies: thread.replies,
       })
     : undefined;
-  // Escape from anywhere (focus often stays on the "N replies" link in the
-  // chat), unless something on top already took it (a menu, a dialog).
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -109,8 +100,6 @@ export function ReplyThreadView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, onClose]);
   const currentUserId = useQuery(api.auth.me);
-  // On screen (panel open, tab visible): read, and a "New" line above the
-  // first reply that was not.
   const visible = useDocumentVisible();
   const { state: readState, newSinceAt } = useThreadReadState({
     rootId,
@@ -170,8 +159,6 @@ export function ReplyThreadView({
           title="This message is gone."
         />
       ) : (
-        // A plain scroll area: a thread is short, and the chat's stick-to-
-        // bottom container showed "Scroll to end" over three replies.
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-3 p-3 pt-6">
             {thread
@@ -223,10 +210,6 @@ export function ReplyThreadView({
   );
 }
 
-/**
- * The thread's bottom slot, as the chat's: Eva's open question takes the
- * composer's place until it is answered. A blocking one wins, as in the chat.
- */
 function ThreadDock({
   rootId,
   chatParentId,
@@ -240,7 +223,6 @@ function ThreadDock({
   blocking: { toolUseId: string; payload: string } | null;
   savedQuestionRaw: string | undefined;
 }) {
-  // The saved question just answered: hidden until Eva's reply moves on.
   const [answeredKey, setAnsweredKey] = useState<string | null>(null);
   const [isAnswering, setIsAnswering] = useState(false);
   const addReply = useMutation(api.sessionWorkflow.addReply);
@@ -300,7 +282,6 @@ function ThreadDock({
   );
 }
 
-/** The reply field: people and data mentions, plus @Eva to bring her in. */
 function ReplyComposer({
   rootId,
   model,
@@ -339,7 +320,6 @@ function ReplyComposer({
         onValueChange={setText}
         onEnterSubmit={handleSubmit}
         placeholder="Reply…"
-        // A reply wakes Eva only when it @mentions her (projects v2, decision 2).
         extraPeopleItems={[EVA_MENTION_ITEM]}
         className="min-h-8 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0"
       />

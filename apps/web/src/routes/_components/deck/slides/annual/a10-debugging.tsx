@@ -22,11 +22,6 @@ interface Case {
   fix: string;
 }
 
-/**
- * Newest first, in the order they are spoken: one per build step.
- * Sources: Eva release notes, August to September 2026. Closing figures
- * (65 respawns against 146 launches, 24 hours) from live traffic logs.
- */
 const CASES: readonly Case[] = [
   {
     date: "10 Sep",
@@ -53,7 +48,6 @@ const ENTER = { duration: DUR.hero, ease: EASE.expo };
 const EXIT = { duration: DUR.base, ease: EASE.in };
 const LINK_H = 32;
 
-/** The thread that draws down between two lines of a case, a light riding its tip. */
 function CaseLink({ delay }: { delay: number }) {
   return (
     <DrawPath
@@ -124,7 +118,6 @@ function CaseView({ item }: { item: Case }) {
         delay={0.5}
       />
       <CaseLink delay={0.8} />
-      {/* The cause is the point of each case: it lands brightest and catches the light. */}
       <Sheen delay={1.6} className="-mx-4 rounded-lg px-4">
         <CaseLine
           label="Cause"
@@ -146,7 +139,6 @@ function CaseView({ item }: { item: Case }) {
 
 export function AnnualDebugging() {
   const step = useDeckStep();
-  // `.at` is typed as possibly undefined: step 3 has no case, it has the close.
   const item = CASES.at(step);
 
   return (

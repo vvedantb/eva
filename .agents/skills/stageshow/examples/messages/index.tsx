@@ -1,14 +1,8 @@
 import { Stage, Phone, Thread, Bubble, Stamp, Receipt, type Act, Avatar } from '../../kit'
 import './messages.css'
 
-// A conversation at true iOS size: your reply is typed into the composer and
-// sent, the bubble forming out of the field's words; the receipt turns to
-// Read, they start typing, and the dots grow into their reply. The new
-// conversation holds once complete; the host can explicitly replay it.
-
 type S = { draft: string; sent: boolean; delivered: boolean; read: boolean; typing: boolean; reply: boolean }
 const initial: S = { draft: '', sent: false, delivered: false, read: false, typing: false, reply: false }
-// Reduced motion shows the whole exchange
 const poster: S = { ...initial, sent: true, delivered: true, read: true, reply: true }
 const MINE = 'Yes! See you at 7'
 
@@ -18,7 +12,6 @@ async function script(a: Act<S>) {
   await a.type('draft', MINE, { interval: 60 })
   await a.wait(450)
   await a.click('send')
-  // Clear the field in the same update that adds the bubble: the words lift out of it
   await a.set({ sent: true, draft: '' })
   await a.wait(600)
   await a.set({ delivered: true })

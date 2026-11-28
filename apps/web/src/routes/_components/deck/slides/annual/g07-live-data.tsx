@@ -9,12 +9,6 @@ import { MaskedText } from "../../_components/motion";
 
 const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 
-/**
- * Eva's connector gives Claude read-only access to live data: the remote MCP
- * server with sign-in for Claude connectors (19 February 2026) and the
- * read-only Postgres replica (10 June 2026). Matt's design is the AQP referral
- * activity page in CarePulse.
- */
 const USES: readonly string[] = [
   "Their own dashboards",
   "Their own KPIs",
@@ -38,7 +32,6 @@ export function AnnualLiveData() {
 
       <div className="mt-10 grid grid-cols-2 gap-5">
         <Reveal step={1}>
-          {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
           <Card className="flex h-[290px] flex-col gap-6 rounded-[28px] p-8">
             <div className={LABEL}>Anyone, with Claude</div>
             <ul className="flex flex-col gap-4">

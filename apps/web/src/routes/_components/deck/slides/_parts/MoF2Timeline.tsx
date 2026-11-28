@@ -11,7 +11,6 @@ import {
 
 const DAYS: readonly string[] = ["Today", "Yesterday"];
 
-/** Pixel layout of the two entries, so the rail and the feed line land on the dots. */
 const GROUP = 146;
 const CARD_TOP = 30;
 const CARD_H = 100;

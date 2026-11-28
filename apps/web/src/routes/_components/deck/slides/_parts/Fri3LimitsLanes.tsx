@@ -14,7 +14,6 @@ import { fri3X } from "./Fri3LimitsLadder";
 interface Problem {
   icon: Icon;
   label: string;
-  /** First and latest mention in Eva's changelog. */
   first: string;
   latest: string;
 }
@@ -46,7 +45,6 @@ const PROBLEMS: readonly Problem[] = [
   },
 ];
 
-/** Warm, so the problems never read as part of the brand line above them. */
 const WARM = "#fbbf24";
 export const FRI3_LANE_GAP = 48;
 export const FRI3_LANES_H = PROBLEMS.length * FRI3_LANE_GAP;
@@ -98,7 +96,6 @@ function Lane({ problem, index }: { problem: Problem; index: number }) {
         animate={{ opacity: on ? 0.6 : 0 }}
         transition={cueTransition(on, at + 0.15, { duration: DUR.base })}
       />
-      {/* Still being written about at the right-hand end. */}
       <m.span
         className="absolute flex -translate-x-1/2 -translate-y-1/2"
         style={{ left: right }}

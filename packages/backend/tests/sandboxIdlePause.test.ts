@@ -7,13 +7,6 @@ import schema from "../convex/schema";
 import { sandboxPausedAlertText } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The idle-pause sweep must be a strict no-op while the setting is off (every
- * existing deployment), and when on must only ever stop a
- * sandbox that is active, idle past both graces, not busy and not being looked
- * at. Each guard is pinned here with real Convex rows.
- */
-
 const TIMEOUT_MS = 30_000;
 const HOUR = 60 * 60 * 1000;
 
@@ -36,7 +29,6 @@ async function fixture() {
       title: "Idle session",
       status: "active",
       sandboxId: "sbx-session",
-      // Pre-feature session: no activity row, old updatedAt is the fallback.
       updatedAt: now - 3 * HOUR,
     });
     const taskId = await ctx.db.insert("agentTasks", {
@@ -47,7 +39,6 @@ async function fixture() {
       updatedAt: now - 3 * HOUR,
       createdBy: userId,
     });
-    // A quick task's sandbox is its owned session's.
     const taskSessionId = await ctx.db.insert("sessions", {
       owner: { kind: "task", taskId },
       repoId,
@@ -85,8 +76,6 @@ function sessionStatus(t: Fixture["t"], id: Id<"sessions">) {
 }
 
 describe("idle pause sweep", () => {
-  // The stop helpers schedule zero-delay provider actions (finalize + stuck
-  // recovery). Faking setTimeout keeps them from firing after a test ends.
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
   });
@@ -272,11 +261,6 @@ describe("idle pause sweep", () => {
   );
 });
 
-/**
- * A background exec after Stop resumes the VM (Vercel SDK `withResume`) while
- * the owner row stays `closed`. The leak sweep must flag exactly those VMs and
- * never one Eva still wants or does not own.
- */
 describe("sandbox owner state (leak sweep)", () => {
   test(
     "closed and idle is a leak; active, stopping, busy and unowned are not",
@@ -290,7 +274,6 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "stopping" });
-        // A task's Run (a task-mode turn) holds its session's VM.
         await ctx.db.patch(taskSessionId, { status: "closed" });
         await ctx.db.insert("turns", {
           entityId: taskSessionId,
@@ -361,14 +344,12 @@ describe("sandbox owner state (leak sweep)", () => {
           sandboxId: "sbx-doc",
         });
 
-      // The user is typing the next answer: inside the 5-minute grace.
       expect(await state()).toBe("wanted");
 
       await t.run(async (ctx) => {
         for (const turn of await ctx.db.query("turns").collect()) {
           await ctx.db.patch(turn._id, { finishedAt: now - HOUR });
         }
-        // A crashed workflow's stale slot must not pin the VM.
         await ctx.db.patch(docId, { activeWorkflowId: "stale-workflow" });
       });
       expect(await state()).toBe("closed");
@@ -390,8 +371,6 @@ describe("sandbox owner state (leak sweep)", () => {
           sandboxIds: ["sbx-session"],
         });
 
-      // A closed session and an active quick task share one VM: the sweep
-      // must not stop the VM the task still uses.
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "closed" });
         await ctx.db.patch(taskSessionId, { sandboxId: "sbx-session" });

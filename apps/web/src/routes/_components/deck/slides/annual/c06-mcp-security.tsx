@@ -18,26 +18,18 @@ import { AnnBExpiryDial } from "../_parts/AnnBDials";
 import { MOA3_GATES_SHUT, MoA3Gates } from "../_parts/MoA3Gates";
 import { ProblemFix } from "../_parts/ProblemFix";
 
-/**
- * Shortest first: nothing on this slide lives longer than it needs to.
- * Source: authorisation code, access token and refresh token lifetimes in the
- * security model documented in the Eva repository.
- */
 const LIFETIMES: readonly { value: number; unit: string; label: string }[] = [
   { value: 5, unit: "minutes", label: "Sign-in code" },
   { value: 1, unit: "hour", label: "Access pass" },
   { value: 30, unit: "days", label: "Renewal" },
 ];
 
-/** Each check lands as its gate shuts: the outer ring first, the inner after. */
 const CHECKS: readonly { text: string; at: number }[] = [
   { text: "Checked at the door", at: 0.55 },
   { text: "Checked again at the data", at: MOA3_GATES_SHUT - 0.05 },
 ];
 
-/** How far the light's box overhangs the content, so its glow is never clipped. */
 const BLEED = 320;
-/** The light sits under the dials, then drops to the gates. */
 const LIGHT = [
   null,
   { x: BLEED + 544, y: BLEED + 90, size: 760 },

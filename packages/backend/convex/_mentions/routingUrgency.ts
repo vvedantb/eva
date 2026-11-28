@@ -1,17 +1,3 @@
-/**
- * How a chat `@`-mention is routed, and what that means for delivery.
- *
- * Being named in a message covers three very different things — a direct
- * question, a heads-up, and an offhand credit — and today all three arrive the
- * same way: an inbox row plus an email fifteen minutes later. Jev is asked
- * which one it is, and the answer picks the delivery. Nothing is dropped: an
- * incidental mention still lands in the inbox, just quietly.
- *
- * Pure so the mapping can be tested without the gateway. The prompt criteria
- * live here too, beside the mapping they feed, rather than in the `"use node"`
- * action that sends them.
- */
-
 /** The three answers Jev picks between. */
 export const MENTION_ROUTES = ["reply", "fyi", "none"] as const;
 

@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { useMotionCue } from "./deckContext";
 import { ACCENT_GRADIENT } from "./motion/tokens";
 
-/** Accent text waits this long after its words land (kept for `Title`). */
 const SHEEN_LEAD = 0.55;
 
 /**

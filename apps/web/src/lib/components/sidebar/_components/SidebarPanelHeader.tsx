@@ -50,15 +50,10 @@ export function SidebarPanelHeader({
     <div
       className={cn(
         "relative flex items-center overflow-hidden",
-        // Repo identity keeps a reserved tall slot so team art
-        // resolving later does not shift the nav list (CLS). 128px: the
-        // inset banner then ends near the rail's first track.
         isSourceListHeader ? "px-2 pt-3" : "h-32 px-3",
       )}
     >
       {teamBackgroundUrl && !showContextSidebar && !isFlatPanel ? (
-        // Inset and rounded like the rail tracks: the top lines up with the
-        // rail's first track (12px); ~8px gap to the rail track and the edge.
         <div className="absolute top-3 right-2 bottom-0 left-1 overflow-hidden rounded-t-surface">
           <img
             src={teamBackgroundUrl}
@@ -120,8 +115,6 @@ function FlatPanelHeaderContent({
 }) {
   return (
     <>
-      {/* Lines the title up with nav row icons: nav px-2 + row
-          px-4, or the Sessions grid's tighter px-2.5. */}
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary",
@@ -221,7 +214,6 @@ function RepoIdentityHeaderContent({
                 : repoName
           }
         >
-          {/* Always reserve the logo slot so late logoUrl does not reflow the title. */}
           <RepoLogo
             logoUrl={repoLogoUrl}
             size={28}

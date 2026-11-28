@@ -1,9 +1,6 @@
 import { getAIModelProvider, type api, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 
-// Plan usage (Claude rate-limit windows) for every chat surface, web and phone:
-// which reading a chip shows, its tone, and the copy around it.
-
 /**
  * One credential the viewer can run on, with its latest reading or `null` when
  * it has never reported (or reported too long ago to be evidence of anything).
@@ -59,7 +56,6 @@ export function snapshotsOf(
  * cannot name its account cannot ask for a reading either.
  */
 export interface UsageAccountScope {
-  /** null is the shared team credential, which has no account row. */
   providerAccountId: Id<"userProviderAccounts"> | null;
   accountLabel: string;
 }
@@ -77,11 +73,8 @@ export function claudeUsageAccountScope(
   return scope;
 }
 
-/** Utilisation at which a window stops reading as routine. */
 const WARNING_UTILIZATION = 80;
-/** Utilisation at which it reads as about to be refused. */
 const DANGER_UTILIZATION = 95;
-/** Mirrors the server-side freshness gate in `usageLimits.getForViewer`. */
 const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type UsageTone = "neutral" | "warning" | "danger";
@@ -94,7 +87,6 @@ export function toneForUtilization(utilization: number): UsageTone {
   return "neutral";
 }
 
-/** The provider's own verdict, which is all a windowless reading reports. */
 function toneForStatus(status: UsageSnapshot["status"]): UsageTone {
   if (status === "rejected") return "danger";
   if (status === "allowed_warning") return "warning";
@@ -121,12 +113,6 @@ export function reportedWindows(
   );
 }
 
-/**
- * Windows that meter spend beyond the plan rather than headroom within it.
- * They still earn a row in the card — money spent is worth seeing — but they
- * are not a constraint, so a full overage meter must not colour the chip as if
- * the plan were about to refuse work.
- */
 const SPEND_METER_WINDOW_KEYS: ReadonlySet<string> = new Set([
   "overage",
   "seven_day_overage_included",
@@ -143,7 +129,6 @@ export function maxUtilization(
   return utilizations.length === 0 ? undefined : Math.max(...utilizations);
 }
 
-/** Status remains meaningful until its associated windows have all reset. */
 function activeUsageStatus(
   snapshot: UsageSnapshot,
   now: number,
@@ -197,7 +182,6 @@ export function resetsInLabel(resetsAt: number, now: number): string {
 
 export interface ChipSummary {
   label: string;
-  /** Fill for the chip's meter; absent when the provider reports no windows. */
   utilization?: number;
   tone: UsageTone;
 }
@@ -316,7 +300,6 @@ export function chipSummary(
 /** Only the selected credential's limits belong beside its model picker. */
 export function usageRowsForAccount<Row extends { providerAccountId?: string }>(
   rows: readonly Row[],
-  /** Only the id is read here, so a `UsageAccountScope` is more than enough. */
   scope: { providerAccountId: string | null } | undefined,
 ): Row[] {
   if (!scope) return [...rows];
@@ -326,10 +309,6 @@ export function usageRowsForAccount<Row extends { providerAccountId?: string }>(
 
 type UsageProvider = UsageSnapshot["provider"];
 
-/**
- * Display name per provider. A record rather than a ternary, so adding a
- * provider to the Convex validator fails to compile until it gets a name.
- */
 const PROVIDER_LABELS: Record<UsageProvider, string> = { claude: "Claude" };
 
 /** "Claude · Max plan" — the plan half is dropped for an API-key session. */
@@ -351,7 +330,6 @@ export function newestCapturedAt(
   );
 }
 
-/** The freshest reading for the account, or none within the freshness window. */
 function freshestReading(
   rows: readonly UsageSnapshot[],
   now: number,
@@ -383,15 +361,11 @@ export function emptyAccountUsageCopy(
   if (!freshest) return "No plan usage has been reported for this account yet.";
   switch (freshest.completeness) {
     case "complete":
-      // We asked, Claude answered in full, and there were no plan windows in it
-      // (Team/Enterprise spend caps live on claude.ai).
       return "Claude isn't reporting plan rate limits for this account.";
     case "refused":
       return "Claude declined to report plan rate limits for this account.";
     case "partial":
     default:
-      // Something was observed in passing, or the row predates the
-      // discriminant — either way we never had the full picture.
       return "Plan usage for this account hasn't been fully reported yet.";
   }
 }
@@ -399,10 +373,6 @@ export function emptyAccountUsageCopy(
 /** One account's outcome from `usageLimitsActions.refreshAll`. */
 export type UsageRefreshOutcome = FunctionReturnType<typeof api.usageLimitsActions.refreshAll>["results"][number];
 
-/**
- * Why a refresh came back with nothing, in the user's terms. Each one names a
- * different next move, which is the only reason they are distinguished at all.
- */
 const REFRESH_FAILURE_COPY: Record<string, string> = {
   "no-token": "This account has no Claude OAuth token connected.",
   unauthorized: "Claude rejected the token. Reconnect the account in Settings.",

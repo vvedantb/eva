@@ -1,19 +1,5 @@
 "use node";
 
-/**
- * The one place Eva composes a chat UI panel.
- *
- * json-render's experimental composition asks TypeSafe Jev a series of typed
- * choice questions — "which candidate is the root", "what goes next, and under
- * which parent" — instead of asking a language model to write JSON. Every
- * answer is picked from candidates we built, so composition is fast and the
- * output cannot contain anything the catalog does not define.
- *
- * Imports stay confined to json-render and the leaf modules beside this
- * file (the catalog among them); reaching into `mcp/*` would put a `"use node"`
- * chunk in an import cycle, which breaks the Convex prod push.
- */
-
 import {
   experimental_composeSpec,
   experimental_createEvaluator,
@@ -31,11 +17,8 @@ import {
   type RenderUiInputRaw,
 } from "./schema";
 
-/** Jev answers each question in well under a second. */
 const EVALUATION_TIMEOUT_MS = 15_000;
-/** Whole-panel budget; a composition that needs longer is a bad request. */
 const COMPOSITION_TIMEOUT_MS = 60_000;
-/** Gateway id, matching the `evaluate` MCP tool. */
 const EVALUATION_MODEL = "typesafe-ai/jev";
 
 const INSTRUCTIONS = {
@@ -79,8 +62,6 @@ export async function composeChatUiPanel(
   const { prompt, title, blocks } = parsed.data;
 
   const candidates = buildChatUiCandidates(blocks, title);
-  // Leave room for the layout the composer wraps the blocks in, but never let
-  // one call spend more evaluations than a panel can justify.
   const maxElements = Math.min(blocks.length + 8, MAX_PANEL_ELEMENTS);
 
   try {
@@ -123,9 +104,6 @@ export async function composeChatUiPanel(
       };
     }
 
-    // Selection is an independent include/omit decision per candidate, so a
-    // composition can drop content the agent asked for. Put it back before
-    // validating — the panel's promise is that every block is shown.
     const { spec: complete, appended } = appendMissingBlocks(
       composed,
       candidates,

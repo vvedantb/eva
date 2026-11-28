@@ -25,11 +25,6 @@ type RevertResult = Infer<typeof revertResultValidator>;
 
 /** One (repo path, target sha) pair a revert resets. */
 export type RevertTarget = {
-  /**
-   * Absolute clone path. `undefined` selects the primary repo via
-   * `workspaceDirShell()` at exec time — the pre-multi-repo scalar fallback,
-   * used whenever the message has no `beforeShas` array.
-   */
   path: string | undefined;
   sha: string;
 };
@@ -77,7 +72,6 @@ export const revertSessionToTurn = action({
       sessionId: args.sessionId,
       messageId: args.messageId,
     });
-    // Access is checked before any status leaks back to the caller.
     const repo = await getActionRepoWithAccess(ctx, context.repoId);
     if (context.status !== "ok") return { status: context.status };
 
@@ -94,8 +88,6 @@ export const revertSessionToTurn = action({
     });
     if (targets.length === 0) return { status: "sha_missing" };
 
-    // Resolve each target's owner/name for push: the primary via the already
-    // access-checked `repo`, every other path via its `sessionRepos` row.
     const linkedRepos =
       targets.length > 1 || targets[0]?.path !== undefined
         ? await ctx.runQuery(internal.sessions.listLinkedReposInternal, {
@@ -114,9 +106,6 @@ export const revertSessionToTurn = action({
       };
     });
 
-    // All-or-nothing: verify every sha exists in its repo before touching any
-    // of them. The sandbox may be a fresh VM that only cloned recent history —
-    // try to fetch the exact commit before declaring it missing.
     for (const target of resolved) {
       const sha = quote([target.sha]);
       const known = await execHandle(
@@ -132,8 +121,6 @@ export const revertSessionToTurn = action({
       }
     }
 
-    // Local edits (terminal, code-server) in any repo would be swept into the
-    // restore commit unnoticed; make the user deal with them first.
     for (const target of resolved) {
       const dirty = await execHandle(
         handle,
@@ -189,8 +176,6 @@ export const revertSessionToTurn = action({
       }
     }
 
-    // Primary repo's commit, when reverted, else the first target's — a
-    // single-repo session always has exactly one.
     const primaryCommit =
       commits.find((commit) => commit.path === undefined) ?? commits[0];
     const commitSha = primaryCommit ? primaryCommit.sha : "";
@@ -202,8 +187,6 @@ export const revertSessionToTurn = action({
         content: `Restored workspace to before turn ${context.turnNumber} (commit ${shortSha})`,
       });
     } else {
-      // The restore commit(s) exist locally either way; the next turn's
-      // persistTurnWork (or PublishRecoveryBanner) will push them.
       await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
         chatId: context.chatId,
         content: `Restored workspace to before turn ${context.turnNumber} (commit ${shortSha}), but the push failed`,

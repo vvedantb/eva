@@ -5,12 +5,10 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { type LastCrash, useLastCrash } from "@/logging/lastCrash";
 
-/** The `at` of the last crash sent, so each crash is sent once. */
 const REPORTED_KEY = "eva.lastCrashReported";
 
 type Send = (report: LastCrash & { platform: string }) => Promise<null>;
 
-/** Sends `crash` unless it was sent before. Never throws: a failed send retries next launch. */
 async function reportOnce(crash: LastCrash, send: Send) {
   try {
     const reported = Number((await SecureStore.getItemAsync(REPORTED_KEY)) ?? 0);
@@ -18,7 +16,6 @@ async function reportOnce(crash: LastCrash, send: Send) {
     await send({ ...crash, platform: Platform.OS });
     await SecureStore.setItemAsync(REPORTED_KEY, String(crash.at));
   } catch {
-    // A crash reporter must never throw.
   }
 }
 

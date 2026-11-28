@@ -47,7 +47,6 @@ export function InboxClient({
   const [history, setHistory] = useQueryState("history", inboxHistoryParser);
   const inboxRows = useQuery(api.inbox.list, history ? "skip" : listArgs);
   const feed = useQuery(api.notifications.list, history ? { history: true } : "skip");
-  // History: the whole feed, in the Inbox's rows (a repo's inbox keeps to that repo).
   const rows: InboxRow[] | undefined = history
     ? feed
         ?.filter((n) => repoId === undefined || n.repoId === repoId)
@@ -61,7 +60,6 @@ export function InboxClient({
   const frameRef = useRef<HTMLIFrameElement>(null);
   const markDone = useInboxDone(listArgs);
 
-  // The first row is selected until the user picks one (or the picked one leaves).
   const selected =
     rows?.find((row) => row.key === selectedKey) ?? rows?.[0];
 
@@ -73,7 +71,6 @@ export function InboxClient({
     }
   };
 
-  /** Done, then the next row (or the one before, at the end) is selected. */
   const done = (row: InboxRow) => {
     if (!inboxDoneTarget(row) || !rows) return;
     const index = rows.findIndex((r) => r.key === row.key);
@@ -122,7 +119,6 @@ export function InboxClient({
         leftDefaultSize="36%"
         leftMinWidthPx={300}
         rightMinWidthPx={360}
-        // The chat beside the list is the point of this view, so it starts open.
         defaultRightCollapsed={false}
         mobilePaneLabels={{ left: "Inbox", right: "Chat" }}
         leftPanel={() => (
@@ -150,7 +146,6 @@ export function InboxClient({
                 frameRef={frameRef}
               />
             ) : selected ? (
-              // No page to show (a notification without a link): its own text.
               <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
                 <div className="mx-auto w-full max-w-2xl space-y-2 px-6 py-6">
                   <h2 className="text-lg font-semibold tracking-[-0.01em] text-balance text-foreground">
@@ -189,11 +184,6 @@ export function InboxClient({
   );
 }
 
-/**
- * The pane shows the chat alone for a chat row, or a notification whose link
- * is a task, session or project chat. A reply thread opens the whole page,
- * where its Replies tab sits beside the chat.
- */
 function inboxShowsChatOnly(row: InboxRow): boolean {
   if (row.threadRootId !== undefined || row.href?.includes("thread=")) return false;
   return row.kind === "chat" || (row.href !== undefined && inboxChatRefFromHref(row.href) !== undefined);
@@ -218,14 +208,12 @@ const INBOX_KEYS: Record<string, InboxKeyCommand> = {
   Escape: "clear",
 };
 
-/** The Inbox command a key press asks for; none while typing or with a modifier. */
 function inboxKeyCommand(e: KeyboardEvent): InboxKeyCommand | undefined {
   if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return undefined;
   const target = e.target;
   if (target instanceof HTMLElement) {
     if (target.isContentEditable) return undefined;
     if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return undefined;
-    // A focused button (a row, a bar button) answers Enter itself.
     if (e.key === "Enter" && target.tagName === "BUTTON") return undefined;
   }
   return INBOX_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];

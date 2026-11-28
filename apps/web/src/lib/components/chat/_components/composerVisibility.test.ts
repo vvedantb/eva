@@ -4,11 +4,6 @@ import {
   type ComposerElement,
 } from "@/lib/components/chat/_components/composerVisibility";
 
-/**
- * A stand-in for the editor's root element. The three reads below are the whole
- * contract, so a fake keeps the rule testable in the node environment the rest
- * of the suite runs in.
- */
 function editor(overrides: Partial<ComposerElement> = {}): ComposerElement {
   return {
     isConnected: true,
@@ -18,12 +13,6 @@ function editor(overrides: Partial<ComposerElement> = {}): ComposerElement {
   };
 }
 
-/**
- * Up to three session shells and Manager Ave's panel stay mounted at once, so
- * anything that listens on `document` reaches every one of them. Each rule here
- * is one of the ways a mounted composer can be invisible; missing any of them
- * put a stray keystroke into every hidden draft.
- */
 describe("isComposerVisible", () => {
   it("accepts a rendered, visible editor", () => {
     expect(isComposerVisible(editor())).toBe(true);

@@ -8,7 +8,6 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/** The shared time axis: 1 February to 1 October 2026, left to right. */
 const START = Date.UTC(2026, 1, 1);
 const END = Date.UTC(2026, 9, 1);
 export const FRI3_PLOT_X = 224;
@@ -19,7 +18,6 @@ export function fri3X(date: string): number {
   return FRI3_PLOT_X + ((at - START) / (END - START)) * FRI3_PLOT_W;
 }
 
-/** The day each model first appeared in Eva's model picker (git history). */
 const MODELS: readonly { label: string; date: string }[] = [
   { label: "Opus 4.5", date: "2026-04-14" },
   { label: "Opus 4.6", date: "2026-04-17" },
@@ -47,13 +45,11 @@ const POINTS = MODELS.map((model, index) => ({
   y: BASE_Y - (index + 1) * RISE,
 }));
 
-/** One step per model: along to its date, then up. */
 const LADDER = POINTS.reduce(
   (d, point) => `${d} H ${point.x.toFixed(1)} V ${point.y}`,
   `M ${FRI3_PLOT_X} ${BASE_Y}`,
 );
 
-/** How far along the drawn line each step sits, 0 to 1. */
 const LENGTHS = POINTS.map((point, index) => {
   const prevX = index === 0 ? FRI3_PLOT_X : (POINTS[index - 1]?.x ?? 0);
   return point.x - prevX + RISE;
@@ -65,7 +61,6 @@ const FRACTIONS = LENGTHS.map(
     TOTAL,
 );
 
-/** Seconds into the draw when the ease reaches `progress`, so each dot lands as the line does. */
 function timeAt(progress: number): number {
   const [x1, y1, x2, y2] = EASE.inOut;
   const curve = (a: number, b: number, s: number) =>

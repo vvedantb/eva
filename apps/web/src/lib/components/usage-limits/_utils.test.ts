@@ -44,7 +44,6 @@ test("tone buckets sit on the 80 and 95 thresholds", () => {
 });
 
 test("a reported status is never softened by a low window", () => {
-  // The provider's own warning is the part worth surfacing, not the 42% bar.
   expect(worseTone("neutral", "warning")).toBe("warning");
   expect(chipSummary([claude({ status: "allowed_warning" })], NOW)?.tone).toBe(
     "warning",
@@ -76,8 +75,6 @@ test("windows with no utilisation are skipped, not drawn at zero", () => {
 });
 
 test("a spend meter is shown but never stands in for plan headroom", () => {
-  // Extra usage bills money; it does not measure how close the plan is to
-  // refusing work, so a maxed-out meter must not become the headline number.
   const snapshot = claude({
     windows: [
       { key: "five_hour", label: "5h", utilization: 20 },
@@ -95,7 +92,6 @@ test("a spend meter is shown but never stands in for plan headroom", () => {
     utilization: 20,
     tone: "neutral",
   });
-  // The rows themselves are untouched — the card still shows the spend.
   expect(reportedWindows(snapshot, NOW)).toHaveLength(3);
 });
 
@@ -111,8 +107,6 @@ test("a reading of nothing but spend has no headline to show", () => {
 });
 
 test("the chip shows the tightest window across every account, not the freshest", () => {
-  // Two Claude accounts on one repo. The newer row is the roomier one, so a
-  // first-match chip would have understated how close the other is to refusal.
   const roomy = claude({
     capturedAt: NOW,
     windows: [{ key: "5h", label: "5h", utilization: 18 }],
@@ -129,8 +123,6 @@ test("the chip shows the tightest window across every account, not the freshest"
 });
 
 test("one account's flagged status colours the chip the whole card shares", () => {
-  // The collapsed chip stands in for every account, so a rejection sitting
-  // behind a lower utilisation must not be hidden by it.
   const calm = claude({
     windows: [{ key: "5h", label: "5h", utilization: 70 }],
   });
@@ -197,8 +189,6 @@ test("chip bar prefers Weekly (Fable) when the active model is Fable", () => {
 });
 
 test("the scoped bar matches Anthropic's versioned display name", () => {
-  // `/usage` names the window "Opus 5", not "Opus" — an exact-match lookup
-  // silently falls back to the tightest window instead of the model's own.
   const row = claude({
     windows: [
       { key: "five_hour", label: "5h", utilization: 88 },
@@ -211,7 +201,6 @@ test("the scoped bar matches Anthropic's versioned display name", () => {
 });
 
 test("the scoped bar also reads the fixed per-model weekly keys", () => {
-  // Opus and Sonnet arrive as their own top-level windows, not as model_scoped.
   const row = claude({
     windows: [
       { key: "five_hour", label: "5h", utilization: 88 },
@@ -228,8 +217,6 @@ test("the scoped bar also reads the fixed per-model weekly keys", () => {
 });
 
 test("a reading too old for the chip is too old for the scoped bar", () => {
-  // The scoped lookup runs before the plain chip, so it needs the same
-  // freshness gate or a day-old Fable number outlives every other reading.
   const stale = claude({
     capturedAt: NOW - DAY - 1,
     windows: [
@@ -261,8 +248,6 @@ test("an expired scoped window stops driving the bar", () => {
 });
 
 test("a windowless rejection still colours a chip that has a number", () => {
-  // Account A reports utilisation; account B was refused before it could
-  // report any window. B's rejection must reach the shared chip's tone.
   const measured = claude({
     windows: [{ key: "5h", label: "5h", utilization: 40 }],
   });
@@ -279,8 +264,6 @@ test("a windowless rejection still colours a chip that has a number", () => {
 });
 
 test("only the accounts that have reported become snapshots", () => {
-  // Every credential the viewer can run on is an entry, so the card can list an
-  // account before its first turn. The chip measures readings, not accounts.
   const reading = {
     provider: "claude" as const,
     capturedAt: NOW,
@@ -290,7 +273,6 @@ test("only the accounts that have reported become snapshots", () => {
     { providerAccountId: undefined, accountLabel: "Kezia", reading: null },
     { providerAccountId: undefined, accountLabel: "Team", reading },
   ]);
-  // The account the reading belongs to travels with it — the chip scopes on it.
   expect(snapshots).toEqual([
     { ...reading, providerAccountId: undefined, accountLabel: "Team" },
   ]);
@@ -352,7 +334,6 @@ test("reset labels count down, and stop at the reset", () => {
 test("a reset more than a day out is counted in days, not raw hours", () => {
   expect(formatResetDistanceMs(2 * DAY + 23 * HOUR)).toBe("2d 23h");
   expect(formatResetDistanceMs(6 * DAY + 12 * HOUR)).toBe("6d 12h");
-  // Whole days drop the "0h", and the last minutes of a day roll up into it.
   expect(formatResetDistanceMs(3 * DAY)).toBe("3d");
   expect(formatResetDistanceMs(DAY - 30 * 1000)).toBe("1d");
   expect(resetsInLabel(NOW + 2 * DAY + 23 * HOUR, NOW)).toBe(
@@ -365,7 +346,6 @@ test("under a day stays on hours and minutes, under an hour on minutes", () => {
   expect(formatResetDistanceMs(2 * HOUR + 28 * 60 * 1000)).toBe("2h 28m");
   expect(formatResetDistanceMs(2 * HOUR)).toBe("2h");
   expect(formatResetDistanceMs(45 * 60 * 1000)).toBe("45m");
-  // Rounding up keeps a live countdown off "0m" while time remains.
   expect(formatResetDistanceMs(30 * 1000)).toBe("1m");
 });
 
@@ -401,8 +381,6 @@ test("account hover copy distinguishes never-reported from windowless", () => {
 });
 
 test("account hover copy reads the reason off the row, not the clock", () => {
-  // Every row below is fresh and windowless — the timestamp cannot tell these
-  // three apart, which is why the reading carries the reason.
   expect(
     emptyAccountUsageCopy(
       [claude({ windows: [], completeness: "complete" })],
@@ -421,8 +399,6 @@ test("account hover copy reads the reason off the row, not the clock", () => {
       NOW,
     ),
   ).toBe("Plan usage for this account hasn't been fully reported yet.");
-  // Rows written before the discriminant, and readings whose windows have all
-  // reset, claim nothing about the provider.
   expect(
     emptyAccountUsageCopy(
       [claude({ windows: [], completeness: undefined })],

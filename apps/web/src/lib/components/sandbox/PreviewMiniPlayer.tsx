@@ -87,8 +87,6 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
           role="miniPlayer"
         />
       </div>
-      {/* A footer, not a corner overlay: the hosted iframe is rectangular and
-          would poke through rounded bottom corners drawn over it. */}
       <div className="relative h-2.5 shrink-0 bg-muted">
         <div
           {...resizeHandlers}
@@ -105,11 +103,6 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
   );
 }
 
-/**
- * The owner doc is the truth about whether this iframe still shows a live
- * sandbox; the pane that would normally notice has been unmounted.
- * Blob/data guests are local fixtures (no sandbox doc to reconcile).
- */
 function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
   const { owner } = entry;
   const fixture =
@@ -128,11 +121,6 @@ function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
   );
 }
 
-/**
- * Commit-phase side effect without an effect: mounting this runs the ref
- * callback once, which drops the sandbox's iframes and thereby closes the
- * window (the store listens to `dropPreviewGroup`).
- */
 function StalePreviewSweeper({ sandboxId }: { sandboxId: string }) {
   return (
     <span

@@ -1,9 +1,3 @@
-/**
- * A quote from an Eva reply, cited into the next prompt: the web's text
- * selection "Cite" and the phone's "Select text" then "Quote" both build one,
- * and both send it as a `<cited_assistant>` block after the prompt.
- */
-
 /** Max quote stored on a citation chip. Longer selections are rejected. */
 export const ASSISTANT_CITATION_MAX_CHARS = 2_000;
 
@@ -51,8 +45,6 @@ export function parseCitationSegments(
         text: value.slice(cursor, start),
       });
     }
-    // The quote is whitespace-collapsed on create, so the first blank line
-    // can only be the comment separator.
     const body = match[2] ?? "";
     const split = body.indexOf(CITATION_COMMENT_SEPARATOR);
     segments.push({

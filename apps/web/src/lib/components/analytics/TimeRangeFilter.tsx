@@ -19,7 +19,6 @@ import {
 interface TimeRangeFilterProps {
   value: TimeRange;
   onChange: (value: TimeRange) => void;
-  /** Subset of ranges to offer; defaults to every range. */
   ranges?: readonly TimeRange[];
 }
 

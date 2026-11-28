@@ -5,16 +5,7 @@ import { resolveMessageCredential } from "../convex/_userProviderAccounts/creden
 import { findUsageLimitHold } from "../convex/_queues/usageLimitReset";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Regression guard for the per-account usage-limit hold. The hold reads the
- * failed turn's `credentialAccountId`. "Retry with account" patches that stamp
- * on the user message, so a retry on Team must clear a personal account's id,
- * not leave it behind. Otherwise a second limit on Team names the old account:
- * Team messages send straight into the limit, and the old account's wait.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -81,7 +72,6 @@ describe("message credential stamp", () => {
           model: "claude:sonnet" as const,
           ...(await resolveMessageCredential(ctx.db, ownAccountId, ownerId)),
         });
-        // Same patch as retryLastTurnWithAccount with the Team pick.
         await ctx.db.patch(userMessageId, {
           ...(await resolveMessageCredential(ctx.db, undefined, ownerId)),
         });

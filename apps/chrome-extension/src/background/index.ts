@@ -16,12 +16,6 @@ import {
   openEva,
 } from "./handlers";
 
-/* ------------------------------ toolbar visibility ------------------------- *
- * Visibility is per-tab and kept in `chrome.storage.session` so it survives
- * worker restarts and page navigations within a tab, and clears when the
- * browser session ends (toolbar then defaults to hidden).
- * --------------------------------------------------------------------------- */
-
 function visKey(tabId: number): string {
   return `toolbarVisible:${tabId}`;
 }
@@ -33,7 +27,6 @@ async function getVisibility(tabId: number | undefined): Promise<boolean> {
   return stored[key] === true;
 }
 
-/** Green dot badge on the icon so the user knows the toolbar is active here. */
 function applyBadge(tabId: number, visible: boolean): void {
   if (visible) {
     void chrome.action.setBadgeText({ tabId, text: "●" });
@@ -49,7 +42,6 @@ async function setVisibility(tabId: number, visible: boolean): Promise<void> {
   applyBadge(tabId, visible);
 }
 
-// Clicking the icon toggles the toolbar for the current tab.
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id === undefined) return;
   const tabId = tab.id;
@@ -63,8 +55,6 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     await chrome.tabs.sendMessage(tabId, message);
   } catch {
-    // No content script on this page (chrome://, web store, etc.) — revert so
-    // the badge and stored state don't drift from reality.
     await setVisibility(tabId, current);
   }
 });
@@ -72,8 +62,6 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   void chrome.storage.session.remove(visKey(tabId));
 });
-
-/* --------------------------------- router --------------------------------- */
 
 function handleRequest(
   message: AnyBgRequest,
@@ -106,5 +94,5 @@ function handleRequest(
 chrome.runtime.onMessage.addListener((message: AnyBgRequest, sender, reply) => {
   if (!message || !BG_REQUEST_TYPES.has(message.type)) return false;
   void handleRequest(message, sender).then(reply);
-  return true; // async response
+  return true;
 });

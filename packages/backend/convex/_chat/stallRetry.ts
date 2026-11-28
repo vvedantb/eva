@@ -1,20 +1,6 @@
 import type { Doc } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 
-/**
- * Whether a stalled chat turn should be restaged without a new user bubble.
- *
- * claimPendingTurn acquires the 2-minute running lease before the daemon has
- * started heartbeating it. If the process then dies (huge Claude resume after
- * sandbox reconnect is the observed case), the prompt is gone: the empty
- * assistant bubble is dropped, and the next send is a different turn. Retry
- * once, only when the stall produced no output and nothing else is already
- * running or queued.
- *
- * Retry is scheduled after finalizeExpired inserts the stall alert, so the
- * first failure already counts as 1. A second stall of the same prompt is 2.
- */
-
 export const STALL_ALERT_TEXT =
   "Turn stalled: the agent process in the sandbox stopped responding.";
 

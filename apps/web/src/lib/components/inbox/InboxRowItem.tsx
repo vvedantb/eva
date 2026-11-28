@@ -32,8 +32,6 @@ export function InboxRowItem({
   onSelect: () => void;
 }) {
   const rowRef = useRef<HTMLButtonElement>(null);
-  // Arrow keys move the selection from the list's key handler, so the row has
-  // no event of its own to scroll from; nearest-block is a no-op when visible.
   /* eslint-disable no-effect/no-event-handler -- scrolls the DOM row into view */
   useEffect(() => {
     if (selected) rowRef.current?.scrollIntoView({ block: "nearest" });
@@ -52,7 +50,6 @@ export function InboxRowItem({
         selected ? "bg-muted" : "hover:bg-muted/40",
       )}
     >
-      {/* Fixed-width dot slot so read and unread rows stay aligned. */}
       <span className="flex w-1.5 shrink-0 justify-center" aria-hidden>
         {row.unread ? <span className="size-1.5 rounded-full bg-primary" /> : null}
       </span>
@@ -104,7 +101,6 @@ export function InboxRowItem({
   );
 }
 
-/** The repo logo, as the old feed showed it; the type icon for a notification with no repo. */
 function InboxSourceAvatar({
   repo,
   notice,

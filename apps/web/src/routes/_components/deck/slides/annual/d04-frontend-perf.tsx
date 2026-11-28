@@ -20,18 +20,12 @@ import {
 interface Drop {
   label: string;
   before: number;
-  /** The before figure as written in the source, so 28 does not read as 28.0. */
   beforeText: string;
   after: number;
   decimals: number;
   unit: string;
 }
 
-/**
- * One per build step, in the order they are spoken.
- * Sources: Eva release notes. Build and checker 20 August 2026; landing
- * page 8 August 2026.
- */
 const DROPS: readonly Drop[] = [
   {
     label: "Local build",
@@ -65,7 +59,6 @@ const ROW_H = 120;
 const BLEED = 260;
 const HEAD_GLOW =
   "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.5) 34%, transparent 70%)";
-/** The light sits behind whichever figure is falling. */
 const LIGHT = [
   null,
   ...DROPS.map((_, index) => ({
@@ -79,9 +72,7 @@ function DropRow({ drop, index }: { drop: Drop; index: number }) {
   const step = useDeckStep();
   const fallen = step >= index + 1;
   const current = step === index + 1;
-  // At rest every row is lit; once the build starts, the falling row leads.
   const opacity = step === 0 || current ? 1 : fallen ? 0.7 : 0.45;
-  // A floor keeps a bar that falls to zero from vanishing entirely.
   const share = Math.max(drop.after / drop.before, 6 / TRACK_W);
   const fall = fallen
     ? { duration: DURATION, ease: EASE.expo, delay: 0.15 }
@@ -145,7 +136,6 @@ function DropRow({ drop, index }: { drop: Drop; index: number }) {
         <span className="w-[76px] shrink-0 text-right text-base whitespace-nowrap tabular-nums text-white/35">
           <span className="relative">
             {drop.beforeText}
-            {/* The old figure is struck through once the new one has landed. */}
             <m.span
               aria-hidden
               className="absolute inset-x-[-3px] top-1/2 h-px origin-left bg-white/45"

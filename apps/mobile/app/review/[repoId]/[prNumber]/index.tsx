@@ -55,7 +55,6 @@ import { useActionResult } from "@/reviews/useActionResult";
 import { useStartReviewSession } from "@/reviews/useStartReviewSession";
 import { type Scheme, useScheme } from "@/ui/theme";
 
-/** The web review tabs, in its order: Summary, Timeline, Code. */
 const REVIEW_TABS = ["summary", "timeline", "code"] as const;
 type ReviewTab = (typeof REVIEW_TABS)[number];
 const TAB_LABEL: Record<ReviewTab, string> = { summary: "Summary", timeline: "Timeline", code: "Code" };
@@ -86,7 +85,6 @@ export default function ReviewScreen() {
     (force) => (repoId === undefined ? Promise.reject(new Error("Repo not found")) : getOverview({ repoId, prNumber, force })),
     "Couldn't load pull request",
   );
-  // After a deep link, Back opens the Reviews list.
   const back = () => goBackOrReplace(router, "/sessions?section=reviews");
   const bare = (body: ReactNode) => (
     <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
@@ -130,15 +128,6 @@ export default function ReviewScreen() {
   );
 }
 
-/**
- * The loaded pull request: the header with the tab row, the tabs on a `Pager`
- * (a sideways swipe moves between them, as Sessions and Projects; the tab
- * fill follows the pages), and the bottom bar. The tab is a route param set
- * in place (`setParams`), so a switch adds no history and Back still leaves
- * the pull request. A tab mounts once visited or swiped toward, and then
- * stays mounted with its scroll, as the web keeps every tab mounted; the diff
- * downloads only once Code is visited, so reading Summary does not fetch it.
- */
 function ReviewTabs({
   repo,
   overview,
@@ -176,8 +165,6 @@ function ReviewTabs({
   };
 
   const nav = (
-    // As high as Code's ⋯ (a `HeaderIconButton`, 48; 56 with larger text) on
-    // every tab, so the tabs and the content do not move when it shows.
     <View className={`${largerText ? "min-h-14" : "min-h-12"} flex-row items-center gap-2 px-1`}>
       <Tabs value={tab} onValueChange={(value: string) => select(REVIEW_TABS.find((candidate) => candidate === value) ?? "summary")}>
         <TabsList size="sm" className="self-start" progress={progress}>
@@ -188,7 +175,6 @@ function ReviewTabs({
           ))}
         </TabsList>
       </Tabs>
-      {/* Code's controls, at the tab row's right end as on the web. */}
       <View className="ml-auto">
         {tab === "code" ? (
           <DiffOptions pr={pr} refreshing={diff.state.status === "ready" && diff.state.refreshing} onRefresh={diff.reload} />
@@ -237,7 +223,6 @@ function ReviewTabs({
           }
         }}
       />
-      {/* The web header's Merge and its floating composer, in thumb reach. */}
       <View
         className="flex-row items-center gap-2 px-4 pt-2"
         style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: EVA_THEME[scheme].border }}
@@ -251,7 +236,6 @@ function ReviewTabs({
             pending > 0 ? `Review pull request, ${pending} ${pending === 1 ? "comment" : "comments"} pending` : "Comment on pull request"
           }
           onPress={() => {
-            // As the web composer: pending line comments open it on Review.
             setComposerMode(pending > 0 ? "review" : "comment");
             setComposing(true);
           }}
@@ -285,16 +269,6 @@ function ReviewTabs({
   );
 }
 
-/**
- * The web `ReviewHeader`: Back (phones expect one), the state pill, `head →
- * base` and the ⋯ menu (Refresh, Copy link, View on GitHub, Rename; on an
- * open pull request Stack a new session and Close without merging, behind
- * the web confirm (`PrCloseDialog`); its dots turn into a spinner while a
- * refresh runs); then the title with `#N` linking to GitHub; then the blocker, when
- * there is one worth a line, with its fix (a session on the head branch, as
- * the web `PrRemedyButton`, no confirm); then the tabs. Rename sits in this
- * menu (chose: the web has it on the Reviews list row's menu).
- */
 function ReviewHeader({
   repoId,
   overview,
@@ -307,11 +281,9 @@ function ReviewHeader({
   repoId: Id<"githubRepos">;
   overview: PrOverview;
   refreshing: boolean;
-  /** Reads the overview again: Refresh, and after a close or a rename. */
   onRefresh: () => void;
   onBack: () => void;
   scheme: Scheme;
-  /** The tab row, last, as the web header ends in its tabs. */
   nav: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
@@ -321,7 +293,6 @@ function ReviewHeader({
   const [renaming, setRenaming] = useState(false);
   const [closeTarget, setCloseTarget] = useState<PrCloseTarget | null>(null);
   const isOpen = overview.status === "open";
-  // The web `useStackNewSession`: the new-session screen on this repo, from the head branch.
   const stackNewSession = () =>
     router.push({
       pathname: "/session/new",
@@ -353,8 +324,6 @@ function ReviewHeader({
             {overview.headRef}
           </Text>
           <IconArrowNarrowRight size={14} color={theme.mutedForeground} />
-          {/* The head gives up its width first, so the base stays whole, as the web;
-              only a base past half the row truncates. */}
           <Text numberOfLines={1} className="font-instrument-sans shrink-0 text-sm" style={{ color: theme.mutedForeground, maxWidth: "50%" }}>
             {overview.baseRef}
           </Text>
@@ -387,7 +356,6 @@ function ReviewHeader({
                   Stack a new session
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {/* Closing notifies every reviewer and stops CI, so it asks first, as the web. */}
                 <DropdownMenuItem
                   icon={IconGitPullRequestClosed}
                   destructive
@@ -413,7 +381,6 @@ function ReviewHeader({
         </Text>
       </Text>
       {blocker === null ? null : (
-        // 44 high when it holds the fix, so the fix is a whole target without slop over the title or the tabs.
         <View className={blocker.remedy === null ? "flex-row items-center gap-1.5 px-1" : "min-h-11 flex-row items-center gap-1.5 px-1"}>
           <ToneIcon tone={blocker.tone} scheme={scheme} size={13} />
           <Text className="font-instrument-sans-medium min-w-0 shrink text-xs" style={{ color: toneColour(blocker.tone, scheme), fontWeight: "500" }}>
@@ -453,11 +420,6 @@ function ReviewHeader({
   );
 }
 
-/**
- * The web `PrRemedyButton`: the blocker's fix as a link in the blocker's own
- * colour at the line's end (a session on the head branch with the fix asked
- * for). It fills the 44 high line and pads its width to 44 or more.
- */
 function RemedyLink({ label, colour, starting, onPress }: { label: string; colour: string; starting: boolean; onPress: () => void }) {
   return (
     <Pressable
@@ -470,7 +432,6 @@ function RemedyLink({ label, colour, starting, onPress }: { label: string; colou
       className="ml-auto min-h-11 min-w-11 flex-row items-center gap-1 self-stretch pl-2 active:opacity-70"
       style={{ opacity: starting ? 0.7 : 1 }}
     >
-      {/* `text-sm`, the phone floor for tappable text (the web link is `text-xs`). */}
       <Text className="font-instrument-sans-medium text-sm" style={{ color: colour, fontWeight: "500" }}>
         {label}
       </Text>

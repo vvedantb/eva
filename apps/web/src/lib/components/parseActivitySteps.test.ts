@@ -6,18 +6,6 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import type { ActivityStep } from "@vvedantb/ui";
 
-/**
- * Regression guard for the streaming-renderer parse cache (commit 7f38b7770)
- * and the startup collapse (commit 05532b5c7).
- *
- * Every activity consumer — the timeline, the composer todo badge, the
- * sub-agent row, the question cards, the silence clock — now reads through one
- * module-level MRU cache instead of parsing the payload itself. That cache is
- * shared mutable state on the hottest path in the app: a lookup or eviction bug
- * hands one payload's steps to a different payload's reader, which shows up in
- * production as the wrong tool rows in a chat bubble rather than as a crash.
- */
-
 const step = (
   label: string,
   fields: Partial<ActivityStep> = {},
@@ -56,9 +44,6 @@ describe("parseActivitySteps", () => {
 
 describe("the parse cache", () => {
   test("one payload string is parsed once and shared by every reader", () => {
-    // The shared array is the whole point: seven consumers per streamed token
-    // used to parse a payload capped at 600 KB seven times over. Readers must
-    // treat it as read-only.
     const data = payload(step("Running command..."));
     expect(parseActivitySteps(data)).toBe(parseActivitySteps(data));
   });
@@ -69,16 +54,12 @@ describe("the parse cache", () => {
       data: payload(step(`step ${index}`)),
     }));
     for (const item of items) parseActivitySteps(item.data);
-    // Reverse order, so the entries evicted by the later reads have to
-    // re-parse to themselves rather than to whatever is still resident.
     for (const item of items.toReversed()) {
       expect(parseActivitySteps(item.data)?.[0]?.label).toBe(item.label);
     }
   });
 
   test("a cached empty payload never reads back as steps, or the other way round", () => {
-    // One cache entry answers both questions, so a mix-up here makes a live
-    // turn look silent (or a silent one look busy).
     const steps = payload(step("Reading file..."));
     expect(parseActivitySteps("[]")).toBeNull();
     expect(parseActivitySteps(steps)?.length).toBe(1);
@@ -92,8 +73,6 @@ describe("the parse cache", () => {
 
 describe("isEmptyActivityPayload", () => {
   test("only a well-formed payload carrying zero steps is empty", () => {
-    // "Nothing to report" has to stay distinguishable from "nothing published
-    // yet" — the placeholder copy differs.
     expect(isEmptyActivityPayload("[]")).toBe(true);
     expect(isEmptyActivityPayload(payload(step("Running command...")))).toBe(
       false,

@@ -15,18 +15,15 @@ import {
 import { GraceBar, SnapshotStack } from "../_parts/AnnCLifecycleBeats";
 import { MoA3WeeklySweep } from "../_parts/MoA3WeeklySweep";
 
-/** Source: snapshot lifecycle documented in the Eva repository. */
 const STAGES: readonly { label: string; step: number }[] = [
   { label: "One snapshot kept", step: 1 },
   { label: "48-hour grace", step: 2 },
   { label: "Weekly sweep", step: 3 },
 ];
 
-/** The content block is 1088px wide; each station sits at the centre of a third. */
 const BLOCK_W = 1088;
 const BLEED = 300;
 const stationX = (index: number) => ((index * 2 + 1) / 6) * BLOCK_W;
-/** The light walks from station to station with the build. */
 const LIGHT = [
   null,
   ...STAGES.map((_, index) => ({
@@ -36,9 +33,7 @@ const LIGHT = [
   })),
 ];
 
-/** One lifecycle track, filling station by station, with a lit head on the fill. */
 function Track({ step }: { step: number }) {
-  /** The track fills to each station as it arrives, and to the end on the last. */
   const fill = step >= 3 ? 1 : step === 0 ? 0 : (step * 2 - 1) / 6;
   const travel = { duration: DUR.hero + 0.2, ease: EASE.expo };
 
@@ -63,7 +58,6 @@ function Track({ step }: { step: number }) {
           x: fill * BLOCK_W,
           opacity: step === 0 || step >= 3 ? 0 : 1,
         }}
-        // On the last beat the head runs off the end of the track and goes out.
         transition={{
           x: travel,
           opacity: { duration: DUR.slow, delay: step >= 3 ? 0.6 : 0 },
@@ -79,7 +73,6 @@ function Track({ step }: { step: number }) {
             className="absolute top-0 size-3 -translate-x-1/2"
             style={{ left: stationX(index) }}
           >
-            {/* One ring leaves the station as the fill arrives. */}
             <m.span
               className="absolute inset-0 rounded-full"
               style={{ border: `1.5px solid ${BRAND.blue}` }}

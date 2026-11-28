@@ -83,18 +83,10 @@ interface CreateRepoArgs {
   githubId: number;
   rootDirectory?: string;
   teamId?: Id<"teams">;
-  /** Add the row hidden: a detected app the user chose not to show. */
   hidden?: boolean;
-  /** Return the existing row instead of throwing "already exists". */
   ifMissing?: boolean;
 }
 
-/**
- * Inserts a repo row, handling deduplication and monorepo sub-app setup.
- *
- * The caller (`github:connectRepo`) owns the installation authorization and
- * passes GitHub's own id, owner and name, never the client's.
- */
 async function insertRepo(
   ctx: Pick<MutationCtx, "db" | "scheduler">,
   args: CreateRepoArgs,
@@ -145,7 +137,6 @@ async function insertRepo(
   }
 
   if (normalizedRoot && args.hidden !== true) {
-    // An app row replaces its own team's root row, never another team's.
     const rootEntry = candidates.find(
       (r) =>
         !r.rootDirectory &&
@@ -169,7 +160,6 @@ async function insertRepo(
     ...(args.hidden === true ? { hidden: true } : {}),
   });
   if (args.hidden === true) return repoId;
-  // A repo that already commits `.eva/config.json` is ready without setup.
   await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
     repoId,
   });
@@ -249,7 +239,6 @@ export const updateConfig = authMutation({
     for (const siblingId of siblingIds) {
       await ctx.db.patch(siblingId, sharedPatch);
     }
-    // `.eva/` is read from the default branch, so a new branch means a resync.
     if (
       args.defaultBaseBranch !== undefined &&
       args.defaultBaseBranch !== repo.defaultBaseBranch
@@ -259,7 +248,6 @@ export const updateConfig = authMutation({
       });
     }
 
-    // Per-app, never siblings: apps of one monorepo need different sizes.
     if (args.sandboxSize !== undefined) {
       await ctx.db.patch(args.repoId, { sandboxSize: args.sandboxSize });
     }

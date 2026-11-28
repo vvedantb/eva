@@ -4,7 +4,6 @@ import { useSurface, useDeckStep } from "../../_components/DeckPrimitives";
 import { BRAND, Connector, DUR, EASE, LEAVE } from "../../_components/motion";
 import { FriTyped, FriWindow } from "./FriMock";
 
-/** Pixel layout of the document body, so cursors, highlight and pin line up. */
 const BODY_X = 24;
 const BODY_Y = 57;
 interface Bar {
@@ -23,7 +22,6 @@ const BARS: readonly Bar[] = [
   { x: 16, y: 182, w: 300, strong: true },
   { x: 16, y: 200, w: 250, strong: true },
 ];
-/** The phrase the comment is anchored to: part of the fifth line. */
 const ANCHOR = { x: 196, y: 130, w: 176 };
 
 interface Cursor {
@@ -34,7 +32,6 @@ interface Cursor {
   drift: number[];
 }
 
-/** Two people in the same paragraph, which is the whole point of the slide. */
 const CURSORS: readonly Cursor[] = [
   {
     name: "Zuza",
@@ -87,7 +84,6 @@ function LiveCursor({ cursor, index }: { cursor: Cursor; index: number }) {
   );
 }
 
-/** Where the pin sits, in the coordinates of the wrapper around the window. */
 const PIN = { x: 520, y: 206 };
 
 function CommentAnchor() {
@@ -111,7 +107,6 @@ function CommentAnchor() {
         animate={{ scaleX: anchored ? 1 : 0, opacity: anchored ? 1 : 0 }}
         transition={enter(0)}
       />
-      {/* Hidden until its step: a round cap on an undrawn line still paints a dot. */}
       <m.div
         aria-hidden
         className="pointer-events-none absolute inset-0"

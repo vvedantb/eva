@@ -3,17 +3,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { SANDBOX_DELETE_GRACE_MS } from "../_sandbox/vercelSnapshotOptions";
 
-/**
- * Session archive lifecycle. One field, `sessions.archive`, holds it:
- *
- *   live (archive unset) ──archive──▶ archived { archivedAt, sandboxDeleteAfter? }
- *        ▲                                 │ sandbox deleted: sandboxDeleteAfter cleared
- *        └────────────unarchive────────────┘
- *
- * A delete time exists only inside an archive, so "delete time but live" and
- * "archived but the time disagrees" cannot be written. Every write to it goes
- * through this module.
- */
 type ArchiveFields = Pick<Doc<"sessions">, "archive">;
 
 export function isSessionArchived(session: ArchiveFields): boolean {

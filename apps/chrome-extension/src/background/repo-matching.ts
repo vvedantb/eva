@@ -15,7 +15,6 @@ function domainMatches(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
-/** Most-specific (longest) configured domain that matches the page host wins. */
 function findBestMatchingRepo(
   host: string,
   domainToRepoId: Map<string, Id<"githubRepos">>,
@@ -53,7 +52,6 @@ export async function resolveRepoForUrl(
         const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
         hostname = url.hostname;
       } catch {
-        // already a plain hostname
       }
       domainToRepoId.set(hostname, repo._id);
     }

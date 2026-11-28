@@ -12,14 +12,6 @@ import { buildEvaAutomationUrl } from "../_env/webAppUrl";
 import { extractPrNumber } from "../_github/prUrl";
 import { resolveAutomationDoc } from "./systemAutomations";
 
-/**
- * A finished PR-event run posts its result as a new PR comment, then hides
- * the comment the automation's previous run left on that PR as "outdated".
- * The newest result stays at the bottom of the timeline, with a notification,
- * and older ones fold away. Best-effort, like the check run.
- */
-
-/** GitHub rejects a comment body over 65,536 characters. */
 const MAX_BODY_CHARS = 60_000;
 
 /** Posts the run's comment once it succeeds. Only PR-event runs have a head. */
@@ -45,7 +37,6 @@ const commentContextValidator = v.object({
   title: v.string(),
   automationNumId: v.optional(v.number()),
   resultSummary: v.string(),
-  /** The comment this automation's previous run on the PR left, to hide. */
   previousCommentNodeId: v.optional(v.string()),
 });
 
@@ -161,7 +152,6 @@ export const postRunComment = internalAction({
         runId,
         commentNodeId: data.node_id,
       });
-      // Hidden only once the new one is up, so the PR never shows neither.
       if (context.previousCommentNodeId !== undefined) {
         await octokit.graphql(MINIMIZE_COMMENT, {
           id: context.previousCommentNodeId,

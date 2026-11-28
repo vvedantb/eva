@@ -11,7 +11,6 @@
 export interface EvaSession {
   token: string;
   site: string;
-  /** The chat's address in the Eva app, or "" when unknown. */
   view: string;
 }
 
@@ -28,7 +27,6 @@ export interface EvaComment {
 
 export interface EvaCommentInput {
   feedback: string;
-  /** The element context the injected script captured; Eva builds the prompt. */
   context: object;
 }
 

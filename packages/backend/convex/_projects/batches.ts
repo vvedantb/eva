@@ -10,40 +10,20 @@ import { validateRepoGroupMembers } from "../_repoGroups/validate";
 import { createTodoTask } from "../_agentTasks/mutations";
 import { coordinatorTurnMessageId } from "./chatTaskCards";
 
-/**
- * The tasks a project's coordinator creates (`create_task`,
- * `create_tasks_batch`): `todo` and approved, each in any repo the acting
- * user can access (default the home repo), so the scheduler starts them at once. One tool call is one
- * `projectTaskBatches` row, anchored to the coordinator message it ran in.
- */
-
 const coordinatorTaskInput = v.object({
-  /** Absent: titled from the description (`initialTitle`). */
   title: v.optional(v.string()),
   description: v.optional(v.string()),
-  /** Any repo the acting user can access; absent is the home repo. */
   repoId: v.optional(v.id("githubRepos")),
-  /**
-   * Repos besides the task's own it changes in the same sandbox, each with
-   * its own PR (`agentTasks.linkedRepoIds`). Any repo the acting user can access.
-   */
   linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
   phaseLabel: v.optional(v.string()),
 });
 
 type CoordinatorTask = Infer<typeof coordinatorTaskInput>;
 
-/** How the errors below name a task. */
 function taskLabel(task: CoordinatorTask): string {
   return task.title ?? task.description?.slice(0, 60) ?? "a task";
 }
 
-/**
- * Why a task's repos cannot be checked out side by side, or null when they
- * can: the multi-repo session rules (`validateRepoGroupMembers`), so the home
- * repo or a repeated repo in `linkedRepoIds` is refused here, before the
- * task exists, never when its sandbox starts.
- */
 async function linkedReposError(
   ctx: MutationCtx,
   homeRepoId: Id<"githubRepos">,
@@ -77,8 +57,6 @@ export async function createCoordinatorTasks(
   const { projectId, userId, tasks } = params;
   if (tasks.length === 0) throw new Error("Create at least one task.");
   const project = await getProjectWithAccess(ctx.db, projectId, userId);
-  // Any repo the acting user can access, the linked ones too; every task is
-  // checked before any is written.
   const access = await Promise.all(
     tasks.map(async (task) => {
       const repoIds = [

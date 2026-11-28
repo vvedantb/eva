@@ -1,11 +1,6 @@
 import { Bar, Chart, Count, Stage, Swap, Window, type Act, type Layout } from '../../kit'
 import './excel.css'
 
-// Excel for Mac: select B2:B7, click AutoSum, the total lands in B8, the
-// chart beside the table gains its data labels and total, then a click on
-// B8 shows =SUM(B2:B7) in the formula bar. Cmd+Z undoes it and a click back
-// on B2 returns to the opening frame.
-
 const ROWS: [string, number][] = [
   ['North', 48200],
   ['South', 39850],
@@ -14,13 +9,13 @@ const ROWS: [string, number][] = [
   ['Metro', 44960],
   ['Web', 37040],
 ]
-const SUM = ROWS.reduce((n, [, v]) => n + v, 0) // 284,190
+const SUM = ROWS.reduce((n, [, v]) => n + v, 0)
 const SHARE = ROWS.map(([, v]) => Math.round((v / SUM) * 100))
 const fmt = (n: number) => n.toLocaleString('en-US')
 
 type S = {
-  from: number // anchor row (the active cell)
-  to: number // the row the selection reaches
+  from: number
+  to: number
   dragging: boolean
   total: boolean
   labels: boolean
@@ -29,7 +24,6 @@ type S = {
 
 const initial: S = { from: 2, to: 2, dragging: false, total: false, labels: false, sum: 0 }
 
-// Geometry per layout. Columns: row header, A, B, then the rest.
 const GEO = {
   wide: { rowHead: 34, a: 112, b: 104, col: 76, cols: 9, rows: 16, row: 22, head: 20, chart: { left: 330, top: 30, width: 344, height: 236 }, plot: { w: 268, h: 158 } },
   compact: { rowHead: 28, a: 70, b: 78, col: 64, cols: 4, rows: 13, row: 22, head: 20, chart: { left: 188, top: 26, width: 196, height: 176 }, plot: { w: 152, h: 88 } },
@@ -38,7 +32,6 @@ const GEO = {
 async function script(a: Act<S>) {
   await a.wait(500)
 
-  // 1. Select the column: press on B2 and drag down to B7.
   await a.move({ at: 'b2', x: 0.42, y: 0.55 })
   await a.wait(250)
   const rowAt = (y: number) => {
@@ -49,19 +42,16 @@ async function script(a: Act<S>) {
   await a.set({ dragging: false })
   await a.wait(500)
 
-  // 2. AutoSum: aim at the sigma, so the label stays readable.
   a.mark('autosum')
   await a.move({ at: 'autosum', x: 0.96, y: 0.7 })
   await a.wait(250)
   await a.click()
   await a.set({ total: true, sum: SUM })
 
-  // 3. The chart picks it up: data labels stagger in as the total counts.
   await a.wait(300)
   await a.set({ labels: true })
   await a.wait(1100)
 
-  // 4. Click the total to read its formula.
   a.mark('formula')
   await a.move({ at: 'b8', x: 0.3, y: 0.62 })
   await a.wait(150)
@@ -69,7 +59,6 @@ async function script(a: Act<S>) {
   await a.set({ from: 8, to: 8 })
   await a.wait(2400)
 
-  // Undo, then back to B2: the opening frame, caused on screen.
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ total: false, labels: false })
@@ -139,7 +128,6 @@ function Excel({ s, layout }: { s: S; layout: Layout }) {
         </>
       }
     >
-      {/* Ribbon tabs */}
       <div className="xl-tabs">
         {(compact ? ['Home', 'Insert', 'Draw', 'Formulas', 'Data'] : ['Home', 'Insert', 'Draw', 'Page Layout', 'Formulas', 'Data', 'Review', 'View', 'Automate']).map((t, i) => (
           <span key={t} className="xl-tab" data-active={i === 0 || undefined}>
@@ -148,7 +136,6 @@ function Excel({ s, layout }: { s: S; layout: Layout }) {
         ))}
       </div>
 
-      {/* Ribbon */}
       <div className="xl-ribbon" data-crop>
         <div className="xl-group">
           <span className="xl-big">
@@ -231,7 +218,6 @@ function Excel({ s, layout }: { s: S; layout: Layout }) {
         </div>
       </div>
 
-      {/* Formula bar */}
       <div className="xl-fbar">
         <span className="xl-name" data-target="namebox">
           <span>{name}</span>
@@ -249,7 +235,6 @@ function Excel({ s, layout }: { s: S; layout: Layout }) {
         </span>
       </div>
 
-      {/* The sheet */}
       <div className="xl-sheet" data-crop data-cursor="crosshair" style={{ gridTemplateColumns: `${g.rowHead}px ${widths.map((w) => `${w}px`).join(' ')}`, gridAutoRows: g.row, gridTemplateRows: `${g.head}px` }}>
         <div className="xl-corner" />
         {letters.map((l) => (
@@ -264,7 +249,6 @@ function Excel({ s, layout }: { s: S; layout: Layout }) {
           )
         })}
 
-        {/* The selection: one green frame with the fill handle, gliding as Excel's cell cursor does */}
         <div
           className="xl-selection"
           style={{ left: g.rowHead + g.a - 1, width: g.b + 1, top: g.head + (top - 1) * g.row - 1, height: (bottom - top + 1) * g.row + 1 }}
@@ -325,7 +309,6 @@ function ChartObject({ s, g }: { s: S; g: (typeof GEO)['wide'] }) {
         <span className="xl-chart-title">Q3 Sales by Region</span>
         <span className="xl-chart-total" data-show={s.total || undefined}>
           Total <span className="xl-chart-value">
-            {/* Reserve the final formatted width so the label stays still as digits arrive. */}
             <span className="xl-chart-value-size" aria-hidden>{fmt(SUM)}</span>
             <Count value={s.sum} duration={900} />
           </span>

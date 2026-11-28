@@ -43,8 +43,6 @@ test("each entry is capped at the entry cap", () => {
 });
 
 test("the first user message is pinned when the budget only fits the tail", () => {
-  // 20 entries of ~1,000 chars against a 3,500 budget: room for the pinned
-  // first user message plus the two newest entries.
   const digest = buildTitleDigest(
     history(20, (index) => `m${index}-${"y".repeat(1_000)}`),
     { totalBudget: 3_500, entryCap: 1_200 },
@@ -89,6 +87,5 @@ test("defaults keep the whole digest under 8,000 characters", () => {
   expect(digest.length).toBeLessThanOrEqual(8_000);
   expect(digest).toContain("USER: m0-");
   expect(digest).toContain("ASSISTANT: m39-");
-  // Entry cap trims each 1,500-char message to 1,200 + prefix.
   expect(digest).not.toContain("q".repeat(1_201));
 });

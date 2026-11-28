@@ -1,9 +1,3 @@
-/**
- * Who sent a user turn in a shared chat. The web chat and the phone chat draw
- * a teammate's turn on the left with their avatar and first name; these decide
- * which turns those are and what name to show.
- */
-
 /** The fields of a chat message that say who sent it. */
 export type ChatUserAttribution<TUserId extends string = string> = {
   role: string;
@@ -63,11 +57,6 @@ export function firstNameByUserId<TUserId extends string>(
   return names;
 }
 
-/**
- * Who a bubble belongs to, for grouping: you, one teammate, or Eva when her
- * replies are bubbles (the project coordinator). Undefined: never groups (a
- * system row, or a flat Eva reply).
- */
 function bubbleSender(
   message: ChatUserAttribution,
   currentUserId: string | undefined,

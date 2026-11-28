@@ -21,11 +21,6 @@ const STACK: readonly string[] = [
   "TypeScript",
 ];
 
-/**
- * The slide has no build steps, so the camera holds one position rather than
- * moving. The angle is small on purpose: enough for the row of tags to read as
- * a plane laid into the slide, not enough to thin the words out.
- */
 const STACK_SHOTS: readonly CameraShot[] = [
   { rotateY: -7, rotateX: 4, translateZ: 20 },
 ];

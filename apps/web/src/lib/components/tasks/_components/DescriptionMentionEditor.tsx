@@ -32,23 +32,9 @@ interface DescriptionMentionEditorProps {
   onBlur?: () => void;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
-  /** When true, blocks all input. Used while a draft is loading. */
   disabled?: boolean;
-  /**
-   * What this field is for, e.g. "description of a coding task for acme/web".
-   * Used for inline AI completion when the per-user experimental "Composer
-   * autocomplete" flag is on; otherwise ignored.
-   */
   completionContext?: string;
-  /**
-   * Receives images pasted into the editor instead of inserting them as text.
-   * Omitting it drops pasted images, as before.
-   */
   onImageFiles?: (files: File[]) => void;
-  /**
-   * Called for large plain-text pastes. Return true when handled as an
-   * attachment so the editor skips inline insert.
-   */
   onLargeTextPaste?: (text: string) => boolean;
 }
 

@@ -37,7 +37,6 @@ export function DeploymentErrorFallback({ error }: { error: Error }) {
     return <div className="min-h-dvh w-full bg-background" />;
   }
 
-  // A query that threw before the live status query reported maintenance.
   if (isMaintenanceError(error)) {
     return <MaintenanceScreen />;
   }
@@ -61,8 +60,6 @@ export function DeploymentErrorFallback({ error }: { error: Error }) {
           >
             Refresh
           </Button>
-          {/* Not `<Link>`: the router is a plausible cause of whatever threw,
-              so this deliberately leaves the SPA and boots a fresh one. */}
           <Button asChild size="sm" variant="secondary">
             <a href="/home">Go home</a>
           </Button>

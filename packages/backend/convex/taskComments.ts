@@ -26,7 +26,6 @@ const taskCommentValidator = v.object({
   ...taskCommentFields,
 });
 
-/** Notification message for a new task comment or a "Make changes" request. */
 function commentNotificationMessage(
   requestsChanges: boolean | undefined,
   projectId: Id<"projects"> | undefined,
@@ -44,12 +43,6 @@ function commentNotificationMessage(
     : `New comment added on this ${scopeLabel}.`;
 }
 
-/**
- * Notifies the teammates `@`-mentioned in a task comment, except those in
- * `skip`, and subscribes them to the task. Adds each one to `skip`. A comment
- * mention is not judged by routing: it toasts, pushes and emails at once
- * (`@eva/shared/notificationRouting`).
- */
 async function notifyCommentMentions(
   ctx: MutationCtx,
   args: {
@@ -104,8 +97,6 @@ export const create = authMutation({
     taskId: v.id("agentTasks"),
     content: v.string(),
     parentId: v.optional(v.id("taskComments")),
-    // Set when the comment is submitted via "Make changes" (re-runs Eva). The
-    // subscriber broadcast then reads as a change request, not a plain comment.
     requestsChanges: v.optional(v.boolean()),
   },
   returns: v.id("taskComments"),
@@ -129,18 +120,12 @@ export const create = authMutation({
       createdAt: Date.now(),
     });
 
-    // A "Make changes" submission parks itself on the task as the pending
-    // change-request comment. The next run created for this task (the project
-    // scheduler or startExecution) copies it
-    // onto the run's `triggeringCommentId`, so the timeline labels that run
-    // "made changes" rather than a bare "success".
     if (args.requestsChanges) {
       await ctx.db.patch(args.taskId, {
         pendingChangeRequestCommentId: commentId,
       });
     }
 
-    // Clear the stored draft for this comment surface now that it has been submitted.
     await deleteDraftForTarget(ctx.db, ctx.userId, args.taskId, args.parentId);
 
     const notifiedUserIds = new Set<string>([ctx.userId]);
@@ -151,7 +136,6 @@ export const create = authMutation({
       args.content,
     );
 
-    // Commenting subscribes you to the task (sticky opt-out respected).
     await ensureSubscribed(ctx, args.taskId, ctx.userId);
 
     if (
@@ -181,10 +165,6 @@ export const create = authMutation({
       skip: notifiedUserIds,
     });
 
-    // Broadcast to the rest of the subscriber set (creator, assignee, followers).
-    // Mention/reply recipients are already in notifiedUserIds, so they keep their
-    // higher-signal notification instead of a duplicate broadcast. A "Make
-    // changes" submission reads as a change request rather than a new comment.
     await notifySubscribers(ctx, {
       taskId: args.taskId,
       type: args.requestsChanges ? "changes_requested" : "comment_added",

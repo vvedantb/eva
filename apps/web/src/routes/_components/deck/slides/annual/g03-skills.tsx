@@ -11,17 +11,9 @@ import { DUR, EASE } from "../../_components/motion";
 
 interface Skill {
   name: string;
-  /** Who wrote it, when it was not me. */
   credit?: string;
 }
 
-/**
- * The agent skills in carepulse-ts (`.agents/skills`), named by what they
- * cover: carepulse-forms (Effect Schema), carepulse-data-tables (tables and
- * URL filters), carepulse-domain-modules (policies), carepulse-rpc and
- * eprocurement-convex (backend calls). Zuza's design review skill follows
- * CarePulse's design standards.
- */
 const SKILLS: readonly Skill[] = [
   { name: "Effect" },
   { name: "Tables" },

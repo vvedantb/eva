@@ -81,7 +81,6 @@ export const upsertVarInternal = internalMutation({
     const newEntry = {
       key: args.key,
       value: args.value,
-      // seedOnly implies sandboxExclude, so sandbox readers always skip it.
       ...(args.seedOnly === true
         ? { sandboxExclude: true, seedOnly: true }
         : { sandboxExclude: args.sandboxExclude ?? false }),
@@ -131,7 +130,6 @@ export const toggleSandboxExclude = authMutation({
     teamId: v.id("teams"),
     key: v.string(),
     sandboxExclude: v.boolean(),
-    // Seed-only: given to snapshot seed runs, never to sessions.
     seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),

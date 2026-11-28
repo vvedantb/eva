@@ -12,16 +12,8 @@ import {
 } from "../_sessionChats/helpers";
 import { closeTurn } from "../_chat/turnStore";
 
-/**
- * One action run stops after this long and reschedules itself, well inside
- * the 10 minute action limit.
- */
 const BATCH_TIME_BUDGET_MS = 4 * 60 * 1000;
 
-/**
- * Page cap for one session. Each page moves at least one row, so this only
- * trips on a runaway loop; the session is logged and skipped.
- */
 const MAX_PAGES_PER_SESSION = 10_000;
 
 /**

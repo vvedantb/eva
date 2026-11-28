@@ -1,12 +1,3 @@
-// Load test runner. For each scale it boots a fresh, isolated local Convex
-// backend, pushes this checkout's functions, seeds deterministic data, then
-// probes every case in CASES as the focal user and records server-side
-// execution stats from the deployment's function log stream.
-//
-//   cd packages/backend
-//   node loadtest/run.ts --label before [--scales 1,10,100,1000] [--samples 30]
-//
-// Results go to loadtest/results/<label>.json. See loadtest/README.md.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -45,9 +36,6 @@ const SAMPLES = Number(flags.samples);
 const WARMUP = Number(flags.warmup);
 const ONLY = flags.only ? new Set(flags.only.split(",")) : null;
 const cases = CASES.filter((c) => !ONLY || ONLY.has(c.name));
-
-// ---------------------------------------------------------------------------
-// Probing
 
 const logEntrySchema = z.object({
   kind: z.string(),
@@ -90,13 +78,6 @@ class LogStream {
 
   private buffer: Array<LogEntry> = [];
 
-  /**
-   * The log entry for the call that just returned. Calls run one at a time,
-   * so the next completed public query with this identifier is that call;
-   * strays (a late entry from a timed-out wait) are skipped. Matching per
-   * call, not per round, stops a slow log at 1000× from shifting every later
-   * sample.
-   */
   async nextQuery(identifier: string, timeoutMs: number): Promise<LogEntry | undefined> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -132,13 +113,10 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
   let nonce = 0;
 
   for (let round = 0; round < WARMUP + SAMPLES; round++) {
-    // Shuffle per round so drift (GC, compaction, crons) spreads evenly.
     const order = [...cases].sort(() => rand() - 0.5);
     let callMs = 0;
     let drainMs = 0;
     for (const queryCase of order) {
-      // A fresh token identifier per call defeats the query cache, so every
-      // sample is a real execution. `subject` still resolves the focal user.
       nonce++;
       const identity = {
         subject: "loadtest_focal_user",
@@ -177,9 +155,6 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
   process.stdout.write("\n");
   return [...results.values()];
 }
-
-// ---------------------------------------------------------------------------
-
 
 async function main() {
   fs.mkdirSync(WORK_DIR, { recursive: true });
@@ -221,7 +196,6 @@ async function main() {
   }
 }
 
-/** Merges into an existing file for the label, replacing re-run scales. */
 function writeResults(output: ResultsFile) {
   const dir = path.join(BACKEND_ROOT, "loadtest/results");
   fs.mkdirSync(dir, { recursive: true });

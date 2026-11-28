@@ -23,7 +23,6 @@ export function HiddenSandboxTabRedirect({
   params,
 }: HiddenSandboxTabRedirectProps) {
   const flags = useQuery(api.auth.getExperimentalFlags);
-  // Wait for the flags: an opted-in user's Files URL must not bounce on load.
   if (flags === undefined || !isHiddenSandboxTab(activeTab, flags)) {
     return null;
   }

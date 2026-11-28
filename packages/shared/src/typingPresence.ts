@@ -1,7 +1,3 @@
-// "Someone is typing" for task comments and replies, web and phone: who is
-// typing in a presence room, how to say it, and when to send "stopped". Each
-// app wraps it with its own `@convex-dev/presence` hook (react / react-native).
-
 /** After this long with no keystroke, the person has stopped typing. */
 export const TYPING_TIMEOUT_MS = 3000;
 

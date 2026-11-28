@@ -4,20 +4,6 @@ import { useLocalStorage } from "usehooks-ts";
 import { z } from "zod";
 import { api } from "@eva/backend";
 
-/**
- * "Follow the presenter" for the deck. One browser holds the secret `hostKey`
- * returned by `createSession` and is the only one allowed to move the deck;
- * everyone opening `?session=CODE` subscribes to the session row and renders
- * whatever slide the host is on.
- *
- * There is no take-control and no presence: the backend session row carries a
- * slide and a status, nothing else.
- */
-
-/**
- * Session code → host key, for every deck this browser is presenting. Survives
- * a reload, so refreshing the host window keeps the host role.
- */
 const HOST_KEYS_STORAGE = "eva:deck-host-keys";
 const hostKeysSchema = z.record(z.string(), z.string());
 
@@ -34,18 +20,14 @@ export type LiveShareState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export interface LiveShare {
   sessionCode: string | undefined;
-  /** This browser owns the session and drives every viewer. */
   isHost: boolean;
-  /** This browser is pinned to the host's slide and cannot navigate. */
   isFollower: boolean;
   sessionState: LiveShareState;
-  /** The slide to render: the host's for a follower, the URL's otherwise. */
   effectiveSlide: number;
   isStarting: boolean;
   onNavigate: (slide: number) => void;
   startSharing: () => Promise<void>;
   stopSharing: () => Promise<void>;
-  /** Drops `?session=` without ending the session. */
   leave: () => void;
 }
 
@@ -88,8 +70,6 @@ export function useLiveShare({
         ? "notfound"
         : session.status;
 
-  // A code nobody can find is not a session at all, so the deck falls back to
-  // local control rather than stranding the viewer on slide 1.
   const hosting = hostKey !== undefined;
   const isHost = hosting && sessionState !== "notfound";
   const isFollower =

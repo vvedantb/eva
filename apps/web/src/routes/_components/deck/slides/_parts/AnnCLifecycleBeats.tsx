@@ -10,19 +10,10 @@ import {
 } from "../../_components/motion";
 import { AnnBCountDown } from "./AnnBCountDown";
 
-/**
- * The three beats of the workspace lifecycle on the running-costs slide: the
- * one snapshot kept, the 48-hour grace and the weekly sweep. Each takes `live`
- * from its own build step.
- */
-
-/** Every beat's visual shares one box, so the labels sit on one line. */
 const VISUAL_H = 160;
 
-/** Front to back: the kept snapshot, then the two older ones. */
 const SNAPSHOT_TONES = ["#302b3b", "#26222f", "#1e1b26"];
 
-/** A snapshot drawn as a tiny workspace window: title bar, then a few lines. */
 function SnapshotFace({ kept }: { kept: boolean }) {
   return (
     <div className="flex h-full flex-col p-3">
@@ -60,11 +51,7 @@ export function SnapshotStack({ live }: { live: boolean }) {
         return (
           <m.div
             key={layer}
-            // Opaque tones, darker further back, so the stack reads as paper
-            // on paper rather than three washes bleeding into each other.
             className="absolute h-[112px] w-[168px] rounded-[16px]"
-            // Older snapshots peek out up and to the left, so the kept one
-            // sits centred over its station.
             style={{
               left: 24 - layer * 20,
               top: 36 - layer * 14,
@@ -107,7 +94,6 @@ export function SnapshotStack({ live }: { live: boolean }) {
             ) : (
               <SnapshotFace kept={false} />
             )}
-            {/* The kept one is outlined in brand once its siblings have gone. */}
             {kept ? (
               <m.span
                 aria-hidden
@@ -174,7 +160,6 @@ export function GraceBar({ live }: { live: boolean }) {
               transition={run}
             />
           </div>
-          {/* A lit end cap rides the draining edge back to zero. */}
           <m.span
             aria-hidden
             className="absolute top-1/2 -mt-[11px] -ml-[11px] size-[22px] rounded-full"
@@ -201,7 +186,6 @@ export function GraceBar({ live }: { live: boolean }) {
             }
           />
         </div>
-        {/* Lands as the bar runs out: at zero the workspace is deleted. */}
         <m.span
           className="text-white/75"
           initial={{ opacity: 0, scale: 0.6, rotate: 0 }}

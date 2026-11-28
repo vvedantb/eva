@@ -1,17 +1,3 @@
-/**
- * Narrow, hand-written mirrors of the `@opencode-ai/sdk` surface the runner
- * touches.
- *
- * The SDK is loaded by dynamic import from the sandbox's global npm root (it is
- * never bundled), and the repo carries no dependency on it — mirroring the
- * Claude Agent SDK loader. These declarations therefore describe the wire
- * contract we rely on rather than re-exporting the package's generated types.
- *
- * Deliberately partial: parts and messages carry many more fields, and they
- * ride along untouched because the runner re-serializes whole objects rather
- * than rebuilding them. Only fields the runner reads are declared. Kept in
- * lockstep with the CLI/SDK pin (SDK_VERSION in opencodeSdk.ts).
- */
 
 type OpencodeTokens = {
   input: number;
@@ -46,8 +32,6 @@ type OpencodeToolPart = OpencodePartBase & {
   type: "tool";
   callID: string;
   tool: string;
-  /** `input`/`output`/`error`/`metadata`/`time` also ride here and are read
-   * downstream by opencodeToolToStep and probeOpencodeStateResult. */
   state: { status: string };
 };
 
@@ -60,7 +44,6 @@ type OpencodeStepFinishPart = OpencodePartBase & {
   tokens: OpencodeTokens;
 };
 
-/** Parts the runner forwards nothing for (file, subtask, snapshot, agent, …). */
 type OpencodeOpaquePart = OpencodePartBase & { type: OpaquePartType };
 type OpaquePartType =
   | "file"
@@ -147,7 +130,6 @@ export type OpencodeMcpLocalConfig = {
   enabled: boolean;
 };
 
-/** `McpStatus` union; every member carries the discriminant the runner reads. */
 type OpencodeMcpStatus = { status: string };
 
 export type OpencodeClientLike = {

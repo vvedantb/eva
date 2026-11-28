@@ -9,10 +9,6 @@ import {
   type ProjectTaskNotes,
 } from "./projectView";
 
-// The project status hooks of the web and the phone: the same queries and the
-// same rules (`projectView`), so both apps show one status. A subpath
-// (`@eva/shared/projectStatusHooks`), not the root: it is React.
-
 export type ProjectTaskListRow = FunctionReturnType<
   typeof api.agentTasks.listByProject
 >[number];
@@ -22,10 +18,6 @@ export type ProjectTaskListRow = FunctionReturnType<
  * (`convex-helpers`), the phone the plain `convex/react` one.
  */
 export function projectStatusHooks(useQuery: typeof convexUseQuery) {
-  /**
-   * The tasks whose latest run failed, of the rows the caller can open. One
-   * query for every project on the page: the home repo is the access scope.
-   */
   function useFailedTaskIds(
     repoId: Id<"githubRepos">,
     rows: ReadonlyArray<ProjectTaskListRow> | undefined,
@@ -40,10 +32,6 @@ export function projectStatusHooks(useQuery: typeof convexUseQuery) {
     return failed === undefined ? undefined : new Set<string>(failed);
   }
 
-  /**
-   * One project's child tasks and its derived status (`projectStatus`): the
-   * project screen, overview, task list and Documents tab.
-   */
   function useProjectTaskStatus(
     projectId: Id<"projects">,
     repoId: Id<"githubRepos">,
@@ -57,11 +45,6 @@ export function projectStatusHooks(useQuery: typeof convexUseQuery) {
     return { tasks, failedTaskIds: failedTaskIds ?? new Set<string>(), status };
   }
 
-  /**
-   * Derived status for every project of a repo, keyed by project id: one
-   * subscription for the whole list (`listStatusesForRepo`). Undefined while
-   * it loads, so rows never jump between sections while the list fills in.
-   */
   function useProjectListStatuses(
     repoId: Id<"githubRepos">,
     archived = false,
@@ -74,10 +57,6 @@ export function projectStatusHooks(useQuery: typeof convexUseQuery) {
     return new Map(rows.map((row) => [String(row.projectId), row]));
   }
 
-  /**
-   * Each task's open ask and open reports (`listTaskReports`), keyed by task
-   * id: the task list and the coordinator chat's task cards.
-   */
   function useProjectTaskNotes(
     projectId: Id<"projects">,
   ): ReadonlyMap<string, ProjectTaskNotes> {

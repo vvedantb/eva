@@ -406,7 +406,7 @@ var SECRET_PATTERNS = [
   [/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+/g, "***"],
   // URL userinfo: \`https://user:secret@host\` keeps the user, drops the secret.
   // The secret stops at \`/\`, so \`//localhost:5173/@fs/x\` is not userinfo.
-  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//\$1:***@"]
+  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//$1:***@"]
 ];
 function redactSecrets(text) {
   let out = text;
@@ -847,7 +847,7 @@ function copyBaseClaudeConfig() {
   );
 }
 function isSafeClaudeSessionId(sessionId) {
-  return /^[A-Za-z0-9._-]+\$/.test(sessionId) && !/^\\.+\$/.test(sessionId);
+  return /^[A-Za-z0-9._-]+$/.test(sessionId) && !/^\\.+$/.test(sessionId);
 }
 function logTranscriptStats(sessionId, label) {
   if (!isSafeClaudeSessionId(sessionId)) {
@@ -961,7 +961,7 @@ function isJsonObject2(value) {
 var SkipServer = class extends Error {
 };
 function substituteVars(value, env) {
-  return value.replace(/\\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
+  return value.replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
     const resolved = env[name];
     if (!resolved) throw new SkipServer("missing env var " + name);
     return resolved;
@@ -1173,7 +1173,7 @@ var VM_MEMORY_SAMPLE_INTERVAL_MS = 3e4;
 var lastSampleAt = 0;
 function parseMeminfo(text) {
   const kb = (key) => {
-    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB\$\`, "m").exec(text);
+    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB$\`, "m").exec(text);
     return match ? Number(match[1]) : null;
   };
   const total = kb("MemTotal");
@@ -1191,7 +1191,7 @@ function parseMeminfo(text) {
   };
 }
 function parseOomKills(vmstat) {
-  const match = /^oom_kill (\\d+)\$/m.exec(vmstat);
+  const match = /^oom_kill (\\d+)$/m.exec(vmstat);
   return match ? Number(match[1]) : null;
 }
 function readVmMemory() {
@@ -2149,7 +2149,7 @@ function mediaCandidateRoots(workDir, rootDirectory) {
   const roots = [workDir];
   const trimmed = rootDirectory?.trim() ?? "";
   if (trimmed.length > 0 && trimmed !== "." && !trimmed.startsWith("/") && !trimmed.includes("..")) {
-    const appRoot = \`\${workDir}/\${trimmed.replace(/\\/+\$/, "")}\`;
+    const appRoot = \`\${workDir}/\${trimmed.replace(/\\/+$/, "")}\`;
     if (appRoot !== workDir) {
       roots.push(appRoot);
     }
@@ -4689,10 +4689,10 @@ function synchronizeForPush(branch) {
     );
     return { status: "failed" };
   }
-  if (/^0\\s+\\d+\$/.test(divergence.stdout)) {
+  if (/^0\\s+\\d+$/.test(divergence.stdout)) {
     return { status: "ready", remoteExists: true };
   }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.stdout)) {
+  if (/^[1-9]\\d*\\s+0$/.test(divergence.stdout)) {
     const fastForward = git(["merge", "--ff-only", remoteRef]);
     if (fastForward.ok) {
       return { status: "ready", remoteExists: true };
@@ -4702,7 +4702,7 @@ function synchronizeForPush(branch) {
     );
     return { status: "failed" };
   }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.stdout)) {
+  if (/^[1-9]\\d*\\s+[1-9]\\d*$/.test(divergence.stdout)) {
     if (localBranchRewroteOwnHistory(branch, remoteRef)) {
       log(
         \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
@@ -5669,7 +5669,7 @@ async function uploadAndAttachSandboxMedia(target2) {
   for (const recDir of recordings) {
     if (!existsSync6(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
-      if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
+      if (!/\\.(webm|mp4|mov|avi)$/i.test(file)) continue;
       const fp = harvestableFile(recDir, file);
       if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
@@ -5693,7 +5693,7 @@ async function uploadAndAttachSandboxMedia(target2) {
   for (const ssDir of screenshots) {
     if (!existsSync6(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
-      if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
+      if (!/\\.(png|jpg|jpeg|gif|webp)$/i.test(file)) continue;
       const fp = harvestableFile(ssDir, file);
       if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
@@ -7985,7 +7985,7 @@ function toTomlValue(value, path3) {
     throw new Error(\`Unsupported Codex config override value at \${path3}: \${typeName}\`);
   }
 }
-var TOML_BARE_KEY = /^[A-Za-z0-9_-]+\$/;
+var TOML_BARE_KEY = /^[A-Za-z0-9_-]+$/;
 function formatTomlKey(key) {
   return TOML_BARE_KEY.test(key) ? key : JSON.stringify(key);
 }
@@ -9870,7 +9870,7 @@ var SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
 var EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 var EXCLUDE_END = "# <<< eva-system-skills <<<";
-var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}\$/;
+var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 var SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 function parseSystemSkillsFile(raw) {
   const parsed = tryParseJsonObject(raw);

@@ -5,12 +5,6 @@ import {
   shouldNudge,
 } from "./readinessHints";
 
-/**
- * The nudge is a judgement call shown over the user's own words, so the two
- * ways it can embarrass itself are covered here: showing at all when the draft
- * is fine, and asking twice for the same thing.
- */
-
 describe("readinessHints", () => {
   test("keeps the order the backend ranked the signals in", () => {
     expect(readinessHints(["target", "expected", "current"])).toEqual([

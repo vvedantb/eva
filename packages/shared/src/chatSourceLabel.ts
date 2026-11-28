@@ -1,9 +1,3 @@
-/**
- * Labels that name a session, task or project, on the web and the phone:
- * doc and artifact sources, Inbox rows, routed questions and the awake
- * sandboxes list. One wording: the kind word, then `#` and the number.
- */
-
 /** The chat kinds a doc or artifact source can be. */
 export type ChatSourceKind = "session" | "task" | "project";
 

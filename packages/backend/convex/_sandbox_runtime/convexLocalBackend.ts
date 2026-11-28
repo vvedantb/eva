@@ -47,12 +47,10 @@ export const CONVEX_FUNCTIONS_READY_LOG_LINE = "Convex functions ready";
  */
 export const CONVEX_FUNCTIONS_READY_ATTEMPTS = 60;
 
-/** Shell command printing the config.json paths the `convex dev` daemon wrote. */
 function findLocalDeploymentConfig(repoDir: string): string {
   return `find ${repoDir} -name node_modules -prune -o -path "*/.convex/local/*/config.json" -print`;
 }
 
-/** Shell command printing one field of the config.json held in `$eva_cfg`. */
 function readLocalDeploymentField(field: string): string {
   return `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))${field})' "$eva_cfg"`;
 }
@@ -78,10 +76,6 @@ export function buildConvexPostSeedPushLines(repoDir: string): string[] {
   return [
     'echo "SEEDRUN-STAGE:convex-push"',
     `eva_cfg=$(${findLocalDeploymentConfig(repoDir)} 2>/dev/null | head -1)`,
-    // A repo that runs a Convex daemon always leaves this config behind, so its
-    // absence means the daemon never got a backend up. Failing here is the
-    // point: a build that quietly skipped the push would go green with a
-    // snapshot whose functions were never deployed.
     'if [ -z "$eva_cfg" ]; then',
     `  echo "convex-push: no local deployment config under ${repoDir}"`,
     '  echo "SEEDRUN-FAILED:convex-push"',
@@ -105,13 +99,8 @@ export function buildConvexPostSeedPushLines(repoDir: string): string[] {
   ];
 }
 
-/**
- * Sticky file the watchdog writes when it sees the backend hold documents while
- * no schema is active, i.e. the seed loaded data before any push landed.
- */
 const CONVEX_DATA_BEFORE_SCHEMA_FLAG = "/tmp/eva-convex-data-before-schema";
 
-/** Consecutive failed health checks, 10s apart, before the watchdog fails the seed. */
 const CONVEX_BACKEND_WATCHDOG_MISSES = 6;
 
 /**
@@ -139,7 +128,6 @@ export function buildConvexBackendWatchdogLines(repoDir: string): string[] {
     `curl -sf -m 10 -X POST "http://127.0.0.1:$eva_port/api/query" -H 'Content-Type: application/json' -H "Authorization: Convex $eva_key" -d '{"path":"${path}","args":[{}],"format":"json"}' 2>/dev/null`;
   return [
     "(",
-    // A check every 10s would flood the xtrace'd seed log; the admin key stays out of it too.
     "  { set +x; } 2>/dev/null",
     "  eva_misses=0",
     "  eva_schema=0",
@@ -165,7 +153,6 @@ export function buildConvexBackendWatchdogLines(repoDir: string): string[] {
     "    free -m 2>&1",
     "    sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process|oom' | tail -n 10",
     "    pgrep -a convex-local-backend 2>&1 || echo 'convex-watchdog: no convex-local-backend process'",
-    // dmesg truncates the process name to 15 characters.
     "    if ! sudo dmesg 2>/dev/null | grep -q 'Killed process [0-9]* (convex-local-ba'; then",
     '      echo "SEEDRUN-FAILED:convex-backend-down"',
     `    elif [ -f ${CONVEX_DATA_BEFORE_SCHEMA_FLAG} ]; then`,
@@ -187,37 +174,14 @@ export function buildConvexBackendWatchdogLines(repoDir: string): string[] {
 export const STOP_CONVEX_BACKEND_WATCHDOG_LINE =
   'kill "$eva_convex_watchdog" 2>/dev/null || true';
 
-/**
- * Wedge signature `convex dev` prints while it cannot reach the local backend.
- * Cloud-mode `convex dev` never prints this, so its presence in the bg log
- * confirms the command runs a LOCAL backend before the supervisor kills it.
- */
 const CONVEX_LOCAL_BACKEND_WEDGE_LOG_LINE =
   "Unable to pull deployment config from http://127.0.0.1:3210";
 
-/**
- * Self-heal supervisor around a `convex dev` background command.
- *
- * `convex dev` wedges permanently when convex-local-backend misses its startup
- * window (CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS, 240s for CarePulse) on a
- * busy resume: it stops respawning the backend and retries HTTP against :3210
- * forever, leaving the preview with a dead backend (observed 2026-07-23,
- * sandbox plum-serious-fowl-oA1Ym4). The supervisor launches the command in
- * its own process group, waits for the health endpoint, and on a confirmed
- * wedge kills the whole tree and relaunches — up to 3 attempts.
- *
- * Exit conditions mirror the pre-supervisor behaviour so the /tmp/bg-<i>.pid
- * liveness contract is unchanged: once healthy (or on any non-wedge outcome)
- * the wrapper just `wait`s on the command, and exits when it exits.
- */
 function buildConvexSupervisorLines(command: string): string[] {
   return [
-    // The command goes through a file (not inline quoting) so any user quoting
-    // survives, and `setsid` can give it a killable process group of its own.
     `cat > "/tmp/eva-convex-bg-cmd-$$.sh" <<'EVA_CONVEX_BG_CMD'`,
     command,
     "EVA_CONVEX_BG_CMD",
-    // Wrapper stdout is the /tmp/bg-<i>.log the launcher redirected us into.
     `eva_bg_log=$(readlink "/proc/$$/fd/1" 2>/dev/null || echo /dev/null)`,
     "eva_attempt=1",
     "while true; do",
@@ -235,9 +199,6 @@ function buildConvexSupervisorLines(command: string): string[] {
     '    wait "$eva_child" 2>/dev/null',
     "    exit 0",
     "  fi",
-    // Child died before :3210 was up (`TypeError: fetch failed` on a cold
-    // `npx convex dev`). Retry; exiting here makes convex-ready-<i> fail
-    // immediately because /tmp/bg-<i>.pid is this wrapper.
     '  if [ "$eva_verdict" = exited ]; then',
     "    if [ $eva_attempt -ge 3 ]; then",
     '      echo "[eva-supervisor] convex dev exited before backend healthy after 3 attempts"',
@@ -248,9 +209,6 @@ function buildConvexSupervisorLines(command: string): string[] {
     "    sleep 3",
     "    continue",
     "  fi",
-    // Grace elapsed, still running, :3210 down. Only a LOCAL backend command
-    // that logged the wedge signature is restarted; anything else (cloud-mode
-    // convex dev, non-backend convex tooling) is left alone.
     `  if ! grep -q "${CONVEX_LOCAL_BACKEND_WEDGE_LOG_LINE}" "$eva_bg_log" 2>/dev/null; then`,
     '    wait "$eva_child" 2>/dev/null',
     "    exit 0",
@@ -287,10 +245,6 @@ export function buildConvexBackgroundScriptBody(command: string): string {
   const artifactLiteral = JSON.stringify(LINUX_X64_ARTIFACT);
   return [
     "unset CONVEX_AGENT_MODE",
-    // The Convex CLI stages each function push in a /tmp/.tmpXXXX dir (~66MB
-    // for CarePulse); pushes killed mid-flight (wedge heals, resume
-    // interrupts) leak them until the disk fills. Age-gated one hour so a
-    // live push's staging dir is never swept.
     "find /tmp -maxdepth 1 -type d -name '.tmp*' -mmin +60 -exec rm -rf {} + 2>/dev/null || true",
     "python3 - <<'PY'",
     "import glob, json, os, pathlib, shutil, subprocess, tempfile, urllib.request, zipfile",
@@ -342,10 +296,6 @@ export function buildConvexBackgroundScriptBody(command: string): string {
     "latest = fetched or EXPECTED_LATEST",
     "print(f'convex local backend: fetched={fetched} plant_as={latest} pin_binary={PIN}')",
     "labels = {PIN, EXPECTED_LATEST, latest}",
-    // Cursor once ran the convex CLI with HOME=/tmp/cursor-home and needed the
-    // pinned binary planted there too; since the in-process SDK migration it
-    // runs under the sandbox home, so /tmp/cursor-home is no longer a convex
-    // cache and planting there only leaks ~250MB per label onto the disk.
     "cache_roots = []",
     "for root in (",
     "  os.path.expanduser('~/.cache/convex/binaries'),",
@@ -375,9 +325,6 @@ export function buildConvexBackgroundScriptBody(command: string): string {
     "dests = [os.path.join(root, label) for root in cache_roots for label in sorted(labels)]",
     "needed = [d for d in dests if not planted(d)]",
     "reuse = next((exec_path_of(d) for d in dests if planted(d)), None)",
-    // The binary is ~250MB planted up to 9 times and the zip 58MB more; on a
-    // long-lived sandbox the disk cannot afford a redownload per resume, so
-    // the network path is the last resort, not the default.
     "if not needed:",
     "  print('all convex backend labels already planted; skipping download')",
     "elif reuse:",

@@ -35,7 +35,6 @@ describe("buildSubagentThread", () => {
           output: { text: "Checking." },
         }),
         child({ detail: "login.ts" }),
-        // Another agent's step and a main-agent step stay out.
         child({ parentToolUseId: "toolu_b" }),
         { type: "bash", label: "Ran", status: "complete" },
       ],

@@ -1,8 +1,3 @@
-/**
- * A project's 30-day progress chart, shared by the backend
- * (`projects.progressChart`) and both apps. Pure.
- */
-
 /** How many days the chart shows, today included. */
 export const PROJECT_PROGRESS_DAYS = 30;
 
@@ -12,20 +7,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type ProgressTask<Id extends string = string> = {
   id: Id;
   createdAt: number;
-  /** Its PR merged, or it was marked Done. */
   shippedAt?: number;
-  /** It left the open list: shipped, archived or cancelled. */
   closedAt?: number;
 };
 
 export type ProgressDay<Id extends string = string> = {
-  /** The day's local midnight, as a timestamp. */
   start: number;
-  /** Tasks that shipped this day. */
   shipped: Id[];
-  /** Tasks that closed this day without shipping (archived or cancelled). */
   archived: Id[];
-  /** Tasks still open at the end of the day (now, for today). */
   open: number;
 };
 

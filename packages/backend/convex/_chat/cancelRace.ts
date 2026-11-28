@@ -59,7 +59,6 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
   p: {
     id: ChatTurnEntityId;
     entity: TEntity;
-    /** A session chat reads its open turn's workflow, so this may be async. */
     activeWorkflowId: (
       entity: TEntity,
     ) => string | undefined | Promise<string | undefined>;
@@ -72,9 +71,6 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
   clearsWorkflow: boolean;
   clearsPendingTurn: boolean;
 } | null> {
-  // Snapshot what this cancel owns. A concurrent send may stage a
-  // newer pendingTurn / workflow while we run — must not clear those or mark
-  // the newer assistant placeholder as cancelled.
   const workflowIdToCancel = await p.activeWorkflowId(p.entity);
   const pendingRequestedAt = p.entity.pendingTurn?.requestedAt;
 

@@ -22,21 +22,17 @@ const GROW: Transition = { type: "spring", bounce: 0, duration: 0.9 };
 
 const CHAT_WIDTH = 420;
 const GAP = 48;
-/** Until the chat arrives, the page holds the middle of the row. */
 const CENTRE_OFFSET = (GAP + CHAT_WIDTH) / 2;
 
-/** The chat's tab row. The first is original; the other two arrived later. */
 const TABS: readonly string[] = ["Chat", "Artifacts", "Documents"];
 const TAB_WIDTH = 96;
 const SAVED: readonly string[] = ["Referral report", "Provider comparison"];
 
-/** Where the first saved row sits in the row's box, so the link can reach it. */
 const ROW_Y = 150;
 
 const enter = (on: boolean, delay: number) =>
   cueTransition(on, delay, { duration: DUR.slow, ease: EASE.expo });
 
-/** The chat panel: Artifacts tab selected, saved pages listed, composer below. */
 function ChatTabs({ tabbed }: { tabbed: boolean }) {
   return (
     <m.div
@@ -51,7 +47,6 @@ function ChatTabs({ tabbed }: { tabbed: boolean }) {
       })}
     >
       <div className="relative flex px-2 py-2">
-        {/* The hero: the selection glides from Chat onto the new tab. */}
         <m.span
           aria-hidden
           className="absolute top-2 bottom-2 left-2 rounded-full bg-white/[0.12]"
@@ -142,7 +137,6 @@ export function FridayArtifacts() {
         >
           <MoF3ArtifactPage hosted={hosted} />
           <ChatTabs tabbed={tabbed} />
-          {/* The saved row and the open page are the same thing. */}
           <m.div
             className="pointer-events-none absolute inset-0"
             initial={{ opacity: 0 }}

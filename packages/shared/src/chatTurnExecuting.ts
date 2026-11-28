@@ -33,9 +33,7 @@ export function isChatTurnExecuting({
   status,
   messages,
 }: {
-  /** `api.turns.getChatStatus`: `null` = no open turn, `undefined` = loading. */
   status: ChatTurnStatus | null | undefined;
-  /** The chat transcript; `undefined` while it loads. */
   messages: ReadonlyArray<TurnShapeMessage> | undefined;
 }): boolean {
   if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
@@ -43,16 +41,10 @@ export function isChatTurnExecuting({
   if (status.source !== "durable" || status.placeholderMessageId === undefined) {
     return true;
   }
-  // Not in the transcript yet (or deleted): trust the open turn.
   const reply = messages?.find((m) => m._id === status.placeholderMessageId);
   return reply?.finishedAt === undefined;
 }
 
-/**
- * Whether a chat still has an unfinished Working bubble: the load-time
- * fallback of `isChatTurnExecuting`. System alerts (`isSystemAlert`) are
- * skipped — they can append mid-turn and must not read as a finished reply.
- */
 function isAssistantTurnInProgress(
   messages: ReadonlyArray<TurnShapeMessage>,
 ): boolean {

@@ -25,9 +25,7 @@ export function ProjectOverviewTab({
   title: string;
   description: string | undefined;
   documentsHref: string | undefined;
-  /** The project's work page: a task picked on the progress chart opens there. */
   projectHref: string | undefined;
-  /** An archived project: the context and every field are read-only. */
   readOnly: boolean;
 }) {
   const { status } = useProjectTaskStatus(projectId, repoId);

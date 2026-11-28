@@ -32,7 +32,6 @@ export function PrCloseDialog({
 }: {
   target: PrCloseTarget | null;
   onOpenChange: (open: boolean) => void;
-  /** After GitHub closed it: the PR screen reads its overview again. */
   onClosed?: () => void;
 }) {
   const theme = EVA_THEME[useScheme()];
@@ -60,7 +59,6 @@ export function PrCloseDialog({
     <Dialog
       open={target !== null}
       onOpenChange={(open) => {
-        // Closing mid-request would hide the only progress the user sees.
         if (!closing) onOpenChange(open);
       }}
     >

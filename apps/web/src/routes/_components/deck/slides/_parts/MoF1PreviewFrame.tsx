@@ -12,26 +12,19 @@ import { useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, LEAVE, SETTLE } from "../../_components/motion";
 import { MoF1PreviewPage } from "./MoF1PreviewPage";
 
-/** Phone, then tablet, then desktop. The frame walks these in order. */
 const WIDTHS: readonly number[] = [360, 650, 960];
 const MAX = 960;
 const HEIGHT = 396;
 const BAR = 45;
-/** Rounded end caps; the plate between them is the only thing that stretches. */
 const CAP = 40;
 const PAD = 20;
 
-/**
- * One keyframed tween for every moving part, not a spring: Motion drops the
- * whole update when a spring is handed a keyframe array.
- */
 const WALK: Transition = { duration: 1.5, times: [0, 0.45, 1], ease: EASE.out };
 
 const leftEdge = (width: number) => (MAX - width) / 2;
 const rightEdge = (width: number) => (MAX + width) / 2 - CAP;
 const plateScale = (width: number) => (width - CAP * 2) / (MAX - CAP * 2);
 
-/** Walks the three widths on step 1; settles straight back to the phone. */
 function useWalk(at: (width: number) => number): {
   value: number | number[];
   transition: Transition;
@@ -42,7 +35,6 @@ function useWalk(at: (width: number) => number): {
     : { value: at(WIDTHS[0] ?? MAX), transition: SETTLE };
 }
 
-/** Icon pitch in the title bar: 24px button, 8px gap. */
 const DEVICE_PITCH = 32;
 const DEVICES: readonly { name: string; glyph: Icon }[] = [
   { name: "phone", glyph: IconDeviceMobile },
@@ -98,17 +90,11 @@ function ToolbarButton({
   );
 }
 
-/**
- * Which layout shows while the frame walks: phone, tablet, desktop. A layout
- * only appears once the frame is wide enough to hold it, and the previous one
- * holds until then, so the page never spills past the glass.
- */
 const FADES: readonly { opacity: number[]; times: number[] }[] = [
   { opacity: [1, 1, 0, 0], times: [0, 0.38, 0.46, 1] },
   { opacity: [0, 0, 1, 1, 0, 0], times: [0, 0.38, 0.46, 0.86, 0.94, 1] },
   { opacity: [0, 0, 1], times: [0, 0.86, 0.96] },
 ];
-/** The page scrolls under the bottom edge rather than stopping at it. */
 const SCROLL_FADE = "linear-gradient(black calc(100% - 28px), transparent)";
 
 function Layout({ index }: { index: number }) {

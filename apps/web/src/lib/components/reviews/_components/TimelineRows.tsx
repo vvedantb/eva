@@ -29,11 +29,6 @@ import {
 import { PrAvatar } from "./prReviewParts";
 import type { ConversationEvent } from "@eva/shared";
 
-/**
- * The rows on Timeline's rail. Each owns a 3rem gutter whose marker sits on the
- * rail and masks it with the canvas colour, so the rail reads as a thread rather
- * than a strikethrough.
- */
 const ROW_CLASS = "relative mb-5 pl-12";
 
 function Marker({
@@ -241,8 +236,6 @@ export function TimelineConversation({
     </div>
   );
 }
-
-/** Sentence form of a verdict, so the rail reads as prose. */
 function verdictAction(state: string): string {
   if (state === "APPROVED") return "approved these changes";
   if (state === "CHANGES_REQUESTED") return "requested changes";

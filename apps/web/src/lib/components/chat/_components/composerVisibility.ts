@@ -27,8 +27,6 @@ export function isComposerVisible(
   element: ComposerElement | null | undefined,
 ): boolean {
   if (!element) return false;
-  // A backgrounded tab has no visible composer at all, so no mounted one may
-  // claim a keystroke the user aimed at another window.
   if (typeof document !== "undefined" && document.visibilityState !== "visible")
     return false;
   if (!element.isConnected) return false;

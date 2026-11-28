@@ -18,7 +18,6 @@ export const resolveNumId = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     entityType: repoEntityTypeValidator,
-    /** Untrusted URL segment — validated by `normalizeId`, not by the arg type. */
     docId: v.string(),
   },
   returns: v.union(v.number(), v.null()),
@@ -30,7 +29,6 @@ export const resolveNumId = authQuery({
 
     const doc = await ctx.db.get(id);
     if (!doc || doc.repoId !== args.repoId) return null;
-    // Tasks and projects are archived, never deleted: an archived one opens.
     if ("deletedAt" in doc && doc.deletedAt !== undefined) return null;
     return doc.numId ?? null;
   },

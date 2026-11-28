@@ -13,12 +13,6 @@ describe("streaming lastUpdatedAt coalescing", () => {
     ).toBe(false);
   });
 
-  /**
-   * `lastUpdatedAt` is optional on the row, so a record that has never been
-   * touched arrives as `undefined`. Coalescing it would strand the stream:
-   * nothing would ever write the first timestamp, so every later touch would
-   * see `undefined` again and the row would look stale forever.
-   */
   test("a row with no lastUpdatedAt is always written", () => {
     expect(shouldCoalesceStreamingTouch(undefined, 1_800_000_000_000)).toBe(
       false,

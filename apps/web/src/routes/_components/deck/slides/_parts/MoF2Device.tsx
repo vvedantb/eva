@@ -3,11 +3,6 @@ import { m } from "motion/react";
 import type { Transition } from "motion/react";
 import { BRAND_GRADIENT, DUR, EASE } from "../../_components/motion";
 
-/**
- * The whole device reshapes on one layout move, so every part uses the same
- * curve. Layout animations run on transforms, and each nested `layout` node
- * corrects its own scale, so bars and bubbles keep their shape mid-move.
- */
 const RESHAPE: Transition = { duration: 1, ease: EASE.expo };
 const FADE: Transition = { duration: DUR.fast, ease: EASE.out };
 
@@ -48,7 +43,6 @@ function Bubble({ user = false, rows }: { user?: boolean; rows: string[] }) {
   );
 }
 
-/** A side pane that folds away when the screen gets narrow. */
 function SidePane({
   phone,
   width,
@@ -165,7 +159,6 @@ export function MoF2Device({ phone }: { phone: boolean }) {
         </SidePane>
       </m.div>
 
-      {/* The phone's notch arrives with the phone shape. */}
       <m.span
         aria-hidden
         className="absolute top-[18px] left-1/2 h-[14px] w-[64px] -translate-x-1/2 rounded-full bg-black ring-1 ring-white/10"

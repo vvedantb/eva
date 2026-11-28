@@ -22,17 +22,10 @@ import {
 const MAX_ISSUE_COMMENTS = 100;
 const MAX_REVIEW_COMMENTS = 100;
 const MAX_CHECKS = 40;
-/**
- * Deployments of one commit. A repo with several apps deploys each of them, and
- * each costs a second request for its latest status, so this is a ceiling on
- * fan-out rather than on what is interesting.
- */
 const MAX_PREVIEWS = 4;
 const MAX_COMMITS = 30;
-/** GitHub itself serves at most 250 commits per pull request. */
 const MAX_ALL_COMMITS = 250;
 
-/** Overview GitHub payload is moderately volatile (checks/comments). */
 const PR_OVERVIEW_CACHE_TTL_MS = 60_000;
 
 const pullRequestCommentValidator = v.object({
@@ -43,28 +36,17 @@ const pullRequestCommentValidator = v.object({
   authorAvatarUrl: v.union(v.string(), v.null()),
   createdAt: v.string(),
   htmlUrl: v.string(),
-  /** Present for inline review comments. */
   path: v.optional(v.string()),
   line: v.optional(v.union(v.number(), v.null())),
-  /**
-   * Review this inline comment belongs to, so the timeline can nest it under the
-   * matching review verdict. Null for standalone (issue) comments.
-   */
   reviewId: v.optional(v.union(v.number(), v.null())),
 });
 
 const pullRequestCheckValidator = v.object({
-  /**
-   * Check runs come from the Checks API; statuses come from the older commit
-   * status API. GitHub's own PR page merges both, and review bots split across
-   * the two, so keep the origin for grouping/labelling.
-   */
   kind: v.union(v.literal("check"), v.literal("status")),
   name: v.string(),
   status: v.string(),
   conclusion: v.union(v.string(), v.null()),
   htmlUrl: v.union(v.string(), v.null()),
-  /** Short bot-authored summary line, e.g. "3 issues found". */
   description: v.union(v.string(), v.null()),
 });
 
@@ -72,17 +54,11 @@ const pullRequestReviewValidator = v.object({
   id: v.number(),
   authorLogin: v.string(),
   authorAvatarUrl: v.union(v.string(), v.null()),
-  /** APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING */
   state: v.string(),
   submittedAt: v.union(v.string(), v.null()),
   htmlUrl: v.string(),
 });
 
-/**
- * A submitted review as a timeline event — unlike `reviews` (collapsed to the
- * latest verdict per author for the sidebar), every submitted review is kept, in
- * order, with its body, because the conversation shows each one where it landed.
- */
 const pullRequestReviewEventValidator = v.object({
   id: v.number(),
   authorLogin: v.string(),
@@ -100,7 +76,6 @@ const pullRequestActorValidator = v.object({
 
 const pullRequestCommitValidator = v.object({
   sha: v.string(),
-  /** First line only — the rest is body detail the list does not show. */
   message: v.string(),
   authorLogin: v.union(v.string(), v.null()),
   authorAvatarUrl: v.union(v.string(), v.null()),
@@ -113,16 +88,9 @@ const pullRequestLabelValidator = v.object({
   color: v.string(),
 });
 
-/**
- * A deployment of the head commit — a preview environment, in practice. GitHub
- * models the address as a *status* on a deployment rather than on the deployment
- * itself, so `url` is null until the provider has reported one.
- */
 const pullRequestPreviewValidator = v.object({
-  /** GitHub's environment name, e.g. "Preview" or "preview-eva". */
   environment: v.string(),
   url: v.union(v.string(), v.null()),
-  /** success | pending | in_progress | failure | error | inactive | queued */
   state: v.string(),
   updatedAt: v.string(),
 });
@@ -144,32 +112,24 @@ const pullRequestOverviewValidator = v.object({
   changedFiles: v.number(),
   additions: v.number(),
   deletions: v.number(),
-  /** GitHub's own count, which can exceed the returned `commits` page. */
   commitCount: v.number(),
   commits: v.array(pullRequestCommitValidator),
   commitsTruncated: v.boolean(),
-  /** null while GitHub computes mergeability — the client retries. */
   mergeable: v.union(v.boolean(), v.null()),
-  /** clean | dirty | blocked | behind | unstable | draft | unknown */
   mergeableState: v.string(),
   mergedAt: v.union(v.string(), v.null()),
   mergedByLogin: v.union(v.string(), v.null()),
-  /** The commit the merge produced, so the lifecycle event can link to it. */
   mergeCommitSha: v.union(v.string(), v.null()),
   labels: v.array(pullRequestLabelValidator),
-  /** Latest decisive review per reviewer, human or bot. */
   reviews: v.array(pullRequestReviewValidator),
-  /** Every submitted review, in order, for the conversation timeline. */
   reviewEvents: v.array(pullRequestReviewEventValidator),
   requestedReviewers: v.array(pullRequestActorValidator),
   assignees: v.array(pullRequestActorValidator),
   checks: v.array(pullRequestCheckValidator),
   checksTruncated: v.boolean(),
-  /** Deployments of the head commit, newest first. Empty where nothing deploys. */
   previews: v.array(pullRequestPreviewValidator),
   comments: v.array(pullRequestCommentValidator),
   commentsTruncated: v.boolean(),
-  /** GitHub's native PR stack this belongs to; null when not stacked. */
   stack: v.union(pullRequestStackValidator, v.null()),
 });
 
@@ -235,7 +195,6 @@ type PullRequestPreview = {
 type PullRequestOverview = {
   number: number;
   title: string;
-  /** Derived PR lifecycle for the sidebar meta column. */
   status: "open" | "closed" | "merged";
   draft: boolean;
   body: string | null;
@@ -318,12 +277,10 @@ export function latestReviewPerAuthor(
 }
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
-/** One entry of GitHub's PR commits listing, taken from the client's own types. */
 type GithubPrCommit = Awaited<
   ReturnType<InstallationOctokit["rest"]["pulls"]["listCommits"]>
 >["data"][number];
 
-/** Shared by the overview's first page and the full listing behind Load more. */
 function toPullRequestCommit(commit: GithubPrCommit): PullRequestCommit {
   return {
     sha: commit.sha,
@@ -348,9 +305,6 @@ export const fetchPullRequestOverview = internalAction({
   handler: async (ctx, args): Promise<PullRequestOverview> => {
     const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
 
-    // Only checks and commit statuses need the head sha, so they chain off the
-    // PR fetch while the other four calls start immediately — one round trip
-    // instead of two on the uncached path.
     const prPromise = octokit.rest.pulls.get({
       owner: repo.owner,
       repo: repo.name,
@@ -407,7 +361,6 @@ export const fetchPullRequestOverview = internalAction({
           }),
         )
         .catch(() => ({ data: { check_runs: [], total_count: 0 } })),
-      // Older bots report through commit statuses rather than check runs.
       prPromise
         .then((res) =>
           octokit.rest.repos.getCombinedStatusForRef({
@@ -434,9 +387,6 @@ export const fetchPullRequestOverview = internalAction({
       }),
     ]);
 
-    // The address lives on the deployment's latest *status*, not the deployment,
-    // so each one costs a second request. Failures are swallowed per deployment:
-    // a preview nobody can reach is worth less than the rest of the overview.
     const previews: PullRequestPreview[] = (
       await Promise.all(
         deploymentRes.data.slice(0, MAX_PREVIEWS).map(async (deployment) => {
@@ -500,15 +450,10 @@ export const fetchPullRequestOverview = internalAction({
           : [],
     );
     const reviews = latestReviewPerAuthor(allReviews);
-    // A pending review is an unsubmitted draft, so it never appears on the
-    // conversation; the sidebar still collapses over the full history.
     const reviewEvents = allReviews.filter(
       (review) => review.state !== "PENDING",
     );
 
-    // GitHub serves this listing oldest-first, so the page kept here is the start
-    // of the branch: the conversation reads from the beginning, and Load more
-    // (`getPullRequestCommits`) fetches the newer ones on demand.
     const commits: PullRequestCommit[] = commitRes.data.map(toPullRequestCommit);
 
     const comments: PullRequestComment[] = [
@@ -566,8 +511,6 @@ export const fetchPullRequestOverview = internalAction({
       mergeableState: pr.mergeable_state ?? "unknown",
       mergedAt: pr.merged_at ?? null,
       mergedByLogin: pr.merged_by?.login ?? null,
-      // Present on an open pull request too (GitHub's test-merge commit), so it
-      // is only meaningful once `merged` is true.
       mergeCommitSha: pr.merged ? (pr.merge_commit_sha ?? null) : null,
       labels: pr.labels.map((label) => ({
         name: label.name,
@@ -595,8 +538,6 @@ export const fetchPullRequestOverview = internalAction({
   },
 });
 
-// V4: payload gained `stack` — a bumped name drops V3 entries instead of
-// serving objects that are missing the new field.
 const prOverviewCache = new ActionCache(components.actionCache, {
   action: internal._github.prOverview.fetchPullRequestOverview,
   name: "prOverviewV4",
@@ -638,14 +579,8 @@ export const updatePullRequest = action({
   args: {
     repoId: v.id("githubRepos"),
     prNumber: v.number(),
-    /** Omitted fields are left as they are on GitHub. */
     title: v.optional(v.string()),
     body: v.optional(v.string()),
-    /**
-     * Close or reopen. Reopening a *merged* pull request is not a thing GitHub
-     * allows, so the caller has to know which state the branch is in — the header
-     * only offers Reopen for a closed one.
-     */
     state: v.optional(v.union(v.literal("open"), v.literal("closed"))),
   },
   returns: v.object({ title: v.string(), body: v.union(v.string(), v.null()) }),
@@ -706,7 +641,6 @@ export async function invalidatePrOverviewCache(
 
 const pullRequestCommitsValidator = v.object({
   commits: v.array(pullRequestCommitValidator),
-  /** True when the pull request has more commits than GitHub will serve. */
   truncated: v.boolean(),
 });
 
@@ -736,8 +670,6 @@ export const fetchPullRequestCommits = internalAction({
 
     return {
       commits: commits.map(toPullRequestCommit),
-      // GitHub's own ceiling: a longer branch simply cannot be listed here, so
-      // the timeline keeps its link out rather than promising the whole history.
       truncated: commits.length >= MAX_ALL_COMMITS,
     };
   },
@@ -813,7 +745,6 @@ export const mergePullRequest = action({
     if (stack !== null) {
       const outcome = await mergeStackAsync(octokit, target, args.method);
       if (outcome !== null) {
-        // Every entry at or below this one changed state on GitHub.
         await Promise.all(
           stack.entries
             .filter((entry) => entry.position <= stack.position)

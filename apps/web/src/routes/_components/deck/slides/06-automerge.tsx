@@ -22,7 +22,6 @@ import { PipelineConnector, PipelineNode } from "./_parts/Pipeline";
 
 const ICON_SIZE = 26;
 
-/** Nightly routines, in the order they run. */
 const ROUTINES = [
   "Find critical bugs",
   "Add test coverage",
@@ -32,15 +31,10 @@ const ROUTINES = [
   "Daily standup 08:00",
 ];
 
-/**
- * Step 1 is one chain reaction: the cursor clicks the human step, then each
- * rail carries a light to the next stage, which lights as the light arrives.
- */
 const CLICK = 0.55;
 const HOP = 0.45;
 const at = (hop: number) => CLICK + 0.1 + hop * HOP;
 
-/** Centre of the human node, in the pipeline row's pixels. */
 const TARGET = { x: 176 + 52 + 96, y: 78 };
 
 function Cursor() {

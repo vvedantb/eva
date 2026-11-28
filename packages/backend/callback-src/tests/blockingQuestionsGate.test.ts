@@ -1,15 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { freshModules } from "./freshModules";
 
-/**
- * Which surfaces may pause a turn on a question.
- *
- * The gate is read once at module load from the environment, so each case
- * re-imports config with the env it is asserting about. The `RUN_ID` case is
- * the one that matters: a run has nobody to answer, and the pause suspends the
- * turn watchdog, so enabling it there would hang the turn until someone stopped
- * the sandbox.
- */
 const ORIGINAL = {
   entity: process.env.ENTITY_ID_FIELD,
   run: process.env.RUN_ID,

@@ -7,7 +7,6 @@ export const Route = createFileRoute("/_repo/$owner/$repo/inbox")({
   component: RepoInbox,
 });
 
-/** A repo's inbox: the same list, that repo only. */
 function RepoInbox() {
   const { repo } = useRepo();
   return <InboxClient repoId={repo._id} />;

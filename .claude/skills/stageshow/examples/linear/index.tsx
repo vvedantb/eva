@@ -3,25 +3,6 @@ import type { ReactNode } from 'react'
 import { Avatar, Bar, Camera, Collapse, Field, Popover, Stage, Text, Window, type Act, type Layout, type Rect } from '../../kit'
 import './linear.css'
 
-// Linear, light, in its desktop window (860 wide), as it looks after the
-// 2026 refresh: grayscale chrome, a dimmed sidebar, compact rounded tabs.
-// Color stays only on Linear's own content marks (status circles, label
-// dots, avatars) and the accent on the one avatar the story lands. The issue list is the
-// context; Cmd+K opens the command menu over it, "assign" filters it, the
-// user picks "Assign to me", and ENG-142's row takes their avatar while its
-// status turns from Todo to In Progress. Cmd+Z undoes it, so the loop closes
-// with a caused reset.
-//
-// Real strings: the team, the view, ENG-142 and its title, the command menu
-// (its rows are what the typing filters, so they must be words), and what is
-// typed. Every other row is placeholder lines around Linear's own signature
-// marks: priority bars, status circles, avatars.
-//
-// Icons: Linear ships no public icon pack, so the nav and command glyphs are
-// lucide-react (installed here), chosen for its thin, even line, which is
-// close to Linear's own. The status circles and priority bars are Linear's
-// own geometry, drawn from circles and rects, because they are its content.
-
 type S = {
   focus: boolean
   open: boolean
@@ -39,7 +20,7 @@ type Row = { status: Status; pri: 0 | 1 | 2 | 3 | 4; id: number; title: number; 
 const ROWS: Row[] = [
   { status: 'progress', pri: 4, id: 44, title: 210, label: 34, who: 'Mara', date: 30 },
   { status: 'progress', pri: 2, id: 40, title: 168, who: 'Theo', date: 26 },
-  { status: 'todo', pri: 3, id: 0, title: 0, label: 30, date: 30 }, // ENG-142
+  { status: 'todo', pri: 3, id: 0, title: 0, label: 30, date: 30 },
   { status: 'todo', pri: 2, id: 42, title: 236, who: 'Ines', date: 28 },
   { status: 'todo', pri: 1, id: 38, title: 150, label: 40, date: 30 },
   { status: 'backlog', pri: 0, id: 44, title: 192, who: 'Mara', date: 24 },
@@ -65,24 +46,20 @@ async function script(a: Act<S>) {
   const compact = a.layout === 'compact'
   await a.wait(900)
 
-  // 1. Context: the pointer comes to rest on ENG-142, which takes focus
   a.mark('focus')
   await a.move({ at: 'row', x: compact ? 0.86 : 0.7, y: 0.6 })
   await a.set({ focus: true })
   await a.wait(700)
 
-  // 2. Cmd+K opens the command menu on that issue
   a.mark('open')
   await a.key('cmd+k')
   await a.set({ open: true })
   await a.wait(800)
 
-  // 3. Type "assign": the menu narrows to the two assign commands
   a.mark('type')
   await a.type('query', 'assign', { interval: 95 })
   await a.wait(700)
 
-  // 4. Pick yourself
   a.mark('pick')
   await a.move({ at: 'me', x: 0.62, y: 0.55 })
   await a.set({ hoverMe: true })
@@ -90,11 +67,8 @@ async function script(a: Act<S>) {
   await a.click()
   await a.wait(120)
   await a.set({ open: false })
-  // Step the pointer off the row so it doesn't sit over the change
   await a.move({ at: 'rest', x: compact ? 0.5 : 0.42, y: 0.5 })
 
-  // 5. The camera comes in on the row (the change is two 16px marks in a
-  // 920px scene), then the row updates: avatar in, Todo -> In Progress
   a.mark('result')
   if (!compact) {
     const who = a.rect('who142', { layout: true })
@@ -109,7 +83,6 @@ async function script(a: Act<S>) {
     await a.wait(1100)
   }
 
-  // Undo, the way Linear does it, then let go of the row
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ assigned: false })
@@ -146,8 +119,6 @@ function Priority({ level }: { level: Row['pri'] }) {
   )
 }
 
-// Linear's status circles. Todo and In Progress are one object: the ring
-// recolors and the pie inside sweeps to half.
 function StatusIcon({ status }: { status: Status }) {
   if (status === 'backlog') {
     return (
@@ -326,7 +297,6 @@ function Scene({ s, layout }: { s: S; layout: Layout }) {
         </div>
         <Field value={s.query} placeholder="Type a command or search…" focused={s.open} className="ln-cmd__field" box={{ 'data-cursor': 'pointer' }} />
         <div className="ln-cmd__list">
-          {/* Compact keeps the first three, so the menu clears the keycaps */}
           {(compact ? COMMANDS.slice(0, 3) : COMMANDS).map((c, i) => {
             const match = !q || c.label.toLowerCase().includes(q)
             const firstMatch = COMMANDS.findIndex((x) => !q || x.label.toLowerCase().includes(q))

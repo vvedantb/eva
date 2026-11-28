@@ -2,10 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { isInsertedTokenTrigger } from "@eva/shared";
 import { renderEditorChipHtml } from "./mentionEditorUtils";
 
-// Regression: accepting a skill inserts `/label `, but a surface that collapses
-// whitespace lets the browser drop that trailing space on the next keystroke.
-// The value then reads as `/labelx`, which is a valid trigger, and the picker
-// reopened filtering by the chip's own label.
 describe("isInsertedTokenTrigger", () => {
   const inserted = { startIndex: 0, token: "/caveman-help" };
 
@@ -22,7 +18,6 @@ describe("isInsertedTokenTrigger", () => {
   });
 
   it("honours a trigger once the chip has been edited", () => {
-    // Backspacing into a chip is how a reader picks something else instead.
     expect(isInsertedTokenTrigger("/caveman-hel", 0, inserted)).toBe(false);
   });
 
@@ -40,8 +35,6 @@ describe("isInsertedTokenTrigger", () => {
   });
 });
 
-// Chip labels are other people's data (doc titles, names) written into
-// innerHTML, so a quote must not close the attribute it sits in.
 describe("renderEditorChipHtml", () => {
   it("keeps a quoted label inside its attribute", () => {
     const label = `x" onmouseover="alert(1)`;

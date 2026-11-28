@@ -15,11 +15,8 @@ export function ProjectDescription({
 }: {
   description: string | undefined;
   projectId: Id<"projects">;
-  /** Overrides the wrapper padding (Overview passes `px-0`). */
   className?: string;
-  /** Height cap. Off on Overview, where the description owns the column. */
   clamp?: boolean;
-  /** An archived project: the context shows, with no editor. */
   readOnly: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -56,9 +53,6 @@ export function ProjectDescription({
           !isEditing && clamp && "max-h-[20dvh] overflow-y-auto scrollbar",
         )}
       >
-        {/* A real button stretched over the (non-editable) preview rather than
-            `onClick` on the wrapper: the div gave click-to-edit no keyboard path
-            at all, and the editor below cannot itself be the button. */}
         {!isEditing && !readOnly ? (
           <button
             type="button"

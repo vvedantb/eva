@@ -8,12 +8,6 @@ import { authQuery, getProjectWithAccess, normalizeIdOrThrow } from "../function
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
 
 /**
- * The task cards under the coordinator's replies: each task it created
- * (`projectTaskBatches`) or acted on (`projectChatTaskLinks`) in a turn. The
- * apps draw each card from the project's task list, so its status stays live.
- */
-
-/**
  * The coordinator turn a tool call runs in: the newest message of the
  * project's chat, the same anchor rule as artifacts (`chatTurnAnchor`).
  */

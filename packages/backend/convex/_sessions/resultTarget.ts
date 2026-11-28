@@ -4,13 +4,6 @@ import {
   SANDBOX_DISK_FULL_ADVICE,
 } from "../_sandbox_runtime/sandboxFiles";
 
-/**
- * Which message a finished turn's result belongs on, and which leftover bubbles
- * to drop.
- *
- * Generic over the message type so Convex docs pass straight in and tests can
- * use plain objects; only the fields the decision reads are named.
- */
 type AssistantReply = {
   role: string;
   content: string;
@@ -132,18 +125,11 @@ export function assistantReplyContent(args: {
 }): string {
   if (args.success) return args.result || "I couldn't process your message.";
   const error = args.error || "Unknown error during execution.";
-  // A raw "ENOSPC: no space left on device, write" names no cause a user can
-  // act on (session 96, 2026-11-11). Lead with the cause and the fix; keep the
-  // raw text for debugging.
   return isDiskFullErrorText(error)
     ? `Error: Sandbox disk is full. ${SANDBOX_DISK_FULL_ADVICE}\n\n${error}`
     : `Error: ${error}`;
 }
 
-/**
- * An assistant bubble this turn owns — not an alert, not a synthetic turn,
- * not a task run's reply (the run settles its own row by id).
- */
 function isOwnReply(message: AssistantReply): boolean {
   return (
     message.role === "assistant" &&

@@ -1,5 +1,3 @@
-/** Where each agent-composed panel sits in the transcript. */
-
 export interface PlaceablePanel {
   _id: string;
   messageId?: string;
@@ -13,13 +11,7 @@ export interface PlacementMessage {
 }
 
 export interface PanelPlacement<Panel extends PlaceablePanel> {
-  /** Panels keyed by the message they render under, in creation order. */
   byMessageId: Map<string, Panel[]>;
-  /**
-   * Panels with no visible row at or before their creation time, while the
-   * whole history is loaded. They render after the last message so a panel is
-   * never silently dropped.
-   */
   trailing: Panel[];
 }
 

@@ -34,7 +34,6 @@ export async function resolveConnectorToken(
 ): Promise<PickedConnectorToken | null> {
   const [oauthToken, envToken] = await Promise.all([
     resolveUserAccessToken(ctx, userId, provider).catch(
-      // Table not deployed yet, or refresh failed — still use the env key.
       (): string | null => null,
     ),
     envTokenForRepo(ctx, provider, repoId),

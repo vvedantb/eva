@@ -25,7 +25,6 @@ export const getSyncTarget = internalQuery({
       installationId: v.number(),
       ref: v.string(),
       rootDirectory: v.optional(v.string()),
-      // False while the repo has never synced a `.eva/config.json`.
       hasEvaConfig: v.boolean(),
     }),
     v.null(),
@@ -33,9 +32,6 @@ export const getSyncTarget = internalQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return null;
-    // A monorepo's root row is often disconnected while its app rows are
-    // connected; the `.eva/` folder belongs to the whole GitHub repo, so any
-    // connected app is enough.
     if (repo.connected === false) {
       const siblings = await findSiblingsOf(ctx.db, repo);
       if (siblings.every((row) => row.connected === false)) return null;
@@ -107,14 +103,10 @@ export const applyEvaConfig = internalMutation({
       const app = parsed.ok
         ? findEvaApp(parsed.value, row.rootDirectory)
         : null;
-      // A broken file keeps the last good commands and shows the error.
       if (!parsed.ok) {
         await ctx.db.patch(row._id, { evaConfig });
         continue;
       }
-      // An app row the file does not list (a newly added app) keeps its
-      // Convex-managed commands, but is still marked as part of a repo that
-      // has the file, so the setup prompt does not show for it.
       if (!app) {
         await ctx.db.patch(row._id, {
           evaConfig: { ...evaConfig, appListed: false },

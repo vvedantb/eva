@@ -13,7 +13,6 @@ import {
 import { hrefToNavigateOptions, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { useChartAnimation } from "@/lib/components/analytics/chartMotion";
 
-/** Lazy chart.js, as the Stats charts: the Project page does not pay for it up front. */
 const chartModules = Promise.all([
   import("react-chartjs-2"),
   import("chart.js"),
@@ -31,7 +30,6 @@ const chartModules = Promise.all([
   return { Chart: reactChart.Chart };
 });
 
-/** A theme token's colour, read when the chart draws (canvas cannot take `var()`). */
 function token(name: string): string {
   if (typeof document === "undefined") return "transparent";
   return getComputedStyle(document.documentElement)
@@ -39,10 +37,8 @@ function token(name: string): string {
     .trim();
 }
 
-/** The three series: one colour each, the same in the legend, bars and line. */
 const SERIES = {
   shipped: { label: "Shipped", color: "success" },
-  // Tailwind v4 names the grey text token `--color-muted-foreground`.
   archived: { label: "Archived", color: "color-muted-foreground" },
   open: { label: "Open", color: "cat-2" },
 } as const;
@@ -65,7 +61,6 @@ function ProgressCanvas({
   const open = token(SERIES.open.color);
   const grid = token("border");
   const ink = token("color-muted-foreground");
-  // The picked day stays full colour; the rest dim, so the list below reads as its own.
   const dimmed = (color: string, index: number) =>
     selected === null || selected === index
       ? color
@@ -155,7 +150,6 @@ export function ProjectProgressChart({
   projectHref,
 }: {
   projectId: Id<"projects">;
-  /** The project's work page; a listed task opens as a chat tab there. */
   projectHref: string | undefined;
 }) {
   const navigate = useNavigate();

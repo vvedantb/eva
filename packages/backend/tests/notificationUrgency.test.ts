@@ -5,31 +5,12 @@ import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Mention routing (2026-09-21) makes a mention's urgency decide how it is
- * delivered: `high` earns an instant email, `normal` waits for the daily
- * digest, `low` never leaves the inbox. Three separate places have to agree on
- * that one field — the instant-email query, the digest query and the mutation
- * routing calls back into — and the failure mode of each is silent: an email
- * that never arrives, or one that arrives for an offhand credit.
- *
- * The degraded path matters as much as the happy one. Routing is a network
- * call that can fail, and a mention it never judged keeps `urgency` undefined;
- * that mention must still email, exactly as it did before routing existed.
- */
 
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|notification-urgency";
 
 type Urgency = "low" | "normal" | "high";
 
-/**
- * One emailable user with an unread mention at each urgency — including one
- * that routing has not judged yet — plus a non-mention type, which carries no
- * urgency and must be untouched by any of this.
- */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -65,7 +46,6 @@ async function fixture() {
   return { t, ...ids };
 }
 
-/** `null` for "no urgency": `t.run` returns Convex values, which have no undefined. */
 async function urgencyOf(
   t: Awaited<ReturnType<typeof fixture>>["t"],
   id: Id<"notifications">,
@@ -86,12 +66,9 @@ describe("notification urgency", () => {
       expect(data).not.toBeNull();
       const titles = (data?.notifications ?? []).map((n) => n.title);
       expect(titles).toContain("high mention");
-      // Routing failed or has not landed: degrade to the old behaviour rather
-      // than swallow the mention.
       expect(titles).toContain("unrouted mention");
       expect(titles).not.toContain("normal mention");
       expect(titles).not.toContain("low mention");
-      // Only mentions are routed; every other high-signal type is unchanged.
       expect(titles).toContain("comment reply");
     },
     TIMEOUT_MS,
@@ -128,8 +105,6 @@ describe("notification urgency", () => {
       });
       expect(await urgencyOf(f.t, f.unrouted)).toBe("high");
 
-      // The row now emails, where before routing landed it also did — the
-      // point is that `normal` and `low` are the ones that stop.
       await f.t.mutation(internal.notifications.setUrgency, {
         notificationId: f.unrouted,
         urgency: "low",

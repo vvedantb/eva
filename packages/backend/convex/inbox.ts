@@ -24,19 +24,6 @@ import { findWorkChat } from "./_sessions/ownerState";
 import { isSessionArchived } from "./_sessions/archive";
 import { sessionOwnerEntityId } from "./_sessions/owner";
 
-/**
- * The Inbox (`@eva/shared/inbox`): one list, one row for each chat, grouped
- * by how urgent it is.
- *
- * - Holding up work and Waiting on you: the Needs you rows (`needsYou.ts`),
- *   which leave on their own once someone acts on them.
- * - New since you looked: chats the caller took part in (owns, created, posted
- *   or was @mentioned in) with activity after they last read them or pressed
- *   Done. Project membership alone does not count: Eva replies too often.
- * - Alerts: unread notifications that do not ask for the caller, in New since
- *   you looked. One about a chat folds into that chat's row.
- */
-
 const inboxChatIdValidator = v.union(
   v.id("agentTasks"),
   v.id("projects"),
@@ -44,36 +31,26 @@ const inboxChatIdValidator = v.union(
 );
 
 const inboxRowValidator = v.object({
-  /** The chat's owner id, or `notification:<id>` for an alert about nothing else. */
   key: v.string(),
   group: v.union(v.literal("holding"), v.literal("waiting"), v.literal("new")),
   kind: v.union(v.literal("chat"), v.literal("alert")),
-  /** The source line above the title: "Checkout v2 · #902", "Quick task #88". */
   contextLabel: v.string(),
   title: v.string(),
-  /** The latest message, the question, or the PR: one line. */
   preview: v.optional(v.string()),
   at: v.number(),
-  /** Messages since the caller last read the chat, up to `INBOX_NEW_COUNT_CAP` + 1. */
   newCount: v.optional(v.number()),
-  /** Unread: the blue dot. */
   unread: v.boolean(),
   action: v.optional(
     v.union(v.literal("answer"), v.literal("review"), v.literal("retry")),
   ),
-  /** Done on a chat row: `inbox.markDone` with this id. */
   doneChatId: v.optional(inboxChatIdValidator),
-  /** Done on a notification row: `notifications.archiveMany` with this id. */
   notificationId: v.optional(v.id("notifications")),
   taskId: v.optional(v.id("agentTasks")),
   prUrl: v.optional(v.string()),
-  /** The web page it opens, and the Inbox pane shows. */
   href: v.optional(v.string()),
-  /** The chat the phone opens (`chats.get` target). */
   chatTarget: v.optional(v.string()),
   threadRootId: v.optional(v.id("messages")),
   repoId: v.optional(v.id("githubRepos")),
-  /** The notification behind the row, for its type icon (`getNotificationAppearance`). */
   notice: v.optional(
     v.object({
       type: notificationTypeValidator,
@@ -85,11 +62,8 @@ const inboxRowValidator = v.object({
 
 type InboxRow = typeof inboxRowValidator.type;
 
-/** Most read rows one repo's New since you looked looks through, newest first. */
 const READ_ROW_SCAN_LIMIT = 300;
-/** Most New since you looked rows the list shows. */
 const NEW_ROW_LIMIT = 50;
-/** Most unread notifications the alert rows look through. */
 const ALERT_SCAN_LIMIT = 100;
 
 export const list = authQuery({
@@ -122,7 +96,6 @@ function needsYouInboxRow(row: NeedsYouRow, fromNotification: boolean): InboxRow
     at: row.at,
     unread: fromNotification,
     action: inboxActionForNeedsYou(row),
-    // A notification that asks for you leaves when you archive it.
     notificationId: row.notificationId,
     taskId: row.taskId,
     prUrl: row.prUrl,
@@ -138,7 +111,6 @@ type InboxChat =
   | { kind: "project"; doc: Doc<"projects"> }
   | { kind: "session"; doc: Doc<"sessions"> };
 
-/** A read row's chat, when it is one the Inbox lists: a task, a project, or a standalone session. */
 async function loadInboxChat(
   db: DatabaseReader,
   parentId: Doc<"chatReads">["parentId"],
@@ -157,8 +129,6 @@ async function loadInboxChat(
   if (sessionId) {
     const doc = await db.get(sessionId);
     if (!doc) return null;
-    // A task's or project's session is listed through its owner, so a link to
-    // it ("/sessions/N") folds into the owner's row.
     const ownerId = sessionOwnerEntityId(doc);
     if (ownerId !== undefined) return await loadInboxChat(db, ownerId);
     return doc.deletedAt === undefined && !isSessionArchived(doc)
@@ -168,7 +138,6 @@ async function loadInboxChat(
   return null;
 }
 
-/** Took part: made the chat, or posted or was @mentioned in it. A project member alone did not. */
 function tookPart(
   userId: Id<"users">,
   chat: InboxChat,
@@ -179,10 +148,6 @@ function tookPart(
   return chat.doc.userId === userId;
 }
 
-/**
- * In New since you looked: activity after the last Done, and either unread or
- * read since that Done (opening a row reads it; it stays until Done).
- */
 function isNewSinceLooked(
   row: Doc<"chatReads">,
   activityAt: number | undefined,
@@ -192,7 +157,6 @@ function isNewSinceLooked(
   return activityAt > row.lastReadAt || (row.seenNewAt ?? 0) > doneAt;
 }
 
-/** Chats the caller took part in, with activity they have not marked Done. */
 async function newChatRows(
   db: DatabaseReader,
   userId: Id<"users">,
@@ -207,7 +171,6 @@ async function newChatRows(
         )
         .order("desc")
         .take(READ_ROW_SCAN_LIMIT);
-      // Session chat rows are read through their session's owner row.
       const owned = reads.filter(
         (row) => db.normalizeId("sessionChats", row.parentId) === null,
       );
@@ -216,7 +179,6 @@ async function newChatRows(
       );
       return owned.flatMap((row, index) => {
         const chat = chats[index];
-        // An owned session's row maps to its owner, which has its own read row.
         if (!chat || chat.doc._id !== row.parentId) return [];
         if (!tookPart(userId, chat, row)) return [];
         const activityAt = lastChatActivityAt(chat.doc);
@@ -252,7 +214,6 @@ async function newChatRows(
   );
 }
 
-/** Title, source line, links and phone target of a chat row. */
 function chatIdentity(
   repo: Doc<"githubRepos">,
   chat: InboxChat,
@@ -288,11 +249,6 @@ function chatIdentity(
   };
 }
 
-/**
- * The chat's latest transcript messages (thread replies left out), newest
- * first: the first is the preview, and those after the read time are the new
- * count, capped at `INBOX_NEW_COUNT_CAP` + 1.
- */
 async function latestMessages(
   db: DatabaseReader,
   chat: InboxChat,
@@ -318,13 +274,6 @@ async function latestMessages(
     .take(INBOX_NEW_COUNT_CAP + 1);
 }
 
-/**
- * Unread notifications that do not ask for the caller (a run that finished, a
- * PR merged, a deploy, an automation's result). One about a chat (its
- * `chatTarget`, or its link: `inboxChatRefFromHref`) becomes that chat's row,
- * so it folds into the chat's own row when it has one, Done on it is the
- * chat's Done, and a Done chat hides the notifications from before it.
- */
 async function alertRows(
   db: DatabaseReader,
   userId: Id<"users">,
@@ -350,14 +299,12 @@ async function alertRows(
     unread.map(async (n): Promise<InboxRow | null> => {
       const repo = n.repoId === undefined ? undefined : repoById.get(String(n.repoId));
       const chat = repo ? await notificationChat(db, repo, n) : null;
-      // About nothing the Inbox lists as a chat: a row of its own.
       if (!repo || !chat) return inboxHistoryRow(n);
       const { event } = splitNotificationTitle(n);
       const [read, projectTitle] = await Promise.all([
         getReadRow(db, userId, chat.doc._id),
         chatProjectTitle(db, chat),
       ]);
-      // Done on the chat after this notification: it is handled.
       if ((read?.doneAt ?? 0) >= n.createdAt) return null;
       const identity = chatIdentity(repo, chat, projectTitle);
       return {
@@ -365,13 +312,11 @@ async function alertRows(
         group: "new",
         kind: "chat",
         ...identity,
-        // The chat is the title, so the line says what happened to it.
         preview: alertLine(event, n.message),
         at: n.createdAt,
         unread: true,
         doneChatId: chat.doc._id,
         notificationId: n._id,
-        // A reply thread opens on its own page (the Replies tab), not the bare chat.
         href: n.threadRootId !== undefined && n.href ? n.href : identity.href,
         threadRootId: n.threadRootId,
         repoId: repo._id,
@@ -386,13 +331,11 @@ function noticeOf(n: Doc<"notifications">): InboxRow["notice"] {
   return { type: n.type, title: n.title, message: n.message };
 }
 
-/** "PR merged · moved to done", "New comment: can we also cache…". */
 function alertLine(event: string | undefined, message: string | undefined): string | undefined {
   const text = message ? inboxPreview(message) : undefined;
   return joinInboxLine(event, text, ": ");
 }
 
-/** A task's project title, for the source line ("Checkout v2 · #902"). */
 async function chatProjectTitle(
   db: DatabaseReader,
   chat: InboxChat,
@@ -401,7 +344,6 @@ async function chatProjectTitle(
   return (await db.get(chat.doc.projectId))?.title;
 }
 
-/** The chat a notification is about: its `chatTarget`, else its link, in its repo. */
 async function notificationChat(
   db: DatabaseReader,
   repo: Doc<"githubRepos">,
@@ -428,7 +370,6 @@ async function notificationChat(
   return doc ? await loadInboxChat(db, doc._id) : null;
 }
 
-/** A `chatTarget` (a session chat, session, task or project id) as the chat the Inbox lists. */
 async function chatOfTarget(
   db: DatabaseReader,
   chatTarget: string,
@@ -454,7 +395,6 @@ export const markDone = authMutation({
     chatId: inboxChatIdValidator,
     notificationId: v.optional(v.id("notifications")),
   },
-  /** What Undo puts back: the Done time it replaced, and the notification it read. */
   returns: v.object({
     previousDoneAt: v.optional(v.number()),
     readNotificationId: v.optional(v.id("notifications")),

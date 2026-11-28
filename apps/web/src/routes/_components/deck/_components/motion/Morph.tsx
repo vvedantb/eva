@@ -5,17 +5,8 @@ import { useDeckStep } from "../deckContext";
 import { DUR, EASE } from "./tokens";
 
 export interface MorphProps {
-  /**
-   * One state per build step, like `Camera` shots: `states[0]` rests, the
-   * next arrives on step 1, and the last holds for any step beyond it.
-   */
   states: readonly ReactNode[];
-  /** Deck step that shows `states[0]`. Shift it when the swap starts later in the slide. */
   from?: number;
-  /**
-   * A 6px focus-pull on the swap. Only for element-sized content (under about
-   * 400px); turn it off for anything larger — it is a per-frame filter.
-   */
   blur?: boolean;
   className?: string;
 }

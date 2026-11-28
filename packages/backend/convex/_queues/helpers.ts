@@ -63,24 +63,10 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 
-/**
- * Grace period between the last subagent settling and the retry drain. The
- * daemon reacts to that same settle by opening a synthetic turn to process the
- * subagent's report (`ensureSyntheticTurn` in callback-src), so draining the
- * instant the settle lands would start the queued turn on top of it. The retry
- * re-checks `isSurfaceBusy`, so if that synthetic turn did open, this no-ops and
- * the turn's own completion drains the queue instead.
- */
 const BACKGROUND_AGENT_DRAIN_DELAY_MS = 15 * 1000;
 
-/** Where a chat's sandbox is, as the queue sees it. */
 type QueueSandboxState = "awake" | "asleep" | "transitioning";
 
-/**
- * One mapping for all three surfaces' sandbox status. Unset (a task or project
- * that never previewed) is asleep. Stopping counts as transitioning: a start
- * now would race the stop, so the message waits for the next wake.
- */
 function sandboxStateFromStatus(
   status: Doc<"sessions">["status"] | undefined,
 ): QueueSandboxState {
@@ -89,68 +75,32 @@ function sandboxStateFromStatus(
   return "asleep";
 }
 
-/** Outcome of a queue config's pre-start guard: `ok: false` aborts before anything is cleared or inserted. */
 type ChatQueueGuardResult<TPrepared> =
   | { ok: true; data: TPrepared }
   | { ok: false; error: string };
 
-/**
- * Everything `startNextQueuedChatMessage` needs to dequeue and start the next
- * queued turn for one chat surface. Every function that writes to the
- * entity's own table is a closure defined at the concrete adapter (so `TId`
- * is a single branded id there, never the generic union) — the shared core
- * below never calls `ctx.db.patch`/`ctx.db.insert` on the entity table
- * itself.
- */
-/** Chat surfaces the queue serves: a session's chat. */
 type ChatQueueId = Id<"sessionChats">;
 
 type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  /** A turn is running. A session chat reads its open turn; ctx is for that read. */
   hasActiveWorkflow: (
     entity: TEntity,
     ctx: MutationCtx,
   ) => boolean | Promise<boolean>;
-  /** The sandbox owner's id for the idle-pause activity clock (a chat's session). */
   activityParentId: (entity: TEntity, id: TId) => string;
-  /**
-   * Where the chat's sandbox is. Only quiet drains read it: a message queued
-   * while Eva sleeps wakes her, and the sandbox-ready drain sends it.
-   */
   sandboxState: (entity: TEntity) => QueueSandboxState;
-  /** Starts the sleeping sandbox (`sandboxState` returned "asleep"). */
   wakeSandbox: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
-  /** Backgrounded Agent/Task subagents, which outlive the turn that spawned them. */
   backgroundAgents: (entity: TEntity) => BackgroundAgentEntry[] | undefined;
-  /** The daemon-minted continuation turn, if one is open. */
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
-  /** When the user last pressed Stop (see `nextRunnableQueuedMessage`). */
   queueHeldAt: (entity: TEntity) => number | undefined;
   streamingEntityId: (id: TId) => string;
-  /**
-   * Provider the entity was created on, the legacy fallback for handoff
-   * detection when the previous turn carries no model stamp.
-   */
   fallbackProvider: (entity: TEntity) => AIProvider | undefined;
-  /** The chat's sticky composer traits, carried onto an automatic continue. */
   stickyTraits: (entity: TEntity) => StickyComposerTraits;
-  /**
-   * The account `next` runs on (undefined = Team), re-resolved at dequeue
-   * rather than trusted from enqueue time. Resolved before the usage-limit
-   * hold, which only holds the credential that ran out.
-   */
   turnAccountId: (
     ctx: MutationCtx,
     entity: TEntity,
     next: Doc<"queuedMessages">,
   ) => Promise<Id<"userProviderAccounts"> | undefined>;
-  /**
-   * Validates the entity/message can start a workflow, returning any extra
-   * data (e.g. session's repo + narrowed mode/model) the insert/start steps
-   * need. Runs BEFORE the streaming row is cleared, matching current
-   * behavior — a guard failure leaves nothing to clear.
-   */
   prepareGuard: (
     ctx: MutationCtx,
     entity: TEntity,
@@ -172,28 +122,18 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
     next: Doc<"queuedMessages">,
     prepared: TPrepared,
   ) => Promise<WorkflowId>;
-  /** Patches `updatedAt` and records the started workflow as this entity's active one. */
   onStarted: (
     ctx: MutationCtx,
     id: TId,
     workflowId: WorkflowId,
     now: number,
   ) => Promise<void>;
-  /** Inserts an assistant error bubble and touches `updatedAt`. */
-  /** `replyTo`: the failed message was a thread reply; the error joins it. */
   recordError: (
     ctx: MutationCtx,
     id: TId,
     content: string,
     replyTo: Id<"messages"> | undefined,
   ) => Promise<void>;
-  /**
-   * The wake-up payload for the master session watching this entity, or
-   * `undefined` when it is unwatched (or when the surface cannot be watched at
-   * all). Read off the already-loaded entity, so the shared core below never
-   * has to guess a field name per surface. A task's session reads its task,
-   * which holds the watch.
-   */
   orchestratorNotifyChild: (
     ctx: MutationCtx,
     entity: TEntity,
@@ -202,18 +142,6 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   defaultStartErrorMessage: string;
 };
 
-/**
- * True while the surface is still working on the previous turn. A running
- * workflow (`hasActiveWorkflow`) alone is not enough: a backgrounded Agent/Task subagent keeps running after
- * the turn that spawned it completes, and the daemon opens a synthetic turn to
- * process whatever that subagent reports back. Dequeuing in either window
- * starts the queued message on top of work the user is still waiting on — the
- * "queued message ran while a subagent was working" bug.
- *
- * Subagents only count on an awake sandbox: they die with their VM, and a stop
- * never settles them. Counting them on a sleeping sandbox held the message
- * without waking Eva, so it sat in "Queued" until the `TURN_BACKSTOP_MS` cap.
- */
 async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   ctx: MutationCtx,
   entity: TEntity,
@@ -233,21 +161,10 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   if (syntheticTurnMessageId === undefined) {
     return false;
   }
-  // Check the message rather than trusting the id: a crashed daemon can leave
-  // the id set on a turn that cleanup already finalized, which would wedge the
-  // queue with nothing left to drain it.
   const syntheticTurn = await ctx.db.get(syntheticTurnMessageId);
   return syntheticTurn !== null && syntheticTurn.finishedAt === undefined;
 }
 
-/**
- * A drain blocked only by still-running subagents has no later signal if those
- * subagents never settle (dead daemon): `runningBackgroundAgents` drops them
- * after the cap, but nothing drains at that moment. Book the retry for then.
- * Skipped when a workflow or synthetic turn is what blocks — their completion
- * drains — and when nothing is queued. Repeated blocked drains may book
- * duplicates; `drainQueueAfterBackgroundAgents` re-checks and no-ops.
- */
 async function scheduleDrainAtBackgroundAgentExpiry<
   TId extends ChatQueueId,
   TEntity,
@@ -306,16 +223,6 @@ export async function usageLimitHoldFor(
     : null;
 }
 
-/**
- * The queued message to run next. Two holds keep older messages waiting; only
- * a message queued after the newer hold may run:
- * - an open after-turn question: the later message is the user's answer, and
- *   messages queued during the turn must not run past the question and hide
- *   its card.
- * - a Stop (`queueHeldAt`): Stop means stop, so what was queued before it
- *   waits for Steer instead of starting the moment the turn ends.
- * Null when nothing may run yet.
- */
 async function nextRunnableQueuedMessage(
   ctx: MutationCtx,
   id: ChatQueueId,
@@ -334,23 +241,6 @@ async function nextRunnableQueuedMessage(
   return null;
 }
 
-/**
- * Dequeues and starts the next pending message for one chat surface. Single
- * implementation shared by sessions, project chat, and task chat — the three
- * exported `startNextQueuedX` functions below are thin `config` bindings so a
- * fix here reaches all three surfaces by construction.
- *
- * `trigger: "quiet"` is for the drains that are NOT a turn ending (sandbox
- * ready, enqueue, a usage-limit resume, a provider switch):
- * - they never wake a watching orchestrator. An empty queue there means
- *   "nothing was waiting", not "the child just went idle"; notifying, merely
- *   starting a watched chat's sandbox woke its master with a spurious
- *   "finished: completed" carrying the tail of an older reply.
- * - they only start a turn on an awake sandbox. A sleeping one is woken
- *   instead, and its sandbox-ready drain sends the message. A turn-ended drain
- *   skips this: the turn just ran there, and the task chat workflow starts its
- *   own sandbox when a follow-up outlives the first run.
- */
 async function startNextQueuedChatMessage<
   TId extends ChatQueueId,
   TEntity,
@@ -363,8 +253,6 @@ async function startNextQueuedChatMessage<
 ): Promise<boolean> {
   const entity = await config.getEntity(ctx, id);
   if (!entity) return false;
-  // Before the busy check: a turn that ends with subagents still running
-  // queues its continue now, and the later drain starts it.
   if (trigger === "turn-ended") {
     await queueRuntimeContinue(ctx, id, config.stickyTraits(entity));
   }
@@ -373,14 +261,6 @@ async function startNextQueuedChatMessage<
     return false;
   }
 
-  /**
-   * Wakes the master session watching this entity. Every turn-finished path
-   * (workflow completion, synthetic turn, cancel, stall teardown) ends by
-   * draining the queue here, and we only reach this function once the entity
-   * has no active workflow — so "the drain started nothing" is exactly "the
-   * child went idle". Hooking that single fact keeps mid-queue turns silent
-   * without every completion mutation remembering to check.
-   */
   const watchedChild =
     trigger === "turn-ended"
       ? await config.orchestratorNotifyChild(ctx, entity, id)
@@ -404,16 +284,11 @@ async function startNextQueuedChatMessage<
     return false;
   }
 
-  // An account deleted or unshared since the enqueue makes this throw. A throw
-  // here rolls back the caller — often the turn's own completion — and the next
-  // drain throws again, so the message would sit at the front forever. Consume
-  // it with an error bubble instead, like a guard failure.
   let providerAccountId: Id<"userProviderAccounts"> | undefined;
   try {
     providerAccountId = await config.turnAccountId(ctx, entity, nextMessage);
   } catch (error) {
     await ctx.db.delete(nextMessage._id);
-    // No user message will own the uploads: reclaim them with the row.
     await reclaimQueuedAttachments(ctx, nextMessage);
     const reason =
       error instanceof Error ? error.message : config.defaultStartErrorMessage;
@@ -422,10 +297,6 @@ async function startNextQueuedChatMessage<
     return false;
   }
 
-  // The last turn ran out of usage: sending now would only fail again, so the
-  // queue waits for the reset. Every drain that lands here books the resume —
-  // duplicates are harmless, since the first to run starts the turn and makes
-  // the rest find the surface busy.
   const hold = await usageLimitHoldFor(ctx, id, nextMessage, providerAccountId);
   if (hold !== null) {
     await ctx.scheduler.runAt(
@@ -433,7 +304,6 @@ async function startNextQueuedChatMessage<
       internal._queues.helpers.drainQueueQuietly,
       { parentId: id },
     );
-    // The turn that hit the limit failed and nothing runs until the reset.
     await notifyWatchingOrchestrator("error");
     return false;
   }
@@ -453,26 +323,16 @@ async function startNextQueuedChatMessage<
     providerAccountId,
   );
   if (!guard.ok) {
-    // The row is gone and no user message was inserted to take the uploads.
     await reclaimQueuedAttachments(ctx, nextMessage);
     await config.recordError(ctx, id, guard.error, nextMessage.replyTo);
-    // The queued turn is consumed and cannot run, so the child is idle again —
-    // without this the master would wait forever on a turn that never starts.
     await notifyWatchingOrchestrator("error");
     return false;
   }
 
-  // Wipe any stale streaming row before the new turn's placeholder appears —
-  // a leftover row (old warm daemon, one-shot provider, crashed turn) would
-  // render the finished turn's reply/activity under the new placeholder (see
-  // stageAndStartChatTurn in _sessions/execution.ts). Every dequeue does this, because
-  // not every caller clears first: _sessions/sandbox.ts drains queued turns
-  // straight after a resume, with no clear of its own.
   await clearStreamingActivity(ctx, config.streamingEntityId(id));
 
   const now = Date.now();
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
-  // A dequeued follow-up is the user's message landing: restart the idle clock.
   const activityRef = activityRefForParentId(
     ctx.db,
     config.activityParentId(entity, id),
@@ -485,7 +345,6 @@ async function startNextQueuedChatMessage<
       now,
     );
   }
-  // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,
     id,
@@ -548,7 +407,6 @@ export async function rollbackQueuedChatStart(
   }
 }
 
-/** Binds the entity's open turn to the workflow the queue just started. */
 async function bindOpenTurnWorkflow(
   ctx: MutationCtx,
   entityId: ChatTurnEntityId,
@@ -574,7 +432,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
   streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   fallbackProvider: ({ chat }) => chat.provider,
   stickyTraits: ({ chat }) => chat,
-  // The queued model may belong to another provider than the stored pick.
   turnAccountId: async (ctx, { session }, next) =>
     await resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: next.providerAccountId,
@@ -600,7 +457,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
     return { ok: true, data: { repo, model: next.model, providerAccountId } };
   },
   insertUserMessage: async (ctx, id, { session }, next, prepared, now) => {
-    // A thread reply's own row was stored when it was sent (`addReply`).
     if (next.replyTo !== undefined) return;
     await ctx.db.insert("messages", {
       parentId: id,
@@ -628,7 +484,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
       content: "",
       timestamp: Date.now(),
       activityLog: "",
-      // Eva answers a thread reply inside that thread.
       replyTo: next.replyTo,
     });
     if (next.replyTo !== undefined) {
@@ -648,10 +503,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
       askedBy: next.userId,
       taskRun: next.taskRun,
     });
-    // Normalised, not forwarded raw: the composer enqueues model defaults
-    // explicitly (e.g. reasoning "high"), and the workflow feeds these
-    // straight into prewarmSessionDaemon — a raw default yields a
-    // different opts sig from the page-open prewarm and kills its daemon.
     const model = normalizeAIModel(prepared.model);
     const launchTraits = launchTraitsFromStored(model, {
       reasoningLevel: next.reasoningLevel,
@@ -659,9 +510,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
       use1mContext: next.use1mContext,
       fastMode: next.fastMode,
     });
-    // Same daemon-pull staging as a direct send (stageAndStartChatTurn). A new
-    // session's first message lands here once its sandbox exists; leaving the
-    // staging to the workflow held the turn ~7s behind its validate step.
     if (usesChatDaemon(model)) {
       const { prompt } = await buildSessionPrompt(ctx, {
         session,
@@ -734,8 +582,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: async (ctx, { session }, id) => {
-    // An owned session's chat reports as its owner (`sessionOwner`): the
-    // watch lives on the owner.
     const owner = sessionOwner(session);
     if (owner.kind === "task") {
       const task = await ctx.db.get(owner.taskId);
@@ -777,8 +623,6 @@ export async function drainSessionChatQueues(
   }
   const chat = await findMainChat(ctx.db, sessionId);
   if (!chat) return false;
-  // Not "the turn that ended": a quiet drain cannot wake a watching master
-  // with a spurious completion.
   return await startNextQueuedChatMessage(
     ctx,
     chat._id,
@@ -799,8 +643,6 @@ export async function drainChatQueueQuietly(
 ): Promise<boolean> {
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId) {
-    // A session's quiet drain offers every chat its message: sandbox-ready
-    // and enqueue both land here.
     await drainSessionChatQueues(ctx, sessionId, undefined, "quiet");
     return false;
   }

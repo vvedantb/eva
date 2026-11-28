@@ -1,18 +1,12 @@
-// eva's look for the @vvedantb/ui agent activity family: the activity
-// timeline, its question card and the model picker. Each value is what the
-// legacy @eva/ui component rendered, so the swap changes no DOM.
 import { Markdown, type UiConfig } from "@vvedantb/ui";
 
 export const aiactivityConfig = {
   ActivityTasks: {
     name: "Eva",
-    // The package default is bare Streamdown. `Markdown` eases live reply text
-    // in (`useSmoothText`) rather than letting it land in bursts.
     markdown: Markdown,
     thinkingIcon: { src: "/icon.svg", alt: "Eva" },
   },
   ActivityQuestionCard: {
-    // eva's `accent` is the neutral hover fill, not a brand colour.
     classes: { selectedOption: "bg-accent-soft" },
   },
   ModelPicker: {

@@ -19,7 +19,6 @@ import {
   parseClaudeSdkTaxonomy,
 } from "./sdkTaxonomy.js";
 
-/** Push-time timestamps for durationMs (not persisted across serialize). */
 const stepStartedAt = new WeakMap<ProgressStep, number>();
 
 function mergeToolResult(step: ProgressStep, result: ToolCompleteResult): void {
@@ -40,7 +39,6 @@ function mergeToolResult(step: ProgressStep, result: ToolCompleteResult): void {
   }
 }
 
-/** Flips one step to complete and swaps its in-progress label for the past-tense one. */
 function markStepComplete(step: ProgressStep): void {
   step.status = "complete";
   if (completedLabels[step.label]) {
@@ -62,12 +60,6 @@ export function markLastComplete(): void {
   markStepComplete(S.accumulatedSteps[S.accumulatedSteps.length - 1]);
 }
 
-/**
- * Completes the step whose `toolUseId` matches this tool_result (Claude sets it
- * on every tool_use). Falls back to the last step for providers/steps without an
- * id. Matching by id is what lets a subagent's parent `Agent` step stay active
- * until its own tool_result, rather than being closed by its first child.
- */
 function completeToolStep(
   trackingId?: string,
   result?: ToolCompleteResult,
@@ -82,7 +74,6 @@ function completeToolStep(
       }
     }
   }
-  // Fallback: the newest tool row. Text streamed meanwhile is never the target.
   for (let i = S.accumulatedSteps.length - 1; i >= 0; i--) {
     const step = S.accumulatedSteps[i];
     if (step.type === "response") continue;
@@ -92,17 +83,11 @@ function completeToolStep(
   }
 }
 
-/** Short "N of M done" summary used as the todos step's fallback detail. */
 function summarizeTodos(todos: TodoItem[]): string {
   const done = todos.filter((t) => t.status === "completed").length;
   return `${done} of ${todos.length} done`;
 }
 
-/**
- * Applies a todo checklist snapshot. TodoWrite/TaskCreate/TaskUpdate fire many
- * times per turn; rather than one activity row per call, we keep ONE evolving
- * "todos" step and update it in place so the UI shows a single live checklist.
- */
 function applyTodosSnapshot(todos: TodoItem[]): void {
   const existing = S.accumulatedSteps.find((step) => step.type === "todos");
   if (existing) {
@@ -121,23 +106,12 @@ function applyTodosSnapshot(todos: TodoItem[]): void {
   S.lastStepType = "tool";
 }
 
-/** Appends a reasoning delta, or supersedes with a fuller snapshot; head-capped. */
 function appendReasoningDetail(step: ProgressStep, next: string): void {
   const current = step.detail ?? "";
-  // Snapshot providers resend the whole thought (prefix of `current`); delta
-  // providers send only the new fragment. Same heuristic as streamed text.
   const merged = next.startsWith(current) ? next : current + next;
   step.detail = headCap(merged, STEP_FIELD_CAPS.reasoning).text;
 }
 
-/**
- * Streams the model's reasoning into ONE evolving "reasoning" step. Reasoning
- * fires many times per turn (thousands of deltas); like the todos snapshot we
- * keep a single live row updated in place rather than one row per delta. A new
- * burst after any tool step opens a fresh row (the tool push completes the
- * prior reasoning row), so thinking interleaves with tools in timeline order.
- * The prose rides `detail`, matching the frontend's reasoning-block convention.
- */
 function applyReasoningSnapshot(text: string): void {
   const next = String(text);
   if (!next) return;
@@ -159,12 +133,6 @@ function applyReasoningSnapshot(text: string): void {
   S.lastStepType = "thinking";
 }
 
-/**
- * Mirrors newly streamed reply text into ONE "response" step per run of text,
- * so the activity log keeps the words the agent wrote between tool runs in
- * timeline order (the final message only carries the last run). Like
- * reasoning, a tool push completes the row and the next text opens a new one.
- */
 function appendResponseText(added: string): void {
   if (!added) return;
   const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
@@ -220,7 +188,6 @@ export function updateThinkingStep(label: string, detail?: string): void {
   S.lastStepType = "thinking";
 }
 
-/** Removes startup/thinking filler once durable activity or text begins. */
 function clearThinkingStep(): void {
   S.transientThinkingStep = null;
 }
@@ -238,9 +205,6 @@ function pushProgressStep(step: ProgressStep): void {
     updateThinkingStep(step.label, step.detail);
     return;
   }
-  // When pushing the FIRST step inside a subagent, don't auto-complete its
-  // parent `Agent` step — the parent stays active until its own tool_result
-  // (completed by toolUseId). Sibling children still close each other normally.
   const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
   const isFirstChildUnderParent =
     step.parentToolUseId !== undefined &&
@@ -297,40 +261,23 @@ export function applyCanonicalEvents(events: CanonicalEvent[]): boolean {
         break;
       case "append_text":
         clearThinkingStep();
-        // A whole (non-streamed) assistant text block — always a boundary, so a
-        // paragraph break separates it from any prior block.
         appendStreamedContent(ev.text, true);
         break;
       case "push_subagent_text":
-        // Pushed directly: pushProgressStep would treat a `response` step as
-        // thinking filler, and closing the last step could end a sibling tool
-        // that is still running in the parent or another subagent.
         clearThinkingStep();
         S.accumulatedSteps.push(ev.step);
         break;
       case "stream_text_delta":
         clearThinkingStep();
-        // Live provider token delta. Appends exactly like append_text but marks
-        // the flag so Claude's FINAL assistant message duplicate is skipped
-        // (see claudeParseLine dedup). The break is applied only on the first
-        // delta after an explicit message boundary.
         appendStreamedContent(ev.text, S.pendingParagraphBreak);
         S.pendingParagraphBreak = false;
         S.streamedAssistantTextThisMessage = true;
         break;
       case "mark_message_start":
-        // A new assistant message is beginning; clear the per-message dedup flag
-        // so its text blocks stream fresh, and request a paragraph break before
-        // this message's first streamed text.
         S.streamedAssistantTextThisMessage = false;
         S.pendingParagraphBreak = true;
         break;
       case "mark_text_block_start":
-        // A new text content block is opening inside the current message. With
-        // interleaved thinking the model emits text → thinking → text within one
-        // message (no message_start between them), so request a paragraph break
-        // here too — otherwise consecutive text blocks butt together. The break
-        // itself only lands when there is prior content (see appendStreamedContent).
         S.pendingParagraphBreak = true;
         break;
       case "update_reasoning":
@@ -373,12 +320,9 @@ export function parseStreamEvent(line: string): boolean {
   }
 }
 
-/** Appends new text to the streamed buffer and its timeline response row. */
 function appendStreamedContent(text: string, isBlockBoundary = false): void {
   const before = S.currentStreamedContent;
   writeStreamedContent(text, isBlockBoundary);
-  // Both branches below only ever extend the buffer, so the suffix is exactly
-  // what this call added (a snapshot adds just its unseen tail).
   appendResponseText(S.currentStreamedContent.slice(before.length));
 }
 
@@ -388,8 +332,6 @@ function writeStreamedContent(text: string, isBlockBoundary: boolean): void {
     return;
   }
   if (nextText.startsWith(S.currentStreamedContent)) {
-    // A full snapshot supersedes the accumulated streamed text (dedup); never a
-    // boundary, so no separator is inserted.
     S.currentStreamedContent = nextText;
     return;
   }
@@ -399,8 +341,6 @@ function writeStreamedContent(text: string, isBlockBoundary: boolean): void {
     !S.currentStreamedContent.endsWith("\n") &&
     !nextText.startsWith("\n")
   ) {
-    // Distinct assistant message/block — keep a paragraph break so the end of
-    // one block does not butt against the start of the next.
     S.currentStreamedContent += "\n\n";
   }
   S.currentStreamedContent += nextText;

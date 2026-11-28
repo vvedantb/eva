@@ -1,12 +1,6 @@
-/**
- * A git diff split into per-file entries, with GitHub-style counts. Pure, so
- * the web Diffs tab and the phone diff screen read one parser.
- */
-
 /** A changed file's git status: the subset of the web tree's `GitStatus` a patch header can name. */
 export type DiffFileStatus = "added" | "deleted" | "renamed" | "modified";
 
-/** Splits a multi-file git diff into one self-contained patch string per file. */
 function splitDiffFiles(diff: string): string[] {
   if (diff.trim().length === 0) return [];
   return diff
@@ -15,18 +9,11 @@ function splitDiffFiles(diff: string): string[] {
     .filter((section) => section.startsWith("diff --git "));
 }
 
-/** Reads the (new) file path from a single-file git patch, for a stable key. */
 function fileNameFromPatch(patch: string, fallback: string): string {
   const match = patch.match(/^diff --git a\/.+? b\/(.+)$/m);
   return match ? match[1] : fallback;
 }
 
-/**
- * Classifies a single-file git patch into a git status the file tree can colour.
- * Reads the patch's extended header lines (new/deleted/rename) rather than
- * counting +/- lines, so it mirrors git's own semantics; anything else is a
- * plain content change ("modified").
- */
 function diffFileStatus(patch: string): DiffFileStatus {
   if (/^new file mode /m.test(patch)) return "added";
   if (/^deleted file mode /m.test(patch)) return "deleted";
@@ -34,22 +21,11 @@ function diffFileStatus(patch: string): DiffFileStatus {
   return "modified";
 }
 
-/** Reads the old path from a rename patch, so headers can show `old → new`. */
 function renamedFromPatch(patch: string): string | null {
   const match = patch.match(/^rename from (.+)$/m);
   return match ? match[1] : null;
 }
 
-/**
- * Counts changed lines the way GitHub's file header does: `+`/`-` content
- * lines only. Context lines and hunk count come from the same pass — they are
- * only used to estimate a file's rendered height before it is mounted.
- *
- * Only lines inside a hunk are counted. The `---`/`+++` file markers live in
- * the patch header, before the first `@@`, so skipping everything up to it is
- * what excludes them — testing for a `---`/`+++` prefix instead would miss a
- * deleted `---` (YAML front matter), `--brand: red;` (CSS), or an added `++i`.
- */
 function diffFileStats(patch: string): {
   additions: number;
   deletions: number;
@@ -75,26 +51,15 @@ function diffFileStats(patch: string): {
 
 /** One changed file, with everything the header and body need to render it. */
 export interface DiffFileEntry {
-  /** Self-contained single-file patch. */
   readonly patch: string;
-  /** The file's (new) path — also the accordion/tree key. */
   readonly path: string;
   readonly status: DiffFileStatus;
   readonly additions: number;
   readonly deletions: number;
-  /** Unchanged lines carried as hunk context — for height estimation only. */
   readonly contextLines: number;
-  /** Number of `@@` hunks — each renders one separator row. */
   readonly hunkCount: number;
-  /** Old path when the file was renamed or moved. */
   readonly renamedFrom: string | null;
-  /** GitHub does not render binary contents, and neither can we. */
   readonly binary: boolean;
-  /**
-   * False for patches with no `@@` hunks — pure renames, mode changes, and
-   * empty new files. There is nothing to diff, so the body says so instead of
-   * rendering an empty code view.
-   */
   readonly hasHunks: boolean;
 }
 
@@ -139,11 +104,8 @@ export type UnifiedDiffLine =
   | { readonly kind: "hunk"; readonly text: string }
   | {
       readonly kind: "added" | "removed" | "context";
-      /** The line's content, without its `+`/`-`/space marker. */
       readonly text: string;
-      /** Line number on the old side; null for an added line. */
       readonly oldLine: number | null;
-      /** Line number on the new side; null for a removed line. */
       readonly newLine: number | null;
     };
 
@@ -397,18 +359,10 @@ export function summarizeDiffSize(
   return { total, byKind };
 }
 
-/** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, "");
 }
 
-/*
- * Hunk-body classification: a leading `-`/`+` is always a real change. The
- * `---`/`+++` file markers only occur in the patch header, which
- * `ignoreWhitespaceInPatch` copies straight through before it ever reaches a
- * hunk, so excluding them here would silently swallow genuine edits to lines
- * whose own content starts with `-`/`+` (`---`, `--brand: red;`, `++i`).
- */
 function isMinusLine(line: string): boolean {
   return line.startsWith("-");
 }
@@ -417,12 +371,6 @@ function isPlusLine(line: string): boolean {
   return line.startsWith("+");
 }
 
-/**
- * Pair deleted/added lines that differ only by whitespace and turn those
- * pairs into context. Unmatched +/- lines stay as real changes — the same
- * idea as `git diff --ignore-all-space`, applied to an already-fetched
- * unified patch so the GitHub PR payload does not need a second fetch.
- */
 function filterHunkLines(lines: string[]): {
   lines: string[];
   hasChanges: boolean;
@@ -526,9 +474,6 @@ export function applyIgnoreWhitespace(
 ): DiffFileEntry[] {
   return entries.flatMap((entry) => {
     if (entry.binary || !entry.hasHunks) return [entry];
-    // A file whose every hunk was whitespace-only filters down to a header-only
-    // patch. GitHub drops such files from the list entirely; keeping them would
-    // render a "nothing to diff" body and inflate the toolbar's file count.
     return buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch)).filter(
       (filtered) => filtered.hasHunks,
     );

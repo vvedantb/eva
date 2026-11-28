@@ -22,7 +22,6 @@ export function InboxList({
   onSelect,
   onHistoryChange,
 }: {
-  /** `undefined` while the query is in flight. */
   rows: InboxRow[] | undefined;
   history: boolean;
   repoById: Map<Id<"githubRepos">, RepoWithLogo>;
@@ -74,7 +73,6 @@ export function InboxList({
           ))
         )}
       </div>
-      {/* Sticky footer: outside the scroll area, so it stays put over a long list. */}
       <div className="shrink-0 border-t border-border px-2 py-2">
         <Button
           size="sm"

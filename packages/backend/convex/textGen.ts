@@ -21,13 +21,10 @@ import { buildTitleDigest } from "./_sessions/prompts";
 import { ownedSessionOwnerValidator } from "./_sessions/owner";
 import { chatTurnEntityIdValidator } from "./validators";
 
-/** Cheap gateway model for titles, tags, completions and polish. Same as Ave. */
 const TEXT_GEN_MODEL = "openai/gpt-6-luna";
 
-/** Luna's lowest effort; it rejects gpt-5's "minimal". */
 const NO_REASONING = { reasoningEffort: "none", textVerbosity: "low" };
 
-/** Trims, then strips one pair of wrapping quotes the model sometimes adds. */
 function stripWrappingQuotes(raw: string): string {
   const text = raw.trim();
   const wrappedDouble = text.startsWith('"') && text.endsWith('"');
@@ -38,17 +35,10 @@ function stripWrappingQuotes(raw: string): string {
   return text;
 }
 
-/** Strips wrapping quotes the model sometimes adds around the title. */
 function cleanGeneratedTitle(raw: string): string {
   return stripWrappingQuotes(raw);
 }
 
-/**
- * A short title for a request (a session's first message, a task's or a
- * project's prompt), or "" when the model returns none. Uses the flex
- * service tier (~0.5x cost, higher latency OK — titles are background). If
- * flex can't be applied, Gateway falls back to the default tier (best-effort).
- */
 async function generateRequestTitle(
   noun: "task" | "project",
   request: string,
@@ -255,24 +245,16 @@ export const generateTaskTags = internalAction({
   },
 });
 
-/** Longest prefix we send to the model — the tail is what matters, not the head. */
 const MAX_COMPLETION_INPUT = 2000;
 
-/** Identical prefixes are common (retyping, undo); an hour of reuse is plenty. */
 const COMPLETION_CACHE_TTL_MS = 60 * 60 * 1000;
 
-/**
- * Trims the model's continuation down to a single clause. The model is asked for
- * one sentence, but it occasionally adds a second or wraps the whole thing in
- * quotes, so clip rather than trust.
- */
 function cleanCompletion(raw: string): string {
   const firstLine = raw.split("\n")[0] ?? "";
   let text = firstLine.trim();
   if (text.startsWith('"') && text.endsWith('"') && text.length >= 2) {
     text = text.slice(1, -1).trim();
   }
-  // Keep everything up to and including the first sentence end.
   const sentenceEnd = text.search(/[.!?](\s|$)/);
   if (sentenceEnd !== -1) {
     text = text.slice(0, sentenceEnd + 1);
@@ -290,7 +272,6 @@ function cleanCompletion(raw: string): string {
 export const completeTextInternal = internalAction({
   args: {
     text: v.string(),
-    /** What the field is for, e.g. "description of a coding task for acme/web". */
     contextHint: v.string(),
   },
   returns: v.string(),
@@ -304,8 +285,6 @@ Continue the partial text below from exactly where it stops. Reply with the cont
 
 Partial text:
 ${args.text.slice(-MAX_COMPLETION_INPUT)}`,
-        // Reasoning tokens count against maxOutputTokens, so a tight cap
-        // returns an empty string. Keep reasoning off and clip in cleanCompletion.
         providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
         stopSequences: ["\n"],
@@ -348,16 +327,10 @@ export const completeText = action({
   },
 });
 
-/** A prediction is one instruction, not a paragraph; clip anything longer. */
 const MAX_PREDICTION_CHARS = 280;
 
-/** Smaller than the title digest: the latest reply matters most here. */
 const PREDICTION_DIGEST = { totalBudget: 6_000, entryCap: 1_500 };
 
-/**
- * Trims a predicted message to one line, without the quotes or `USER:` prefix
- * the model sometimes copies from the digest format.
- */
 function cleanPrediction(raw: string): string {
   const firstLine = stripWrappingQuotes(raw).split("\n")[0] ?? "";
   return stripWrappingQuotes(firstLine.replace(/^USER:\s*/i, "")).slice(
@@ -394,8 +367,6 @@ Write the single most likely next USER message, in the user's own voice and styl
 
 Conversation:
 ${digest}`,
-        // Same trade-off as completeTextInternal: the user is looking at an
-        // empty composer, so latency beats depth.
         providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
       });
@@ -439,7 +410,6 @@ export const predictNextMessage = action({
   },
 });
 
-/** Transcripts run long; the head is what matters, and 8k chars is minutes of speech. */
 const MAX_TRANSCRIPT_INPUT = 8000;
 
 /**
@@ -477,8 +447,6 @@ Rewrite the transcript so it reads as if it were typed, following every rule:
 
 Transcript:
 ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
-        // Reasoning tokens count against maxOutputTokens, and the output
-        // roughly mirrors the input length, so keep reasoning off and the cap high.
         providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 2048,
       });
@@ -490,15 +458,8 @@ ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
   },
 });
 
-/**
- * Recaps are read word by word, so they get a stronger model than titles:
- * nano echoed prompt labels. Haiku 5.5 beat GPT-6 Luna on one mock project
- * (19 November 2026): 4-6 s against 8-12 s, and it named task chats as chips
- * every run, where Luna never did.
- */
 const RECAP_MODEL = "anthropic/claude-haiku-5.5";
 
-/** "17 hours", "2 days", "45 minutes": how long the user was away, for the opening line. */
 function formatAway(ms: number): string {
   const minutes = Math.round(ms / 60_000);
   if (minutes < 90) return `${minutes} minutes`;
@@ -507,14 +468,12 @@ function formatAway(ms: number): string {
   return `${Math.round(hours / 24)} days`;
 }
 
-/** Keeps `@[Title](id)` chips the context offered; any other id becomes plain text. */
 function keepKnownMentions(text: string, allowedIds: ReadonlyArray<string>): string {
   return text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (token, label: string, id: string) =>
     allowedIds.includes(id) ? token : label,
   );
 }
 
-/** What `writeRecap` reads: `chatRecaps.recapContext`'s result. */
 interface RecapContext {
   kind: "away" | "full";
   awayMs: number;

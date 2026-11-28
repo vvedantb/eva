@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PACKAGE_HELPER_SCRIPT } from "../convex/_sandbox_runtime/packageManager";
 
-/**
- * A carepulse-ts web snapshot died at toolchain install with
- * `curl: (56) Connection died, tried 5 times` fetching the gh tarball over
- * HTTP/2.
- */
 describe("seed run GitHub release downloads survive direct-path failures", () => {
-  /** The fallback has to cover both base images, not just AL2023. */
   test("the gh repo fallback registers a repo for each package manager", () => {
     const startAt = PACKAGE_HELPER_SCRIPT.indexOf("eva_pkg_install_gh() {");
     expect(startAt, "eva_pkg_install_gh moved or was renamed").toBeGreaterThan(

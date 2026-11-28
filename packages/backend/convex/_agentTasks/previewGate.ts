@@ -4,7 +4,6 @@ import type { DatabaseReader } from "../_generated/server";
 import { taskHasRun } from "./runSummary";
 
 const PREVIEW_ALLOWED_STATUSES = [
-  // A run was asked for: its turn needs the sandbox.
   "in_progress",
   "code_review",
   "business_review",

@@ -15,12 +15,9 @@ import type { Placed } from "./sessionsTimelineLayout";
 const START = 16;
 const END = TRACK_W - START;
 const STEPS = 3;
-/** Time runs at an even pace, so each light-up lands as the head passes. */
 const PACE = 560;
-/** The glow's box overhangs the timeline by this much, so its edge never shows. */
 const GLOW_BLEED = 96;
 
-/** Where the lit part of the axis runs on each step: to that month's last milestone. */
 function runs(placed: readonly Placed[]): Run[] {
   const out: Run[] = [];
   let from = START;
@@ -84,7 +81,6 @@ export function SessionsTimeline() {
         className="absolute inset-0 overflow-visible"
       >
         <defs>
-          {/* userSpaceOnUse: a horizontal line has a zero-height bounding box. */}
           <linearGradient
             id="sessions-timeline-line"
             gradientUnits="userSpaceOnUse"
@@ -107,7 +103,6 @@ export function SessionsTimeline() {
           animate={{ pathLength: 1 }}
           transition={{ duration: 1.4, ease: EASE.inOut, delay: 0.4 }}
         />
-        {/* Time passing: the lit axis runs forward to this month's last change. */}
         <m.path
           d={`M ${START} ${LINE_Y} L ${END} ${LINE_Y}`}
           stroke="url(#sessions-timeline-line)"

@@ -1,9 +1,3 @@
-/**
- * What the local store should hold the instant Delete is pressed on a
- * quick-task draft. `api.agentTasks.deleteDraft` deletes the row; these paint
- * the result before the server answers.
- */
-
 /** The list to paint while `deleteDraft` is in flight. */
 export function draftsAfterRemove<T extends { _id: string }>(
   rows: readonly T[],

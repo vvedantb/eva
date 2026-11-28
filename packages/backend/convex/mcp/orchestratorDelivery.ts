@@ -43,7 +43,6 @@ export const TASK_PREVIEW_SANDBOX_READY_POLL_MS = 2_000;
 export interface AwaitSandboxActiveDeps {
   kind: ChatTargetKind;
   readStatus: () => Promise<string | undefined>;
-  /** Issues the surface's Start mutation (as the acting user). */
   start: () => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now?: () => number;
@@ -76,8 +75,6 @@ export async function awaitSandboxActive(
     started = true;
   };
 
-  // `wait` is a start/stop already in flight. If that settles to `closed`,
-  // start once rather than failing on a teardown race.
   if (plan === "start") {
     await start();
   }

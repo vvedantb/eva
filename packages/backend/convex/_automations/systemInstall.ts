@@ -12,30 +12,19 @@ import {
 } from "./systemAutomations";
 import { automationTriggerValidator } from "../validators";
 
-/** Catalog entry joined with this repo's install state, for the Automations Hub. */
 const systemAutomationEntry = v.object({
   key: v.string(),
   title: v.string(),
-  /** One-line card copy; the prompt itself is only shown once installed. */
   blurb: v.string(),
-  /** This install's schedule, or the catalog default before it is installed. */
   cronSchedule: v.string(),
-  /** Cron or event; an event install carries its own label. */
   trigger: automationTriggerValidator,
-  /** True when the automation reports without touching code. */
   readOnly: v.boolean(),
-  /** True while an install row exists for this repo (soft-deleted ones don't count). */
   installed: v.boolean(),
   enabled: v.boolean(),
   sendEmail: v.boolean(),
-  /** Per-repo URL id of the install row, or null when not installed. */
   numId: v.union(v.number(), v.null()),
 });
 
-/**
- * Finds this repo's install row for a catalog key. Returns soft-deleted rows
- * too, so reinstalling revives the original row and keeps its run history.
- */
 async function findInstall(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -89,7 +78,6 @@ export const listSystemAutomations = authQuery({
   },
 });
 
-/** Resolves the repo + catalog entry for a Hub mutation, or throws. */
 async function authorizeInstall(
   db: DatabaseWriter,
   userId: Id<"users">,
@@ -122,9 +110,6 @@ export const installSystemAutomation = authMutation({
     const now = Date.now();
     const existing = await findInstall(ctx.db, args.repoId, args.key);
 
-    // Content fields stay empty: the catalog supplies title and prompt on read.
-    // `title` is denormalised only as a fallback if the entry is removed. The
-    // schedule is real, seeded from the catalog and then the user's to change.
     const id =
       existing?._id ??
       (await ctx.db.insert("automations", {

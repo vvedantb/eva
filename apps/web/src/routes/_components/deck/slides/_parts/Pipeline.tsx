@@ -15,21 +15,13 @@ const CONNECTOR_WIDTH = 52;
 interface PipelineNodeProps {
   icon: ReactNode;
   label: string;
-  /** false keeps the node in its resting, hidden state. */
   active: boolean;
-  /** Seconds to wait after `active` turns true. */
   delay?: number;
-  /** Steady brand glow — used for the one human step. */
   glow?: boolean;
-  /** A single brand glow that fades out — used when the change goes live. */
   flash?: boolean;
-  /** Soft repeating ring. Omit it for nodes that never pulse; pass false to stop it. */
   pulse?: boolean;
-  /** Plays a press: the node dips as the cursor clicks it. */
   pressed?: boolean;
-  /** Seconds after `pressed` turns true that the click lands. */
   pressAt?: number;
-  /** The build step the node lights on, which cues its sheen. */
   step?: number;
 }
 
@@ -156,7 +148,6 @@ export function PipelineNode({
 }
 
 interface PipelineConnectorProps {
-  /** false leaves the connector unfilled. */
   active: boolean;
   delay?: number;
 }
@@ -184,7 +175,6 @@ export function PipelineConnector({
           ease: EASE.inOut,
         })}
       />
-      {/* Kept mounted: the travel has to be triggered by a prop change. */}
       <m.div
         aria-hidden
         className="absolute top-1/2 -mt-1 size-2 rounded-full bg-white"

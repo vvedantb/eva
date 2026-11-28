@@ -63,8 +63,6 @@ export function useTaskChatBinding(
       accounts: accounts.options,
       resolveAccountId: accounts.resolveId,
     },
-    // A run can start before the task's chat exists; naming the task reaches
-    // it then.
     stopTarget: { taskId },
   });
 }

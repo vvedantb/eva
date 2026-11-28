@@ -31,14 +31,12 @@ const SHOTS: readonly CameraShot[] = [
   { rotateY: -4, translateZ: -10, x: -20 },
 ];
 
-/** Jar interior, in the svg's own units. */
 const JAR = { top: 70, bottom: 300 };
 
 export function BeeCost() {
   const step = useDeckStep();
   const fill = step >= FILL;
   const sips = step >= SIPS;
-  // Fills once to the brim and stays full: the allowance is there to use.
   const level = fill ? 1 : 0;
   const height = (JAR.bottom - JAR.top) * level;
 
@@ -49,7 +47,6 @@ export function BeeCost() {
       </Title>
       <Camera shots={SHOTS} className="mt-6">
         <div className="flex w-[1088px] items-center justify-center gap-20">
-          {/* A honey jar that fills to $500. */}
           <div className="relative">
             <svg width="260" height="330" viewBox="0 0 260 330" aria-hidden>
               <defs>
@@ -106,7 +103,6 @@ export function BeeCost() {
             </div>
           </div>
 
-          {/* What it pays for. */}
           <div className="flex flex-col gap-3">
             <m.div
               className="mb-1 text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase"

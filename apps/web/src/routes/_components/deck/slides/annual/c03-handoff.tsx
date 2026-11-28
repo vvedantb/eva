@@ -17,22 +17,15 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/** Composition width, the slide's content column. */
 const STAGE_W = 1088;
-/** Each provider sits over a quarter mark, so the pair is centred. */
 const DOCK_X: readonly [number, number] = [STAGE_W * 0.25, STAGE_W * 0.75];
-/** The card travels this far, dock centre to dock centre. */
 const TRAVEL = DOCK_X[1] - DOCK_X[0];
 const BADGE_W = 240;
 const BADGE_H = 64;
 const CARD_W = 460;
-/** Badge height plus the gap down to the card's pad. */
 const CARD_TOP = 100;
-/** Header row, three bubbles, the composer and the card's padding. */
 const CARD_H = 306;
-/** The pad sits this far outside the card: 16px card radius + 12 = 28px. */
 const PAD_INSET = 12;
-/** Seconds for the conversation to cross from one provider to the other. */
 const FLIGHT = 1.2;
 
 const MESSAGES: readonly { text: string; mine: boolean }[] = [
@@ -41,7 +34,6 @@ const MESSAGES: readonly { text: string; mine: boolean }[] = [
   { text: "Now make it monthly", mine: true },
 ];
 
-/** The empty place under each provider where the conversation can land. */
 function Pad({ x }: { x: number }) {
   return (
     <div
@@ -100,7 +92,6 @@ function Conversation({ moved }: { moved: boolean }) {
           ))}
         </div>
 
-        {/* An empty composer, so the card reads as a live chat, not a quote. */}
         <div
           aria-hidden
           className="mt-4 flex h-11 items-center gap-3 rounded-[12px] bg-white/[0.04] pr-1.5 pl-4"
@@ -149,8 +140,6 @@ export function AnnualHandoff() {
               receives
             />
 
-            {/* The route between the two providers: drawn as the card leaves,
-                then work keeps flowing along it. */}
             <Connector
               from={{ x: DOCK_X[0] + BADGE_W / 2 + 10, y: BADGE_H / 2 }}
               to={{ x: DOCK_X[1] - BADGE_W / 2 - 10, y: BADGE_H / 2 }}
@@ -158,8 +147,6 @@ export function AnnualHandoff() {
               flowPeriod={1.1}
             />
 
-            {/* The hero: the whole conversation lifts off one provider and
-                lands on the other, word for word. */}
             <m.div
               className="absolute rounded-[16px] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)]"
               style={{
@@ -184,7 +171,6 @@ export function AnnualHandoff() {
                     }
               }
               transition={{
-                // Eased both ends, so the lift-off and the landing both read.
                 x: { duration: FLIGHT, ease: EASE.inOut },
                 default: {
                   duration: FLIGHT,

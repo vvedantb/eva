@@ -27,11 +27,6 @@ interface Strand {
   heading: string;
 }
 
-/**
- * Left to right, in priority order. What each one means is in the notes.
- * "Many agents, one coordinator" is being planned in Eva session #1044,
- * 25 November 2026: each thread its own agent, branch and workspace.
- */
 const STRANDS: Strand[] = [
   { icon: IconGitMerge, heading: "Automate the release" },
   { icon: IconShieldLock, heading: "Guard the irreversible" },
@@ -41,7 +36,6 @@ const STRANDS: Strand[] = [
 
 const CARD_WIDTH = 254;
 const CARD_HEIGHT = 170;
-/** The glow's box overhangs the card row so its falloff is never clipped. */
 const BLEED = 128;
 const FIRST_STRAND = {
   x: BLEED + CARD_WIDTH / 2,
@@ -62,7 +56,6 @@ export function AnnualAhead() {
       </Reveal>
 
       <div className="relative isolate mt-16">
-        {/* The first strand lights as the queue figure arrives. */}
         <Spotlight shots={[null, FIRST_STRAND]} className="-inset-32" />
         <Magnify focus={queued ? 0 : null} dimTo={0.55} className="flex gap-6">
           {STRANDS.map((strand, index) => (
@@ -77,7 +70,6 @@ export function AnnualAhead() {
                 delay: 0.45 + index * 0.1,
               }}
             >
-              {/* p-8 inside a 32px outer radius keeps the corners concentric. */}
               <Card className="flex flex-col rounded-[32px] p-8">
                 <div
                   style={{ height: CARD_HEIGHT - 64 }}

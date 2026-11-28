@@ -5,13 +5,8 @@ import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { filterActiveEntities } from "./numId";
 import { DAILY_STANDUP_KEY } from "./_automations/systemAutomations";
 
-/** A month of a daily automation — deep enough to never need paging. */
 const ENTRY_LIMIT = 31;
 
-/**
- * This repo's active "Daily standup" install, matched by system key (unlike
- * the global changelog, which is title-matched across every repo).
- */
 async function findStandupAutomation(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -31,11 +26,6 @@ type StandupEntry = {
   publishedAt: number;
 };
 
-/**
- * Published standups, newest first. A successful run can still finish without
- * a summary; those have nothing to render, so they are dropped rather than
- * shown as blank cards.
- */
 async function publishedStandups(
   db: DatabaseReader,
   automationId: Id<"automations">,

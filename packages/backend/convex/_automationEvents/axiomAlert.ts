@@ -1,16 +1,6 @@
 import { z } from "zod";
 import type { AlertEvent } from "./events";
 
-/**
- * Parses the body of an Axiom custom webhook notifier sent with Axiom's
- * default template (see axiom.co/docs/monitor-data/custom-webhook-notifier):
- *
- *   { "action": "Open" | "Closed", "event": { monitorID, title, body, … } }
- *
- * Pure, like `parseRepoEvents`: `http.ts` checks the secret first.
- */
-
-/** Per-field caps, so one huge matched event cannot flood the task. */
 const MAX_TITLE_CHARS = 200;
 const MAX_TEXT_CHARS = 4_000;
 const MAX_MATCHED_EVENT_CHARS = 8_000;
@@ -45,7 +35,6 @@ const axiomWebhookSchema = z.object({
 
 export type AxiomParseResult =
   | { kind: "alert"; alert: AlertEvent }
-  /** A threshold monitor resolving. Nothing to do. */
   | { kind: "resolved" }
   | { kind: "invalid" };
 

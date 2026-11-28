@@ -26,7 +26,6 @@ export const automationExecutionWorkflow = workflow.define({
     title: v.string(),
     model: aiModelValidator,
     providerAccountId: v.optional(v.id("userProviderAccounts")),
-    // Only non-default traits (see `launchTraitsFromStored`).
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),
     use1mContext: v.optional(v.boolean()),
@@ -35,8 +34,6 @@ export const automationExecutionWorkflow = workflow.define({
     userId: v.id("users"),
     readOnly: v.optional(v.boolean()),
     actionsEnabled: v.optional(v.boolean()),
-    // PR open and push runs: the PR's branch. The run works on it and pushes
-    // edits there instead of opening a PR of its own.
     prBranch: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
@@ -82,8 +79,6 @@ export const automationExecutionWorkflow = workflow.define({
               args.rootDirectory,
             );
 
-      // Shared automations live on the monorepo root; Vercel credentials live
-      // on app rows, so the sandbox runs on `sandboxRepoId`.
       await runOneShotAgent(step, {
         ownerId: args.runId,
         userId: args.userId,
@@ -99,7 +94,6 @@ export const automationExecutionWorkflow = workflow.define({
           branchName:
             args.prBranch ?? (isReadOnly ? undefined : args.branchName),
           createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
-          // Ephemeral agent runs only need checkout + Claude; skip repo setup daemons.
           skipStartupCommands: true,
         },
         streamingEntityId: automationRunStreamingEntityId(args.runId),
@@ -118,7 +112,6 @@ export const automationExecutionWorkflow = workflow.define({
         },
         prompt,
         onSandboxReady: async (sandboxId) => {
-          // Recorded so a cancel before launch can still delete it.
           await step.runMutation(internal.automations.updateRunStatus, {
             runId: args.runId,
             status: "running",
@@ -141,8 +134,6 @@ export const automationExecutionWorkflow = workflow.define({
             );
 
             if (pushResult.pushed && args.prBranch !== undefined) {
-              // Recorded so this push's own webhook does not start a run.
-              // Best-effort: the edits are already on the PR either way.
               try {
                 const pushedSha = await step.runAction(
                   internal.sandbox.readSandboxHead,
@@ -159,8 +150,6 @@ export const automationExecutionWorkflow = workflow.define({
                 );
               }
             }
-            // No commits pushed (ahead-of-remote gate) → no diff, no PR to
-            // open. A PR branch run's edits are already on its PR.
             if (pushResult.pushed && args.prBranch === undefined) {
               prUrl = await step.runAction(
                 internal.taskWorkflowActions.createPullRequest,

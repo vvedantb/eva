@@ -5,16 +5,12 @@ import { Button, Input } from "@vvedantb/ui";
 import { RepoSetupCard, type GitHubRepo } from "./RepoSetupCard";
 import { MonorepoAppsPanel, type MonorepoApp } from "./MonorepoAppsPanel";
 
-/** Below this the filter costs more attention than the scrolling it saves. */
 const FILTER_THRESHOLD = 8;
 
 interface RepoSetupListProps {
   repos: GitHubRepo[];
-  /** Keys already connected — `owner/name`, or `owner/name:rootDirectory`. */
   addedKeys: Set<string>;
-  /** Keys with a connect call in flight. */
   addingKeys: Set<string>;
-  /** Key → the reason its last connect failed. */
   failures: Record<string, string>;
   expandedRepo: string | null;
   monorepoApps: Record<string, MonorepoApp[]>;

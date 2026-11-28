@@ -52,8 +52,6 @@ const FEATURES = [
   "recap",
 ] as const;
 
-// `.catch` keeps an unknown ?feature= on the default preview instead of
-// throwing, which is what the two type assertions used to buy.
 const searchSchema = z.object({
   feature: z.enum(FEATURES).catch("cite"),
 });
@@ -310,7 +308,6 @@ function DiffsFilesPreview() {
   );
 }
 
-/** A "+2,000" pull request that is about 300 lines of code. */
 const DEMO_DIFF_SIZE: DiffSize = {
   total: { files: 14, additions: 2034, deletions: 61 },
   byKind: {
@@ -605,7 +602,6 @@ function PreviewToolsPreview() {
   const [path, setPath] = useState("/billing");
   const [contain, setContain] = useState(false);
   const [poppedOut, setPoppedOut] = useState(false);
-  // The path input reads repo history, so borrow a real repo's context.
   return (
     <RepoProvider owner="vvedantb" repoParam="eva--web" passive>
       <RepoGate>
@@ -658,7 +654,6 @@ function RecapCards() {
     sentiment: FeedbackSentiment;
     comment: string | undefined;
   }>();
-  // Local state in place of `feedback.rateRecap`, so the demo needs no data.
   const onRate = (sentiment: FeedbackSentiment | null, comment?: string) => {
     setRating(
       sentiment === null
@@ -701,7 +696,6 @@ function RecapCards() {
 }
 
 function RecapPreview() {
-  // The card reads repo mentions, so borrow a real repo's context.
   return (
     <RepoProvider owner="vvedantb" repoParam="eva--web" passive>
       <RepoGate>

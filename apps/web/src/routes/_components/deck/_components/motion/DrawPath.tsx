@@ -5,23 +5,18 @@ import { useMotionCue } from "../deckContext";
 import { ACCENT, DUR, EASE, cueTransition } from "./tokens";
 
 export interface DrawPathProps {
-  /** SVG path data in pixels of the `width`×`height` box. */
   d: string;
   width: number;
   height: number;
-  /** Build step to play on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
   duration?: number;
   strokeWidth?: number;
-  /** A solid colour. Omit for the brand gradient, purple to blue left to right. */
   color?: string;
-  /** Send a glowing dot along the path as it draws, fading at the far end. */
   dot?: boolean;
   className?: string;
 }
 
-/** The dot's glow is a static radial gradient, so nothing filters per frame. */
 const DOT_GLOW =
   "radial-gradient(circle, #fff 0 22%, rgba(160,140,255,0.55) 34%, transparent 70%)";
 
@@ -57,7 +52,6 @@ export function DrawPath({
         fill="none"
         aria-hidden
       >
-        {/* User-space units: a bounding-box gradient collapses on a flat line. */}
         <linearGradient
           id={gradientId}
           gradientUnits="userSpaceOnUse"

@@ -14,7 +14,6 @@ const GATES: readonly { radius: number; width: number; colour: string }[] = [
   { radius: 72, width: 7, colour: BRAND.blue },
   { radius: 46, width: 7, colour: BRAND.purple },
 ];
-/** Seconds for one gate to swing shut; the inner one follows the outer. */
 const SHUT = 0.9;
 const GATE_GAP = 0.3;
 /** When the second gate has shut and the lock can drop in. */

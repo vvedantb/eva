@@ -114,9 +114,6 @@ function noteHeartbeatFailure(error: Error | string): void {
       String(S.consecutiveHeartbeatFailures) +
       " consecutive failures: " +
       message;
-    // Setting the flag is the whole job: with no CLI subprocess left to kill,
-    // each SDK runner's watchdog picks this up on its next tick and aborts the
-    // turn through its own SDK cancellation path.
     log(S.fatalHeartbeatErrorMessage);
   }
 }
@@ -244,8 +241,6 @@ async function heartbeatPing(): Promise<void> {
     }
     const entityId = STREAMING_ENTITY_ID ?? "";
     if (!entityId) return;
-    // Touch-only ping: keep watchdog heartbeats alive during long silent tool
-    // runs (e.g. `pnpm tsc`) without POSTing the full accumulatedSteps JSON.
     await callStreamingHeartbeatTouch(entityId);
     S.lastStreamingSentAt = Date.now();
     S.consecutiveHeartbeatFailures = 0;
@@ -293,11 +288,6 @@ async function initialHeartbeat(): Promise<void> {
 const HEARTBEAT_TICK_MS = 10_000;
 let lastHeartbeatTickAt = 0;
 
-/**
- * A starved process (VM swap thrash, CPU starvation) cannot heartbeat, so its
- * lease expires server-side and the turn is finalised as stalled. This line is
- * the daemon-side evidence that the process was frozen rather than dead.
- */
 function logEventLoopStall(now: number): void {
   const stalledMs = measureTickStallMs({
     previousTickAt: lastHeartbeatTickAt,
@@ -361,12 +351,6 @@ function enforceTurnLease(): boolean {
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   S.streamingLoopsStopped = true;
   if (decision.reason !== "superseded") {
-    // The server already finalised this turn (stalled, cancelled or timed out),
-    // so nothing downstream will publish what the agent wrote: this daemon holds
-    // the only copy of those edits. persistTurnWork is synchronous, bounded by
-    // its own git timeouts, best-effort, and skips automation runs itself.
-    // "superseded" is excluded on purpose: a rival daemon owns the same
-    // worktree, and a commit from the loser could race the winner's work.
     log(
       "persisting turn work before lease-terminal exit (" +
         decision.reason +
@@ -379,14 +363,11 @@ function enforceTurnLease(): boolean {
 }
 
 export async function setFinalizingState(): Promise<boolean> {
-  // No "Finalizing response..." step — status filler isn't shown in the
-  // activity flow; the response text itself is the signal.
   markLastComplete();
   S.lastStepType = "thinking";
   try {
     await sendStreamingHeartbeatUpdate(buildStreamingPayload());
   } catch {
-    /* ignore final heartbeat errors */
   }
   return enforceTurnLease();
 }
@@ -402,7 +383,6 @@ export async function runPreflightHeartbeat(): Promise<boolean> {
           "ms",
       );
     } catch {
-      /* ignore ready file errors */
     }
     return true;
   } catch (error) {

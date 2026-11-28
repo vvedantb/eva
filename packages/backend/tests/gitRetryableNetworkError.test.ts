@@ -5,12 +5,6 @@ import {
   isTransientTransportError,
 } from "../convex/_sandbox_runtime/git";
 
-/**
- * Session 300 (7 Oct 2026): GitHub answered a push with a 500 and the whole
- * publish failed on the first try (fix #918). The push and fetch retry loops
- * only retry what this classifier matches, so it must catch GitHub's real 5xx
- * shapes — and must NOT widen to refusals a retry can never fix.
- */
 describe("retryable git network errors", () => {
   test.each([
     [

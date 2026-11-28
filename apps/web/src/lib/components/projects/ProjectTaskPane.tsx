@@ -26,7 +26,6 @@ import type { ProjectTaskTab } from "./projectSandboxTabs";
 import { ProjectTaskFacts } from "./ProjectTaskFacts";
 import type { ProjectTaskListRow } from "./useProjectStatus";
 
-/** The sandbox pane each task tab shows. */
 const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review"> = {
   "task-preview": "preview",
   "task-browser": "browser",
@@ -43,7 +42,6 @@ export function useProjectTaskExpand({
   prUrl,
   onShowReview,
 }: {
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   prUrl: string | undefined;
   onShowReview: () => void;
@@ -71,10 +69,8 @@ export function ProjectTaskPane({
   collapsed,
   onSelectTab,
 }: {
-  /** The task's row in the project's task list. */
   row: ProjectTaskListRow;
   tab: ProjectTaskTab;
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   collapsed: boolean;
   onSelectTab: (tab: ProjectTaskTab) => void;
@@ -167,10 +163,6 @@ export function ProjectTaskPane({
   );
 }
 
-/**
- * The task sandbox's Preview, Browser and Review panes, keyed by the task's
- * session as on its full page (same pane storage scope).
- */
 function ProjectTaskSandboxPanes({
   taskId,
   owner,
@@ -189,13 +181,11 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /** The pane on screen. */
   paneTab: "preview" | "browser" | "review";
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;
   isSandboxStarting: boolean;
   autoWakeEligible: boolean;
-  /** False while the panel is collapsed. */
   onScreen: boolean;
 }) {
   const panes = useSandboxPanes({
@@ -227,10 +217,8 @@ function ProjectTaskSandboxPanes({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
-          // Only the pane on screen holds the presence beacon or auto-wakes.
           presenceEnabled={onScreen}
           onScreen={onScreen}
-          // The project task's full page has no mini-player either.
           miniPlayer={undefined}
         />
       </ReviewChatTargetProvider>

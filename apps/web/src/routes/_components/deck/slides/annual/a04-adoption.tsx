@@ -3,12 +3,6 @@ import type { CameraShot } from "../../_components/DeckCamera";
 import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { AnnualAdoptionChart } from "../_parts/AnnualAdoptionChart";
 
-/**
- * A three-quarter view gives the bars some body, then the camera swings
- * towards the July-onwards months as they are picked out, and squares up for
- * the summary. The angles stay shallow because the month labels and the count
- * above each bar are 12px and have to survive the rotation.
- */
 const ADOPTION_SHOTS: readonly CameraShot[] = [
   { rotateY: -8, rotateX: 5, translateZ: -20 },
   { rotateY: -4, rotateX: 3, x: 30 },

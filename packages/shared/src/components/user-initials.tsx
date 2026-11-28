@@ -18,7 +18,6 @@ import { getUserInitials, type UserFields } from "./getUserInitials";
 
 const ONLINE_THRESHOLD_MS = 120_000;
 
-/** Matches a Convex `users` table id well enough to gate the profile query. */
 const USER_ID_PATTERN = /^[a-z0-9_]{16,40}$/;
 
 function isUsersTableId(id: string): id is Id<"users"> {
@@ -44,11 +43,6 @@ export function UserInitials({
   user?: UserFields;
   hideLastSeen?: boolean;
   size?: "sm" | "md" | "lg" | "xl";
-  /**
-   * Render the bare avatar with no hover affordance. Used by
-   * `UserProfileHoverCardBody` so the avatar it renders does not open another
-   * profile card (which would recurse).
-   */
   disableProfileCard?: boolean;
 }) {
   const fetchedUser = useQuery(
@@ -61,8 +55,6 @@ export function UserInitials({
   const initials = getUserInitials(user);
   const name = getUserName(user);
   const online = !!user.lastSeenAt && Date.now() - user.lastSeenAt < 120_000;
-  // Name is a separate node rather than part of the string so the blur-PID
-  // rule can reach it without hiding the presence suffix.
   const presenceSuffix = online
     ? " · Online"
     : user.lastSeenAt
@@ -98,10 +90,8 @@ export function UserInitials({
     </div>
   );
 
-  // Inside the profile card itself — show only the avatar, no nested affordance.
   if (disableProfileCard) return avatar;
 
-  // With a known user id we can show the full profile card on hover.
   if (userId) {
     return (
       <HoverCard openDelay={250} closeDelay={100}>
@@ -117,7 +107,6 @@ export function UserInitials({
     );
   }
 
-  // Preloaded-only avatars (no id to fetch a profile) keep the lightweight tooltip.
   return (
     <Tooltip>
       <TooltipTrigger asChild>{avatar}</TooltipTrigger>
@@ -175,7 +164,6 @@ function MailIcon({ className }: { className?: string }) {
   );
 }
 
-/** Floating glass shell shared by every profile-card state. */
 function ProfileCardShell({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-surface bg-popover/95 text-popover-foreground smooth-shadow-ring-lg backdrop-blur-md">
@@ -222,7 +210,6 @@ export function UserProfileHoverCardBody({ userId }: { userId: string }) {
 
   return (
     <ProfileCardShell>
-      {/* Ambient aurora header — same --ambient tokens as the app shell */}
       <div
         className="relative h-14"
         style={{ backgroundColor: "color-mix(in oklch, var(--ambient-1) 8%, transparent)" }}
@@ -238,7 +225,6 @@ export function UserProfileHoverCardBody({ userId }: { userId: string }) {
       </div>
 
       <div className="px-4 pb-4">
-        {/* Avatar lifted onto the header */}
         {isUsersTableId(userId) ? (
           <div className="-mt-8 mb-3 w-fit rounded-full ring-4 ring-popover">
             <UserInitials

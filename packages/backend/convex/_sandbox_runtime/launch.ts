@@ -27,9 +27,6 @@ import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
 
-// Paths baked into the callback script env for each CLI's config directory.
-// The callback script reads and writes these on the sandbox disk; no volume is
-// mounted there.
 export const CLAUDE_BASE_CONFIG_DIR = "/home/eva/.claude";
 export const CLAUDE_RUNTIME_CONFIG_DIR = "/tmp/claude-config";
 export const CLAUDE_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.claude-persist";
@@ -44,26 +41,20 @@ const CLAUDE_INSTALL_TIMEOUT_SECONDS = 300;
 const CLAUDE_FALLBACK_INSTALL_DIR = CLAUDE_CLI_INSTALL_DIR;
 export const CLAUDE_FALLBACK_BIN_PATH = `${CLAUDE_FALLBACK_INSTALL_DIR}/bin/claude`;
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
-/** Where `npm install -g --prefix CLAUDE_FALLBACK_INSTALL_DIR` places the package. */
 const CLAUDE_FALLBACK_PACKAGE_ROOT = `${CLAUDE_FALLBACK_INSTALL_DIR}/lib/node_modules/${CLAUDE_CODE_PACKAGE}`;
 const CODEX_INSTALL_TIMEOUT_SECONDS = 300;
 const CODEX_FALLBACK_INSTALL_DIR = CODEX_CLI_INSTALL_DIR;
 const CODEX_FALLBACK_BIN_PATH = `${CODEX_FALLBACK_INSTALL_DIR}/bin/codex`;
 const CODEX_CLI_PACKAGE = "@openai/codex";
-/** Where `npm install -g --prefix CODEX_FALLBACK_INSTALL_DIR` places the package. */
 const CODEX_FALLBACK_PACKAGE_ROOT = `${CODEX_FALLBACK_INSTALL_DIR}/lib/node_modules/${CODEX_CLI_PACKAGE}`;
 const OPENCODE_INSTALL_TIMEOUT_SECONDS = 300;
 const OPENCODE_FALLBACK_INSTALL_DIR = "/tmp/opencode-cli";
 const OPENCODE_FALLBACK_BIN_PATH = `${OPENCODE_FALLBACK_INSTALL_DIR}/bin/opencode`;
-/** Mirrors OPENCODE_VERSION in snapshotActions.ts and SDK_VERSION in
- * callback-src/providers/opencodeSdk.ts — the CLI serves, the SDK is its
- * generated client, and a drifted pair breaks fresh snapshots. */
 const OPENCODE_FALLBACK_VERSION = "1.18.16";
 const EVA_TOOLING_PREP_TIMEOUT_SECONDS = 30;
 const CALLBACK_READY_POLL_ATTEMPTS = 60;
 const CALLBACK_READY_POLL_INTERVAL_MS = 1000;
 
-/** Cap for a runner log tail quoted into a thrown error (and thus a chat row). */
 const RUNNER_LOG_TAIL_MAX_CHARS = 2_000;
 
 /**
@@ -80,9 +71,6 @@ const RUNNER_LOG_TAIL_MAX_CHARS = 2_000;
  */
 export function condenseRunnerLogTail(log: string): string {
   const collapsed: string[] = [];
-  // `shown` is the first line of the current run (kept verbatim, so timestamps
-  // and ports survive); `key` is its digit-masked form, used only to decide
-  // whether the next line is a repeat of the same failure.
   let shown: string | undefined;
   let key: string | undefined;
   let repeats = 0;
@@ -92,8 +80,6 @@ export function condenseRunnerLogTail(log: string): string {
   };
   for (const line of redactSecrets(log).split("\n")) {
     const trimmed = line.trim();
-    // Compare on the message, not the timestamps/backoff figures that differ on
-    // every retry of the same failure.
     const normalized = trimmed.replace(/\d+/g, "#");
     if (key !== undefined && normalized === key) {
       repeats += 1;
@@ -111,29 +97,18 @@ export function condenseRunnerLogTail(log: string): string {
     : condensed;
 }
 
-/**
- * Computes a scoped callback HMAC if the deployment encryption key is
- * available. Mirrors `computeScopedHmac` in `http.ts`, which verifies it.
- */
 function computeScopedHmac(message: string): string | null {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
   return createHmac("sha256", secret).update(message).digest("hex");
 }
 
-/**
- * Overrides for the URLs handed to agent sandboxes, for deployments whose own
- * `CONVEX_CLOUD_URL`/`CONVEX_SITE_URL` are not reachable from outside — e.g. a
- * local backend on 127.0.0.1 exposed through a tunnel. The built-in names are
- * reserved by Convex and cannot be overridden, hence the EVA_ pair.
- */
 function publicConvexUrl(): string {
   return (
     resolvePublicConvexCloudUrl(process.env) ?? requiredEnv("CONVEX_CLOUD_URL")
   );
 }
 
-/** Resolves the Convex site URL used for HTTP actions, falling back from cloud URL. */
 function resolveConvexSiteUrl(convexCloudUrl: string): string {
   return (
     resolvePublicConvexSiteUrl(process.env, convexCloudUrl) ??
@@ -142,8 +117,6 @@ function resolveConvexSiteUrl(convexCloudUrl: string): string {
 }
 
 const CLI_REGISTRY_TIMEOUT_MS = 4_000;
-/** Long enough that a burst of launches shares one lookup, short enough that a
- * CLI release reaches sandboxes within the hour it lands. */
 const CLI_VERSION_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const registryLatestSchema = z.object({ version: z.string() });
@@ -153,7 +126,6 @@ const cachedCliVersions = new Map<
   { version: string; resolvedAt: number }
 >();
 
-/** Numeric compare of two `x.y.z` strings. Anything non-numeric loses. */
 function isNewerVersion(candidate: string, floor: string): boolean {
   const candidateParts = candidate.split(".");
   const floorParts = floor.split(".");
@@ -166,21 +138,6 @@ function isNewerVersion(candidate: string, floor: string): boolean {
   return false;
 }
 
-/**
- * The CLI version a launch installs: the registry's latest, or `floor` when
- * that is newer or the lookup fails.
- *
- * Resolved here rather than by handing `@latest` to npm inside the sandbox, so
- * one concrete version reaches both the install command and the provider's
- * `*_CLI_PINNED_VERSION` env var. The callback's `resolvePinnedCliBinary()`
- * compares the installed CLI against that env var to tell a drifted global
- * binary from the one this launch provisioned; `@latest` leaves nothing to
- * compare, which degrades that check to "is it installed?" — the exact guard
- * whose absence left snapshots serving CLI 2.1.246 forever.
- *
- * Never throws. A registry outage must not fail a launch; it means the sandbox
- * runs the floor until the next lookup succeeds.
- */
 async function resolveLatestCliVersion(
   packageName: string,
   floor: string,
@@ -282,15 +239,6 @@ export function pinnedCliInstallCommand(cli: {
   ].join("; ");
 }
 
-/**
- * Installs the Codex runtime used by App Server and the SDK.
- *
- * Version-checked, not existence-checked, for the same reason as
- * `ensureClaudeCliAvailable`: this guard used to fire only when the binary was
- * absent, so a sandbox seeded months ago kept its stale global `codex` for life
- * and a model gated on a newer CLI could never run there. Same guard, see
- * `pinnedCliInstallCommand`.
- */
 async function ensureCodexRuntimeAvailable(
   sandbox: SandboxHandle,
   version: string,
@@ -308,12 +256,6 @@ async function ensureCodexRuntimeAvailable(
   );
 }
 
-/**
- * Installs the opencode CLI on sandboxes whose snapshot predates it. The CLI is
- * still required after the SDK migration — it is what runs `opencode serve`,
- * the HTTP server every turn talks to. The SDK itself self-installs from the
- * callback (loadOpencodeSdk) when the snapshot lacks it.
- */
 async function ensureOpencodeCliAvailable(
   sandbox: SandboxHandle,
 ): Promise<void> {
@@ -324,7 +266,6 @@ async function ensureOpencodeCliAvailable(
   );
 }
 
-/** Installs the CLI for the selected provider, if any, before launch. */
 function ensureProviderCliAvailable(
   sandbox: SandboxHandle,
   provider: AIProvider,
@@ -337,47 +278,19 @@ function ensureProviderCliAvailable(
       return ensureCodexRuntimeAvailable(sandbox, cliVersion);
     case "opencode":
       return ensureOpencodeCliAvailable(sandbox);
-    // "cursor" needs no provisioning: @cursor/sdk is installed globally in the
-    // seed snapshot, and the callback script self-installs it as a fallback on
-    // old snapshots.
     default:
       return Promise.resolve();
   }
 }
 
-/**
- * Provisions the parts of eva's own tooling that only the snapshot seed run
- * installs: `/home/eva` (every provider-SDK self-install targets
- * `/home/eva/.eva-agent-sdk`) plus the agent-browser CLI, which agents invoke
- * by name off PATH — hence a global install, not the `--prefix` form the
- * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted
- * without a seeded snapshot have none of it. Both
- * halves are gated on the artifact already being present, so a snapshot boot
- * pays one probe and installs nothing.
- *
- * The npm install runs detached: a synchronous install once held the launch's
- * providerPrep gate until the provider SIGTERM-killed it at the exec timeout,
- * which surfaced in chat as "Sandbox command failed with exit code 143".
- * agent-browser availability is eventually-consistent instead — a session
- * without browser tooling still chats and edits code.
- *
- * Nothing in here may throw: losing the SDK-fallback directory or the browser
- * CLI degrades a launch, but killing the chat turn is strictly worse.
- */
 async function ensureEvaToolingAvailable(
   sandbox: SandboxHandle,
 ): Promise<void> {
   try {
     await execHandle(
       sandbox,
-      // Each half is its own brace group and best-effort (`|| true`): `&&`/`||`
-      // are left-associative at equal precedence, so a flat chain would run
-      // the install after a failed mkdir.
       [
-        // Same paths and permissions the seed run creates (snapshotActions.ts).
         "{ [ -d /home/eva ] || { sudo mkdir -p /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva; } || true; }",
-        // Detached via setsid+nohup so the exec returns immediately and the
-        // install survives it; the log file is the debugging breadcrumb.
         "{ command -v agent-browser >/dev/null 2>&1 || sudo sh -c 'setsid nohup npm install -g agent-browser >/tmp/eva-tooling-install.log 2>&1 &' || true; }",
       ].join(" && "),
       EVA_TOOLING_PREP_TIMEOUT_SECONDS,
@@ -390,13 +303,6 @@ async function ensureEvaToolingAvailable(
   }
 }
 
-/**
- * Points pnpm at the sandbox user's store for shells whose HOME is an agent
- * runtime dir. Cursor's agent runs its shell with HOME=/tmp/cursor-home, so a
- * pnpm install there silently builds a second multi-GB store; the per-home
- * .npmrc makes every home resolve the same store. Existing duplicate stores
- * are deleted — installed node_modules keep their content via hard links.
- */
 function ensureSharedPnpmStore(sandbox: SandboxHandle): Promise<void> {
   const storeDir = "/home/vercel-sandbox/.local/share/pnpm";
   const homes = [
@@ -411,7 +317,6 @@ function ensureSharedPnpmStore(sandbox: SandboxHandle): Promise<void> {
   return execHandle(sandbox, `${perHome.join("; ")}; true`, 30).then(() => {});
 }
 
-/** Per-entity spawn lock the runner holds for its lifetime (see launchScript). */
 function runnerFlockPath(entityIdField: string, entityId: string): string {
   return `/tmp/eva-runner.${entityIdField}-${entityId}.lock`;
 }
@@ -446,7 +351,6 @@ export async function launchScript(
     claudeSessionId?: string;
     mcpToken?: string;
     mcpBaseUrl?: string;
-    /** Serialized installed system-skill stubs; see `systemSkills.ts` in the callback. */
     systemSkillsJson?: string;
     claimMutation?: string;
     openSyntheticTurnMutation?: string;
@@ -454,7 +358,6 @@ export async function launchScript(
     updateBackgroundAgentsMutation?: string;
     updateGoalMutation?: string;
     harnessCatalogToken?: string;
-    /** Multi-repo sessions only: the session's linked repo clones. */
     linkedRepos?: LinkedRepoEnvRow[];
   } = {},
 ): Promise<void> {
@@ -464,12 +367,6 @@ export async function launchScript(
   );
   const normalizedModel = normalizeAIModel(opts.model);
   const provider = getAIModelProvider(normalizedModel);
-  // One lookup feeds both the install and the provider's *_CLI_PINNED_VERSION
-  // below, so the callback can never be told to expect a version this launch
-  // did not install. Held as a promise, not awaited here: the registry round
-  // trip (~130ms cold, cached 15 minutes) then overlaps the uploads and the
-  // rest of the prep instead of delaying them. Only the selected provider's
-  // registry is consulted; the others fall back to their compiled floor.
   const cliVersionPromise =
     provider === "claude"
       ? resolveClaudeCliVersion()
@@ -504,9 +401,6 @@ export async function launchScript(
     ),
   ];
 
-  // Written on every launch, empty list included: the file persists on a reused
-  // sandbox, so an unconditional write is what lets the callback prune stubs
-  // for skills that have since been uninstalled.
   if (opts.systemSkillsJson !== undefined) {
     uploadTasks.push(
       uploadWithTiming(
@@ -519,9 +413,6 @@ export async function launchScript(
 
   await Promise.all([providerPrep, ...uploadTasks]);
 
-  // Settled long before here — `providerPrep` above already awaited it. Only
-  // the selected provider's var carries a resolved version; the other holds its
-  // compiled floor, which that provider's loader never reads on this launch.
   const resolvedCliVersion = await cliVersionPromise;
   const claudeCliVersion =
     provider === "claude" ? resolvedCliVersion : CLAUDE_CODE_VERSION;
@@ -543,19 +434,12 @@ export async function launchScript(
     `CLAUDE_MODEL=${quote([normalizedModel])}`,
     `ALLOWED_TOOLS=${quote([opts.allowedTools ?? "Read,Glob,Grep,Skill"])}`,
     `SYSTEM_PROMPT=${quote([opts.systemPrompt ?? ""])}`,
-    // Claude Code backgrounds Agent/Bash by default; Eva's turn ends on the
-    // SDK `result` event, so a backgrounded sub-agent can never report back.
-    // Force synchronous tools so sub-agent work stays inside the same turn.
     `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`,
     `CODEX_RUNTIME_HOME_DIR=${quote([CODEX_RUNTIME_HOME_DIR])}`,
     `CODEX_PERSIST_DIR=${quote([CODEX_PERSIST_VOLUME_MOUNT_PATH])}`,
     `CODEX_BIN_PATH=${quote([CODEX_FALLBACK_BIN_PATH])}`,
-    // Lets the callback tell a drifted global `codex` from the one this launch
-    // provisioned. Resolved per launch, not the compiled floor.
     `CODEX_CLI_PINNED_VERSION=${quote([codexCliVersion])}`,
     `CLAUDE_BIN_PATH=${quote([CLAUDE_FALLBACK_BIN_PATH])}`,
-    // Lets the callback tell a drifted global `claude` from the one this launch
-    // provisioned. Resolved per launch, not the compiled floor.
     `CLAUDE_CLI_PINNED_VERSION=${quote([claudeCliVersion])}`,
     `OPENCODE_RUNTIME_HOME_DIR=${quote([OPENCODE_RUNTIME_HOME_DIR])}`,
     `OPENCODE_PERSIST_DIR=${quote([OPENCODE_PERSIST_VOLUME_MOUNT_PATH])}`,
@@ -563,7 +447,6 @@ export async function launchScript(
     `CURSOR_RUNTIME_HOME_DIR=${quote([CURSOR_RUNTIME_HOME_DIR])}`,
     `CURSOR_PERSIST_DIR=${quote([CURSOR_PERSIST_VOLUME_MOUNT_PATH])}`,
   ];
-  // Callback credentials use HTTP routes on the Convex site deployment.
   if (streamingHmac || opts.harnessCatalogToken) {
     envParts.push(
       `CONVEX_SITE_URL=${quote([resolveConvexSiteUrl(convexUrl)])}`,
@@ -614,15 +497,10 @@ export async function launchScript(
       envParts.push(`${key}=${quote([val])}`);
     }
   }
-  // Reserved Eva values are appended after repo/user env so they cannot be
-  // shadowed. The callback consumes and removes them before agent tools spawn.
   if (opts.mcpBaseUrl && opts.mcpToken) {
     envParts.push(`EVA_MCP_AUTH=${quote([opts.mcpToken])}`);
     envParts.push(`EVA_MCP_BASE_URL=${quote([opts.mcpBaseUrl])}`);
   }
-  // Multi-repo sessions only: every provider's env gains the same two keys —
-  // absent entirely for an ordinary single-repo session (see
-  // buildLinkedReposEnv). The callback (callback-src/config.ts) is the reader.
   for (const [key, val] of Object.entries(
     buildLinkedReposEnv(opts.linkedRepos ?? []),
   )) {
@@ -630,14 +508,6 @@ export async function launchScript(
   }
   envParts.push(`CALLBACK_SCRIPT_FP=${quote([CALLBACK_SCRIPT_FINGERPRINT])}`);
   const exportLines = envParts.map((part) => `export ${part}`);
-  // Kernel-enforced single-runner-per-entity: spawn under an exclusive flock
-  // held for the runner's lifetime (flock(1) execs node, so the lock fd rides
-  // the runner process itself and the kernel releases it on death — no stale
-  // pid or pid-reuse races). Concurrent launches for the same entity lose the
-  // lock instantly (exit 217) instead of booting a duplicate daemon, and
-  // waitForRunnerReady decides whether the lock holder is the runner this
-  // launch wanted; the daemon's own pidfile fence remains as fallback for
-  // images without flock(1), where this fails open.
   const runnerLockPath = runnerFlockPath(entityIdField, entityId);
   const runnerLaunchScript = [
     "#!/usr/bin/env bash",
@@ -645,8 +515,6 @@ export async function launchScript(
     EVA_ENV_SOURCE_CMD,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/eva-mcp.json",
     ...exportLines,
-    // The script carries per-launch credentials, so unlink it once this shell
-    // has loaded the exports and before the long-lived callback is spawned.
     'rm -f "$0"',
     "if command -v flock >/dev/null 2>&1; then",
     `  nohup flock -n -E 217 ${runnerLockPath} node /tmp/run-design.mjs >> /tmp/design.log 2>&1 &`,
@@ -654,17 +522,6 @@ export async function launchScript(
     "  nohup node /tmp/run-design.mjs >> /tmp/design.log 2>&1 &",
     "fi",
     "echo $! > /tmp/run-design.pid",
-    // Privileged half of the OOM bias: the callback lowers its own
-    // oom_score_adj to -600 (callback-src/index.ts) but lowering needs root,
-    // so that write no-ops unprivileged — observed in prod as the callback
-    // dying silently under memory pressure while dev servers survived. Lower
-    // it here via sudo instead. The opencode server subtree is re-raised to
-    // 300 at spawn (callback-src/providers/opencodeServer.ts) — the only agent
-    // process the callback still spawns — and dev services start at 500
-    // (PREFER_OOM_KILL_LINE in helpers.ts), so the kernel kill order becomes:
-    // dev services first (preview self-heal restarts them), then agent work
-    // (turn error reporting), the heartbeat/reporting callback last. Fail
-    // open on images without passwordless sudo.
     'echo -600 | sudo -n tee "/proc/$(cat /tmp/run-design.pid)/oom_score_adj" >/dev/null 2>&1 || true',
   ].join("\n");
   await writeSandboxFile(
@@ -672,20 +529,11 @@ export async function launchScript(
     "/tmp/eva-launch-runner.sh",
     runnerLaunchScript,
   );
-  // Clear the previous runner's markers synchronously first. The detached
-  // launcher removes them too, but execDetached returns before the script runs,
-  // so the first ready poll could otherwise accept a dead predecessor's marker
-  // (observed in prod: a relaunch that lost the spawn flock with exit 217
-  // reported "runner ready" in 827ms, then no daemon ever polled
-  // claimPendingTurn and the session hung on "Working…").
   await execHandle(
     sandbox,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/run-design.done",
     5,
   );
-  // Use the provider-native detached path; waitForRunnerReady confirms the
-  // backgrounded runner actually started.
-  // Use handle.exec (not execHandle) so cwd stays at the Vercel default — the script
   await sandbox.execDetached(
     "chmod +x /tmp/eva-launch-runner.sh && /tmp/eva-launch-runner.sh",
     { timeoutSeconds: 15 },
@@ -693,8 +541,6 @@ export async function launchScript(
   await waitForRunnerReady(sandbox, entityId, {
     runnerLockPath,
     daemonPaths: entityDaemonPaths(entityIdField, entityId),
-    // Only a daemon launch can be satisfied by an incumbent runner, and only
-    // one whose opts signature matches (see waitForRunnerReady).
     expectedDaemonOptsSig: opts.extraEnvVars?.EVA_DAEMON_OPTS,
   });
   console.log(
@@ -702,7 +548,6 @@ export async function launchScript(
   );
 }
 
-/** Polls for /tmp/run-design.ready after a detached runner launch. */
 async function waitForRunnerReady(
   sandbox: SandboxHandle,
   entityId: string,
@@ -732,12 +577,6 @@ async function waitForRunnerReady(
       )
     ).trim();
     if (alive === "dead") {
-      // A loser of the spawn flock exits immediately, before writing the ready
-      // file. A held lock alone is NOT success: the holder can be a stale
-      // subtree fd (children inherit the lock fd), a daemon with different
-      // model/tools than this launch asked for, or — for a one-shot turn — a
-      // warm daemon that will never run this launch's prompt. Only accept it
-      // when a live daemon owns the entity pidfile with our exact opts sig.
       const lock = (
         await execHandle(
           sandbox,

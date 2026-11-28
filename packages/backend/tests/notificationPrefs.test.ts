@@ -6,12 +6,6 @@ import schema from "../convex/schema";
 import { createNotification } from "../convex/notifications";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The email and push choices (plan `notifications-v2-5.md`, part D): unset
- * email is on (urgent at once, the rest in the digest), off sends nothing,
- * push off never pushes, and the migration maps the old opt-in.
- */
-
 const TIMEOUT_MS = 30_000;
 
 type Prefs = Doc<"users">["notificationPrefs"];
@@ -30,7 +24,6 @@ async function fixture(notificationPrefs: Prefs) {
       platform: "android",
       updatedAt: 0,
     });
-    // An instant type (assignment) and a digest type (task done).
     await createNotification(ctx, {
       userId: id,
       type: "task_assigned",

@@ -27,11 +27,6 @@ import { startAgentJob } from "../_agentJobs/slot";
 import { reconcileProviderAccountForModel } from "../_userProviderAccounts/defaults";
 import { canRunByHand } from "../_automationEvents/labels";
 
-/**
- * True when the automation already has an agent run executing. An event run
- * still waiting out its debounce is `queued` with no workflow yet, and does
- * not count: it has not claimed a sandbox.
- */
 async function hasRunInFlight(
   ctx: MutationCtx,
   automationId: Id<"automations">,
@@ -61,11 +56,6 @@ export const recordPushedSha = internalMutation({
   },
 });
 
-/**
- * Whether automation runs pushed every commit a queued run absorbed (see
- * `pushedSha`). One push by a person keeps the run: it runs on the newest
- * head, which holds that push and the automation's commits on top.
- */
 async function onlyAutomationPushes(
   ctx: MutationCtx,
   headShas: ReadonlyArray<string> | undefined,
@@ -82,13 +72,6 @@ async function onlyAutomationPushes(
   return pushers.every((pusher) => pusher !== null);
 }
 
-/**
- * Starts an automation's execution workflow, inserting a queued run unless an
- * event trigger already made one. Shared by the cron, "run now" and event
- * paths — all start an identical run once their eligibility checks pass. The
- * workflow never re-reads the row, so this is where the system-automation
- * catalog overlay is applied, and where an event's details join the prompt.
- */
 async function startAutomationRun(
   ctx: MutationCtx,
   storedAutomation: Doc<"automations">,
@@ -96,7 +79,6 @@ async function startAutomationRun(
   event?: {
     runId: Id<"automationRuns">;
     context: string;
-    /** The open PR's branch: the run checks it out and pushes edits to it. */
     prBranch: string | undefined;
   },
 ): Promise<void> {
@@ -119,8 +101,6 @@ async function startAutomationRun(
   const model = normalizeAIModel(
     automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
   );
-  // A picked account that no longer fits (other provider, or unshared) falls
-  // back to the creator's own default, as chats do. No pick stays Team.
   const providerAccountId =
     automation.providerAccountId === undefined
       ? undefined
@@ -145,7 +125,6 @@ async function startAutomationRun(
         title: automation.title,
         model,
         providerAccountId,
-        // Unset traits follow the repo's defaults, as a new quick task does.
         ...launchTraitsFromStored(model, {
           reasoningLevel: automation.reasoningLevel ?? repo.defaultReasoningLevel,
           thinkingEnabled:
@@ -193,8 +172,6 @@ export const runNow = authMutation({
       args.automationId,
       ctx.userId,
     );
-    // Resolved so the prompt guard sees the catalog definition, not the
-    // placeholder stored on a system install.
     const automation = resolveAutomationDoc(stored);
     if (!automation.description) {
       throw new Error("Automation has no description/prompt configured");
@@ -227,8 +204,6 @@ export const startEventRun = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.status !== "queued") return null;
-    // Automations pushed every commit this run would cover. Running on their
-    // own pushes would loop, so the run is dropped, with no history entry.
     if (await onlyAutomationPushes(ctx, run.headShas)) {
       await ctx.db.delete(args.runId);
       return null;
@@ -244,8 +219,6 @@ export const startEventRun = internalMutation({
       await syncCheckRunLater(ctx, run);
       return null;
     }
-    // Busy: wait for the current run rather than drop the event, so a burst
-    // of merges still runs once per merge.
     if (await hasRunInFlight(ctx, automation._id)) {
       if (Date.now() - run.startedAt > EVENT_RUN_MAX_WAIT_MS) {
         await ctx.db.patch(args.runId, {
@@ -263,7 +236,6 @@ export const startEventRun = internalMutation({
       );
       return null;
     }
-    // Pushes that landed during the debounce or the wait moved the run's head.
     const prBranch = prEventHeadBranch(args.event);
     const context = describeRepoEvent(withLatestHead(args.event, run.headSha));
     await startAutomationRun(ctx, automation, repo, {

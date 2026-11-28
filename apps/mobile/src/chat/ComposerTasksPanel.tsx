@@ -20,10 +20,8 @@ import { useScheme } from "@/ui/theme";
 
 type Theme = (typeof EVA_THEME)[EvaThemeScheme];
 
-/** Eight rows show before the list scrolls, so a long plan leaves the transcript most of the screen. */
 const MAX_LIST_HEIGHT = 8 * 22;
 
-/** Every status's look in one place, from the web `TASK_STATUS_STYLE`; a new status fails the type check here. */
 function statusStyle(theme: Theme, status: ComposerTaskStep["status"]) {
   switch (status) {
     case "completed":
@@ -52,24 +50,19 @@ export function ComposerTasksPanel({
   streamingEntityId,
   turnId,
 }: {
-  /** The chat's streaming row (`chatStreamingEntityId`). */
   streamingEntityId: string | undefined;
-  /** The live reply the steps belong to; undefined while no turn runs (no panel). */
   turnId: string | undefined;
 }) {
   const theme = EVA_THEME[useScheme()];
   const [expanded, setExpanded] = useState(false);
   const [dismissedTurnId, setDismissedTurnId] = useState<string | null>(null);
   const streaming = useQuery(api.streaming.get, streamingEntityId && turnId ? { entityId: streamingEntityId } : "skip");
-  // Deferred, as the live reply: the payload is large and changes on every token.
   const activity = useDeferredValue(streaming?.currentActivity);
-  // Most turns have no task list: skip the full parse until one is in the payload.
   const steps = activity?.includes('"todos"') ? composerTaskSteps(parseActivityLog(activity)) : [];
   const progress = turnId !== undefined && dismissedTurnId !== turnId ? composerTaskProgress(steps) : null;
   if (!progress || turnId === undefined) return null;
 
   return (
-    // The queue panel's look: a `bg-muted/50` card with a 16 top radius, flush on what is under it.
     <View
       className="-mb-2 mx-6 rounded-t-2xl border border-b-0 px-1.5 pt-0.5"
       style={{ backgroundColor: withAlpha(theme.muted, 0.5), borderColor: theme.border }}
@@ -121,7 +114,6 @@ export function ComposerTasksPanel({
   );
 }
 
-/** One 3-high bar per step in its status colour, 80 wide, as the web; a one-step list has none. */
 function TaskSegments({ theme, steps }: { theme: Theme; steps: readonly ComposerTaskStep[] }) {
   if (steps.length <= 1) return null;
   return (
@@ -133,7 +125,6 @@ function TaskSegments({ theme, steps }: { theme: Theme; steps: readonly Composer
   );
 }
 
-/** A step: its status mark, its text, and "now" on the one in progress. */
 function TaskStepRow({ theme, step }: { theme: Theme; step: ComposerTaskStep }) {
   const style = statusStyle(theme, step.status);
   return (

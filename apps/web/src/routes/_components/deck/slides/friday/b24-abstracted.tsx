@@ -47,11 +47,9 @@ const RESULT_X = W - CARD_W;
 interface Part {
   icon: Icon;
   label: string;
-  /** Scattered across the route, in the way, before Eva takes it on. */
   loose: { x: number; y: number; rotate: number };
 }
 
-/** The machinery a coding agent usually asks you to think about. */
 const PARTS: readonly Part[] = [
   { icon: IconCpu, label: "Which model", loose: { x: 330, y: 18, rotate: -6 } },
   {
@@ -77,7 +75,6 @@ const PARTS: readonly Part[] = [
   },
 ];
 
-/** Where each part sits once tucked inside Eva: two columns of three. */
 function tucked(index: number) {
   const column = index % 2;
   const row = Math.floor(index / 2);
@@ -134,7 +131,6 @@ function PartChip({ part, index }: { part: Part; index: number }) {
   );
 }
 
-/** The box the machinery goes into. It arrives as the parts fly in. */
 function EvaBox() {
   const step = useDeckStep();
   const shown = step >= TUCK;
@@ -172,7 +168,6 @@ function PromptCard() {
   const appScheme = useAppScheme();
   const clear = useDeckStep() >= CLEAR;
   return (
-    // The Simple Mode prompt box from the slide before grows into this card.
     <m.div
       layoutId={SHARED.prompt}
       className={cn(
@@ -258,7 +253,6 @@ export function FridayAbstracted() {
         <div className="relative isolate" style={{ width: W, height: H }}>
           <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
 
-          {/* The route from what you asked to what you got. */}
           <div className="absolute inset-0">
             <DrawPath
               d={`M ${CARD_W + 8} ${MID_Y} L ${RESULT_X - 8} ${MID_Y}`}

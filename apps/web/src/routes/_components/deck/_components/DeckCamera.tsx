@@ -28,12 +28,10 @@ export interface CameraShot {
 
 interface CameraProps {
   children: ReactNode;
-  /** One shot per build step. The last shot holds for any step beyond it. */
   shots: readonly CameraShot[];
   className?: string;
 }
 
-/** A camera settling into position: critically damped, never bouncy. */
 const CAMERA_TRANSITION: Transition = {
   type: "spring",
   bounce: 0,
@@ -85,7 +83,6 @@ export function Camera({ children, shots, className }: CameraProps) {
 
 interface LayerProps {
   children: ReactNode;
-  /** Pixels towards the viewer. Negative sits behind the neutral plane. */
   depth?: number;
   className?: string;
 }

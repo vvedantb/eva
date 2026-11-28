@@ -37,14 +37,10 @@ import { backfilledCloseTimes } from "./_agentTasks/closeTimes";
  *   npx convex run --component migrations lib:getStatus --watch
  *   npx convex run --component migrations lib:cancel '{name: "dataMigrations:setDefault"}'
  */
-// The second type argument is not optional here: `Migrations` defaults it to
-// `void`, and `customRange` resolves its index field types through it.
 export const dataMigrations = new Migrations<DataModel, typeof schema>(
   components.migrations,
   {
     migrationsLocationPrefix: "dataMigrations:",
-    // Required by any `define` that sets `customRange` — the paginator needs
-    // the schema to resolve the index it ranges over.
     schema,
   },
 );
@@ -86,11 +82,6 @@ export const backfillLogUsageFields = dataMigrations.define({
   },
 });
 
-/**
- * Caps every stored `backgroundAgents` array at the settled-entry limit that
- * `mergeBackgroundAgents` now enforces on write. Small batches: an unpruned
- * row can hold several hundred KB, and a batch reads all of its rows at once.
- */
 function pruneBackgroundAgentsPatch(doc: {
   backgroundAgents?: BackgroundAgentEntry[];
 }): { backgroundAgents: BackgroundAgentEntry[] } | undefined {
@@ -120,7 +111,6 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
 
-/** Few chats per batch: one chat reads all its threads and their replies. */
 const THREAD_PARTICIPANTS_BATCH = 5;
 
 /**

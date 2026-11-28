@@ -11,11 +11,6 @@ export const workflow = new WorkflowManager(components.workflow, {
       base: 2,
     },
     retryActionsByDefault: true,
-    // Shared across every workflow type (sessions, tasks, design, projects…).
-    // At 10, a burst of concurrent turns queued steps behind each other and a
-    // warm session turn's handoff could wait 10s+ in the pool — the "slow hi".
-    // Raised to cut that head-of-line wait; Convex scales the functions, this
-    // cap is backpressure, not a hard resource limit.
     maxParallelism: 30,
   },
 });
@@ -45,7 +40,6 @@ export async function isTrackedWorkflowRunning(
     const status = await workflow.status(ctx, toWorkflowId(workflowId));
     return status.type === "inProgress";
   } catch {
-    // Unknown id (cleaned up by the component): nothing is running.
     return false;
   }
 }
@@ -59,6 +53,5 @@ export async function cancelTrackedWorkflow(
   try {
     await workflow.cancel(ctx, toWorkflowId(workflowId));
   } catch {
-    // Workflow may have already completed or been cancelled
   }
 }

@@ -42,7 +42,6 @@ export default function ReplyThreadScreen() {
   const users = useQuery(api.users.listAll, {});
   const addReply = useMutation(api.sessionWorkflow.addReply);
   const answerBlocking = useMutation(api.pendingQuestions.answer);
-  // Eva's question from a turn in this thread is answered here, not in the chat (the web `ThreadDock`).
   const parentId = chat?.parentId;
   const threadTurn = useQuery(api.messages.openThreadTurn, parentId ? { parentId } : "skip");
   const isTurnThread = threadTurn?.rootId === rootId;
@@ -51,11 +50,9 @@ export default function ReplyThreadScreen() {
     api.streaming.get,
     parentId && isTurnThread ? { entityId: chatStreamingEntityId(parentId) } : "skip",
   );
-  // The saved question just answered: hidden until Eva's reply moves on.
   const [answeredSaved, setAnsweredSaved] = useState<string | null>(null);
   const composer = useMentionComposer(chat?.repoId, undefined, undefined, [EVA_MENTION_ITEM]);
   const [sending, setSending] = useState(false);
-  // Read while on screen (as the chat): a "New" line above the first reply you had not seen.
   const focused = useIsFocused();
   const appActive = useAppActive();
   const { state: readState, newSinceAt } = useThreadReadState({ rootId, active: focused && appActive });
@@ -84,7 +81,6 @@ export default function ReplyThreadScreen() {
     );
   }
 
-  // Eva's turn in this thread streams on the chat's row, as a turn of the chat itself.
   const liveId = findStreamingTargetMessage(thread.replies)?._id;
   const firstNewId = findNewMessageIds(thread.replies, newSinceAt, me ?? undefined)[0];
   const streamingEntityId = chat.parentId ? chatStreamingEntityId(chat.parentId) : undefined;
@@ -107,11 +103,9 @@ export default function ReplyThreadScreen() {
       .finally(() => setSending(false));
   };
 
-  // One row of the thread: Eva's bubble, yours, or a teammate's.
   const replyBubble = (message: (typeof thread.replies)[number]) => {
     if (message.role === "assistant") {
       return (
-        // Full width, as in the main chat (#1538).
         <View>
           <EvaReply>
             {message._id === liveId && streamingEntityId ? (
@@ -161,7 +155,6 @@ export default function ReplyThreadScreen() {
           </Fragment>
         ))}
       </ScrollView>
-      {/* The chat's question dock: a blocking question wins and resumes her turn; a saved one goes as an @Eva reply. */}
       {blocking && blockingQuestions ? (
         <View className="p-3" style={{ paddingBottom: insets.bottom + 12 }}>
           <ChoiceQuestion

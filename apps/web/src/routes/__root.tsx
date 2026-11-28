@@ -1,5 +1,3 @@
-// Dev overlays are commented out for now; restore with the blocks below.
-// import { lazy, Suspense } from "react";
 import {
   createRootRouteWithContext,
   Outlet,
@@ -28,24 +26,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
-// /** Lazy so @vvedantb/redline stays out of the production bundle. */
-// const DevRedline = import.meta.env.DEV
-//   ? lazy(() =>
-//       import("@/lib/components/DevRedline").then((m) => ({
-//         default: m.DevRedline,
-//       })),
-//     )
-//   : null;
-
 function RootComponent() {
   useDocumentTitle();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { isSignedIn } = useAuth();
 
-  // The anonymous landing is the one route that needs no Convex. Skipping the
-  // provider there keeps marketing visitors from opening a WebSocket to the
-  // production deployment (ClientProvider's presence/user bootstrapping and
-  // ChangelogDialogGate each subscribe immediately on mount).
   const anonymousLanding = pathname === "/" && isSignedIn !== true;
 
   const app = (
@@ -54,32 +39,15 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
-        {/* The floating preview window sits on the host's z layer and just
-            before it in DOM order, so the hosted iframe paints over its body. */}
         <PreviewMiniPlayer />
-        {/* Preview iframes survive ALL route changes by living here, outside
-            the router. Mounted after AppShell so equal-z fixed layers paint
-            above routed content; Radix portals (z-50) still stack above. */}
         <PreviewIframeHost />
       </NuqsAdapter>
       {IS_EMBEDDED ? <EmbedNavigationBridge /> : null}
       <AppToaster />
-      {/* No analytics from embedded documents: the host page already counts. */}
       {IS_EMBEDDED ? null : <Analytics />}
-      {/* Dev overlays, commented out for now.
-      {DevRedline ? (
-        <Suspense fallback={null}>
-          <DevRedline />
-        </Suspense>
-      ) : null} */}
     </>
   );
 
-  // One provider above everything, including the layers outside the app shell:
-  // the preview mini player, the What's New dialog and the routes without
-  // chrome all render tooltips, and Radix throws
-  // outright when a Tooltip has no Provider above it. Context only — no DOM,
-  // so the anonymous landing pays nothing for it.
   return (
     <TooltipProvider>
       {anonymousLanding ? (
@@ -87,9 +55,7 @@ function RootComponent() {
       ) : (
         <ClientProvider>
           {app}
-          {/* The What's New dialog belongs to the top-level window, not previews. */}
           {IS_EMBEDDED ? null : <ChangelogDialogGate />}
-          {/* "Close without merging" from any PR menu confirms here. */}
           <PrCloseDialogHost />
         </ClientProvider>
       )}

@@ -9,11 +9,6 @@ import { MaskedText } from "../../_components/motion";
 
 const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 
-/**
- * The presenter's own reflection. The 40+ ideas list is their own count, and
- * "well received" is their own account of audience feedback. The IDE and
- * hand-written code figures are their own account, as of November 2026.
- */
 const CARDS: readonly { label: string; text: string }[] = [
   { label: "Before", text: "40+ ideas, filtered down to a few" },
   {
@@ -34,7 +29,6 @@ export function AnnualUnlocked() {
       <div className="mt-10 grid grid-cols-2 gap-5">
         {CARDS.map((card, index) => (
           <Reveal key={card.label} step={index + 1}>
-            {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[220px] flex-col rounded-[28px] p-8">
               <div className={LABEL}>{card.label}</div>
               <div className="mt-auto text-3xl leading-snug font-semibold text-white">

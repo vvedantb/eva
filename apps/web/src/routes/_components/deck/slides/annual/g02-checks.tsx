@@ -15,7 +15,6 @@ interface CheckGroup {
   items: readonly string[];
 }
 
-/** What a piece of work shows before it is ready. One group per build step. */
 const GROUPS: readonly CheckGroup[] = [
   {
     label: "Proof",
@@ -59,7 +58,6 @@ export function AnnualChecks() {
       <div className="mt-10 grid grid-cols-2 gap-5">
         {GROUPS.map((group, index) => (
           <Reveal key={group.label} step={index + 1}>
-            {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[300px] flex-col gap-6 rounded-[28px] p-8">
               <div className="text-sm font-semibold tracking-[0.14em] text-white/45 uppercase">
                 {group.label}

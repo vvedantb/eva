@@ -1,7 +1,3 @@
-// Shared constants for the preview-access "grant" handshake. Kept in a plain
-// (non-"use node") module so both the Convex action that mints grants and the
-// in-sandbox proxy builder can import them without pulling in Node-only deps.
-
 /** Issuer claim on preview grants. Distinct from the sandbox-auth JWT issuer. */
 export const PREVIEW_GRANT_ISSUER = "eva-preview";
 

@@ -104,7 +104,6 @@ export function PrMetaEditButton({
   edit,
 }: {
   field: MetaField;
-  /** What the field holds now: logins, or label names. */
   selected: readonly string[];
   edit: PrMetaEditState;
 }) {
@@ -136,7 +135,6 @@ export function PrMetaEditButton({
           setOpen(true);
           edit.loadCandidates();
         }}
-        // A 44 square at the row's end (the web 24 pencil), so it needs no slop.
         className="size-11 items-center justify-center rounded-full active:opacity-70"
       >
         {saving ? <Spinner size="sm" decorative /> : <IconPencil size={13} color={theme.mutedForeground} />}
@@ -191,11 +189,6 @@ export function LabelDot({ color }: { color: string }) {
   return <View className="size-2 rounded-full" style={{ backgroundColor: `#${color}` }} />;
 }
 
-/**
- * The web `usePrEdit`: renames a pull request or rewrites its description
- * (`github.updatePullRequest`), then reads the overview again (`onSaved`).
- * The error stays on the form, as the web editors show it.
- */
 function usePrEdit(repoId: Id<"githubRepos">, prNumber: number, onSaved: () => void) {
   const updatePr = useAction(api.github.updatePullRequest);
   const [saving, setSaving] = useState(false);
@@ -279,7 +272,6 @@ export function DescriptionEditSheet({
               {edit.error}
             </Text>
           )}
-          {/* eva authenticates as its GitHub App, so the edit is the app's, not the reader's. */}
           <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>Saved to GitHub as the eva app.</Text>
         </SheetBody>
         <SheetFooter>

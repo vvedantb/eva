@@ -14,10 +14,6 @@ interface Quarter {
   items: readonly string[];
 }
 
-/**
- * One column per build step. Source: carepulse-ts main branch, December 2025
- * to November 2026, checked 16 November 2026.
- */
 const QUARTERS: readonly Quarter[] = [
   {
     when: "Dec – Feb",
@@ -64,7 +60,6 @@ function QuarterCard({ quarter, index }: { quarter: Quarter; index: number }) {
       animate={shown ? { opacity: 1, y: 0 } : { opacity: 0.25, y: 12 }}
       transition={{ duration: DUR.slow, ease: EASE.expo }}
     >
-      {/* p-6 inside a 24px outer radius keeps the corners concentric. */}
       <Card className="flex h-[330px] flex-col gap-4 rounded-[24px] p-6">
         <div className="text-sm font-medium tracking-[0.18em] text-white/45 uppercase">
           {quarter.when}

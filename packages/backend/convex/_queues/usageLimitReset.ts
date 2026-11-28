@@ -1,10 +1,3 @@
-/**
- * Pure usage-limit text parsing, kept free of every Convex server import so the
- * web app can read the same reset time the workflow schedules its retry for.
- * `recovery.ts` re-exports both, so its importers are unaffected; a dependency
- * added here would put the whole workflow module graph in the browser bundle.
- * (`aiModels` is already browser-safe: the web app imports it directly.)
- */
 import { getAIModelProvider, normalizeAIModel } from "../_validators/aiModels";
 
 /**
@@ -31,7 +24,6 @@ export function isUsageLimitError(errorMsg: string): boolean {
  * Returns the reset timestamp (ms since epoch) or null if unparseable.
  */
 export function parseUsageLimitResetTime(errorMsg: string): number | null {
-  // Match patterns like "resets 4pm (UTC)", "resets 4:30pm (UTC)", "resets 16:00 (UTC)"
   const resetMatch = errorMsg.match(
     /resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*\(?\s*UTC\s*\)?/i,
   );
@@ -43,7 +35,6 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
 
   let hour24: number;
   if (ampm) {
-    // 12-hour format
     if (ampm === "pm" && hourRaw !== 12) {
       hour24 = hourRaw + 12;
     } else if (ampm === "am" && hourRaw === 12) {
@@ -52,7 +43,6 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
       hour24 = hourRaw;
     }
   } else {
-    // 24-hour format
     hour24 = hourRaw;
   }
 
@@ -69,12 +59,10 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
     ),
   );
 
-  // If the reset time has already passed today, schedule for tomorrow
   if (resetDate.getTime() <= now.getTime()) {
     resetDate.setUTCDate(resetDate.getUTCDate() + 1);
   }
 
-  // Add 2-minute buffer so the limit is definitely cleared
   return resetDate.getTime() + 2 * 60 * 1000;
 }
 
@@ -85,20 +73,12 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
  */
 export const USAGE_LIMIT_QUEUE_RESUME_DELAY_MS = 8 * 60 * 1000;
 
-/** Same label `resolveCredentialSourceLabel` stamps for the shared credential. */
 const TEAM_CREDENTIAL_LABEL = "Team";
 
 /** A chat queue waiting out a usage limit. */
 export interface UsageLimitHold {
-  /** When the held queue sends (ms since epoch). */
   resumeAt: number;
-  /** Model stamp of the turn that ran out; undefined on a legacy turn. */
   model: string | undefined;
-  /**
-   * The credential that ran out: an account id, null for Team, or undefined
-   * when the turn predates the `credentialAccountId` stamp (holds every
-   * account, as before).
-   */
   accountId: string | null | undefined;
 }
 

@@ -35,16 +35,11 @@ const H = 420;
 const INBOX_W = 400;
 const MAIL_X = INBOX_W + 36;
 const MAIL_W = W - MAIL_X;
-/** The template is 560px wide plus its grey margin; shown at this scale. */
 const EMAIL_SCALE = 0.95;
 const EMAIL_FRAME_W = Math.round(MAIL_W / EMAIL_SCALE);
 const EMAIL_FRAME_H = 1100;
 const MAIL_BODY_H = H - 44;
 
-/**
- * Example content in the shape the real runs use: emoji section headings and
- * plain-English bullets. Written for the slide; not a real edition.
- */
 const EXAMPLE_HTML = `
 <p><strong>✨ New Features</strong></p>
 <ul>
@@ -64,10 +59,8 @@ const EXAMPLE_HTML = `
 </ul>
 `;
 
-/** Monday 12 October 2026, 03:00 UTC: when the latest run published. */
 const PUBLISHED_AT = Date.UTC(2026, 9, 12, 3, 0);
 
-/** The real template, built once with the example body. */
 const EMAIL_HTML = buildAutomationEmailHtml({
   appUrl: "",
   contentHtml: EXAMPLE_HTML,
@@ -81,7 +74,6 @@ interface InboxRow {
   time: string;
 }
 
-/** Older mail already in the inbox. The new edition lands above these. */
 const OLDER: readonly InboxRow[] = [
   {
     subject: "Daily summary",
@@ -189,7 +181,6 @@ function Inbox() {
         <span className="text-sm font-medium text-foreground">Inbox</span>
       </div>
       <div className="flex flex-col gap-1 p-2">
-        {/* The new edition drops in at the top on arrival. */}
         <m.div
           initial={{ opacity: 0, y: -24, height: 0 }}
           animate={{ opacity: 1, y: 0, height: 68 }}
@@ -213,7 +204,6 @@ function Inbox() {
   );
 }
 
-/** The real template in a mail window. It scrolls slowly once opened. */
 function Email() {
   const appScheme = useAppScheme();
   const step = useDeckStep();

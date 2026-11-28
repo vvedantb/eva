@@ -1,9 +1,3 @@
-/**
- * The weekly changelog's structured shape. The changelog automation returns
- * this as JSON so the email can render a tiered layout; older runs hold plain markdown,
- * so every reader falls back to the raw text when parsing fails. Pure module:
- * safe for queries, node actions and the email templates alike.
- */
 import { z } from "zod";
 
 export const CHANGELOG_AUTOMATION_TITLE = "Eva Weekly Changelog";
@@ -29,9 +23,7 @@ const changelogItemSchema = z.object({
   category: z.enum(["new", "faster", "fixes", "improvements"]),
   title: z.string().min(1),
   summary: z.string().min(1),
-  /** App route for the "Try it" button, e.g. "/settings/sandboxes". */
   path: z.string().startsWith("/").optional(),
-  /** Marks the one item shown as the week's top pick. */
   highlight: z.boolean().optional(),
 });
 

@@ -17,12 +17,6 @@ export const SIDEBAR_RESIZE: SidebarResizeOptions = {
   maxWidth: 424,
 };
 
-/**
- * Route height classes. `AppShell.Content` pads for the mobile header below
- * `md`, so a route fills the space under it. The `0px` fallback is for embedded
- * documents, which render with no shell. The bottom inset keeps the composer
- * and last rows above the home indicator; it is `0` on desktop.
- */
 const SHELL_ROUTE_BOTTOM_INSET = "pb-[env(safe-area-inset-bottom)]";
 
 /** Viewport-bound route (repo, inbox, Ave): the route scrolls inside itself. */

@@ -19,26 +19,11 @@ import {
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
 
-// Tools for talking to the person behind the agents: an in-app notification
-// any caller may raise, and (master only) answering the blocking questions
-// child agents are paused on.
-
-/** Whether the caller named a chat at all, as opposed to leaving it blank. */
 function namesChat(ref: EntityRef): boolean {
   return (
     ref.id !== undefined || ref.prUrl !== undefined || ref.numId !== undefined
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pending question payloads
-//
-// A pendingQuestions row stores the AskUserQuestion tool input verbatim. The
-// web UI (chatBodyUtils.ts) reads the same shape and answers with a JSON map
-// of question text -> answer, multi-select joined by ", " (see
-// MultipleChoiceQuestion.tsx). Both are reproduced here so an answer from the
-// master is indistinguishable from one typed in the UI.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const askedQuestionSchema = z.object({
   question: z.string(),
@@ -55,7 +40,6 @@ const askedPayloadSchema = z.object({
   questions: z.array(askedQuestionSchema).min(1),
 });
 
-/** How much of an unreadable payload a listing echoes back. */
 const UNPARSED_PAYLOAD_LIMIT = 2000;
 
 function parseAskedQuestions(payload: string): AskedQuestion[] | null {
@@ -134,7 +118,6 @@ function findAskedQuestion(
   );
 }
 
-/** One question's answer string, in the shape the UI writes. */
 function answerFor(
   question: AskedQuestion,
   entry: AnswerEntry,
@@ -166,7 +149,6 @@ function answerFor(
   return { answer: parts.join(", ") };
 }
 
-/** The full answer map for a question row, or the first thing wrong with it. */
 function buildAnswerMap(
   questions: AskedQuestion[],
   entries: AnswerEntry[],
@@ -194,10 +176,6 @@ function buildAnswerMap(
 
 const DECISION_RULE =
   "Only answer what the user has already decided, or what is plainly implied by their instructions. Anything that is a genuine user decision — visual or design choices, scope, destructive or irreversible actions, spending money — must be relayed to the user instead (ask them in chat, or notify_user), and answered only once they reply.";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// agentInteractionTools — every caller
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function agentInteractionTools(
   credentials: McpCredentials,
@@ -265,10 +243,6 @@ urgency "normal" (default) also lands in the user's daily email digest if they h
   return tools;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// orchestratorQuestionTools — Manager Ave only
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function orchestratorQuestionTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
@@ -277,7 +251,6 @@ export function orchestratorQuestionTools(
   const { clerkUserId } = credentials;
   const { resolveEntityTarget } = entityAccess(ctx, credentials);
 
-  /** Unanswered rows the user can reach, optionally for one chat or one row. */
   async function listPending(args: {
     userId: string;
     entityId?: string;

@@ -30,7 +30,6 @@ import { openAppLink } from "@/push/openLink";
 import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { useScheme } from "@/ui/theme";
 
-/** One row: a result, or a recent one (whose type is a plain string, as it may predate a rename). */
 type Row = { type: string; title: string; subtitle: string; href: string };
 
 const TYPE_ICON: Record<HitType, ComponentType<IconProps>> = {
@@ -49,16 +48,10 @@ const TYPE_ICON: Record<HitType, ComponentType<IconProps>> = {
 
 const iconFor = (type: string) => (isHitType(type) ? TYPE_ICON[type] : IconSearch);
 
-/** The web Recents: the last results opened, newest first, on this device. */
 const RECENT_LIMIT = 8;
 const recentRow = z.object({ type: z.string(), title: z.string(), subtitle: z.string(), href: z.string() });
 const recentsStore = persistedStore<readonly Row[]>("spotlightRecents", [], jsonParser(z.array(recentRow)));
 
-/**
- * A page link the phone has a tab for: the Inbox, Sessions (with its Quick
- * Tasks and Reviews sections) and Projects, in or outside a repo. Null for the
- * rest (Documents, Automations, Stats, a repo's Settings...), which open on the web.
- */
 function tabForPage(path: string): Href | null {
   const last = path.split(/[?#]/)[0]?.split("/").filter(Boolean).pop();
   switch (last) {
@@ -103,7 +96,6 @@ export default function SearchScreen() {
       router.navigate(tab);
       return;
     }
-    // A repo link opens its phone screen when it names one (Back returns here); `openAppLink` falls back to the web.
     openAppLink({ href: row.href, repoId: repos ? repoForHref(repos, row.href)?._id : undefined });
   };
 

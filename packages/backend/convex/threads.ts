@@ -9,14 +9,6 @@ import {
   newestReplyAt,
 } from "./_messages/threadParticipants";
 
-/**
- * A reply thread's read and follow state for the caller (plan
- * `notifications-v2-5.md`, part A): the "N new" pill under the root, the
- * "New" line in the thread, and the thread header's Follow button. Web and
- * phone.
- */
-
-/** A thread root the caller may read, or null (gone, a reply, an optimistic id). */
 async function readableRoot(
   db: DatabaseReader,
   rawRootId: string,
@@ -30,16 +22,12 @@ async function readableRoot(
 }
 
 export const readState = authQuery({
-  // A plain string: the chat renders optimistic rows under client-minted ids.
   args: { rootId: v.string() },
   returns: v.union(
-    // Not a participant: never posted, mentioned or followed.
     v.null(),
     v.object({
       following: v.boolean(),
-      /** Read up to here; undefined when never opened. */
       lastReadAt: v.optional(v.number()),
-      /** Others' replies since then (0 when not following). */
       unread: v.number(),
     }),
   ),

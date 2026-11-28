@@ -1,13 +1,3 @@
-/**
- * Pure parsing for the ways an MCP caller can name an existing session: its
- * Convex id, its per-repo `numId`, or the GitHub PR url Eva stored on it.
- *
- * No Convex imports, so the tool layer, the lookup query, and the tests all
- * share one definition of "what counts as a PR link".
- */
-
-// Accepts what a person actually pastes: bare host, http, www, and the
-// /files, /commits, ?query and #anchor tails GitHub adds while reviewing.
 const PR_URL_PATTERN =
   /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?:[/?#].*)?$/i;
 

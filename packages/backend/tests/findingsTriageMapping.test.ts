@@ -9,8 +9,6 @@ import {
 } from "../convex/_automations/triageMapping";
 import { FINDING_SEVERITIES } from "../convex/_validators/enums";
 
-// The mapping is generic over the id type, so plain strings stand in for the
-// `Id<"agentTasks">` the action passes.
 const tasks: Array<DuplicateCandidate<string>> = [
   { _id: "task_a", numId: 12, title: "Fix flaky login test" },
   { _id: "task_b", numId: 34, title: "Rewrite billing webhook" },

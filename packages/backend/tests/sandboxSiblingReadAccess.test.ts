@@ -6,18 +6,10 @@ import schema from "../convex/schema";
 import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A sandbox's git credential helper sends the repository git asked about, so
- * the backend can hand a read-only single-repo token for a sibling codebase
- * the sandbox owner can reach in eva — and nothing else. These tests pin who
- * gets a token, who gets 403, and that the home repo keeps its full token.
- */
-
 
 const SECRET = "sandbox-secret-abc";
 const SANDBOX_ID = "sbx_home";
 
-/** Home repo the sandbox is bound to, plus one sibling repo shared by a team. */
 async function fixture(options: {
   entity?: "session" | "task" | "project";
   siblingHidden?: boolean;
@@ -82,7 +74,6 @@ async function fixture(options: {
       createdAt: now,
     });
 
-    // A task's or project's sandbox is its owned session's.
     const owner =
       entityKind === "task"
         ? {
@@ -185,7 +176,6 @@ describe("resolveCredentialRequest — sibling repositories", () => {
   test("sandboxReadExcluded on any app row denies the whole repository", async () => {
     const { t, ids } = await fixture({});
     await t.run(async (ctx) => {
-      // Second app row of the same GitHub repo carries the opt-out.
       await ctx.db.insert("githubRepos", {
         owner: "AcmeOrg",
         name: "design-system",
@@ -251,10 +241,6 @@ describe("resolveCredentialRequest — sibling repositories", () => {
 });
 
 describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
-  // Snapshot seed-prep sandboxes and ephemeral automation / test-gen /
-  // evaluation runs have no session, task or project row. The helper install
-  // pins their home repository on the credential row instead; without that
-  // pin every private-repo fetch and push 403'd (prod, 10–15 Sep 2026).
   async function orphanFixture(options: { pinHome: boolean }) {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
@@ -296,9 +282,6 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
     );
   });
 
-  // The write half of the fix. Every sandbox create and resume reinstalls the
-  // helper, which is how legacy rows are meant to recover — so the upsert's
-  // patch branch must pin the repository, not only its insert branch.
   test("a first install pins the home repository on a new row", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(internal.sandboxGitCredentials.upsertForSandbox, {
@@ -327,7 +310,6 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
     expect(
       await resolve(t, "evalucom/carepulse-ts.git", "rotated-secret"),
     ).toEqual({ kind: "home", installationId: 9 });
-    // One row per sandbox: the rotation retires the previous secret.
     expect(await resolve(t, "evalucom/carepulse-ts.git")).toEqual({
       kind: "denied",
       reason: "unknown secret",
@@ -378,7 +360,6 @@ describe("resolveCredentialRequest — entity kinds", () => {
       owner: "AcmeOrg",
       name: "design-system",
     });
-    // Its home repo too: GitHub refuses a push with this token.
     expect(await resolve(t, undefined)).toMatchObject({ kind: "read_only" });
   });
 });
@@ -395,7 +376,6 @@ describe("listReadableSiblingRepos", () => {
         rootDirectory: "packages/tokens",
         teamId: ids.teamId,
       });
-      // A second app row of the home repo must not leak back in either.
       await ctx.db.insert("githubRepos", {
         owner: "vvedantb",
         name: "eva",

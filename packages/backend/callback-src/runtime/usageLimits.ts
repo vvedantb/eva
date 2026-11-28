@@ -10,33 +10,17 @@ import type {
 import { isJsonObject, log, trimmedString } from "../utils.js";
 import { callbackState as S } from "./state.js";
 
-/** Convex mutation that upserts the (repo, provider, account) usage-limit row. */
 const REPORT_MUTATION = "usageLimits:report";
 const NOTE_REFRESH_MUTATION = "usageLimits:noteRefreshAttempt";
 
-/**
- * A single retry only: this is best-effort telemetry reported alongside the
- * turn's completion, so a long backoff would just hold a promise open past the
- * point anyone cares about the reading.
- */
 const REPORT_MAX_RETRIES = 1;
 
-/**
- * Bound on the experimental `/usage` lookup. It rides the SDK's control channel,
- * which a finished one-shot query may already have torn down — a torn-down
- * channel that never answers would otherwise hold a turn open indefinitely.
- */
 const USAGE_LOOKUP_TIMEOUT_MS = 5_000;
 
-/** On-demand chip refresh waits for SDK init, which a cold query can exceed. */
 const FORCE_USAGE_LOOKUP_TIMEOUT_MS = 20_000;
 
-/** A one-shot process may wait this long after delivering completion before its
- * hard exit. This covers the lookup timeout plus a small reporting allowance. */
 const USAGE_REPORT_EXIT_GRACE_MS = 7_000;
 
-/** Keep an unchanged live daemon comfortably inside the server's 24-hour
- * freshness window without writing the same reading after every turn. */
 const USAGE_REPORT_REFRESH_MS = 6 * 60 * 60 * 1000;
 
 let pendingClaudeUsageReport: Promise<void> | null = null;
@@ -47,15 +31,6 @@ let pendingClaudeUsageReport: Promise<void> | null = null;
  */
 export type UsageLimitProvider = "claude";
 
-/**
- * Display labels for the Agent SDK's rate-limit window keys. Shared by both
- * Claude capture paths (the `rate_limit_event` stream message names one window;
- * the `/usage` lookup names several) so a window's label never depends on which
- * source observed it first.
- *
- * Duplicated in `convex/_usageLimits/claudeUsage.ts`, which documents the
- * same window keys — a label added here belongs there too.
- */
 const CLAUDE_WINDOW_LABELS: Record<string, string> = {
   five_hour: "5h",
   seven_day: "Weekly (all models)",
@@ -66,12 +41,6 @@ const CLAUDE_WINDOW_LABELS: Record<string, string> = {
   overage: "Extra usage",
 };
 
-/**
- * Minimal structural view of the Agent SDK's EXPERIMENTAL `/usage` response.
- * Declared here rather than imported so the pinned SDK renaming or dropping the
- * method cannot break this module's types; every value read is still guarded,
- * because the SDK documents the shape itself as unstable.
- */
 type ClaudeUsageWindowLike = {
   utilization?: number | null;
   resets_at?: string | null;
@@ -94,14 +63,12 @@ export type ClaudeUsageResponseLike = {
       resets_at?: string | null;
     }[];
   } | null;
-  /** Convex/SDK control envelopes sometimes wrap the payload. */
   value?: ClaudeUsageResponseLike | null;
 };
 
 type ClaudeUsageReportInput = {
   readUsage: () => Promise<ClaudeUsageResponseLike | null>;
   error?: string;
-  /** Skip the unchanged-reading window so an on-demand chip refresh lands. */
   force?: boolean;
 };
 
@@ -143,11 +110,6 @@ function buildWindow(
   };
 }
 
-/**
- * Replaces the same-keyed window in place, appending when it is new. Each
- * source only ever knows about some of the windows, so merging by key is what
- * stops a single-window `rate_limit_event` from erasing the others.
- */
 function mergeWindow(
   snapshot: UsageLimitSnapshot,
   window: UsageLimitWindow,
@@ -170,7 +132,6 @@ function ensureSnapshot(): UsageLimitSnapshot {
   return created;
 }
 
-/** Stream events name Fable as `seven_day_oi`; store it like the SDK `/usage` path. */
 function normalizeWindowKey(key: string): string {
   if (key === "seven_day_oi") return "model_scoped:Fable";
   return key;
@@ -200,8 +161,6 @@ export function mergeClaudeRateLimitEvent(event: JsonObject): void {
   if (status) snapshot.status = status;
   if (!rawKey) return;
   const key = normalizeWindowKey(rawKey);
-  // The stream event reports `resetsAt` in epoch SECONDS, unlike the `/usage`
-  // lookup's ISO strings — normalize both to epoch ms here.
   const resetsAtSeconds = readFiniteNumber(info.resetsAt);
   mergeWindow(
     snapshot,
@@ -225,7 +184,6 @@ function pushUsageWindow(
   if (!entry) return;
   const utilization = readFiniteNumber(entry.utilization);
   const resetsAt = readIsoMs(entry.resets_at);
-  // A window the server reports as entirely null carries nothing to show.
   if (utilization === undefined && resetsAt === undefined) return;
   windows.push(
     buildWindow(
@@ -257,8 +215,6 @@ export function readClaudeUsageWindows(
   for (const entry of limits.model_scoped ?? []) {
     const name = trimmedString(entry.display_name);
     if (!name) continue;
-    // Model-scoped entries are weekly windows too, so they are labelled like
-    // the fixed ones ("Weekly (Fable)") rather than by bare model name.
     pushUsageWindow(windows, "model_scoped:" + name, entry, `Weekly (${name})`);
   }
   pushUsageWindow(windows, "overage", limits.overage);
@@ -306,7 +262,6 @@ function noteDaemonRefresh(
     },
     REPORT_MAX_RETRIES,
   ).catch(() => {
-    /* breadcrumb only */
   });
 }
 
@@ -348,13 +303,6 @@ export async function captureClaudeUsage(
       if (recordAttempt) noteDaemonRefresh(false, null, "omitted-availability");
       return false;
     }
-    // A failed or not-yet-initialized SDK query can report `false` even for an
-    // OAuth account whose prior turn exposed plan windows. Treating that as an
-    // authoritative empty snapshot erases the last useful reading and makes
-    // the UI disappear. Keep whatever we already observed. When we have never
-    // observed anything, still record a partial so the selected account gets a
-    // row — Team/Enterprise seats often have no 5h/weekly windows, and staying
-    // silent left the chip saying nothing had been reported.
     if (available === false) {
       log(
         "usage limits: claude plan usage unavailable — preserving prior reading",
@@ -371,9 +319,6 @@ export async function captureClaudeUsage(
     const subscriptionType = trimmedString(payload.subscription_type);
     if (subscriptionType) snapshot.subscriptionType = subscriptionType;
     snapshot.windows = readClaudeUsageWindows(payload);
-    // A successful `/usage` read is authoritative. Replacing here drops windows
-    // and status that vanished since the last turn instead of preserving them
-    // for the lifetime of a warm daemon.
     S.usageLimitSnapshot = snapshot;
     if (recordAttempt) {
       noteDaemonRefresh(true, true, subscriptionType ?? "complete");
@@ -395,8 +340,6 @@ export async function captureClaudeUsage(
 export function captureClaudeUsageLimitError(error: string | undefined): void {
   if (!error) return;
   const message = error.toLowerCase();
-  // Mirrors `isUsageLimitError` in convex/_queues/usageLimitReset.ts —
-  // the callback bundle cannot import from convex/, so keep the two in sync.
   if (
     !message.includes("out of extra usage") &&
     !message.includes("rate limit") &&
@@ -407,9 +350,6 @@ export function captureClaudeUsageLimitError(error: string | undefined): void {
   ) {
     return;
   }
-  // Preserve complete windows when the usage endpoint returned them. Without
-  // one, ensureSnapshot creates a partial status-only reading so Convex patches
-  // an existing row instead of replacing its last valid windows.
   const snapshot = ensureSnapshot();
   snapshot.status = "rejected";
 }
@@ -441,9 +381,6 @@ export function buildUsageLimitReportArgs(
   return {
     repoId,
     provider,
-    // Stored on the row so the UI can say why a reading has no windows. The
-    // server also reads it for merge-vs-replace, and still accepts the older
-    // `snapshotComplete` boolean from callback bundles baked before this.
     completeness: snapshot.completeness,
     ...(providerAccountId ? { providerAccountId } : {}),
     ...(snapshot.subscriptionType === undefined
@@ -456,13 +393,6 @@ export function buildUsageLimitReportArgs(
   };
 }
 
-/**
- * Upserts the run's usage-limit snapshot in Convex at the end of a turn.
- *
- * Best-effort by contract: nothing here may affect the turn's outcome, so every
- * failure is logged and swallowed. Unchanged readings are skipped between
- * periodic refreshes, keeping a live warm daemon from looking stale.
- */
 async function reportUsageLimits(
   provider: UsageLimitProvider,
   force = false,
@@ -498,7 +428,6 @@ async function reportUsageLimits(
     );
     S.lastReportedUsageLimitsAt = capturedAt;
   } catch (error) {
-    // Clear the fingerprint so the next turn retries this reading.
     S.lastReportedUsageLimits = "";
     S.lastReportedUsageLimitsAt = 0;
     const messageText = error instanceof Error ? error.message : String(error);

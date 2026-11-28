@@ -33,19 +33,13 @@ import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** The full commit list, read on demand (the web `usePrCommits`). */
 type CommitsLoad =
   | { status: "idle" | "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; data: FunctionReturnType<typeof api.github.getPullRequestCommits> };
 
-/** The web rail's gutter: a 32 marker column, then 16 to the row's text (`pl-12`). */
 const GUTTER = 32;
 
-/**
- * A row's least height: the two-line list row a thumb taps (the Inbox 64),
- * where the web rail packs its rows to fit their text. The marker sits on its centre.
- */
 const ROW_HEIGHT = 64;
 
 /**
@@ -61,7 +55,6 @@ const ROW_HEIGHT = 64;
 export function ReviewTimeline({ repoId, overview }: { repoId: Id<"githubRepos">; overview: PrOverview }) {
   const scheme = useScheme();
   const getCommits = useAction(api.github.getPullRequestCommits);
-  // The overview carries GitHub's first page of commits, the oldest; Load more reads the rest.
   const [all, setAll] = useState<CommitsLoad>({ status: "idle" });
   const commits = all.status === "ready" ? all.data.commits : overview.commits;
   const rows = groupTimelineRows([...buildPrTimeline({ ...overview, commits })].reverse());
@@ -116,7 +109,6 @@ export function ReviewTimeline({ repoId, overview }: { repoId: Id<"githubRepos">
   );
 }
 
-/** The web rail: a 1 px line through the gutter, broken by each row's marker; it stops at the last row. 8 between rows. */
 function Rail({ last, scheme, children }: { last: boolean; scheme: Scheme; children: ReactNode }) {
   return (
     <View className="pb-2">
@@ -155,7 +147,6 @@ function TimelineRowView({
   );
 }
 
-/** The marker on the rail: the canvas colour masks the line behind it. */
 function Marker({ scheme, children }: { scheme: Scheme; children: ReactNode }) {
   return (
     <View className="items-center justify-center" style={{ width: GUTTER, height: GUTTER, backgroundColor: EVA_THEME[scheme].background }}>
@@ -172,7 +163,6 @@ function IconMarker({ icon: Icon, color, scheme }: { icon: ComponentType<IconPro
   );
 }
 
-/** A row: the marker in the gutter, then the text, 16 to its right, at least `ROW_HEIGHT`. */
 function Row({ marker, children }: { marker: ReactNode; children: ReactNode }) {
   return (
     <View className="flex-row items-center gap-4" style={{ minHeight: ROW_HEIGHT }}>
@@ -187,7 +177,6 @@ function When({ at, scheme }: { at: number | string | null; scheme: Scheme }) {
   return <Text style={[TEXT_XS, { color: EVA_THEME[scheme].mutedForeground }]}>{timeAgo(typeof at === "number" ? at : new Date(at).getTime())}</Text>;
 }
 
-/** A push: the headline, the short sha, the author and when. A tap opens it on GitHub. */
 function CommitRow({ commit, scheme }: { commit: PrOverview["commits"][number]; scheme: Scheme }) {
   const theme = EVA_THEME[scheme];
   const sha = commit.sha.slice(0, 7);
@@ -223,10 +212,6 @@ function CommitRow({ commit, scheme }: { commit: PrOverview["commits"][number]; 
   );
 }
 
-/**
- * A run of remarks folded behind one row naming how many, from how many
- * authors and when; the first author's face fades while folded, as the web.
- */
 function Conversation({
   events,
   comments,
@@ -292,19 +277,12 @@ function Conversation({
   );
 }
 
-/** Sentence form of a verdict, so the rail reads as prose. */
 function verdictAction(state: string): string {
   if (state === "APPROVED") return "approved these changes";
   if (state === "CHANGES_REQUESTED") return "requested changes";
   return "had a review dismissed";
 }
 
-/**
- * A verdict: the reviewer's face with the verdict's glyph pinned to it, the
- * sentence and when, then the summary. The web links the login to GitHub; a
- * login is no thumb target, so the face, sentence and time are one 44 high
- * link, as a commit row, and the summary sits under it.
- */
 function VerdictRow({ review, stale, scheme }: { review: PrOverview["reviewEvents"][number]; stale: boolean; scheme: Scheme }) {
   const theme = EVA_THEME[scheme];
   return (
@@ -358,7 +336,6 @@ const LIFECYCLE = {
   closed: { icon: IconGitPullRequestClosed, label: "closed this pull request" },
 } as const;
 
-/** The opening, the merge (in the merged violet) or the close (in red). */
 function LifecycleRow({
   kind,
   at,

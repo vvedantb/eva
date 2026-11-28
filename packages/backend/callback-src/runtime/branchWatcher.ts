@@ -5,18 +5,8 @@ import { callConvexWithRetry } from "../http/convexClient.js";
 import { log } from "../utils.js";
 import { git, readCurrentBranch } from "./gitExec.js";
 
-/**
- * Reports the branch the sandbox checkout is actually on, plus how much of its
- * work is not on GitHub yet, so the UI can show both live. Deliberately independent of the turn lifecycle: the user can `git
- * checkout` in the Terminal panel with no turn running, and heartbeats only fire
- * while the daemon holds a turn lease.
- */
-
-/** Cheap enough to run on every tick; bounded so a wedged git cannot stall us. */
 const GIT_TIMEOUT_MS = 5_000;
-/** Backstop for inotify events the kernel dropped (or a worktree pointer file). */
 const POLL_INTERVAL_MS = 15_000;
-/** A checkout rewrites HEAD several times; wait for it to settle. */
 const DEBOUNCE_MS = 300;
 
 export type BranchTarget = { kind: "sessionChat"; chatId: string };
@@ -50,7 +40,6 @@ export function formatBranch(
   return sha.length > 0 ? sha : null;
 }
 
-/** Work on the checked-out branch that origin does not have yet. */
 type GitSync = { uncommittedFiles: number; unpushedCommits: number };
 export type GitState = { branch: string; sync: GitSync | null };
 
@@ -83,12 +72,6 @@ function readWatchedBranch(): string | null {
   return formatBranch(abbrev, short.ok ? short.stdout : "");
 }
 
-/**
- * Counts with the turn-end commit's exclusions, so they match what "Commit &
- * push" would publish. Unpushed is measured against every origin ref: a new
- * branch forked from `origin/main` counts only its own commits. Null when git
- * cannot answer — the branch is still reported.
- */
 function readGitSync(): GitSync | null {
   const status = git(
     ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
@@ -124,7 +107,6 @@ async function runCheckLoop(): Promise<void> {
   const activeTarget = target;
   if (activeTarget === null) return;
   if (checkInFlight) {
-    // A checkout landed mid-send; re-read once the in-flight call settles.
     recheckQueued = true;
     return;
   }
@@ -147,7 +129,6 @@ async function runCheckLoop(): Promise<void> {
           });
           lastReported = state;
         } catch (error) {
-          // Leave lastReported alone so the next tick retries this state.
           log(
             "branchWatcher: report failed: " +
               (error instanceof Error ? error.message : String(error)),
@@ -175,8 +156,6 @@ function scheduleCheck(): void {
 
 function watchHeadIn(gitDir: string): void {
   try {
-    // Watch the directory, not `.git/HEAD`: git replaces HEAD by writing a temp
-    // file and renaming it, so a watcher on the file follows the dead inode.
     const headWatcher = watch(gitDir, (_event, filename) => {
       if (filename !== "HEAD") return;
       scheduleCheck();
@@ -229,8 +208,6 @@ export function startBranchWatcher(): void {
   const pollInterval = setInterval(() => {
     void runCheckLoop();
   }, POLL_INTERVAL_MS);
-  // Never keep the process alive: a one-shot run exits as soon as its turn
-  // completes, and this is best-effort telemetry.
   pollInterval.unref();
 
   void runCheckLoop();

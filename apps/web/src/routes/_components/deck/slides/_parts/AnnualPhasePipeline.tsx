@@ -9,19 +9,11 @@ export interface AnnualPhase {
   date: string;
 }
 
-/** Seconds between one phase lighting up and the next. */
 const STAGGER = 0.3;
-/** How long the rail takes to fill between two phases. */
 const FILL = 0.24;
 const GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
-/** How far the numbered circles stand off the rail they sit on. */
 const NODE_DEPTH = 40;
 
-/**
- * The fade lives on the circle and the caption rather than on the node itself:
- * an opacity below 1 forces `transform-style: flat`, which would collapse the
- * `Layer` depth every time a phase faded in.
- */
 function PhaseNode({
   phase,
   index,
@@ -45,7 +37,6 @@ function PhaseNode({
     >
       <Layer depth={NODE_DEPTH}>
         <span className="relative mx-auto flex size-11">
-          {/* One ring leaves the node as the light reaches it. */}
           <m.span
             aria-hidden
             className="absolute inset-0 rounded-full"
@@ -88,7 +79,6 @@ function PhaseNode({
             : { duration: DUR.fast },
         }}
       >
-        {/* Fixed height so a two-line label does not push its date out of line. */}
         <div className="mt-4 flex h-9 items-start justify-center text-[15px] leading-tight font-medium text-white">
           {phase.label}
         </div>
@@ -98,7 +88,6 @@ function PhaseNode({
   );
 }
 
-/** A rail segment that fills left to right with a light packet running along it. */
 function PhaseConnector({ active, delay }: { active: boolean; delay: number }) {
   return (
     <m.div
@@ -119,7 +108,6 @@ function PhaseConnector({ active, delay }: { active: boolean; delay: number }) {
           delay: active ? delay : 0,
         }}
       />
-      {/* Kept mounted: the travel has to be triggered by a prop change. */}
       <m.div
         aria-hidden
         className="absolute top-1/2 -mt-[5px] -ml-[5px] size-2.5 rounded-full bg-white shadow-[0_0_14px_#3B7DD8]"

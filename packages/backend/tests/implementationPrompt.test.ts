@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { buildImplementationPrompt } from "../convex/_agentTasks/prompts";
 
 test("buildImplementationPrompt uses commitText for edit commits, not reviewer annotations", () => {
-  // promptText may include "[author · date]"; that must not leak into git commits.
   const prompt = buildImplementationPrompt(
     { title: "Add dark mode", description: "Toggle theme", taskNumber: 12 },
     "eva/task-12",

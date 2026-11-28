@@ -29,13 +29,10 @@ interface FileViewerPanelProps {
   sandboxId: string | undefined;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /** Sandbox repo root, so the breadcrumb reads as a repo-relative path. */
   root: string | null;
 }
 
-/** An open edit session. A `null` draft means untouched since it started/saved. */
 interface EditSession {
-  /** The sandbox+path the session belongs to; anything else abandons it. */
   key: string;
   draft: string | null;
   saving: boolean;
@@ -64,8 +61,6 @@ export function FileViewerPanel({
     "md",
     markdownViewParser,
   );
-  // Wrapping is a reading preference, so it persists across files — the same
-  // storage-backed toggle the Diffs tab uses for its own wrap control.
   const [wrap, setWrap] = useLocalStorage("eva:file-viewer-wrap", false);
   const { state, revision, refresh, install } = useSandboxFileContents({
     sandboxId,
@@ -78,9 +73,6 @@ export function FileViewerPanel({
   const canEdit = Boolean(filePath) && Boolean(sandboxId) && isActive;
   const sessionKey =
     sandboxId && filePath && isActive ? fileCacheKey(sandboxId, filePath) : "";
-  // Adjust-state-during-render rather than an effect: switching file, or the
-  // sandbox stopping, must drop the draft before anything renders it against
-  // the wrong file.
   if (editSession !== null && editSession.key !== sessionKey) {
     setEditSession(null);
   }
@@ -93,13 +85,9 @@ export function FileViewerPanel({
     if (editSession === null || editSession.saving) return;
     if (!sandboxId || !filePath) return;
     const content = editSession.draft;
-    // Clean is a no-op — the Cmd+S handler still swallows the event.
     if (content === null || content === loadedContent) return;
     const attempt = editSession.key;
 
-    // Only ever touches the session it started in: the open file may have
-    // changed while the write was in flight, and the user may have typed on,
-    // in which case the draft stays dirty against the newly saved content.
     const settle = (saved: boolean) =>
       setEditSession((session) => {
         if (session === null || session.key !== attempt) return session;
@@ -139,8 +127,6 @@ export function FileViewerPanel({
     })();
   };
 
-  // No file open, or nothing to read it from: a bare notice, without the
-  // header's path and controls, which would have nothing to point at.
   if (state.kind === "empty") {
     return <ViewerNotice message="Select a file to view it" />;
   }
@@ -169,8 +155,6 @@ export function FileViewerPanel({
     return {
       kind: "idle",
       onEdit: () => {
-        // Editing the rendered preview would swap the body out from under the
-        // caret, so move to source first.
         if (isMarkdown && markdownView === "rendered") {
           void setMarkdownView("source");
         }
@@ -213,7 +197,6 @@ export function FileViewerPanel({
           wrap={wrap}
           resolvedTheme={resolvedTheme}
           editing={editing}
-          // Rendered markdown has no caret, so an edit session is source view.
           renderMarkdown={isMarkdown && markdownView === "rendered" && !editing}
           onRetry={refresh}
           onDraftChange={(contents) =>

@@ -2,27 +2,6 @@ import { Check as Tick, ChevronDown, FileText, Lock } from 'lucide-react'
 import { Avatar, Bar, Collapse, Facepile, Field, Menu, Popover, Roll, Row, Stage, Text, Window, type Act, type Layout } from '../../kit'
 import './share.css'
 
-// A document editor's Share popover. Beats: Share opens the popover over the
-// document, an email is typed and committed as a chip with Enter, the role
-// menu sets Can edit, Invite drops the new person in at the top of the access
-// list. Share closes the popover; the list is reset while it is out of sight.
-//
-// What makes it hold up frame by frame:
-// - The popover is measured from the Share button: its right edge is the
-//   button's right edge, its top 8px below it. Nothing is hard-coded.
-// - The role picker sits inside the field, as wide as its longest label, so
-//   Can view to Can edit moves nothing; only the word changes. The field is
-//   wide enough for the whole email as text and as a chip.
-// - The role menu opens under its trigger and runs to the popover's inner
-//   edge, so it covers the role column whole: no word peeks out beside it.
-// - The document behind is placeholder bars, so the popover's edge only ever
-//   crosses filler, never a word.
-// - Every person is the same two-line Row, the new one included.
-// - The Enter keycap shows over the document, clear of the popover.
-//
-// Real strings: the title, the popover's labels, the email, the roles and the
-// people. The document behind is placeholder.
-
 type S = {
   open: boolean
   email: string
@@ -36,7 +15,6 @@ type S = {
 
 const initial: S = { open: false, email: '', typing: false, chip: false, menu: false, role: 'Can view', hover: undefined, added: false }
 
-// The still is the payoff: the popover open with the new person added
 const poster: S = { ...initial, open: true, added: true }
 
 const DOC = 'Launch brief'
@@ -47,13 +25,11 @@ const EDIT = ROLES.indexOf('Can edit')
 async function script(a: Act<S>) {
   await a.wait(600)
 
-  // 1. Share opens the popover; the field takes focus
   a.mark('open')
   await a.click({ at: 'share', x: 0.5, y: 0.55 })
   await a.set({ open: true })
   await a.wait(700)
 
-  // 2. Type the email, then Enter commits it as a chip in place
   a.mark('type')
   await a.click({ at: 'field', x: 0.3, y: 0.5 })
   await a.set({ typing: true })
@@ -64,7 +40,6 @@ async function script(a: Act<S>) {
   await a.set({ chip: true })
   await a.wait(600)
 
-  // 3. The role menu: open it, run down to Can edit, pick it
   a.mark('role')
   await a.click({ at: 'role', x: 0.45, y: 0.5 })
   await a.set({ menu: true })
@@ -75,9 +50,6 @@ async function script(a: Act<S>) {
   await a.set({ menu: false, role: 'Can edit' })
   await a.wait(500)
 
-  // 4. Invite: the person drops in at the top of the list, then the field
-  //    clears. Two beats: one cause, one effect at a time, so the eye follows
-  //    the chip into the list before the field empties behind it
   a.mark('invite')
   await a.click({ at: 'invite', x: 0.5, y: 0.55 })
   await a.set({ added: true })
@@ -85,7 +57,6 @@ async function script(a: Act<S>) {
   await a.set({ chip: false, email: '', role: 'Can view' })
   await a.wait(1850)
 
-  // 5. Share again closes it; the list resets out of sight
   a.mark('close')
   await a.click({ at: 'share', x: 0.5, y: 0.55 })
   await a.set({ open: false })
@@ -96,8 +67,6 @@ async function script(a: Act<S>) {
 
 type Geo = { win: { x: number; y: number; w: number; h: number }; pop: number }
 
-// Wide: one 24px gutter above and either side of the window, which runs off
-// the bottom. Compact: the same at the column's width, a narrower popover.
 const GEO: Record<Layout, Geo> = {
   wide: { win: { x: 24, y: 24, w: 432, h: 360 }, pop: 344 },
   compact: { win: { x: 16, y: 20, w: 326, h: 400 }, pop: 310 },
@@ -207,8 +176,6 @@ export default function ShareDemo() {
   )
 }
 
-/** The role menu sits 6px under the field, from its trigger's left edge to
- *  6px past the popover's inner edge (over the role column), in the popover's own coordinates. */
 function roleMenu(rect: (name: string) => { x: number; y: number; width: number; height: number }, pop: { left: number; top: number; width: number }) {
   const r = rect('role')
   const f = rect('field')

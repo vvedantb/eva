@@ -21,12 +21,6 @@ import { sessionOwnerTaskId } from "./owner";
 import { buildSessionBranchName } from "../_git/branchNames";
 
 /**
- * The repos checked out in one session's sandbox: the primary (`sessions.repoId`,
- * always at `/tmp/repo`) plus every `sessionRepos` row cloned beside it under
- * `/tmp/workspace`.
- */
-
-/**
  * Inserts the session's linked repos: one `sessionRepos` row each, checked
  * out on the session's own branch name off its own default base, and sets
  * `linkedRepoCount`. The rows are the sandbox's clone list, so they must exist
@@ -74,14 +68,8 @@ export const sessionRepoValidator = v.object({
   ...sessionRepoFields,
 });
 
-/**
- * One checked-out repo, primary or linked. A single shape for both so the UI
- * renders one list; the fields only a clone has (`installDependencies`,
- * `clonedAt`, `devPort`, `sessionRepoId`) are absent on the primary row.
- */
 const sessionRepoListItemValidator = v.object({
   kind: v.union(v.literal("primary"), v.literal("linked")),
-  /** The `sessionRepos` row this came from. Absent on the primary. */
   sessionRepoId: v.optional(v.id("sessionRepos")),
   repoId: v.id("githubRepos"),
   owner: v.string(),
@@ -115,7 +103,6 @@ export const listRepos = authQuery({
       kind: "session",
       sessionId: session._id,
     });
-    // A task's session: the task owns the primary repo's PR.
     const ownerTaskId = sessionOwnerTaskId(session);
     const primaryPr =
       ownerTaskId === undefined
@@ -147,8 +134,6 @@ export const listRepos = authQuery({
       .collect();
     const linked = await Promise.all(
       links.map(async (link) => {
-        // The repo row may have been deleted under the session; the link still
-        // knows its own owner/name, so only presentation fields are lost.
         const linkedRepo = await ctx.db.get(link.repoId);
         const linkedPr = sessionRepoPullRequest(prs, link._id);
         return {

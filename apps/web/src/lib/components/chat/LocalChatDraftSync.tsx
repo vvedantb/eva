@@ -4,9 +4,7 @@ import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextare
 
 interface LocalChatDraftSyncProps {
   mentionRef: React.RefObject<MentionTextareaHandle | null>;
-  /** Display text that seeded the editor at mount — skip the redundant first save. */
   initialDisplay: string;
-  /** Persist tokenized draft (empty string clears). */
   onSave: (tokenized: string) => void;
 }
 
@@ -38,8 +36,6 @@ export function LocalChatDraftSync({
     onSave(tokenized);
   }, [textInput.value]); // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable no-effect/no-event-handler, no-effect/no-pass-data-to-parent */
-  // Same dep rationale as ChatDraftSync: seed/skip only needs mount; mentionRef
-  // is a stable ref; onSave identity changes are fine for a local write.
 
   return null;
 }

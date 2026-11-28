@@ -52,7 +52,6 @@ const threadSummary = v.object({
       needsReply: v.boolean(),
     }),
   ),
-  /** True when the caller is a participant Eva is still waiting on. */
   needsMyReply: v.boolean(),
   sourceOwnerUserId: v.optional(v.id("users")),
   sourceKind: routedSourceKindValidator,
@@ -80,7 +79,6 @@ const messageSummary = v.object({
   createdAt: v.number(),
 });
 
-/** Questions are answered in Manager Ave, which `/ave` opens full screen. */
 const AVE_HREF = "/ave";
 
 function normalizeTopicKey(raw: string): string {
@@ -103,7 +101,6 @@ function titleOf(question: string): string {
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}…` : trimmed;
 }
 
-/** A title quoted mid-sentence keeps its own punctuation out of ours. */
 function quotedTitle(question: string): string {
   return `"${titleOf(question).replace(/[.?!]+$/, "")}"`;
 }
@@ -119,7 +116,6 @@ function clipContext(text: string, max: number): string {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
-/** Briefing the teammate sees above Eva's question. */
 function composeAskContext(
   agentContext: string,
   source: SourceRecord,
@@ -141,7 +137,6 @@ async function latestUserRequest(
   ctx: QueryCtx,
   sourceId: string,
 ): Promise<string | undefined> {
-  // A task's or project's chat is its session's (none before it chatted).
   const sessionId = ctx.db.normalizeId("sessions", sourceId);
   const taskId = ctx.db.normalizeId("agentTasks", sourceId);
   const projectId = ctx.db.normalizeId("projects", sourceId);
@@ -188,11 +183,6 @@ function sourceHref(
   return entityHref(kind, repo, numId);
 }
 
-/**
- * The source chat's id with its table still attached. `sourceId` is the same
- * id as a plain string (how threads store it); `ref` is what writes use, so no
- * caller has to cast the string back to the right table.
- */
 type SourceRef =
   | { kind: "session"; id: Id<"sessions"> }
   | { kind: "task"; id: Id<"agentTasks"> }
@@ -291,8 +281,6 @@ async function enrichThread(
   const needsMyReply = rows.some(
     (row) => row.userId === viewerUserId && row.needsReply,
   );
-  // Stable order for the UI — row order is insertion order, which shuffles as
-  // people are added to an existing thread.
   participants.sort((a, b) => a.name.localeCompare(b.name));
   return {
     _id: thread._id,
@@ -376,12 +364,6 @@ function notifyEntityArgs(
   return { projectId: source.ref.id };
 }
 
-/**
- * Where a source's transcript and queue live: a session's Main chat (created
- * for a pre-chat legacy session), or the chat a task or project talks in
- * (`ensureOwnerChat`, created on first need), with the chat's model.
- * Undefined when the source is gone.
- */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
@@ -435,8 +417,6 @@ async function enqueueSourceWake(
   if (source.deleted || source.archived) return;
   const parent = await transcriptParent(ctx, source);
   if (!parent) return;
-  // The reply runs like any send: on the chat's sticky model, traits and
-  // account. A teammate wrote it, not an MCP caller: no "via MCP" badge.
   await queueSystemChatMessage(ctx, {
     context: parent.context,
     userId,
@@ -456,10 +436,6 @@ type DirectoryMember = {
   role: RoleUser | null;
 };
 
-/**
- * Who Eva is asking. A role with several matches is no longer ambiguous: the
- * whole role gets the question, which is what a group thread is for.
- */
 async function resolveParticipants(
   ctx: QueryCtx,
   args: {
@@ -498,7 +474,6 @@ async function resolveParticipants(
         "Pass userIds or role (business, dev, designer). Call list_work_profiles first.",
     };
   }
-  // The person driving the source chat must never be asked their own question.
   const others = chosen.filter((row) => row.userId !== args.actorUserId);
   if (others.length === 0) {
     return {
@@ -518,10 +493,6 @@ type AskGate =
     }
   | { ok: false; error: string };
 
-/**
- * Everything that must hold before anyone is picked. `ask` and `candidatesFor`
- * share it so the agent sees the same refusal whichever it calls first.
- */
 async function gateAsk(
   ctx: QueryCtx,
   actorUserId: Id<"users">,
@@ -547,9 +518,6 @@ async function gateAsk(
       error: "This repo is not on a team. Ask in the session chat.",
     };
   }
-  // Count members rather than reading `team.isPersonal`: a team can be flagged
-  // personal and still have several people on it (that is the main working team
-  // in production), so the flag does not answer "is there anyone to ask".
   if (!(await teamHasOtherMembers(ctx, team._id, actorUserId))) {
     return {
       ok: false,
@@ -689,7 +657,6 @@ export const countWaitingForMe = authQuery({
       (thread): thread is Doc<"routedThreads"> =>
         thread !== null && OPEN_STATUSES.has(thread.status),
     );
-    // Team access once per team, not once per thread.
     const teamIds = [...new Set(openThreads.map((thread) => thread.teamId))];
     const access = await Promise.all(
       teamIds.map((teamId) => hasTeamAccess(ctx.db, teamId, ctx.userId)),
@@ -728,8 +695,6 @@ export const reply = authMutation({
       body,
       createdAt: now,
     });
-    // Snapshot before patching, so `needsReply` still reads as it did when Eva
-    // asked and the outstanding list is the people who have not answered yet.
     const rows = await threadParticipants(ctx, thread._id);
     const outstanding: string[] = [];
     for (const row of rows) {
@@ -747,8 +712,6 @@ export const reply = authMutation({
       }
     }
     outstanding.sort((a, b) => a.localeCompare(b));
-    // A group question still needs a human until everyone asked has answered;
-    // Eva is woken on each reply either way (below), so this is display state.
     await ctx.db.patch(thread._id, {
       status: outstanding.length > 0 ? "waiting_human" : "waiting_eva",
       lastMessageAt: now,
@@ -770,7 +733,6 @@ export const reply = authMutation({
         `${name} replied: ${previewOf(body)}`,
       );
       if (source.ownerUserId !== ctx.userId) {
-        // The owner acts in the chat the reply just woke, not in Ave.
         const repo = await ctx.db.get(thread.repoId);
         await createNotification(ctx, {
           userId: source.ownerUserId,
@@ -872,8 +834,6 @@ async function askCore(
   });
   if (!chosen.ok) return chosen;
   const topicKey = normalizeTopicKey(args.topicKey);
-  // One open thread per topic per source, whoever is on it — a second ask adds
-  // people rather than forking the conversation.
   const existing = await ctx.db
     .query("routedThreads")
     .withIndex("by_source_and_topic", (q) =>
@@ -908,8 +868,6 @@ async function askCore(
       createdAt: now,
     });
   }
-  // Eva has just asked, so everyone on the thread is on the hook again — the
-  // people already there as well as anyone newly named.
   const alreadyOn = created ? [] : await threadParticipants(ctx, threadId);
   const onThread = new Set(alreadyOn.map((row) => row.userId));
   for (const row of alreadyOn) {
@@ -1080,7 +1038,6 @@ export const candidatesFor = internalQuery({
     const directory = await listDirectoryForTeam(ctx, gate.teamId);
     return {
       ok: true as const,
-      // The person driving the session must not be offered their own question.
       candidates: directory.filter(
         (row) =>
           row.userId !== actorUserId &&

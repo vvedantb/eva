@@ -75,9 +75,6 @@ export function TaskDetailInline({
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
   const isHiddenTab = useIsHiddenSandboxTab();
-  // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
-  // it, so a reload lands back on Files / Review. A tab the user picks
-  // afterwards overrides that for this mount.
   const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<SandboxTab | null>(
     null,
   );
@@ -103,7 +100,6 @@ export function TaskDetailInline({
     isStarting,
     handleStartExecution,
     handleResolveConflicts,
-    // Sandbox preview
     canStartSandbox,
     canViewSandbox,
     showSandbox,
@@ -121,8 +117,6 @@ export function TaskDetailInline({
     taskSession,
   } = detail;
   const { sandbox } = taskSession;
-  // A project task with a PR opens on Review, as in the project panel
-  // (`defaultProjectTaskTab`).
   const urlSandboxTab: SandboxTab = simpleView
     ? "preview"
     : fileViewerPath && !isHiddenTab("files")
@@ -132,8 +126,6 @@ export function TaskDetailInline({
         ? "review"
         : "preview";
   const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
-  // A task chats in a session chat (a project task's own chat in the
-  // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId;
   const isAgentActive = useTaskAgentActive(chatParentId);
@@ -147,8 +139,6 @@ export function TaskDetailInline({
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
-  // Chat file chips → Files tab + `?file=` (same pattern as sessions).
-  // Must stay above early returns so hooks order is stable.
   const openFile = (path: string) => {
     if (isHiddenTab("files")) return;
     if (routing?.mode === "quick-sandbox") {
@@ -176,7 +166,6 @@ export function TaskDetailInline({
     setExpandRightSignal((n) => n + 1);
   };
 
-  // Must stay above early returns — same hooks-order constraint as openFile.
   const handleSandboxTabChange = (tab: SandboxTab) => {
     if (routing?.mode === "quick-sandbox") {
       if (tab === "prd" || !isTaskRouteSandboxTab(tab)) {
@@ -188,8 +177,6 @@ export function TaskDetailInline({
     }
     setEmbeddedSandboxTab(tab);
   };
-  // Declared here, not inline in the chat panel JSX, so it keeps its identity
-  // and does not re-render every transcript row (same as SessionDetailClient).
   const openAgentsTab = () => {
     handleSandboxTabChange("agents");
     setExpandRightSignal((n) => n + 1);
@@ -213,8 +200,6 @@ export function TaskDetailInline({
   }
 
   const isQuickTask = task.projectId === undefined;
-  // A project task is its chat in its project: the quick task page sends it
-  // to its project task page.
   if (!isQuickTask && routing?.mode !== "project-task") {
     return <ProjectTaskPageRedirect task={task} />;
   }
@@ -233,13 +218,8 @@ export function TaskDetailInline({
       allTags={allTags}
     />
   );
-  // A project task's page has no rail toggle: its panel stays open.
   const isProjectTaskPage = routing?.mode === "project-task";
 
-  // Always mount the sandbox panel when the task can have a sandbox so tabs
-  // (Diffs, etc.) stay reachable while stopped — same as sessions. Panes
-  // self-gate with their own inactive empty states. Tasks that never ran
-  // still get the honest empty message.
   const sandboxRightPanel = (
     panes: SandboxPanesApi,
     owner: SandboxOwner,
@@ -306,7 +286,6 @@ export function TaskDetailInline({
     }) => ReactNode,
   ) => (
     <ResizablePanelLayout
-      // Remount per task: the open flag is read once at mount.
       key={taskId}
       storageKey="task-sandbox-panel"
       chatPane="left"
@@ -430,8 +409,6 @@ export function TaskDetailInline({
       </>
     ) : null;
 
-  // Navigation, so it goes next to the breadcrumb rather than into the header's
-  // action cluster — same split as the project header.
   const quickTaskSurfaceTabs =
     isQuickTask && canViewSandbox && titleSlotElement ? (
       <SandboxSurfaceTabs

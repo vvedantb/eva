@@ -15,14 +15,6 @@ interface Recap {
   changed: readonly string[];
 }
 
-/**
- * One recap per side project: what was built, then what it changed. Step 1
- * shows the build, step 2 the result. Sources: vmem repository from
- * 2 December 2025 (GitHub, checked 22 November 2026), 80% is the BSc
- * final-year project mark; flowtape and Redline on npm from 5 October 2026
- * (npm, checked 15 November 2026); Bee releases from 26 September 2026
- * (GitHub, checked 15 November 2026).
- */
 function ProjectRecap({ recap }: { recap: Recap }) {
   const columns = [
     { label: "What I built", items: recap.built },
@@ -37,7 +29,6 @@ function ProjectRecap({ recap }: { recap: Recap }) {
       <div className="mt-12 grid grid-cols-2 gap-5">
         {columns.map((column, index) => (
           <Reveal key={column.label} step={index + 1}>
-            {/* p-8 inside a 28px outer radius keeps the corners concentric. */}
             <Card className="flex h-[300px] flex-col gap-6 rounded-[28px] p-8">
               <div className={LABEL}>{column.label}</div>
               <ul className="flex flex-col gap-4">

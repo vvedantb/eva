@@ -4,11 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `sessions.addToGroup` puts an existing session into another session's
- * linked-session group (MCP `add_to_session_group`).
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-group-add";
 
@@ -89,11 +84,6 @@ describe("sessions.addToGroup", () => {
     TIMEOUT_MS,
   );
 
-  /**
-   * Without the same-group early return, re-adding leaves the group first: a
-   * two-member group dissolves, and the session is then patched onto the
-   * deleted group id still held by the stale anchor doc.
-   */
   test(
     "re-adding a session to the group it is already in keeps the group",
     async () => {

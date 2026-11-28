@@ -5,7 +5,6 @@ import { AnimatePresence, m } from "motion/react";
 
 export interface ActiveFilterChip<K extends string> {
   key: K;
-  /** May hold a person's name marked `data-pii`. */
   label: ReactNode;
 }
 
@@ -20,10 +19,6 @@ export function ActiveFiltersBar<K extends string>({
   onClearAll: () => void;
 }) {
   return (
-    // Chips are 20px tall on a pointer device, which is not a tap target. They
-    // grow to the 40px floor below `sm` rather than taking `hit-target`:
-    // a chip's neighbour is 6px away, so the 8px ::after bleed on each of them
-    // would overlap and one chip would clear the other's filter.
     <AnimatePresence>
       <m.div
         key="active-filters"
@@ -44,8 +39,6 @@ export function ActiveFiltersBar<K extends string>({
             onClick={() => onClearFilter(f.key)}
             className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-control bg-muted/60 px-2 py-0.5 h-auto font-normal text-xs text-muted-foreground hover:bg-muted transition-colors"
           >
-            {/* The name reads "Remove filter <label>". Not an `aria-label`:
-                that would copy a person's name out of its `data-pii` span. */}
             <span className="sr-only">Remove filter</span>
             <span className="max-sm:truncate">{f.label}</span>
             <IconX

@@ -25,21 +25,16 @@ const messageValidator = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
   ...messageFields,
-  // Resolved agent media (recordings/screenshots), in capture order.
   media: v.optional(
     v.array(
       v.object({
         url: v.union(v.string(), v.null()),
         contentType: v.union(v.string(), v.null()),
-        // Sandbox file name, null for captures stored before names were kept.
         name: v.union(v.string(), v.null()),
       }),
     ),
   ),
-  // Resolved URLs for user-attached input files, in the same order as
-  // attachmentStorageIds. Entries that fail to resolve are null.
   attachmentUrls: v.optional(v.array(v.union(v.string(), v.null()))),
-  // Parallel metadata for rendering (image thumb vs file chip).
   attachments: v.optional(
     v.array(
       v.object({
@@ -57,16 +52,8 @@ export const generateUploadUrl = authMutation({
   handler: async (ctx) => ctx.storage.generateUploadUrl(),
 });
 
-/**
- * Largest `tail` a caller may ask for: the web app's biggest older-history
- * page (`useOlderTranscript`). Past it, the caller asks for everything.
- */
 const MAX_TAIL = 400;
 
-/**
- * Which messages of a parent to read, oldest first in the result. Ranges are
- * on `_creationTime`, the last field of every index.
- */
 type MessageRange =
   | { kind: "all" }
   | { kind: "tail"; count: number }
@@ -100,11 +87,6 @@ function messageRange(args: {
   return tail === undefined ? { kind: "all" } : { kind: "tail", count: tail };
 }
 
-/**
- * The transcript's rows: a thread reply (`replyTo` set) shows in its thread
- * panel only, so every range reads `by_parent_and_reply_to` with `replyTo`
- * unset.
- */
 async function readMessages(
   db: QueryCtx["db"],
   parentId: typeof parentIdValidator.type,
@@ -160,7 +142,6 @@ async function readMessages(
   }
 }
 
-/** Fetches messages for a parent and resolves their image/video/attachment storage URLs. */
 async function resolveMessageUrls(
   ctx: Pick<QueryCtx, "db" | "storage">,
   parentId: typeof parentIdValidator.type,
@@ -262,7 +243,6 @@ export const listByParent = authQuery({
  * cannot read its chat. Activity payloads ship trimmed, as in `listByParent`.
  */
 export const listReplies = authQuery({
-  // A plain string: the chat renders optimistic rows under client-minted ids.
   args: { rootId: v.string() },
   returns: v.union(
     v.null(),
@@ -318,9 +298,7 @@ export const listThreadSummaries = authQuery({
     v.object({
       rootId: v.id("messages"),
       preview: v.string(),
-      /** The root's author; absent for Eva's messages. */
       authorId: v.optional(v.id("users")),
-      /** When the root was sent. */
       rootAt: v.number(),
       replyCount: v.number(),
       lastReplyAt: v.number(),
@@ -361,7 +339,6 @@ export const openThreadTurn = authQuery({
     v.object({
       rootId: v.id("messages"),
       preview: v.string(),
-      /** She is waiting on a question, asked in that thread. */
       hasQuestion: v.boolean(),
     }),
   ),
@@ -413,12 +390,7 @@ export const hasMessagesBefore = authQuery({
   },
 });
 
-/** Shorter queries match most of a chat by word start: not worth a load. */
 const SEARCH_MIN_QUERY_LENGTH = 3;
-/**
- * Search hits read per query. Each hit is a whole message read, and assistant
- * rows carry large activity logs, so the most relevant few must do.
- */
 const SEARCH_HIT_LIMIT = 50;
 
 /**
@@ -534,7 +506,6 @@ export const listUserMessagesByParent = authQuery({
         q.eq("parentId", args.parentId).eq("role", "user"),
       )
       .collect();
-    // Thread replies are not in the transcript, so not in its jump rail either.
     return rows.filter((row) => row.replyTo === undefined).map((row) => ({
       _id: row._id,
       _creationTime: row._creationTime,
@@ -567,10 +538,6 @@ export const activityLogById = authQuery({
   },
 });
 
-/**
- * The reply bubble a turn opened, or null when the id is unknown or the row
- * is gone. Takes a string: the callback sends the turn id it got from env.
- */
 async function turnReplyMessage(
   db: QueryCtx["db"],
   turnId: string | undefined,
@@ -588,23 +555,14 @@ export const updateLastInternal = internalMutation({
   args: {
     parentId: parentIdValidator,
     messageId: v.optional(v.id("messages")),
-    /**
-     * The turn that made the media. Its own reply is the target, so a queued
-     * follow-up that lands during the upload cannot take the media.
-     */
     turnId: v.optional(v.string()),
     content: v.optional(v.string()),
     activityLog: v.optional(v.string()),
     variations: v.optional(v.array(variationValidator)),
-    // Legacy single-media args: stale callback bundles still in flight during
-    // a deploy call with these instead of mediaStorageIds. New callers use
-    // mediaStorageIds.
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** File names of the new captures, merged into the message's names. */
     mediaNames: messageFields.mediaNames,
-    /** Set by public entry points (`screenshots:attachMedia`) to enforce access. */
     requesterUserId: v.optional(v.id("users")),
   },
   returns: v.null(),
@@ -637,7 +595,6 @@ export const updateLastInternal = internalMutation({
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     if (args.variations !== undefined) patch.variations = args.variations;
 
-    // Accumulates within a turn, so a second capture cannot orphan the first.
     const mediaStorageIds = appendMediaStorageIds(target.mediaStorageIds, args);
     if (mediaStorageIds !== undefined) {
       patch.mediaStorageIds = mediaStorageIds;

@@ -14,20 +14,11 @@ import {
 import { chatLogDigestBlock } from "../chatLog";
 import { bumpThreadRoot } from "../_messages/replies";
 
-/** Hard cap on the injected block, including its closing tag. */
 const HANDOFF_CONTEXT_LIMIT = 24_000;
 const RECENT_MESSAGE_COUNT = 6;
 const RECENT_MESSAGE_LIMIT = 2_400;
 const OLDER_MESSAGE_LIMIT = 320;
-/** Reserve for the omission marker, so the closing tag survives the cap. */
 const OMISSION_MARKER_RESERVE = 80;
-/**
- * Bounds on the history read. A handoff only ever replays the tail since the
- * incoming provider's last checkpoint, so the whole table is never needed.
- * Rows carry their full `activityLog`, so a count cap alone can pass Convex's
- * 16 MiB read limit: reads go in small batches and stop at a byte budget. One
- * send reads twice (alert + prompt), so the budget stays well under half.
- */
 const HANDOFF_SCAN_LIMIT = 400;
 const HANDOFF_SCAN_BATCH = 4;
 const HANDOFF_SCAN_BYTE_BUDGET = 2 * 1024 * 1024;
@@ -56,10 +47,6 @@ function truncate(text: string, limit: number): string {
   return `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
-/**
- * One transcript line. Content is JSON-escaped and `<` is escaped further so a
- * message body can never close the block or forge a tag of its own.
- */
 function transcriptLine(message: HandoffMessage, limit: number): string {
   const role = message.role === "user" ? "User" : "Assistant";
   const encodedContent = JSON.stringify(message.content)
@@ -76,7 +63,6 @@ function eligibleTranscriptMessage(message: HandoffMessage): boolean {
   );
 }
 
-/** Index of the turn being started, which the caller has already inserted. */
 function currentUserIndex(messages: ReadonlyArray<HandoffMessage>): number {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -105,11 +91,6 @@ function previousUserModel(
   return undefined;
 }
 
-/**
- * Last point the incoming provider's own native session is known to hold: an
- * assistant row it completed successfully. Everything after it is unseen.
- * Returns -1 when the provider has never completed a turn here.
- */
 function successfulProviderCheckpoint(
   messages: ReadonlyArray<HandoffMessage>,
   beforeIndex: number,
@@ -164,7 +145,6 @@ export function buildHandoffContextBlock(
   );
   const olderLines: string[] = [];
 
-  // Newest-first admission: the turns nearest the handoff matter most.
   for (let index = older.length - 1; index >= 0; index -= 1) {
     const message = older[index];
     if (!message) continue;
@@ -203,8 +183,6 @@ export function detectModelHandoffFromMessages(
   const incomingModel = normalizeAIModel(incomingModelInput);
   const currentIndex = currentUserIndex(messages);
   if (currentIndex < 0) return { kind: "none" };
-  // No prior conversation means there is nothing to catch anyone up on, whatever
-  // the fallback provider says.
   if (!messages.slice(0, currentIndex).some(eligibleTranscriptMessage)) {
     return { kind: "none" };
   }
@@ -295,7 +273,6 @@ export async function maybeInsertModelHandoffAlert(
   parentId: HandoffParentId,
   incomingModel: string,
   fallbackPreviousProvider: AIProvider | undefined,
-  /** The thread the incoming turn answers in; the alert joins it. */
   replyTo?: Id<"messages">,
 ): Promise<void> {
   const handoff = await detectModelHandoff(
@@ -344,8 +321,6 @@ export async function prependModelHandoffContext(
   prompt: string,
 ): Promise<string> {
   if (handoff.kind !== "handoff") return prompt;
-  // The incoming provider's own session has not seen this chat: give it the
-  // Log too, so agreed decisions survive the switch.
   const stored = await chatSourceFieldsForEntityId(ctx.db, String(parentId));
   const source = stored ? chatSourceArgFromFields(stored) : null;
   const logBlock = source ? await chatLogDigestBlock(ctx, source) : "";

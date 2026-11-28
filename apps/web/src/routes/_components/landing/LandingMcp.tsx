@@ -94,7 +94,6 @@ export function LandingMcp() {
   );
 }
 
-/** Tool calls arriving from an external MCP client, revealed one at a time. */
 function McpCallPanel() {
   return (
     <div className="overflow-hidden rounded-surface bg-background smooth-shadow-ring-md">

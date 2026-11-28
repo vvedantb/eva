@@ -35,9 +35,7 @@ import { isJsonObject } from "../utils.js";
 export type ClaudeGoal = {
   objective: string;
   status: "active" | "complete";
-  /** Stop hook evaluations that said "not met yet". */
   checks: number;
-  /** The evaluator's latest "not met" reason. */
   lastCheck?: string;
 };
 
@@ -48,9 +46,7 @@ const GOAL_ACTIVE =
   /^Goal active: ([\s\S]+?) \((?:not yet evaluated|(\d+) turns?)\)/;
 const STOP_HOOK_FEEDBACK_PREFIX = "Stop hook feedback:\n[";
 const UNRECOVERABLE_CLEAR_PREFIX = "Goal cleared after an unrecoverable error";
-/** Claude truncates the repeated condition in Stop hook feedback to this. */
 const FEEDBACK_CONDITION_LIMIT = 500;
-/** Keeps a chatty evaluator reason from bloating the chat document. */
 const LAST_CHECK_LIMIT = 500;
 
 function textOf(content: JsonValue | undefined): string {
@@ -99,14 +95,12 @@ export function isGoalWorkFrame(message: JsonObject): boolean {
   return model !== undefined && model !== "<synthetic>";
 }
 
-/** The "not met" reason when `text` is Stop hook feedback for `objective`. */
 function stopHookReason(text: string, objective: string): string | undefined {
   if (!text.startsWith(STOP_HOOK_FEEDBACK_PREFIX)) return undefined;
   const rest = text.slice(STOP_HOOK_FEEDBACK_PREFIX.length);
   const full = objective + "]: ";
   if (rest.startsWith(full)) return rest.slice(full.length).trim();
   if (objective.length <= FEEDBACK_CONDITION_LIMIT) return undefined;
-  // Shortened condition: match its head, then the first `]: ` after it.
   const head = objective.slice(0, FEEDBACK_CONDITION_LIMIT - 100);
   if (!rest.startsWith(head)) return undefined;
   const end = rest.indexOf("]: ", head.length);

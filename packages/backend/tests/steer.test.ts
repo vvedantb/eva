@@ -5,13 +5,6 @@ import schema from "../convex/schema";
 import { decideSteerDelivery } from "../convex/_chat/steer";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Steer sends a queued message into the running turn. Claude and Codex take
- * it natively through the daemon claim; the row must never be lost or sent
- * twice: a delivered row is deleted, a rejected one stays at the front of the
- * queue so it runs as the next turn.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|steer-test";
 const MODEL = "claude:sonnet";
@@ -86,7 +79,6 @@ async function createRunningChatFixture() {
       userId,
       lastModel: MODEL,
     });
-    // The running turn: an open turn bound to its workflow.
     await ctx.db.insert("turns", {
       entityId: chatId,
       sessionId,
@@ -150,13 +142,11 @@ describe("native steer through the daemon claim", () => {
       await t.mutation(api.queuedMessages.steer, { id: steerId });
       let state = await readState(fixture);
       expect(state.steerRequestedAt).toBeTypeOf("number");
-      // Moved ahead of the earlier message, waiting for the daemon.
       expect(state.queue).toEqual([
         { id: steerId, steer: "requested" },
         { id: earlierId, steer: undefined },
       ]);
 
-      // A daemon without a live turn does not take it.
       const busy = await t.mutation(api._sessions.workflow.claimPendingTurn, {
         chatId,
         model: MODEL,
@@ -176,7 +166,6 @@ describe("native steer through the daemon claim", () => {
       expect(state.steerRequestedAt).toBeUndefined();
       expect(state.queue[0]).toEqual({ id: steerId, steer: "delivering" });
 
-      // Handed over exactly once.
       const again = await t.mutation(api._sessions.workflow.claimPendingTurn, {
         chatId,
         model: MODEL,

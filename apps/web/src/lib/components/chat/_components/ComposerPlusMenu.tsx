@@ -43,7 +43,6 @@ function matchesQuery(
   return false;
 }
 
-/** Sticky search field for plus-menu sublists (keeps typing out of Radix key handling). */
 function SubmenuSearch({
   value,
   onChange,
@@ -95,10 +94,8 @@ interface DataMenuItem {
 
 interface ComposerPlusMenuProps {
   dataItems: DataMenuItem[];
-  /** Same `/` entries the editor's slash picker shows. */
   skillItems: SlashItem[];
   mentionRef: RefObject<MentionTextareaHandle | null>;
-  /** Circular muted plus, matching the compact ChatGPT-style composer. */
   compact?: boolean;
 }
 

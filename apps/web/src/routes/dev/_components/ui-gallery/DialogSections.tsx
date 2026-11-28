@@ -32,7 +32,6 @@ import {
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
 const noop = () => {};
-/** Keeps focus (and its ring / caret) out of overlays rendered open on load. */
 const skipAutoFocus = (event: Event | SyntheticEvent) => event.preventDefault();
 
 export function DialogSection() {

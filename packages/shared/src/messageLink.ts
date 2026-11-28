@@ -1,7 +1,6 @@
 /** `?message=<id>`: the chat message a shared link points at. */
 export const MESSAGE_LINK_PARAM = "message";
 
-/** Base for parsing a bare path; never appears in the result. */
 const PATH_BASE = "http://eva.invalid";
 
 /**

@@ -19,35 +19,27 @@ import {
 } from "../../_components/motion";
 import { MoA2AvatarRing } from "../_parts/MoA2AvatarRing";
 
-/** Three colleagues, left to right. The first shares, the second draws on it. */
 const PEOPLE = [0, 1, 2];
 
 const STAGE_W = 1088;
 const COLUMN_WIDTH = 300;
-/** Keep in step with the row's `gap-[90px]`. */
 const COLUMN_GAP = 90;
-/** Centre to centre, first colleague to second. */
 const SPAN = COLUMN_WIDTH + COLUMN_GAP;
 const AVATAR = 132;
 const BADGE_W = 200;
 const BADGE_H = 56;
-/** Avatar, then the `mt-6` gap, then half a badge: the badge row's centre line. */
 const LINK_Y = AVATAR + 24 + BADGE_H / 2;
-/** Badge centres of the sharer and the colleague who draws on it. */
 const SHARER_X = STAGE_W / 2 - SPAN;
 const TAKER_X = STAGE_W / 2;
-/** The link runs badge edge to badge edge, with a little air at each end. */
 const LINK_FROM = { x: SHARER_X + BADGE_W / 2 + 6, y: LINK_Y };
 const LINK_TO = { x: TAKER_X - BADGE_W / 2 - 6, y: LINK_Y };
 
-/** The static glow of the capacity packet: a painted gradient, no shadow. */
 const PACKET =
   "radial-gradient(circle, #fff 0 24%, rgba(59,125,216,0.6) 40%, transparent 70%)";
 
 function Person({ index }: { index: number }) {
   const deckStep = useDeckStep();
   const attached = deckStep >= 1;
-  /** The sharer lights first; the colleague lights as the link reaches them. */
   const linked = deckStep >= 2 && index < 2;
   const at = index * 0.12;
 
@@ -80,7 +72,6 @@ function Person({ index }: { index: number }) {
           ease: EASE.expo,
         })}
       >
-        {/* The shared edge is a painted ring whose opacity moves. */}
         <m.span
           aria-hidden
           className="absolute inset-0 rounded-[inherit] ring-[1.5px] ring-[#3B7DD8]/80"
@@ -91,7 +82,6 @@ function Person({ index }: { index: number }) {
             ease: EASE.out,
           })}
         />
-        {/* The key turns as it lands, like one going into a lock. */}
         <m.span
           className="flex"
           initial={{ rotate: -40 }}
@@ -132,7 +122,6 @@ export function AnnualAccounts() {
             ))}
           </Stagger>
 
-          {/* One straight link, badge to badge, carrying capacity across. */}
           <Connector
             from={LINK_FROM}
             to={LINK_TO}

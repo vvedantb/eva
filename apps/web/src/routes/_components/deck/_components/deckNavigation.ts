@@ -2,12 +2,6 @@ import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { DeckSlide } from "../slides/types";
 
-/**
- * Where the build is up to, plus which slide that build belongs to and which
- * way we travelled to get there. Keeping all three in one state object is what
- * lets an external slide change (URL, outline click, browser back) implicitly
- * reset the build to step 0 without an effect.
- */
 interface DeckState {
   slide: number;
   step: number;
@@ -24,7 +18,6 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export interface DeckNavigation {
-  /** The slide being shown, already clamped to the deck. */
   entry: DeckSlide;
   total: number;
   step: number;
@@ -32,9 +25,7 @@ export interface DeckNavigation {
   goTo: (target: number) => void;
   next: () => void;
   prev: () => void;
-  /** Back one whole slide, landing on its finished build. */
   prevSlide: () => void;
-  /** Jumps to a slide *and* a build step, for the other window's messages. */
   applyRemote: (slide: number, step: number) => void;
 }
 
@@ -92,7 +83,6 @@ export function useDeckNavigation(
 
   function prevSlide() {
     if (slide <= 1) return;
-    // Step back onto the *finished* previous slide rather than replaying its build.
     const resting = slides[slide - 2].steps;
     setDeckState({ slide: slide - 1, step: resting, direction: -1 });
     onNavigate(slide - 1);
@@ -101,7 +91,6 @@ export function useDeckNavigation(
 
   function prev() {
     if (step > 0) {
-      // Backwards, so an auto-playing build does not step forward again.
       setDeckState({ slide, step: step - 1, direction: -1 });
       onMove(slide, step - 1);
       return;

@@ -1,33 +1,15 @@
-/**
- * The note card shown after Select element on a direct sandbox link, where
- * Eva's own comment card (React, in the Eva page) does not exist. It mirrors
- * `AnnotationCommentCard`: the element chips as a disclosure for the details,
- * a note field and two buttons. With a session the main button sends the note
- * to Eva; without one it copies the note and the element's context.
- *
- * Plain DOM in a shadow root, like the toolbar. Sizes, spacing and type are the
- * values measured on the real component; colours are Eva's theme variables.
- */
-
 import { applyTheme, getTheme } from "./theme";
 
 export interface SelectionCardInfo {
-  /** `<div.card>`: tag and first class. */
   chip: string;
-  /** Nearest React component name, or "". */
   reactName: string;
-  /** Trimmed text of the element, or "". */
   text: string;
-  /** Role / aria summary, or "". */
   accessibility: string;
-  /** The element's HTML, for the details. */
   html: string;
-  /** `prop` / `value` style pairs, for the details. */
   styles: { prop: string; value: string }[];
 }
 
 export interface SelectionCard {
-  /** Follows the element when the page scrolls or resizes. */
   reposition(rect: Rect): void;
   setHiddenForCapture(hidden: boolean): void;
   close(): void;
@@ -110,16 +92,12 @@ export function openSelectionCard({
 }: {
   info: SelectionCardInfo;
   rect: Rect;
-  /** "Send to Eva" with a session, "Copy for Eva" without one. */
   submitLabel: string;
-  /** A send needs a note; a copy works with none. */
   requireNote: boolean;
-  /** Resolves null when done (the card closes), or a message to show. */
   onSubmit: (note: string) => Promise<string | null>;
   onCancel: () => void;
 }): SelectionCard {
   const host = document.createElement("div");
-  // The picker skips anything carrying this attribute.
   host.setAttribute("data-eva-annotate-overlay", "1");
   applyTheme(host, getTheme());
   const shadow = host.attachShadow({ mode: "open" });
@@ -151,7 +129,6 @@ export function openSelectionCard({
     card.appendChild(a11y);
   }
 
-  // Details: the element's HTML and its styles, as in Eva's card.
   const details = div("details");
   details.hidden = true;
   const code = div("code");
@@ -217,7 +194,6 @@ export function openSelectionCard({
     const height = card.offsetHeight;
     const maxLeft = window.innerWidth - width - GUTTER_PX;
     const left = Math.min(Math.max(GUTTER_PX, next.left), Math.max(GUTTER_PX, maxLeft));
-    // Below the element; above it when there is no room; never off screen.
     const below = next.top + next.height + GAP_PX;
     const above = next.top - height - GAP_PX;
     const fitsBelow = below + height <= window.innerHeight - GAP_PX;
@@ -255,8 +231,6 @@ export function openSelectionCard({
     onCancel();
   });
   submitButton.addEventListener("click", submit);
-  // The page has its own shortcuts (a "/" search, arrow keys): typing here
-  // must not reach them.
   for (const type of ["keydown", "keyup", "keypress"]) {
     shadow.addEventListener(type, (event) => event.stopPropagation());
   }
@@ -276,7 +250,6 @@ export function openSelectionCard({
   document.documentElement.appendChild(host);
   reposition(rect);
   field.focus();
-  // Eva's card scales in from 0.96; the class lands on the next frame.
   window.requestAnimationFrame(() => card.classList.add("in"));
 
   return {

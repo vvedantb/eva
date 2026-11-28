@@ -62,7 +62,6 @@ test("upsertRelatedPrsBlock lists a task's sibling PRs once, above the footer", 
   const api = { label: "acme/api", url: "https://github.com/acme/api/pull/12" };
   const web = { label: "acme/web", url: "https://github.com/acme/web/pull/7" };
 
-  // Single-repo task: no siblings, body unchanged.
   expect(upsertRelatedPrsBlock(body, [])).toBe(body);
 
   const once = upsertRelatedPrsBlock(body, [api]);
@@ -88,7 +87,6 @@ test("upsertRelatedPrsBlock lists a task's sibling PRs once, above the footer", 
       `[View in Eva](${evaUrl}) | *Created by Eva*`,
     ].join("\n"),
   );
-  // The description rewrite leaves the related block alone.
   expect(insertPrDescription(twice, "New description")).toContain(
     `- [acme/web](${web.url})\n${RELATED_PRS_END}`,
   );

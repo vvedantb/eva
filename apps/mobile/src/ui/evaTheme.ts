@@ -26,11 +26,7 @@ export function applyEvaTheme(darkFamily: "dark" | "neutral" = "dark") {
       separator: pair("border"),
       surface: pair("card"),
       surfaceCard: pair("card"),
-      // As the web's `compat-shadcn-rgb.css`: `surface-secondary` is `--muted`,
-      // `surface-tertiary` and `default-foreground` are `--secondary`'s.
       surfaceSecondary: pair("muted"),
-      // Phone-only glass chrome (tab bar, header buttons): in dark, Eva's card
-      // at the package's 88% and Eva's border. Light keeps the package glass.
       fill: { light: tokens.color.fill.light, dark: withAlpha(dark.card, 0.88) },
       hairline: { light: tokens.color.hairline.light, dark: dark.border },
     },
@@ -47,12 +43,8 @@ export function applyEvaTheme(darkFamily: "dark" | "neutral" = "dark") {
       overlay: pair("popover"),
       overlayForeground: pair("popoverForeground"),
       fieldPlaceholder: pair("mutedForeground"),
-      // The web `.tabs-segmented` active pill (`--segment-active`), under the
-      // foreground label.
       segment: pair("segmentActive"),
       segmentForeground: pair("foreground"),
-      // The bottom tab bar pill: Eva's secondary in light, so it shows on the
-      // near-white glass; the segmented pill in dark.
       tabBarPill: { light: light.secondary, dark: dark.segmentActive },
     },
   });
@@ -60,7 +52,6 @@ export function applyEvaTheme(darkFamily: "dark" | "neutral" = "dark") {
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
-/** `#rrggbb` as the `h s% l%` channels global.css holds, to one decimal. */
 function hslChannels(hex: string): string {
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
   const max = Math.max(r, g, b);

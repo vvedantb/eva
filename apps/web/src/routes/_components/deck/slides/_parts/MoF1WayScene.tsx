@@ -9,14 +9,12 @@ import {
   useMotionCue,
 } from "../../_components/motion";
 
-/** Every scene starts once its card has landed. */
 const LEAD = 0.45;
 
 function grow(on: boolean, delay: number, duration = DUR.slow) {
   return on ? { duration, ease: EASE.expo, delay } : LEAVE;
 }
 
-/** Quick task: one job runs from start to finish. */
 function OneJob({ on, delay }: { on: boolean; delay: number }) {
   return (
     <div className="flex w-full items-center gap-3">
@@ -50,7 +48,6 @@ function OneJob({ on, delay }: { on: boolean; delay: number }) {
   );
 }
 
-/** Session: a conversation that keeps going, turn after turn. */
 const TURNS: readonly { width: number; mine: boolean }[] = [
   { width: 150, mine: true },
   { width: 190, mine: false },
@@ -87,7 +84,6 @@ function Conversation({ on, delay }: { on: boolean; delay: number }) {
   );
 }
 
-/** Project: several jobs in order, each starting where the last one ends. */
 const JOBS: readonly { start: number; span: number }[] = [
   { start: 0, span: 0.36 },
   { start: 0.3, span: 0.4 },

@@ -25,14 +25,8 @@ import {
 } from "./messages";
 
 const FAILED_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure"]);
-/** Only this many failed checks get their logs downloaded. */
 const MAX_LOGGED_CHECKS = 3;
-/**
- * Slack before the first webhook of a batch: a comment is created a moment
- * before GitHub delivers its webhook.
- */
 const FEEDBACK_LOOKBACK_MS = 60_000;
-/** How long a review batch waits for an earlier one for the same PR. */
 const SIBLING_RETRY_MS = 30_000;
 
 export interface RepoRef {
@@ -41,7 +35,6 @@ export interface RepoRef {
   repo: string;
 }
 
-/** Failed check runs on a commit, with log tails for GitHub Actions jobs. */
 async function fetchFailedChecks(
   { octokit, owner, repo }: RepoRef,
   headSha: string,
@@ -61,8 +54,6 @@ async function fetchFailedChecks(
         [run.output.title, run.output.summary]
           .filter((part) => part !== null && part !== "")
           .join("\n\n") || null;
-      // An Actions check run's id is its job id. Other apps (Vercel, …) have
-      // no downloadable log, so their output summary has to do.
       const isActions = run.app?.slug === "github-actions";
       const logTail =
         isActions && index < MAX_LOGGED_CHECKS
@@ -126,7 +117,6 @@ export const flush = internalAction({
     if (context === null) return null;
 
     if (context.action === "run") {
-      // Agent runs settle through their workflow, like a cron run.
       await ctx.runMutation(internal.automations.startEventRun, {
         runId,
         event,
@@ -134,8 +124,6 @@ export const flush = internalAction({
       return null;
     }
 
-    // An earlier batch for this PR is still sending; its cursor decides where
-    // this one starts, so wait for it rather than overlap.
     if (context.siblingRunning) {
       await ctx.scheduler.runAfter(
         SIBLING_RETRY_MS,
@@ -215,17 +203,14 @@ export const flush = internalAction({
           await settle("cancelled", "A task already exists for this issue");
           return null;
         }
-        // The task exists and is starting; the link comment is a courtesy.
         try {
           await commentOnIssue(ref, event, created.taskId, context);
         } catch {
-          // Missing Issues permission or WEB_APP_URL: the task still runs.
         }
         await settle("success", `Created quick task #${created.numId}`);
         return null;
       }
 
-      // route_to_pr_chat
       if (context.chat === null) {
         await settle("cancelled", "The PR no longer belongs to an Eva chat");
         return null;
@@ -281,7 +266,6 @@ export const confirmCiGreen = internalAction({
       repo,
       pull_number: passed.prNumber,
     });
-    // A green old commit says nothing about the PR as it is now.
     if (pr.data.head.sha !== passed.headSha) return null;
     const runs = await octokit.paginate(octokit.rest.checks.listForRef, {
       owner,
@@ -312,13 +296,10 @@ type FlushContext = {
 
 interface RoutedMessage {
   message: string;
-  /** Run-history line, given the chat's label ("session #12"). */
   summary: (chatLabel: string) => string;
-  /** Review runs: where the next batch starts. */
   cursor?: number;
 }
 
-/** The chat message for a routed event, or null when it has gone stale. */
 async function buildRoutedMessage(
   ref: RepoRef,
   event: RepoEvent,
@@ -332,7 +313,6 @@ async function buildRoutedMessage(
           `Stopped CI auto-fix after ${MAX_CI_FIX_ATTEMPTS} attempts (${chat})`,
       };
     }
-    // A newer push supersedes this failure; its own checks will report.
     const pr = await ref.octokit.rest.pulls.get({
       owner: ref.owner,
       repo: ref.repo,
@@ -375,7 +355,6 @@ async function buildRoutedMessage(
   return null;
 }
 
-/** Links the new task from the issue, so the reporter can follow along. */
 async function commentOnIssue(
   { octokit, owner, repo }: RepoRef,
   event: Extract<RepoEvent, { kind: "issue_labeled" }>,

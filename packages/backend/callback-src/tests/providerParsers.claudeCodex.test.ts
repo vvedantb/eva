@@ -4,7 +4,6 @@ import { codexParseLine } from "../providers/codex.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type { JsonObject, JsonValue } from "../types.js";
 
-/** Shapes a provider stream must never crash on, whatever the field types. */
 const MALFORMED: JsonValue[] = [
   "",
   " ",
@@ -70,7 +69,6 @@ test("claudeParseLine never throws and ignores non-message frames", () => {
   for (const payload of payloads) {
     const events = claudeParseLine(payload);
     expect(Array.isArray(events)).toBe(true);
-    // `result` and unknown frames carry no activity, whatever their fields.
     if (payload.type === "result" || payload.type === "unknown_kind") {
       expect(events).toEqual([]);
     }
@@ -101,8 +99,6 @@ test("claude tool_result trims the id, joins text blocks, and drops junk", () =>
     },
   ]);
 
-  // A blank id is no id, a non-string content yields no text, and only the
-  // boolean `true` marks an error — a truthy string does not.
   expect(
     claudeParseLine({
       type: "tool_result",
@@ -140,7 +136,6 @@ test("claude user messages complete only tool_result blocks with an id", () => {
     },
   ]);
 
-  // No usable block: the user frame produces nothing at all.
   expect(
     claudeParseLine({
       type: "user",
@@ -164,7 +159,6 @@ test("claude stream_event frames map deltas and ignore empty text", () => {
       frame({ type: "content_block_start", content_block: { type: "text" } }),
     ),
   ).toEqual([{ kind: "mark_text_block_start" }]);
-  // Only text blocks break the paragraph; thinking and malformed blocks do not.
   expect(
     claudeParseLine(
       frame({
@@ -182,8 +176,6 @@ test("claude stream_event frames map deltas and ignore empty text", () => {
       }),
     ),
   ).toEqual([{ kind: "stream_text_delta", text: " tok " }]);
-  // An empty or non-string delta text is dropped, and never falls through to
-  // the thinking arm even when a thinking field is present.
   expect(
     claudeParseLine(
       frame({
@@ -224,8 +216,6 @@ test("claude assistant blocks are lenient field by field", () => {
     },
   });
   expect(events).toMatchObject([
-    // A blank id leaves the step untracked, but the step is still pushed and
-    // still nested under the subagent parent.
     {
       kind: "push_step",
       step: { type: "bash", parentToolUseId: "toolu_parent" },
@@ -235,8 +225,6 @@ test("claude assistant blocks are lenient field by field", () => {
       trackingId: "toolu_read",
       step: { type: "read", toolUseId: "toolu_read" },
     },
-    // A subagent's thinking is dropped; its text (coerced, not dropped)
-    // becomes a response step under the Agent row.
     {
       kind: "push_subagent_text",
       step: {
@@ -251,8 +239,6 @@ test("claude assistant blocks are lenient field by field", () => {
     undefined,
   );
 
-  // Outside a subagent, non-string thinking/text payloads are coerced, not
-  // dropped.
   resetStateForTests();
   expect(
     claudeParseLine({
@@ -269,7 +255,6 @@ test("claude assistant blocks are lenient field by field", () => {
     { kind: "append_text", text: "7" },
   ]);
 
-  // Read-only todo tools add no row at all.
   expect(
     claudeParseLine({
       type: "assistant",
@@ -282,7 +267,6 @@ test("claude assistant blocks are lenient field by field", () => {
     }),
   ).toEqual([]);
 
-  // Text already streamed as deltas is not appended twice.
   S.streamedAssistantTextThisMessage = true;
   expect(
     claudeParseLine({
@@ -320,7 +304,6 @@ test("claude todo tools fold malformed checklists best-effort", () => {
     { content: "two", status: "pending" },
   ]);
 
-  // TaskCreate falls back to description, and an empty subject adds nothing.
   expect(todos({ subject: "", description: "desc" }, "TaskCreate")).toEqual([
     { content: "one", status: "completed" },
     { content: "two", status: "pending" },
@@ -333,8 +316,6 @@ test("claude todo tools fold malformed checklists best-effort", () => {
     { content: "third", status: "in_progress" },
   ]);
 
-  // TaskUpdate patches the last item; an unknown status resets it to pending
-  // and a blank subject is ignored.
   expect(todos({ status: null, subject: "" }, "TaskUpdate")).toEqual([
     { content: "one", status: "completed" },
     { content: "two", status: "pending" },
@@ -345,7 +326,6 @@ test("claude todo tools fold malformed checklists best-effort", () => {
     { content: "two", status: "pending" },
     { content: "renamed", status: "pending" },
   ]);
-  // A malformed TodoWrite payload clears the checklist, as it always has.
   expect(
     claudeParseLine({
       type: "assistant",
@@ -408,7 +388,6 @@ test("codex reasoning items route text on any lifecycle frame", () => {
     expect(
       codexParseLine({ type, item: { type: "reasoning", text: " deep " } }),
     ).toEqual([{ kind: "update_reasoning", text: " deep " }]);
-    // Blank reasoning text is not a step and not a reasoning update.
     expect(
       codexParseLine({ type, item: { type: "reasoning", text: "   " } }),
     ).toEqual([]);
@@ -418,7 +397,6 @@ test("codex reasoning items route text on any lifecycle frame", () => {
 
 test("codex item ids gate tracking differently on start and completion", () => {
   resetStateForTests();
-  // A blank id cannot track a step, so the step is pushed untracked.
   expect(
     codexParseLine({
       type: "item.started",
@@ -432,14 +410,12 @@ test("codex item ids gate tracking differently on start and completion", () => {
     }),
   ).toMatchObject([{ kind: "push_step", trackingId: "item_1" }]);
 
-  // On completion an id of any length still names the step to complete.
   expect(
     codexParseLine({
       type: "item.completed",
       item: { type: "command_execution", id: "", output: "done" },
     }),
   ).toMatchObject([{ kind: "complete_tool", trackingId: "" }]);
-  // Without an id there is nothing to name: a bare result, else a plain mark.
   expect(
     codexParseLine({
       type: "item.completed",

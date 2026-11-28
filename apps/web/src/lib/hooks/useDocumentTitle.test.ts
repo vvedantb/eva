@@ -5,12 +5,6 @@ import {
   readEntityTitle,
 } from "./useDocumentTitle";
 
-/**
- * Regression (#957): session shells hand over across two commits — the new
- * shell publishes first, the old shell's cleanup runs one deferred render
- * later. An unconditional clear blanked the new title, so every tab read
- * "Sessions | Eva".
- */
 describe("publishEntityTitle", () => {
   it("keeps the newer title when the older publisher clears late", () => {
     const clearOld = publishEntityTitle("Old session");
@@ -31,13 +25,6 @@ describe("publishEntityTitle", () => {
   });
 });
 
-/**
- * The tab title used to read "Sessions | Eva" for every session, so three
- * pinned tabs were indistinguishable. These rules pin the composition that
- * fixes that: the entity names the tab, the section stays as the suffix, and
- * the unread count leads so it survives the browser's truncation of long
- * titles.
- */
 describe("composeDocumentTitle", () => {
   it("names the entity ahead of the section", () => {
     expect(
@@ -55,7 +42,6 @@ describe("composeDocumentTitle", () => {
     ).toBe("Projects | Eva");
   });
 
-  /** Tabs are narrow: anything but a leading count gets truncated away. */
   it("leads with the unread count", () => {
     expect(
       composeDocumentTitle({ section: "Sessions", entity: null, unread: 3 }),
@@ -71,18 +57,12 @@ describe("composeDocumentTitle", () => {
     ).not.toContain("(");
   });
 
-  /**
-   * Landing and auth callbacks declare no `staticData.title`. The marketing
-   * title is the whole string there — no " | Eva" suffix and no count, since
-   * the query behind the count is skipped while signed out.
-   */
   it("falls back to the marketing title when nothing is named", () => {
     expect(
       composeDocumentTitle({ section: null, entity: null, unread: 4 }),
     ).toBe("Eva - Your New Coworker");
   });
 
-  /** A detail view can resolve before its route label does — no stray "·". */
   it("renders an entity with no section", () => {
     expect(
       composeDocumentTitle({ section: null, entity: "Untitled doc", unread: 0 }),

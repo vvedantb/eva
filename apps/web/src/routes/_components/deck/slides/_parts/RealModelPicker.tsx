@@ -30,7 +30,6 @@ import {
 
 const FABLE: AIModel = "claude:claude-fable-5-2";
 
-/** The same trimmed set and five ticks the shipped simple view uses. */
 const SIMPLE_OPTIONS = getSimpleViewModelOptions(AI_MODEL_OPTIONS, FABLE);
 const LADDER_STEPS = SIMPLE_VIEW_MODEL_LADDER.flatMap((id) =>
   SIMPLE_OPTIONS.filter((option) => option.id === id),
@@ -65,16 +64,10 @@ function Toggle({ simple }: { simple: boolean }) {
   );
 }
 
-/**
- * The composer's under-bar: the real model trigger markup (provider icon,
- * model label, chevron) sitting under a stand-in prompt box, so the panel above
- * reads as an open picker rather than a floating list.
- */
 function ComposerBar({ model }: { model: AIModel }) {
   const option = findModelOption(model, AI_MODEL_OPTIONS);
   return (
     <div className="w-full">
-      {/* The prompt box carries on to the next slide as "You" (see `SHARED`). */}
       <m.div
         layoutId={SHARED.prompt}
         transition={{ layout: MORPH }}
@@ -102,10 +95,6 @@ function ComposerBar({ model }: { model: AIModel }) {
   );
 }
 
-/**
- * Walks the ladder thumb from the cheapest tick up to Fable shortly after the
- * card mounts, so the audience sees the slider move rather than a static card.
- */
 function scheduleLadderWalk(onStep: (model: AIModel) => void): () => void {
   const timeouts: number[] = [];
   LADDER_STEPS.forEach((step, index) => {
@@ -117,13 +106,6 @@ function scheduleLadderWalk(onStep: (model: AIModel) => void): () => void {
   };
 }
 
-/**
- * The shipped ladder names no models — a presenter's audience would see five
- * dots. These labels sit under the card, on the deck side only, and come from
- * the same options the ladder gets so they cannot drift. The 28px gutter is the
- * card's padding plus the slider's own `inset-x-4`, so each label centres on
- * its tick.
- */
 function LadderLabels({ selected }: { selected: AIModel }) {
   const lastIndex = LADDER_STEPS.length - 1;
   return (
@@ -152,10 +134,6 @@ function LadderLabels({ selected }: { selected: AIModel }) {
   );
 }
 
-/**
- * The list autofocuses its search box, which would swallow the deck's arrow
- * keys. Hand focus back to the deck root once that settles.
- */
 function releaseFocusToDeck(node: HTMLDivElement): () => void {
   const timeout = window.setTimeout(() => {
     const active = document.activeElement;
@@ -177,8 +155,6 @@ export function RealModelPicker() {
   const simple = useDeckStep() >= 1;
   const [model, setModel] = useState<AIModel>(FABLE);
   const [traits, setTraits] = useState<StoredModelTraits>({});
-  // Stable ref callbacks: an inline one is re-attached on every render, which
-  // would restart the walk (and the state it sets) forever.
   const [ladderRef] = useState(() => (node: HTMLDivElement | null) => {
     if (!node) return;
     setModel(FIRST_STEP);
@@ -192,7 +168,6 @@ export function RealModelPicker() {
   return (
     <div
       className="flex w-[440px] flex-col gap-3"
-      // The deck advances on a stage click; inside the panel a click is a pick.
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-center justify-between">
@@ -218,7 +193,6 @@ export function RealModelPicker() {
               ref={ladderRef}
             >
               <div className="w-full rounded-lg bg-popover p-3 text-popover-foreground smooth-shadow-ring-lg">
-                {/* Inside the card, so the band cannot clip the card's own shadow. */}
                 <Sheen step={1} delay={0.35} className="-m-3 rounded-lg p-3">
                   <SimpleModelLadder
                     value={model}

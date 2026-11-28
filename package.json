@@ -14,6 +14,7 @@
     "ext:build": "pnpm --filter eva-assist-extension build",
     "ext:release": "npx tsx scripts/release-extension.ts",
     "lint": "oxlint -c .oxlintrc.json .",
+    "no-comments": "oxlint -c scripts/oxlint/no-comments.json --fix",
     "typecheck": "pnpm --parallel --filter @eva/web --filter @eva/backend --filter @eva/mobile typecheck",
     "build": "pnpm --filter @eva/web build",
     "ci": "bun run --parallel lint typecheck build test",

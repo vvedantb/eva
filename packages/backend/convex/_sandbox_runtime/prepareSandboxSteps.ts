@@ -17,7 +17,6 @@ type PrepareSandboxArgs = {
   baseBranch?: string;
   branchName?: string;
   createRetry?: { maxAttempts: number; initialBackoffMs: number; base: number };
-  /** Skip repo startup + background commands (read-only ephemeral agent runs). */
   skipStartupCommands?: boolean;
 };
 
@@ -52,7 +51,6 @@ export function plannedStartupStages(
   return ["Fetching base branch...", ...branchStages, ...commandStages];
 }
 
-/** Emits progress steps to the streaming entity for real-time UI updates. */
 async function emitSteps(
   step: WorkflowCtx,
   streamingEntityId: string,
@@ -84,8 +82,6 @@ export async function prepareSandboxSteps(
       startupProgress(completedSteps, label, plan),
     );
 
-  // Resolve which existing sandbox (if any) to reuse before the create/resume
-  // action inside createOrResumeSandbox → ensureSandboxRunning.
   if (args.existingSandboxId) {
     await ensureSandboxStartedSteps(step, {
       sandboxId: args.existingSandboxId,
@@ -94,9 +90,6 @@ export async function prepareSandboxSteps(
     });
   }
 
-  // Step 1: Create/resume the sandbox only.
-  // Snapshot-backed quick tasks should start from local refs instead of
-  // blocking sandbox acquisition on a network fetch.
   const setupResult = await step.runAction(
     internal.sandbox.createOrResumeSandbox,
     {
@@ -112,10 +105,6 @@ export async function prepareSandboxSteps(
   );
   const { sandboxId, resumeFellBack } = setupResult;
 
-  // From here the sandbox exists but the caller only learns its id when this
-  // returns. A throw below would leave an ephemeral sandbox running that no
-  // caller's cleanup can see, so delete it here before rethrowing. Reused
-  // (non-ephemeral) sandboxes belong to their entity and are left alone.
   try {
     completedSteps.push({
       type: "tool",
@@ -123,7 +112,6 @@ export async function prepareSandboxSteps(
       status: "complete",
     });
 
-    // Step 2: Fetch latest refs needed for checkout/setup.
     await emitActive("Fetching base branch...");
     try {
       await step.runAction(
@@ -139,8 +127,6 @@ export async function prepareSandboxSteps(
         FETCH_STEP_RETRY,
       );
     } catch {
-      // Non-fatal: snapshot already has the codebase.
-      // resolveBaseTarget falls back to local refs when remote isn't fetched.
       console.warn(
         `[prepareSandbox] fetch base branch (${baseBranch}) failed — continuing with local snapshot refs`,
       );
@@ -172,15 +158,12 @@ export async function prepareSandboxSteps(
           status: "complete",
         });
       } catch {
-        // Non-fatal: branch may not exist yet (new task) or network unreachable.
-        // setupBranch falls back to local refs via resolveBranchStartTarget.
         console.warn(
           `[prepareSandbox] fetch task branch (${args.branchName}) failed — continuing with local refs`,
         );
       }
     }
 
-    // Step 3: Checkout or create the working branch from latest fetched refs.
     if (args.branchName) {
       await emitActive("Setting up branch...");
 
@@ -208,8 +191,6 @@ export async function prepareSandboxSteps(
       );
     }
 
-    // Step 4: Restore service state baked into seeded snapshots before daemons
-    // or startup commands touch local dependencies. No-ops for ordinary snapshots.
     if (!args.skipStartupCommands) {
       await emitActive("Restoring seeded runtime...");
       await step.runAction(
@@ -224,10 +205,6 @@ export async function prepareSandboxSteps(
       });
     }
 
-    // Step 5: Launch background commands (long-running daemons / services) FIRST,
-    // before startup commands, so one-time startup/seed work can depend on services
-    // being up (e.g. `supabase start`, `npx convex dev`). Skipped together with
-    // startup for read-only ephemeral flows (PR recap, interview). Non-fatal.
     if (!args.skipStartupCommands) {
       await emitActive("Launching background commands...");
       try {
@@ -261,11 +238,6 @@ export async function prepareSandboxSteps(
       }
     }
 
-    // Step 6: Run startup commands once per sandbox (marker file). Skipped for
-    // read-only ephemeral flows (PR recap) and when a reused project sandbox
-    // already paid this cost on the first task. Startup commands that depend on
-    // services should wait for readiness themselves, since background daemons
-    // above are launched detached.
     let shouldRunStartupCommands = !args.skipStartupCommands;
     if (shouldRunStartupCommands) {
       const markerExists = await step.runAction(
@@ -303,7 +275,6 @@ export async function prepareSandboxSteps(
           }
         }
       } catch (e) {
-        // Non-fatal: log warning and continue
         const msg = errorMessage(e);
         console.warn(
           `[prepareSandbox] Startup commands failed — continuing: ${msg}`,

@@ -31,13 +31,6 @@ import {
 } from "../../_components/motion";
 import { ProblemFix } from "../_parts/ProblemFix";
 
-/**
- * Sources: security audit 8 August 2026; production dependency warnings
- * 2 critical and 48 high to 0 and 2; verified against production data
- * 19 August 2026 (Eva release notes).
- */
-
-/** Every surface the August audit read, in the order it read them. */
 const SURFACES: readonly { name: string; icon: Icon }[] = [
   { name: "Codebases", icon: IconFolderCode },
   { name: "Sessions", icon: IconMessages },
@@ -49,12 +42,10 @@ const SURFACES: readonly { name: string; icon: Icon }[] = [
 ];
 
 const ROW_W = 1088;
-/** The guard's scan: one beam across the row, one shared rule drawn under it. */
 const SCAN = 1.4;
 const SCAN_LEAD = 0.15;
 const BEAM_W = 180;
 
-/** When the beam passes the middle of chip `index`. */
 function passAt(index: number): number {
   return SCAN_LEAD + moA3InOutAt((index + 0.5) / SURFACES.length) * SCAN;
 }
@@ -91,7 +82,6 @@ function SurfaceChip({
       />
       <span className="text-[13px] text-white/75">{name}</span>
 
-      {/* Status sits in the corner: a warning, swapped for a tick as the guard passes. */}
       <span className="absolute top-2.5 right-2.5 flex size-5 items-center justify-center">
         <m.span
           className="absolute flex size-5 items-center justify-center rounded-full bg-amber-400/15 text-amber-300"
@@ -186,7 +176,6 @@ export function AnnualSecurity() {
             />
           ))}
         </div>
-        {/* The guard itself: one band of light reading every door in turn. */}
         <m.span
           aria-hidden
           className="pointer-events-none absolute inset-y-0 left-0"

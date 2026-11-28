@@ -42,34 +42,19 @@ export type ProgressStep = {
   type: string;
   label: string;
   detail?: string;
-  /** Full, unshortened path for file-type steps. Powers the chat File Viewer. */
   path?: string;
   status: "active" | "complete";
-  /** The tool_use id that produced this step (Claude only). Lets a tool_result
-   * complete the exact step, and anchors nested subagent children. */
   toolUseId?: string;
-  /** Set when this step ran inside a subagent — the parent `Agent` tool_use id.
-   * The UI nests these under the matching `subtask` step. */
   parentToolUseId?: string;
-  /** Todo checklist snapshot (type "todos" only), JSON-serialised for transport. */
   todos?: TodoItem[];
-  /** Bash command (fuller than detail, capped). */
   command?: string;
-  /** Tool result transcript (tail-capped). */
   output?: StepOutput;
-  /** Edit before/after snippets (max 4). */
   edits?: StepEdit[];
-  /** Codex file_change paths (max 10). */
   files?: string[];
-  /** Write tool content head preview. */
   contentPreview?: string;
-  /** True when the tool failed or exited non-zero. */
   isError?: boolean;
-  /** Wall time from push → complete (ms). */
   durationMs?: number;
-  /** AskUserQuestion prompt (type "question" only): the questions and options shown to the user. */
   questions?: StepQuestion[];
-  /** AskUserQuestion answers keyed by question text (blocking questions only). */
   answers?: Record<string, string>;
 };
 
@@ -92,16 +77,6 @@ export type UsageLimitWindow = {
   resetsAt?: number;
 };
 
-/**
- * What the latest observation covered. Mirrors `usageLimitCompletenessValidator`
- * in the Convex validators, and travels with the reading so a windowless row can
- * say WHY it has no windows:
- *
- * - `complete`: an authoritative `/usage` response — Convex replaces the row.
- * - `partial`: a stream event or a refusal message — Convex merges it.
- * - `refused`: the provider answered `rate_limits_available: false`, i.e. it
- *   declined to report. Distinct from having reported nothing at all.
- */
 type UsageLimitCompleteness = "complete" | "partial" | "refused";
 
 /**
@@ -137,8 +112,6 @@ export type CanonicalEvent =
     }
   | { kind: "mark_last_complete" }
   | { kind: "append_text"; text: string }
-  /** Text a subagent wrote — a settled `response` step nested under its
-   * `Agent` row, never the parent's reply. */
   | { kind: "push_subagent_text"; step: ProgressStep }
   | { kind: "stream_text_delta"; text: string }
   | { kind: "mark_message_start" }

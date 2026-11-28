@@ -24,10 +24,6 @@ interface Stat {
   accent?: boolean;
 }
 
-/**
- * Sources: Eva's own records and project history, 11 January to 25 November 2026; sessions exclude the quick tasks and projects moved into sessions on 11 November 2026.
- * Left to right; the lead figure rolls first and the rest trail it.
- */
 const HEADLINE: Stat[] = [
   { value: 5673, label: "changes shipped", delay: 0.55, accent: true },
   { value: 1015, label: "quick tasks raised", delay: 0.75 },
@@ -45,11 +41,6 @@ const SECONDARY: Stat[] = [
 const NUMBER_CLASS =
   "text-6xl leading-none font-semibold tracking-[-0.03em] tabular-nums";
 
-/**
- * The light sits behind the lead figure on entry, then widens and drops onto
- * the second row as it arrives. Pixels are on the 1280×720 stage, so the glow
- * is only ever clipped by the slide edge.
- */
 const LIGHT = [
   { x: 180, y: 296, size: 520 },
   { x: 640, y: 472, size: 900 },

@@ -2,30 +2,6 @@ import { Archive, ChevronLeft, ChevronRight, Ellipsis, Megaphone, MessageSquare,
 import { Avatar, Bar, Collapse, Phone, Row, Stage, type Act } from '../../kit'
 import './swipe.css'
 
-// A mail app's swipe to archive, phone only. Beats: the finger presses a
-// message, swipes it left with the archive action opening behind, lets go,
-// and the row carries on off the screen at the speed the finger left it;
-// then the gap closes and the next message moves up. Plays once; Replay is
-// the reset.
-//
-// What makes the swipe read as one gesture, rather than harsh, paused half
-// way or jolted into place:
-// - The row is under the finger the whole way, 1:1, no lag, no rubber band.
-// - The throw starts at the finger's own speed. The script measures the last
-//   few samples of the drag and builds a curve whose first slope is that
-//   speed, so there is no step at the hand-over and no pause.
-// - The Archive mark rides the row's trailing edge, so it ends at the left
-//   edge when the row is off, as Mail's does; the gap then closes in one ease
-//   with the color solid, never fading through gray.
-// - The kit's touch cursor presses first, then swipes, leaving its trail.
-//
-// Only the swiped message is unread: a blue dot on a placeholder row would
-// be the heaviest mark on filler.
-//
-// Real strings: Inbox, Edit, the swiped message, the one that moves up into
-// its place (so the last frame has words where the eye lands), Archive. The other rows are
-// placeholder lines at a real message's line heights.
-
 type S = { dx: number; throw: { ms: number; ease: string } | null; gone: boolean }
 
 const initial: S = { dx: 0, throw: null, gone: false }
@@ -43,7 +19,6 @@ const MAIL = [
 async function script(a: Act<S>) {
   await a.wait(900)
 
-  // 1. Press the message on its right side, then swipe it left
   a.mark('swipe')
   const row = a.rect('row')
   const y = row.y + row.height * 0.5
@@ -57,24 +32,20 @@ async function script(a: Act<S>) {
       samples.push({ x: at.x, t: performance.now() })
       a.put({ dx: at.x - from })
     },
-    // A swipe is flat: no carrying bow, the finger runs along the row
     { duration: 300, path: (t, a0, b0) => ({ x: a0.x + (b0.x - a0.x) * t, y: a0.y }) },
   )
 
-  // 2. The finger lifts still moving; the row carries on at that speed
   a.mark('throw')
   const last = samples.slice(-4)
   const v = last.length > 1 ? Math.abs(last[last.length - 1]!.x - last[0]!.x) / Math.max(1, last[last.length - 1]!.t - last[0]!.t) : 1
   const dx = samples.length ? samples[samples.length - 1]!.x - from : 0
   const left = row.width + dx
   const ms = 300
-  // A curve whose first slope is the finger's speed, easing out at the end
   const x1 = 0.25
   const y1 = Math.min(0.95, (x1 * v * ms) / left)
   a.put({ throw: { ms, ease: `cubic-bezier(${x1}, ${y1.toFixed(3)}, 0.35, 1)` }, dx: -row.width })
   await a.wait(ms)
 
-  // 3. The gap closes and the next message moves up
   a.mark('close')
   a.put({ gone: true })
   await a.wait(1800)
@@ -95,7 +66,6 @@ export default function SwipeDemo() {
       className="sw"
     >
       {(s, rect, layout) => {
-        // The row moves in screen points; the phone is drawn scaled
         const box = rect('row')
         const k = box.width ? box.width / 402 : 1
         const shift = s.dx / k
@@ -124,7 +94,6 @@ export default function SwipeDemo() {
                   const picked = i === PICK
                   const item = (
                     <div className="sw-cell" data-target={picked ? 'row' : undefined}>
-                      {/* Only while the row is off its rest: at rest its antialiased edges would show a purple hairline */}
                       {picked && (s.dx !== 0 || s.throw) && <div className="sw-action" />}
                       <Row
                         pad={0}
@@ -184,8 +153,6 @@ export default function SwipeDemo() {
   )
 }
 
-// Placeholder rows: bars at a real message's line heights, so every row is
-// the height a real one would be. Only the swiped message has words.
 const FILL = [
   null,
   null,

@@ -1,9 +1,3 @@
-/**
- * What to do with an in-flight assistant message when the user hits stop.
- *
- * Structural parameter types rather than `Doc<>`: this is a decision over a few
- * fields, so Convex docs pass straight in and tests can use plain objects.
- */
 type CancelledMessage = {
   role: string;
   content?: string;
@@ -26,7 +20,6 @@ export type CancelledMessageOutcome =
   | { kind: "delete" }
   | { kind: "patch"; content?: string; activityLog?: string };
 
-/** True when the activity JSON actually has tool steps (not missing / empty / `[]`). */
 function hasToolActivity(activity: string | undefined): boolean {
   if (activity === undefined) return false;
   const trimmed = activity.trim();
@@ -61,7 +54,6 @@ export function cancelledMessageOutcome(
   }
 
   const outcome: CancelledMessageOutcome = { kind: "patch" };
-  // Never overwrite text the message already committed — the stream is behind it.
   if (!message.content && streamedContent) {
     outcome.content = streamedContent;
   }

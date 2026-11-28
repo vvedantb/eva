@@ -6,7 +6,6 @@ import type {
 } from "../../convex/_sandbox/provider";
 import { workspaceDirShell } from "../../convex/_sandbox_runtime/helpers";
 
-/** Hermetic git: no user config, no prompts, a fixed author. */
 const gitEnv = {
   ...process.env,
   HOME: undefined,
@@ -47,7 +46,6 @@ export function localGitSandboxHandle(opts: {
     errorReason: null,
     classifyForReconcile: () => Promise.resolve("alive"),
     exec: (cmd: string): Promise<SandboxExecResult> => {
-      // The commands quote the URL the way git.ts does, so match that form.
       const withWorkspace = cmd.replaceAll(
         workspaceDirShell(),
         quote([opts.workspace]),

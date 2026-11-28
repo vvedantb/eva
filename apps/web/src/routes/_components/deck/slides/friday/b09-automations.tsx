@@ -30,7 +30,6 @@ interface Routine {
   label: string;
 }
 
-/** The five maintenance routines, in the order they run overnight. */
 const ROUTINES: readonly Routine[] = [
   { icon: IconBug, label: "Find critical bugs" },
   { icon: IconTestPipe, label: "Add test coverage" },
@@ -39,7 +38,6 @@ const ROUTINES: readonly Routine[] = [
   { icon: IconChecklist, label: "Code-quality review" },
 ];
 
-/** Fixed geometry, so each routine's line lands on its own review row. */
 const CHIPS_X = 300;
 const CHIP_W = 320;
 const PRS_X = 808;
@@ -102,7 +100,6 @@ export function FridayAutomations() {
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">
-        {/* Edge to edge on the 1088px content width: dial, routines, results. */}
         <div className="relative mt-12 h-[300px] w-full">
           <div className="absolute top-0 left-0">
             <MoF2Dial running={running} />

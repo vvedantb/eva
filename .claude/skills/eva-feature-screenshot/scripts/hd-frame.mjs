@@ -1,23 +1,3 @@
-// HD framing for eva feature shots.
-//
-// Wraps a raw HD screenshot (2560x1440) in the brand presentation frame from
-// templates/frame.html: gradient canvas, rounded card, eva mark + wordmark.
-// frame.html is authored in CSS pixels (1600x900 canvas, 1280x720 card); we
-// render it through Playwright at deviceScaleFactor 2 and capture scale:"device",
-// so the output is a crisp 3200x1800 PNG. The 2560-wide raw sits in the 1280 CSS
-// card at DPR 2 = pixel-perfect, no upscaling. The template stays unchanged.
-//
-// Usage:
-//   node hd-frame.mjs --slug sessions --title Eva
-//   node hd-frame.mjs --slug sessions --raw C:/path/other.png
-//
-// Flags:
-//   --slug <name>   reads screenshots/<today>-<slug>.png, writes -framed.png
-//   --title <text>  wordmark text (default "Eva")
-//   --raw <path>    override the input PNG (reframe an older/other shot)
-//
-// PW_CORE overrides the bundled playwright-core location (see hd-shot.mjs).
-
 import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 
 const PW_CORE = (
@@ -54,9 +34,6 @@ if (!existsSync(raw)) {
 }
 const out = raw.replace(/\.png$/, "-framed.png");
 
-// replaceAll, not replace: frame.html mentions all three tokens in its top
-// comment, and String.replace would swap only that first (comment) occurrence,
-// leaving the real <span>/<img> placeholders untouched.
 const tpl = readFileSync(`${SKILL}/templates/frame.html`, "utf-8");
 const html = tpl
   .replaceAll("__IMG__", `file:///${raw}`)

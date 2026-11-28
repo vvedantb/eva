@@ -14,10 +14,6 @@ export const SANDBOX_TABS = [
 ] as const;
 export type SandboxTab = (typeof SANDBOX_TABS)[number];
 
-/**
- * Old URL segments the web app still redirects: `terminal` (bottom panel),
- * `desktop` (→ `computer`), `diffs` and `pr` (→ `review`).
- */
 const LEGACY_SANDBOX_TAB_SLUGS = ["terminal", "desktop", "diffs", "pr"];
 
 /** Builtin sandbox URL segments that custom tab slugs must not collide with. */

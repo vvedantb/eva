@@ -6,7 +6,6 @@ import { internal } from "../_generated/api";
 /** Where the agent saves one screenshot per scenario, named `<scenarioId>.png`. */
 export const ARENA_SCREENSHOT_DIR = "/tmp/eva-arena";
 
-/** The spec is context only; scenarios carry the checks, so a long doc is cut. */
 const MAX_SPEC_CHARS = 12_000;
 
 export type ArenaScenarioSnapshot = {

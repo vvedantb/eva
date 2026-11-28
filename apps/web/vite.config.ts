@@ -19,9 +19,6 @@ function agentLoginPlugin(): Plugin {
       env = loadEnv("development", server.config.root, "");
 
       server.middlewares.use("/api/auth/agent-login", async (req, res) => {
-        // Mints a sign-in token for the agent user: never serve it to another
-        // machine when the dev server listens on the LAN (`--host`). Traffic
-        // through the in-sandbox preview proxy arrives from loopback.
         const remote = req.socket.remoteAddress;
         if (
           remote !== "127.0.0.1" &&
@@ -87,11 +84,6 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
-/**
- * `/preview-auth` is its own small entry (`preview-auth.html`), not a route of
- * the main app. Vercel rewrites the path in production (`vercel.json`); this
- * does the same for the dev server.
- */
 function previewAuthEntryPlugin(): Plugin {
   return {
     name: "preview-auth-entry",
@@ -106,11 +98,8 @@ function previewAuthEntryPlugin(): Plugin {
   };
 }
 
-/** All of node_modules (@vvedantb/ui ships React Compiler output in `dist`), plus vendored code. */
 const COMPILER_EXCLUDE = [
   /\/node_modules\//,
-  // Vendored Stageshow kit: written for plain React (refs read in render,
-  // hand-tuned effects), so the compiler must not rewrite it.
   /\/src\/lib\/stageshow\//,
 ];
 
@@ -119,26 +108,12 @@ export default defineConfig({
     tailwindcss(),
     tanstackRouter({
       routesDirectory: "./src/routes",
-      // The generator tests this against each bare directory-entry name (not the
-      // full path), so a plain `_utils` excludes both the `_utils.ts` helper file
-      // and the `_utils/` folder — mirroring how `_components` is matched.
       routeFileIgnorePattern:
         "(_components|_utils|Client\\.tsx|Panel\\.tsx|\\.test\\.tsx?)",
       autoCodeSplitting: true,
     }),
-    // Redline tags JSX with data-redline-source before the React transform.
-    // Dev-only by default (off for vite build).
     redline(),
-    // React Compiler for both dev and build so local runtime matches production
-    // memoization. `compiler: true` runs oxc-transform-react (Rust) in-process —
-    // no Babel pass. Bailouts surface as build warnings; `pnpm compiler:check`
-    // is the gate that fails on a new one.
-    // @vvedantb/ui ships already compiled (its `dist`), so node_modules is
-    // excluded whole: compiling it again would only add work.
     react({ compiler: true, exclude: COMPILER_EXCLUDE }),
-    // Nothing imports the icon barrel anymore: static imports are rewritten to
-    // deep paths here, and icon-by-name resolution reads raw path data from
-    // the virtual module below — see lib/components/TablerIconByName.tsx.
     tablerDeepImports(),
     tablerIconData(),
     originHints(),
@@ -153,9 +128,6 @@ export default defineConfig({
         brotliSize: true,
       }),
   ].filter(Boolean),
-  // @vvedantb/ui is served unbundled in dev (it imports CSS files). Its own
-  // dependencies are still pre-bundled: several ship CommonJS, which the
-  // browser cannot import from unbundled source.
   optimizeDeps: {
     exclude: ["@vvedantb/ui"],
     include: [
@@ -216,10 +188,6 @@ export default defineConfig({
     host: "0.0.0.0",
     cors: false,
   },
-  // The @pierre/diffs highlight worker keeps a dynamic `import("shiki/wasm")`
-  // that never runs (we stay on the JS highlighter). Vite's default `iife`
-  // worker format cannot code-split, so it would inline that ~1MB wasm payload
-  // into the worker bundle; ES workers leave it as a lazy chunk.
   worker: {
     format: "es",
   },
@@ -227,9 +195,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Packages using React Context MUST be deduplicated to prevent "Context not found" errors
-    // When pnpm installs multiple copies (different peer deps), each has its own context instance
-    // This forces all imports to resolve to the same instance at bundle time
     dedupe: [
       "react",
       "react-dom",
@@ -247,8 +212,6 @@ export default defineConfig({
       "shiki",
       "frimousse",
       "sonner",
-      // eva's provider (@eva/ui) and the app must share one copy, or the
-      // UiConfig context splits and components lose eva's config.
       "@vvedantb/ui",
     ],
   },
@@ -260,15 +223,6 @@ export default defineConfig({
       },
       output: {
         codeSplitting: {
-          // Only group packages whose whole cost we are happy to load eagerly.
-          //
-          // A group's `test` claims EVERY module under the matched path,
-          // including third-party utilities the package bundles inside its own
-          // dist (dayjs inside mermaid, clsx inside streamdown). One eager
-          // import of such a utility pulls the entire group chunk into the
-          // entry graph, so index.html modulepreloads all of it. That is how
-          // mermaid/shiki/streamdown/katex were costing 1.2 MB gzip on first
-          // load — do not add groups for them.
           groups: [
             {
               name: "vendor-radix",

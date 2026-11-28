@@ -22,7 +22,6 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "today", label: "Today" },
 ];
 
-/** The section pills shown: Today only while the standup is on or has history (outside the screen, see `sectionIndex`). */
 function visibleSections(showsToday: boolean) {
   return showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
 }
@@ -51,7 +50,6 @@ export default function ProjectsScreen() {
   };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   useMarkStandupsRead(section.id === "today");
-  // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const foreground = EVA_THEME[useScheme()].foreground;
   return (
@@ -60,7 +58,6 @@ export default function ProjectsScreen() {
         title={section.label}
         action={
           section.id === "projects" ? (
-            // As the Sessions "+": a round header button, as Back.
             <HeaderIconButton label="New project" onPress={openNew}>
               <IconPlus size={18} color={foreground} />
             </HeaderIconButton>

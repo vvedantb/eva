@@ -21,7 +21,6 @@ export const isBoundToRepo = internalQuery({
  */
 export const BG_HEAL_MIN_INTERVAL_MS = 45_000;
 
-/** Stamps older than this belong to long-gone sandboxes; reaped on claim. */
 const STAMP_GC_AGE_MS = 24 * 60 * 60 * 1000;
 const STAMP_GC_BATCH = 5;
 
@@ -44,15 +43,6 @@ export const claim = internalMutation({
     if (stamp && now - stamp.lastHealAt < BG_HEAL_MIN_INTERVAL_MS) {
       return false;
     }
-    // A session between early-ready and final-ready is about to launch these
-    // daemons itself. Healing now would launch them first (a fresh VM has no
-    // pid files), and the lifecycle's own launch ~15s later kills those
-    // wrappers, orphans their children and truncates the logs. Read after the
-    // rate-limit check so a healthy sandbox pays one session-row read per
-    // interval, and return before stamping so the first poll after final-ready
-    // heals immediately (during the ~1min startup window every tick reads the
-    // row — cheap, indexed). Task/project sandboxes have no session row and
-    // are unaffected.
     const session = await ctx.db
       .query("sessions")
       .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
@@ -71,8 +61,6 @@ export const claim = internalMutation({
         lastHealAt: now,
       });
     }
-    // Opportunistic GC so stamps for destroyed sandboxes never pile up — no
-    // sandbox teardown path needs to know this table exists.
     const dead = await ctx.db
       .query("sandboxHealStamps")
       .withIndex("by_last_heal", (q) =>

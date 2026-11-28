@@ -17,7 +17,6 @@ import {
 } from "../_parts/MoF2Roadmap";
 import type { MoF2Bar } from "../_parts/MoF2Roadmap";
 
-/** Four jobs, top to bottom, in the order they run. */
 const BARS: readonly MoF2Bar[] = [
   {
     label: "Referral portal",
@@ -47,7 +46,6 @@ const BARS: readonly MoF2Bar[] = [
 
 const ZOOMS: readonly string[] = ["Quarter", "Month", "Week"];
 
-/** The zoom is the step-2 move; the camera leans in with it. */
 const SHOTS = [{}, {}, { translateZ: 28, y: -4 }];
 
 function ZoomSwitch() {

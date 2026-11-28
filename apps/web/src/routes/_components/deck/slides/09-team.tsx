@@ -22,18 +22,11 @@ import {
 } from "../_components/motion";
 
 interface Person {
-  /** First name only — the deck is shown outside the team. */
   name: string;
   count: number;
-  /** One label under the figure. Roles and projects live in the notes. */
   countLabel: string;
 }
 
-/**
- * Spotlight order, left to right.
- * Source: sessions and quick tasks created in Eva, 11 January to 30 October 2026,
- * including those later cancelled. The 400 total is colleagues only.
- */
 const PEOPLE: Person[] = [
   { name: "Matt", count: 27, countLabel: "sessions and tasks" },
   { name: "Zuza", count: 250, countLabel: "sessions and tasks" },
@@ -43,12 +36,10 @@ const PEOPLE: Person[] = [
   { name: "Vedant", count: 1182, countLabel: "sessions and tasks" },
 ];
 
-/** The meter under each figure is its share of the largest count. */
 const MOST = Math.max(...PEOPLE.map((person) => person.count));
 
 const CARD_W = 166;
 const CARD_GAP = 16;
-/** Card centres on the 1280×720 stage: 96px gutter, then one card per 182px. */
 const LIGHT = [
   null,
   ...PEOPLE.map((_, index) => ({
@@ -78,8 +69,6 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
       transition={SETTLE}
     >
       <Sheen step={position} delay={0.2} className="rounded-[28px]">
-        {/* p-5 (20px) inside a 28px outer radius: six cards share the row, so
-            the padding is tighter than the 28px a concentric avatar wants. */}
         <Card className="relative flex h-[300px] flex-col rounded-[28px] p-5">
           <div
             className="flex size-12 items-center justify-center rounded-full text-xl font-semibold text-white"
@@ -100,8 +89,6 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
               delay={0.1}
               className="text-5xl leading-none font-semibold text-white"
             />
-            {/* The label arrives with its figure, so a lit card never shows a
-                caption hanging under an empty space. */}
             <m.div
               className="mt-3 text-sm text-white/45"
               initial={{ opacity: 0, y: 6 }}

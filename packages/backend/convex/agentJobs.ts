@@ -19,7 +19,6 @@ import {
 } from "./_agentJobs/owner";
 import { tearDownStaleAgentJob } from "./_agentJobs/slot";
 
-/** The title a job's usage log row shows. */
 async function jobLogTitle(
   ctx: MutationCtx,
   owner: AgentJobOwner,
@@ -46,7 +45,6 @@ async function jobLogTitle(
 export const handleCompletion = authMutation({
   args: {
     entityId: agentJobOwnerIdValidator,
-    /** Automation runs launch with a run id; the callback echoes it back. */
     runId: v.optional(v.string()),
     ...completionCallbackArgs,
     ...turnLeaseFenceArgs,

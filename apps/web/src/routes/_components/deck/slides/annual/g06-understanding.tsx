@@ -15,7 +15,6 @@ interface Case {
   took: string;
 }
 
-/** Four CarePulse changes from September to November 2026. One per build step. */
 const CASES: readonly Case[] = [
   {
     name: "Provider homepage",
@@ -51,7 +50,6 @@ export function AnnualUnderstanding() {
       <div className="mt-10 grid grid-cols-4 gap-4">
         {CASES.map((item, index) => (
           <Reveal key={item.name} step={index + 1}>
-            {/* p-6 inside a 28px outer radius keeps the corners close to concentric. */}
             <Card className="flex h-[320px] flex-col rounded-[28px] p-6">
               <div className="text-xl font-semibold text-white">
                 {item.name}

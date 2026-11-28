@@ -42,7 +42,6 @@ export const prRecapWorkflow = workflow.define({
     headSha: v.string(),
     reviewerFeedback: v.optional(v.array(reviewerFeedbackItemValidator)),
     consumeAgentCommentIds: v.optional(v.array(v.id("docComments"))),
-    /** Already resolved by `startPrRecap`, which records it on the recap doc. */
     model: aiModelValidator,
     ...modelTraitsExecutionFields,
   },
@@ -100,8 +99,6 @@ export const prRecapWorkflow = workflow.define({
       reviewerFeedback: args.reviewerFeedback,
     });
 
-    // Sandbox credentials (esp. VERCEL_PROJECT_ID) live on app rows, not the
-    // codebase root that startRecap passes as args.repoId.
     await runOneShotAgent(step, {
       ownerId: args.docId,
       userId: args.userId,
@@ -115,7 +112,6 @@ export const prRecapWorkflow = workflow.define({
         kind: "ephemeral",
         baseBranch: repoData.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
         createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
-        // Recap agents only read the diff in-repo; no convex import / dev daemons.
         skipStartupCommands: true,
       },
       streamingEntityId: prRecapStreamingEntityId(args.docId),
@@ -175,7 +171,6 @@ export const getRepoData = internalQuery({
     repoName: v.string(),
     defaultBaseBranch: v.optional(v.string()),
     linkRootDirectory: v.optional(v.string()),
-    /** App row used for sandbox credentials (VERCEL_PROJECT_ID lives here). */
     sandboxRepoId: v.id("githubRepos"),
   }),
   handler: async (ctx, args) => {

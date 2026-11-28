@@ -1,10 +1,5 @@
 import type { AgentGoal } from "@eva/backend";
 
-/**
- * Claude's native `/goal` banner above the composer (web and phone
- * `GoalBanner`): the copy both apps show.
- */
-
 /** Claude's own command; the daemon clears the banner when Claude confirms. */
 export const CLEAR_GOAL_COMMAND = "/goal clear";
 

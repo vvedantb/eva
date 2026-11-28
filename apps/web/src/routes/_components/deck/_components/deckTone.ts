@@ -6,17 +6,11 @@ import type { DeckTheme } from "./DeckPrimitives";
  * One map keeps the progress bar, the buttons and the share bar in step.
  */
 export interface DeckTone {
-  /** Page background behind the slide. */
   stage: string;
-  /** Resting pill or bar surface, plus its hover. */
   surface: string;
-  /** Icon buttons: resting muted, hover full strength. */
   control: string;
-  /** Secondary text: counters, hints. */
   muted: string;
-  /** Primary text on a chrome surface. */
   text: string;
-  /** The progress bar's unfilled track. */
   track: string;
 }
 

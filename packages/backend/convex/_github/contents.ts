@@ -13,8 +13,6 @@ export type BlobResult = {
   skipped: null | "too-large" | "binary";
 };
 
-// GitHub's contents API returns a union (file / directory / symlink / submodule);
-// only the file shape carries what we need, so parse at the boundary.
 const fileContentsSchema = z.object({
   type: z.literal("file"),
   encoding: z.string(),
@@ -51,7 +49,6 @@ export async function readFileAtRef(
     file = parsed.data;
   } catch (error) {
     const parsed = requestErrorSchema.safeParse(error);
-    // 403 is how the contents API reports a blob over its own 1MB ceiling.
     if (parsed.success && parsed.data.status === 404) {
       return { contents: null, skipped: null };
     }
@@ -66,7 +63,6 @@ export async function readFileAtRef(
   }
 
   const bytes = decodeGitHubContentBytes(file.content);
-  // A NUL byte is the same heuristic git uses to call a file binary.
   if (githubContentContainsNul(bytes)) {
     return { contents: null, skipped: "binary" };
   }

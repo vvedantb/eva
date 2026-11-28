@@ -24,13 +24,6 @@ import {
   MoF2Stuck,
 } from "../_parts/MoF2Beats";
 
-/**
- * Sources: Eva release notes. Watchdog 30 July 2026 (up to two hours on
- * Working before); empty-turn retry 26 August 2026; usage-limit card
- * 4 September 2026, extended 10 September 2026.
- */
-
-/** Centre of each card in the row, for the light that follows the story. */
 const centre = (index: number) => ({
   x: MOF2_BEAT.width / 2 + index * (MOF2_BEAT.width + MOF2_BEAT.gap),
   y: MOF2_BEAT.height / 2,
@@ -50,7 +43,6 @@ export function FridayReliability() {
         When it breaks, <Accent>you know</Accent>
       </Title>
 
-      {/* The three cards are the story, so they take the middle of the stage. */}
       <div className="flex flex-1 items-center pb-12">
         <div className="relative isolate">
           <Spotlight shots={GLOW} className="-inset-24 overflow-visible" />

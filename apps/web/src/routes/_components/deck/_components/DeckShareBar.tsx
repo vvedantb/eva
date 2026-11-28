@@ -14,7 +14,6 @@ import type { LiveShare } from "./useLiveShare";
 
 interface DeckShareBarProps {
   share: LiveShare;
-  /** The deck's own route path, used to build the join link. */
   basePath: string;
   theme: DeckTheme;
 }
@@ -63,9 +62,6 @@ function SharePanel({
       .catch(() => undefined);
   }
 
-  // The pill stays visually small — `hit-target` grows the pressable area to
-  // 40×40 with a pseudo-element instead. `gap-5` is what keeps two of those
-  // grown areas (8px of bleed each) from meeting in the middle.
   const action = cn(
     "hit-target inline-flex items-center rounded-full px-3 py-1 text-xs",
     "motion-press active:scale-[0.96]",
@@ -77,13 +73,9 @@ function SharePanel({
     <m.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      // A smaller, faster departure than the arrival — the bar should not draw
-      // the room's eye on its way out.
       exit={{ opacity: 0, y: 4, transition: tokenTransition.fast }}
       transition={springTransition}
       className={cn(
-        // Concentric: the bar and its buttons are both pills, so the outer
-        // radius is the inner radius plus the 8px of padding by construction.
         "pointer-events-auto absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-5 rounded-full px-4 py-2 text-xs backdrop-blur-md",
         tone.surface,
         tone.muted,
@@ -149,7 +141,6 @@ function followerLabel(state: LiveShare["sessionState"]): string {
   }
 }
 
-/** A pulsing red dot: the one place the deck borrows broadcast language. */
 function LiveDot() {
   return (
     <span className="relative flex size-2 shrink-0">

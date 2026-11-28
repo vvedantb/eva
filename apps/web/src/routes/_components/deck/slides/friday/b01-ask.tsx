@@ -19,7 +19,6 @@ import {
 import { MoF1AskPanel, MoF1BuildPanel } from "../_parts/MoF1Ask";
 import { MoF1PreviewPanel } from "../_parts/MoF1AskPreview";
 
-/** One panel per beat, left to right, in the order they are spoken. */
 const STAGE_LABELS: readonly string[] = [
   "You ask",
   "Eva builds it",
@@ -27,7 +26,6 @@ const STAGE_LABELS: readonly string[] = [
 ];
 
 const PANEL_H = 268;
-/** On the closing line, the sentence steps forward and the rest recede. */
 const CLOSING_STEP = 3;
 
 function useFocus(index: number): {
@@ -71,7 +69,6 @@ function Panel({ index, children }: { index: number; children: ReactNode }) {
             : LEAVE
         }
       >
-        {/* Light crosses the glass once it has landed. */}
         <Sheen step={index} delay={0.45} className="h-full rounded-[20px]">
           {children}
         </Sheen>
@@ -88,11 +85,9 @@ function Panel({ index, children }: { index: number; children: ReactNode }) {
   );
 }
 
-/** The hand-off between beats: a line draws, then work keeps flowing along it. */
 function Link({ step }: { step: number }) {
   const deckStep = useDeckStep();
   const on = deckStep >= step;
-  // Hidden until its step: a round cap on an undrawn line still paints a dot.
   const opacity = !on ? 0 : deckStep >= CLOSING_STEP ? 0.4 : 1;
   return (
     <m.div

@@ -35,7 +35,6 @@ const READ_ONLY_SUPABASE_TOOLS = new Set([
   "search_docs",
 ]);
 
-/** Tools with no project argument. Every other tool must take `project_id`. */
 const PROJECT_FREE_TOOLS = new Set(["search_docs"]);
 
 /** One allowed Supabase project: its ref and an optional label ("staging"). */
@@ -124,7 +123,6 @@ export function bindSupabaseProject(
   return { ok: true, args: { ...args, project_id: match.ref } };
 }
 
-// In-memory cache (reset on action cold starts)
 const toolDefinitionCache = new Map<
   string,
   { tools: Tool[]; expiresAt: number }
@@ -264,7 +262,6 @@ async function discoverTools(token: string): Promise<Tool[]> {
 
 type SupabaseCredentials = { token: string; projects: SupabaseProject[] };
 
-/** Per user: the repo whose token lists Supabase's tools (null = none). */
 const discoveryRepoCache = new Map<
   string,
   { repoId: string | null; expiresAt: number }
@@ -279,12 +276,6 @@ function resolveCredentials(
   });
 }
 
-/**
- * Credentials used only to list Supabase's tool definitions (names and input
- * schemas, no data). A sandbox uses its own repo. A user-level connection
- * (claude.ai) uses the first repo it can reach that has Supabase configured;
- * every call still runs on the repo the caller names.
- */
 async function discoveryCredentials(
   ctx: ActionCtx,
   credentials: McpCredentials,
@@ -301,8 +292,6 @@ async function discoveryCredentials(
   }
   const { userId } = await mcpGetContext(ctx, clerkUserId);
   const repos = await mcpListUserRepos(ctx, userId);
-  // Sequential on purpose: stop at the first configured repo instead of
-  // decrypting every repo's env vars.
   for (const repo of repos) {
     const found = await resolveCredentials(ctx, repo.id);
     if (found) {
@@ -329,11 +318,6 @@ export async function supabaseTools(
   const { scopedRepoId } = credentials;
   const { assertRepoAccess, resolveRepoRef } = entityAccess(ctx, credentials);
 
-  /**
-   * The repo a call runs against: the one the caller names, else the
-   * sandbox's own repo. Same access check as postgres_query, including the
-   * sandbox token's single-repo pin.
-   */
   async function targetRepo(
     ref: RepoRef,
   ): Promise<{ repoId: string } | ReturnType<typeof toolErrorResult>> {
@@ -421,7 +405,6 @@ export async function supabaseTools(
           } = input;
           const target = await targetRepo(repoRefSchema.parse(input));
           if ("content" in target) return target;
-          // Re-resolve in case the token expired or the env changed.
           const current = await resolveCredentials(ctx, target.repoId);
           if (!current) {
             return toolErrorResult(

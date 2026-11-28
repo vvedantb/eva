@@ -32,13 +32,6 @@ describe("package alias table", () => {
     }
   });
 
-  /**
-   * Ubuntu 24.04 renamed several libraries for the 64-bit time_t ABI break and
-   * 26.04 dropped some of those suffixes again, so the two releases disagree per
-   * package. Both spellings must stay listed — which one leads is decided by
-   * what the Phase 1 harness actually installed on the managed image, never by
-   * a rule of thumb.
-   */
   test("libraries that were renamed across releases list both spellings", () => {
     for (const id of ["alsa", "cups-libs", "gtk3", "at-spi2"]) {
       const apt = PACKAGE_ALIASES[id]?.apt ?? [];
@@ -50,11 +43,6 @@ describe("package alias table", () => {
     }
   });
 
-  /**
-   * Verified against `vercel/sandbox/universal` (Ubuntu 26.04) by the Phase 1
-   * harness — these are the exact names apt resolved, not inferred ones. A
-   * change here means someone guessed; re-run the spike before trusting it.
-   */
   test("primary apt names match what the managed image installed", () => {
     const observed: Record<string, string> = {
       docker: "docker.io",
@@ -92,11 +80,6 @@ describe("package alias table", () => {
   });
 });
 
-/**
- * The helper is emitted as one element of arrays joined with both `"\n"` and
- * `"; "`. `}` followed by `; ` is valid bash, but only if the definitions
- * themselves parse — so check the real thing rather than trusting the shape.
- */
 describe("the emitted bash parses", () => {
   const parses = (script: string) => {
     execFileSync("bash", ["-n", "-c", script], { stdio: "pipe" });
@@ -116,10 +99,6 @@ describe("the emitted bash parses", () => {
     expect(() => parses(pkgInstallScript("docker", "git", "jq"))).not.toThrow();
   });
 
-  /**
-   * The alias table is compiled into a bash `case`; an id containing `)` or a
-   * quote would produce a syntactically valid but wrong arm.
-   */
   test("every alias id is safe inside a case arm", () => {
     for (const id of Object.keys(PACKAGE_ALIASES)) {
       expect(id, `${id} is not case-arm safe`).toMatch(/^[a-z0-9.+_-]+$/);
@@ -127,10 +106,6 @@ describe("the emitted bash parses", () => {
   });
 });
 
-/**
- * `eva__pkg_candidates` is the whole point of the table — resolve it by
- * actually running the generated bash rather than re-implementing the lookup.
- */
 describe("candidate resolution", () => {
   const resolve = (id: string, manager: "apt" | "dnf") =>
     execFileSync(
@@ -152,7 +127,6 @@ describe("candidate resolution", () => {
     expect(resolve("alsa", "apt")).toBe("libasound2t64 libasound2");
   });
 
-  /** An id absent from the table means "same name everywhere". */
   test("an unmapped id falls through to itself", () => {
     expect(resolve("some-identical-name", "apt")).toBe("some-identical-name");
     expect(resolve("some-identical-name", "dnf")).toBe("some-identical-name");

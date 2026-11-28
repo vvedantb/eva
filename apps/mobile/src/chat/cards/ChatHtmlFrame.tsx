@@ -15,11 +15,6 @@ import { View } from "react-native";
 import { textColor, useScheme, type Scheme } from "@/ui/theme";
 import { useRowSeen } from "./seenRows";
 
-/**
- * Eva's theme tokens for an agent page's `:root`, from the phone theme. The
- * web reads the same names off its live CSS; the phone has no chart ramp,
- * radius or font tokens to hand over, so a page falls back to its own there.
- */
 function hostContext(scheme: Scheme): HtmlRenderHostContext {
   const theme = EVA_THEME[scheme];
   return {
@@ -75,11 +70,7 @@ export function ChatHtmlFrame({ render, rowKey }: { render: Doc<"chatHtmlRenders
 
 function HtmlPage({ html, title, height }: { html: string; title: string; height: number }) {
   const scheme = useScheme();
-  // Built once, with the theme of the moment for a correct first paint. A new
-  // document would reload the page and drop its state, so later theme changes
-  // go in as a host message instead, as the web.
   const [document] = useState(() => injectHtmlRenderBootstrap(html, hostContext(scheme)));
-  // The page reports its own height; until then the agent's height holds.
   const [reportedHeight, setReportedHeight] = useState<number | null>(null);
   return (
     <HtmlView

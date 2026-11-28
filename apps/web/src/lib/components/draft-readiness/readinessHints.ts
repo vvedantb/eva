@@ -1,12 +1,3 @@
-/**
- * Client half of the draft-readiness nudge: what to show, and when.
- *
- * The signal names mirror `convex/_agentTasks/readiness.ts`, but the wording
- * is defined here — the backend owns the rubric it asks Jev about, the client
- * owns the phrasing the user reads, and web cannot import convex source.
- */
-
-/** Signal -> the short phrase the banner asks the user to add. */
 const READINESS_HINTS = {
   target: "where the change goes",
   expected: "what should happen",
@@ -16,7 +7,6 @@ const READINESS_HINTS = {
 export type ReadinessSignal = keyof typeof READINESS_HINTS;
 
 export interface DraftReadiness {
-  /** 0 (too vague to start) to 1 (fully specified). */
   score: number;
   missing: ReadinessSignal[];
 }

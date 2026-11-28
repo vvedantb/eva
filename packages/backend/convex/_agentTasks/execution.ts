@@ -38,7 +38,6 @@ export async function startTaskExecution(
   if (!repo) {
     throw new Error("Repository not found");
   }
-  // A pending schedule is replaced by this run.
   await cancelTaskRunSchedule(ctx, taskId);
   await startTaskRunTurn(ctx, task, {
     mode: options.mode,

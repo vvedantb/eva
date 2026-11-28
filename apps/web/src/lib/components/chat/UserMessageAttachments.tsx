@@ -30,8 +30,6 @@ export function UserMessageAttachments({
   );
   if (resolved.length === 0 && viewer === null) return null;
 
-  // Only the images take part in the lightbox, so a thumb's gallery position is
-  // its index among images, not among all attachments.
   const galleryImages = resolved
     .filter((item) => isImageContentType(item.contentType))
     .map((item) => ({ url: item.url, alt: "Attached image" }));

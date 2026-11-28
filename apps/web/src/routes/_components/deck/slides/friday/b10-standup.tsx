@@ -18,16 +18,11 @@ import {
 import { Fri2Panel } from "../_parts/Fri2Panel";
 import { MOF2_TIMELINE_DOT_Y, MoF2Timeline } from "../_parts/MoF2Timeline";
 
-/**
- * A stand-in for the real thing: plain English, no file names, no jargon. It is
- * written out word by word so the room watches it arrive rather than reads it.
- */
 const SUMMARY =
   "Yesterday the team shipped the new referral export, fixed two problems people had reported that morning, and started on the admin dashboard. Nothing is blocked. Three pieces of work are waiting for someone to check them.";
 
 const WORDS = SUMMARY.split(" ");
 
-/** Fast enough to read as typing, slow enough that the last word still lands. */
 const WORD_STAGGER = 0.032;
 const WRITE_AT = 0.2;
 const WRITTEN = WRITE_AT + WORDS.length * WORD_STAGGER + 0.2;
@@ -35,7 +30,6 @@ const WRITTEN = WRITE_AT + WORDS.length * WORD_STAGGER + 0.2;
 const PANEL_W = 560;
 const GAP = 64;
 
-/** Morning light behind the panel while it writes, easing off for the feed. */
 const GLOW = [
   null,
   { x: PANEL_W / 2, y: 140, size: 620 },
@@ -89,7 +83,6 @@ export function FridayStandup() {
               <p className="relative text-[17px] leading-relaxed text-pretty text-white/85">
                 {WORDS.map((word, index) => (
                   <m.span
-                    // Words repeat, so the index is part of the identity.
                     key={`${word}-${index}`}
                     className="inline-block"
                     style={{ marginRight: "0.26em" }}
@@ -129,7 +122,6 @@ export function FridayStandup() {
             </Fri2Panel>
           </m.div>
 
-          {/* The summary feeds the timeline: a light runs from the panel to today. */}
           <div
             className="absolute"
             style={{ left: PANEL_W + 6, top: MOF2_TIMELINE_DOT_Y - 1 }}

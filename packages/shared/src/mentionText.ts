@@ -1,10 +1,3 @@
-/**
- * Stored chat text holds mentions as `@[Label](id)` and skills as
- * `/[Label](id)` (a Convex id, or a synthetic skill id below). The web and
- * phone composers show `@Label` / `/Label` while the user types and build
- * these tokens on send, so a message from either notifies and renders the same.
- */
-
 /** The token id charset (Convex ids), so plain markdown links never match. */
 export const CONVEX_ID_PATTERN = /^[a-z0-9_]{16,40}$/;
 /** Mirrors the backend regex in `_mentions/mentionToken.ts`. */
@@ -53,7 +46,6 @@ export function parseMentionChipHref(href: string): { kind: MentionChipKind; id:
   return { kind, id };
 }
 
-/** Fenced and inline code, which keeps its tokens as typed. */
 const CODE_SPAN_REGEX = /(```[\s\S]*?```|`[^`\n]*`)/;
 
 /**
@@ -65,11 +57,9 @@ export function mentionTokensToChipLinks(markdown: string): string {
   return markdown
     .split(CODE_SPAN_REGEX)
     .map((part, index) =>
-      // `split` with a capture group puts the code spans at the odd indexes.
       index % 2 === 1
         ? part
         : part
-            // `replace` starts a `/g` regex from 0, so the shared ones are safe here.
             .replace(MENTION_TOKEN_REGEX, (_match, label: string, id: string) => `[${label}](${mentionChipHref("at", id)})`)
             .replace(SKILL_TOKEN_REGEX, (_match, label: string, id: string) => `[${label}](${mentionChipHref("slash", id)})`),
     )
@@ -133,7 +123,6 @@ export function tokenizedToEditable(content: string): {
 } {
   const mentionMap = new Map<string, string>();
   const skillMap = new Map<string, string>();
-  // Fresh regexes: the module-level `/g` ones carry `lastIndex` state.
   for (const [, label, id] of content.matchAll(/@\[([^\]]{1,200})\]\(([a-z0-9_]{16,40})\)/g)) {
     if (label !== undefined && id !== undefined) mentionMap.set(label, id);
   }
@@ -143,11 +132,6 @@ export function tokenizedToEditable(content: string): {
   return { displayText: tokenizedToDisplayText(content), mentionMap, skillMap };
 }
 
-/**
- * Eva system skills have no `repoSkills` row, so their chips carry a synthetic
- * id instead. The prefix keeps them inside the token charset (and past the
- * 16-char minimum) while staying distinguishable from a real Convex id.
- */
 const SYSTEM_SKILL_TOKEN_PREFIX = "evasystemskill_";
 
 export function systemSkillTokenId(name: string): string {
@@ -158,11 +142,6 @@ export function isSystemSkillTokenId(id: string): boolean {
   return id.startsWith(SYSTEM_SKILL_TOKEN_PREFIX);
 }
 
-/**
- * Harness built-in skills also have no Convex row; same synthetic-id scheme as
- * system skills, distinct prefix. Both prefixes are 16 chars, so the longest
- * built-in name still fits the 40-char id cap.
- */
 const HARNESS_SKILL_TOKEN_PREFIX = "evabuiltinskill_";
 
 export function harnessSkillTokenId(name: string): string {

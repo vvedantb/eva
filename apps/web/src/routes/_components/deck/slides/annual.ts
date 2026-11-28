@@ -81,7 +81,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualTitle,
     steps: 0,
   },
-  // ── Eva: the main project ──
   {
     id: "annual-s01-eva",
     title: "Eva",
@@ -347,7 +346,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualAhead,
     steps: 2,
   },
-  // ── CarePulse: the day job, in CarePulse blue on the light stage ──
   {
     id: "annual-s02-carepulse",
     title: "CarePulse",
@@ -404,7 +402,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     theme: "light",
     section: "carepulse",
   },
-  // ── Side projects: one opener and one recap each, in their own colours ──
   {
     id: "annual-s03-vmem",
     title: "vmem",
@@ -461,7 +458,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
     section: "bee",
   },
-  // ── Close: the framework map and the last word, back in Eva colours ──
   {
     id: "annual-g12-unlocked",
     title: "What AI unlocked for me",

@@ -3,12 +3,9 @@ import { m } from "motion/react";
 import { DUR, EASE, LEAVE } from "../../_components/motion";
 
 export const RADIUS = 185;
-/** The visual box is 560 square; everything orbits its centre. */
 const BOX = 560;
 const C = BOX / 2;
-/** The ring as a path, so one light can ride it with CSS `offset-path`. */
 const RING = `M ${C - RADIUS} ${C} a ${RADIUS} ${RADIUS} 0 1 0 ${RADIUS * 2} 0 a ${RADIUS} ${RADIUS} 0 1 0 ${-RADIUS * 2} 0`;
-/** Sparks leaving the laptop for the cloud: the hand-off, once. */
 const SPARKS = [-34, -12, 10, 30];
 
 export function Handoff({ lifted }: { lifted: boolean }) {

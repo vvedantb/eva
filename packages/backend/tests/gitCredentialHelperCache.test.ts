@@ -16,17 +16,6 @@ import {
 } from "../convex/_sandbox_runtime/gitCredentials";
 import { toSandboxGitCredential } from "../convex/githubAuth";
 
-/**
- * PR #1084. The in-sandbox git credential helper cached every token for a
- * fixed 50 minutes from fetch time. The backend's GitHub App client hands out
- * tokens that may already be up to 59 minutes old, so the helper kept serving
- * dead tokens and pushes failed with "Invalid username or token". The cache
- * must now run to the token's own `expiresAt` minus a 5-minute margin.
- *
- * These tests run the real generated bash script against a fake `curl`, so a
- * regression in the shell logic (not just the TypeScript) fails here.
- */
-
 function hasShellTools(): boolean {
   try {
     execSync("command -v bash && command -v jq && command -v cksum", {
@@ -62,7 +51,6 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
     const callsFile = join(dir, "calls");
 
     execSync(`mkdir -p ${binDir}`);
-    // Fake curl: count each call and print the canned backend response.
     writeFileSync(
       join(binDir, "curl"),
       `#!/usr/bin/env bash\necho x >> "${callsFile}"\ncat "${responseFile}"\n`,
@@ -124,7 +112,6 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
   });
 
   test("a token the backend hands out near expiry is never cached", () => {
-    // The #1084 case: the backend's own cache returns a 56-minute-old token.
     respond({ token: "ghs_old", expiresAt: nowSeconds() + 240 });
 
     expect(runHelper()).toContain("password=ghs_old");
@@ -144,8 +131,6 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
   });
 
   test("a legacy fetch-time cache entry is not served as valid", () => {
-    // The old helper wrote the fetch timestamp on line one. Read as an expiry,
-    // it is already past, so the token must be refetched.
     writeFileSync(cacheFile(), `${nowSeconds()}\nghs_legacy\n`);
     respond({ token: "ghs_new", expiresAt: nowSeconds() + 3600 });
 
@@ -153,10 +138,6 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
     expect(curlCalls()).toBe(1);
   });
 
-  // The backend half of #1084: octokit gives an ISO `expiresAt`, and the
-  // helper compares it to `date +%s`. A milliseconds value would read as far
-  // future and cache dead tokens forever, so run the real converter's output
-  // through the real script.
   const backendResponse = (token: string, expiresInSeconds: number) => ({
     username: "x-access-token",
     ...toSandboxGitCredential({

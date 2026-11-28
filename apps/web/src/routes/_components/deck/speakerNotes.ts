@@ -1,8 +1,4 @@
-/** Presenter-only notes, keyed by `DeckSlide.id`. Never rendered on the stage. */
 const NOTES: Record<string, string> = {
-  // ---------------------------------------------------------------------------
-  // Friday session deck
-  // ---------------------------------------------------------------------------
   "01-title": `Open on the promise: in the next twenty minutes you will see what Eva changed this summer, and what it means for your work.
 Detail: the logo breathes on an eight-second loop and the title lands word by word, so let it settle before speaking. Say up front that every number comes from the project's own records, so questions can be answered rather than deflected.
 Figures: the window is 12 June to 10 September 2026, taken from Eva's git history.
@@ -269,9 +265,6 @@ The lanes show what got written about, not how often it happened.
 → So if better models alone fixed these, the lines would end, and they don't.
 To me that suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.`,
 
-  // ---------------------------------------------------------------------------
-  // Bee deck
-  // ---------------------------------------------------------------------------
   "bee-01-title": `So, this is Bee.
 → It's a small app I built that sits at the top of your screen during meetings.
 It's honestly just something I've been playing around with.
@@ -392,9 +385,6 @@ It runs on Windows and Mac, and if you want to help test it out, just message me
 Bee's still in progress, but what do we think — would you use Bee?
 → So yeah, that's pretty much it — any questions?`,
 
-  // ---------------------------------------------------------------------------
-  // Annual CDM deck
-  // ---------------------------------------------------------------------------
   "a01-title": `So this is my annual CDM review.
 Most of it's Eva, which I've been building since January, plus CarePulse and four side projects: vmem, flowtape, Redline and Bee.
 And at the end I'll map it all back to the senior engineer framework.
@@ -730,9 +720,6 @@ And it's fenced, so an old turn can't come back and write over the one that repl
 → So interrupted doesn't mean lost any more.
 But things still go wrong sometimes, so the question is what you see when they do.`,
 
-  // ---------------------------------------------------------------------------
-  // Intro to Eva deck
-  // ---------------------------------------------------------------------------
   "annual-c01-providers": `So the first platform decision was not to depend on one AI supplier.
 If one puts its prices up, falls behind or goes down, I didn't want us stuck.
 On screen is every model in the picker, grouped by provider: Claude, Codex, OpenCode and Cursor.

@@ -10,17 +10,12 @@ export interface Point {
 }
 
 export interface ConnectorProps {
-  /** Endpoints in pixels of the parent, which must be `relative`. */
   from: Point;
   to: Point;
-  /** Bow the line by this many pixels, perpendicular to it. 0 is straight. */
   bend?: number;
-  /** Build step to connect on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
-  /** Keep work flowing along the line once it has drawn. */
   flow?: boolean;
-  /** Seconds for one dash to travel one period. Larger is calmer. */
   flowPeriod?: number;
   strokeWidth?: number;
   className?: string;

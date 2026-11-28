@@ -8,8 +8,6 @@ import {
 import { resolveSessionBaseBranch } from "../convex/_sessions/baseBranch";
 
 test("resolveTaskWorkflowBaseBranch uses the task's base, then the repo default", () => {
-  // A project's child task opens its own PR to main: the project's branch
-  // never stands in for its base.
   expect(
     resolveTaskWorkflowBaseBranch(
       { baseBranch: "feature/x" },
@@ -41,7 +39,6 @@ test("resolveNewTaskBaseBranch prefers the explicit pick, then the repo", () => 
 });
 
 test("resolveSessionBaseBranch prefers the branch chosen at session creation", () => {
-  // The session PR must target the chosen base, not the repo default.
   expect(
     resolveSessionBaseBranch(
       { baseBranch: "main" },

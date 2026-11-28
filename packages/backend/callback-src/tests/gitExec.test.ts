@@ -4,11 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-// WORK_DIR tracks a throwaway dir so the default `cwd` never touches this checkout.
 const workspace: { dir: string } = { dir: "" };
 
 const originalConfig = { ...(await import("../config.js")) };
-// Bun copies a mocked module's exports once, so re-mock after each change.
 function setWorkspace(dir: string): void {
   workspace.dir = dir;
   mock.module("../config.js", () => ({ ...originalConfig, WORK_DIR: dir }));

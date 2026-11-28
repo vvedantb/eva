@@ -8,17 +8,11 @@ import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 
 const reviewSideValidator = v.union(v.literal("LEFT"), v.literal("RIGHT"));
 
-/**
- * One inline comment, already resolved to GitHub's anchor model: a line number
- * on one side of the diff, optionally starting at an earlier line for a
- * multi-line comment. `LEFT` is the base file, `RIGHT` the head file.
- */
 const reviewCommentInputValidator = v.object({
   path: v.string(),
   body: v.string(),
   line: v.number(),
   side: reviewSideValidator,
-  /** Null for a single-line comment. */
   startLine: v.union(v.number(), v.null()),
   startSide: v.union(reviewSideValidator, v.null()),
 });
@@ -44,7 +38,6 @@ export const submitPrReview = action({
   returns: v.object({
     reviewId: v.number(),
     htmlUrl: v.string(),
-    /** APPROVED | CHANGES_REQUESTED | COMMENTED */
     state: v.string(),
   }),
   handler: async (

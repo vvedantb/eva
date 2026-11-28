@@ -2,8 +2,6 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Icon, Prompt, Stage, Window, type WindowProps } from '../../kit'
 import './chrome.css'
 
-// One native-size figure per option. The page reflows; the chrome does not
-// shrink as part of a large sheet. All frame measurements come from Window.
 const files = [{ name: 'Brief.pdf', size: '24 KB' }, { name: 'Notes.md', size: '4 KB' }, { name: 'Sketch.fig', size: '86 KB' }, { name: 'Assets.zip', size: '2 MB' }]
 function Content({ short = false }: { short?: boolean }) {
   return <div className="wc-content" aria-label="Files">{files.slice(0, short ? 3 : 4).map((file, i) => <div className="wc-file-row" key={file.name} data-selected={i === 0 || undefined}><Icon name="file" size={14} /><span>{file.name}</span><span className="wc-file-size">{file.size}</span></div>)}</div>

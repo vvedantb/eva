@@ -6,7 +6,6 @@ import { isAccountUsableBy } from "./sharing";
 /** A chat message's snapshot of the credential that powered its turn. */
 export type MessageCredential = {
   credentialSourceLabel: string;
-  /** Absent = Team. Undefined (not omitted) so a patch clears a stale stamp. */
   credentialAccountId: Id<"userProviderAccounts"> | undefined;
 };
 

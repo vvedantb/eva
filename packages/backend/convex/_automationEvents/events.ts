@@ -13,27 +13,17 @@ export {
   type RepoEventKind,
 } from "./labels";
 
-/**
- * GitHub webhooks, plus monitoring alerts, normalised into the few repo events
- * automations react to. Pure: `http.ts` verifies the caller, then hands the
- * raw body here (alerts go through `axiomAlert.ts`).
- */
-
 const repoRef = { owner: v.string(), name: v.string() };
 
-/** A monitoring alert, before the webhook route adds the automation's repo. */
 const alertFields = {
   kind: v.literal("production_alert"),
   source: v.literal("axiom"),
   monitorId: v.string(),
   title: v.string(),
   description: v.string(),
-  /** Axiom's own summary: the matched event, or the threshold crossed. */
   body: v.string(),
   value: v.optional(v.number()),
-  /** Match monitors: the matching event, as JSON text. */
   matchedEvent: v.optional(v.string()),
-  /** Grouped monitors: the group that fired, as "key=value" pairs. */
   group: v.optional(v.string()),
   queryStartTime: v.optional(v.string()),
   queryEndTime: v.optional(v.string()),
@@ -74,13 +64,7 @@ export const repoEventValidator = v.union(
     prUrl: v.string(),
     prNumber: v.number(),
     title: v.string(),
-    /** The PR's head commit when the webhook fired; Eva's check sits on it. */
     headSha: v.string(),
-    /**
-     * The PR's branch, when it lives in this repo and the PR is still open.
-     * Runs check it out and push edits to it. Fork PRs have none: Eva cannot
-     * push there, so they run on the default branch as before.
-     */
     headBranch: v.optional(v.string()),
   }),
   v.object({ ...alertFields, ...repoRef }),
@@ -104,16 +88,12 @@ export type CiPassed = Infer<typeof ciPassedValidator>;
 
 /** Delay before a queued event runs, so a burst of webhooks lands as one run. */
 export const EVENT_DEBOUNCE_MS: Record<RepoEvent["kind"], number> = {
-  // Each check suite (Actions, Vercel, …) completes separately.
   ci_failed: 90_000,
-  // One review arrives as a review event plus one event per inline comment.
   pr_feedback: 60_000,
   issue_labeled: 0,
   pr_opened: 0,
   pr_merged: 0,
-  // Pushes often come in bursts; one run covers the final head.
   pr_updated: 60_000,
-  // A match monitor sends one alert per matching event; gather the burst.
   production_alert: 30_000,
 };
 
@@ -169,7 +149,6 @@ export function triggerMatchesEvent(
   event: RepoEvent,
 ): boolean {
   if (trigger === undefined || trigger.kind !== "event") return false;
-  // Any switched-on event fires the automation.
   if (!trigger.events.includes(event.kind)) return false;
   if (event.kind !== "issue_labeled") return true;
   const wanted = (trigger.label ?? DEFAULT_ISSUE_LABEL).trim().toLowerCase();
@@ -267,8 +246,6 @@ export function describeAlert(
   ].join("\n");
 }
 
-// ── Webhook boundary ────────────────────────────────────────────────────────
-
 const repositorySchema = z.object({
   name: z.string(),
   owner: z.object({ login: z.string() }),
@@ -353,7 +330,6 @@ const pullRequestSchema = z.object({
     head: z.object({
       sha: z.string(),
       ref: z.string(),
-      // Null when the fork was deleted.
       repo: z.object({ full_name: z.string() }).nullable().catch(null),
     }),
   }),
@@ -425,7 +401,6 @@ export function parseCiCompleted(
         kind: "status",
         owner: repository.owner.login,
         name: repository.name,
-        // Branches whose head is this commit; a PR's head branch is one.
         branches: branches
           .filter((branch) => branch.commit.sha === sha)
           .map((branch) => branch.name),
@@ -456,7 +431,6 @@ export function parseRepoEvents(
   try {
     return parseRepoEventsOrThrow(githubEvent, body);
   } catch {
-    // Malformed JSON: GitHub still gets its 200, nothing is dispatched.
     return [];
   }
 }
@@ -489,7 +463,6 @@ function parseRepoEventsOrThrow(
       if (!parsed.success) return [];
       const { action, label, issue, repository, sender } = parsed.data;
       if (action !== "labeled" || label === null || isBot(sender)) return [];
-      // GitHub delivers PRs through `issues` too; only real issues count.
       if (issue.pull_request != null) return [];
       return [
         {
@@ -532,7 +505,6 @@ function parseRepoEventsOrThrow(
         sender,
       } = parsed.data;
       if (action !== "submitted" || isBot(sender)) return [];
-      // An approval with no request attached gives the agent nothing to do.
       if (review.state.toLowerCase() === "approved") return [];
       if (!TRUSTED_ASSOCIATIONS.has(review.author_association)) return [];
       return [

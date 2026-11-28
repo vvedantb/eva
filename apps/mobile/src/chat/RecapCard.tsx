@@ -22,12 +22,9 @@ export function RecapCard({
   onDismiss,
 }: {
   kind: "away" | "full";
-  /** When the absence began (ms); only an "away" title shows it. */
   since: number;
   text: string | undefined;
-  /** The viewer's thumbs on this recap. */
   rating: FeedbackSentiment | undefined;
-  /** Sets the thumbs; `null` clears them. */
   onRate: (sentiment: FeedbackSentiment | null) => void;
   onDismiss: () => void;
 }) {

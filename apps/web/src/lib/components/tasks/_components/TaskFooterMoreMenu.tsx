@@ -21,8 +21,6 @@ export interface MoreMenuVisibility {
   showMoreMenu: boolean;
 }
 
-// Simple view hides the git plumbing: conflict resolution. The footer menu then has nothing
-// left and drops out entirely; the header menu stays for Copy link.
 export function getMoreMenuVisibility({
   simpleView,
   hasActiveRun,
@@ -112,7 +110,6 @@ export function TaskSandboxMenuItems({
   ) : null;
 }
 
-/** Spinner while the item's action runs, else its own icon. */
 function BusyMenuIcon({
   busy,
   children,

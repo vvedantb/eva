@@ -8,8 +8,6 @@ const usdWhole = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 2,
 });
 
-// Sub-cent completions (a Haiku call, a title regeneration) would all render
-// as "$0.00"; give them enough precision to be distinguishable.
 const usdSubCent = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "USD",

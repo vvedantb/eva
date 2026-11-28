@@ -22,11 +22,6 @@ export function EnvVarRequestCard({
   onReply,
 }: {
   request: EnvVarRequest;
-  /**
-   * Posts the outcome to the agent. Undefined when the chat cannot send right
-   * now (archived, or the sandbox is asleep), which disables the card the same
-   * way it disables panel buttons.
-   */
   onReply?: (message: string) => void;
 }) {
   if (request.status !== "pending") {
@@ -59,15 +54,12 @@ function PendingEnvVarRequestForm({
   const [error, setError] = useState<string | null>(null);
   const disabled = submitting || onReply === undefined;
 
-  // Reset is duplicated into the catch instead of using `finally`: React
-  // Compiler bails on the whole file when it meets a `finally` clause.
   const send = async (answer: () => Promise<{ reply: string }>) => {
     if (submitting || onReply === undefined) return;
     setSubmitting(true);
     setError(null);
     try {
       const { reply } = await answer();
-      // The card turns into its answered row once the query updates.
       setValue("");
       setSubmitting(false);
       onReply(reply);
@@ -114,8 +106,6 @@ function PendingEnvVarRequestForm({
           <div className="flex min-w-0 items-center gap-2">
             <Input
               id={inputId}
-              // Masked text rather than a password field: browsers offer to
-              // save any submitted password, and this is not a login.
               type="text"
               className="min-w-0 flex-1 font-mono text-xs [-webkit-text-security:disc]"
               autoComplete="off"

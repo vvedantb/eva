@@ -20,7 +20,6 @@ import { IntroClosing } from "./intro/13-closing";
  * cannot collide with the other two decks.
  */
 export const INTRO_SLIDES: DeckSlide[] = [
-  // Act 1 · Open
   {
     id: "intro-01-title",
     title: "Title",
@@ -29,7 +28,6 @@ export const INTRO_SLIDES: DeckSlide[] = [
     steps: 0,
   },
 
-  // Act 2 · The problem, and the features
   {
     id: "intro-02-gap",
     title: "The gap",
@@ -73,7 +71,6 @@ export const INTRO_SLIDES: DeckSlide[] = [
     steps: 0,
   },
 
-  // Act 3 · How it is built
   {
     id: "intro-08-stack",
     title: "Tech stack",
@@ -96,7 +93,6 @@ export const INTRO_SLIDES: DeckSlide[] = [
     steps: 0,
   },
 
-  // Act 4 · The insight, the demo and the close
   {
     id: "intro-11-insight",
     title: "Key insight",

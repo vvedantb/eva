@@ -17,10 +17,8 @@ export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = TURN_BACKSTOP_MS;
  */
 export const MAX_SETTLED_BACKGROUND_AGENTS = 50;
 
-/** Terminal status stamped on entries orphaned by a dead daemon. */
 const STALE_STATUS = "stale";
 
-/** Terminal status stamped on an entry replaced by a restart of the same task. */
 const SUPERSEDED_STATUS = "superseded";
 
 /**

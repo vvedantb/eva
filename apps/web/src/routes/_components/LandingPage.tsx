@@ -33,8 +33,6 @@ interface LandingPageProps {
  * all on a single screen.
  */
 export function LandingPage({ agentRedirect }: LandingPageProps) {
-  // `?agent` is mid-redirect to the agent login route; render a blank canvas
-  // rather than flashing the whole marketing page.
   if (agentRedirect) {
     return <div className="min-h-dvh w-full bg-background" />;
   }
@@ -74,10 +72,6 @@ export function LandingPage({ agentRedirect }: LandingPageProps) {
   );
 }
 
-/**
- * Dev-only shortcut into the agent account, rendered by both versions of the
- * page so switching `VITE_NEW_LANDING` never takes it away.
- */
 function AgentSignIn() {
   const navigate = useNavigate();
 

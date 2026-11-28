@@ -1,29 +1,6 @@
 import { Bar, Connector, Roll, Stage, Text, Window, type Act } from '../../kit'
 import './panel.css'
 
-// A settings panel over the product it changes, with one annotation tying a
-// setting to what it does. Beats: the cursor picks a new accent in the
-// Branding panel; the checkout's Pay button takes the color; a leader draws
-// from the accent row to the button. Plays once; the still is the payoff.
-//
-// What makes a panel-over-product picture read:
-// - Two jobs, two weights. The checkout is the product, large, behind; the
-//   panel is the tool, smaller, in front, straddling the checkout's right
-//   edge over its empty margin, never over the form.
-// - The panel and the thing it changes share one color change: the swatch,
-//   the hex and the button move together, so the cause is plain before the
-//   line arrives.
-// - One leader, after the change: out of the panel's bottom edge under the
-//   chosen swatch, down through empty ground, then into the button's right
-//   edge, ending short of it. It never runs over the panel's or the form's
-//   content. It explains which setting did that; a line per row would be a
-//   diagram, not a picture.
-// - Narrow, there is no clear path for a leader: the panel sits above the
-//   checkout, over its chrome only, and the shared color carries the story.
-//
-// Real strings: the merchant, the amount, Pay, the panel's title and its two
-// color rows.
-
 type S = { accent: number; linked: boolean }
 
 const ACCENTS = [

@@ -40,13 +40,9 @@ interface ProjectDetailSandboxContentProps {
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
   expandRightSignal: number;
-  /** Opens a reply thread in the rail's Replies tab (and expands the rail). */
   onThreadOpen: (messageId: string) => void;
-  /** ✕ on the Replies tab: back to the tab before it. */
   onCloseThread: () => void;
-  /** The chat tabs: Eva, then the open tasks (`useProjectTaskTabs`). */
   taskTabs: ProjectTaskTabs;
-  /** The open task tabs' rows (`useProjectTaskTabRows`). */
   taskTabRows: ProjectTaskTabRows;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
@@ -72,7 +68,6 @@ export function ProjectDetailSandboxContent({
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
-  // The coordinator can always wake: a project has no closed state.
   const {
     isSandboxActive,
     isSandboxStarting,
@@ -82,15 +77,11 @@ export function ProjectDetailSandboxContent({
     handleStartSandbox,
     handleSandboxToggle,
   } = sandbox;
-  // An archived project opens read-only: no wake, no composer.
   const isArchived = project.archivedAt !== undefined;
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const { rows, selectedRow, selectedLoading } = taskTabRows;
-  // Eva's tab is selected unless a task tab is (or its row still loads).
   const onEva = selectedRow === undefined && !selectedLoading;
 
-  // Always mount the sandbox panel so tabs stay reachable while stopped —
-  // same as sessions. Panes self-gate.
   const projectSandboxPanel = (
     panes: SandboxPanesApi,
     owner: SandboxOwner,
@@ -136,10 +127,6 @@ export function ProjectDetailSandboxContent({
     />
   );
 
-  // Chat tabs need the panel (a task tab shows its tabs there): a project
-  // with no session yet has only Eva's chat, and no tab row. The row sits in
-  // the shown chat's header, left of its usage chip, so tabs and chip share
-  // one line.
   const chatTabs = sandbox.sandbox.owner ? (
     <ProjectChatTabs
       rows={rows}
@@ -175,14 +162,9 @@ export function ProjectDetailSandboxContent({
     />
   );
 
-  // Every chat stays mounted behind its tab (Eva's and each open task's, at
-  // most `MAX_PROJECT_TASK_TABS`): switching tabs is instant and keeps each
-  // composer's draft. A hidden `<Activity>` unmounts effects, so a hidden
-  // chat marks nothing read and listens to no keys.
   const chatColumn = () =>
     sandbox.sandbox.owner ? (
       <div className="flex h-full min-h-0 flex-col">
-        {/* A task tab whose row still loads shows no chat yet: keep the tabs. */}
         {!onEva && selectedRow === undefined ? chatTabs : null}
         <Activity mode={onEva ? "visible" : "hidden"}>
           <div className="flex min-h-0 flex-1 flex-col">{evaChat}</div>
@@ -212,7 +194,6 @@ export function ProjectDetailSandboxContent({
 
   const layout = (rightPanel: (ctx: SandboxPanelContext) => ReactNode) => (
     <ResizablePanelLayout
-      // Remount per project: the open flag is read once at mount.
       key={projectId}
       storageKey="project-sandbox-panel"
       chatPane="left"
@@ -257,8 +238,6 @@ export function ProjectDetailSandboxContent({
           }
         </SandboxWorkspace>
       ) : (
-        // No session yet, so no sandbox tabs: the card holds only the Tasks
-        // list. "+" focuses Eva's composer, the only chat there.
         layout(() => (
           <div className="flex h-full min-h-0 flex-col">
             <ProjectTasksPanel

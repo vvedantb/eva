@@ -5,18 +5,6 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `createForkedSession` (fix #882): the fork stacks on the source — its base
- * is the source branch when that branch is on GitHub, else the source's own
- * base — and it never queues the old transcript as a `<forked_thread>` first
- * message, because the forked disk already holds the agent's conversation. The
- * chat rows are not copied either: the fork's Main chat holds one "Forked
- * from" system alert. The Plan tab and interaction mode come along with the
- * source Main chat's composer traits.
- */
-
-
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|fork-stack";
 
@@ -45,7 +33,6 @@ async function fixture() {
       planContent: "# Seed plan",
       lastInteractionMode: "plan",
     });
-    // Composer picks live on the chat.
     const mainChatId = await ctx.db.insert("sessionChats", {
       sessionId: id,
       repoId,
@@ -70,10 +57,6 @@ async function fixture() {
   return { t: t.withIdentity({ subject: CLERK_ID }), sourceId };
 }
 
-/**
- * Keeps the work the fork schedules from firing after the test has ended,
- * where its writes land outside any transaction (an unhandled rejection).
- */
 async function withoutScheduledRuns<T>(run: () => Promise<T>): Promise<T> {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
   try {

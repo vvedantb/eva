@@ -15,12 +15,6 @@ interface MonthBar {
   sessions: number;
 }
 
-/**
- * Sessions created per calendar month, 2026. June is genuinely zero.
- * Source: Eva's own records, measured to 24 November 2026 (November is partial).
- * November excludes the 772 quick tasks and projects moved into sessions on
- * 11 November 2026, which carry that date rather than their real one.
- */
 const MONTHS: readonly MonthBar[] = [
   { month: "Jan", sessions: 13 },
   { month: "Feb", sessions: 11 },
@@ -37,23 +31,17 @@ const MONTHS: readonly MonthBar[] = [
 
 const COL_W = 72;
 const GAP = 16;
-/** Height of the plot area, including the value label above each bar. */
 const PLOT_H = 230;
 const BAR_MAX_H = 196;
 const PEAK = Math.max(...MONTHS.map((bar) => bar.sessions));
-/** A zero month still gets a visible stub rather than disappearing. */
 const STUB_H = 3;
-/** Index of the first highlighted month (July). */
 const HIGHLIGHT_FROM = 6;
-/** Bars rise left to right on entry; the value above each counts with it. */
 const RISE_AT = (index: number) => 0.45 + index * 0.07;
 
 const TRACK_W = MONTHS.length * COL_W + (MONTHS.length - 1) * GAP;
 const HIGHLIGHT_LEFT = HIGHLIGHT_FROM * (COL_W + GAP);
 const HIGHLIGHT_W = TRACK_W - HIGHLIGHT_LEFT;
-/** The July marker sits in the gap before the first highlighted bar. */
 const MARKER_X = HIGHLIGHT_LEFT - GAP / 2;
-/** Faint value guides at a third, two thirds and the full bar height. */
 const GUIDES = [1, 2, 3].map((part) => PLOT_H - (BAR_MAX_H * part) / 3);
 
 function barHeight(sessions: number): number {
@@ -126,7 +114,6 @@ export function AnnualAdoptionChart() {
 
   return (
     <div className="relative" style={{ width: TRACK_W }}>
-      {/* The glow is a painted radial, so fading it is opacity only. */}
       <m.div
         aria-hidden
         className="pointer-events-none absolute"

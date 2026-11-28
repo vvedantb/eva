@@ -1,9 +1,3 @@
-/**
- * The geometry behind `SessionsTimeline`. Kept apart from the component so the
- * lane arithmetic can be read — and adjusted — without scrolling past motion
- * props, and so the drawing code stays a plain function of `place()`.
- */
-
 /** Design width of the timeline, matching the slide's content column. */
 export const TRACK_W = 1088;
 /** Vertical centre of the track inside the timeline box. */
@@ -11,7 +5,6 @@ export const LINE_Y = 228;
 export const BOX_H = 412;
 /** Left and right breathing room so the first and last label cards fit. */
 export const INSET = 90;
-/** 1 July to 10 September 2026, the span the axis maps. */
 const SPAN_DAYS = 71;
 /**
  * Wide enough that the longest label — "Sessions in the sidebar everywhere" —
@@ -19,35 +12,22 @@ const SPAN_DAYS = 71;
  * the first and last cards still sit inside the track.
  */
 export const CARD_W = 176;
-/** Clear space demanded between two cards that share a lane. */
 const CARD_GUTTER = 16;
 const MIN_GAP = CARD_W + CARD_GUTTER;
-/**
- * Three lanes per side. The July cluster puts six milestones inside 180px of
- * track, and at this card width all six conflict with each other, so they need
- * six distinct lanes: three above the line and three below.
- */
 const LANES = 3;
-/** Stem to the shallowest lane, then the clear space between stacked lanes. */
 const STEM_BASE = 24;
 const LANE_GAP = 10;
-/** A label line at `leading-snug`, then the `mt-1` and the date line under it. */
 const LABEL_LINE_H = 20;
 const DATE_BLOCK_H = 20;
-/** Approximate advance width of the label face, used to predict wrapping. */
 const CHAR_W = 7.1;
 
 interface Milestone {
-  /** Days after 1 July 2026. */
   day: number;
   label: string;
   date: string;
-  /** Build step that reveals this milestone. */
   step: number;
 }
 
-/** Source: dates each change landed on Eva's main branch, 9 July to 10 September 2026. */
-// One row per milestone reads as the table it is.
 // prettier-ignore
 const MILESTONES: readonly Milestone[] = [
   { day: 8, label: "Follow-up queue", date: "9 Jul", step: 1 },
@@ -74,13 +54,10 @@ export interface Placed extends Milestone {
   x: number;
   above: boolean;
   lane: number;
-  /** Length of the stem from the axis to this card. */
   stem: number;
-  /** Index within its build step, used for the stagger. */
   order: number;
 }
 
-/** Height a card takes, from the number of lines its label will wrap onto. */
 function cardHeight(label: string): number {
   const lines = Math.max(1, Math.ceil((label.length * CHAR_W) / CARD_W));
   return lines * LABEL_LINE_H + DATE_BLOCK_H;
@@ -128,7 +105,6 @@ export function place(): Placed[] {
       above,
       lane,
       order,
-      // Grown below, once every lane's tallest card is known.
       stem: STEM_BASE,
     });
   });

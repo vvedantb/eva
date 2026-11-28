@@ -7,7 +7,8 @@
     {
       "name": "no-effect",
       "specifier": "@vvedantb/config/oxlint/no-effect.mjs"
-    }
+    },
+    { "name": "no-comments", "specifier": "./scripts/oxlint/no-comments.mjs" }
   ],
   "categories": {
     "correctness": "error",
@@ -15,6 +16,7 @@
     "perf": "warn"
   },
   "rules": {
+    "no-comments/no-comments": "error",
     "react/rules-of-hooks": "error",
     "react/capitalized-calls": "error",
     "react/exhaustive-deps": "warn",
@@ -70,7 +72,7 @@
           {
             "name": "react",
             "importNames": ["useEffect"],
-            "message": "Avoid useEffect: derive state inline, use event handlers, or rely on Convex live queries. Justify unavoidable effects with a comment. See CLAUDE.md."
+            "message": "Avoid useEffect: derive state inline, use event handlers, or rely on Convex live queries. Unavoidable effects need a scoped oxlint-disable with a reason. See CLAUDE.md."
           }
         ]
       }
@@ -207,6 +209,64 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "apps/chrome-extension/tailwind.config.js",
+        "apps/mobile/babel.config.js",
+        "apps/mobile/plugins/withReleaseSigning.js",
+        "apps/mobile/src/ui/fonts.js",
+        "apps/mobile/tailwind.config.js",
+        "apps/web/src/lib/components/PreviewNavBar.tsx",
+        "apps/web/src/lib/components/chat/chatBodyUtils.ts",
+        "apps/web/src/lib/components/sandbox/useSandboxPanes.ts",
+        "apps/web/src/lib/components/tasks/SchedulePopover.tsx",
+        "apps/web/src/routes/_global/home/_components/RepoCard.tsx",
+        "apps/web/src/routes/_global/home/_components/RepoGroup.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/automations/AutomationClient.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/automations/_components/FindingRow.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/automations/_components/RunEmailPanel.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/automations/_components/SystemAutomationCard.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/automations/_components/SystemAutomationSettings.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/projects/ProjectsClient.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/projects/_components/ProjectDetailHeaderActions.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/projects/_components/ProjectDetailSandboxContent.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/projects/_components/ProjectsSelectButton.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/QuickTaskDetailHeaderActions.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/QuickTaskDetailShell.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/QuickTasksListSplit.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/QuickTasksToolbar.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/DesktopPanel.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/AnnotationCommentCard.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/CachedSessionShell.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/FileViewerEditControls.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/FileViewerHeader.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/NewSessionComposer.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/PreviewAnnotationLayer.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/SandboxFileTree.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBarTools.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/SessionHeaderMenu.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/route.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/settings/TeamEnvVarsClient.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/settings/_components/BuildRow.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/settings/_components/CustomTabRow.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/settings/skills/_components/SkillRow.tsx",
+        "apps/web/src/routes/_repo/$owner/$repo/settings/skills/_components/SystemSkillRow.tsx",
+        "apps/web/tailwind.config.js",
+        "packages/backend/convex/_sandbox_runtime/gitCredentials.ts",
+        "packages/backend/convex/_validators/enums.ts",
+        "packages/backend/convex/_validators/tableFields.ts",
+        "packages/backend/convex/schema.ts",
+        "packages/backend/convex/snapshotActions.ts",
+        "packages/backend/convex/taskWorkflowActions.ts",
+        "packages/backend/scripts/sync-to-local.mjs",
+        "packages/backend/scripts/vercel-sandbox-spike/managed-image-spike.mjs",
+        "packages/shared/src/modelPricing.ts",
+        "scripts/check-schema-narrowing.mjs",
+        "scripts/check-shared-backend.mjs",
+        "scripts/design-check.mjs"
+      ],
+      "rules": { "no-comments/no-comments": "off" }
     }
   ],
   "ignorePatterns": [

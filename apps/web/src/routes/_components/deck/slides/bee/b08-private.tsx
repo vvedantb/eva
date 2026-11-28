@@ -39,7 +39,6 @@ export function BeePrivate() {
     <Shell className="justify-center py-14">
       <Camera shots={SHOTS}>
         <div className="relative flex h-[440px] w-[1088px] items-start gap-12">
-          {/* Your screen as others see it while you share. */}
           <div className="relative h-[360px] w-[560px] overflow-hidden rounded-[26px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10">
             <div className="absolute top-4 left-1/2 -translate-x-1/2">
               <m.div

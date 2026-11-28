@@ -5,15 +5,12 @@ import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
 const GROUPED = new Intl.NumberFormat("en-GB").format;
 
 interface AnnCCountDownProps {
-  /** The figure the slide starts from, shown before the count runs. */
   from: number;
   to: number;
   step?: number;
   duration?: number;
   delay?: number;
-  /** 0 keeps the thousands separator; 1 renders 2.6 rather than 3. */
   decimals?: number;
-  /** The resting figure as written in the source, so 28 does not read 28.0. */
   fromText?: string;
   suffix?: string;
   className?: string;
@@ -42,8 +39,6 @@ export function AnnCCountDown({
 
   return (
     <span
-      // Remounting on the step boundary is what re-arms the one-shot count when
-      // a presenter steps backwards and forwards again.
       key={running ? "on" : "off"}
       className={cn("tabular-nums", className)}
       ref={(el) => {

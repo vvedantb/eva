@@ -12,30 +12,23 @@ import {
 import { MoA1Dot, MoA1Rail } from "./MoA1Rail";
 
 export interface AnnABeat {
-  /** A number rolls itself up; a phrase rises into place. */
   heading: string | number;
   label: string;
-  /** At most one beat per slide takes the brand gradient. */
   accent?: boolean;
 }
 
 interface AnnABeatsProps {
   beats: readonly AnnABeat[];
-  /** Build step that reveals the first beat. Each later beat waits one more. */
   firstStep?: number;
-  /** Keep the last beat's node breathing: it is still running. */
   liveLast?: boolean;
   className?: string;
 }
 
-/** The content column the beats span, and the grid inside it. */
 const TRACK_W = 1088;
 const COLS = 3;
 const COL_GAP = 40;
 const COL_W = (TRACK_W - COL_GAP * (COLS - 1)) / COLS;
-/** Nodes sit just inside each column's left edge, over the heading. */
 const NODE_INSET = 6;
-/** The light travels first; the beat lands as it arrives. */
 const LAND = 0.4;
 
 function nodeX(index: number): number {
@@ -64,7 +57,6 @@ function Heading({
             {beat.accent ? <Accent>{roll}</Accent> : roll}
           </div>
         </Reveal>
-        {/* The month's share of the quarter, drawn to scale. */}
         <m.div
           className="mt-5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]"
           initial={{ opacity: 0 }}
@@ -94,8 +86,6 @@ function Heading({
     );
   }
 
-  // Fixed height so a one-line heading keeps its label on the same baseline as
-  // the two-line headings beside it.
   return (
     <div className="min-h-[76px] text-3xl leading-tight font-semibold text-balance text-white">
       <MaskedText step={step} delay={LAND}>
@@ -147,7 +137,6 @@ export function AnnABeats({
                 step={step}
                 delay={LAND - 0.05}
                 liveStep={liveLast && last ? step : undefined}
-                // On the rail (40px up), just inside the column edge.
                 className="-top-10 left-1.5"
               />
               <Heading beat={beat} step={step} peak={peak} />

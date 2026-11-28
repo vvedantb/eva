@@ -80,7 +80,6 @@ const isTimeRange = (v: string): v is QuickTaskTimeRange =>
   QUICK_TASK_TIME_RANGES.some((range) => range === v);
 
 interface QuickTasksToolbarProps {
-  /** Active or Archived tasks; the Archived list has no Select or New Task. */
   listMode: ArchiveListMode;
   onListModeChange: (mode: ArchiveListMode) => void;
   view: QuickTaskView;
@@ -235,8 +234,6 @@ export function QuickTasksToolbar({
                   onClick={onStartSelecting}
                 >
                   <IconCheckbox size={16} />
-                  {/* `sr-only`, not `hidden`: the tooltip below is hover-only,
-                      so on touch this span is the button's only name. */}
                   <span className="max-sm:sr-only">Select</span>
                 </Button>
               </TooltipTrigger>

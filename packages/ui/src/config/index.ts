@@ -1,5 +1,3 @@
-// eva's app config for @vvedantb/ui. `EvaUiProvider` hands it to every
-// vvedantb component, so they render eva's classes and defaults.
 import type { UiConfig } from "@vvedantb/ui";
 import { aiactivityConfig } from "./aiactivity";
 import { aichatConfig } from "./aichat";

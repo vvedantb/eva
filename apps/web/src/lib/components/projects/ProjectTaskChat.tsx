@@ -22,12 +22,9 @@ export function ProjectTaskChat({
   headerLeft,
 }: {
   taskId: Id<"agentTasks">;
-  /** The task's own PR. */
   prUrl: string | undefined;
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   onShowReview: () => void;
-  /** The project's chat tabs, on the chat's header row. */
   headerLeft?: ReactNode;
 }) {
   const {
@@ -48,7 +45,6 @@ export function ProjectTaskChat({
   });
 
   if (isLoading) {
-    // The tab row stays while the task loads: tabs never jump.
     return (
       <>
         {headerLeft}

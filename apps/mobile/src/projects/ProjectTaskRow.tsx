@@ -14,11 +14,6 @@ import { PrIcon } from "@/sessions/SessionGroup";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
-/**
- * The web flat row body (`ProjectFlatRowBody`): an icon, the title on one
- * line, one muted sentence under it, and `trailing` at the end. No fill: the
- * row fades while pressed.
- */
 function FlatRow({
   icon,
   title,
@@ -110,7 +105,6 @@ export function ProjectTaskRow({
         </Text>
       }
       accessibilityLabel={displayTitle(task.title)}
-      // A project task is its chat.
       onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
       onLongPress={onLongPress}
     />

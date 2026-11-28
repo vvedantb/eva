@@ -6,11 +6,6 @@ const WIDTH = 560;
 const HEIGHT = 30;
 const MID = HEIGHT / 2;
 
-/**
- * The old path: a line drawn by reading a terminal, so it wanders. The wobble
- * is deliberate and hand-written — a generated sine would read as decoration.
- * The taut line has the same points at the same x, so one morphs into the other.
- */
 const WOBBLE = [15, 8, 21, 10, 22, 11, 23, 9, 20, 12, 15];
 const STEP_X = WIDTH / (WOBBLE.length - 1);
 const pathThrough = (ys: readonly number[]) =>
@@ -18,17 +13,13 @@ const pathThrough = (ys: readonly number[]) =>
 const RAGGED = pathThrough(WOBBLE);
 const TAUT = pathThrough(WOBBLE.map(() => MID));
 
-/** Seconds for the wire to pull taut. */
 const PULL = 0.9;
-/** Seconds for one reply to cross the finished line. */
 const TRIP = 1.5;
 
 interface AnnBConnectionProps {
   label: string;
   date: string;
-  /** Position in the stagger, from the top. */
   index: number;
-  /** The build step that converts this line. */
   step: number;
 }
 
@@ -63,8 +54,6 @@ export function AnnBConnection({
           aria-hidden
         >
           <defs>
-            {/* User space, not the bounding box: a straight horizontal line has
-                zero height, and an object-bounding-box gradient collapses on it. */}
             <linearGradient
               id={gradientId}
               gradientUnits="userSpaceOnUse"
@@ -113,7 +102,6 @@ export function AnnBConnection({
           />
         </svg>
 
-        {/* A reply travelling the finished wire. One loop per connection. */}
         {converted ? (
           <m.span
             aria-hidden

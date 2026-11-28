@@ -10,11 +10,6 @@ import { requestSessionSandboxStop } from "./_sessions/sandbox";
 
 const DAY_MS = 86_400_000;
 
-/**
- * Parses an "HH:MM" 24-hour string into minutes-from-midnight, or null if it is
- * not a valid time. Used to compare the configured stop time against the
- * current wall-clock time in the configured timezone.
- */
 function parseHHMM(value: string): number | null {
   if (!/^\d{2}:\d{2}$/.test(value)) return null;
   const hours = Number(value.slice(0, 2));
@@ -23,12 +18,6 @@ function parseHHMM(value: string): number | null {
   return hours * 60 + minutes;
 }
 
-/**
- * Returns the local calendar date ("YYYY-MM-DD") and minutes-from-midnight for
- * `timestamp` as observed in `timeZone`. Formatting an absolute timestamp in
- * the IANA zone means DST transitions are handled automatically — the same
- * "22:00" fires at the correct instant in both summer and winter.
- */
 function getLocalParts(
   timestamp: number,
   timeZone: string,
@@ -90,7 +79,6 @@ export const setSandboxAutoStopSettings = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // App-wide: the sweep stops every user's sandboxes.
     await requireAppAdmin(ctx.db, ctx.userId);
     const existing = await ctx.db.query("appSettings").first();
     if (existing) {
@@ -215,7 +203,6 @@ export const run = internalAction({
 
     if (settings.lastRunDate === occurrenceDate) return null;
 
-    // Claim the occurrence before sweeping so a later tick cannot double-fire.
     await ctx.runMutation(internal.sandboxAutoStop.recordRun, {
       date: occurrenceDate,
     });

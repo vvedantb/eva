@@ -1,38 +1,3 @@
-/**
- * Durable swap provisioning for sandboxes.
- *
- * Repos that restore a large local Convex backend snapshot (CarePulse
- * eProcurement: ~300k–1M+ docs) spike memory transiently on every sandbox
- * start: the backend's first open, each `convex dev` prepare/push (bundle +
- * schema-validate against all restored docs) and a `next dev` cold compile
- * stack up. Observed 2026-08-07: the kernel OOM-killed convex-local-backend at
- * ~11.5 GB RSS on a 16 GB box with zero swap, while the same backend idles at
- * ~1.2 GB once up.
- *
- * More RAM is not an option: Vercel Sandbox allocates 2 GB per vCPU and the
- * Pro plan caps a sandbox at 8 vCPUs / 16 GB (Evalucom is on Pro, and
- * vercelProvider already asks for 8), so the box in that incident was already
- * at the ceiling. Disk is likewise fixed at 32 GB on every plan. That leaves
- * swap, which only has to absorb a transient spike.
- *
- * A hand-made swapfile does not survive a sandbox restart, so eva provisions it
- * itself on every path that can precede a memory spike, for every sandbox owner
- * (session, quick task, project chat, seed prep):
- * - `createSandbox` post-create, before dependency install and build;
- * - every boot via `ensureSandboxRunning` (and the early-ready resume path,
- *   which skips that bootstrap to unlock the UI sooner);
- * - `runBackgroundCommands`, immediately before `convex dev` launches;
- * - both dev-server launchers, so a cold `next dev` compile on a lazily resumed
- *   VM (preview self-heal, task dev-server re-run) is covered too;
- * - the seeded-snapshot seed run, before its install/build/daemon stages.
- * Each call re-runs the same idempotent script, which no-ops in one exec when
- * swap is already active.
- *
- * Sizing is disk-bound, not memory-bound: the VM has ~6–13 GB free after a
- * snapshot restore, and a 12 GB swapfile has already filled the disk to 100%
- * and broken writes. We take the smaller of the requested size and
- * (free − reserve), and skip entirely when that leaves too little to matter.
- */
 import type { SandboxHandle } from "../_sandbox/provider";
 import {
   lowDiskCleanupLines,
@@ -44,15 +9,11 @@ import { errorMessage } from "@vvedantb/server";
 const ENSURE_SCRIPT_PATH = "/tmp/eva-ensure-swap.sh";
 const RELEASE_SCRIPT_PATH = "/tmp/eva-release-swap.sh";
 
-/** Every status line the script prints, so callers can log one line. */
 const MARKER_PREFIX = "eva-swap:";
 
 export type SwapConfig = {
-  /** Requested swap size in MiB, capped by free disk. */
   sizeMib: number;
-  /** Free disk (MiB) the swapfile must never eat into. */
   reserveMib: number;
-  /** Below this a swapfile cannot absorb the spike, so we skip it. */
   minMib: number;
 };
 
@@ -104,30 +65,19 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     "avail_mib() { df -Pm / 2>/dev/null | awk 'NR==2 {print $4}'; }",
     'file_mib() { s=$(stat -c %s "$SWAP" 2>/dev/null || echo 0); echo $((s / 1048576)); }',
     "",
-    // Every boot path runs this script, so it is also where a low disk gets
-    // its Eva-owned caches back before the daemons start writing.
     "DISK_BEFORE=$(avail_mib)",
     ...lowDiskCleanupLines("avail_mib"),
     'if [ "$CLEANED" = yes ]; then',
     `  echo "${MARKER_PREFIX}low-disk-cleanup before=\${DISK_BEFORE}MiB after=$(avail_mib)MiB"`,
     "fi",
     "",
-    // Already swapping: nothing to do. This is the common case on a resume
-    // where the VM kept running, and makes repeat calls per boot free.
     'if swapon --show=NAME --noheadings 2>/dev/null | grep -qx "$SWAP"; then',
     `  echo "${MARKER_PREFIX}active size=$(file_mib)MiB free_disk=$(avail_mib)MiB"`,
     "  exit 0",
     "fi",
     "",
-    // Cgroup swap accounting: swapon succeeds but the cgroup never pages out
-    // when memory.swap.max is 0. Normally already `max` on Vercel; cheap to assert.
     "echo max | sudo -n tee /sys/fs/cgroup/memory.swap.max >/dev/null 2>&1 || true",
     "",
-    // A swapfile baked into the snapshot restores as a plain file with swap
-    // off. Reuse it (no new disk cost) unless it breaks the current policy —
-    // an oversized leftover is what filled the disk to 100% before. A leftover
-    // on a disk already under the reserve is dropped too: free disk beats swap,
-    // and the sizing below recreates a smaller one only if the reserve allows.
     'if [ -f "$SWAP" ]; then',
     "  existing=$(file_mib)",
     "  free_now=$(avail_mib)",
@@ -159,8 +109,6 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     "  exit 0",
     "fi",
     "",
-    // fallocate is instant but is rejected on some filesystems (overlay/tmpfs)
-    // and by kernels without extent support — dd always works, just slower.
     'if ! sudo -n fallocate -l "${SIZE}M" "$SWAP" >/dev/null 2>&1; then',
     '  sudo -n rm -f "$SWAP" || true',
     '  if ! sudo -n dd if=/dev/zero of="$SWAP" bs=1M count="$SIZE" status=none >/dev/null 2>&1; then',
@@ -180,8 +128,6 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     `  echo "${MARKER_PREFIX}failed stage=swapon fs=$(stat -f -c %T / 2>/dev/null)"`,
     "  exit 0",
     "fi",
-    // Overflow-only swap: keep hot pages in RAM and page out under real
-    // pressure, so steady-state dev-server latency is unchanged.
     "sudo -n sysctl -w vm.swappiness=10 >/dev/null 2>&1 || true",
     `echo "${MARKER_PREFIX}enabled size=\${SIZE}MiB free_disk=$(avail_mib)MiB"`,
     "exit 0",
@@ -206,11 +152,8 @@ export function buildReleaseSwapScript(): string {
     `  echo "${MARKER_PREFIX}release-noop"`,
     "  exit 0",
     "fi",
-    // /proc/swaps reports Size/Used in KiB.
     "USED=$(awk -v f=\"$SWAP\" '$1 == f { print int($4 / 1024) }' /proc/swaps 2>/dev/null)",
     "AVAIL=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)",
-    // swapoff pages everything back into RAM. Leave it alone rather than
-    // trigger the very OOM the swapfile exists to prevent.
     'if [ -z "${USED:-}" ] || [ -z "${AVAIL:-}" ] || [ "$USED" -gt "$((AVAIL - 1024))" ]; then',
     `  echo "${MARKER_PREFIX}release-skipped used=\${USED:-?}MiB mem_available=\${AVAIL:-?}MiB"`,
     "  exit 0",
@@ -225,12 +168,6 @@ export function buildReleaseSwapScript(): string {
   ].join("\n");
 }
 
-/**
- * Runs one swap script in the sandbox and returns its status line.
- *
- * Fail-open by design: swap is an optimisation, so every failure degrades to an
- * empty status and a log line rather than breaking a boot or a stop.
- */
 async function runSwapScript(
   sandbox: SandboxHandle,
   label: string,
@@ -246,7 +183,6 @@ async function runSwapScript(
       .map((line) => line.trim())
       .filter((line) => line.startsWith(MARKER_PREFIX));
     const status = markers.at(-1) ?? `no status (exit ${result.exitCode})`;
-    // Earlier markers (the low-disk cleanup) go in the log line too.
     const logged = markers.length > 1 ? markers.join(" | ") : status;
     console.log(`[sandbox] ${label}: ${logged} on ${sandbox.id}`);
     return status;
@@ -265,8 +201,6 @@ async function runSwapScript(
  */
 export async function ensureSwapFile(sandbox: SandboxHandle): Promise<string> {
   if (swapProvisioningDisabled()) return "";
-  // dd of a multi-GiB file is the slow path (~30-60s on NVMe), still well
-  // inside the ~300s single-exec ceiling.
   return await runSwapScript(
     sandbox,
     "ensureSwapFile",
@@ -284,7 +218,6 @@ export async function ensureSwapFile(sandbox: SandboxHandle): Promise<string> {
  * file through every restore. See {@link buildReleaseSwapScript}.
  */
 export async function releaseSwapFile(sandbox: SandboxHandle): Promise<string> {
-  // Writing pages back to RAM can take a while on a large, well-used swapfile.
   return await runSwapScript(
     sandbox,
     "releaseSwapFile",

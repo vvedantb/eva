@@ -12,7 +12,6 @@ const ACTIONS = 3;
 const SAVED = 4;
 const FORWARD = 5;
 
-/** An hour of talk, as Bee heard it. Example lines. */
 const TRANSCRIPT = [
   "Alex: so the provider sent most of the forms last week",
   "Sam: did the CQC report come through as well?",
@@ -46,7 +45,6 @@ export function BeeSummary() {
       <Camera shots={SHOTS}>
         <div className="relative flex h-[460px] w-[1088px] items-start gap-12">
           <div className="relative h-[460px] w-[620px] shrink-0">
-            {/* The whole meeting, scrolling past, then folding away. */}
             <m.div
               className="absolute inset-0 overflow-hidden rounded-[22px] bg-[#e9e3d6] px-8 py-6 ring-1 ring-[#2a1e0c]/10 [mask-image:linear-gradient(transparent,black_15%,black_85%,transparent)]"
               initial={false}
@@ -84,7 +82,6 @@ export function BeeSummary() {
               </m.div>
             </m.div>
 
-            {/* What is left: the summary, built up as on the original slide. */}
             <m.div
               className="absolute top-0 left-0 w-full origin-center"
               initial={{ opacity: 0, scaleY: 0.1 }}
@@ -100,7 +97,6 @@ export function BeeSummary() {
             </m.div>
           </div>
 
-          {/* It goes back into your notes, and to anyone who missed it. */}
           <SummaryAfter saved={step >= SAVED} forward={step >= FORWARD} />
         </div>
       </Camera>

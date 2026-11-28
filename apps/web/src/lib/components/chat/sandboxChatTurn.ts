@@ -53,29 +53,22 @@ export interface SandboxTurnPorts {
     args: SandboxTurnSendArgs,
     expected: SandboxTurnExpectation,
   ) => Promise<null>;
-  /** Posts an assistant error row (a failed preview annotation send). */
   postError: (content: string) => Promise<null>;
 }
 
 /** The composer settings a turn runs on. */
 export interface SandboxTurnSettings {
   model: AIModel;
-  /** The effort shown in the picker; the turn and its rows record this one. */
   effortLevel: ReasoningLevel | undefined;
   executionTraits: ModelTraitsExecutionArgs;
-  /** Already resolved from the picker id; undefined = Team credential. */
   providerAccountId: Id<"userProviderAccounts"> | undefined;
 }
 
 export interface SandboxTurnInput {
-  /** What the agent receives. */
   message: string;
-  /** Compact chat text when `message` is a rich prompt (preview annotations). */
   displayContent?: string;
-  /** Preview annotations: stored on the user row for the comments drawer. */
   annotation?: PreviewAnnotation;
   attachmentStorageIds?: Id<"_storage">[];
-  /** Sessions: the proposed plan this turn implements. */
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
@@ -91,8 +84,6 @@ export async function sendSandboxTurn(
   expected: SandboxTurnExpectation,
 ): Promise<void> {
   const { model, effortLevel, executionTraits, providerAccountId } = settings;
-  // The picker's effort wins. The execution payload leaves out the provider
-  // default, so it is only the fallback.
   const reasoningLevel = effortLevel ?? executionTraits.reasoningLevel;
   await ports.send(
     {
@@ -144,7 +135,6 @@ export function sandboxAnnotationSender(
  */
 export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
   parentId: Id<"sessionChats"> | undefined;
-  /** The chat's streaming row (a task's runs stream here too). */
   streamingEntityId: string | undefined;
   draftTarget: ChatDraftTarget | undefined;
 } {

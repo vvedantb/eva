@@ -94,8 +94,6 @@ export const update = authMutation({
       ctx.userId,
     );
     assertProjectNotArchived(project);
-    // `id` must be omitted — leaving it in the rest-spread patches a stray
-    // `id` field onto the document and breaks projects:list return validation.
     const {
       id: _projectId,
       projectLead,
@@ -116,8 +114,6 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
-    // The session mirrors the title and base branch, and moves to an edited
-    // branch (the one branch writer).
     const edited = await ctx.db.get(args.id);
     if (edited) {
       await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });

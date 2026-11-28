@@ -5,17 +5,11 @@ import { DUR, EASE, cueTransition } from "../../../_components/motion";
 import { BEE_SPRING } from "./BeeIsland";
 import { BEE_CARD, SourceChip } from "./BeeBits";
 
-/**
- * The meeting summary Bee writes, and what happens to it after: shared by the
- * summary slide and its fold draft, so both always show the same detail.
- */
-
 interface Action {
   text: string;
   owner: string;
 }
 
-/** Example meeting: what was decided and who does what. */
 const DECIDED: readonly string[] = [
   "Provider joins the AQP list, if forms are back by Friday",
   "Start with nursing home placements only",
@@ -121,7 +115,6 @@ export function SummaryAfter({
         Saved to your notes, so Bee finds it next time
       </p>
 
-      {/* Missed it: whoever was there forwards the same file. */}
       <m.div
         className="mt-6 flex flex-col gap-3"
         initial={{ opacity: 0, y: 16 }}

@@ -9,13 +9,11 @@ import { type draftTarget } from "../validators";
 
 type DraftTarget = Infer<typeof draftTarget>;
 
-/** Result returned by resolveTarget: the repoId for this surface and a function to find any existing draft row. */
 type ResolvedTarget = {
   repoId: Id<"githubRepos">;
   findExisting: () => Promise<Doc<"drafts"> | null>;
 };
 
-/** Finds a user's draft row for a task comment, matched by taskId and parentCommentId. */
 async function findTaskCommentDraft(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,
@@ -50,7 +48,6 @@ export async function resolveTarget(
     const task = await db.get(target.taskId);
     if (!task) throw new Error("Task not found");
 
-    // Tasks may be repo-scoped or project-scoped; find the repoId either way.
     let repoId: Id<"githubRepos">;
     if (task.repoId) {
       repoId = task.repoId;
@@ -82,7 +79,6 @@ export async function resolveTarget(
     const chatId = target.chatId;
     return {
       repoId,
-      // One draft per chat: each chat is its own composer.
       findExisting: async () => {
         const rows = await db
           .query("drafts")

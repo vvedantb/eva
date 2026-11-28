@@ -34,13 +34,11 @@ const MONTH_NAMES = [
   "December",
 ];
 
-/** Formats a timestamp as a UK-style "DD Month YYYY" date (UTC, deterministic). */
 function formatCommentDate(timestamp: number): string {
   const date = new Date(timestamp);
   return `${date.getUTCDate()} ${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
-/** Resolves a human-readable name for a comment author, falling back to "Reviewer". */
 function userDisplayName(user: Doc<"users"> | null): string {
   if (!user) return "Reviewer";
   if (user.fullName?.trim()) return user.fullName.trim();
@@ -49,7 +47,6 @@ function userDisplayName(user: Doc<"users"> | null): string {
   return user.email ?? "Reviewer";
 }
 
-/** Fetches a task's comments as PR change-request lines, oldest first. */
 async function getChangeRequestContents(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
@@ -63,7 +60,6 @@ async function getChangeRequestContents(
     .map((c) => c.content);
 }
 
-/** Resolves `@` mention tokens in text an agent prompt carries. */
 async function resolveTextForPrompt(
   ctx: QueryCtx,
   text: string | undefined,
@@ -93,7 +89,6 @@ export async function buildTaskRunPrompt(
     repo: Doc<"githubRepos">;
     mode: Infer<typeof runModeValidator>;
     branchName: string;
-    /** Comments before this were handled by an earlier run. */
     commentsSince: number | undefined;
     previousRunSummary?: string;
     projectContext?: { title: string; description?: string };
@@ -129,7 +124,6 @@ export async function buildTaskRunPrompt(
     .filter((c) => commentsSince === undefined || c.createdAt > commentsSince)
     .sort((a, b) => a.createdAt - b.createdAt);
 
-  // Resolve author names once for the comments we are about to surface.
   const uniqueAuthorIds = [
     ...new Set(
       sortedComments
@@ -145,10 +139,6 @@ export async function buildTaskRunPrompt(
     authorNameById.set(id, userDisplayName(authors[index]));
   });
 
-  // Resolve any `@` mention tokens (matching how the task description is
-  // prepared), then keep the raw resolved text for the commit subject
-  // separate from the author/date-annotated text shown to the agent — the
-  // annotation must not leak into the edit commit message.
   const changeRequests = await Promise.all(
     sortedComments.map(async (c) => {
       const author = c.authorId
@@ -163,8 +153,6 @@ export async function buildTaskRunPrompt(
     }),
   );
 
-  // Sibling repositories this sandbox's git credentials can read (owner is
-  // the task owner, whose access the credential helper mints tokens against).
   const readableRepos = await listReadableSiblingRepos(
     ctx.db,
     task.createdBy,
@@ -240,8 +228,6 @@ export const getTaskPrCreationData = internalQuery({
     if (!repo) throw new Error("Repository not found");
 
     const branchName = taskBranchName(task);
-    // Only a live PR blocks a new one: after a merge or close, new commits on
-    // the branch need a fresh PR.
     const livePr = await findLivePullRequestOnBranch(
       ctx.db,
       repo._id,

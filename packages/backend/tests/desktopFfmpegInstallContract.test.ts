@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test";
 import { FFMPEG_INSTALL_SCRIPT } from "../convex/_sandbox/ffmpegInstall";
 
-/** Every `dnf` attempt in the script, in source order. */
 const installAttempts = FFMPEG_INSTALL_SCRIPT.split("\n").filter((line) =>
   line.includes("dnf install"),
 );
 
-/** Soft-failing and idempotent, so a dnf hiccup cannot block desktop startup. */
 test("the ffmpeg install is idempotent and cannot block startup", () => {
   expect(
     FFMPEG_INSTALL_SCRIPT.startsWith("if ! ffmpeg -version"),
@@ -23,13 +21,6 @@ test("the health probe catches a present but unloadable ffmpeg binary", () => {
   expect(FFMPEG_INSTALL_SCRIPT).not.toContain("command -v ffmpeg");
 });
 
-/**
- * The libjack regression. `pipewire-jack-audio-connection-kit-libs` claims the
- * `libjack.so.0()(64bit)` capability but installs the library off the loader
- * path, so `dnf` exits 0 while ffmpeg still dies on launch. Chaining the next
- * attempt behind `||` therefore skipped it, and the sandbox stayed broken.
- * Each attempt must be re-gated on the binary actually running.
- */
 test("each install attempt is gated on ffmpeg running, not on dnf's exit code", () => {
   expect(installAttempts.length).toBeGreaterThan(1);
   expect(
@@ -55,7 +46,6 @@ test("the repair installs ffmpeg, then real jack, then the capability match", ()
     toEqual([...order].sort((a, b) => a - b));
 });
 
-/** The shim pipewire hides in a private directory is the last resort. */
 test("the loader-path repair runs only after every package attempt", () => {
   const ldconfigAt = FFMPEG_INSTALL_SCRIPT.indexOf("ldconfig");
   expect(ldconfigAt).toBeGreaterThan(-1);

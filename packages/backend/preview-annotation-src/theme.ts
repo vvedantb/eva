@@ -1,8 +1,3 @@
-/**
- * Eva's colours for the injected toolbar and selection card. Shared by both so
- * a theme message from Eva restyles them together.
- */
-
 import type { PreviewToolbarTheme } from "@eva/shared/previewFrameMessages";
 import { DARK_THEME, LIGHT_THEME } from "./themeFallback.generated";
 

@@ -30,9 +30,6 @@ test("buildLinkedReposSection describes the primary and every linked repo", () =
         baseBranch: "develop",
       },
     ],
-    // Pre-escaped, matching buildEditPrompt's contract: it escapes `"` in the
-    // raw message once (`commitMessage`) and reuses the same escaped string in
-    // every commit line it builds, including this one.
     'add nursing home filter \\"urgent\\"',
   );
 

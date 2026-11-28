@@ -26,13 +26,6 @@ import { hasActiveTaskRun } from "../convex/_agentTasks/taskRunStatus";
 import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
- * new sessions, each through the web's own server paths. Fake timers keep the
- * scheduled sandbox and push actions queued instead of running.
- */
-
-/** Loading the chat-workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|mobile-api";
 
@@ -69,8 +62,6 @@ async function fixture() {
       userId,
       lastModel: "codex:gpt-5.6-sol",
     });
-    // A read-only chat: the chat of an archived session (a teammate's, so it
-    // stays out of this user's chat lists).
     const archivedSessionId = await ctx.db.insert("sessions", {
       owner: { kind: "standalone" },
       repoId,
@@ -94,7 +85,6 @@ async function fixture() {
       updatedAt: now,
       createdBy: userId,
     });
-    // The task's model lives on its chat.
     const task = await ctx.db.get(taskId);
     if (task) await ensureWorkSession(ctx, { kind: "task", task }, { lastModel: "claude:opus" });
     const projectId = await ctx.db.insert("projects", {
@@ -119,14 +109,12 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** The session chat a quick task or a project chats in. */
 async function ownedChatId(asUser: Fixture["asUser"], owner: FunctionArgs<typeof api.sessions.getOwnedWithSeed>["owner"]) {
   const owned = (await asUser.query(api.sessions.getOwnedWithSeed, { owner }))?.session;
   if (!owned) throw new Error("The owner has no session");
   return owned.chatId;
 }
 
-/** User rows and still-queued rows on one chat: a send lands in one of them. */
 async function sent(t: Fixture["t"], parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">) {
   return await t.run(async (ctx) => {
     const queued = await ctx.db
@@ -240,14 +228,11 @@ describe("mobile api", () => {
       expect(await sent(t, ids.chatId)).toEqual([
         { content: "hi session", model: "codex:gpt-5.6-sol", userId: ids.userId },
       ]);
-      // A quick task chats in its session's Main chat, on the chat's own
-      // model (seeded from the task's run `model`).
       const taskChatId = await ownedChatId(asUser, { kind: "task", taskId: ids.taskId });
       expect(await sent(t, ids.taskId)).toEqual([]);
       expect(await sent(t, taskChatId)).toEqual([
         { content: "hi task", model: "claude:opus", userId: ids.userId },
       ]);
-      // A project chats in its session's Main chat too.
       const projectChatId = await ownedChatId(asUser, { kind: "project", projectId: ids.projectId });
       expect(await sent(t, ids.projectId)).toEqual([]);
       expect(await sent(t, projectChatId)).toEqual([
@@ -262,7 +247,6 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
-      // The task's run is a task-mode turn in its chat.
       await t.run((ctx) =>
         openSessionChatTurn(ctx, {
           chatId,
@@ -307,7 +291,6 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const requestedAt = Date.now();
-      // A project's turn runs on its session chat.
       const { chatId: projectChatId } = await asUser.mutation(api.sessions.ensureOwned, {
         owner: { kind: "project", projectId: ids.projectId },
       });
@@ -393,7 +376,6 @@ describe("mobile api", () => {
         traits: { effortLevel: "high", fastMode: true },
         intendedBranch: "eva/fix-login",
       });
-      // A stopped sandbox has no worktree, so its last branch is not shown.
       await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "closed" }));
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).not.toHaveProperty("sandboxBranch");
       await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "active" }));
@@ -408,7 +390,6 @@ describe("mobile api", () => {
     "getChat says whether the sandbox runs, as the web composer reads it",
     async () => {
       const { t, ids, asUser } = await fixture();
-      // A task's and a project's sandbox is its session's.
       const owned = await Promise.all([
         asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } }),
         asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "project", projectId: ids.projectId } }),
@@ -447,7 +428,6 @@ describe("mobile api", () => {
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
-      // A task in a project ships through its own pull request, not the project's.
       await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
       expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
     },
@@ -486,7 +466,6 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const { chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
-      // Shown as the task, read and written as its session's Main chat.
       expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({
         kind: "task",
         parentId: chatId,
@@ -520,7 +499,6 @@ describe("mobile api", () => {
           updatedAt: Date.now(),
         }),
       );
-      // The web session picker's own mutation.
       await asUser.mutation(api.sessionChats.setProviderAccountId, { chatId: ids.chatId, providerAccountId: accountId });
       const chat = await asUser.query(api.chats.get, { target: ids.sessionId });
       expect(chat).toMatchObject({ providerAccountId: accountId, session: { chatId: ids.chatId } });
@@ -573,7 +551,6 @@ describe("mobile api", () => {
       expect(session).toMatchObject({ baseBranch: "staging" });
       const chat = await asUser.query(api.chats.get, { target: sessionId });
       if (!chat) throw new Error("no chat");
-      // The picks live on the session's Main chat.
       expect(chat).toMatchObject({ model: "claude:opus", traits: { effortLevel: "low" } });
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
@@ -586,8 +563,6 @@ describe("mobile api", () => {
     "the review screen's Revert, blocker fix and Stack start sessions as the web does",
     async () => {
       const { t, ids, asUser } = await fixture();
-      // Revert (and a blocker fix): a titled session on the branch it must land on,
-      // with the shared `revertSessionRequest` (or `PrRemedy`) prompt.
       const revert = { title: "Revert #7", message: "Revert merge commit `abc123` on `staging`.", baseBranch: "staging" };
       const reverted = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
@@ -600,7 +575,6 @@ describe("mobile api", () => {
       if (!chat) throw new Error("no chat");
       expect((await sent(t, chat.parentId))[0]?.content).toBe(revert.message);
 
-      // Stack: on the PR's head branch, and the session remembers the PR it stacks on.
       const stacked = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
         prompt: "Follow up",
@@ -616,7 +590,6 @@ describe("mobile api", () => {
     "the Quick Tasks screen files a task in To Do without a run, lists it first and opens it as a chat",
     async () => {
       const { t, ids, asUser } = await fixture();
-      // What the phone form sends: the web `createQuickTask` with its picks.
       const taskId = await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,
         description: "Fix the footer\nIt overlaps the tab bar",
@@ -628,7 +601,6 @@ describe("mobile api", () => {
       });
       const task = await t.run((ctx) => ctx.db.get(taskId));
       expect(task).toMatchObject({
-        // The prompt's first line, until the generated title replaces it.
         title: "Fix the footer",
         status: "todo",
         baseBranch: "staging",
@@ -636,12 +608,10 @@ describe("mobile api", () => {
         tags: ["frontend"],
       });
       expect(task?.run).toBeUndefined();
-      // The form's picks go on the task's chat.
       expect(await asUser.query(api.chats.get, { target: taskId })).toMatchObject({
         model: "claude:opus",
         traits: { effortLevel: "low" },
       });
-      // A task in a project is not in the list the web opens with.
       await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,
         description: "Billing step",
@@ -684,7 +654,6 @@ describe("mobile api", () => {
       expect(plan.skippedCount).toBe(1);
       const failed = await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }));
       expect(failed).toBe(0);
-      // A quick task's run is a task-mode message in its chat.
       const isRunning = (taskId: Id<"agentTasks">) =>
         t.run(async (ctx) => {
           const task = await ctx.db.get(taskId);
@@ -692,7 +661,6 @@ describe("mobile api", () => {
         });
       expect(await isRunning(mine)).toBe(true);
       expect(await isRunning(theirs)).toBe(false);
-      // A second Run (the row menu's "Run Eva") on a task that is running fails and is counted, not thrown.
       expect(await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }))).toBe(1);
     },
     TIMEOUT_MS,
@@ -702,17 +670,14 @@ describe("mobile api", () => {
     "a quick-task draft saved on the phone is listed on any device and becomes a To Do task on Create",
     async () => {
       const { t, ids, asUser } = await fixture();
-      // What the phone saves when the form is left with text in it: the web `saveDraft` fields.
       const draftId = await asUser.mutation(api.agentTasks.saveDraft, {
         repoId: ids.repoId,
         description: "Half an idea\nMore later",
         baseBranch: "staging",
       });
-      // Left again after an edit: the same draft, not a second one. Its row shows the prompt's first line.
       await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, description: "Half an idea, v2\nMore later" });
       const drafts = await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId });
       expect(drafts.map((draft) => draft.title)).toEqual(["Half an idea, v2"]);
-      // Drafts are not on the list.
       const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
       expect(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()).map((task) => task.title)).not.toContain(
         "Half an idea, v2",
@@ -728,15 +693,12 @@ describe("mobile api", () => {
     "a phone @mention and /skill go on the wire as the backend's own tokens, stored as sent on a reply and a new session",
     async () => {
       const { t, ids, asUser } = await fixture();
-      // What the phone composer sends after picking Grace and a skill. A
-      // production-shaped id: convex-test ids hold a `;`, outside the token charset.
       const graceId = "k17grace00000000000000000000000g";
       const skillId = systemSkillTokenId("eva-capture");
       const message = tokenizeMentionText("ask @Grace Hopper to /eva-capture", {
         mentionMap: new Map([["Grace Hopper", graceId]]),
         skillMap: new Map([["eva-capture", skillId]]),
       });
-      // The regexes `notifyChatMentions` and the skill resolver read.
       expect([...message.matchAll(MENTION_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
         ["Grace Hopper", graceId],
       ]);
@@ -768,11 +730,9 @@ describe("mobile api", () => {
         session: { id: ids.sessionId, title: "Fix the login bug", archived: false },
       });
 
-      // Rename: the web `sessions.update`.
       await asUser.mutation(api.sessions.update, { id: ids.sessionId, title: "Fix the sign-in bug" });
       expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.title)).toEqual(["Fix the sign-in bug"]);
 
-      // Archive stops the sandbox first, then leaves the Active list for Archived.
       await asUser.mutation(api.chats.archive, { sessionId: ids.sessionId });
       const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
       expect(archived).toMatchObject({ archive: { archivedAt: expect.any(Number) }, status: "closed" });
@@ -780,13 +740,11 @@ describe("mobile api", () => {
       expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toContain(
         ids.sessionId,
       );
-      // Read-only while archived, as the web session page.
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         canReply: false,
         session: { archived: true },
       });
 
-      // Unarchive: the web `sessions.unarchive`.
       await asUser.mutation(api.sessions.unarchive, { id: ids.sessionId });
       expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.sessionId)).toEqual([ids.sessionId]);
     },
@@ -834,7 +792,6 @@ describe("mobile api", () => {
       });
       const listed = await asUser.query(api.projects.list, { repoId: ids.repoId });
       const byId = new Map(listed.map((project) => [project._id, project]));
-      // The description is what the coordinator's first turn carries.
       expect(byId.get(offline)).toMatchObject({
         title: "Offline drafts",
         description: "Offline drafts\nKeep a draft when the network drops.",
@@ -846,13 +803,10 @@ describe("mobile api", () => {
         title: "Shorter onboarding copy.",
         description: "Shorter onboarding copy.",
       });
-      // No stored phase and no project branch: the status is derived.
       expect(byId.get(offline)).not.toHaveProperty("phase");
       expect(byId.get(offline)).not.toHaveProperty("branchName");
-      // Each takes the repo's next project number.
       const numbers = await t.run(async (ctx) => [(await ctx.db.get(offline))?.numId, (await ctx.db.get(copy))?.numId]);
       expect(new Set(numbers).size).toBe(2);
-      // Save sends nothing: the project has no chat yet.
       expect((await asUser.query(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: offline } }))?.session).toBeNull();
     },
     TIMEOUT_MS,
@@ -926,13 +880,11 @@ describe("mobile api", () => {
 
   test("sessionMenuActions lists the web row menu in its order and groups, per list and view", () => {
     const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
-    // The git actions are a group of their own: no PR state yet, so Send for Review shows.
     expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
       ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName"],
       ["openPr", "sendForReview"],
       ["archive"],
     ]);
-    // Unpushed work adds Commit & push; a PR already out for review drops Send for Review.
     expect(sessionMenuActions({ archived: false, simpleView: false, ...pr, prState: "open", hasUnpushedWork: true })).toEqual([
       ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName"],
       ["commitPush", "openPr"],
@@ -947,7 +899,6 @@ describe("mobile api", () => {
       ["rename", "regenerateTitle", "copyTitle", "copyLink"],
       ["archive"],
     ]);
-    // A linked-group row adds Remove from group, alone, before Archive or Unarchive.
     expect(sessionMenuActions({ archived: true, simpleView: true, inGroup: true })).toEqual([
       ["copyTitle", "copyLink"],
       ["removeFromGroup"],

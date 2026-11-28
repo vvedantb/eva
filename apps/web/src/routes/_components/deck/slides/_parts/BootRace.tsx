@@ -4,7 +4,6 @@ import type { Transition } from "motion/react";
 import { useInk, BRAND } from "../../_components/DeckPrimitives";
 import { BRAND_GRADIENT, DUR, EASE, LEAVE } from "../../_components/motion";
 
-/** Static radial glows for the light on each bar's tip; nothing filters. */
 const COMET_BRAND =
   "radial-gradient(circle closest-side, #fff 0 18%, rgba(130,170,255,0.55) 40%, transparent)";
 const COMET_PLAIN =
@@ -12,11 +11,8 @@ const COMET_PLAIN =
 
 interface RaceLaneProps {
   label: string;
-  /** false leaves the lane empty, waiting for the presenter. */
   running: boolean;
-  /** Seconds the fill takes to cross the track. */
   duration: number;
-  /** Brand gradient for the fast lane, plain white for the slow one. */
   brand?: boolean;
   readout: ReactNode;
   caption?: ReactNode;
@@ -31,7 +27,6 @@ export function RaceLane({
   caption,
 }: RaceLaneProps) {
   const ink = useInk();
-  // Fill and comet share one tween, so the light always sits on the tip.
   const travel: Transition = running
     ? { duration, ease: brand ? EASE.expo : "linear" }
     : { duration: DUR.fast, ease: EASE.out };
@@ -39,7 +34,6 @@ export function RaceLane({
   return (
     <div className="relative flex h-[90px] items-center">
       {brand && (
-        // A painted flash, not a blur: only its opacity moves.
         <m.div
           aria-hidden
           className="pointer-events-none absolute -inset-x-6 -inset-y-2"
@@ -106,7 +100,6 @@ export function RaceLane({
 }
 
 interface LinearCountProps {
-  /** Counted in tenths, so 400 reads as 40.0. */
   tenths: number;
   duration: number;
   running: boolean;

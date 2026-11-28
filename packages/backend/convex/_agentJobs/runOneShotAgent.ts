@@ -24,12 +24,10 @@ export type AgentJobSandbox =
         initialBackoffMs: number;
         base: number;
       };
-      /** Skip repo startup and background commands (agents that only read). */
       skipStartupCommands?: boolean;
     }
   | { kind: "reuse"; sandboxId: string | undefined };
 
-/** Launch settings the job picks; the primitive fills in the rest. */
 type AgentJobAgent = Pick<
   LaunchArgs,
   | "model"
@@ -44,23 +42,16 @@ type AgentJobAgent = Pick<
 >;
 
 type RunOneShotAgentSpec = {
-  /** The row that holds the job's slot and owns its turn. */
   ownerId: AgentJobOwnerId;
   userId: Id<"users">;
   installationId: number;
-  /** `id` is the row whose sandbox credentials the job uses. */
   repo: { id: Id<"githubRepos">; owner: string; name: string };
   sandbox: AgentJobSandbox;
-  /** Defaults to the owner id. */
   streamingEntityId?: string;
   agent: AgentJobAgent;
-  /** A function when the prompt needs the prepared sandbox (a port, say). */
   prompt: string | ((sandboxId: string) => Promise<string>);
-  /** Runs once the sandbox is ready, before the agent launches. */
   onSandboxReady?: (sandboxId: string) => Promise<void>;
-  /** Saves the agent's result. Runs before the sandbox is deleted. */
   onResult: (result: AgentJobResult, sandboxId: string) => Promise<void>;
-  /** Saves a failure of any step: prepare, launch or `onResult`. */
   onError: (message: string) => Promise<void>;
 };
 
@@ -123,7 +114,6 @@ export async function runOneShotAgent(
     await spec.onError(errorMessage(error));
   } finally {
     if (ephemeral && sandboxId) {
-      // Best-effort: a failed delete must not fail the job.
       try {
         await step.runAction(internal.sandbox.deleteSandbox, {
           sandboxId,

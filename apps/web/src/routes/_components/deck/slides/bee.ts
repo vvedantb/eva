@@ -15,11 +15,6 @@ import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 
-/**
- * Bee, for colleagues who are not technical: the problem, what it does in a
- * meeting, privacy, and the ask. Light stage throughout; the route sets the
- * `bee` brand for honey accents and Bee's typeface.
- */
 const SLIDES: DeckSlide[] = [
   {
     id: "bee-00-blank",
@@ -33,7 +28,6 @@ const SLIDES: DeckSlide[] = [
     title: "Bee",
     Component: BeeTitle,
     steps: 2,
-    // The flight lands at about 3 s; then the name, then the line under it.
     autoMs: [3100, 1400],
   },
   {
@@ -41,7 +35,6 @@ const SLIDES: DeckSlide[] = [
     title: "The problem",
     Component: BeeProblem,
     steps: 2,
-    // The clock runs while you search: leave time to watch it.
     autoMs: [1100, 4500],
   },
   {
@@ -49,7 +42,6 @@ const SLIDES: DeckSlide[] = [
     title: "Meet the notch",
     Component: BeeNotch,
     steps: 2,
-    // A moment on the wide call before the zoom, then time to watch it listen.
     autoMs: [2800, 3200],
   },
   {
@@ -63,7 +55,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-05-web",
     title: "Answers from the web",
     Component: BeeWeb,
-    // Three questions: each is heard and searched, then its sources show.
     steps: 6,
     autoMs: [1100, 2800, 2600, 2800, 2600, 2800],
   },
@@ -72,7 +63,6 @@ const SLIDES: DeckSlide[] = [
     title: "A convo with Krzys",
     Component: BeeRealMeeting,
     steps: 3,
-    // Each round types four searches (about 10.7 s) before moving on.
     autoMs: [1100, 11400, 11400],
   },
   {
@@ -87,7 +77,6 @@ const SLIDES: DeckSlide[] = [
     title: "Better together",
     Component: BeeTeams,
     steps: 7,
-    // Six lines of conversation, each typed out before the next voice, then the point.
     autoMs: [1300, 2200, 2200, 2200, 2200, 2200, 2200],
   },
   {

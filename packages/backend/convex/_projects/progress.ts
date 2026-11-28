@@ -9,11 +9,9 @@ const chartTaskValidator = v.object({
 });
 
 const chartDayValidator = v.object({
-  /** The day's local midnight. */
   start: v.number(),
   shipped: v.array(v.id("agentTasks")),
   archived: v.array(v.id("agentTasks")),
-  /** Tasks still open at the end of the day (now, for today). */
   open: v.number(),
 });
 
@@ -27,7 +25,6 @@ const chartDayValidator = v.object({
 export const progressChart = authQuery({
   args: {
     projectId: v.id("projects"),
-    /** The reader's `Date.getTimezoneOffset()`, for local days. */
     tzOffsetMinutes: v.number(),
   },
   returns: v.union(

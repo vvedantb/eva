@@ -62,30 +62,19 @@ export const getImpactStats = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     startTime: v.optional(v.number()),
-    /** Start of the equal-length window before `startTime`. */
     previousStartTime: v.optional(v.number()),
   },
   returns: v.object({
     prsShipped: v.number(),
-    /** Tasks in a terminal outcome (done/merged + cancelled). */
     tasksRan: v.number(),
     totalSessions: v.number(),
     sessionsWithPr: v.number(),
-    /** done / (done + cancelled), as a percent. */
     shipRate: v.number(),
     tasksCompleted: v.number(),
-    /** Distinct session PRs whose live state is "merged". */
     prsMerged: v.number(),
-    /** prsMerged / distinct session PRs, as a percent. */
     mergeRate: v.number(),
-    /**
-     * Median task-created-to-PR latency. Absent when no task in the window
-     * produced a PR from a finished run.
-     */
     medianTimeToPrMs: v.optional(v.number()),
-    /** Done tasks that needed exactly one run, as a percent of done tasks that ran. */
     firstTryRate: v.number(),
-    /** Summed wall-clock time of runs that finished in the window. */
     agentWorkMs: v.number(),
     prevPrsShipped: v.optional(v.number()),
     prevTasksRan: v.optional(v.number()),
@@ -155,14 +144,11 @@ export const getImpactStats = authQuery({
             )
             .collect();
 
-    // Runs (task-mode chat turns) are only read for tasks that can appear in
-    // either the current or previous window.
     const tasksNeedingRuns = allTasks.filter((task) => task.status !== "draft");
     const runsByTaskId = new Map<
       string,
       Array<{ startedAt?: number; finishedAt?: number }>
     >();
-    // Every PR a task opened, project PRs included (they name their task).
     const prsByTaskId = new Map<
       string,
       Array<{ prUrl: string; createdAt: number }>
@@ -190,7 +176,6 @@ export const getImpactStats = authQuery({
       }),
     );
 
-    /** Middle value of `values`, averaging the two middles when even. */
     function median(values: number[]): number | undefined {
       if (values.length === 0) return undefined;
       const sorted = [...values].sort((a, b) => a - b);
@@ -200,11 +185,8 @@ export const getImpactStats = authQuery({
         : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
     }
 
-    /** Computes stats for sessions/tasks/runs starting from an optional timestamp. */
     function computeStats(from: number | undefined) {
       const prUrls = new Set<string>();
-      // Merge state only exists on sessions, so the merge rate is measured
-      // against session PRs rather than every PR counted in `prsShipped`.
       const sessionPrUrls = new Set<string>();
       const mergedPrUrls = new Set<string>();
       const filtered =
@@ -222,8 +204,6 @@ export const getImpactStats = authQuery({
       }
       let done = 0;
       let cancelled = 0;
-      // Denominator for the first-try rate: a done task with no runs never
-      // took a "try", so counting it would deflate the rate.
       let doneWithRuns = 0;
       let firstTryTasks = 0;
       let agentWorkMs = 0;
@@ -266,7 +246,6 @@ export const getImpactStats = authQuery({
         if (p.prUrl) prUrls.add(p.prUrl);
       }
       const tasksRan = done + cancelled;
-      // Cook rate: finished successfully vs finished at all (done/merged + cancelled).
       const rate = tasksRan > 0 ? Math.round((done / tasksRan) * 100) : 0;
       return {
         prsShipped: prUrls.size,
@@ -286,7 +265,6 @@ export const getImpactStats = authQuery({
             ? Math.round((firstTryTasks / doneWithRuns) * 100)
             : 0,
         agentWorkMs,
-        /** Raw counters kept out of the response, used to derive prev rates. */
         internal: { doneWithRuns, firstTryTasks },
       };
     }
@@ -294,8 +272,6 @@ export const getImpactStats = authQuery({
     const { internal: currentInternal, ...current } = computeStats(startTime);
 
     if (startTime !== undefined && args.previousStartTime !== undefined) {
-      // computeStats is cumulative from a timestamp, so the previous period is
-      // the wider window minus the current one — see the subtractions below.
       const prev = computeStats(args.previousStartTime);
       const prevTasksCompleted = prev.tasksCompleted - current.tasksCompleted;
       const prevTasksRan = prev.tasksRan - current.tasksRan;
@@ -378,7 +354,6 @@ export const getActivityTimeline = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     startTime: v.number(),
-    /** Right edge of the chart — the last bucket is the one containing it. */
     endTime: v.number(),
     bucketSizeMs: v.number(),
   },
@@ -419,7 +394,6 @@ export const getActivityTimeline = authQuery({
       };
       activeUsersByBucket[t] = new Set<Id<"users">>();
     }
-    /** Maps a timestamp to its corresponding bucket start time. */
     const getBucket = (timestamp: number) => {
       const bucketStart =
         Math.floor((timestamp - args.startTime) / args.bucketSizeMs) *
@@ -467,8 +441,6 @@ export const getActivityTimeline = authQuery({
         if (buckets[bucket]) buckets[bucket].prsShipped++;
       }
     }
-    // Sessions in the window fill the buckets; active sessions of any age
-    // name the users whose last-seen time is plotted.
     const [windowSessions, activeSessions] = await Promise.all([
       ctx.db
         .query("sessions")
@@ -610,8 +582,6 @@ export const getLeaderboard = authQuery({
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
     const startTime = args.startTime;
-    // Only the window is read. Tasks come back in `updatedAt` order, so put
-    // them back in `by_repo` (creation) order: it decides ties in the top 5.
     const filteredTasks =
       startTime === undefined
         ? await ctx.db
@@ -681,7 +651,6 @@ export const getLeaderboard = authQuery({
     const leaderboard = userStatEntries
       .map(([userId, stats], i) => {
         const user = leaderboardUsers[i];
-        // Unchanged rule: only users with a linked Clerk account are listed.
         if (!user?.clerkId) return null;
         return {
           userId,

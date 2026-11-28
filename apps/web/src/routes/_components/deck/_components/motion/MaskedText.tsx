@@ -7,7 +7,6 @@ import { ACCENT_SHEEN_LEAD, Accent, AccentText } from "../DeckAccent";
 import type { AccentSlice } from "../DeckAccent";
 import { DUR, EASE, STAGGER, cueTransition } from "./tokens";
 
-/** A run of text inside one masked word: plain, or a slice of an `Accent`. */
 interface Piece {
   text: string;
   slice?: AccentSlice;
@@ -28,12 +27,6 @@ function plainText(node: ReactNode): string | null {
   return null;
 }
 
-/**
- * Splits text on whitespace. Whitespace stays real text between the masks, so
- * wrapping and `text-balance` behave exactly as they did on the plain string.
- * Punctuation that touches the previous word ("one" + ".") joins its mask, so a
- * full stop can never wrap onto a line by itself.
- */
 function pushText(text: string, out: Unit[], accentFrom?: number) {
   let offset = 0;
   const total = text.length;
@@ -70,14 +63,12 @@ function splitWords(children: ReactNode, out: Unit[] = []): Unit[] {
   return out;
 }
 
-/** One entry per authored line: each child, with strings also split on "\n". */
 function splitLines(children: ReactNode): ReactNode[] {
   return Children.toArray(children).flatMap((child) =>
     typeof child === "string" ? child.split("\n") : [child],
   );
 }
 
-/** Room for descenders and overhangs, given back so the line box is unchanged. */
 const WORD_MASK =
   "inline-block overflow-hidden align-bottom px-[0.06em] -mx-[0.06em] py-[0.12em] -my-[0.12em]";
 const LINE_MASK = "block overflow-hidden py-[0.12em] -my-[0.12em]";
@@ -90,7 +81,6 @@ interface MaskProps {
   line: boolean;
 }
 
-/** One clipped unit. Its contents inherit the unit's cue, so an `Accent` inside sheens on time. */
 function Mask({ children, on, delay, duration, line }: MaskProps) {
   return (
     <span className={line ? LINE_MASK : WORD_MASK}>
@@ -108,12 +98,9 @@ function Mask({ children, on, delay, duration, line }: MaskProps) {
 
 export interface MaskedTextProps {
   children: ReactNode;
-  /** `word` (default) masks each word; `line` masks each child / "\n"-separated line. */
   by?: "word" | "line";
-  /** Build step to play on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
-  /** Seconds between units. Defaults to `STAGGER.word`, or 0.12 per line. */
   stagger?: number;
   duration?: number;
   className?: string;
@@ -159,8 +146,6 @@ export function MaskedText({
     );
   }
 
-  // Each word's place in reading order, counted outside the render callback
-  // (the React Compiler cannot compile a counter mutated inside a lambda).
   const units = splitWords(children);
   const order: number[] = [];
   let count = 0;

@@ -63,7 +63,6 @@ export const applyGeneratedTitle = internalMutation({
     }
     const project = await ctx.db.get(args.owner.projectId);
     if (!project || project.title !== args.fallbackTitle) return null;
-    // As `projects.update`, a title edit leaves `updatedAt` (activity) alone.
     await ctx.db.patch(project._id, { title: args.title });
     await mirrorOwnerIntoSession(ctx, {
       kind: "project",

@@ -28,7 +28,6 @@ import {
   variationKeyFromIndex,
 } from "../_utils/designVariations";
 
-/** Tab label for a zero-based variation index: 0 -> "A". */
 function variationLetter(index: number): string {
   return String.fromCharCode(65 + index);
 }
@@ -41,7 +40,6 @@ interface DesignVariationsPanelProps {
   latestVariations: DesignVariation[];
   isSandboxStarting: boolean;
   onStartSandbox: () => void;
-  /** Hands the composer a prompt for the variation on screen. */
   onUseVariation: (letter: string, label: string) => void;
 }
 

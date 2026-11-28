@@ -1,9 +1,5 @@
 import type { BackgroundAgentEntry } from "@eva/backend";
 
-// A chat's background agents (subagents the agent sent off to run alongside
-// it), web and phone: which ones a chat lists, how a row reads, and the stop
-// confirm's copy.
-
 /** A background agent the chat lists: running, and sent to the background. */
 export function isVisibleBackgroundAgent(agent: BackgroundAgentEntry): boolean {
   return agent.status === "running" && agent.backgrounded === true;

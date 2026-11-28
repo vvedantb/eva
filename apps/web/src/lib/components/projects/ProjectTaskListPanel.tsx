@@ -35,26 +35,19 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
-/** No task open as a chat tab. */
 const NO_OPEN_TASKS: ReadonlySet<string> = new Set();
 
-/** The Pull requests group's key, beside the display statuses. */
 const PULL_REQUESTS = "pull_requests";
 
-/** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
-  /** The tasks open as chat tabs: their rows are marked. */
   openTaskIds: ReadonlySet<string>;
   failedTaskIds: ReadonlySet<string>;
-  /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
   basePath: string;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  /** Task numbers by task id: names where a merged task went. */
   numIdOf: (taskId: string) => number | undefined;
-  /** An archived project: no row menu. */
   readOnly: boolean;
 }
 
@@ -88,10 +81,6 @@ function ProjectTaskRowFor({
   );
 }
 
-/**
- * A group's header on a soft band: the label, the count and a chevron that
- * turns open, all muted.
- */
 function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-1 rounded-control bg-muted/60 pr-1">
@@ -119,16 +108,11 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
 interface ProjectTaskListPanelProps {
   projectId: Id<"projects">;
   tasks: Task[];
-  /** Tasks archived on their own: listed under Archived, with Unarchive. */
   archivedTasks: Task[];
-  /** An archived project: no row menu. */
   readOnly: boolean;
-  /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
-  /** The tasks open as chat tabs (`?tasks=`). */
   openTaskIds?: ReadonlySet<string>;
-  /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
 
@@ -167,8 +151,6 @@ export function ProjectTaskListPanel({
   );
   const pullRequests = projectTaskPullRequests(tasks);
 
-  // Groups come and go with their tasks, so the open set is derived: each
-  // group's default, flipped where the reader toggled it.
   const groups = [
     ...sections.map((section) => ({
       key: section.status,

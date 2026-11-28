@@ -56,7 +56,6 @@ export const arenaBrowserWorkflow = workflow.define({
         reportId: args.reportId,
       });
     } catch (error) {
-      // A doc with no scenarios left fails the report now, not at the backstop.
       await saveFailure(errorMessage(error));
       return;
     }
@@ -73,7 +72,6 @@ export const arenaBrowserWorkflow = workflow.define({
       repo: { id: data.repoId, owner: data.repoOwner, name: data.repoName },
       sandbox: { kind: "ephemeral", baseBranch: args.branchName },
       agent: { model: "sonnet", allowedTools: "Bash,Read,Glob,Grep" },
-      // The prompt names the port the app came up on.
       prompt: async (sandboxId) => {
         const { port } = await step.runAction(
           internal.arenaActions.startAppForRun,
@@ -307,7 +305,6 @@ type StartBrowserRunParams = {
   pr?: { number: number; headSha: string };
 };
 
-/** Inserts a browser report and starts its workflow. Shared by manual and PR runs. */
 async function startBrowserRun(
   ctx: MutationCtx,
   params: StartBrowserRunParams,
@@ -406,7 +403,6 @@ export const startPrRuns = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Monorepos have one githubRepos row per app, each with its own docs.
     const repos = await findReposByOwnerAndName(ctx.db, args);
 
     for (const repo of repos) {

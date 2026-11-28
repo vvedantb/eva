@@ -18,7 +18,6 @@ const SIZES: Record<"lg" | "xl" | "2xl", string> = {
 
 const WORD_STAGGER = 0.12;
 
-/** True for `Eva`, `Eva,`, `Eva.` and friends — the brand word gets the gradient. */
 function isBrandWord(word: string): boolean {
   return /^Eva[.,;:!?]?$/.test(word);
 }
@@ -35,7 +34,6 @@ export function BlurWordsTitle({
   className,
 }: BlurWordsTitleProps) {
   const visible = useDeckStep() >= step;
-  // Flatten first so every word carries its own stagger index across all lines.
   const rows = lines.map((line, index) => ({
     line,
     words: line.split(" "),
@@ -47,7 +45,6 @@ export function BlurWordsTitle({
   return (
     <h1
       className={cn(
-        // Lines are authored, but one long enough to wrap still balances.
         "font-semibold tracking-[-0.025em] text-balance text-white",
         "leading-[1.02]",
         SIZES[size],

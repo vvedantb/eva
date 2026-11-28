@@ -9,19 +9,6 @@ import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { resolveMobileChat } from "./_mobile/chatTarget";
 import { schedulePush } from "./push";
 
-/**
- * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
- * `post`s the question, the UI `getActive`s the unanswered one and writes the
- * user's choice via `answer`, and the sandbox `claimAnswer`s it to resume the
- * turn. `entityId` is the chat id, matching how `streaming.ts` keys a chat
- * turn's state.
- *
- * Auth: the sandbox (CONVEX_TOKEN, the launching user) posts and claims, the
- * signed-in user reads and answers — each checked against the repo behind
- * `entityId` (see `questionEntityAccess`), so nobody can read, replace or
- * answer another team's question.
- */
-
 async function listEntityQuestions(
   db: GenericDatabaseReader<DataModel>,
   entityId: string,
@@ -32,7 +19,6 @@ async function listEntityQuestions(
     .collect();
 }
 
-/** The `messages.parentId` a question's `entityId` names, if it is a chat. */
 function chatMessageParentId(
   db: GenericDatabaseReader<DataModel>,
   entityId: string,
@@ -109,12 +95,6 @@ export const clearForEntity = internalMutation({
   },
 });
 
-/**
- * The repo behind a question's `entityId`. Only a chat turn posts a question
- * (`BLOCKING_QUESTIONS_ENABLED` in the callback), so this is a session chat;
- * a session id is a pre-chat session's transcript, which a chat view may
- * still read with. Undefined for ids of any other shape, which no UI reads.
- */
 async function repoIdForQuestionEntity(
   db: GenericDatabaseReader<DataModel>,
   entityId: string,
@@ -126,12 +106,6 @@ async function repoIdForQuestionEntity(
   return undefined;
 }
 
-/**
- * "allowed" / "denied" for an entity with a repo; "unknown" for an id that
- * resolves to none. The sandbox (CONVEX_TOKEN = the launching user, who has
- * access) may still post and claim on unknown ids so no agent kind wedges
- * mid-turn; the UI's read and answer require "allowed".
- */
 async function questionEntityAccess(
   db: GenericDatabaseReader<DataModel>,
   entityId: string,
@@ -176,8 +150,6 @@ export const post = authMutation({
       payload: args.payload,
       createdAt: Date.now(),
     });
-    // The sandbox posts as the user who launched the turn: tell their phone.
-    // A re-post of the same question (a retried call) does not push again.
     if (!isRepost) {
       const resolved = await resolveMobileChat(ctx.db, args.entityId);
       if (resolved) {
@@ -245,12 +217,6 @@ export const answer = authMutation({
 const claimArgs = { entityId: v.string(), toolUseId: v.string() };
 const claimResult = v.object({ answer: v.union(v.string(), v.null()) });
 
-/**
- * Takes the user's answer for the sandbox: deletes the row once taken. With
- * `release`, the waiting turn is giving up, so an unanswered row is deleted
- * too — in the same mutation, so an answer that lands at the deadline is
- * still claimed rather than lost.
- */
 async function claimQuestion(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: { entityId: string; toolUseId: string },
@@ -270,7 +236,6 @@ async function claimQuestion(
     return { answer: null };
   }
   const claimed = existing.answer;
-  // The row is deleted next; the Log keeps the question and answer.
   await recordAnsweredQuestion(ctx, args.entityId, existing.payload, claimed);
   await ctx.db.delete(existing._id);
   return { answer: claimed };

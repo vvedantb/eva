@@ -14,14 +14,12 @@ import {
 } from "../../_components/motion";
 import { MoF2Device } from "../_parts/MoF2Device";
 
-/** What the audit actually delivered, three words at most each. */
 const GAINS: readonly string[] = [
   "One pane",
   "Pinch to zoom",
   "Reachable controls",
 ];
 
-/** Step 0 centres the desktop on the stage; step 1 slides the phone aside for the numbers. */
 const CENTRE_OFFSET = 214;
 
 export function FridayMobile() {
@@ -34,7 +32,6 @@ export function FridayMobile() {
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">
-        {/* Fixed height so the frame changes shape without shifting the row. */}
         <div className="flex h-[400px] items-center gap-24">
           <m.div
             className="flex w-[660px] justify-center"

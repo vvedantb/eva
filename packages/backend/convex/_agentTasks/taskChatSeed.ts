@@ -16,7 +16,6 @@ import { chatSeedFields, ensureWorkSession } from "../_sessions/ownedSession";
 export type NewTaskPicks = {
   projectId?: Id<"projects">;
   model?: Infer<typeof aiModelValidator>;
-  /** null = Team; absent = the creator's default account for the model. */
   providerAccountId?: Id<"userProviderAccounts"> | null;
   reasoningLevel?: Infer<typeof reasoningLevelValidator>;
   thinkingEnabled?: boolean;

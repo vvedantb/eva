@@ -13,12 +13,6 @@ import type { LogoState } from "./_parts/BeeLogo";
 const LANDED = 1;
 const SETTLED = 2;
 
-/**
- * The flight in: off the left edge, a loose loop across the stage, then down
- * into its place above the title. Offsets are from the resting spot. The
- * waypoints are joined with a Catmull-Rom curve and sampled finely, so speed
- * and direction change smoothly instead of turning a corner at each one.
- */
 const WAYPOINTS: readonly (readonly [number, number])[] = [
   [-760, 220],
   [-420, -60],
@@ -40,7 +34,6 @@ function catmullRom(a: number, b: number, c: number, d: number, t: number) {
   );
 }
 
-/** Position on the curve at `u` in 0..1. */
 function pointAt(u: number): readonly [number, number] {
   const last = WAYPOINTS.length - 1;
   const at = Math.min(u * last, last - 1e-6);
@@ -53,7 +46,6 @@ function pointAt(u: number): readonly [number, number] {
   ];
 }
 
-/** Slow off the start, cruise, then a long soft landing. */
 const easeInOut = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t);
 
 const FLIGHT = (() => {
@@ -69,7 +61,6 @@ const FLIGHT = (() => {
     const [nx] = pointAt(Math.min(1, u + 0.01));
     x.push(Math.round(px * 10) / 10);
     y.push(Math.round(py * 10) / 10);
-    // Bank gently into the direction of travel, level again on landing.
     rotate.push(
       Math.round(Math.max(-12, Math.min(12, (nx - px) * 0.9)) * (1 - t) * 10) /
         10,
@@ -82,12 +73,10 @@ const FLIGHT = (() => {
 
 const FLIGHT_TRANSITION: Transition = {
   duration: 2.6,
-  // After the slide's own entrance, so the two motions do not fight.
   delay: 0.45,
   ease: "linear",
 };
 
-/** Buzzing while it flies, a loop and sparkle as it lands, then idle. */
 function logoState(step: number): LogoState {
   if (step >= SETTLED) return "idle";
   if (step >= LANDED) return "done";
@@ -106,7 +95,6 @@ export function BeeTitle() {
         animate={FLIGHT}
         transition={FLIGHT_TRANSITION}
       >
-        {/* Once it is down, a slow hover, as if it is flying in place. */}
         <m.div
           animate={settled ? { y: [0, -8, 0] } : { y: 0 }}
           transition={

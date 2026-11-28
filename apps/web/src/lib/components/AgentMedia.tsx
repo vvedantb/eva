@@ -12,7 +12,6 @@ import { cn } from "@eva/ui";
 /** A resolved capture: `url` is null when the stored blob is gone. */
 export type AgentMediaEntry = ResolvedMediaEntry;
 
-/** Hairline ring that separates media from any surface, in light and dark. */
 const MEDIA_OUTLINE = "ring-1 ring-black/10 dark:ring-white/10";
 
 /**
@@ -45,10 +44,6 @@ export function AgentMedia({ entries }: { entries: AgentMediaEntry[] }) {
   );
 }
 
-/**
- * All images in one row. One image keeps the old single-image width; two or
- * three share the row; more scroll sideways, three to a view.
- */
 function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const count = images.length;
@@ -61,7 +56,6 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
           "flex items-start gap-2",
           count === 1 ? "max-w-lg" : "w-full",
           count > 3 &&
-            // No edge fade: it masked the first caption once the row scrolled.
             "overflow-x-auto scrollbar snap-x snap-mandatory pb-1",
         )}
       >
@@ -87,8 +81,6 @@ function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
                 loading="lazy"
                 className={cn(
                   MEDIA_OUTLINE,
-                  // Sized by the image, not the tile, so the ring hugs a tall
-                  // phone capture instead of framing empty side bars.
                   "rounded-surface block h-auto max-h-96 w-auto max-w-full cursor-pointer transition-opacity hover:opacity-90",
                 )}
               />

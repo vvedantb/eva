@@ -18,16 +18,10 @@ import { CountRoll, EASE, GridBackdrop } from "../_components/motion";
 interface Item {
   icon: Icon;
   title: string;
-  /**
-   * A small gesture the icon makes once its card has landed. Keyframes, so it
-   * runs as a tween: Motion drops a spring that is handed an array.
-   */
   nudge: TargetAndTransition;
-  /** A leading figure that rolls in, followed by the rest of the title. */
   figure?: { value: number; rest: string };
 }
 
-/** Descriptions for each of these live in the slide's speaker notes. */
 const ITEMS: readonly Item[] = [
   {
     icon: IconPencil,
@@ -74,9 +68,7 @@ const ITEMS: readonly Item[] = [
 
 const COLUMNS = 4;
 const DELAY_CHILDREN = 0.45;
-/** Cards land as a diagonal wave: each step along a row or down a column. */
 const WAVE = 0.08;
-/** The card's own entry takes half a second; the icon moves once it is down. */
 const NUDGE_AFTER = 0.45;
 
 const waveDelay = (index: number) =>
@@ -105,9 +97,6 @@ export function Slide08More() {
         <Title>And a great deal more</Title>
       </Reveal>
 
-      {/* No build steps, so the one hero move is on entry: the whole grid
-          lands from a tilted plane while its cards arrive as a diagonal wave.
-          Each card keeps its own viewing distance for the hover tilt. */}
       <div className="flex flex-1 items-center pt-4">
         <m.div
           className="grid w-full grid-cols-4 gap-4"

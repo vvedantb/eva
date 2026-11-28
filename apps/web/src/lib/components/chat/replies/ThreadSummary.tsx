@@ -40,7 +40,6 @@ export function ThreadSummary({
         {replyCount === 1 ? "1 reply" : `${replyCount} replies`}
       </span>
       {unread > 0 ? (
-        // The mention blue: unread replies in a thread you follow.
         <span className="rounded-full bg-mention px-1.5 text-2xs font-medium text-mention-foreground tabular-nums">
           {unread} new
         </span>

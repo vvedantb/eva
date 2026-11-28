@@ -11,7 +11,6 @@ import { useState } from "react";
 type TranscriptParentId = FunctionArgs<typeof api.messages.listByParent>["parentId"];
 type TranscriptMessage = FunctionReturnType<typeof api.messages.listByParent>[number];
 
-/** Older-history state for one chat: how many pages were asked for. */
 type OlderState = { parentId: TranscriptParentId | undefined; steps: number };
 
 /**
@@ -32,8 +31,6 @@ export function useChatTranscript(parentId: TranscriptParentId | undefined) {
     undefined,
   );
   const ownLiveArgs = parentId && liveArgs?.parentId === parentId ? liveArgs : undefined;
-  // Anchored once per chat, during render: re-anchoring on every tail change
-  // would slide the window this exists to pin.
   if (parentId && tail !== undefined && ownLiveArgs === undefined) {
     setLiveArgs(transcriptLiveArgs(parentId, tail));
   }
@@ -45,7 +42,6 @@ export function useChatTranscript(parentId: TranscriptParentId | undefined) {
   const before = rows?.[0]?._creationTime;
   const olderArgs = parentId && before !== undefined && steps > 0 ? olderTranscriptArgs(parentId, before, steps) : "skip";
   const loaded = useQuery(api.messages.listByParent, olderArgs);
-  // Held across a step change (the new page's query starts empty), and dropped for another chat.
   const [held, setHeld] = useState<{ parentId: TranscriptParentId | undefined; rows: TranscriptMessage[] | undefined }>({
     parentId: undefined,
     rows: undefined,
@@ -55,7 +51,6 @@ export function useChatTranscript(parentId: TranscriptParentId | undefined) {
   }
   const heldOlder = held.parentId === parentId ? held.rows : undefined;
 
-  // Before any page, one row read says whether there is history at all.
   const probe = useQuery(
     api.messages.hasMessagesBefore,
     parentId && before !== undefined && steps === 0 ? { parentId, before } : "skip",
@@ -65,7 +60,6 @@ export function useChatTranscript(parentId: TranscriptParentId | undefined) {
   const hasOlder = steps === 0 ? probe === true : !exhausted;
   const isLoadingOlder = olderArgs !== "skip" && loaded === undefined;
 
-  // A held page from an earlier anchor may reach into the live rows.
   const olderRows =
     heldOlder === undefined || before === undefined ? [] : heldOlder.filter((message) => message._creationTime < before);
   const messages = rows === undefined ? undefined : olderRows.length > 0 ? [...olderRows, ...rows] : rows;
@@ -74,7 +68,6 @@ export function useChatTranscript(parentId: TranscriptParentId | undefined) {
     messages,
     hasOlder,
     isLoadingOlder,
-    /** The next, doubled page of history above; a no-op while one loads or when none is left. */
     loadOlder: () => {
       if (!parentId || !hasOlder || isLoadingOlder) return;
       setOlder({ parentId, steps: steps + 1 });

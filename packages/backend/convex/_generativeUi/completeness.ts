@@ -1,17 +1,3 @@
-/**
- * Guarantees the panel shows everything the agent handed it.
- *
- * Composition asks the evaluator an independent include/omit question per
- * candidate, so it can legitimately decide a block is not needed — good when
- * the candidates are a catalogue of options, wrong here, where every block is
- * content the agent explicitly asked to display. Rather than fail the call, we
- * append whatever was dropped to the root container in its original order:
- * Jev still owns the layout, and nothing silently disappears.
- *
- * Pure, and separate from `compose.ts` so it stays testable without a
- * composer.
- */
-
 import type {
   Experimental_CompositionCandidate,
   Spec,
@@ -19,7 +5,6 @@ import type {
 } from "@json-render/core";
 import { isBlockCandidate } from "./candidates";
 
-/** Two elements are the same placement when type and props match exactly. */
 function signature(element: Pick<UIElement, "type" | "props">): string {
   return `${element.type}:${JSON.stringify(element.props)}`;
 }

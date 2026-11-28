@@ -20,7 +20,6 @@ export interface UsageTotals {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   completions: number;
-  /** Completions whose model has no published rate; they add 0 to savings. */
   unpricedCompletions: number;
 }
 
@@ -108,8 +107,6 @@ export function summariseUsage(
 
   for (const row of rows) {
     const model = row.model ?? UNKNOWN_MODEL;
-    // Null when the model has no published rate (or the row predates the
-    // usage columns); such rows count as unpriced instead of adding zero.
     const savings =
       row.model === undefined
         ? null

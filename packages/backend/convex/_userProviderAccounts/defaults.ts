@@ -53,11 +53,6 @@ type TurnProviderAccountBase = {
   model: string | undefined;
 };
 
-/**
- * Team (undefined) stays Team. A concrete account that no longer matches the
- * model's provider falls back to the owner's default for that provider — a
- * cross-provider model switch must not run on the wrong provider's credential.
- */
 async function reconcileUsableAccountForModel(
   db: GenericDatabaseReader<DataModel>,
   ownerUserId: Id<"users">,
@@ -96,9 +91,6 @@ export async function resolveTurnProviderAccountId(
   if (args.changePolicy === "owner-only") {
     const requested = args.requestedAccountId;
     if (requested === undefined) {
-      // The entity's stored account is server state, not a caller pick, so a
-      // stale id (owner deleted the account) degrades to the owner's default
-      // for this model rather than failing the turn.
       return await reconcileUsableAccountForModel(
         db,
         args.ownerUserId,

@@ -20,16 +20,10 @@ import {
 
 type TerminalPane = NonNullable<Doc<"sessions">["terminalPanes"]>[number];
 
-/**
- * Extra preview panes kept per owner. Pane ids are per-browser UUIDs, so old
- * ids pile up; the oldest writes drop off past this cap.
- */
 const MAX_PREVIEW_PANE_PATHS = 16;
 
 const viewStateValidator = v.object({
-  /** Main (first) preview pane path; the agent's set_preview_path writes it. */
   previewPath: v.optional(v.string()),
-  /** Paths of extra preview panes, keyed by the client pane id. */
   previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   terminalHistoryTail: v.optional(v.string()),
   agentBrowsingAt: v.optional(v.number()),
@@ -48,8 +42,6 @@ function nextPane(
   count: number,
   createdAt: number,
 ): TerminalPane {
-  // `count` includes the default console pane at index 0, so the first
-  // user-created terminal is "Terminal 1".
   return {
     id: `${ownerKey}-terminal-${createdAt}`,
     title: `Terminal ${count}`,
@@ -57,7 +49,6 @@ function nextPane(
   };
 }
 
-/** Existing panes, or a fresh list seeded with the stable default pane. */
 function panesOrDefault(
   owner: ResolvedSandboxOwner,
   createdAt: number,
@@ -208,7 +199,6 @@ export const setTerminalHistoryTail = authMutation({
       ctx.userId,
       args.owner,
     );
-    // Server-side trim too, so a buggy client cannot inflate entity docs.
     await patchSandboxOwner(ctx.db, owner, {
       terminalHistoryTail: terminalHistoryTail(args.tail),
     });

@@ -4,13 +4,9 @@ import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { orderQueuedRows } from "./queuedMessages";
 
-// The queue panel's edits on the web and the phone. A subpath
-// (`@eva/shared/queuedMessageMutations`), not the root: it is React.
-
 type QueueParentId = FunctionArgs<typeof api.queuedMessages.listByParent>["parentId"];
 type QueuedRow = FunctionReturnType<typeof api.queuedMessages.listByParent>[number];
 
-/** Rewrites the loaded queue of `parentId`; a queue not on screen is left alone. */
 function patchQueue(
   store: OptimisticLocalStore,
   parentId: QueueParentId | undefined,
@@ -40,8 +36,6 @@ export function useQueuedMessageMutations(parentId: QueueParentId | undefined) {
   const reorderQueuedMessages = useMutation(api.queuedMessages.reorder).withOptimisticUpdate((store, args) =>
     patchQueue(store, args.parentId, (current) => orderQueuedRows(current, args.orderedIds)),
   );
-  // Shows "Steering…" at once; the server may instead send the row as the
-  // next turn (Cursor, OpenCode, idle chat), which removes it.
   const steerQueuedMessage = useMutation(api.queuedMessages.steer).withOptimisticUpdate((store, args) =>
     patchQueue(store, parentId, (current) =>
       current.map((row): QueuedRow => (row._id === args.id ? { ...row, steer: "requested" } : row)),

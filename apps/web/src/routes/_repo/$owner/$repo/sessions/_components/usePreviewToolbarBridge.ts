@@ -1,18 +1,15 @@
 "use client";
 
-// useEffect: subscribe to the toolbar's postMessages and push Eva's state in.
 import { useEffect } from "react";
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 import { readPreviewToolbarTheme } from "../_utils/previewToolbarTheme";
 
 export interface PreviewToolbarState {
-  /** Omitted where there is no chat to send an annotation to. */
   selectEnabled: boolean;
   commentsEnabled: boolean;
   commentsActive: boolean;
   commentCount: number;
-  /** Omitted where no composer can take the sketch image. */
   sketchEnabled: boolean;
   sketchActive: boolean;
 }
@@ -58,7 +55,6 @@ export function usePreviewToolbarBridge({
   } = state;
 
   useEffect(() => {
-    // Read fresh on every send: the theme is not a prop here.
     function sendState() {
       postToFrame(iframeElement, {
         type: PREVIEW_FRAME_MESSAGE.toolbarState,
@@ -72,8 +68,6 @@ export function usePreviewToolbarBridge({
       });
     }
     sendState();
-    // The theme provider switches light/dark by toggling a class on <html>,
-    // after this component's effects run, so watch the class itself.
     const themeObserver = new MutationObserver(sendState);
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -84,7 +78,6 @@ export function usePreviewToolbarBridge({
       if (!isFromFrame(event, iframeElement)) return;
       if (typeof event.data !== "object" || event.data === null) return;
       const type = Reflect.get(event.data, "type");
-      // A fresh page (first load, reload) starts without any state.
       if (type === PREVIEW_FRAME_MESSAGE.annotateReady) {
         sendState();
         return;

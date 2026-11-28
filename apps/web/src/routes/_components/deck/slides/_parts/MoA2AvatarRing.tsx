@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import { BRAND } from "../../_components/DeckPrimitives";
 import { EASE, cueTransition } from "../../_components/motion";
 
-/** Clear space between the avatar and its ring, in pixels. */
 const GAP = 7;
 
 /**
@@ -15,7 +14,6 @@ export function MoA2AvatarRing({
   on,
   delay,
 }: {
-  /** Diameter of the avatar it circles. */
   size: number;
   on: boolean;
   delay: number;

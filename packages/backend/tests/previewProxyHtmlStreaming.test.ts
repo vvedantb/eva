@@ -5,22 +5,6 @@ import {
   previewProxySource,
 } from "./_helpers/previewProxySource";
 
-/**
- * The preview proxy used to buffer every HTML byte so it could inject the
- * nav-sync script anywhere in the document. That made TTFB equal to total
- * render time behind the proxy: a Next.js page whose static shell flushes in
- * ~0.5s showed nothing for 10-16s (fix 6f1629e5). Dev-server HTML now buffers
- * only to `</head>`, injects there, and pipes every later byte through as it
- * arrives — while desktop (noVNC) and editor (code-server) HTML keeps
- * whole-document buffering because those rewrites target the end of `<body>`.
- *
- * This runs the real shipped `handleUpstream` against a fake streaming
- * upstream. `buildInjectionTag` is stubbed (it interpolates the generated
- * script) and the noVNC CDN constant is a placeholder; everything else —
- * chunk accumulation, the split point, the byte passthrough, the fallback and
- * the header rewrite — is the code that ships.
- */
-
 const INJECTION_TAG = "<script data-eva-preview-nav-sync>NAV</script>";
 
 type ChunkSink = (chunk: Buffer) => boolean;
@@ -30,9 +14,7 @@ interface FakeClientRes {
   write: ChunkSink;
   end: (chunk?: Buffer | string) => void;
   once: (event: string, listener: () => void) => void;
-  /** Every write/end payload, in order. */
   writes: Buffer[];
-  /** Payload count at the moment `end` was called. */
   writesBeforeEnd: number;
   headers: Record<string, unknown>;
   status: number;
@@ -63,10 +45,8 @@ const handleUpstreamFactory = new Function(
   "clientReq",
   "clientRes",
   [
-    // Stubbed: the real tag embeds the generated nav-sync + annotation scripts.
     "function buildInjectionTag() { return INJECTION_TAG; }",
     'const NOVNC_CDN_RFB = "https://cdn.example.test/rfb.js";',
-    // Stubbed: the real tag points at the proxy-served ping script.
     'const ACTIVITY_SCRIPT_TAG = "<script data-eva-preview-activity>PING</script>";',
     extractFunctionSource("function isDocumentRequest(req) {"),
     extractFunctionSource("function insertBeforeHeadOrBodyClose(html, tag) {"),
@@ -87,13 +67,9 @@ const handleUpstreamFactory = new Function(
 
 interface HarnessOptions {
   bufferWholeHtml?: boolean;
-  /** Proxy-level switch for the on-screen idle-pause ping (activity reporting on). */
   pingPages?: boolean;
-  /** Request headers, e.g. `sec-fetch-dest` for a document load. */
   requestHeaders?: Record<string, string>;
-  /** `false` makes every clientRes.write report backpressure. */
   acceptWrites?: boolean;
-  /** Replaces the stubbed nav-sync tag. */
   injectionTag?: string;
 }
 
@@ -174,7 +150,6 @@ function createHarness(options: HarnessOptions = {}) {
   return { clientRes, handleUpstream, upstream };
 }
 
-/** Concatenated bytes the client received, as text. */
 function received(clientRes: FakeClientRes): string {
   return Buffer.concat(clientRes.writes).toString("utf8");
 }
@@ -187,8 +162,6 @@ describe("dev-server HTML streams through the preview proxy", () => {
 
     res.emit("data", Buffer.from("<html><head><title>a</title></head><body>"));
 
-    // The regression: nothing was flushed until upstream ended, so TTFB was
-    // the full render time.
     expect(clientRes.writes.length).toBeGreaterThan(0);
     expect(clientRes.ended).toBe(false);
     expect(received(clientRes)).toContain(INJECTION_TAG);
@@ -240,7 +213,6 @@ describe("dev-server HTML streams through the preview proxy", () => {
     res.emit("data", tail.subarray(splitAt));
     res.emit("end");
 
-    // Decoding each chunk separately would replace the halved emoji with U+FFFD.
     expect(received(clientRes)).toBe(
       `<html><head>${INJECTION_TAG}</head>${tail.toString("utf8")}`,
     );
@@ -271,7 +243,6 @@ describe("dev-server HTML streams through the preview proxy", () => {
     res.emit("data", Buffer.from("<html><head></head>"));
     res.emit("data", Buffer.from("<body>a</body>"));
 
-    // Without backpressure the proxy would buffer an unbounded response.
     expect(res.paused).toBeGreaterThan(0);
     expect(res.resumed).toBe(0);
     clientRes.drain();
@@ -311,11 +282,6 @@ describe("dev-server HTML streams through the preview proxy", () => {
   });
 });
 
-/**
- * noVNC's vnc_lite.html imports RFB at the END of `<body>`, so the desktop and
- * editor proxies must still see the whole document before rewriting it.
- * Streaming those would break the module rewrites with no error.
- */
 describe("desktop and editor HTML keeps whole-document buffering", () => {
   test("nothing is flushed until upstream ends", () => {
     const { clientRes, handleUpstream, upstream } = createHarness({
@@ -337,7 +303,6 @@ describe("desktop and editor HTML keeps whole-document buffering", () => {
   });
 
   test("the desktop and editor ports are the ones that buffer", () => {
-    // Behaviour above is driven by BUFFER_WHOLE_HTML; pin what sets it.
     const definition = previewProxySource.slice(
       previewProxySource.indexOf("const BUFFER_WHOLE_HTML"),
       previewProxySource.indexOf(
@@ -350,11 +315,6 @@ describe("desktop and editor HTML keeps whole-document buffering", () => {
   });
 });
 
-/**
- * Idle pause: a hidden tab used to keep its sandbox awake for hours because
- * every request it made (polls, reconnects) counted as a human. Documents now
- * carry an on-screen ping instead, and only real document loads get it.
- */
 describe("on-screen ping injection", () => {
   const PING_TAG = "<script data-eva-preview-activity>PING</script>";
 
@@ -412,9 +372,6 @@ describe("on-screen ping injection", () => {
     expect(received(clientRes)).not.toContain(PING_TAG);
   });
 
-  // The annotation script's CSS escape holds "$&". String.replace expanded it
-  // to </head>, so the ping tag landed inside the nav-sync script and its
-  // </script> leaked the rest of that script onto the page as text.
   test("a '$&' in the nav-sync script stays literal and the ping lands after it", () => {
     const navTag = '<script data-eva-preview-nav-sync>x.replace(/a/g, "\\\\$&");</script>';
     const { clientRes, handleUpstream, upstream } = createHarness({

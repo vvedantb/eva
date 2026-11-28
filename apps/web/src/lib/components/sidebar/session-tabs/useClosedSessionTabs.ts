@@ -2,10 +2,8 @@
 
 import { useLocalStorage } from "usehooks-ts";
 
-/** localStorage key for tabs the user dismissed from the strip. */
 const CLOSED_SESSION_TABS_KEY = "eva:session-tabs:closed";
 
-/** The stored value is user-writable, so anything not an id string is dropped. */
 function parseClosedIds(value: string[]): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((id) => typeof id === "string");

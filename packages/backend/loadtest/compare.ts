@@ -1,10 +1,3 @@
-// Output equivalence check: seeds one dataset, runs every case on the old
-// code, pushes the new code onto the same data, runs every case again and
-// diffs the results. A query fix must not change what any query returns.
-//
-//   node loadtest/compare.ts --old-dir /path/to/old/packages/backend [--scale 10]
-//
-// The old dir needs `convex/_loadTest/` (copy it in) and node_modules.
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -54,7 +47,6 @@ async function runAll(client: AdminClient, refs: SeedRefs): Promise<Map<string, 
   return out;
 }
 
-/** First differing character, with context, for a readable report line. */
 function firstDiff(a: string, b: string): string {
   let i = 0;
   while (i < a.length && a[i] === b[i]) i++;

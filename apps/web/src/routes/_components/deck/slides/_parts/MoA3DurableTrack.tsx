@@ -8,12 +8,6 @@ import {
   Pulse,
 } from "../../_components/motion";
 
-/**
- * The turn on the reliability slide (d08), drawn as a track through five
- * checkpoints: broken at the interruption on step 0, carried through on step 1.
- */
-
-/** The five checkpoints a turn passes through, evenly spaced along the track. */
 const CHECKPOINTS: readonly string[] = [
   "Start",
   "Plan",
@@ -23,17 +17,13 @@ const CHECKPOINTS: readonly string[] = [
 ];
 
 const TRACK_W = 880;
-/** Where the turn is interrupted, as a fraction of the track. */
 const BREAK_AT = 0.62;
-/** Seconds for the broken run: straight to the break, then nothing. */
 const MOA3_BROKEN_RUN = 1.3;
-/** The durable run: to the break, a held beat while it resumes, then on to the end. */
 const MOA3_DURABLE_RUN = 2.6;
 const DURABLE_TIMES = [0, 0.4, 0.56, 1];
 const HEAD_GLOW =
   "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.55) 34%, transparent 70%)";
 
-/** When the fill crosses checkpoint `index`, so its tick lands on time. */
 function crossing(index: number, durable: boolean): number {
   const at = index / (CHECKPOINTS.length - 1);
   if (!durable) return (at / BREAK_AT) * MOA3_BROKEN_RUN * 0.55;
@@ -54,7 +44,6 @@ function Checkpoint({
   index: number;
   durable: boolean;
 }) {
-  // Everything up to Build sits before the break, so those three tick either way.
   const reached = durable || index <= 2;
   const delay = crossing(index, durable);
 
@@ -73,7 +62,6 @@ function Checkpoint({
           delay: index * 0.06,
         }}
       >
-        {/* Remounted per run, so each run's crossing rings once. */}
         <m.span
           key={durable ? "durable" : "broken"}
           aria-hidden
@@ -120,8 +108,6 @@ export function MoA3DurableTrack({
     <div className="relative mx-auto" style={{ width: TRACK_W }}>
       <div className="absolute top-[13px] right-0 left-0 h-1.5 overflow-hidden rounded-full bg-white/12">
         <m.div
-          // Remounting on the boundary replays the whole run, so the room watches
-          // the same turn succeed rather than comparing two static pictures.
           key={durable ? "durable" : "broken"}
           className="absolute inset-0 origin-left rounded-full"
           style={{ background: BRAND_GRADIENT }}
@@ -129,7 +115,6 @@ export function MoA3DurableTrack({
           animate={{ scaleX: durable ? [0, BREAK_AT, BREAK_AT, 1] : BREAK_AT }}
           transition={run}
         />
-        {/* On the closing line, one band of light runs the finished track. */}
         <m.span
           aria-hidden
           className="absolute inset-y-0 left-0 w-40"
@@ -147,7 +132,6 @@ export function MoA3DurableTrack({
         />
       </div>
 
-      {/* The lit head of the turn, riding the fill. */}
       <m.span
         key={durable ? "head-durable" : "head-broken"}
         aria-hidden
@@ -195,7 +179,6 @@ export function MoA3DurableTrack({
               }
         }
       >
-        {/* Stalled is a live state: it keeps signalling until something picks it up. */}
         {durable ? (
           <IconPlugOff size={16} stroke={2} />
         ) : (

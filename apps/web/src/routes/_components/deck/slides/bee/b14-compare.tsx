@@ -13,7 +13,6 @@ interface Row {
   bee: string;
 }
 
-/** How each one works, not a measured accuracy test. */
 const ROWS: readonly Row[] = [
   {
     topic: "What was said",
@@ -70,7 +69,6 @@ export function BeeCompare() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.2 }}
           >
-            {/* Column heads: the real Teams logo and Bee's mark. */}
             <div className={`${GRID} pb-5`}>
               <span />
               <span className="flex items-center gap-3 text-xl font-semibold text-[#2a1e0c]/70">

@@ -6,11 +6,6 @@ import { groupChatFeedback, type FeedbackSentiment } from "./chatFeedback";
 import dayjs from "./utils/dates";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
-// The open chat's read state, web and phone: it marks the chat read while it
-// is on screen, and remembers where unseen replies began for the "NEW" divider.
-// A subpath (`@eva/shared/chatReadState`), not the root: it is React.
-
-/** How often an on-screen chat reports presence; well under the 30-minute away recap. */
 const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
 
 /** A chat whose read state is kept (a session chat, task or project). */
@@ -44,12 +39,8 @@ export function useChatReadState({
   const markRead = useMutation(api.chatReads.markRead);
   const touchVisit = useMutation(api.chatReads.touchVisit);
 
-  // State, not a ref: the anchor drives render (the divider must appear once
-  // it is captured). Adjusted during render, React's "store information from
-  // previous renders" pattern, so no effect and no extra commit.
   const [captured, setCaptured] = useState<{ parentId: ChatReadParentId; anchor: number | undefined } | null>(null);
   if (!isActive) {
-    // Leaving (hidden tab, cached shell, another screen) drops the anchor, so the return gets a fresh one.
     if (captured !== null) setCaptured(null);
   } else if (read !== undefined && (captured === null || captured.parentId !== parentId)) {
     setCaptured({ parentId, anchor: read.hasUnread ? (read.lastReadAt ?? 0) : undefined });
@@ -65,12 +56,9 @@ export function useChatReadState({
   useEffect(() => {
     if (!isActive || parentId === undefined) return;
     void markRead({ parentId, opened: true });
-    // Present while on screen, and once on leaving: the next recap measures
-    // the absence from here, not from the open.
     const timer = setInterval(() => touchVisit({ parentId }).catch(() => undefined), VISIT_HEARTBEAT_MS);
     return () => {
       clearInterval(timer);
-      // Best effort: signing out or closing the app can drop it.
       touchVisit({ parentId }).catch(() => undefined);
     };
   }, [parentId, isActive, markRead, touchVisit]);
@@ -105,7 +93,6 @@ export function useThreadReadState({
   const state = useQuery(api.threads.readState, { rootId });
   const markRead = useMutation(api.threads.markRead);
 
-  // Adjusted during render, as `useChatReadState`: no effect, no extra commit.
   const [captured, setCaptured] = useState<{ rootId: string; anchor: number | undefined } | null>(null);
   if (!active) {
     if (captured !== null) setCaptured(null);
@@ -114,8 +101,6 @@ export function useThreadReadState({
   }
 
   const hasUnread = (state?.unread ?? 0) > 0;
-  // Mark only once the state has loaded: the "New" line is captured from it
-  // above, and marking first would leave nothing unread to place it at.
   const loaded = state !== undefined;
   /* eslint-disable no-effect/no-event-handler --
      The triggers are the thread coming on screen (web panel and tab, phone
@@ -173,11 +158,9 @@ export function useChatRecap({
     kind: "away" | "full";
     since: number;
     text: string | undefined;
-    /** The viewer's thumbs on this recap (`feedback.rateRecap`). */
     rating: { sentiment: FeedbackSentiment; comment: string | undefined } | undefined;
   } | null;
   dismiss: () => void;
-  /** Sets the recap's thumbs; `null` clears it. */
   rate: (sentiment: FeedbackSentiment | null, comment?: string) => Promise<null>;
 } {
   const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");

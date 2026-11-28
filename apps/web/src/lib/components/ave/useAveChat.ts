@@ -16,7 +16,6 @@ import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
 import { takePageSelection } from "@/lib/components/ave/pageSelection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
-/** One Manager Ave per user, so one draft per browser. */
 const DRAFT_STORAGE_KEY = "eva:ave-draft";
 
 /**
@@ -33,7 +32,6 @@ export function useAveChat() {
   const streaming = useQuery(api.ave.getStreaming, {});
   const sendMessage = useMutation(api.ave.send);
   const cancelRun = useMutation(api.ave.cancel);
-  // Client-owned until the server echoes it back; nothing else can hold it.
   const [pendingSends, setPendingSends] = useState<ChatBodyMessage[]>([]);
   const [draft, setDraft] = useLocalStorage(DRAFT_STORAGE_KEY, "");
 
@@ -56,9 +54,6 @@ export function useAveChat() {
 
   const { transcript, followUps } = splitAveFollowUps(withPending, isExecuting);
 
-  // The run streams into `getStreaming`, which ChatBody paints onto the oldest
-  // unfinished assistant row. If the run has not written one yet, a local
-  // "Working" row stands in so the live activity has somewhere to render.
   const lastMessage = transcript[transcript.length - 1];
   const workingPlaceholder: ChatBodyMessage = {
     _id: "ave-working",
@@ -87,7 +82,6 @@ export function useAveChat() {
         id: "ave-attachments",
         description: "Remove them and send the message as text.",
       });
-      // Rejecting keeps the text and the files in the composer.
       throw new Error("Manager Ave does not accept attachments");
     }
     const clientId = crypto.randomUUID();
@@ -103,14 +97,11 @@ export function useAveChat() {
         clientId,
       },
     ]);
-    // No `finally`: React Compiler bails on the whole file when it meets one.
     try {
       await catchMutationError(
         sendMessage({
           content,
           clientId,
-          // Read at send time: the panel floats over every page, so Ave needs
-          // the one the user is on now, not the one they opened it from.
           pageContext: {
             path: `${window.location.pathname}${window.location.search}`,
             title: document.title,
@@ -149,10 +140,8 @@ export function useAveChat() {
   };
 
   return {
-    /** Scopes typing presence and scroll state; stable before the first send. */
     conversationId: thread?._id ?? "ave",
     messages,
-    /** Sent mid-run; the next run reads them. */
     followUps,
     isLoadingMessages: serverMessages === undefined,
     streamingActivity: streaming?.currentActivity,

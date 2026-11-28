@@ -23,20 +23,6 @@ import { evaChatSettings } from "./projectAccount";
 import { findWorkChat } from "../_sessions/ownerState";
 import { askFiledDuring, findOpenAsk } from "./reports";
 
-/**
- * The project scheduler: it replaces the old one-at-a-time build. It starts
- * every approved `todo` child task that is not halted and has no run
- * pending, in `taskNumber` order, with no cap on how many run at once. Each task runs like a quick
- * task: its own session, sandbox, branch and PR to main. The rules are the
- * shared ones (`@eva/shared/projectStatus`); this module only loads the facts
- * and starts runs.
- *
- * It runs on these events: the coordinator creates or starts tasks, a
- * person runs one, a child task's status changes (`onProjectTasksChanged`),
- * and a child PR merges (the PR webhook). It is
- * idempotent: a second call on the same state starts nothing.
- */
-
 /** A project's child tasks that are not deleted. */
 export async function listProjectTasks(
   db: DatabaseReader,
@@ -54,7 +40,6 @@ export async function listProjectTasks(
 export interface ProjectFactsContext {
   project: Doc<"projects">;
   now: number;
-  /** When the coordinator last finished a turn while it is idle now; undefined while it is busy or never ran. */
   coordinatorIdleSince?: number;
 }
 
@@ -76,10 +61,6 @@ export async function loadProjectFactsContext(
   };
 }
 
-/**
- * Who must answer the task's open ask now: the coordinator, until it had a
- * turn after the ask and is idle again without answering; then a person.
- */
 function openAskHolder(
   ask: Pick<Doc<"projectTaskReports">, "createdAt"> | null,
   context: ProjectFactsContext,
@@ -91,15 +72,6 @@ function openAskHolder(
   return passed ? "person" : "coordinator";
 }
 
-/**
- * One child task as the shared rules read it. Only a `todo` task's latest
- * run matters (`lastTaskRunOutcome`): a failed or stopped run puts its task
- * back to `todo`. A task with an open ask is waiting, never halted: its run
- * ended on purpose. A `todo` task whose latest run filed an ask that is now
- * closed was stopped while it waited (`closeTaskReports`): it is halted as
- * stopped, so nothing restarts it.
- */
-/** Whether a task's chat already runs on the account Eva's chat runs on. */
 async function runsOnEvaAccount(
   db: DatabaseReader,
   project: Doc<"projects">,
@@ -123,10 +95,7 @@ export async function projectTaskFacts(
     findOpenAsk(db, task._id),
     hasActiveTaskRun(db, task),
   ]);
-  // `task.run` also covers a run started before runs became chat turns.
   const runPending = task.run !== undefined || active;
-  // The usage limit holds while its reset is ahead and the task would run
-  // on the same account again (it takes Eva's at its next start).
   const usageLimited =
     latest?.usageLimited === true &&
     (latest.limitResetAt === undefined || latest.limitResetAt > now) &&
@@ -197,18 +166,10 @@ export async function scheduleReadyProjectTasks(
     const task = byId.get(id);
     if (task && (await startProjectTask(ctx, task))) started.push(task._id);
   }
-  // The same events can need the coordinator: a failure, a finished batch.
   await requestEventWakes(ctx, tasks, facts);
   return started;
 }
 
-/**
- * Asks for the coordinator wake-ups the task state calls for (decision 16):
- * a task whose run failed and that the coordinator may still retry (one
- * wake-up for each failed run), and a batch it created whose tasks have all
- * ended: launched, cancelled, or failed after its retry (one for each
- * batch). Idempotent by key, so calling it on every event is safe.
- */
 async function requestEventWakes(
   ctx: MutationCtx,
   tasks: readonly Doc<"agentTasks">[],
@@ -329,7 +290,6 @@ export async function handTasksToCoordinator(
   return handed;
 }
 
-/** A todo task of `projectId`, or an error the coordinator can read. */
 async function coordinatorTodoTask(
   ctx: MutationCtx,
   projectId: Id<"projects">,

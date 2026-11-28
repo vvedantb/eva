@@ -4,24 +4,15 @@ import './Field.css'
 
 export interface FieldProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   label?: ReactNode
-  /** The typed value. Drive it with act.type(). */
   value: string
   placeholder?: string
-  /** Focus ring and a blinking caret. */
   focused?: boolean
-  /** Dots instead of the value. */
   password?: boolean
-  /** valid: a check at the end and a calm ring. error: the ring turns danger. */
   status?: 'valid' | 'error'
-  /** The typed value committed as a chip, in place (a filter on Enter): the
-   * text stays where it was typed while a surface grows around it. Clear the
-   * value and the chip together; the chip fades out holding its text. */
   chip?: boolean
-  /** Gives the chip a remove ×, with this data-target for the cursor. */
   remove?: string
   leading?: ReactNode
   trailing?: ReactNode
-  /** Props for the input box itself, the thing to click: data-target, data-cursor. */
   box?: HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, unknown>
 }
 
@@ -32,8 +23,6 @@ export interface FieldProps extends Omit<HTMLAttributes<HTMLDivElement>, 'childr
  * blinking only once it rests. Put data-target on `box`, the part a cursor clicks.
  */
 export function Field({ label, value, placeholder, focused, password, status, chip, remove, leading, trailing, box, className, style, ...rest }: FieldProps) {
-  // A cleared chip keeps its text while it fades, then lets go
-  // (decided while rendering, so not one frame passes without it)
   const held = useRef('')
   const text = useRef<HTMLSpanElement>(null)
   const [, release] = useState(0)
@@ -44,8 +33,6 @@ export function Field({ label, value, placeholder, focused, password, status, ch
     release((n) => n + 1)
   }
   const out = !chip && !value && !!held.current
-  // Keep the text only while its fade is visible. A stage reset can disable
-  // the transition before it starts, or cancel it halfway through.
   useLayoutEffect(() => {
     const el = text.current
     if (!out || !el) return
@@ -79,7 +66,6 @@ export function Field({ label, value, placeholder, focused, password, status, ch
               </span>
             )}
           </span>
-          {/* Keyed on the value, so every keystroke restarts the blink from solid */}
           {focused && <span key={value.length} className="ss-field__caret" />}
         </span>
         {status === 'valid' && (

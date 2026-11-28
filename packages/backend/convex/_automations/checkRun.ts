@@ -12,14 +12,6 @@ import { buildEvaAutomationUrl } from "../_env/webAppUrl";
 import { runStatusValidator } from "../_validators/enums";
 import { resolveAutomationDoc } from "./systemAutomations";
 
-/**
- * The GitHub check run Eva shows on a PR commit while an automation runs for
- * it, like Vercel's deploy check. Only runs started by a PR open, push or
- * merge carry a `headSha`, so only they get one. Best-effort: a missing
- * "Checks: write" permission or a GitHub outage never touches the run.
- */
-
-/** GitHub rejects a check summary over 65,535 characters. */
 const MAX_SUMMARY_CHARS = 60_000;
 
 /**
@@ -60,7 +52,6 @@ export const getCheckRunContext = internalQuery({
   returns: v.union(v.null(), checkRunContextValidator),
   handler: async (ctx, { runId }) => {
     const run = await ctx.db.get(runId);
-    // A queued run has not started yet; its check opens when it does.
     if (!run || run.headSha === undefined || run.status === "queued") {
       return null;
     }

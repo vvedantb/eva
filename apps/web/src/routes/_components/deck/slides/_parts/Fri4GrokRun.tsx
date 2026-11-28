@@ -9,12 +9,10 @@ import { DROP_AT, MERGE_AT } from "./Fri4ReviewBoard";
 
 interface Line {
   step: number;
-  /** Seconds into its step that the line starts. */
   at: number;
   label: string;
 }
 
-/** What the bot does, in the order it does it. Each line works, then ticks. */
 const LINES: readonly Line[] = [
   { step: 1, at: DROP_AT + 0.2, label: "Notified: ready for review" },
   { step: 2, at: 0.25, label: "Migrations applied" },
@@ -44,7 +42,6 @@ function RunLine({ line }: { line: Line }) {
       })}
     >
       <span className="relative flex size-4 items-center justify-center">
-        {/* The pending mark: the whole run is visible before it starts. */}
         <m.span
           aria-hidden
           className="absolute inset-[1.5px] rounded-full border border-foreground/40"

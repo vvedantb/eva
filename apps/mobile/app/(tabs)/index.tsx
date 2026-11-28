@@ -31,7 +31,6 @@ import { LIST_WINDOW } from "@/ui/listWindow";
  * are drawn.
  */
 export default function InboxScreen() {
-  // History: the whole notification feed, read and Done ones too (the web `?history=true`).
   const [history, setHistory] = useState(false);
   const inboxRows = useQuery(api.inbox.list, history ? "skip" : {});
   const feed = useQuery(api.notifications.list, history ? { history: true } : "skip");
@@ -48,7 +47,6 @@ export default function InboxScreen() {
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
-  // The web `useInboxDone`: a chat leaves until something newer happens; a notification is archived.
   const done = async (row: InboxRow): Promise<void> => {
     const target = inboxDoneTarget(row);
     if (!target) return;
@@ -73,7 +71,6 @@ export default function InboxScreen() {
   };
 
   const historyToggle = (
-    // Sticky footer: under the list, above the tab bar, so it stays put on scroll.
     <View
       className="items-start px-2 pt-2"
       style={{
@@ -139,7 +136,6 @@ export default function InboxScreen() {
               onDone={done}
             />
           )}
-          // A scroll closes a row swiped open.
           onScrollBeginDrag={closeSwipeRows}
         />
       )}

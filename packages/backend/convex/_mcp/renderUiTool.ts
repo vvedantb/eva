@@ -1,14 +1,3 @@
-/**
- * The `render_ui` MCP tool: the agent hands Eva the content of a panel, Jev
- * lays it out, and the panel renders inline in the chat.
- *
- * The request contract — the input schema and its caps — lives in
- * `_generativeUi/schema.ts`, shared with the composition client. What stays
- * here is the agent-facing surface: the description, the error copy and the
- * tool factory. Composition and storage are injected as `run`, which keeps the
- * Convex types out of this module and lets tests pass a fake.
- */
-
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { defineTool, type EvaTool } from "../mcp/registry";
 import {

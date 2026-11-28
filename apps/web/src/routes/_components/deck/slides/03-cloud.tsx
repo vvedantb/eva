@@ -19,10 +19,6 @@ import {
 } from "../_components/motion";
 import { CloudVisual } from "./_parts/cloud-visual";
 
-/**
- * Square on while the laptop is still the story, swinging round as the work
- * moves to the cloud, then easing back as the counters take the eye.
- */
 const CLOUD_SHOTS: readonly CameraShot[] = [
   {},
   { rotateY: -10, rotateX: 6, translateZ: 60 },
@@ -32,7 +28,6 @@ const CLOUD_SHOTS: readonly CameraShot[] = [
 const NUMBER_CLASS =
   "text-[32px] leading-[1.15] font-semibold tracking-[-0.03em] whitespace-nowrap text-white tabular-nums";
 
-/** The numbers carry the card; each label is four words at most. */
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
     <StaggerItem className="h-full">
@@ -46,7 +41,6 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** The arrow in "10 → 23" travels from the old figure to the new one. */
 function Towards() {
   const { on, delay } = useMotionCue(undefined, 0.35);
   return (

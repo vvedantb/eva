@@ -1,0 +1,149 @@
+# Decision records moved out of comments: misc
+
+Source: comment triage, 27 November 2026. Each line is file, symbol, decision. Written by Haiku agents; some entries state behaviour that the code already shows.
+
+- _sessions/internal.ts | getRevertContext (messageId) | messageId is typed v.string(), not an id. Reason: the chat tree widens message ids to hold client-built synthetic turns, which never carry checkpoints.
+- _sessions/internal.ts | getRevertContext | A revert refuses while any chat in the session has an open turn. Reason: all chats share one worktree, and the daemon owns it until its turn finishes.
+- _sessions/linkedRepoSteps.ts | module | Linked-repo steps have one copy, shared by session and multi-repo task workflows. Reason: one implementation of clone, push and draft PR cannot drift between the two.
+- _sessions/linkedRepoSteps.ts | prepareLinkedRepoSteps | A failed clone posts an alert and the loop continues. Reason: one failing repo must not leave every other linked repo uncloned.
+- _sessions/mutations.ts | archiveGroup | Members are capped at 50, the same cap as listGroup. Reason: the dialog count must match what is actually archived.
+- _sessions/mutations.ts | createSession | Linked repos are resolved and validated before any insert. Reason: a rejected selection must not leave a half-built session behind.
+- _sessions/mutations.ts | createSession | The first message queues directly and notifies its mentions in place. Reason: it does not go through startExecute, which would otherwise send that notification.
+- _sessions/mutations.ts | createSession | The model falls back to repo.defaultModel; args.model is not checked here. Reason: a check on args.model after the session insert threw and rolled back the whole mutation.
+- _sessions/mutations.ts | stopAndArchiveSession | The session is re-read after the stop. Reason: the stop changes status, and the archive patches from the document it is given.
+- _sessions/ownedSession.ts | module | Owner lookups live in leaf owner.ts and ownerState.ts. Reason: low-level modules can use them without importing this module.
+- _sessions/ownedSession.ts | ownedSessionSeed | Task and project sessions keep their own branch. Reason: their PRs stay owned by the task or project (resolvePrOwnerFromBranch).
+- _sessions/ownerState.ts | module | Owner lookups that need chat modules sit apart from owner.ts. Reason: the schema imports owner.ts, so loading it must not pull these modules into an import cycle.
+- _sessions/pendingTurnRecovery.ts | isPendingTurnLive | A staged slot is matched to its turn by turnId, not by age. Reason: a turn that dies before a daemon claims it leaves the slot full, which refused every later turn; a slot for another turn is an orphan.
+- _sessions/pendingTurnRecovery.ts | isPendingTurnLive | With no open durable turn (legacy sessions), a staged slot counts as live. Reason: the slot is then the only record of the turn.
+- _sessions/pendingTurnRecovery.ts | isUnclaimedOpenTurn | Synthetic turns are never restaged. Reason: restaging one only spams a leftover daemon with claimPendingTurn mismatches.
+- _sessions/prArchive.ts | reconcileSessionArchiveState | Archiving also stops any live sandbox. Reason: merged or closed sessions are read-only, and their VMs would otherwise run forever.
+- _sessions/prompts.ts | CHAT_STATIC_INSTRUCTIONS | Claude gets the static rules as its system prompt; other providers get them on the first turn. Reason: other providers have no system-prompt hook.
+- _sessions/prompts.ts | buildEditPrompt | Owner and repo instructions ride every turn; reference sections and readable repos ride the first turn only. Reason: a resumed session keeps the reference sections, and readable repos are reference only.
+- _sessions/prompts.ts | buildEditPrompt | Sessions pass an empty planContent, not plan.md. Reason: a leftover plan.md would appear as an approved-plan block.
+- _sessions/prompts.ts | buildEditPrompt | The prompt forbids agents from starting their own dev server and says to wait about two minutes. Reason: a cold compile looks like a dead server, and duplicate dev servers caused out-of-memory kills on 16GB VMs.
+- _sessions/queries.ts | gatherLinkedSessions | Sessions whose primary repo is another app appear in each repo they clone, tagged with the primary's identity. Reason: the work happens in that clone.
+- _sessions/queries.ts | sessionListItemValidator | List rows carry denormalised flags (isExecuting, hasUnread, isAwaitingAnswer); the first-message preview is fetched on hover. Reason: list subscriptions must not join messages for every row.
+- _sessions/queries.ts | turnFlagsIncludingLinked | Turn flags are read for linked repos too. Reason: turns are filed against the session's primary repo, so a linked row's turn is otherwise invisible.
+- _sessions/repos.ts | listRepos | A linked row uses its link's owner and name. Reason: the linked repo row may be deleted while the session lives.
+- _sessions/repos.ts | sessionRepoListItemValidator | Primary and linked rows share one shape. Reason: the UI renders one list.
+- _sessions/resultTarget.ts | AssistantReply | Helpers are generic over the message type. Reason: Convex docs pass straight in, and tests can use plain objects.
+- _sessions/resultTarget.ts | assistantReplyContent | A disk-full error leads with the cause and the fix, and keeps the raw text. Reason: the raw ENOSPC text names no cause a user can act on.
+- _sessions/sandbox.ts | claimSandboxForTaskRun | The claim records its start attempt on the run. Reason: a cancel before the attach then fails exactly this start.
+- _sessions/sandbox.ts | finishTaskRunSandbox | A VM with a queued follow-up is not stopped. Reason: a stop would park the follow-up until the stop settles, then boot the VM again.
+- _sessions/sandbox.ts | forcePushBranch | The linked row must belong to the session, and only eva-owned branches may be force-pushed. Reason: a reachable session id must not rewrite an unrelated branch, and a base branch must never be reachable.
+- _sessions/sandbox.ts | forcePushBranch | The sandbox and its credentials always use the primary repo's id. Reason: the sandbox belongs to the primary repo, linked clones included.
+- _sessions/sandbox.ts | markSandboxClosed | The stop divider is posted when the stop settles. Reason: the divider then matches the actual outcome, not an optimistic guess.
+- _sessions/sandbox.ts | module (quick task run) | A quick task run uses its session's sandbox under the session lifecycle. Reason: the row never reads closed while the run's VM is up.
+- _sessions/sandbox.ts | previewBlockedError | A project coordinator may always boot its sandbox; a todo task with no run may not. Reason: a project has no closed state (decision 19), so its chat stays reachable.
+- _sessions/sandbox.ts | requestSessionSandboxStart | A single-repo start with a sandbox is scheduled directly, not through the workflow. Reason: workflow step scheduling took about 6s before the first action ran; multi-repo starts must use the workflow or the setup gate stays armed.
+- _sessions/sandbox.ts | requestSessionSandboxStart | Startup activity is seeded before the workflow is scheduled. Reason: the UI shows real steps instead of a generic spinner during that gap.
+- _sessions/sandbox.ts | requestSessionSandboxStop | A Stop while already stopping re-issues finalize. Reason: a stalled finalize would otherwise leave the row wedged in stopping.
+- _sessions/sandbox.ts | requestSessionSandboxStop | A stop from closed still finalizes a sandbox when one is recorded. Reason: an early-ready followed by a failed start can leave a live VM while the UI shows inactive.
+- _sessions/sandbox.ts | requestSessionSandboxStop | Pending questions move onto the chat message before the stop. Reason: stopping kills paused turns, so a blocking question could never be claimed.
+- _sessions/sandbox.ts | sandboxError | A failed start sets sandboxError. Reason: a failed start must look different from a sleeping sandbox.
+- _sessions/sandbox.ts | sandboxError | A watched child is notified without a queue drain. Reason: a drain would start a turn on a session just marked closed.
+- _sessions/sandbox.ts | sandboxReady | A closed or stopping row is never flipped back to active. Reason: that left a VM running while the UI showed it stopped.
+- _sessions/sandbox.ts | sandboxReady | Early-ready arms the setup and services gate flags; final-ready clears them. Reason: the first turn waits for setup, and the Preview heal must not launch services that are still starting.
+- _sessions/sandbox.ts | sandboxReady | Only a start request's own attempt discards its VM. Reason: untokened callers still use the VM they prepared.
+- _sessions/sandbox.ts | sandboxReady | Orphaned background agents are settled on a fresh boot. Reason: they gate each chat's message queue, and nothing else clears them.
+- _sessions/sandbox.ts | sandboxReady | The queue drain is scheduled, not imported, and is quiet. Reason: the queue helpers import this module, so a direct call would be a cycle; a start is not a turn ending, so it must not wake an orchestrator.
+- _sessions/sandbox.ts | sandboxReady | The wake counts as user activity. Reason: the idle sweep must not pause a sandbox that was just brought back.
+- _sessions/sandbox.ts | sandboxStartupWarning | Branch-checkout failures get their own copy. Reason: they are recoverable, and the generic copy wrongly calls them a services problem.
+- _sessions/sandbox.ts | sandboxStartupWarning | The warning is skipped unless the session is active. Reason: a stop that raced startup once inserted a message into a closed chat.
+- _sessions/sandbox.ts | scheduleFinalizeStop | A recovery finalize is scheduled after a delay. Reason: actions are not auto-retried, and a transient error leaves the status stuck in stopping.
+- _sessions/sessionPrompt.ts | PARALLEL_CHATS_NOTE | Only one fact about other chats is sent. Reason: an agent sharing a working tree needs that fact and no sibling summary.
+- _sessions/sessionPrompt.ts | buildSessionPrompt | A resumed provider session gets guard rails only. Reason: re-sending about 3k tokens on each message slows the reply.
+- _sessions/setupGate.ts | MAX_WAIT_MS | The wait is 8 minutes, under the 10-minute action ceiling. Reason: the action must return before the platform ceiling, and on timeout the launch goes ahead.
+- _sessions/stop.ts | module | Web, mobile and MCP share the two Stop mutations. Reason: a Stop must do the same thing on every surface.
+- _sessions/workflow.ts | addAssistantPlaceholder | System alerts are skipped when checking for a placeholder. Reason: startExecute may have staged an empty placeholder under a draft-PR alert.
+- _sessions/workflow.ts | claimPendingTurn | A staged slot with no turnId is dropped. Reason: a turn must never run without a lease.
+- _sessions/workflow.ts | claimPendingTurn | Cancel drains whether or not a turn is pending. Reason: gating the drain on pendingTurn would strand a cancel.
+- _sessions/workflow.ts | claimPendingTurn | No claim while a prewarm is killing the daemon. Reason: the lease would be taken for a dying process that nothing heartbeats.
+- _sessions/workflow.ts | claimPendingTurn | No claim while the daemon is not ready to start. Reason: the two-minute running lease would be taken with nobody heartbeating it.
+- _sessions/workflow.ts | claimPendingTurn | The turn is withheld during the setup gate. Reason: the agent must not run against a stale checkout.
+- _sessions/workflow.ts | claimPendingTurn | The usage refresh flag is level-triggered. Reason: an old callback that does not read the field must not consume it.
+- _sessions/workflow.ts | designResultSchema | variations is required and non-empty. Reason: an all-optional schema matched a bare {} and produced an empty Designs tab.
+- _sessions/workflow.ts | getSessionData (ownsPullRequests) | The field is optional. Reason: a workflow journaled before the field must still replay.
+- _sessions/workflow.ts | getSessionData (primaryPrUrl) | Only the primary repo's own PR is read. Reason: a side-branch PR the agent opened must not stop Eva opening the session's draft.
+- _sessions/workflow.ts | openSyntheticTurn | The model is stamped when the turn opens. Reason: the daemon protocol carries no model on completion.
+- _sessions/workflow.ts | restageOpenTurn | Orphaned slots do not block a restage. Reason: refusing on them made the escape hatch useless on the chats that needed it.
+- _sessions/workflow.ts | restageOpenTurn | Restage needs an empty assistant placeholder. Reason: rebuilding the prompt would replay text that already streamed.
+- _sessions/workflow.ts | saveResult | The design JSON is read from the reply content. Reason: any successful turn may end with it, whatever the turn was asked to do.
+- _sessions/workflow.ts | sessionExecuteWorkflow | A cold sandbox is thawed through durable polling steps first. Reason: a multi-minute thaw would exceed the per-action 10-minute limit.
+- _sessions/workflow.ts | sessionExecuteWorkflow | A failed one-shot launch saves a failed result. Reason: otherwise the placeholder waits for the turn backstop.
+- _sessions/workflow.ts | sessionExecuteWorkflow | A missing draft PR is recovered only when the branch already holds HEAD. Reason: the callback usually pushes first, and this avoids compare-404 alerts.
+- _sessions/workflow.ts | sessionExecuteWorkflow | A task chat push opens the task PR when the branch has none live. Reason: a task worked only through chat still gets a PR.
+- _sessions/workflow.ts | sessionExecuteWorkflow | Docker is skipped on validation for a just-created sandbox. Reason: waiting on the Docker bootstrap delays the launch.
+- _sessions/workflow.ts | sessionExecuteWorkflow | Linked repos publish here, and a primary publish failure does not stop them. Reason: PR creation needs the backend, and a failed primary must not strand a linked repo's commits.
+- _sessions/workflow.ts | sessionExecuteWorkflow | One-shot providers wait for setup before launch. Reason: they push the prompt at launch and would run against a stale checkout.
+- _sessions/workflow.ts | sessionExecuteWorkflow | The push is always attempted after a successful agent turn. Reason: a porcelain check skipped every publish and stranded commits in the sandbox.
+- _sessions/workflow.ts | sessionExecuteWorkflow | The reply is saved before publish. Reason: a slow git push otherwise leaves the UI on Working forever.
+- _sessions/workflow.ts | sessionExecuteWorkflow | The workflow does not push the prompt; the daemon claims it. Reason: pushing from here would double-execute the turn.
+- _sessions/workflow.ts | sessionExecuteWorkflow | ensurePendingTurn runs before prewarm. Reason: a cancel race can wipe pendingTurn while the daemon workflow waits.
+- _sessions/workflow.ts | sessionSandboxStartupWorkflow | The setup gate always clears after linked-repo steps. Reason: a linked repo that never finishes must not wedge the session forever.
+- _sessions/workflow.ts | updateBackgroundAgents | Queue drain is scheduled when agents settle. Reason: the chat never signals that settling otherwise.
+- _shared/modelHandoff.ts | HANDOFF_SCAN_LIMIT | History reads go in small batches and stop at a byte budget. Reason: rows carry full activityLog text, so a count cap alone can exceed Convex's 16 MiB read limit.
+- _shared/modelHandoff.ts | OMISSION_MARKER_RESERVE | Space is reserved for the omission marker. Reason: the closing tag must survive the length cap.
+- _shared/modelHandoff.ts | buildHandoffContextBlock | Older turns are admitted newest-first under the budget. Reason: the turns nearest the handoff matter most.
+- _shared/modelHandoff.ts | prependModelHandoffContext | The chat log digest is included in the handoff. Reason: agreed decisions must survive the provider switch.
+- _shared/modelHandoff.ts | transcriptLine | Content is JSON-escaped and "<" is escaped further. Reason: a message body must never close the handoff block or forge a tag.
+- _shared/ownerTitle.ts | applyGeneratedTitle | A project title edit does not bump updatedAt. Reason: it matches projects.update, where a title edit is not activity.
+- _skillSuggestions/rank.ts | dedupeCandidates | Labels are compared case-insensitively, and a skill named None is dropped. Reason: it would otherwise look like the escape-hatch option.
+- _skillSuggestions/rank.ts | module | The helpers are runtime-free, and the "use node" action stays a thin wrapper. Reason: the ranking rules can then be tested without a gateway call.
+- _systemSkills/registry.ts | SystemSkillDefinition.alwaysInstalled | eva-setup cannot be uninstalled. Reason: the "Set up with Eva" button in Eva's UI runs it.
+- _taskWorkflow/deploymentHelpers.ts | resolveStableDeploymentUrl | A bare alias hostname gets an https:// prefix. Reason: without a scheme, browsers treat the stored URL as a relative path.
+- _taskWorkflow/deploymentHelpers.ts | resolveStableDeploymentUrl | The stored URL is left alone while the stable alias is not attached. Reason: users must not see a per-commit URL that then flips to the alias.
+- _taskWorkflow/helpers.ts | finalizeRunStatus | Terminal status is one choke point, guarded against re-finalizing. Reason: a watched task's orchestrator must be woken exactly once.
+- _taskWorkflow/publicMutations.ts | cancelTaskRun | A stopped task is not restarted automatically. Reason: a person must decide after a stop.
+- _taskWorkflow/publicMutations.ts | cancelTaskRun | The cancelled status and its orchestrator notice are written here. Reason: finalizeRunStatus cannot see a cancel.
+- _taskWorkflow/publicMutations.ts | cancelTaskRun | The execution sandbox is stopped here. Reason: workflow.cancel aborts before the workflow's own sandbox cleanup step runs.
+- _taskWorkflow/publicMutations.ts | handleCompletion | A run that ended on its own open ask is a clean outcome. Reason: the task asked its coordinator and ended its turn on purpose.
+- _taskWorkflow/publicMutations.ts | handleCompletion | The sandbox deadline is extended before publish. Reason: push, PR and deployment tracking run after the agent exits, and no heartbeat renews the lease then.
+- _taskWorkflow/queries.ts | getTaskData | Change requests keep a commit text and a prompt text. Reason: the author and date annotation must not leak into the commit message.
+- _taskWorkflow/queries.ts | getTaskData | Comments are surfaced from the latest successful run's startedAt. Reason: comments added during an in-flight run carry over, and failed runs are not cutoffs.
+- _taskWorkflow/queries.ts | getTaskData | The last successful run's summary is included in a re-run prompt. Reason: a "Make changes" re-run keeps continuity instead of rediscovering prior work.
+- _taskWorkflow/queries.ts | getTaskData | Traits are sent only when non-default. Reason: the runner then falls back to each model's own behaviour.
+- _taskWorkflow/queries.ts | getTaskPrCreationData | Only a live PR on the branch blocks a new PR. Reason: after a merge or close, new commits need a fresh PR.
+- _taskWorkflow/recovery.ts | RETRYABLE_WATCHDOG_EXIT_REASONS | Only watchdog stops that never reached finalisation earn one auto-retry. Reason: finalisation work has already landed, and a rerun could duplicate it.
+- _taskWorkflow/recovery.ts | cleanUpStaleRun | A task sandbox is stopped, not deleted, and diagnostics are captured first. Reason: uncommitted or unpushed work stays recoverable, and the next run resumes the same filesystem.
+- _taskWorkflow/recovery.ts | cleanUpStaleRun | Closing the run's turn is the last step. Reason: it stops the lease reconciler and the turn backstop from both acting on one run.
+- _taskWorkflow/runLifecycle.ts | completeRun | A project task retries after its account's reset time, not on a quick-task schedule. Reason: the project scheduler starts nothing while its account is at the limit.
+- _taskWorkflow/runLifecycle.ts | completeRun | A status the user set mid-run is not overwritten. Reason: done, cancelled and review-column choices belong to the user.
+- _taskWorkflow/runLifecycle.ts | completeRun | A task waiting on its coordinator stays in_progress. Reason: it keeps its parallel slot until the answer starts its next run.
+- _taskWorkflow/runLifecycle.ts | completeRun | No inbox notification per run result. Reason: the task card and chat already show the outcome.
+- _taskWorkflow/runLifecycle.ts | completeRun | in_progress is released with the status, not in the workflow finally. Reason: a task left in_progress keeps showing the replying state while the remaining steps run.
+- _taskWorkflow/scheduling.ts | maybeScheduleQuickTaskRetry / executeScheduledTask | A scheduled rerun keeps the parked change-request comment id. Reason: the timeline still labels it "made changes".
+- _taskWorkflow/startRun.ts | startTaskRun | The GitHub App installation is the task's own repo's. Reason: a project's installation must never be used for a task.
+- _taskWorkflow/startRun.ts | startTaskRun | The task's session is looked up or created before the workflow starts. Reason: the run's turn and sandbox writes land on that one session.
+- _taskWorkflow/startRun.ts | startTaskRunWorkflow | The run's turn is filed under the task's session. Reason: a chat message sent mid-run queues behind the run, and the run's end drains that queue.
+- _taskWorkflow/usageLimitReset.ts | module | Usage-limit parsing stays free of Convex server imports. Reason: the web app reads the same reset time, and a server import would pull the whole workflow graph into the browser bundle.
+- _taskWorkflow/usageLimitReset.ts | parseUsageLimitResetTime | A 2-minute margin is added to the reset time. Reason: the limit must be definitely cleared before the retry.
+- _taskWorkflow/watchdog.ts | handleStaleRun | The timeout is keyed on the workflow, not the task status. Reason: a task the user moved mid-run still has a run to time out, and the user's status choice must survive.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | A PR step failure is wrapped and recorded in prError. Reason: a GitHub failure must not flip the run back to success with no error, and the manual Create PR button is the recovery path.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | A VM the reviewer had open stays active after the run. Reason: the reviewer's open preview must keep pointing at a live sandbox.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | A publish failure keeps success on the run and sets the sandbox to be preserved. Reason: the failure must reach the user without losing the completed work.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | A quick task's first PR opens as draft. Reason: the task lands in business_review, and the user promotes the PR when the task moves to code_review.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | Later runs refresh the existing PR body, and create a fresh PR if that fails. Reason: change-request runs must still get a PR when the previous one was merged or closed.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | Linked repos publish whether or not the home push succeeded. Reason: a failed home publish must not strand linked repos' commits in the sandbox.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | PR create or refresh runs only after this run pushed commits. Reason: a run with no commits has no diff, and an attempt would fail with a spurious 404.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | The PR description is written at code_review, not at business_review. Reason: the diff is not final until the reviewer moves the task on.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | The claimed VM is attached to the session after the run starts it. Reason: chat, preview and sweeps read the sandbox as active only once it is attached; a stop or newer start that won meanwhile leaves this VM to the run to stop.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | The run's sandbox is claimed before the VM is touched. Reason: the session row must never read closed over a running VM, and a busy session makes the run retry rather than boot an untracked VM.
+- _taskWorkflow/workflowDefinition.ts | taskExecutionWorkflow | Traits and attachments are read from the task document. Reason: every entry point, including queued, scheduled and auto-run, then honours the user's choices without extra plumbing.
+- _usageLimits/claudeUsage.ts | UNIFIED_HEADER_WINDOWS | The Fable weekly cap is read from the 7d_oi header. Reason: omitting it meant refresh stored only 5h and weekly-all.
+- _usageLimits/claudeUsage.ts | fractionToPercent | Percentages are rounded to two decimal places. Reason: this matches the /usage percent encoding.
+- _usageLimits/claudeUsage.ts | module | Bodies are parsed, not trusted. Reason: /usage answers an expired or wrong-scope token with HTTP 200 and an error envelope.
+- _usageLimits/claudeUsage.ts | module | Usage windows are also read from Messages response headers. Reason: /usage returns 403 for setup tokens, which only carry the user:inference scope.
+- _usageLimits/claudeUsage.ts | module | Window labels are duplicated from callback-src. Reason: convex/ cannot import that separate esbuild bundle, so a new label must be added in both places.
+- _usageLimits/claudeUsage.ts | readClaudeUsageWindows | Both nested and top-level window shapes are read. Reason: a wrapper change must not look like Claude reported no windows.
+- _usageLimits/claudeUsage.ts | readUnifiedRateLimitHeaders | Model-scoped headers are passed through limits[]. Reason: one place labels per-model weekly windows.
+- _usageLimits/claudeUsage.ts | scopedResetsAtMs | Reset times may be epoch seconds or ISO strings. Reason: a shape change must not drop the Fable weekly window.
+- _usageLimits/rows.ts | findUsageLimitRow | Team lookups need no legacy filter. Reason: legacy rows never set teamId.
+- _usageLimits/rows.ts | listLegacyUsageLimitRows | All legacy rows in the account slot are swept, for every team. Reason: nothing reads a legacy row now, whoever it belonged to.
+- _usageLimits/rows.ts | module | Rows are keyed by credential, not by repo. Reason: the same account has the same headroom on every repo, and legacy per-repo rows are filtered on read.
+- _usageLimits/rows.ts | presentReading | Status and completeness are dropped with their windows. Reason: otherwise the UI would report that the provider has no plan windows at all.
+- _userProviderAccounts/credentialSource.ts | MessageCredential.credentialAccountId | An absent account is stored as undefined, not omitted. Reason: a patch then clears a stale stamp.
+- _userProviderAccounts/defaults.ts | reconcileUsableAccountForModel | A concrete account that no longer matches the model's provider falls back to the owner's default. Reason: a cross-provider model switch must not run on the wrong provider's credential.
+- _userProviderAccounts/defaults.ts | resolveTurnProviderAccountId | A stale stored account degrades to the owner's default for the model. Reason: the owner may have deleted the account, and that must not fail the turn.
+- _userProviderAccounts/listing.ts | module | The account list is shared by every picker and the plan-usage query. Reason: a popover that listed different credentials would show headroom for accounts the user cannot spend.

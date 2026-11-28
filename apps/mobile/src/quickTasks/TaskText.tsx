@@ -15,9 +15,6 @@ import { EmojiPickerSheet, ReactableMenu, measureHeld, type HeldRect } from "@/q
 import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
-// A task's title and prompt as the web edits them in place (`TaskHeader`,
-// `TaskDescription`): the quick task screen and a project task's prompt card.
-
 /** The web `TaskHeader` title: a tap edits it while editable; Return or leaving the field saves a changed, non-empty title. */
 export function TaskTitle({
   title,
@@ -50,7 +47,6 @@ export function TaskTitle({
         accessibilityLabel="Task title"
         value={editing}
         onChangeText={setEditing}
-        // Return blurs (`blurAndSubmit`), so leaving the field is the one save.
         onBlur={save}
         returnKeyType="done"
         submitBehavior="blurAndSubmit"
@@ -100,7 +96,6 @@ export function TaskDescription({
 }: {
   description: string | undefined;
   repoId: Id<"githubRepos">;
-  /** The task chat's model (`useTaskChatModel`); its provider scopes the @-mentions. */
   model: AIModel | undefined;
   editable: boolean;
   reactions: { groups: ReactionGroup[]; toggle: (emoji: string) => void };
@@ -112,7 +107,6 @@ export function TaskDescription({
     getAIModelProvider(normalizeAIModel(model)),
   );
   const [editing, setEditing] = useState(false);
-  // Where the held description is on screen, while its hold menu is open.
   const [menuAnchor, setMenuAnchor] = useState<HeldRect | null>(null);
   const box = useRef<View>(null);
   const [pickingEmoji, setPickingEmoji] = useState(false);
@@ -191,7 +185,6 @@ export function TaskDescription({
       <ReactableMenu
         anchor={menuAnchor}
         onClose={() => setMenuAnchor(null)}
-        // The description, drawn again over the page.
         preview={<View style={{ backgroundColor: theme.background }}>{body}</View>}
         groups={reactions.groups}
         onToggleReaction={reactions.toggle}

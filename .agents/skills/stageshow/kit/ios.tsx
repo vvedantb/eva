@@ -1,24 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import './ios.css'
 
-// The iOS 27 keyboard, at true points inside a Phone: the Liquid Glass sheet
-// with its predictive bar, softly rounded keys with wide gaps, special keys
-// the same color as the letters, a ↵ return key, and the emoji and dictation
-// buttons below the keys. Measured from iOS 27 screenshots.
-
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
 export interface KeyboardProps {
-  /**
-   * The text typed so far. Each new character pops its key, and shift follows
-   * iOS's auto-capitalisation (on at the start and after a sentence ends).
-   */
   typed?: string
-  /** Force shift on or off instead of following the text. */
   shift?: boolean
-  /** The three words in the predictive bar. */
   suggestions?: [string, string, string]
-  /** A key held down: a letter, or 'shift', 'delete', 'return', 'space', '123'. */
   pressed?: string | null
   dark?: boolean
   className?: string
@@ -73,7 +61,6 @@ function Glyph({ name }: { name: 'shift' | 'shift-on' | 'delete' | 'return' | 'e
  * composer; pass `typed` and it pops each key as the text grows.
  */
 export function Keyboard({ typed = '', shift, suggestions = ['I', 'The', 'I’m'], pressed, dark, className, style }: KeyboardProps) {
-  // The key that just landed, shown in its callout for a moment
   const [pop, setPop] = useState<{ ch: string; n: number } | null>(null)
   const last = useRef(typed)
   useEffect(() => {

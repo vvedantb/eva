@@ -24,7 +24,6 @@ interface Version {
   colour: string;
 }
 
-/** Newest first. The times are the only numbers on the slide. */
 const VERSIONS: readonly Version[] = [
   { label: "Zuza", when: "now", colour: BRAND.purple },
   { label: "Eva", when: "11:04", colour: BRAND.blue },
@@ -32,7 +31,6 @@ const VERSIONS: readonly Version[] = [
   { label: "Matt", when: "Tue", colour: "rgba(251,191,36,0.8)" },
 ];
 
-/** The history swings forward a touch as it arrives, so it reads as a new layer. */
 const SHOTS: readonly CameraShot[] = [{}, {}, { rotateY: -4, x: -6 }];
 
 const ROW_H = 44;
@@ -112,7 +110,6 @@ function VersionList() {
           className="h-[330px] w-full"
           bodyClassName="relative flex flex-col gap-2"
         >
-          {/* The thread through every kept version, drawn newest to oldest. */}
           <m.span
             aria-hidden
             className="absolute w-px origin-top bg-white/15"

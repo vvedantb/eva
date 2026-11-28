@@ -18,28 +18,16 @@ import {
 } from "@tabler/icons-react";
 
 interface KpiProps {
-  /** Optional leading icon shown in a rounded pill next to the label. */
   icon?: TablerIcon;
   label: string;
   value: string | number;
-  /** Small supporting text: under the value when stacked, inline beside the label when row. */
   subtitle?: string;
-  /** Provide both current and previous to render a trend chip (stacked layout only). */
   previousValue?: number;
   currentValue?: number;
-  /**
-   * "stacked" (default): label/icon header, optional trend chip, then large value.
-   * "row": compact layout with the icon pill on the left and value + label on the right.
-   */
   layout?: "stacked" | "row";
-  /** Bumps the value text size; used for primary/hero cards in either layout. */
   size?: "default" | "lg";
 }
 
-/**
- * Trend chip rendered to the right of the label: green for a rise, red for a
- * fall, muted for no change. Mirrors the HeroUI KPI.Trend look.
- */
 function TrendBadge({
   current,
   previous,

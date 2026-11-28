@@ -29,8 +29,6 @@ export function DocNewCommentComposer({
   const submit = async (resolutionTarget?: "agent" | "human") => {
     if (!content.trim()) return;
     setIsSubmitting(true);
-    // Ternaries inside the `try`, and a `try`/`finally` with no `catch`, each
-    // bail the React Compiler out of this whole file. See CLAUDE.md.
     const askingEva = resolutionTarget === "agent";
     const errorMessage = askingEva
       ? "Couldn't ask Eva"

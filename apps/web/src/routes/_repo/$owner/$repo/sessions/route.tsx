@@ -2,18 +2,8 @@ import { Activity, useState } from "react";
 import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { CachedSessionShell } from "./_components/CachedSessionShell";
 
-/**
- * Cap mounted session shells. Each hidden shell keeps its whole React tree,
- * DOM and held query results in the tab's memory; 3 covers back-and-forth
- * between recent sessions without paying for 5.
- */
 const MAX_CACHED_SESSIONS = 3;
 
-/**
- * One cached shell's identity. Repo is captured at cache time because bare
- * numIds collide across apps and this layout survives `$owner/$repo` param
- * changes — a shell must keep resolving against the repo it was opened in.
- */
 interface CachedSessionEntry {
   key: string;
   owner: string;
@@ -57,8 +47,6 @@ function SessionsLayout() {
     activeEntry !== undefined ? [activeEntry] : [],
   );
 
-  // Render-phase sync (not an effect): promote the active session to the
-  // front of the cache before its shell renders.
   if (activeEntry !== undefined && cached[0]?.key !== activeEntry.key) {
     setCached(
       [activeEntry, ...cached.filter((e) => e.key !== activeEntry.key)].slice(
@@ -75,14 +63,8 @@ function SessionsLayout() {
       </div>
       {cached.map((entry) => {
         const isActive = entry.key === activeEntry?.key;
-        // Activity keeps a hidden shell's DOM and state (Preview iframes stay
-        // loaded) but tears down its effects, so background sessions hold no
-        // terminal sockets and stop redrawing while off screen.
         return (
           <Activity key={entry.key} mode={isActive ? "visible" : "hidden"}>
-            {/* Flex column: the shell's per-entry RepoGate sizes itself with
-                `flex-1`, which is inert in a block parent (height collapses
-                and the composer falls below the fold). */}
             <div className="flex h-full min-h-0 flex-col">
               <CachedSessionShell
                 numId={entry.numId}

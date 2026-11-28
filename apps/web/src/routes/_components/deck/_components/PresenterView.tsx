@@ -31,9 +31,7 @@ interface PresenterViewProps {
   slides: readonly DeckSlide[];
   slide: number;
   onNavigate: (slide: number) => void;
-  /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
-  /** Whose deck it is: accent colours, typeface and stage. Eva when absent. */
   brand?: DeckBrand;
 }
 
@@ -52,13 +50,9 @@ export function PresenterView({
   const nav = useDeckNavigation(slides, slide, onNavigate, (next, step) =>
     postDeckMessage({ deck: basePath, slide: next, step }),
   );
-  // Destructured: reading `scale` off the object passed as a ref would make the
-  // React Compiler treat it as a ref read during render.
   const { scale: stageScale, measure: measureStage } = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
 
-  // Next and back move whole slides, each starting from its first step: the
-  // stage plays the build itself.
   const slideNav: DeckNavigation = {
     ...nav,
     next: () => nav.goTo(slide + 1),
@@ -67,7 +61,6 @@ export function PresenterView({
 
   const { entry, step, total } = nav;
   const upcoming = slide < total ? slides[slide] : undefined;
-  // The preview has to match the stage, including a light slide's surface.
   const theme = entry.theme ?? "dark";
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -79,8 +72,6 @@ export function PresenterView({
     <div
       tabIndex={-1}
       onKeyDown={handleKeyDown}
-      // The presenter window owns the keys, so it has to hold focus from the
-      // first paint; the same callback attaches the two-window sync.
       ref={(el) => {
         if (!el) return;
         el.focus();
@@ -99,15 +90,9 @@ export function PresenterView({
               height: DESIGN_H,
               transform: `scale(${stageScale})`,
               transformOrigin: "center",
-              // Same viewing distance as the stage, so a camera shot reads
-              // identically in the preview. The rounded clip below keeps this
-              // element itself flat, which is fine: every camera carries its
-              // own perspective, so nothing depends on it chaining deeper.
               perspective: STAGE_PERSPECTIVE,
               perspectiveOrigin: "50% 50%",
             }}
-            // The frame sits on the canvas itself, so the border hugs the slide
-            // rather than the letterboxed pane around it.
             className={cn(
               "relative shrink-0 overflow-hidden rounded-[20px] ring-2 ring-white/10",
               DECK_TONES[theme].stage,
@@ -117,7 +102,6 @@ export function PresenterView({
             )}
           >
             <DeckAmbient theme={theme} />
-            {/* Keyed on the slide id so a slide change remounts the build. */}
             <DeckThemeScope theme={theme}>
               <DeckStepContext key={entry.id} value={step}>
                 <entry.Component />
@@ -133,9 +117,6 @@ export function PresenterView({
           <span className="min-w-0 flex-1 truncate text-base font-medium text-white/85">
             {entry.title}
           </span>
-          {/* `icon` not `icon-sm`: 40×40 each, and gap-2 keeps the two targets
-              clear of one another. The Button variant already carries the
-              house press (scale 0.96 on named properties). */}
           <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"

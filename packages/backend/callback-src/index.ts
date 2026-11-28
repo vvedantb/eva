@@ -64,10 +64,6 @@ import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
 import { writeOomScoreAdj } from "./runtime/daemonProcess.js";
 import { serializeFinalSteps, serializeSteps } from "./parse/stepBudget.js";
 
-// Cursor chat turns run in disposable children so the SDK cannot retain heap
-// across messages. The lightweight parent daemon remains alive to claim turns
-// and process cancellation. Enter the worker before touching the parent's ready
-// marker or installing its process-exit bookkeeping.
 if (IS_CURSOR_TURN_WORKER) {
   try {
     await runCursorTurnWorker();
@@ -88,37 +84,22 @@ process.on("exit", (code) => {
   try {
     if (S.rawLogStream) S.rawLogStream.end();
   } catch {
-    /* ignore */
   }
 });
 
 try {
   unlinkSync(READY_FILE);
 } catch {
-  /* ignore */
 }
 
-// Bias the kernel OOM killer away from this callback. If the sandbox runs out
-// of memory during a heavy tool step (e.g. `npx tsc`), the agent subtree should
-// die — not the process responsible for heartbeats and failure reporting.
-// Lowering our own score requires privilege, so this is best-effort; a spawned
-// child's score is raised at spawn time (opencodeServer.ts) as the portable half.
 writeOomScoreAdj("self", "-600");
 
 S.lastStepType = "thinking";
 
-// Before either provider path starts — the agent scans `.agents/skills` on
-// startup, so installed Eva skills must already be on disk.
 materializeSystemSkills();
 
-// Above the provider split on purpose: each daemon below blocks for the life of
-// the process, so this is the one place that runs exactly once per daemon
-// process for Claude, Codex and Cursor alike (and for one-shot job runs). The
-// Cursor turn worker exited further up, so it never doubles the reports.
 startBranchWatcher();
 
-// Interactive chats keep one provider process warm and claim staged turns.
-// One-shot agents (automations, docs, evaluations) omit CLAIM_MUTATION.
 if (CLAIM_MUTATION) {
   if (PROVIDER === "claude") {
     await runSdkDaemon();
@@ -140,14 +121,10 @@ if (!preflightOk) {
 
 startStreamingLoops();
 
-// Deliverable folders are not cleared at startup: the end-of-turn harvest
-// archives posted files into `.posted/`, so any top-level leftovers are
-// failed uploads from a crashed turn — this turn's harvest posts them.
 for (const d of [WORK_DIR + "/screenshots", WORK_DIR + "/recordings"]) {
   try {
     mkdirSync(d, { recursive: true });
   } catch {
-    /* ignore */
   }
 }
 
@@ -229,12 +206,6 @@ try {
     timedOutForZombie: finalTimedOutForZombie,
     toolStallErrorMessage: finalToolStallErrorMessage,
   };
-  // Cursor can flush partial assistant text while a SIGTERM/SIGKILL is tearing
-  // down the process. extractResultEvent deliberately falls back to that text,
-  // so without this guard an interrupted recording turn reported its
-  // "recording now…" preamble as a successful final answer. Node reports a
-  // direct signal with `code=null`; shells can translate it to 137/143. Keep
-  // both forms so neither can masquerade as genuine completion.
   const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt);
   const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
   const { success: runSucceededWithResult, error: resolvedError } =
@@ -295,9 +266,6 @@ try {
   });
   appendCurrentTurnLease(completionArgs);
 
-  // Durability BEFORE completion: commit + push the turn's work so a VM death
-  // after this point cannot erase it (no-op for automation runs — the commit
-  // gate and the automation workflow's own push steps own those semantics).
   persistTurnWork();
 
   try {
@@ -310,11 +278,6 @@ try {
       exitCode: finalCode,
       error: errorValue,
     });
-    // Hard-exit: a tool step can leave a background child holding our stdio
-    // fds, which keeps the event loop alive forever. A lingering runner keeps
-    // holding the per-entity spawn flock, so every later one-shot launch for
-    // this entity loses the lock and the chat sticks on "Working…" (its
-    // heartbeat also keeps fooling the stall watchdog's liveness probe).
     process.exit(0);
   } catch (e) {
     console.error("Failed to send completion:", e);
@@ -327,10 +290,6 @@ try {
     process.exit(1);
   }
 } catch (err) {
-  // Durability BEFORE the failure completion, as the success path above does
-  // it: this process is about to exit, so nothing else publishes what the turn
-  // already committed. Best-effort — persistTurnWork logs and swallows every
-  // git failure, so the completion below always posts.
   persistTurnWork();
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
@@ -360,7 +319,6 @@ try {
   try {
     await sendTurnCompletion(COMPLETION_MUTATION ?? "", errorArgs);
   } catch {
-    /* ignore completion error path failures */
   }
   process.exit(1);
 }

@@ -30,12 +30,7 @@ function clampPreviewPct(pct: number): number {
 
 interface ConsoleDockProps {
   controller: ConsoleDockApi;
-  /** Top region — the web preview. */
   preview: ReactNode;
-  /**
-   * Bottom "Console" region. `visible` is true only when expanded and not
-   * mid-drag, so the caller can gate the terminal's foreground fit/resize.
-   */
   renderConsole: (visible: boolean) => ReactNode;
 }
 
@@ -62,10 +57,6 @@ export function ConsoleDock({
     rawPctRef.current = previewPct;
     setDragging(true);
   };
-
-  // Live drag writes the preview height straight to the node. Routing it through
-  // `setState` would run a JSON.stringify + localStorage.setItem + storage-event
-  // dispatch on every pointermove — synchronous main-thread work on the input path.
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -80,8 +71,6 @@ export function ConsoleDock({
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
     const committed = clampPreviewPct(rawPctRef.current);
-    // Settle the rubberband before the re-render so React's style write agrees
-    // with the DOM instead of racing it.
     if (previewRef.current) {
       previewRef.current.style.height = `${committed}%`;
     }
@@ -99,7 +88,6 @@ export function ConsoleDock({
         className={cn(
           "min-h-0",
           expanded ? "shrink-0 grow-0" : "flex-1",
-          // Iframes swallow pointer events; disable them so the drag continues.
           dragging && "pointer-events-none",
         )}
         style={expanded ? { height: `${previewPct}%` } : undefined}
@@ -140,8 +128,6 @@ export function ConsoleDock({
 
       <div
         className={cn(
-          // overflow-hidden + min-h-0 so xterm gets a bounded viewport and can
-          // scroll scrollback — without this the terminal grows and is clipped.
           expanded ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "hidden",
           dragging && "pointer-events-none",
         )}

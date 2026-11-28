@@ -1,24 +1,5 @@
 "use node";
 
-/**
- * Asks TypeSafe Jev whether a finished turn's diff went beyond what the user
- * asked for, and whether the reply owned up to it: one requested/necessary/kind
- * call per hunk, one whole-diff headline question, one mention question per
- * flagged hunk, and one call over the turn's screenshots.
- *
- * The mention pass is the point. An unrequested change the reply names is a
- * decision the reader can review; an unnamed one reaches production unseen,
- * which is how a trophy icon nobody asked for shipped inside a tabs feature.
- *
- * Background work scheduled by `scheduleScopeCheck` once the reply is written.
- * Every failure path leaves `scopeCheck` absent rather than guessing — the chip
- * simply does not appear.
- *
- * Imports stay inside `_jev/*`, `_scopeCheck/*` and the generated modules, so
- * this node chunk cannot be dragged into an import cycle (see
- * `tests/convexModuleCycleContract.test.ts`).
- */
-
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -51,13 +32,8 @@ import {
 } from "./_scopeCheck/verdict";
 import { buildVisualQuestions, screenshotName } from "./_scopeCheck/visual";
 
-/** Gateway usage tag; attributes the spend to this feature. */
 const JEV_TAG = "eva-scope-check";
 
-/**
- * Runs `judge` over `items` `size` at a time. Both passes are one Jev call per
- * item, and the gateway 503s when a turn fires sixty at once.
- */
 async function inBatches<Item, Result>(
   items: readonly Item[],
   size: number,
@@ -75,11 +51,6 @@ async function inBatches<Item, Result>(
   return out;
 }
 
-/**
- * One Jev call over the turn's screenshots: do they show what was asked, and
- * which flagged hunks show in them. Any failure means no screenshot pass —
- * the verdict is still written from the diff alone.
- */
 async function judgeScreenshots(
   ctx: ActionCtx,
   messageId: Id<"messages">,
@@ -127,9 +98,7 @@ async function judgeScreenshots(
   };
 }
 
-/** Tries before giving up on GitHub catching up with the pushed sha. */
 const MAX_ATTEMPTS = 3;
-/** Long enough for a push to land, short enough that the chip still feels live. */
 const RETRY_DELAY_MS = 30_000;
 
 export const evaluateTurn = internalAction({
@@ -151,7 +120,6 @@ export const evaluateTurn = internalAction({
           headSha: context.afterSha,
         },
       );
-      // GitHub may not have the turn's push yet; wait and ask again.
       if (diff.unavailable) {
         if (args.attempt < MAX_ATTEMPTS) {
           await ctx.scheduler.runAfter(
@@ -164,7 +132,6 @@ export const evaluateTurn = internalAction({
       }
 
       const hunks = splitDiffIntoHunks(diff.diff);
-      // Nothing judgeable: a lockfile-only or binary-only turn stays silent.
       if (hunks.length === 0) return null;
 
       const prompt = clipPrompt(context.prompt);
@@ -173,14 +140,11 @@ export const evaluateTurn = internalAction({
         candidates.map((hunk) => [hunkKey(hunk), hunk]),
       );
 
-      // Scope and kind ride in one call: Jev answers every question in a
-      // request together, so the plain-English label costs nothing extra.
       const judged = await inBatches(
         candidates,
         SCOPE_BATCH_SIZE,
         async (hunk): Promise<JudgedHunk | null> => {
           const input: EvaluateInputRaw = {
-            // JSON-compatible only: no `undefined` anywhere inside `state`.
             state: {
               prompt,
               file: hunk.file,
@@ -217,8 +181,6 @@ export const evaluateTurn = internalAction({
         },
       );
 
-      // Only the hunks the chip will actually show are worth a mention call:
-      // the flagged set is single digits on a normal turn, and capped at 20.
       const reply = clipReply(context.reply);
       const mentioned = new Map<string, number>(
         await inBatches(
@@ -245,9 +207,6 @@ export const evaluateTurn = internalAction({
         ),
       );
 
-      // The headline question reads the same filtered hunks the per-hunk
-      // questions do — every judgeable hunk, not just the judged slice — so
-      // lockfile and generated-bundle churn cannot drive the chip's number.
       const overallDiff = buildOverallDiff(hunks);
       const overall = await evaluateDecision(
         {
@@ -258,7 +217,6 @@ export const evaluateTurn = internalAction({
         { tag: JEV_TAG },
       );
 
-      // Last, so the sandbox's media upload has had the whole run to land.
       const visual = await judgeScreenshots(
         ctx,
         args.messageId,

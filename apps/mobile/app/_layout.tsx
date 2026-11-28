@@ -42,31 +42,18 @@ import { LastCrashDialog } from "@/logging/LastCrashDialog";
 import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
-// Release builds swallow unhandled rejections: log them first. A fatal error
-// is saved before the app closes, and shown on the next launch.
 installUnhandledRejectionLogging(globalThis, { onFatal: saveLastCrash });
 void loadLastCrash();
 
-// Eva's web colours for every native-ui part, before anything renders.
 applyEvaTheme();
 
-// This phone's last appearance mode, applied before the first screen; the
-// account's mode follows once signed in (`AccountThemeSync`).
 void restoreThemeMode();
 
-/**
- * One client for the app's life, outside render (it holds the socket). Its
- * results keep their identity while their data is the same, so a reconnect
- * on resume does not redraw every list (`StableConvexClient`).
- */
 const convex = new StableConvexClient(CONVEX_URL, { unsavedChangesWarning: false });
 
-/** Fonts wait at most this long, then the app starts with system fonts. */
 const FONT_TIMEOUT_MS = 3_000;
-/** Clerk gets this long to load before the app shows a failure screen. */
 const CLERK_TIMEOUT_MS = 15_000;
 
-/** True once `ms` pass. Clerk load errors are rejected promises, so no error boundary sees them. */
 function useTimedOut(ms: number): boolean {
   const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
@@ -81,7 +68,6 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
     <NativeUiProvider>
       {isMaintenanceError(error) ? (
-        // The layout's providers are gone here, so the status query gets its own (no sign-in needed).
         <ConvexProvider client={convex}>
           <MaintenanceFallback onEnded={() => void retry()} />
         </ConvexProvider>
@@ -92,25 +78,14 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   );
 }
 
-/**
- * A screen threw the backend's maintenance error before `MaintenanceGate`
- * saw the status: the maintenance screen, then the app again on its own once
- * the status says maintenance is over.
- */
 function MaintenanceFallback({ onEnded }: { onEnded: () => void }) {
   const inMaintenance = useMaintenanceMode();
-  // Effect: the end of maintenance is a server event, and `retry` remounts the app.
   useEffect(() => {
     if (inMaintenance === false) onEnded();
   }, [inMaintenance, onEnded]);
   return <MaintenanceScreen />;
 }
 
-/**
- * Children wait for Clerk. Clerk rejects native clients with a promise (not a
- * render throw), so we also probe `/v1/environment` and time out to a visible
- * failure instead of a blank screen.
- */
 function ClerkGate({ children }: { children: ReactNode }) {
   const { isLoaded } = useAuth();
   const timedOut = useTimedOut(CLERK_TIMEOUT_MS);
@@ -140,7 +115,6 @@ export default function RootLayout() {
   const scheme = useScheme();
   const stackOptions = useStackScreenOptions();
   const fontsTimedOut = useTimedOut(FONT_TIMEOUT_MS);
-  // Inter under the names the classes and JS styles use (`@/ui/fonts`).
   const [fontsLoaded, fontError] = useFonts({
     [EVA_FONT.regular]: Inter_400Regular,
     [EVA_FONT.medium]: Inter_500Medium,
@@ -150,30 +124,17 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError && !fontsTimedOut) return null;
 
   return (
-    // Gesture Handler for the whole app; the kit's sheets drag on it, on the
-    // UI thread (each sheet's `Modal` adds its own root view). The keyboard's
-    // real position, frame by frame, for the kit's composer, transcript and
-    // forms (`KeyboardControllerProvider`).
     <GestureHandlerRootView style={styles.root}>
-      {/* Neutral repaints the class colours: global.css has light and dark only. */}
       <View className="flex-1" style={scheme === "neutral" ? NEUTRAL_CLASS_VARS : undefined}>
         <KeyboardProvider>
           <KeyboardControllerProvider>
-            {/* Images pasted into the composer (long-press Paste, the keyboard's image insert). */}
             <PasteInputProvider>
             <GestureHandlerProvider>
               <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
                 <ThemeProvider value={navigationTheme(scheme)}>
                   <NativeUiProvider>
-                    {/* Maintenance replaces the app, signed in or not (its status needs no sign-in). */}
                     <MaintenanceGate>
                       <ClerkGate>
-                        {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
-                            drops their state, so Back landed on the Inbox, not the tab it came from.
-                            A push deeper (a chat, a review, a new session) runs the platform's own
-                            transition (`useStackScreenOptions`). */}
-                        {/* The hold menu and the image viewer draw over the screens here, in the app's window:
-                            a Modal's own window moved the focus, and the chat jumped to its newest message. */}
                         <WindowLayerHost>
                           <Stack screenOptions={stackOptions} />
                         </WindowLayerHost>

@@ -5,7 +5,6 @@ import { TestingClient } from "@/lib/components/testing/TestingClient";
 const searchSchema = z.object({
   welcomeSetup: z.boolean().optional(),
   changelogPreview: z.boolean().optional(),
-  /** Bumped on each preview click so dialogs re-open without a full refresh. */
   previewNonce: z.number().optional(),
 });
 

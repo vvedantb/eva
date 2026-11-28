@@ -3,7 +3,6 @@ import type { GenericDatabaseReader } from "convex/server";
 import { authQuery, authMutation } from "./functions";
 import type { DataModel, Id } from "./_generated/dataModel";
 
-/** Finds the current user's annotation row for a page URL, or null. */
 function annotationForUrl(
   db: GenericDatabaseReader<DataModel>,
   userId: Id<"users">,

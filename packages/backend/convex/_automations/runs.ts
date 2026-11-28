@@ -59,7 +59,6 @@ export const acknowledgeRun = authMutation({
   },
 });
 
-/** Counts automations whose latest run is unacknowledged and completed. */
 async function countUnreadForAutomations(
   db: GenericDatabaseReader<DataModel>,
   automationIds: Array<Id<"automations">>,
@@ -93,9 +92,6 @@ export const countUnreadAll = authQuery({
   returns: v.number(),
   handler: async (ctx) => {
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
-    // Reuse the repo rows already loaded: resolve each canonical id from them
-    // (reading a parent only when it is not in the list), and read each repo's
-    // automations once even when several child apps share one root.
     const loadedRepoIds = new Set(repos.map((repo) => repo._id));
     const rowsByRepo = new Map<
       Id<"githubRepos">,
@@ -123,8 +119,6 @@ export const countUnreadAll = authQuery({
         return automationsVisibleInRepo(repo._id, canonicalId, loadRepoRows);
       }),
     );
-    // Shared monorepo automations surface into every child app, so dedupe
-    // before counting or one unread run is counted once per app.
     const automationIds = new Set<Id<"automations">>();
     for (const automations of perRepo) {
       for (const automation of automations) automationIds.add(automation._id);
@@ -142,7 +136,6 @@ export const getAutomationData = internalQuery({
       repoName: v.string(),
       rootDirectory: v.string(),
       defaultBaseBranch: v.optional(v.string()),
-      /** App row used for sandbox credentials (VERCEL_PROJECT_ID lives here). */
       sandboxRepoId: v.id("githubRepos"),
     }),
     v.null(),
@@ -176,8 +169,6 @@ export const updateRunStatus = internalMutation({
   handler: async (ctx, args) => {
     const current = await ctx.db.get(args.runId);
     if (!current) return null;
-    // Terminal is final. A workflow finishing after the user cancelled must
-    // not flip the run to success (and send its email) or error.
     if (isTerminalRunStatus(current.status)) {
       console.log(
         `[automations] updateRunStatus ignored runId=${args.runId} ${current.status} -> ${args.status}`,
@@ -199,8 +190,6 @@ export const updateRunStatus = internalMutation({
     await syncCheckRunLater(ctx, current);
     if (args.status === "success") await postRunCommentLater(ctx, current);
 
-    // Findings land unranked and possibly duplicating open work. Triage runs
-    // out of band so the run finishes at the same speed either way.
     if (args.findings !== undefined && args.findings.length > 0) {
       await ctx.scheduler.runAfter(
         0,
@@ -209,13 +198,9 @@ export const updateRunStatus = internalMutation({
       );
     }
 
-    // When a run succeeds and the automation opts into email, draft (or, with
-    // auto-send, send) its result summary for every email recipient.
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
-      // Event presets settle through `settleEventRun` and never email; this
-      // guards a preset row reaching here by any other path.
       if (
         run &&
         automation?.sendEmail === true &&

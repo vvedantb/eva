@@ -37,7 +37,6 @@ const CHAT_W = 760;
 const CHAT_X = (W - CHAT_W) / 2;
 const H = 290;
 
-/** Example chat. The prediction is the kind of reply the model suggests. */
 const ASK = "The export shows the wrong date.";
 const REPLY =
   "Fixed. Exports now convert to the user's time zone before the date is written, and the export tests pass.";
@@ -68,7 +67,6 @@ const GLOW = [
   { x: W / 2, y: H / 2, size: 900 },
 ];
 
-/** The keycap the presenter's audience should look at. Dips when pressed. */
 function TabKey() {
   const step = useDeckStep();
   const shown = step >= GHOST;
@@ -117,7 +115,6 @@ function TabKey() {
   );
 }
 
-/** The composer: placeholder, then grey prediction, then accepted text. */
 function Composer() {
   const step = useDeckStep();
   const ghost = step >= GHOST;
@@ -136,7 +133,6 @@ function Composer() {
         transition={cueTransition(accepted, 0.5, { duration: DUR.base })}
       >
         <span className="relative min-w-0 flex-1 truncate text-base">
-          {/* Placeholder until a prediction arrives. */}
           <m.span
             className="absolute inset-0 truncate text-muted-foreground"
             initial={false}
@@ -145,7 +141,6 @@ function Composer() {
           >
             Ask Eva to build something...
           </m.span>
-          {/* The prediction: ghost text, solid once Tab accepts it. */}
           <m.span
             className={cn(
               "block truncate",

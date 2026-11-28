@@ -1,5 +1,3 @@
-// Shared reporting and page discovery. Browser functions below are deliberately
-// self-contained: Playwright installs their source before application code runs.
 export function visibleStages(selector = null) {
   const targets = [...document.querySelectorAll(selector || '.ss-fit, .ss-stage')]
   const stages = new Set()
@@ -82,8 +80,6 @@ export function motionFindings(motion, slow = 1) {
   const ink = motion.ink.filter((i) => i.at >= motion.start).map((i) => ({ n: i.n, t: (i.at - motion.start) / 1000 / slow }))
   const most = Math.max(0, ...ink.map((i) => i.n))
   const runs = []
-  // An initial fade may start with no ink. Judge a loss of established
-  // content, not the baseline before the first entrance has appeared.
   const firstContent = ink.findIndex((sample) => sample.n >= most * 0.2 && sample.n > 0)
   for (const sample of firstContent < 0 ? [] : ink.slice(firstContent)) {
     const last = runs.at(-1)

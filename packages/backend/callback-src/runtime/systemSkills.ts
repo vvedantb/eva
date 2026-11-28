@@ -1,12 +1,3 @@
-/**
- * Materializes Eva system skills into the sandbox checkout.
- *
- * Each installed skill becomes `<root>/<name>/SKILL.md` in every skill root, a
- * stub that tells the agent to fetch the real instructions from the eva MCP
- * server. The files are never committed: a sentinel block in
- * `.git/info/exclude` hides them from `git add -A`.
- */
-
 import {
   existsSync,
   mkdirSync,
@@ -18,21 +9,13 @@ import {
 import { WORK_DIR } from "../config.js";
 import { isJsonObject, log, tryParseJsonObject } from "../utils.js";
 
-/** Written by `launch.ts` on every launch, empty list included. */
 const SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 
-/**
- * Marks a SKILL.md as Eva-materialized. A same-named skill without it is the
- * user's own and is never overwritten or pruned.
- * Duplicated from `convex/_systemSkills/registry.ts` — the callback bundle
- * cannot import Convex source. Drift only ever makes Eva more cautious.
- */
 const SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
 
 const EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 const EXCLUDE_END = "# <<< eva-system-skills <<<";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-/** Codex reads `.agents/skills`; Claude Code reads only `.claude/skills`. */
 const SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 
 export type SystemSkillStub = { name: string; stub: string };
@@ -56,7 +39,6 @@ export function parseSystemSkillsFile(raw: string): SystemSkillStub[] | null {
     const name = entry.name;
     const stub = entry.stub;
     if (typeof name !== "string" || typeof stub !== "string") continue;
-    // Names become path segments — reject anything that could escape the dir.
     if (!SKILL_NAME_PATTERN.test(name)) continue;
     result.push({ name, stub });
   }
@@ -112,7 +94,6 @@ function isEvaStub(directory: string): boolean {
 
 function writeStub(skill: SystemSkillStub): boolean {
   const directories = skillsRoots().map((root) => `${root}/${skill.name}`);
-  // A user skill in either root wins everywhere, so an Eva stub never shadows it.
   const userOwned = directories.some(
     (directory) => existsSync(`${directory}/SKILL.md`) && !isEvaStub(directory),
   );

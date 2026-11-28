@@ -14,7 +14,6 @@ interface Codebase {
   what: string;
 }
 
-/** Every work codebase connected in Eva (list_repos, checked 22 November 2026). */
 const CODEBASES: readonly Codebase[] = [
   { name: "Eva", what: "The platform itself" },
   { name: "CarePulse v3", what: "The current web app" },
@@ -45,7 +44,6 @@ export function AnnualRepos() {
               delay: on ? index * 0.1 : 0,
             }}
           >
-            {/* p-6 inside a 24px outer radius keeps the corners concentric. */}
             <Card className="flex h-[180px] flex-col rounded-[24px] p-6">
               <div className="text-2xl font-semibold text-white">
                 {codebase.name}

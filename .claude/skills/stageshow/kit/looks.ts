@@ -1,9 +1,5 @@
 import { createContext, useContext } from 'react'
 
-// The look a stage sets for everything inside it: theme, palette, fidelity,
-// and which of its designs (wide or compact) is showing. <Stage> provides it;
-// parts read it with useLook().
-
 /** glass: frosted, translucent surfaces over a soft color field. */
 export type Theme = 'light' | 'dark' | 'blueprint' | 'glass'
 export type Palette = 'accent' | 'mono'

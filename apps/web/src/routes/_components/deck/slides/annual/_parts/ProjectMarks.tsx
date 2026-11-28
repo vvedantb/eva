@@ -1,5 +1,3 @@
-/** Real marks for the projects in the Annual deck's sections. */
-
 /** Redline's own mark, from its landing page favicon. */
 export function RedlineMark({ size }: { size: number }) {
   return (

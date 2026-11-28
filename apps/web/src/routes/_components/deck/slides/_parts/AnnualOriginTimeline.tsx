@@ -5,53 +5,27 @@ import { useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, MaskedText, cueTransition } from "../../_components/motion";
 import { MoA1Dot, MoA1Rail } from "./MoA1Rail";
 
-/** Design size of the timeline box, matching the slide's content column. */
 const TRACK_W = 1088;
-/** Vertical centre of the axis inside the box. */
 const LINE_Y = 164;
 const BOX_H = 256;
-/** Room either side of the span so the end dots sit inside the box. */
 const INSET = 24;
-/** 11 January to 25 November 2026, the span the axis maps. */
 const SPAN_DAYS = 318;
-/**
- * A label is its name at `text-base leading-snug`, then `mt-1` and the date
- * at `text-sm`. The stem runs the full height of the label, like a flag pole,
- * so it always reads as that label's own.
- */
 const LABEL_H = 48;
-/** Axis to the shallowest lane, then clear space between stacked lanes. */
 const STEM_BASE = 26;
 const LANE_GAP = 20;
-/** How far each milestone sits in front of the axis it marks. */
 const DOT_DEPTH = 24;
 
 interface Milestone {
-  /** Days after 11 January 2026. */
   day: number;
   label: string;
   date: string;
   above: boolean;
-  /** 0 hugs the axis; 1 stacks a label clear above lane 0. */
   lane: number;
-  /** Which side of its stem the label hangs. `end` keeps the last one on stage. */
   anchor: "start" | "end";
-  /** Build step that reveals this milestone. */
   step: number;
-  /** Stagger position within its step. */
   order: number;
 }
 
-/**
- * The January cluster puts three dates inside 90px of axis, so each gets its
- * own lane: the repository high above, the quick task low above, the session
- * below. Each label hangs to one side of its stem, so no stem crosses a label.
- */
-/**
- * Sources: empty repository from Eva git history (11 January 2026); first
- * session and first quick task from Eva's own records of the first created.
- */
-// One row per milestone reads as the table it is.
 // prettier-ignore
 const MILESTONES: readonly Milestone[] = [
   { day: 0, label: "Empty repository", date: "11 January", above: true, lane: 1, anchor: "start", step: 0, order: 0 },
@@ -65,19 +39,14 @@ function xFor(day: number): number {
   return INSET + (day / SPAN_DAYS) * (TRACK_W - INSET * 2);
 }
 
-/** Axis to the near edge of a label in `lane`. */
 function gapFor(lane: number): number {
   return STEM_BASE + lane * (LABEL_H + LANE_GAP);
 }
 
-/** First day of each month from February, as days after 11 January. */
 const MONTH_STARTS = [21, 49, 80, 110, 141, 171, 202, 233, 263, 294];
-/** Where the lit run rests on each step: 11 Jan, 1 Feb, August, then the end. */
 const STOPS = [0, 21, 202, SPAN_DAYS].map((day) => xFor(day) / TRACK_W);
-/** The light travels first; each milestone lands as it arrives. */
 const LAND = 0.3;
 const ORDER_GAP = 0.25;
-/** The last milestone is still going on, so its dot keeps breathing. */
 const LIVE_LABEL = "Eva starts opening its own work";
 
 function MilestoneMark({ item }: { item: Milestone }) {
@@ -95,10 +64,7 @@ function MilestoneMark({ item }: { item: Milestone }) {
         transformStyle: "preserve-3d",
       }}
     >
-      {/* Stem, dot and label ride together in front of the axis, so they
-          slide along it as the camera dollies but never part from each other. */}
       <Layer depth={DOT_DEPTH}>
-        {/* Grows out of the axis towards its label. */}
         <m.div
           aria-hidden
           className={cn(

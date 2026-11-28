@@ -3,12 +3,8 @@ import { m } from "motion/react";
 import { BRAND, DUR, EASE } from "../../_components/motion";
 import { moA3InOutAt } from "./MoA3Timing";
 
-/** The weekly sweep, the third beat of the running-costs slide (c07). */
-
-/** Matches the other lifecycle beats, so the labels sit on one line. */
 const VISUAL_H = 160;
 
-/** Leftovers around the dial, cleared as the beam passes each one. */
 const LEFTOVERS = [40, 110, 190, 260, 320];
 const SWEEP = 2;
 
@@ -66,7 +62,6 @@ export function MoA3WeeklySweep({ live }: { live: boolean }) {
             transition={{
               duration: DUR.base,
               ease: EASE.out,
-              // In step with the beam's eased turn: it lingers at the ends.
               delay: live ? 0.2 + moA3InOutAt(angle / 360) * SWEEP : 0,
             }}
           />

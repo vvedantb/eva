@@ -10,11 +10,8 @@ export const FRI2_CHIP_STAGGER = 0.09;
 interface Fri2ChipProps {
   icon: Icon;
   label: string;
-  /** Lit chips carry the brand wash; unlit ones sit back in the surface. */
   lit: boolean;
-  /** Position in the run, which sets the chip's share of the stagger. */
   index?: number;
-  /** Seconds after `lit` before this chip lights. Overrides the index stagger. */
   delay?: number;
   className?: string;
 }

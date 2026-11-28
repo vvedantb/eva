@@ -20,7 +20,6 @@ import { COMPOSER_CHIP_CLASS } from "./composerChip";
  */
 export function ViewPrsChip({ owner }: { owner: PrOwnerRef }) {
   const enabled = useViewPrsChip();
-  // Flag off: no subscription at all.
   const prs = useOwnerPullRequests(enabled ? owner : undefined);
   if (prs.length === 0) return null;
 

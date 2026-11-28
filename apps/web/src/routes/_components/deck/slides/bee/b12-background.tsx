@@ -37,7 +37,6 @@ interface Chore {
   tilt: number;
 }
 
-/** What a hands-on agent asks of you before and during the work. */
 const CHORES: readonly Chore[] = [
   { icon: IconCpu, label: "Choose the model", tilt: 1 },
   { icon: IconGauge, label: "Set the reasoning effort", tilt: -1.5 },
@@ -54,7 +53,6 @@ interface Update {
   text: string;
 }
 
-/** One message from you; the rest are updates, as a co-worker would send. Example thread. */
 const THREAD: readonly Update[] = [
   { from: "you", text: "Ship the referral export fix" },
   { from: "bot", text: "On it" },
@@ -176,7 +174,6 @@ export function BeeBackground() {
         </div>
       </Camera>
 
-      {/* Bee is that idea, for meetings. */}
       <m.div
         className="mt-6 flex items-center justify-center gap-4"
         initial={{ opacity: 0, y: 16 }}
@@ -192,7 +189,6 @@ export function BeeBackground() {
         </span>
       </m.div>
 
-      {/* The same lesson, applied back to Eva. */}
       <m.div
         className="mt-4 flex items-center justify-center gap-4"
         initial={{ opacity: 0, y: 16 }}

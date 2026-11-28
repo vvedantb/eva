@@ -25,18 +25,12 @@ import { useScheme } from "@/ui/theme";
 /** What a held message offers: each action is there only when it applies. */
 export type HeldMessage = {
   text: string;
-  /** The message's web permalink. */
   link: string;
-  /** Agent replies: the viewer's thumbs and the setter (`null` clears). */
   rating?: { sentiment: Sentiment | undefined; onRate: (sentiment: Sentiment | null) => void };
   onFork?: () => void;
-  /** A failed turn: re-sends the prompt it answered. */
   onRetry?: () => void;
-  /** A session reply that changed code: Diff this turn and Restore. */
   turn?: TurnChangesTarget;
-  /** An Eva reply: opens it as selectable text, to quote a part of it. */
   onSelectText?: () => void;
-  /** The coordinator chat: opens this message's reply thread. */
   onReply?: () => void;
 };
 
@@ -84,7 +78,6 @@ export function useMessageMenu(onRestore: (turn: TurnChangesTarget) => void): (m
       });
       actions.push({
         key: "restore",
-        // Dimmed while the sandbox sleeps; the short label, as the card shows one line.
         label: restoreTurnLabel(true),
         icon: IconArrowBackUp,
         disabled: !turn.sandboxRunning,

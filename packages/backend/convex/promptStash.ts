@@ -3,7 +3,6 @@ import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { promptStashFields } from "./validators";
 import { resolveStorageEntries } from "./_chat/storageUrls";
 
-/** Max stashed prompts per user per repo; oldest (`_creationTime`) is evicted. */
 const MAX_STASHES_PER_REPO = 20;
 
 const promptStashAttachmentValidator = v.object({
@@ -17,15 +16,6 @@ const promptStashListItemValidator = v.object({
   ...promptStashFields,
   attachments: v.array(promptStashAttachmentValidator),
 });
-
-/**
- * Prompt stash (⌘S) — frozen composer snapshots, not live drafts.
- *
- * Drafts (`drafts` table): one autosaved WIP per chat/comment surface.
- * Stashes (this table): many explicit queue entries per user+repo; restore
- * appends into the current composer and consumes the entry. See
- * `internal/docs/prompt-stash-vs-drafts.md`.
- */
 
 /** Saves a composer snapshot; evicts the oldest row when over the per-repo cap. */
 export const add = authMutation({
@@ -101,7 +91,6 @@ export const listForRepo = authQuery({
           (id) => ctx.storage.getMetadata(id),
           row.attachmentStorageIds,
         );
-        // Deleted blobs resolve to a null url and are dropped from the list.
         const attachments = entries.flatMap((entry) =>
           entry.url === null
             ? []

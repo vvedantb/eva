@@ -25,12 +25,8 @@ const accountListItemValidator = v.object({
   label: v.string(),
   credentials: v.array(credentialValidator),
   shared: v.boolean(),
-  // Owned by the pool owner this list was built for (the viewer, or the task /
-  // session owner), as opposed to a teammate's shared account. Sharing is not
-  // enough to tell them apart: an own account can be shared too.
   isOwn: v.boolean(),
   lastUsedAt: v.optional(v.number()),
-  // First name of whoever last ran on it, omitted when that was the owner.
   lastUsedByName: v.optional(v.string()),
   updatedAt: v.number(),
 });

@@ -25,8 +25,6 @@ export const Route = createFileRoute("/dev/preview-parity")({
   component: PreviewParity,
 });
 
-// The script reads Eva's resolved tokens through the same function Eva sends
-// to an embedded preview, so the fallback palette is measured, not copied.
 Reflect.set(window, "evaPreviewParity", { readTheme: readPreviewToolbarTheme });
 
 const NOW = Date.now();
@@ -99,7 +97,6 @@ function PreviewParity() {
   const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
   return (
     <div className="min-h-screen p-6">
-      {/* The drawer floats over an iframe's box; this one stays empty. */}
       <iframe
         ref={setFrame}
         title="Preview"

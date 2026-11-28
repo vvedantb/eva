@@ -15,20 +15,12 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/** One per build step, in the order to do them. */
 const ACTIONS: readonly string[] = [
   "Raise one quick task",
   "Open the inbox",
   "Review what is waiting",
 ];
 
-/**
- * A slow brand wash drifting behind the list. No blur filter: the gradient's
- * own stops carry the softness, and a translating layer with a live blur is the
- * expensive path on a projector. The layer is far larger than the stage on
- * purpose, so where each circle reaches zero alpha is off the slide rather than
- * showing as an edge across it.
- */
 function BrandSweep() {
   return (
     <m.div
@@ -48,7 +40,6 @@ function BrandSweep() {
   );
 }
 
-/** One action: the number rolls in, a short rule draws, then the words rise. */
 function Action({ action, index }: { action: string; index: number }) {
   const step = useDeckStep();
   const at = index + 1;
@@ -91,8 +82,6 @@ function Action({ action, index }: { action: string; index: number }) {
 export function FridayClose() {
   return (
     <Shell className="relative justify-center py-14">
-      {/* No clip: the wash runs on past the canvas, so a light stage shows no
-          box edge around the slide. */}
       <BrandSweep />
 
       <div className="relative">

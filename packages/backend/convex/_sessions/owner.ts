@@ -56,7 +56,6 @@ export function standaloneOnly(
   return q.eq(q.field("owner.kind"), "standalone");
 }
 
-/** A task: it always works on its own session. */
 type WorkTask = Pick<Doc<"agentTasks">, "_id">;
 
 /** Anything that works on an owned session: a task, or a loaded owner. */
@@ -125,12 +124,7 @@ export function isReadOnlySandboxOwner(owner: SessionOwner): boolean {
 
 /** How a session's sandbox boots, by its owner. */
 export interface SessionSandboxProfile {
-  /** vCPUs of a new sandbox; undefined takes the app's size setting. */
   vcpus: number | undefined;
-  /**
-   * Installs dependencies and runs the startup and background commands and
-   * the dev server (the Preview).
-   */
   runsServices: boolean;
 }
 
@@ -202,8 +196,7 @@ export async function findOwnedSession(
     case "task":
       return await db
         .query("sessions")
-        // A detached (soft-deleted) session no longer belongs to the task.
-        .withIndex("by_owner_task", (q) =>
+            .withIndex("by_owner_task", (q) =>
           q.eq("owner.taskId", owner.taskId).eq("deletedAt", undefined),
         )
         .unique();

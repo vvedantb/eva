@@ -11,13 +11,10 @@ import { useDeckStep } from "../../_components/DeckPrimitives";
 const DIAL_SIZE = 128;
 const DIAL_RADIUS = 54;
 const DIAL_CIRCUMFERENCE = 2 * Math.PI * DIAL_RADIUS;
-/** Twelve clock ticks just outside the ring, so the dial reads as time. */
 const TICKS = Array.from({ length: 12 }, (_, index) => index * 30);
-/** The dial lands, holds for a beat, then the ring drains. */
 const DRAIN_LEAD = 0.55;
 const DRAIN = 1.8;
 const ARC_TOTAL = DRAIN_LEAD + DRAIN;
-/** Arm (draw to full), hold, then drain, as fractions of the arc's one tween. */
 const ARC_TIMES = [
   0,
   (DRAIN_LEAD - 0.12) / ARC_TOTAL,
@@ -47,7 +44,6 @@ export function AnnBExpiryDial({
 }: AnnBExpiryDialProps) {
   const current = useDeckStep();
   const running = current >= step;
-  // Once the next beat arrives, the lifetimes step back behind the gates.
   const receded = current > step;
   const delay = index * 0.14;
   const drainAt = delay + DRAIN_LEAD;
@@ -126,7 +122,6 @@ export function AnnBExpiryDial({
           />
         </svg>
 
-        {/* The lit tip: a dot parked at twelve o'clock, turned with the arc's end. */}
         <m.div
           aria-hidden
           className="absolute inset-0"

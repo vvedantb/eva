@@ -3,11 +3,8 @@ import { cn } from "@eva/ui";
 import { useDeckTheme } from "../deckContext";
 
 export interface GridBackdropProps {
-  /** `grid`: a floor of lines receding in perspective. `dots`: a flat drifting dot field. */
   variant?: "grid" | "dots";
-  /** Cell size in pixels. */
   cell?: number;
-  /** Seconds for the pattern to drift one cell. Larger is calmer. */
   period?: number;
   className?: string;
 }

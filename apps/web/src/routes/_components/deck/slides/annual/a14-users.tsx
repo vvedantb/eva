@@ -25,7 +25,6 @@ interface Change {
   after: string;
 }
 
-/** Top to bottom, in the order they were decided. */
 const CHANGES: Change[] = [
   { before: "Reviews, diffs, meters", after: "The conversation and a preview" },
   { before: "A list of twenty models", after: "One slider" },
@@ -39,7 +38,6 @@ const CHIPS: readonly { icon: Icon; label: string }[] = [
   { icon: IconRouteOff, label: "Dead-end pages removed" },
 ];
 
-/** The before phrases rise first, then each is struck out and replaced in turn. */
 const ROW_GAP = 0.1;
 const STRIKE_START = 0.75;
 const STRIKE_GAP = 0.2;
@@ -70,7 +68,6 @@ function ChangeRow({ before, after, index }: Change & { index: number }) {
       </m.div>
 
       <div className="flex items-center gap-4">
-        {/* The arrow draws itself from the struck phrase towards its replacement. */}
         <span className="relative flex h-5 w-7 items-center">
           <m.span
             aria-hidden

@@ -4,7 +4,6 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import Svg, { Rect } from "react-native-svg";
 import { useScheme } from "@/ui/theme";
 
-/** Tailwind `orange-500`, the web urgent square. */
 const URGENT = "#f97316";
 
 const BARS = [

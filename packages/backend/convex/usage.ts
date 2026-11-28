@@ -6,7 +6,6 @@ import {
   summariseUsage,
 } from "./_logs/usageSummary";
 
-/** Rows read per summary; beyond this the response is flagged `truncated`. */
 const MAX_ROWS = 5000;
 
 const usageTotalsFields = {

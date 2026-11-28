@@ -12,18 +12,9 @@ import {
   requestRun,
 } from "./_ave/threads";
 
-/**
- * Manager Ave's public API: one live thread per user, no repo, no sandbox, no
- * model choice. The run itself is `mcp/aveRun.ts`; everything here only reads
- * the thread or asks for a run through `requestRun`.
- */
-
 const MAX_MESSAGE_CHARS = 20_000;
-/** Page path, title and zone are short; cap them so a bad client cannot bloat context. */
 const MAX_PAGE_FIELD_CHARS = 500;
-/** A selection is quoted to Ave as is; a few paragraphs is plenty. */
 const MAX_SELECTION_CHARS = 4_000;
-/** The chat shows the recent conversation; older rows stay in the table. */
 const LIST_LIMIT = 200;
 
 export const getThread = authQuery({
@@ -73,7 +64,6 @@ export const listMessages = authQuery({
       .withIndex("by_thread", (q) => q.eq("threadId", thread._id))
       .order("desc")
       .take(LIST_LIMIT);
-    // Replay payloads are model context, not chat content — never ship them.
     return recent
       .reverse()
       .map((row) => ({ ...row, modelMessages: undefined }));
@@ -120,7 +110,6 @@ export const send = authMutation({
     const page = args.pageContext;
     const path = page.path.slice(0, MAX_PAGE_FIELD_CHARS);
     const selection = page.selection?.trim().slice(0, MAX_SELECTION_CHARS);
-    // Resolved now, not at run time: Ave should see the page as the user saw it.
     const entity = await resolvePageEntity(ctx.db, ctx.userId, path);
     const thread = await getOrCreateLiveThread(ctx, ctx.userId);
     await ctx.db.insert("aveMessages", {

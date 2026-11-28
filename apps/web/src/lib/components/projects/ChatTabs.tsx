@@ -16,7 +16,6 @@ export function ChatTabStrip({
   className,
   children,
 }: {
-  /** The tab list's accessible name. */
   label: string;
   className?: string;
   children: ReactNode;
@@ -24,8 +23,6 @@ export function ChatTabStrip({
   return (
     <div
       className={cn(
-        // min-w-0: in a narrow chat column the row scrolls instead of
-        // spilling under the panel beside it.
         "flex min-w-0 max-w-full shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin",
         className,
       )}
@@ -57,12 +54,10 @@ export function ChatTab({
   selected: boolean;
   running: boolean;
   label: ReactNode;
-  /** Native tooltip on the tab (a full title the pill truncates). */
   hint?: string;
   onSelect: () => void;
   onClose?: () => void;
   closeLabel?: string;
-  /** A tighter label cap, for tab rows in a narrow column (project task tabs). */
   narrow?: boolean;
 }) {
   return (
@@ -79,12 +74,9 @@ export function ChatTab({
         role="tab"
         aria-selected={selected}
         title={hint}
-        // The selected tab scrolls into view (a tab just opened at the end
-        // of a long row).
         ref={
           selected
             ? (el) => {
-                // The whole pill (label and ✕), not just the label button.
                 el?.parentElement?.scrollIntoView({
                   block: "nearest",
                   inline: "nearest",

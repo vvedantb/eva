@@ -336,13 +336,11 @@ export async function syncOwnerPrSummary(
   owner: PrOwnerRef,
 ): Promise<PrSummary> {
   const rows = await listOwnerPullRequests(ctx.db, owner);
-  // A task also counts its linked repos' PRs (`summariseTaskPullRequests`).
   const linked =
     owner.kind === "task"
       ? await listTaskLinkedPullRequests(ctx.db, owner.taskId)
       : [];
   const summary = summariseTaskPullRequests(rows, linked);
-  // A linked repo's PR on a task's session moves the task's summary too.
   if (owner.kind === "session") {
     const session = await ctx.db.get(owner.sessionId);
     const taskId = session ? sessionOwnerTaskId(session) : undefined;
@@ -368,7 +366,6 @@ export async function syncOwnerPrSummary(
     await ctx.db.patch(owner.sessionId, summary);
   } else if (owner.kind === "task") {
     await ctx.db.patch(owner.taskId, summary);
-    // A merged PR ships the task (`shippedAt`); a reopened one undoes it.
     await reconcileTaskCloseTimes(ctx, owner.taskId);
   } else {
     await ctx.db.patch(owner.projectId, summary);
@@ -420,14 +417,12 @@ export async function recordPullRequest(
       state: args.state,
       primary,
       origin: args.origin === "eva" ? "eva" : existing.origin,
-      // A run or linked-repo id the webhook could not know about.
       owner: sameOwner(ownerRef(existing.owner), args.owner)
         ? args.owner
         : existing.owner,
       headBranch: args.headBranch ?? existing.headBranch,
       baseBranch: args.baseBranch ?? existing.baseBranch,
       title: args.title ?? existing.title,
-      // A merged or closed PR has nothing left to watch.
       ...(isLivePrState(args.state) ? {} : { watch: undefined }),
       updatedAt: now,
     });
@@ -471,7 +466,6 @@ export async function setPullRequestState(
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.headBranch !== undefined ? { headBranch: patch.headBranch } : {}),
     ...(patch.baseBranch !== undefined ? { baseBranch: patch.baseBranch } : {}),
-    // A merged or closed PR has nothing left to watch.
     ...(isLivePrState(patch.state) ? {} : { watch: undefined }),
     updatedAt: Date.now(),
   });
@@ -577,8 +571,6 @@ export async function applyPrLifecycleTransition(
   owner: PrOwnerRef,
   transition: PrLifecycleTransition,
 ): Promise<void> {
-  // A multi-repo task's linked repos' PRs (on its session) follow the task
-  // with its own: no repo's PR is held back as a draft.
   const linkedSession =
     owner.kind === "task"
       ? await findOwnedSession(ctx.db, { kind: "task", taskId: owner.taskId })
@@ -622,13 +614,6 @@ export async function clearArchivedPrStates(
   }
 }
 
-/**
- * Eva branches name their owner: `eva/session-<id>`, `eva/task-<id>`,
- * `eva/project-<id>[-vN]`. Anything after the id (`-<slug>`) marks a side
- * branch the agent opened its own PR from, which still belongs to that owner.
- * Convex ids never contain a hyphen, so the first hyphen ends the id; the
- * caller still validates it with `normalizeId`.
- */
 const EVA_OWNER_BRANCH = new RegExp(
   `^${EVA_BRANCH_PREFIX}(session|task|project)-([^-/]+)(-.+)?$`,
 );
@@ -715,7 +700,6 @@ export async function resolvePrOwnerFromBranch(
     const task = taskId ? await db.get(taskId) : null;
     if (!task || task.repoId === undefined) return null;
     if (!(await repoMatches(db, task.repoId, repo))) return null;
-    // Every task (a quick task or a project's child task) owns its branch.
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
@@ -727,8 +711,6 @@ export async function resolvePrOwnerFromBranch(
   const project = projectId ? await db.get(projectId) : null;
   if (!project) return null;
   if (!(await repoMatches(db, project.repoId, repo))) return null;
-  // A project task converted from the old project branch kept that branch
-  // (`agentTasks.branchName`): a new PR there is the task's own.
   const keeper = (
     await db
       .query("agentTasks")

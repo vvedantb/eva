@@ -13,19 +13,10 @@ import type { JsonObject, JsonValue } from "../types.js";
 import { log } from "../utils.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
-/**
- * The warm daemon's view of Claude's native `/goal`, mirrored onto the chat
- * doc through UPDATE_GOAL_MUTATION. Starts unknown (`undefined`) on every
- * daemon boot: a goal stored before a restart stays shown until the next goal
- * frame, and `/goal clear` replies "No goal set", which then still writes the
- * clear (an in-memory `null` here would dedupe it away).
- */
 let goal: ClaudeGoal | null | undefined;
 let modelWorkedThisTurn = false;
-/** Size of the SDK's latest `background_tasks_changed` roster (agents + shells). */
 let backgroundTaskCount = 0;
 
-/** Writes run one at a time, so a quick set → complete cannot land reversed. */
 let writeChain: Promise<void> = Promise.resolve();
 
 function goalJson(value: ClaudeGoal | null): JsonValue {
@@ -52,7 +43,6 @@ function setGoal(next: ClaudeGoal | null): void {
       await callConvexWithRetry("mutation", mutation, args);
     })
     .catch(() => {
-      /* best-effort: the banner is advisory, the turn must not depend on it */
     });
 }
 
@@ -68,7 +58,6 @@ export function trackClaudeGoalFrame(message: JsonObject): void {
   if (isGoalWorkFrame(message)) modelWorkedThisTurn = true;
   const next = nextClaudeGoal(goal ?? null, message);
   if (next !== undefined) setGoal(next);
-  // A zero-work task-notification result is a stream boundary, not a turn end.
   if (message.type !== "result" || isZeroWorkTaskNotificationResult(message)) {
     return;
   }
@@ -78,7 +67,6 @@ export function trackClaudeGoalFrame(message: JsonObject): void {
     endedCleanly: isCleanTurnEnd(message),
     backgroundWorkRunning: backgroundTaskCount > 0,
   });
-  // Unchanged keeps an unknown (post-boot) goal unknown.
   if (after !== current) setGoal(after);
   modelWorkedThisTurn = false;
 }

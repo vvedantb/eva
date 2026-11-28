@@ -1,10 +1,6 @@
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 
-// A chat turn's checkpoints, web and phone: the commits before and after an
-// agent reply that changed code, its "Diff this turn", and "Restore to before
-// this turn" (a new commit on the session branch; nothing is rewritten).
-
 /** The commits around a turn, when it changed code. */
 export type TurnCheckpoint = { beforeSha: string; afterSha: string };
 

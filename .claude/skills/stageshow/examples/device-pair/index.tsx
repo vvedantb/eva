@@ -1,13 +1,6 @@
 import { Badge, Bar, Chart, Icon, LockScreen, Notification, Phone, Stage, Text, Window, WALLPAPER } from '../../kit'
 import './payments.css'
 
-// "Get paid anywhere": a device pair. The dashboard is pinned top-left and
-// runs off the bottom; the phone straddles its right edge over empty margin
-// and placeholder rows, so the revenue figure and its chart stay clear. Real words:
-// Revenue, the total, the change, and the notification. Narrow, the sidebar
-// goes and both devices keep their true size: the window runs off the right,
-// the phone stands a gutter in from it, whole across, its notification whole.
-
 const REVENUE = [18, 22, 20, 27, 25, 31, 29, 36, 34, 41, 39, 47]
 
 const ROWS = [
@@ -72,7 +65,6 @@ export default function PaymentsStatic() {
 
           <Phone width={236} frame="pro" dark wallpaper={WALL} className="ps-phone">
             <LockScreen size="satellite" stack="top">
-              {/* The product's own app sends it: the dashboard's bolt, not Mail */}
               <Notification icon={<Icon name="bolt" filled size={20} />} title="Payment received" body="$249.00 from Oak & Ivy" />
             </LockScreen>
           </Phone>

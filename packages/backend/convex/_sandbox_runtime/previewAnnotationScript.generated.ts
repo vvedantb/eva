@@ -463,7 +463,7 @@ svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; s
   }
   function pathOnly(path) {
     const pathname = path.split(/[?#]/)[0] ?? "/";
-    return pathname.length > 1 ? pathname.replace(/\\/+\$/, "") : pathname;
+    return pathname.length > 1 ? pathname.replace(/\\/+$/, "") : pathname;
   }
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -1085,7 +1085,7 @@ svg.mark { width: 44px; height: 44px; }
     function normalizeToolName(value) {
       if (typeof value !== "string") return null;
       const name = value.trim();
-      return /^[A-Za-z0-9_.-]{1,128}\$/.test(name) ? name : null;
+      return /^[A-Za-z0-9_.-]{1,128}$/.test(name) ? name : null;
     }
     function modelContextOn(host) {
       const value = Reflect.get(host, "modelContext");
@@ -1238,7 +1238,7 @@ svg.mark { width: 44px; height: 44px; }
       if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
         return CSS.escape(value);
       }
-      return value.replace(/[^a-zA-Z0-9_-]/g, "\\\\\$&");
+      return value.replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
     }
     function generateSelector(element) {
       const parts = [];
@@ -1283,7 +1283,7 @@ svg.mark { width: 44px; height: 44px; }
       for (let i = 0; i < keys.length; i++) {
         const key = keys[i];
         if (!key) continue;
-        if (!key.startsWith("__reactFiber\$") && !key.startsWith("__reactInternalInstance\$")) {
+        if (!key.startsWith("__reactFiber$") && !key.startsWith("__reactInternalInstance$")) {
           continue;
         }
         const value = Reflect.get(element, key);
@@ -1308,7 +1308,7 @@ svg.mark { width: 44px; height: 44px; }
       return names;
     }
     function stripClassHash(className) {
-      return className.replace(/_[a-zA-Z0-9]{5,}\$/, "");
+      return className.replace(/_[a-zA-Z0-9]{5,}$/, "");
     }
     function firstMeaningfulClass(element) {
       for (let i = 0; i < element.classList.length; i++) {

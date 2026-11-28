@@ -1,13 +1,3 @@
-/**
- * Marker-delimited blocks inside a pull request body.
- *
- * `prBody.ts` owns the static sections (Task, Change Requests, Related PRs) and
- * the Eva footer, while generated blocks such as the reviewer description are
- * rewritten on every push. Each generated block sits between its own comment
- * markers, so rewriting one never disturbs the rest and a hand-edited body
- * keeps its own prose.
- */
-
 const FOOTER_SEPARATOR = "\n---\n";
 
 /**

@@ -29,10 +29,6 @@ export const Route = createFileRoute("/slides/")({
   component: SlidesIndexPage,
 });
 
-/**
- * A thumbnail for a deck on our own engine: its first slide, at rest, on that
- * slide's own surface, so a light deck previews light.
- */
 function deckPreview(
   slides: readonly DeckSlide[],
   brand: DeckBrand = "eva",

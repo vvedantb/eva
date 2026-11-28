@@ -1,7 +1,5 @@
 import tailwindcssAnimate from "tailwindcss-animate";
 
-/** @type {import('tailwindcss').Config} */
-
 function c(name) {
   return `rgb(var(--${name}) / <alpha-value>)`;
 }
@@ -37,7 +35,6 @@ const config = {
           DEFAULT: c("accent"),
           foreground: c("accent-foreground"),
         },
-        // Shared @eva/ui classes say `accent-soft` for the soft fill.
         "accent-soft": {
           DEFAULT: c("accent"),
           foreground: c("accent-foreground"),

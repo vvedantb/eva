@@ -18,7 +18,6 @@ interface DeckChromeProps {
   total: number;
   theme: DeckTheme;
   share: LiveShare;
-  /** The deck's own route path, used to build the join link. */
   basePath: string;
   onToggleOutline: () => void;
   onOpenPresenter: () => void;
@@ -37,9 +36,6 @@ export function DeckChrome({
   const pct = `${(slide / total) * 100}%`;
   const tone = DECK_TONES[theme];
   const idle = share.sessionState === "none";
-  // 40×40 is the comfortable-tap floor, so the box is the target rather than a
-  // 30px icon pad. `motion-press` names the properties it animates (transform,
-  // scale and colour) — never `all`.
   const control = cn(
     "pointer-events-auto absolute bottom-2 inline-flex size-10 items-center justify-center rounded-[12px]",
     "motion-press active:scale-[0.96]",
@@ -55,7 +51,6 @@ export function DeckChrome({
           animate={{ width: pct }}
           transition={tokenTransition.slow}
         >
-          {/* One glint along the filled bar per slide change, keyed to remount. */}
           <m.span
             key={slide}
             aria-hidden
@@ -118,7 +113,6 @@ export function DeckChrome({
             key="hint"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            // Leaving is quieter than arriving: half the travel, half the time.
             exit={{ opacity: 0, y: 4, transition: tokenTransition.fast }}
             transition={tokenTransition.slow}
             className={cn(

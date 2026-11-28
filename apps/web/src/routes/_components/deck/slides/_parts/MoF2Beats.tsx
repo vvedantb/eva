@@ -27,9 +27,7 @@ export function MoF2Beat({
   children,
 }: {
   shown: boolean;
-  /** Seconds before the card rises, once shown. */
   delay?: number;
-  /** The step the card lands on, which cues its sheen. */
   step: number;
   children: ReactNode;
 }) {

@@ -36,7 +36,6 @@ import { Pressable, Text, View, type TextInput } from "react-native";
 import type { Chat } from "@/chat/useChatModelPick";
 import { useScheme } from "@/ui/theme";
 
-/** A plan longer than this folds to a preview, as the web card (900 characters or 20 lines). */
 const FOLD_CHARS = 900;
 const FOLD_LINES = 20;
 
@@ -69,14 +68,12 @@ export function useProposedPlans(chat: Chat | null | undefined, planContent: str
 
   if (!chat || !sessionId || !plans || plans.length === 0) return () => null;
   const canAct = chat.canReply;
-  // An edit saved from a card: the session's plan, when it is no card's own text (as the web `matchingProposedPlan` finds none).
   const saved = planContent?.trim() ?? "";
   const edited = saved !== "" && !plans.some((plan) => plan.planMarkdown.trim() === saved) ? planContent : undefined;
   const newest = plans.reduce((latest, plan) => (plan.createdAt > latest.createdAt ? plan : latest));
   const markdownOf = (plan: ProposedPlanRow) => (edited !== undefined && plan._id === newest._id ? edited : plan.planMarkdown);
 
   const implement = (plan: ProposedPlanRow) => {
-    // The send marks the plan implemented, as the web's (`sourceProposedPlanId`).
     send({ target: chat.target, message: buildPlanImplementationPrompt(markdownOf(plan)), sourceProposedPlanId: plan._id })
       .catch(() => toast.error("Couldn't send your message"));
   };
@@ -97,7 +94,6 @@ export function useProposedPlans(chat: Chat | null | undefined, planContent: str
       .catch((cause: Error) => toast.error(cause.message || "Couldn't start new session"));
   };
 
-  // The web `savePlan`: true once saved, so the editor closes; it stays open on a failure.
   const savePlan = async (markdown: string) => {
     setSavingPlan(true);
     const saved = await updatePlanContent({ id: sessionId, planContent: markdown }).then(
@@ -112,7 +108,6 @@ export function useProposedPlans(chat: Chat | null | undefined, planContent: str
 
   const saveAsDocument = () => {
     setSavingDoc(true);
-    // Chained, not try / finally, which React Compiler cannot compile.
     createDoc({ sessionId })
       .then((docId: Id<"docs">) => router.push({ pathname: "/doc/[docId]", params: { docId, repo: chat.repoId } }))
       .catch(() => toast.error("Couldn't save document"))
@@ -140,14 +135,6 @@ export function useProposedPlans(chat: Chat | null | undefined, planContent: str
   };
 }
 
-/**
- * The web `ProposedPlanCard`: a "Plan" (or "Implemented") badge, the plan's
- * title, Copy and Download; the plan, folded to a preview with Expand plan
- * when long; then Edit, Save as Document, Implement (green) and Implement in
- * new session. Download shares the plan as its web `.md` file through the
- * phone's share sheet (Save to Files, Drive, a chat). Edit opens the plan's
- * markdown in a sheet (the web edits it in place in its rich editor).
- */
 function ProposedPlanCard({
   planMarkdown,
   implemented,
@@ -163,7 +150,6 @@ function ProposedPlanCard({
   implemented: boolean;
   onImplement?: () => void;
   onImplementInNewSession?: () => void;
-  /** Saves the edited plan; true once saved. Without it there is no Edit. */
   onSave?: (markdown: string) => Promise<boolean>;
   savingPlan: boolean;
   onSaveAsDocument?: () => void;
@@ -172,7 +158,6 @@ function ProposedPlanCard({
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
-  // The web `text-success-foreground`, which the phone theme does not carry.
   const onSuccess = palette.successForeground[scheme === "light" ? "light" : "dark"];
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -246,7 +231,6 @@ function ProposedPlanCard({
             </Button>
           ) : null}
           {onImplement ? (
-            // The web `bg-success text-success-foreground` button.
             <Button size="sm" fullWidth={false} leftIcon={<IconCode size={14} color={onSuccess} />} style={{ backgroundColor: theme.success, borderColor: theme.success }} onPress={onImplement}>
               <Text className="font-instrument-sans-medium text-sm" style={{ color: onSuccess, fontWeight: "500" }}>
                 Implement
@@ -267,7 +251,6 @@ function ProposedPlanCard({
   );
 }
 
-/** The card's 44 icon buttons: Copy and Download (the web `size-8` ghost buttons). */
 function PlanIconButton({
   label,
   icon: Icon,
@@ -291,10 +274,6 @@ function PlanIconButton({
   );
 }
 
-/**
- * The web Download: the plan as its `.md` file (`buildProposedPlanMarkdownFilename`,
- * the exported text), written to the cache and handed to the share sheet.
- */
 async function sharePlanFile(planMarkdown: string) {
   if (!(await Sharing.isAvailableAsync())) throw new Error("Sharing is not available");
   const file = new File(Paths.cache, buildProposedPlanMarkdownFilename(planMarkdown));
@@ -303,10 +282,6 @@ async function sharePlanFile(planMarkdown: string) {
   await Sharing.shareAsync(file.uri, { mimeType: "text/markdown", UTI: "net.daringfireball.markdown", dialogTitle: file.name });
 }
 
-/**
- * The web Edit, as the phone's PR description editor: the plan's markdown in
- * a sheet, Cancel and Save. Save keeps the sheet open until the plan is saved.
- */
 function PlanEditSheet({
   open,
   onOpenChange,

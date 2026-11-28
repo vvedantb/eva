@@ -1,12 +1,3 @@
-// Deterministic load-test seeder. Run only by `loadtest/run.ts` against a
-// throwaway local backend; every entry point refuses to run unless the
-// deployment has EVA_LOAD_TEST=1.
-//
-// Scale model (scale = N, documented in loadtest/README.md):
-// - Per-team, per-repo and per-user fan-outs are `base × N`.
-// - Per-entity fan-outs (messages per chat, runs per task, comments per doc)
-//   are `base × N` for the focal entity only, and stay at base elsewhere.
-//   Scaling every entity's children would grow as N² and test nothing real.
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
@@ -36,7 +27,6 @@ export const SEED_UNITS = {
   routedThreads: 10,
 } as const;
 
-/** Upper bound of documents one unit inserts, to size chunks. */
 const DOCS_PER_UNIT: Record<SeedChunkKind, number> = {
   teammates: 2,
   shellRepos: 1,
@@ -45,8 +35,6 @@ const DOCS_PER_UNIT: Record<SeedChunkKind, number> = {
   quickTasks: 8,
   docs: 1,
   automations: 2,
-  // One document, but about 13 KB with its activity log: 4 keeps a chunk of
-  // 250 messages near 3 MiB, under the 16 MiB a mutation may write.
   focalMessages: 4,
   focalTaskTimeline: 2,
   focalDocComments: 1,
@@ -102,7 +90,6 @@ function assertLoadTestDeployment() {
   }
 }
 
-/** Realistic-size text so read bytes reflect production rows. */
 function filler(seed: number, length: number): string {
   const words = [
     "refactor", "sandbox", "convex", "query", "index", "session", "preview",
@@ -118,22 +105,10 @@ function filler(seed: number, length: number): string {
   return out.join(" ").slice(0, length);
 }
 
-/**
- * Activity-log sizes (bytes) for the focal chat's assistant messages, cycled.
- * Mean 25.6 KB, matched to production on 2026-11-09 (600 newest messages:
- * median 8.8 KB, p90 84 KB, p99 294 KB; the heaviest chat averaged 26 KB per
- * assistant message). The heavy tail matters: a few turns hold most bytes.
- */
 const ACTIVITY_LOG_BYTES = [
   2_000, 4_000, 6_000, 8_000, 9_000, 11_000, 16_000, 30_000, 60_000, 110_000,
 ] as const;
 
-/**
- * A step-array activity log of about `bytes`, shaped like the callback
- * parsers' output (`callback-src/parse/toolSteps.ts`). About half the bytes
- * are expanded-only detail (`output`, `edits`), which
- * `trimActivityLogForTranscript` drops, as on real transcripts.
- */
 function activityLog(seed: number, bytes: number): string {
   const steps: Array<string> = [];
   let size = 2;
@@ -169,7 +144,6 @@ function activityLog(seed: number, bytes: number): string {
   return `[${steps.join(",")}]`;
 }
 
-/** Spread timestamps across the last 60 days, newest last. */
 function ago(now: number, i: number, total: number): number {
   return now - Math.floor(((total - i) / Math.max(total, 1)) * 60 * DAY);
 }
@@ -344,7 +318,6 @@ export const plan = internalQuery({
     SEED_KINDS.map((kind) => ({
       kind,
       unitsPerScale: SEED_UNITS[kind],
-      // Keep each mutation well under the 8,192 documents-written limit.
       unitsPerChunk: Math.max(1, Math.floor(1000 / DOCS_PER_UNIT[kind])),
     })),
 });
@@ -439,8 +412,6 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
 
   sessions: async (db, refs, i, total) => {
     const { now, userId } = refs;
-    // Every 10th session lives in a sibling repo and links the focal repo,
-    // which exercises the `sessionRepos.by_repo` path in sessions.list.
     const linked = i % 10 === 3;
     const repoId = linked ? refs.shellRepoId : refs.repoId;
     const createdAt = ago(now, i, total);

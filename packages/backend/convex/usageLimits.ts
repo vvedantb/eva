@@ -23,23 +23,6 @@ import {
   findTeamEnvVarDoc,
 } from "./_envVars/documentStore";
 
-/**
- * Agent plan usage limits. A sandbox turn captures how much of the provider's
- * plan it has used and reports it here; the UI reads it back per credential.
- *
- * Deliberately its own mutation rather than extra completion arguments: the
- * completion mutation is shared by every entity workflow, and a reading that is
- * pure telemetry has no business widening that contract.
- *
- * Auth mirrors the completion mutations — the sandbox calls in with its
- * CONVEX_TOKEN identity (the launching user), so repo access is checked exactly
- * as `sessionWorkflow:handleCompletion` checks it.
- *
- * The repo the reading arrived on authorises the call and names the team behind
- * the shared credential, and is then dropped: see `_usageLimits/rows.ts` for why
- * a row belongs to a credential.
- */
-
 type UsageWindow = NonNullable<Doc<"agentUsageLimits">["windows"]>[number];
 
 /** The stored discriminant. Derived from the row so the two cannot drift. */
@@ -47,19 +30,12 @@ export type UsageLimitCompleteness = NonNullable<
   Doc<"agentUsageLimits">["completeness"]
 >;
 
-/**
- * The reading itself, with every field that is row identity rather than reading
- * removed: which credential a reading belongs to is the caller's own question.
- * Taken apart from the schema fields rather than restated, so a new reading
- * field reaches the wire on its own.
- */
 const {
   providerAccountId: _accountIsRowIdentity,
   teamId: _teamIsRowIdentity,
   ...usageLimitReadingFields
 } = agentUsageLimitFields;
 
-/** The only provider with plan windows, so the only one with credentials here. */
 const USAGE_LIMIT_PROVIDER = usageLimitProviderValidator.value;
 
 /** New same-key windows win while unobserved stored windows remain intact. */
@@ -87,11 +63,6 @@ export function isAuthoritativeReading(
   return snapshotComplete === true;
 }
 
-/**
- * Which credential a report belongs to. An account names itself; a run on the
- * shared credential names only the repo it ran in, so the team that owns the
- * token is resolved here. Null when that repo belongs to no team.
- */
 async function resolveReportKey(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -127,14 +98,7 @@ export const report = authMutation({
   args: {
     ...usageLimitReadingFields,
     providerAccountId: agentUsageLimitFields.providerAccountId,
-    // Required on the wire even though the stored field is optional: every
-    // caller reports from a repo, and only a legacy row keeps one. `teamId` is
-    // not accepted at all — a sandbox does not get to choose whose plan its
-    // reading is filed against.
     repoId: v.id("githubRepos"),
-    /** Superseded by `completeness`. Callback bundles baked before the
-     * discriminant still send this boolean, so it is still honoured; bundles
-     * that send neither safely receive merge semantics. */
     snapshotComplete: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -154,9 +118,6 @@ export const report = authMutation({
       }
     }
     const key = await resolveReportKey(ctx.db, repoId, observed);
-    // A run on the shared credential in a repo with no team has nowhere to file
-    // its reading: the row is keyed by team. Dropping it is right — telemetry
-    // must not fail a turn, and there is no viewer who could read it back.
     if (key === null) {
       console.log(
         `[usageLimits] dropped a team-credential reading for repo ${repoId}: no team`,
@@ -170,10 +131,6 @@ export const report = authMutation({
         await ctx.db.replace(existing._id, reading);
         return null;
       }
-      // A partial report that observed nothing is not evidence of anything —
-      // re-stamping `capturedAt` for it would keep presenting hours-old numbers
-      // as "updated 1m ago" forever. Only a report that actually carries a
-      // reading moves the clock.
       const carriesReading =
         reading.windows !== undefined ||
         reading.status !== undefined ||
@@ -182,8 +139,6 @@ export const report = authMutation({
       if (!carriesReading) return null;
       await ctx.db.patch(existing._id, {
         capturedAt: reading.capturedAt,
-        // Describes this observation, so it is always overwritten — a later
-        // refusal must not keep claiming the earlier read was complete.
         ...(reading.completeness === undefined
           ? {}
           : { completeness: reading.completeness }),
@@ -240,11 +195,9 @@ export const getReadingInternal = internalQuery({
   },
 });
 
-/** The Team entry's label. Not a person, so it is not resolved from a name. */
 const TEAM_CREDENTIAL_LABEL = "Team";
 
 const usageLimitCredentialValidator = v.object({
-  /** Absent = the shared team credential, which has no account row. */
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   teamId: v.optional(v.id("teams")),
   accountLabel: v.string(),
@@ -252,12 +205,6 @@ const usageLimitCredentialValidator = v.object({
 
 type UsageLimitCredential = Infer<typeof usageLimitCredentialValidator>;
 
-/**
- * Whether a launch in this repo would inject the shared
- * `CLAUDE_CODE_OAUTH_TOKEN` — the same team-then-repo lookup
- * `resolveAllEnvVars` does, on `key` alone. The value is never read: presence is
- * the whole question, and a query has no business decrypting a credential.
- */
 async function hasSharedClaudeCredential(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -273,16 +220,6 @@ async function hasSharedClaudeCredential(
   );
 }
 
-/**
- * Every Claude credential the viewer may run on in this repo, in the order the
- * card lists them: their own accounts, then teammates' shared ones, then the
- * shared team credential last.
- *
- * Exactly the picker's set (`listSelectableAccountsFor`) narrowed to Claude,
- * because the two answer the same question: a card that listed headroom for a
- * credential the user cannot spend — or omitted one they can — would be
- * describing somebody else's plan.
- */
 async function listUsageLimitCredentials(
   ctx: QueryCtx,
   userId: Id<"users">,
@@ -299,8 +236,6 @@ async function listUsageLimitCredentials(
       accountLabel: account.label,
     }));
   const teamId = repo?.teamId;
-  // The team row is keyed by team, so a repo outside one has nowhere to file a
-  // reading and nothing to show for it.
   if (teamId === undefined) return credentials;
   if (!(await hasSharedClaudeCredential(ctx.db, repoId, teamId))) {
     return credentials;
@@ -323,15 +258,12 @@ async function listUsageLimitCredentials(
 export const getForViewer = authQuery({
   args: {
     repoId: v.id("githubRepos"),
-    /** Quantized by the caller so expiry remains deterministic and cacheable. */
     now: v.number(),
   },
   returns: v.array(
     v.object({
-      /** Absent = the shared team credential. */
       providerAccountId: v.optional(v.id("userProviderAccounts")),
       accountLabel: v.string(),
-      /** Null when the credential has never reported, or not within 24h. */
       reading: v.union(v.null(), v.object(usageLimitReadingFields)),
     }),
   ),

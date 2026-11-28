@@ -1,23 +1,12 @@
-/**
- * Group seeded snapshots: fingerprinting + the isolate queries/mutations the
- * build action and sandbox-boot path share. Pure/isolate only — the actual
- * sandbox build runs in the "use node" action in `snapshotBuild.ts`.
- *
- * Kept in an underscore-prefixed folder (excluded from Convex's function
- * discovery) and re-exported through the top-level `repoGroups.ts`, mirroring
- * `_repoSnapshots/config.ts` → `repoSnapshots.ts`.
- */
 import { v, type Infer } from "convex/values";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 
-/** True when `value` is not null — usable as an Array.filter type predicate. */
 function isPresent<T>(value: T | null): value is T {
   return value !== null;
 }
 
-/** The branch a linked repo's clone checks out, falling back like sessions do. */
 function memberBaseBranch(defaultBaseBranch: string | undefined): string {
   return defaultBaseBranch?.trim() || FALLBACK_GIT_BASE_BRANCH;
 }
@@ -28,9 +17,7 @@ export type RepoGroupFingerprintMember = {
 };
 
 export type RepoGroupFingerprintInput = {
-  /** The primary repo's own seeded snapshot the group boots the builder from. */
   primarySeededSnapshotName: string | null;
-  /** Linked repos only — sorted internally so member order never matters. */
   members: ReadonlyArray<RepoGroupFingerprintMember>;
   installDependencies: boolean;
 };
@@ -82,7 +69,6 @@ const groupBuildPrimaryValidator = v.object({
   owner: v.string(),
   name: v.string(),
   installationId: v.number(),
-  /** Null when the primary itself has no seeded snapshot yet — build must wait. */
   seededSnapshotName: v.union(v.string(), v.null()),
 });
 
@@ -191,8 +177,6 @@ export const getGroupSnapshotForBoot = internalQuery({
       group.linkedRepoIds.map((repoId) => ctx.db.get(repoId)),
     );
     const linked = linkedDocs.filter(isPresent);
-    // A member repo row was deleted — the recorded membership can no longer
-    // be reproduced, so the snapshot cannot be trusted as current.
     if (linked.length !== group.linkedRepoIds.length) return null;
     const fingerprint = computeRepoGroupFingerprint({
       primarySeededSnapshotName: primaryDoc.seededSnapshotName,

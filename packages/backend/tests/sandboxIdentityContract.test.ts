@@ -14,18 +14,6 @@ import { SANDBOX_JWT_ISSUER } from "../convex/sandboxAuthConfig";
 import { signSandboxUserJwt } from "../convex/sandboxJwt";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The in-VM daemon holds CONVEX_TOKEN, a JWT for the launching user, and agent
- * code in the VM can read it. MCP `runAsUser` signs a token with the same
- * issuer, so only the `evaMcp` claim on the MCP token tells the two apart.
- *
- * Fail-safe rule: `rejectSandboxCaller` goes only on functions that MCP and the
- * daemon never call. If Convex ever stopped surfacing the claim, MCP tokens
- * would look like VM tokens, and this rule means nothing legitimate breaks.
- * The rule is checked in review (callers listed in the PR), not here: tests
- * must not read source files (CLAUDE.md, Tests).
- */
-
 const CLERK: UserIdentity = {
   issuer: "https://clerk.example.com",
   subject: "user_clerk",
@@ -169,8 +157,6 @@ describe("guards end to end", () => {
     });
   }, 30_000);
 
-  // A new Clerk account (unknown `sub`) whose token carries an existing
-  // user's email address.
   const NEWCOMER: UserIdentity = {
     issuer: CLERK.issuer,
     subject: "user_newcomer",

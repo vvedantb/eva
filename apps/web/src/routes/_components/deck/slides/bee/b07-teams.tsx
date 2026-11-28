@@ -11,19 +11,16 @@ import { BeeLogo } from "./_parts/BeeLogo";
 interface Person {
   name: string;
   colour: string;
-  /** Seat round the table, in the room's own pixels. */
   x: number;
   y: number;
 }
 
-/** Three people round one table, each with Bee on their own laptop. */
 const PEOPLE: readonly Person[] = [
   { name: "Alex", colour: "#e0901a", x: 178, y: 20 },
   { name: "Jo", colour: "#c2577a", x: 334, y: 178 },
   { name: "Sam", colour: "#3b8ea5", x: 22, y: 178 },
 ];
 
-/** The conversation, one line per build step. Example lines. */
 const LINES: readonly { who: string; text: string }[] = [
   { who: "Alex", text: "They can return the forms by Friday" },
   { who: "Jo", text: "Let's start with nursing home placements" },
@@ -33,7 +30,6 @@ const LINES: readonly { who: string; text: string }[] = [
   { who: "Jo", text: "I will book the follow-up call" },
 ];
 
-/** How many lines the summary shows before it starts to scroll. */
 const VISIBLE = 4;
 const LINE_H = 42;
 
@@ -53,7 +49,6 @@ const SHOTS: readonly CameraShot[] = [
   { rotateX: 4 },
 ];
 
-/** Sound leaving the speaker: two rings, mounted only while they talk, so the loop never restarts mid-way. */
 function Ripples({ colour }: { colour: string }) {
   return (
     <>
@@ -82,14 +77,12 @@ export function BeeTeams() {
   const said = Math.min(step, LINES.length);
   const speaker =
     step >= 1 && step <= LINES.length ? LINES[step - 1].who : null;
-  // Keep the newest line in view, like a live transcript.
   const offset = Math.max(0, said - VISIBLE) * LINE_H;
 
   return (
     <Shell className="justify-center py-14">
       <Camera shots={SHOTS}>
         <div className="relative flex h-[440px] w-[1088px] items-center gap-16">
-          {/* The room, from above. */}
           <div className="relative h-[420px] w-[420px] shrink-0">
             <div className="absolute top-[110px] left-[110px] size-[200px] rounded-[40px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10" />
             {PEOPLE.map((person) => {
@@ -120,7 +113,6 @@ export function BeeTeams() {
                 </div>
               );
             })}
-            {/* What it takes: Bee running on everyone's laptop. */}
             <m.div
               className="absolute bottom-0 left-0 w-full text-center text-[17px] text-[#2a1e0c]/60"
               initial={{ opacity: 0 }}
@@ -131,7 +123,6 @@ export function BeeTeams() {
             </m.div>
           </div>
 
-          {/* One summary, written live: each line as its speaker says it, in their colour. */}
           <div className={`${BEE_CARD} flex w-[560px] flex-col gap-4 p-8`}>
             <span className="text-2xl font-semibold text-[#2a1e0c]">
               Team summary
@@ -172,7 +163,6 @@ export function BeeTeams() {
                           {line.who}
                         </span>
                       </m.span>
-                      {/* Typed out as it is heard. */}
                       <m.span
                         className="whitespace-nowrap"
                         initial={{ clipPath: "inset(0 100% 0 0)" }}

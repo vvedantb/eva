@@ -1,10 +1,3 @@
-/**
- * Pure shell-command builders for checking out a linked repo's session branch,
- * kept out of `linkedRepos.ts` (which is `"use node"`) so they can be unit
- * tested without a sandbox handle or the node-only import chain — matches
- * `divergedPublish.ts`.
- */
-
 import { quote } from "shell-quote";
 
 /**

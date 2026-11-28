@@ -34,34 +34,22 @@ import { useLiveShare } from "./_components/useLiveShare";
 interface DeckProps {
   slides: readonly DeckSlide[];
   slide: number;
-  /** Present when this window is hosting or following a live session. */
   sessionCode: string | undefined;
-  /** Writes `slide` and `session` back into the route's search params. */
   updateSearch: (next: {
     slide?: number;
     session?: string | undefined;
   }) => void;
-  /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
-  /** Whose deck it is: accent colours, typeface and stage. Eva when absent. */
   brand?: DeckBrand;
 }
 
-/** What the slide variants need: which way the deck moved, and whether a shared element carries over. */
 interface SlideMotion {
   dir: number;
   morph: boolean;
 }
 
-/** A slide that continues an element from its neighbour: the stage holds still and fades. */
 const MORPH_FADE = { opacity: 0, x: 0, rotateY: 0, z: 0, scale: 1 };
 
-/**
- * The incoming slide travels in from depth, slightly turned, on a long expo
- * curve; the outgoing one falls back the other way in under half the time. No
- * animated `filter`, and no light sweep across the stage: the Z push alone
- * carries the change.
- */
 const slideVariants = {
   enter: ({ dir, morph }: SlideMotion) =>
     morph
@@ -98,9 +86,7 @@ const slideVariants = {
         },
 };
 
-/** Seconds before an auto-playing build starts, so the slide's entrance lands first. */
 const AUTO_FIRST_MS = 1100;
-/** Gap between auto-played build steps. */
 const AUTO_STEP_MS = 1500;
 
 export function Deck({
@@ -112,37 +98,25 @@ export function Deck({
   brand = "eva",
 }: DeckProps) {
   const share = useLiveShare({ slide, sessionCode, updateSearch });
-  // The stage renders the host's slide when following, its own otherwise, so
-  // everything below — build steps, direction, the outline — follows from it.
   const nav = useDeckNavigation(
     slides,
     share.effectiveSlide,
     share.onNavigate,
     (next, step) => postDeckMessage({ deck: basePath, slide: next, step }),
   );
-  // Destructured: reading `scale` off the object passed as a ref would make the
-  // React Compiler treat it as a ref read during render.
   const { scale: stageScale, measure: measureStage } = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
-  // Builds play on their own unless the presenter turns it off (A).
   const [autoBuild, setAutoBuild] = useState(true);
 
   const { entry, step, direction, total } = nav;
   const theme = entry.theme ?? "dark";
-  // Moving forward onto a morph slide, or back off one, keeps the stage still
-  // so its shared element can glide from the neighbouring slide.
   const index = slides.indexOf(entry);
   const slideMotion: SlideMotion = {
     dir: direction,
     morph: Boolean(direction > 0 ? entry.morph : slides[index + 1]?.morph),
   };
 
-  // A follower is a passenger: every way of moving the deck by hand is taken
-  // away in one place, rather than guarded at each call site. `applyRemote` is
-  // untouched, so a host's own presenter window still drives this stage.
-  // With auto-build on, the presenter's next and back move whole slides; the
-  // build plays itself. With it off (A), they step through the build as before.
   const presenterNav: DeckNavigation = autoBuild
     ? {
         ...nav,
@@ -154,9 +128,6 @@ export function Deck({
     ? { ...nav, next: noop, prev: noop, prevSlide: noop, goTo: noop }
     : presenterNav;
 
-  // A timer is outside React, so this is an effect: one pending step at a time,
-  // only while moving forward (or from the start of a slide reached by going
-  // back), and never in a follower's window.
   const autoNext =
     autoBuild &&
     !share.isFollower &&
@@ -224,14 +195,9 @@ export function Deck({
   }
 
   return (
-    // The deck root is the keyboard surface for the whole presentation, which is
-    // why it is focusable and owns the key handler rather than a window listener.
     <div
       tabIndex={-1}
       autoFocus
-      // The deck owns the keys, so it has to hold focus from the first paint —
-      // `autoFocus` alone does not land on a non-form host element. The same
-      // callback attaches the presenter-window sync.
       ref={(el) => {
         if (!el) return;
         el.focus();
@@ -262,9 +228,6 @@ export function Deck({
         role="presentation"
         ref={measureStage}
       >
-        {/* The canvas owns both the fit-to-pane scale and the viewing distance,
-            so the slide layers directly inside it can move in depth. Nothing
-            here clips its overflow: that would flatten the 3D context. */}
         <div
           style={{
             width: DESIGN_W,
@@ -277,8 +240,6 @@ export function Deck({
           }}
           className="relative shrink-0"
         >
-          {/* No `initial={false}`: it propagates to every descendant and would
-              freeze mount-time animations on a direct `?slide=n` load. */}
           <AnimatePresence mode="popLayout" custom={slideMotion}>
             <m.div
               key={share.effectiveSlide}

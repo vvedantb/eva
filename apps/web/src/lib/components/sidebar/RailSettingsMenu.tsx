@@ -5,7 +5,6 @@ import { SettingsIcon, Sidebar } from "@vvedantb/ui";
 import { GLOBAL_SETTINGS_NAV } from "@/lib/components/sidebar/globalSettingsNav";
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 
-/** First entry in the global Settings sidebar — rail gear lands here. */
 const SETTINGS_LANDING_HREF = GLOBAL_SETTINGS_NAV[0].href;
 
 /**

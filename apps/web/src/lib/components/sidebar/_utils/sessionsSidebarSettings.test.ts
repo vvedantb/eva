@@ -130,9 +130,6 @@ describe("only my sessions filter", () => {
 });
 
 describe("stored sidebar settings", () => {
-  // Regression (#1058): the Active/Archived tab must not persist. Older
-  // localStorage blobs still carry `listMode: "archived"`; parsing (and every
-  // setter, which spreads the parsed value) must drop it.
   test("drops a stale persisted list mode", () => {
     const saved: SessionsSidebarSettings = {
       ...DEFAULT_SESSIONS_SIDEBAR_SETTINGS,

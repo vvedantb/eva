@@ -3,20 +3,6 @@ import type { Id } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { writeSandboxFile } from "./sandboxFiles";
 
-/**
- * Delivering user-attached input files to the agent.
- *
- * The composer uploads pasted/dropped files to Convex file storage. At launch
- * we download the bytes and write them into the sandbox filesystem as flat
- * `/tmp/eva-attachment-<n>.<ext>` files (flat avoids any per-provider mkdir
- * behaviour), then append a note to the prompt pointing the agent at them. The
- * agent reads them with its file-reading tool — the same path Claude Code, Codex,
- * Cursor, and opencode all support — so this works uniformly across providers.
- *
- * The session daemon uses the same filename scheme + note text (duplicated in
- * `callback-src`, which is a separate bundle and cannot import this module).
- */
-
 /** Maps a mime type to a file extension. Defaults to `.bin` for unknown types. */
 export function attachmentExtensionForMimeType(mimeType: string): string {
   const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
@@ -38,7 +24,6 @@ export function attachmentExtensionForMimeType(mimeType: string): string {
     case "text/plain":
       return ".txt";
     default:
-      // Pasted screenshots historically arrived without a reliable type.
       if (type.startsWith("image/")) return ".png";
       return ".bin";
   }
@@ -68,7 +53,6 @@ export async function materializeAttachmentsToSandbox(
   sandbox: SandboxHandle,
   storageIds: readonly Id<"_storage">[],
 ): Promise<string[]> {
-  // A message carries a handful of files: download and write them together.
   const paths = await Promise.all(
     storageIds.map(async (storageId, index) => {
       const blob = await ctx.storage.get(storageId);

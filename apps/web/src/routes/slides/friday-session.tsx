@@ -8,9 +8,7 @@ const BASE_PATH = "/slides/friday-session";
 
 const searchSchema = z.object({
   slide: z.coerce.number().int().min(1).optional().default(1),
-  /** `presenter` swaps the stage for the second-screen notes view. */
   view: z.enum(["presenter"]).optional(),
-  /** Set while hosting or following a live session. */
   session: z.coerce.string().optional(),
 });
 

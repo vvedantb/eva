@@ -15,7 +15,6 @@ import {
 } from "@/lib/components/chat/sandboxChatBinding";
 import type { ChatTurnSendOptions } from "@/lib/components/chat/useChatSend";
 
-/** Puts the implementation prompt in the chat: a send, or a seeded draft. */
 type PlanSend = (
   content: string,
   attachmentStorageIds?: undefined,
@@ -47,8 +46,6 @@ export function useSessionPlanImplementation(binding: SandboxChatBinding) {
     planMarkdown: string,
     plan?: ProposedPlanRow,
   ) => {
-    // Built above the `try` so the block holds no expression-level control
-    // flow — React Compiler bails on the whole file otherwise.
     const settings = newSessionSettings(binding);
     try {
       const { sessionId: nextSessionId, numId } = await createSession({

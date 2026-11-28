@@ -10,11 +10,6 @@ import { StillContext, useStill } from './reduced-motion'
 import { clock } from './clock'
 import { clamp, easeInOutCubic, isDev, warn } from './util'
 
-// The stage: fits a design-size scene into its container, runs the script
-// while it is on screen, and draws the cursor and keycaps over the scene.
-// The script API is act.ts, the cursor cursor.tsx, measuring measure.ts and
-// the look context looks.ts.
-
 /** loop: repeats while on screen. once: plays when first seen, then holds the end. hover: plays while the pointer is over it, settles back when it leaves; on a screen with no hover (a phone) it plays once. */
 export type Play = 'loop' | 'once' | 'hover'
 
@@ -22,68 +17,28 @@ export type Play = 'loop' | 'once' | 'hover'
 export type LookTokens = { [token: `--ss-${string}`]: string }
 
 export interface StageProps<S> {
-  /** Design size. The stage scales down to fit its container, and only grows past it with `fill`. */
   width: number
   height: number
-  /** Scene state at the start of each loop. Statics can leave it out. */
   initial?: S
-  /** Loops while on screen. Leave out for a static illustration. */
   script?: Script<S>
-  /** The still frame shown inside a static stage or with no script. Defaults to initial. */
   poster?: S
-  /**
-   * Where the cursor rests at the start of each loop, or where it sits in a
-   * still. Leave out to hide it. Animated demos hide it in their reduced-motion
-   * poster unless `still` is true. `ripple` sends a soft ring out from each
-   * click, for demos where clicks need to read at a glance (small stages, the
-   * arrow and circle styles). `idle` is how long (ms) the cursor may rest
-   * after it has acted before it fades out (4000 by default); it fades back
-   * in as it next moves, and never fades while it presses or hovers. Before
-   * its first move each loop it waits out of shot instead, coming back just
-   * before it moves. false keeps it on screen throughout. `at` can differ by
-   * layout: { wide: ..., compact: ... }, for a stage with a compact design.
-   */
   cursor?: { at: Target | { wide: Target; compact: Target }; kind?: CursorKind; style?: CursorStyle; still?: boolean; ripple?: boolean; idle?: number | false }
   play?: Play
-  /**
-   * A second, smaller design for narrow containers. Below `below` px of
-   * container width the stage uses this size, the render's `layout` argument
-   * (and `useLook().layout` inside the stage) and data-layout become 'compact', and the script restarts. Build the
-   * compact scene as a tighter crop around the story, never the wide scene
-   * shrunk.
-   */
   compact?: { below: number; width: number; height: number }
-  /** Where keycaps from act.key appear. */
   keys?: KeysAt | { wide: KeysAt; compact: KeysAt }
-  /** Targets shown hovered in a still, since no script is there to hover them. */
   hover?: string[]
   theme?: Theme
   palette?: Palette
   fidelity?: Fidelity
-  /** The grays' temperature. `warm` (the default) is a warm canvas and well;
-   * `cool` swaps them for cool ones, for a macOS scene or a blue ground, so
-   * every gray shares one temperature. Light theme only. */
   greys?: 'warm' | 'cool'
-  /** A look as values: any `--ss-*` tokens (color, type, shape, density),
-   * set on the stage over its theme's. See `references/looks.md`. */
   tokens?: LookTokens
-  /** Grow past the design size to fill the container (up to 2x), for a hero or a docs plate. A host page can set data-ss-fill on any wrapper instead. */
   fill?: boolean
-  /** The accent color for this stage (any CSS color). Sets --ss-accent, its soft fill and the gradient's second stop together. */
   accent?: string
-  /** What the scene sits on. `orbs`: a pale tile lit by a few huge, soft
-   * color orbs behind the UI, so glass has color to take and white cards
-   * lift off it. Pass two or three colors to choose them (lavender and
-   * orange by default). Leave it out for the plain ground. */
   ground?: 'orbs' | [string, string] | [string, string, string]
-  /** Plays the script faster (above 1) or slower (below 1). Waits and tweens divide by it. */
   speed?: number
   className?: string
-  /** A specimen sheet of parts (the kit's chrome, controls, phones sheets), not a product frame: film's composition checks (framing, ladders, voids) stand down. */
   specimen?: boolean
-  /** No framing, when the developer asks for it: no ground, and the product sits whole with room around it, floating on their page. Film's bleed and floating checks stand down; everything else still applies. */
   unframed?: boolean
-  /** `layout` is 'wide' or 'compact' (see `compact`); useLook() also has it, but only in components rendered inside the stage. */
   children: (s: S, rect: (name: string) => Rect, layout: Layout) => ReactNode
 }
 
@@ -114,13 +69,10 @@ export function Stage<S extends object>({
   className,
   children,
 }: StageProps<S>) {
-  // Hover scripts can hold their ending without returning to the start.
-  // On touch, play once rather than assuming the script has a loop seam.
   const play: Play = playProp === 'hover' && typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches ? 'once' : playProp
   const [layout, setLayout] = useState<Layout>('wide')
   const layoutRef = useRef(layout)
   layoutRef.current = layout
-  // Where the cursor rests, for the layout showing
   const restAt = (): Target => {
     const at = cursor!.at
     return typeof at === 'object' && 'wide' in at ? at[layoutRef.current] : at
@@ -141,12 +93,10 @@ export function Stage<S extends object>({
   const [scale, setScale] = useState(1)
   const scaleRef = useRef(1)
   scaleRef.current = scale
-  // film.mjs can slow every stage down (--slow) and film any stage dark (--dark)
   const film = typeof window === 'undefined' ? {} : ((window as unknown as { __stageshow?: { slow?: number; theme?: Theme } }).__stageshow ?? {})
   const speed = speedProp / (film.slow ?? 1)
   const theme = film.theme ?? themeProp
   const [kind, setKind] = useState<CursorKind>(cursor?.kind ?? 'pointer')
-  // A ring that spreads from the click point and fades, drawn under the cursor
   const ripple = (at: Point) => {
     const root = rootRef.current
     if (!root || reduced) return
@@ -159,43 +109,30 @@ export function Stage<S extends object>({
   const keysRef = useRef(keys)
   keysRef.current = keys
   const pos = useRef<Point>({ x: 0, y: 0 })
-  // The cursor's kind follows what's under it after every commit too, so a
-  // hand doesn't linger when the link it was over slides away. Not mid-drag:
-  // the drag owns the kind until release.
   const autoRef = useRef<((p: Point) => void) | null>(null)
   const [inset, setInset] = useState(0)
   const autoUsed = useRef(false)
   const dragging = useRef(false)
   const hovered = useRef<Element | null>(null)
 
-  // Fit: pick the layout from the container width, then scale its design
-  // size into it.
   useLayoutEffect(() => {
     const fit = fitRef.current
     if (!fit) return
     const measure = () => {
       const w = fit.clientWidth
-      // A host that sizes the stage by something other than the screen (a
-      // bento tile set by its row's height) marks a wrapper data-ss-wide to
-      // keep the wide design, scaled, rather than the phone-width one
       const wide = !!fit.parentElement?.closest('[data-ss-wide]')
       const next: Layout = compact && !wide && w < compact.below ? 'compact' : 'wide'
       setLayout(next)
-      // fill (or a host wrapper marked data-ss-fill) lets the stage grow past its design size, within reason
       const grow = fillProp || !!fit.parentElement?.closest('[data-ss-fill]')
       setGrows(grow)
       const dw = next === 'compact' ? compact!.width : width
       const s = Math.min(grow ? 2 : 1, w / dw)
       setScale(s)
-      // A design narrower than its box (a compact layout, or a stage that has
-      // stopped at its design size) sits in the middle of it, not at its left
       setInset(Math.max(0, (w - dw * s) / 2))
     }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(fit)
-    // Hosts can switch layout/fill policy without changing this box's
-    // width. Observe only those attributes on its ancestors, not the scene.
     const hosts = new MutationObserver(measure)
     for (let host = fit.parentElement; host; host = host.parentElement) {
       hosts.observe(host, { attributes: true, attributeFilter: ['data-ss-wide', 'data-ss-fill'] })
@@ -206,7 +143,6 @@ export function Stage<S extends object>({
     }
   }, [width, compact?.below, compact?.width, fillProp]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rects of every data-target, in stage pixels, refreshed after each commit.
   const [rects, setRects] = useState<Record<string, Rect>>({})
   const measureAll = useCallback(() => {
     const root = rootRef.current
@@ -220,8 +156,6 @@ export function Stage<S extends object>({
     })
     return out
   }, [])
-  // Something placed from rect() can itself be a target, and the two can
-  // chase each other. Allow a few passes per frame, then wait for the next.
   const passes = useRef({ n: 0, frame: 0, owed: false })
   const remeasure = useCallback(() => {
     const p = passes.current
@@ -247,8 +181,6 @@ export function Stage<S extends object>({
     clock.cancelLayoutRaf(passes.current.frame)
     passes.current = { n: 0, frame: 0, owed: false }
   }, [])
-  // Things that slide or scale into place move after the commit that started
-  // them, so measure again once they settle.
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
@@ -261,9 +193,6 @@ export function Stage<S extends object>({
   }, [remeasure])
   const rectFor = useCallback((name: string) => rects[name] ?? EMPTY, [rects])
 
-  // Placing: until the first measurements (after fonts load) have painted,
-  // and again after a wide/compact switch, nothing transitions. Otherwise
-  // anything placed from rect() would visibly travel from 0,0 into place.
   const [settling, setSettling] = useState(true)
   useLayoutEffect(() => {
     setSettling(true)
@@ -282,11 +211,7 @@ export function Stage<S extends object>({
     }
   }, [layout])
 
-  // When the cursor last did something; while a script plays, a cursor that
-  // has sat still for longer than `idle` fades out until its next move
   const active = useRef(0)
-  // Each loop: when it began, whether the cursor has moved yet, and (learned
-  // from the first run) how long it waits before its first move
   const loopAt = useRef(0)
   const moved = useRef(false)
   const firstMove = useRef<number | null>(null)
@@ -304,7 +229,6 @@ export function Stage<S extends object>({
   }, [])
 
   const resolve = useCallback((t: Target): Point => {
-    // One target per layout, as cursor.at takes it
     if (typeof t === 'object' && t !== null && 'wide' in t) t = (layoutRef.current === 'compact' ? t.compact : t.wide)
     const name = nameOf(t)
     if (name === null) return t as Point
@@ -319,22 +243,16 @@ export function Stage<S extends object>({
     return { x: r.x + r.width * f.x, y: r.y + r.height * f.y }
   }, [])
 
-  // Stills have no script to hover things, so mark them here.
   useLayoutEffect(() => {
     if (!still || !hover) return
     const root = rootRef.current
     hover.forEach((name) => root?.querySelector(`[data-target="${name}"]`)?.setAttribute('data-hover', ''))
   })
 
-  // Rest the cursor at its start point, unless a script is running: then the
-  // cursor is mid-story, and a resize must not send it back to rest
   useLayoutEffect(() => {
     if (cursor && !loopAt.current) place(resolve(restAt()))
   }, [scale, layout]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Back to the start. `glide` (a hover stage settling as the pointer leaves)
-  // lets the scene's own transitions carry it back and walks the cursor home;
-  // otherwise everything jumps, since nobody is watching.
   const glideId = useRef(0)
   const resetFrame = useRef(0)
   const cancelReset = useCallback(() => {
@@ -395,8 +313,6 @@ export function Stage<S extends object>({
     })
   }, [layout]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Each run gets its own act (act.ts), bound to its own signal, so a
-  // canceled run can never pick up the next run's signal and keep going.
   const makeAct = useMemo(
     () => (signal: AbortSignal) =>
       createAct<S>(signal, {
@@ -406,7 +322,6 @@ export function Stage<S extends object>({
     [resolve, place, speed, layout], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
-  // Run the loop only while the stage is on screen and the tab is visible.
   useEffect(() => {
     const stage = rootRef.current!
     if (still || !script) {
@@ -415,8 +330,6 @@ export function Stage<S extends object>({
       setState(poster ?? initial)
       return cancelReset
     }
-    // A changed script, layout or motion preference starts a fresh scene.
-    // Cleanup only releases resources; it never schedules another reset.
     reset()
     const root = fitRef.current!
     let ctrl: AbortController | null = null
@@ -424,10 +337,6 @@ export function Stage<S extends object>({
     let hovering = false
     let done = false
 
-    // Idle: a cursor waiting to start reads as a stuck one, so before its
-    // first move it steps out of the shot. Once it has acted, resting to
-    // watch the result is part of the story: only a long stillness fades it,
-    // and never while it holds a press or rests on what it hovers.
     const idle = cursor?.idle ?? 4000
     const LEAD = 1200
     let idleTimer = 0
@@ -441,7 +350,6 @@ export function Stage<S extends object>({
         if (!el) return
         const now = performance.now()
         if (!moved.current) {
-          // Later loops know when it moves and handle it in beginLoop
           if (firstMove.current === null && now - active.current > LEAD) el.setAttribute('data-idle', '')
           return
         }
@@ -456,7 +364,6 @@ export function Stage<S extends object>({
       const el = cursorRef.current
       const wait = firstMove.current
       if (idle === false || !el || wait === null || wait <= LEAD) return
-      // A long opening wait: out now, back in just before the first move
       el.setAttribute('data-idle', '')
       revealTimer = window.setTimeout(() => el.removeAttribute('data-idle'), wait - 400)
     }
@@ -469,9 +376,6 @@ export function Stage<S extends object>({
     const finishIdle = () => {
       window.clearInterval(idleTimer)
       window.clearTimeout(revealTimer)
-      // A completed once scene cannot move again. Keep a hovered/pressed
-      // cursor visible, or finish its existing idle delay with one timeout.
-      // There is no reason to poll the held ending forever.
       const el = cursorRef.current
       const held = () => el?.hasAttribute('data-pressed') || stage.querySelector('[data-hover]')
       if (!cursor || idle === false || !el || el.hasAttribute('data-idle') || held()) return
@@ -497,8 +401,6 @@ export function Stage<S extends object>({
             await script(act)
           } catch (e) {
             if (e instanceof Stopped) return
-            // A real error in the script: report it once and stand the stage
-            // down, so a later start() can run it again
             console.error('[stageshow] script error', e)
             ctrl = null
             unwatchIdle()
@@ -506,7 +408,6 @@ export function Stage<S extends object>({
           }
           if (play === 'loop' && isDev()) checkSeam(stateRef.current, initial, pos.current, cursor ? resolve(restAt()) : null)
         } while (play === 'loop' && !signal.aborted)
-        // Once holds its end state for good; hover holds it until the pointer leaves.
         if (play === 'once' && !signal.aborted) {
           done = true
           finishIdle()
@@ -525,7 +426,6 @@ export function Stage<S extends object>({
     markOffscreen()
     const io = new IntersectionObserver(([entry]) => {
       onScreen = entry.isIntersecting
-      // Off screen its CSS animations pause too, so nothing runs out of view
       markOffscreen()
       onScreen ? start() : stop()
     })

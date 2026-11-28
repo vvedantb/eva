@@ -2,21 +2,6 @@ import { ChevronLeft, ChevronRight, CirclePlus, Clock3, House, Library, ListMusi
 import { Bar, Stage, Swap, Text, Window, type Act } from '../../kit'
 import './spotify.css'
 
-// Spotify desktop, dark, about 860 wide. A hero loop.
-//
-// Story: a playlist is open and "Low Tide" is playing from it (green title,
-// equaliser in place of its number). The cursor double-clicks "Neon Harbor"
-// two rows down: the green and the equaliser move to that row, the
-// now-playing bar swaps art, title and artist, the total time changes and
-// the progress bar starts again from 0:00 and keeps moving. After a hold the
-// cursor double-clicks "Low Tide" again, which restarts it from 0:00: the
-// exact frame the loop opens on, so the reset is caused, not a seam.
-//
-// Real strings: the playlist title, the two songs and their artists, the two
-// times. Everything else is a line or album art.
-// Icons: Spotify's own set isn't available, so lucide, chosen for its plain
-// geometric strokes, which are close to Spotify's; play and pause are filled.
-
 type Id = 'a' | 'b'
 type S = { playing: Id; sel: Id; elapsed: number }
 
@@ -27,7 +12,6 @@ const SONGS: Record<Id, { title: string; artist: string; art: number; dur: numbe
   b: { title: 'Neon Harbor', artist: 'The Vales', art: 4, dur: 168 },
 }
 
-// Rows of the playlist. Real text only on the two songs the story plays.
 const ROWS: { id?: Id; art: number; t: number; ar: number; al: number }[] = [
   { id: 'a', art: 2, t: 0, ar: 0, al: 58 },
   { art: 3, t: 52, ar: 46, al: 82 },
@@ -40,7 +24,6 @@ const ROWS: { id?: Id; art: number; t: number; ar: number; al: number }[] = [
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
 async function script(a: Act<S>) {
-  // The song keeps playing under everything the cursor does
   let live = true
   ;(async () => {
     try {
@@ -49,13 +32,11 @@ async function script(a: Act<S>) {
         if (live) a.put((s) => ({ elapsed: s.elapsed + 1 }))
       }
     } catch {
-      /* stopped */
     }
   })()
 
   await a.wait(1400)
 
-  // Play Neon Harbor
   a.mark('play')
   await a.move({ at: 'row-b', x: 0.72, y: 0.5 })
   await a.wait(350)
@@ -63,13 +44,10 @@ async function script(a: Act<S>) {
   await a.set({ playing: 'b', sel: 'b', elapsed: 0 })
   await a.wait(1100)
 
-  // Down to the player, where the new song is running: hovering the
-  // progress bar lights it green and shows its handle, as Spotify does
   a.mark('progress')
   await a.move({ at: 'progress', x: 0.62, y: 0.5 })
   await a.wait(4400)
 
-  // Back to Low Tide, which starts again from the top: the opening frame
   a.mark('back')
   await a.move({ at: 'row-a', x: 0.72, y: 0.5 })
   await a.wait(350)
@@ -133,7 +111,6 @@ export default function SpotifyDemo() {
             toolbar={<span className="spt-me" />}
           >
             <div className="spt-panels">
-              {/* Your Library */}
               <aside className="spt-library" data-crop>
                 {compact ? (
                   <div className="spt-lib-head spt-lib-head--rail">
@@ -176,7 +153,6 @@ export default function SpotifyDemo() {
                 </div>
               </aside>
 
-              {/* The playlist */}
               <main className="spt-main" data-crop>
                 <header className="spt-header">
                   <Art n={7} className="spt-art--cover" />
@@ -250,12 +226,8 @@ export default function SpotifyDemo() {
               </main>
             </div>
 
-            {/* Now playing */}
             <footer className="spt-player">
               <div className="spt-now">
-                {/* Both songs sit in the same place and crossfade: the art keeps its
-                    edges, and the column is as wide as the longer title, so the
-                    + after it stays put */}
                 <span className="spt-now-art">
                   {(['a', 'b'] as Id[]).map((id) => (
                     <Art key={id} n={SONGS[id].art} className={`spt-art--now${s.playing === id ? ' is-on' : ''}`} />

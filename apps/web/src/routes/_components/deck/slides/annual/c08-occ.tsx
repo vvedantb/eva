@@ -11,7 +11,6 @@ import { DUR, EASE, Sheen, cueTransition } from "../../_components/motion";
 import { AnnBCountDown } from "../_parts/AnnBCountDown";
 import { MoA3CollisionCause, MoA3CollisionChart } from "../_parts/MoA3OccBeats";
 
-/** Each beat owns the stage in turn, so only one idea is ever on screen. */
 function Beat({ active, children }: { active: boolean; children: ReactNode }) {
   return (
     <m.div
@@ -33,10 +32,6 @@ function Beat({ active, children }: { active: boolean; children: ReactNode }) {
   );
 }
 
-/**
- * Sources: retry counts from three days of live traffic; both fixes landed
- * 24 August 2026 (Eva release notes).
- */
 interface Fix {
   label: string;
   before: string;
@@ -71,7 +66,6 @@ function FixFigures() {
           <div className="text-sm text-white/45">{fix.label}</div>
           <div className="relative mt-2 text-lg tabular-nums text-white/35">
             {fix.before}
-            {/* The old rate is struck through as the new one lands. */}
             <m.span
               aria-hidden
               className="absolute inset-x-[-4px] top-1/2 h-px origin-left bg-white/45"

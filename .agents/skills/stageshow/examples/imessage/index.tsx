@@ -2,19 +2,6 @@ import { ArrowUp, ChevronLeft, Mic, Plus, Video } from 'lucide-react'
 import { Stage, Phone, Thread, Bubble, Stamp, Receipt, Keyboard, type Act, Avatar } from '../../kit'
 import './imessage.css'
 
-// iMessage on an iPhone, for a landing page. Four beats:
-//   1. Context: Maya's two messages, keyboard up, the field focused.
-//   2. Reply: the person types (keys pop as iOS keys do), taps send; the
-//      bubble rises in, the receipt reads Delivered, then rolls to Read.
-//   3. Maya types (the dots), and the dots grow into her reply. Her reply
-//      makes the receipt redundant, so it folds away, as iOS does.
-// Hold the completed conversation. Replay is the explicit reset; sent
-// messages do not disappear from the live thread on their own.
-//
-// Real strings: Maya, the stamp, her two messages, the typed reply, the
-// receipt, her reply. The keyboard keeps its letters: it is the domain's
-// signature, not information.
-
 type S = {
   draft: string
   keys: boolean
@@ -38,7 +25,6 @@ const initial: S = {
 const MINE = "No way, I'm so in"
 const REPLY = "Leaving at 5, I'll drive"
 
-// The predictive bar follows the word being typed, as iOS's does
 const SUGGEST: Record<string, [string, string]> = {
   N: ['No', 'Not'],
   No: ['Now', 'Not'],

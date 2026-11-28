@@ -10,7 +10,6 @@ import { useProjectTaskStatus } from "./useProjectStatus";
 export interface ProjectChatTaskCards {
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
-  /** Opens a task as a chat tab beside Eva (`ProjectTaskTabs.open`). */
   onOpenTask: (taskNumId: number) => void;
 }
 

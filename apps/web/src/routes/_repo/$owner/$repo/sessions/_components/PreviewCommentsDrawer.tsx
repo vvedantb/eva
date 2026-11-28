@@ -18,7 +18,6 @@ import type { Id } from "@eva/backend";
 import { useIframeBox, type IframeBox } from "./useIframeBox";
 
 const DRAWER_MAX_WIDTH = 320;
-/** Keeps part of the app visible beside the drawer in a narrow pane. */
 const DRAWER_MAX_SHARE = 0.62;
 
 /** The drawer's width over an iframe box; the action bar centres beside it. */
@@ -26,10 +25,8 @@ export function previewCommentsDrawerWidth(box: IframeBox): number {
   return Math.min(DRAWER_MAX_WIDTH, Math.round(box.width * DRAWER_MAX_SHARE));
 }
 
-/** Gap between the floating drawer and the preview's edges. */
 const DRAWER_INSET = 8;
 
-/** Path only: `/a/?x=1#y` and `/a` are the same page. */
 function pagePathname(path: string): string {
   const pathname = path.split(/[?#]/)[0] ?? "/";
   return pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
@@ -40,7 +37,6 @@ export function isResolved(comment: PreviewComment): boolean {
   return comment.kind === "message" && comment.resolved !== undefined;
 }
 
-/** Comments grouped by page, newest group first (input is newest first). */
 function groupByPage(
   comments: readonly PreviewComment[],
 ): { pagePath: string; comments: PreviewComment[] }[] {
@@ -76,7 +72,6 @@ export function PreviewCommentsDrawer({
   onClose: () => void;
 }) {
   const box = useIframeBox(iframeElement);
-  // The iframe paints 0×0 while its pane is hidden.
   if (!box || box.width === 0 || box.height === 0) return null;
   return (
     <DrawerPanel
@@ -105,8 +100,6 @@ function DrawerPanel({
   const [scope, setScope] = useState<"page" | "all">("page");
   const [status, setStatus] = useState<"open" | "resolved">("open");
   const currentPage = pagePathname(previewPath);
-  // Each row counts within the other row's choice, so a tab's number is what
-  // that tab will show.
   const inScope = (comment: PreviewComment) =>
     scope === "all" || pagePathname(comment.pagePath) === currentPage;
   const inStatus = (comment: PreviewComment) =>
@@ -127,8 +120,6 @@ function DrawerPanel({
   return createPortal(
     <div
       data-testid="preview-comments-drawer"
-      // Floats inside the preview with a gap, rounded like the other preview
-      // overlays, so the page's corners stay visible around it.
       className="fixed z-50 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-lg"
       style={{
         left: box.left + box.width - width - DRAWER_INSET,
@@ -136,8 +127,6 @@ function DrawerPanel({
         width,
         height: box.height - DRAWER_INSET * 2,
       }}
-      // Only while focus is in the drawer: keys typed into the preview go to
-      // the iframe's own document.
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
@@ -154,7 +143,6 @@ function DrawerPanel({
           <IconX size={14} aria-hidden />
         </Button>
       </div>
-      {/* Two segmented tracks, one per filter axis (docs/eva-ui.md). */}
       <div className="flex flex-col items-start gap-1.5 px-3 pb-1.5">
         <Tabs
           value={scope}

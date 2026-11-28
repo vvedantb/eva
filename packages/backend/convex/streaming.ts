@@ -144,7 +144,6 @@ export async function clearStreamingActivity(
   }
 }
 
-/** Whose live output a streaming row carries, by its entity id. */
 type StreamOwner =
   | { kind: "sandboxOwner"; owner: SandboxOwner }
   | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
@@ -152,12 +151,6 @@ type StreamOwner =
   | { kind: "report"; reportId: Id<"evaluationReports"> }
   | { kind: "automationRun"; runId: Id<"automationRuns"> };
 
-/**
- * Maps every streaming entity id the app reads to its owner: the prefixed
- * ids (`_chat/agentStreamIds.ts`, sandbox startup rows)
- * and the bare row ids of session chats, sessions, docs (interview, test
- * gen) and evaluation reports. Unknown ids map to null.
- */
 function parseStreamOwner(
   db: QueryCtx["db"],
   entityId: string,
@@ -191,7 +184,6 @@ function parseStreamOwner(
   return null;
 }
 
-/** The read rule of the entity that owns a streaming row. */
 async function canReadStream(
   db: QueryCtx["db"],
   userId: Id<"users">,
@@ -207,7 +199,6 @@ async function canReadStream(
     case "doc":
       return (await findDocWithAccess(db, owner.docId, userId)) !== null;
     case "report": {
-      // Same rule as `evaluationReports.listByDoc`, where the id comes from.
       const report = await db.get(owner.reportId);
       const doc = report ? await db.get(report.docId) : null;
       return doc !== null && (await hasRepoAccess(db, doc.repoId, userId));

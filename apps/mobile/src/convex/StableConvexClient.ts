@@ -2,7 +2,6 @@ import { ConvexReactClient, type Watch, type WatchQueryOptions } from "convex/re
 import { type ArgsAndOptions, type FunctionReference, type FunctionReturnType, getFunctionName } from "convex/server";
 import { convexToJson, type Value } from "convex/values";
 
-/** The last result a query handed out, the raw one it came from, and its JSON. */
 type Held = { raw: Value; held: Value; json: string };
 
 /**
@@ -14,7 +13,6 @@ type Held = { raw: Value; held: Value; json: string };
  * the same JSON as the last one is the last one, so nothing downstream redraws.
  */
 export class StableConvexClient extends ConvexReactClient {
-  /** Keyed by the query's name and args; dropped when its last subscriber goes. */
   private readonly results = new Map<string, Held>();
   private readonly subscribers = new Map<string, number>();
 
@@ -44,9 +42,7 @@ export class StableConvexClient extends ConvexReactClient {
     };
   }
 
-  /** `next`, or the equal result handed out before it. */
   private hold(key: string, next: Value | undefined): Value | undefined {
-    // Loading, or between a reconnect and the server's answer: keep what was held for the answer.
     if (next === undefined) return undefined;
     const last = this.results.get(key);
     if (last?.raw === next) return last.held;

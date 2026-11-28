@@ -31,7 +31,6 @@ export function buildPortListenProbeCommand(
   onListening = "yes",
   onFree = "no",
 ): string {
-  // /proc/net/tcp local_address port is hex, big-endian (13000 → 32C8).
   const hex = port.toString(16).toUpperCase().padStart(4, "0");
   return [
     `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo ${onListening} && exit 0; fi`,

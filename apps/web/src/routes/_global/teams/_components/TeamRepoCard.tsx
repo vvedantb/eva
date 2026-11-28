@@ -87,9 +87,6 @@ export function TeamRepoCard({
                   </p>
                 </div>
               </div>
-              {/* Four 28px icon buttons plus a kebab side by side on a phone is
-                  worse than either alone, so the inline row is the pointer-device
-                  affordance and the kebab below `sm` hosts the same actions. */}
               {isOwner && (
                 <div className="hidden max-sm:shrink-0 items-center gap-1 sm:flex">
                   <Button

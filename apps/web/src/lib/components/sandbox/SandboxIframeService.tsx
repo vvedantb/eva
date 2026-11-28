@@ -35,12 +35,6 @@ export interface StartResult {
   logs?: string;
 }
 
-/**
- * Formats a failed start into a user-facing message, appending sandbox logs
- * when the action returned any. A helper rather than an inline ternary because
- * React Compiler bails on a whole file when a conditional or nullish-coalescing
- * expression sits inside a try/catch, and this runs after the start await.
- */
 function startErrorMessage(
   result: { message?: string; logs?: string },
   fallback: string,
@@ -51,56 +45,29 @@ function startErrorMessage(
 }
 
 interface SandboxIframeServiceProps {
-  /** sessionStorage namespace for caching the resolved iframe URL. */
   cacheNamespace: string;
   cacheKey: string;
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
   port: number;
-  /** Caller-bound Convex action to start the service. */
   startAction: () => Promise<StartResult>;
-  /** Caller-bound Convex action to stop the service. */
   stopAction: () => Promise<unknown>;
-  /** Optional URL transform applied after preview URL resolves. */
   transformUrl?: (url: string) => string;
-  /** Optional side-effect when the service becomes ready (e.g. launch chrome). */
   onReady?: (url: string) => void;
-  /** Run startAction before accepting an already-ready port. */
   ensureStartedBeforeReady?: boolean;
-  /** Maximum poll attempts before declaring failure. */
   maxAttempts: number;
-  /** Tabler icon shown in the inactive / idle empty states. */
   icon: ComponentType<{ className?: string }>;
-  /** Shown when the sandbox itself isn't running. */
   inactiveLabel: string;
-  /** Shown when the service is idle (sandbox up, service stopped). */
   idleLabel: string;
-  /** Label for the start button. */
   startLabel: string;
-  /** Label shown beside the spinner during startup. */
   startingLabel: string;
-  /** Error prefix used when polling exhausts max attempts. */
   pollFailedError: string;
-  /** Generic error fallback when the start action throws. */
   startFailedError: string;
-  /** Generic error fallback when polling throws. */
   loadFailedError: string;
-  /** Optional `allow` attribute on the iframe (e.g. clipboard). */
   iframeAllow?: string;
-  /**
-   * When set, skips the idle Start button and starts automatically — once per
-   * distinct key. Callers pass the timestamp of whatever proved the service is
-   * already up (e.g. the agent's browsing lock), so a manual Stop sticks until
-   * the next signal instead of instantly restarting.
-   */
   autoStartKey?: number;
-  /**
-   * Replaces the raw sandbox URL behind "Open in a new tab". With idle pause on
-   * this is the Eva wake link, which survives the sandbox being paused.
-   */
   externalHref?: string;
-  /** Wakes the sandbox from the inactive state (same button as Preview). */
   wake?: SandboxWake;
 }
 
@@ -136,11 +103,6 @@ export function SandboxIframeService({
   externalHref,
   wake,
 }: SandboxIframeServiceProps) {
-  // Scope the cache key by sandboxId — Vercel signed URLs embed the sandbox
-  // ID in the domain, so a URL cached against a destroyed sandbox would
-  // 400 with "Sandbox not found" once the sandbox is recreated for the same
-  // session/task. useSessionStorage re-reads automatically when the key
-  // changes (e.g. on sandbox swap).
   const [cachedUrl, setCachedUrl] = useSessionStorage<string | null>(
     `eva:${cacheNamespace}:${cacheKey}:${sandboxId ?? "no-sandbox"}`,
     null,
@@ -155,9 +117,6 @@ export function SandboxIframeService({
   const attempts = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const handledAutoStartKey = useRef<number | undefined>(undefined);
-  // Bumped by every start, stop, sandbox swap and unmount. Async work from an
-  // older generation drops its result, so a Stop pressed mid-start stays
-  // stopped (same pattern as CustomTabPanel and useSandboxPreview).
   const generation = useRef(0);
   const refreshIframe = () => {
     setIframeKey((k) => k + 1);
@@ -174,8 +133,6 @@ export function SandboxIframeService({
     const finalUrl = transformUrl ? transformUrl(rawUrl) : rawUrl;
     setUrl(finalUrl);
     setState("running");
-    // Cache the grant-free URL; the iframe still loads `finalUrl` (with grant)
-    // for its first paint, which sets the proxy session cookie.
     setCachedUrl(stripPreviewGrant(finalUrl));
     onReady?.(finalUrl);
   };
@@ -272,26 +229,18 @@ export function SandboxIframeService({
     try {
       await stopAction();
     } catch {
-      // best-effort stop
     }
   };
 
   /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler, no-effect/no-chain-state-updates, no-effect/no-pass-data-to-parent --
      Reads sessionStorage and kicks off a readiness poll against the sandbox;
      the sandbox can also go down without any local event. */
-  // Hydrate from sessionStorage cache when the sandbox is up; clear on stop.
-  // Desktop (ensureStartedBeforeReady) must NOT paint a cached URL immediately —
-  // a stale noVNC URL loads the HTML chrome while the RFB WebSocket is dead
-  // (zombie websockify), which looks like a permanent "Loading" bar. Re-run
-  // start + readiness poll instead.
   useEffect(() => {
     if (isActive && sandboxId && state === "idle") {
       if (
         autoStartKey !== undefined &&
         handledAutoStartKey.current !== autoStartKey
       ) {
-        // Mark before starting so a later Stop (state → idle) is not undone by
-        // this effect re-running against the same key.
         handledAutoStartKey.current = autoStartKey;
         void start();
         return;
@@ -321,13 +270,6 @@ export function SandboxIframeService({
     autoStartKey,
   ]);
   /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler, no-effect/no-chain-state-updates, no-effect/no-pass-data-to-parent */
-
-  // A poll belongs to one sandbox. Cancel it only when the sandbox goes away
-  // or the panel unmounts — not whenever a callback prop changes identity,
-  // which used to kill the poll and leave the panel on "starting" for good.
-  // The cancelled start can no longer settle the state, so go back to idle:
-  // the auto-start / cache effect only runs from idle, and the "starting"
-  // view has no Retry, so leaving it there stranded the panel on a spinner.
   useEffect(
     () => () => {
       generation.current += 1;
@@ -356,10 +298,6 @@ export function SandboxIframeService({
     return () =>
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
-
-  // `isFullscreen` is owned here for the API symmetry with the original
-  // panels; we don't currently render anything different based on it, but it
-  // could drive an icon swap in the future. Reading it keeps lint happy.
   void isFullscreen;
 
   if (!isActive || !sandboxId) {

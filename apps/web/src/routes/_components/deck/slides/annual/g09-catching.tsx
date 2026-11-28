@@ -14,13 +14,6 @@ interface Catch {
   caught: string;
 }
 
-/**
- * The presenter's own lines from Eva sessions, lightly trimmed:
- * - CarePulse #119, 19 October 2026: production database connection limit.
- * - Eva #434, 9 November 2026: test audit; 21,708 lines removed, CI check
- *   83.6 s to 16.6 s (#1036, 20 November 2026).
- * - CarePulse #315, 19 November 2026: home care tiers, tested on staging.
- */
 const CATCHES: readonly Catch[] = [
   {
     asked:
@@ -53,7 +46,6 @@ export function AnnualCatching() {
       <div className="mt-8 flex flex-col gap-4">
         {CATCHES.map((item, index) => (
           <Reveal key={item.asked} step={index + 1}>
-            {/* p-6 inside a 24px outer radius keeps the corners concentric. */}
             <Card className="grid grid-cols-[1.1fr_1fr] gap-8 rounded-[24px] p-6">
               <div>
                 <div className={LABEL}>I asked</div>

@@ -117,11 +117,8 @@ import { useChatTranscript } from "@/chat/useChatTranscript";
 import { ProjectTaskFacts, useProjectTaskRow } from "@/projects/ProjectTaskFacts";
 import { ProjectTaskPromptCard } from "@/projects/ProjectTaskPromptCard";
 
-/** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
 
-/** The session actions the chat header ⋯ adds; it has Copy link of its own. */
-// The header has its own Copy link (every chat kind), so the session's is left out.
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
@@ -143,38 +140,29 @@ export default function ChatScreen() {
   const scheme = useScheme();
   const chat = useQuery(api.chats.get, { target });
   const parentId = chat?.parentId;
-  // The web's load plan: newest 30, live after that, older pages as the reader scrolls up.
   const transcript = useChatTranscript(parentId);
   const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const chatQuestion = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
-  // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
   const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
-  // Read while it is on screen (this screen focused, the app in front), as the web marks its open chat;
-  // `newSinceAt` places the "NEW" divider above the first reply you had not seen.
   const focused = useIsFocused();
   const appActive = useAppActive();
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   const me = useQuery(api.auth.me, {});
-  // "Since you've been gone", as the web: written when you return after a long absence, under the newest message.
   const { recap, dismiss: dismissRecap, rate: rateRecap } = useChatRecap({
     parentId,
     active: focused && appActive,
     messages: messages ?? [],
     currentUserId: me ?? undefined,
   });
-  // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
-  // Eva's open turn answers in a reply thread: no running state here, a status line opens the thread.
   const threadTurn = useQuery(
     api.messages.openThreadTurn,
     parentId && chat?.project !== undefined ? { parentId } : "skip",
   );
-  // A thread turn's question is answered in its thread screen, not here.
   const pending = threadTurn ? null : chatQuestion;
-  // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
   const stop = useMutation(api.chats.stop);
@@ -182,13 +170,9 @@ export default function ChatScreen() {
   const rate = useMutation(api.feedback.rateTurn);
   const send = useMutation(api.chats.send);
   const simpleView = useSimpleView();
-  // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
   const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions"), sessionId: chat?.session?.id });
 
-  // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
   const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
-  // A user message with only attachments still shows, as the web; so does a reply with only captures.
-  // System rows draw as the web: never the sandbox start and stop rows, none at all in simple view.
   const visible = visibleChatMessages(messages ?? [], simpleView).filter((message) =>
     message.isSystemAlert === true
       ? message.content.trim() !== ""
@@ -198,25 +182,17 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  // A project's coordinator chat: cards for the tasks Eva created or gave work to.
   const chatProject = chat?.project ? { projectId: chat.project.id, repoId: chat.repoId } : undefined;
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chatProject);
-  // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
-  // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
-  // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
   const messageMenu = useMessageMenu(restore.request);
-  // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
   const quotes = useQuotes();
-  // "Find in chat" (the web `ThreadFindBar`): the bar under the header while open, and the message of its active match.
-  // Kept per chat: a tab switch to another chat of the session (the same screen) closes it.
   const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
   const requestRecap = useMutation(api.chatRecaps.requestFull);
-  // A project task's chat is the task: its status and PR line under the title, and its prompt before its first run.
   const projectTask = useProjectTaskRow(chat?.task?.id);
 
   if (chat === undefined || chat === null) {
@@ -232,7 +208,6 @@ export default function ChatScreen() {
     );
   }
 
-  // The web rule: a finished reply ends a stale open turn, so Stop never sticks.
   const working = isChatTurnExecuting({ status: turn, messages });
   const { canReply } = chat;
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
@@ -242,10 +217,8 @@ export default function ChatScreen() {
     isSandboxToggling: sandbox.isToggling,
     activeTitle: "No messages yet. Start the conversation!",
   });
-  // Awake, the web line teaches desktop drop, so the phone keeps the title alone.
   const emptyTitle = empty.title;
   const emptyDescription = sandboxAwake ? "" : empty.description;
-  // Why a closed chat takes no message: its task or project is archived, or its session's PR merged or closed, or it was archived (the web banner).
   const closedReason = chat.archived
     ? archiveCopy(chat.archived).readOnly
     : chat.session
@@ -254,25 +227,19 @@ export default function ChatScreen() {
   const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
-  // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
   const bubbleGroups = findBubbleGroups(visible, {
     currentUserId: me ?? undefined,
     assistantBubbles: chat.project !== undefined,
     breaksBefore: newBoundaryId === undefined ? dayStarts : new Set([...dayStarts, newBoundaryId]),
   });
-  // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
-  // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
-  // A question the agent saved on its last reply, as the web: it stays after the turn (and the sandbox)
-  // stops, and its answer goes as a chat message, which wakes the sandbox.
   const savedRaw = visible[visible.length - 1]?.pendingQuestion;
   const savedQuestions = parsePendingQuestion(savedRaw);
   const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
-  // The web recovery card reads every message, so a later system alert also hides it.
   const newestMessage = messages?.[messages.length - 1];
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
@@ -295,9 +262,6 @@ export default function ChatScreen() {
     stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
   };
 
-  // The transcript a fork carries. With history above the loaded rows, the
-  // server builds it, as the web does. (Outside the try below: the React
-  // Compiler cannot compile a conditional inside a try.)
   const forkPrefix = (messageId: string) =>
     transcript.hasOlder && parentId
       ? convex.query(api.messages.forkPrefixByParent, { parentId, throughMessageId: messageId })
@@ -307,7 +271,6 @@ export default function ChatScreen() {
             messageId,
           ),
         );
-  // Fork: a new session that starts from the transcript up to this message, as the web.
   const handleFork = async (messageId: string) => {
     try {
       const prefix = await forkPrefix(messageId);
@@ -318,14 +281,11 @@ export default function ChatScreen() {
       toast.error("Couldn't fork the chat");
     }
   };
-  // One function each for every row (see `ChatMessageRow`).
   const forkFrom = chat.kind === "session" ? (messageId: string) => void handleFork(messageId) : undefined;
   const rateReply = (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => {
     rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
   };
 
-  // A session reply that changed code: its Changes chip (Diff this turn, Restore), as the web's
-  // turn checkpoint actions, which simple view hides.
   const session = chat.session;
   const turnFor = (message: ChatMessage): TurnChangesTarget | undefined => {
     const checkpoint = session && !simpleView ? turnCheckpoint(message) : null;
@@ -338,9 +298,6 @@ export default function ChatScreen() {
     return turn ? <TurnChangesChip turn={turn} /> : null;
   };
   const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
-  // A panel button sends its text as a message, as the web: withheld on a closed
-  // chat and on one whose sandbox is asleep, which disables the buttons.
-  // Retry on a failed turn re-sends the prompt that turn answered, attachments included, as the web.
   const retryFor = (messageId: string) => {
     const prompt = precedingUserTurns.get(messageId);
     if (!canReply || !prompt) return undefined;
@@ -350,12 +307,10 @@ export default function ChatScreen() {
       );
     };
   };
-  // Reply threads, in the project coordinator chat only (the web `replyThreads`).
   const canOpenThread = (message: { isSystemAlert?: boolean; content: string }) =>
     chat.project !== undefined && message.isSystemAlert !== true && message.content.trim() !== "";
   const openThread = (rootId: string) =>
     router.push({ pathname: "/chat/[target]/thread/[rootId]", params: { target, rootId } });
-  // The message footer's actions, behind a press and hold (user choice): built when a message is held.
   const menuFor = (messageId: string) => {
     const message = visible.find((entry) => entry._id === messageId);
     if (!message) return { actions: [] };
@@ -369,8 +324,6 @@ export default function ChatScreen() {
       onFork: forkFrom ? () => forkFrom(message._id) : undefined,
       onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
       turn: turnFor(message),
-      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it,
-      // so not while a question card stands in its place.
       onSelectText:
         message.role === "assistant" && canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
@@ -378,12 +331,10 @@ export default function ChatScreen() {
       onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
     });
   };
-  // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
   const findDocuments = collectThreadFindDocuments(
     visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
   );
   const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
-  // The web "Recap chat": a recap of the whole chat, as the "Recap" card under the newest message.
   if (parentId && visible.length > 0) {
     leadingMenu.push({
       label: "Recap chat",
@@ -443,11 +394,8 @@ export default function ChatScreen() {
           onViewableItemsChanged={seenRows.onViewableItemsChanged}
           data={newestFirst}
           keyExtractor={(message) => message._id}
-          // The side padding is in each row: Android flips an inverted list on both axes, which would swap it here.
           contentContainerClassName="px-0"
-          // Web: messages `gap-3`.
           ItemSeparatorComponent={MessageGap}
-          // Inverted, the end is the top: the next page of older history as the reader nears it.
           onEndReached={transcript.loadOlder}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
@@ -458,7 +406,6 @@ export default function ChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            // A task or project that has not chatted yet has no chat to load (`parentId`).
             messages === undefined && parentId !== undefined ? (
               <CenteredSpinner label="Loading messages" />
             ) : (messages?.length ?? 0) === 0 ? (
@@ -472,7 +419,6 @@ export default function ChatScreen() {
             ) : null
           }
           ListHeaderComponent={
-            // Inverted, the header is the bottom, under the newest message.
             <>
               {recap && visible.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
@@ -483,13 +429,11 @@ export default function ChatScreen() {
                     onDismiss={dismissRecap} />
                 </View>
               ) : null}
-              {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <Shimmer>Working…</Shimmer>
                 </View>
               ) : null}
-              {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}
               {cards.trailing.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <InlineCards cards={cards.trailing} rowKey="trailing" onReply={panelReply} onOpenWebChat={openWebChat} />
@@ -502,8 +446,6 @@ export default function ChatScreen() {
               ) : null}
             </>
           }
-          // Plain values and stable handlers, so a message that did not change keeps its output
-          // when the list draws a new batch or the screen re-renders.
           renderItem={({ item: message }) => {
             const fromTeammate = isOtherUserChatMessage(message, me ?? undefined);
             return (
@@ -517,7 +459,6 @@ export default function ChatScreen() {
                 joinsPrevious={bubbleGroups.joinsPrevious.has(message._id)}
                 joinsNext={bubbleGroups.joinsNext.has(message._id)}
                 senderName={
-                  // One name over a run of a teammate's bubbles.
                   fromTeammate && message.userId && !bubbleGroups.joinsPrevious.has(message._id)
                     ? teammateNames.get(message.userId)
                     : undefined
@@ -531,7 +472,6 @@ export default function ChatScreen() {
                 after={planAfter(message._id)}
                 changes={changesFor(message)}
                 onPanelReply={panelReply}
-                // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
                 onOpenThread={chat.project !== undefined ? openThread : undefined}
@@ -542,10 +482,7 @@ export default function ChatScreen() {
       </SeenRowsContext.Provider>
         {restore.dialog}
         {quotes.sheet}
-        {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
-        {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
-          {/* Once the person is known: the typing presence heartbeat needs their id. */}
           {me ? (
           <ChatDock
             target={target}
@@ -562,7 +499,6 @@ export default function ChatScreen() {
             onStop={handleStop}
             banners={
               <>
-                {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
@@ -587,21 +523,12 @@ export default function ChatScreen() {
           />
           ) : null}
         </ConversationDock>
-        {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
       </Conversation>
     </View>
   );
 }
 
-/**
- * The chat's dock: the agent's question card, the composer or "This chat is
- * closed". It owns the draft, the attachments and the model pick, so a
- * keystroke redraws the dock only, not the transcript above it. It stays
- * mounted while the chat is open, so a draft outlives a question card. The
- * banners and the tasks and queue panels sit on the composer, as the web; the
- * screen builds them, so a keystroke here does not redraw them either.
- */
 function ChatDock({
   target,
   chat,
@@ -627,38 +554,25 @@ function ChatDock({
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
   questions: ParsedQuestion[] | null;
-  /** The last reply's saved question (`messages.pendingQuestion`), when no blocking one is open. */
   savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
-  /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
   messagesNewestFirst: ChatMessage[];
-  /** The chat takes a message (`chat.canReply`). */
   canReply: boolean;
-  /** Why the chat is closed (an archived task or project, `getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
-  /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
   banners: ReactNode;
-  /** The live tasks, then the queued messages, flush on the composer only (not over a question card), as the web dock. */
   panels: ReactNode;
-  /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
-  /** Quotes from replies: chips over the field, sent after the prompt. */
   quotes: Pick<Quotes, "items" | "remove" | "drop">;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
   const send = useMutation(api.chats.send);
   const answer = useMutation(api.pendingQuestions.answer);
-  // The saved question just answered: its card hides before the answer's message arrives.
   const [answeredSaved, setAnsweredSaved] = useState<string | null>(null);
   const attachments = useAttachments();
-  // The `/` list follows the chat's model provider, as the web composer.
-  // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
   const draft = useDraftSync(
     chat.session ? { kind: "sessionChat", sessionId: chat.session.id, chatId: chat.session.chatId } : null,
   );
-  // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
-  // before a task or project chats it has none, so this chat's own target stands in.
   const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
   const composer = useMentionComposer(
     chat.repoId,
@@ -667,28 +581,21 @@ function ChatDock({
       draft.save(tokenized);
       if (tokenized) typing.onActivity();
     },
-    // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
     chat.project !== undefined ? [EVA_MENTION_ITEM] : [],
   );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
   const router = useRouter();
-  // The diff comments drafted on this chat's pull request: chips on the composer, sent with the next prompt.
   const prNumber = chat.prUrl === undefined ? undefined : prNumberFromGithubUrl(chat.prUrl);
   const review = usePendingLineComments(chat.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber });
 
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
-  // limit, sends queue until just after the reset (the server holds them on the same model and account).
-  // The clock ticks once a minute, here only, so the hold lifts at the reset without redrawing the chat.
   const now = useNow(60_000);
   const usageLimitHeld = isHeldByUsageLimit(
     findUsageLimitHold(messagesNewestFirst, now),
     normalizeAIModel(chat.model),
     chat.providerAccountId ?? null,
   );
-  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
-  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
   const composerState = sandboxComposerState({
     isSandboxActive: chat.sandboxActive,
     isSwitchingAccount: modelPick.switching,
@@ -706,18 +613,14 @@ function ChatDock({
       toast.error("Wait for the attachments to upload");
       return;
     }
-    // The web composer is locked while the new account's daemon starts.
     if (modelPick.switching) {
       toast.error("Wait for the account switch");
       return;
     }
     const attachmentStorageIds = attachments.storageIds;
-    // As the web: the comments go as `<review_comment>` blocks and leave the chips once the send lands.
     const sentComments = review.comments;
     attachments.clear();
     typing.stopTyping();
-    // The quotes, then the review comments, go after the prompt, as the web
-    // (`ChatBody`, then `useChatSend`); each leaves only once the send lands, so a retry keeps them.
     const sentQuotes = quotes.items;
     send({
       target: chat.target,
@@ -732,14 +635,11 @@ function ChatDock({
     );
   };
 
-  // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-  // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
   const questionDock = (key: string, asked: ParsedQuestion[], onSubmit: (answers: Record<string, string>) => Promise<void>) => (
     <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
       <ChoiceQuestion key={key} questions={asked} buttonWeight="semibold" onSubmit={onSubmit} />
     </View>
   );
-  // A blocking question wins: it holds the turn open and its answer resumes the run.
   const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && canReply ? savedQuestion : null;
 
   return pending && questions ? (
@@ -753,7 +653,6 @@ function ChatDock({
     })
   ) : saved ? (
     questionDock(saved.raw, saved.questions, async (answers) => {
-      // Hidden at once, as the web, until the reply moves on.
       setAnsweredSaved(saved.raw);
       try {
         await send({ target: chat.target, message: formatQuestionAnswers(saved.questions, answers), attachmentStorageIds: [] });
@@ -763,9 +662,6 @@ function ChatDock({
       }
     })
   ) : canReply ? (
-    // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
-    // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
-    // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
       {banners}
       {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
@@ -816,7 +712,6 @@ function ChatDock({
             />
           ) : null,
         )}
-        // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
           <ComposerFooter
@@ -851,23 +746,12 @@ function ChatDock({
   );
 }
 
-/**
- * A transcript message as `messages.listByParent` returns it. The query's
- * validator adds the resolved captures and attachments, which its handler's
- * inferred type drops, so they are named here as the web `ChatBodyMessage` does.
- */
 type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number] & {
   media?: ResolvedMediaEntry[];
   attachments?: ResolvedMediaEntry[];
   attachmentUrls?: Array<string | null>;
 };
 
-/**
- * One transcript message: its day divider, bubble or reply, and footer. Its
- * own component with plain values and handlers that take the message id, so
- * the React Compiler keeps an unchanged message's output when the inverted
- * list draws a new batch or the screen re-renders.
- */
 function ChatMessageRow({
   message,
   dayStart,
@@ -893,44 +777,28 @@ function ChatMessageRow({
 }: {
   message: ChatMessage;
   dayStart: boolean;
-  /** The first reply you had not seen: the "NEW" divider goes above it. */
   newStart: boolean;
-  /** The message of Find's active match: a tinted band marks it. */
   findActive: boolean;
   fromTeammate: boolean;
-  /** The project coordinator chat: Eva's replies sit in a bubble with her mark (the web `assistantBubbles`). */
   evaBubble: boolean;
-  /** This row continues the run of one sender's bubbles above it: it sits 4 under it, not 12. */
   joinsPrevious: boolean;
-  /** The run goes on below: the avatar and the footer wait for its last bubble. */
   joinsNext: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
-  /** The streaming row's entity id while this is the live reply. */
   live: string | undefined;
-  /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
-  /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
   menuFor: (messageId: string) => MessageMenu;
-  /** The agent's cards placed under this message (`render_ui`, `render_html`). */
   cards: readonly InlineCard[] | undefined;
-  /** The artifacts and reports placed under this message. */
   outputs: readonly TurnOutput[] | undefined;
-  /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
-  /** The coordinator chat: opens a message's reply thread ("N replies"). */
   onOpenThread?: (rootId: string) => void;
-  /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
-  /** A reply that changed code: its Changes chip, over the footer. */
   changes?: ReactNode;
 }) {
   const scheme = useScheme();
-  // Find's active match: the message on a primary tint, as the web paints its active match.
   const findBand = findActive ? { backgroundColor: withAlpha(EVA_THEME[scheme].primary, 0.1) } : undefined;
-  // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
   if (message.isSystemAlert === true) {
     return (
       <View className={`gap-3 ${THREAD_INSET}`}>
@@ -941,7 +809,6 @@ function ChatMessageRow({
     );
   }
   const isUser = message.role === "user";
-  // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
   const failure = isUser
     ? null
     : turnErrorTitle({ errorType: message.errorType, turnModel: turn?.model, messageModel: message.model, providerLabel });
@@ -950,17 +817,14 @@ function ChatMessageRow({
     cards && cards.length > 0 ? (
       <InlineCards cards={cards} rowKey={message._id} onReply={onPanelReply} onOpenWebChat={onOpenWebChat} />
     ) : null;
-  // The web `panelTabs`: a settled reply with prose trades places with its cards.
   const tabbed = !isUser && cardList !== null && live === undefined && message.content.trim() !== "";
   const outputList = outputs && outputs.length > 0 ? <TurnOutputs outputs={outputs} /> : null;
-  // The user turn: attachments above the text, as the web.
   const userBody = (
     <>
       <UserAttachments attachments={attachments} />
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  // The coordinator chats like a person: "Eva is typing…" while it works, then the reply only.
   const replyBody = isUser ? null : live && evaBubble ? (
     <EvaTypingText />
   ) : live ? (
@@ -978,9 +842,7 @@ function ChatMessageRow({
       stopped={message.stopped === true}
     />
   );
-  // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
-  // "N replies" in the footer line, always shown (the web footer's thread control).
   const threadControl =
     onOpenThread && (message.replyCount ?? 0) > 0 ? (
       <ThreadSummary rootId={message._id} replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
@@ -989,12 +851,8 @@ function ChatMessageRow({
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
-                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
-                {/* A press and hold opens the message's menu (user choice, as iMessage): the kit `Message`
-                    lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
-                  // The coordinator chat caps every person's bubble at 70%, as the web; Eva's reply is full width.
                   className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
                   style={fromTeammate ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
@@ -1007,13 +865,10 @@ function ChatMessageRow({
                   ) : evaReply ? (
                     <EvaReply>{replyBody}</EvaReply>
                   ) : (
-                    // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
-                    // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
                     <MessageContent bubble="tint" className={isUser ? undefined : "px-1 py-2"}>
                       {isUser ? userBody : replyBody}
                     </MessageContent>
                   )}
-                  {/* The web user turn: its cards, then its outputs. A reply: outputs, then the cards the tabs did not take. */}
                   {isUser && cardList ? <View className="mt-1 w-full">{cardList}</View> : null}
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
@@ -1027,7 +882,6 @@ function ChatMessageRow({
                       leading={threadControl}
                     />
                   ) : threadControl ? (
-                    // A grouped bubble has no footer: the replies keep their own line.
                     <View className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
@@ -1036,10 +890,8 @@ function ChatMessageRow({
   );
 }
 
-/** The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`. */
 const THREAD_INSET = "pl-[22px] pr-8";
 
-/** The web `gap-3` between two messages. */
 function MessageGap() {
   return <View className="h-3" />;
 }

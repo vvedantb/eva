@@ -6,17 +6,10 @@ import { EASE } from "./tokens";
 
 export interface SheenProps {
   children: ReactNode;
-  /** Build step to pass on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
   duration?: number;
-  /** Put the rounding here so the band is clipped to the same shape as the child. */
   className?: string;
-  /**
-   * Plays the band. Off by default: a sheen on every card read as noise, so
-   * only a deck's one or two headline numbers opt in. Without it the wrapper
-   * just keeps the child's clip and rounding.
-   */
   hero?: boolean;
 }
 
@@ -51,8 +44,6 @@ export function Sheen({
         <m.span
           aria-hidden
           className="pointer-events-none absolute inset-y-0 left-0 w-2/3"
-          // The skew leans the band like light off glass; the gradient runs flat
-          // so its left and right edges are fully transparent.
           style={{ background: band, skewX: -14 }}
           initial={{ x: "-100%" }}
           animate={{ x: on ? "160%" : "-100%" }}

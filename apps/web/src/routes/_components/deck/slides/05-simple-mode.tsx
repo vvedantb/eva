@@ -3,13 +3,11 @@ import { Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import { Spotlight } from "../_components/motion";
 import { RealModelPicker } from "./_parts/RealModelPicker";
 
-/** The light sits under the long list, then settles on the slider. */
 const GLOW = [
   { x: 300, y: 300, size: 720 },
   { x: 300, y: 250, size: 620 },
 ];
 
-/** A small push on the switch, so the simpler picker reads as the answer. */
 const SHOTS = [{}, { translateZ: 18 }];
 
 export function Slide05SimpleMode() {

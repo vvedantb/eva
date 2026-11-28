@@ -2,16 +2,6 @@ import { modelMessageSchema, type ModelMessage } from "ai";
 import type { Infer } from "convex/values";
 import type { avePageContextValidator } from "../_validators/tableFields";
 
-/**
- * Turns stored Manager Ave rows into the model's conversation. Pure so the
- * replay, fallback and trim rules are unit tested (`tests/aveContext.test.ts`).
- *
- * There is no provider-side transcript any more: this is Ave's whole memory.
- * Assistant rows replay their exact tool calls and results from
- * `modelMessages`, so Ave remembers which agents it started and what they
- * returned, not just what it said about them.
- */
-
 /** How many recent rows the run reads. */
 export const AVE_CONTEXT_ROWS = 30;
 /** Rough character budget; the oldest turns drop first. */
@@ -27,10 +17,6 @@ export type AveContextRow = {
 
 export type AvePageContext = Infer<typeof avePageContextValidator>;
 
-/**
- * Each user turn carries the page it was sent from, so "this", "here" or
- * "the one I'm looking at" resolve without a follow-up question.
- */
 function userTurnContent(row: AveContextRow): string {
   const page = row.pageContext;
   if (page === undefined) return row.content;
@@ -55,7 +41,6 @@ function userTurnContent(row: AveContextRow): string {
   return `${lines.join("\n")}\n\n${row.content}`;
 }
 
-/** `modelMessageSchema` is the SDK's own (Zod 4) schema, so each entry is checked with it directly. */
 function parseReplay(raw: string): ModelMessage[] | null {
   let decoded;
   try {
@@ -100,8 +85,6 @@ export function buildModelMessages(
     keepFrom = i;
   }
   const kept = turns.slice(keepFrom).flat();
-  // A replay that begins with an assistant or tool message is fine for the
-  // model; one that begins with a tool result orphaned from its call is not.
   while (kept.length > 0 && kept[0].role === "tool") kept.shift();
   return kept;
 }

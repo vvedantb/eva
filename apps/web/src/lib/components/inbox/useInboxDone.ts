@@ -12,7 +12,6 @@ import { undoToast } from "@/lib/utils/undoToast";
 export type InboxRow = FunctionReturnType<typeof api.inbox.list>[number];
 export type InboxListArgs = FunctionArgs<typeof api.inbox.list>;
 
-/** Drops the rows `keep` rejects from the Inbox list on screen. */
 function patchRows(
   localStore: OptimisticLocalStore,
   listArgs: InboxListArgs,

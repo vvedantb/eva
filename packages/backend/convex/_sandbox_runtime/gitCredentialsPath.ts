@@ -1,15 +1,3 @@
-/**
- * Pure helpers for the `/api/git-credentials` route.
- *
- * A multi-repo session's linked repos can belong to a different GitHub App
- * installation than the primary repo, so the in-sandbox credential helper sends
- * the repository it is authenticating for (git's `path=` component) and the
- * backend mints a token for *that* repo's installation. This module holds the
- * two decisions that logic turns on — parsing the path and checking the
- * sandbox's allow-list — with no Convex or node dependencies, so they are unit
- * testable and usable from the isolate that serves the HTTP route.
- */
-
 /** Owner and repository name taken from a git credential `path=` component. */
 export type RepoPath = { owner: string; name: string };
 

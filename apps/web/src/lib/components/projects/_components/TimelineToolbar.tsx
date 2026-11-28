@@ -85,9 +85,6 @@ export function TimelineToolbar({
       </Tabs>
 
       <div className="flex items-center overflow-hidden rounded-surface bg-muted/40">
-        {/* Real 40px below `sm` rather than `hit-target`: these two abut, so an
-            8px pseudo-element bleed would eat into the neighbour, and the
-            group's `overflow-hidden` would clip it anyway. */}
         <Button
           variant="ghost"
           size="icon"

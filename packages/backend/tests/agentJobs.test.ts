@@ -8,13 +8,6 @@ import { automationRunStreamingEntityId } from "../convex/_chat/agentStreamIds";
 import { isTrackedWorkflowRunning, workflow } from "../convex/workflowManager";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The one-shot agent primitive (`_agentJobs/`, `agentJobs.ts`): one job per
- * owner slot, completions fenced by the turn lease and routed to the turn's
- * workflow, and every stop path (backstop, cancel) closes the turn, frees the
- * slot, clears the streaming rows and deletes the ephemeral sandbox.
- */
-
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|agent-jobs-owner";
 const STRANGER = "clerk|agent-jobs-stranger";
@@ -27,8 +20,6 @@ const reply = {
 };
 
 beforeEach(() => {
-  // Hold every workflow step and scheduled job: these tests read what the
-  // mutations wrote and scheduled, not what a background run does later.
   vi.useFakeTimers();
 });
 afterEach(() => {
@@ -109,7 +100,6 @@ async function createFixture() {
       workflowId,
     });
   const owner = t.withIdentity({ subject: OWNER });
-  /** Starts test generation (a real job) and returns its workflow id. */
   const startTestGen = async () => {
     await owner.mutation(api.testGenWorkflow.startTestGen, {
       docId: ids.docId,
@@ -138,7 +128,6 @@ describe("startAgentJob", () => {
     "takes a free slot, schedules the backstop and refuses a busy slot",
     async () => {
       const f = await createFixture();
-      // A slot left by a workflow the component no longer knows reads free.
       await f.t.run(async (ctx) => {
         await ctx.db.patch(f.docId, { activeWorkflowId: "ended-workflow" });
       });
@@ -188,7 +177,6 @@ describe("agentJobs:handleCompletion", () => {
       const f = await createFixture();
       const sendEvent = vi.spyOn(workflow, "sendEvent");
       const old = await f.openTurn(f.docId, String(f.docId), "sbx", "wf-old");
-      // A newer job opens its own turn, which supersedes the old one.
       const current = await f.openTurn(
         f.docId,
         String(f.docId),
@@ -227,8 +215,6 @@ describe("agentJobs:handleCompletion", () => {
         "sbx",
         workflowId,
       );
-      // The owner's slot names another workflow: the event must still go to
-      // the one bound to the turn.
       await f.t.run(async (ctx) => {
         await ctx.db.patch(f.docId, { activeWorkflowId: "wf-slot" });
       });
@@ -274,7 +260,6 @@ describe("agentJobs.handleStale backstop", () => {
       );
       await f.addStreamingRow(String(f.docId));
 
-      // A backstop for an earlier job leaves the current one alone.
       await f.t.mutation(internal.agentJobs.handleStale, {
         ownerId: f.docId,
         workflowId: "wf-earlier",
@@ -353,7 +338,6 @@ describe("stopAgentJob", () => {
     async () => {
       const f = await createFixture();
       const workflowId = await f.startTestGen();
-      // A workflow step (`setRunning`) sets this; the held timers never run it.
       await f.t.run(async (ctx) => {
         await ctx.db.patch(f.docId, { testGenStatus: "running" });
       });

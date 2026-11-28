@@ -8,7 +8,6 @@ import type { ComponentType } from "react";
 import type { MentionMenuState } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
-/** The web picker's kind glyphs (document, terminal, board, checklist) as Tabler icons. */
 const KIND_ICON: Record<MentionKind, ComponentType<IconProps>> = {
   document: IconFileText,
   session: IconTerminal2,
@@ -55,7 +54,6 @@ export function MentionMenu({
         trailing={Kind ? <Kind size={16} color={muted} /> : undefined}
         badge={item.badge}
         badgeIcon={item.provider ? <ProviderIcon provider={item.provider} size={11} /> : undefined}
-        // The row Return picks, as the web's first (keyboard) row.
         selected={index === 0}
         onPress={() => onPick(item)}
       />

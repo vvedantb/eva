@@ -37,7 +37,6 @@ const SKILLS: readonly Skill[] = [
   { step: JUDGE, icon: IconScale, line: "Knowing how to judge the answer" },
 ];
 
-/** Leans towards each half as it lands, then squares up for the close. */
 const SHOTS: readonly CameraShot[] = [
   { translateZ: -40 },
   { rotateY: 6, x: 60 },
@@ -113,7 +112,6 @@ export function FridayAskJudge() {
           {SKILLS.map((skill) => (
             <SkillCard key={skill.line} skill={skill} />
           ))}
-          {/* The two halves only count together. */}
           <m.span
             aria-hidden
             className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl font-semibold text-white/40"

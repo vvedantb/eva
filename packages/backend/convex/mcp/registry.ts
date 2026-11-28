@@ -12,13 +12,9 @@ import { z } from "zod";
 export interface EvaTool {
   readonly name: string;
   readonly description: string;
-  /** true when the tool creates, changes, sends or stops something; false for pure reads. */
   readonly mutating: boolean;
-  /** The zod raw shape of the tool's input, kept for JSON-schema export. */
   readonly inputShape: z.ZodRawShape;
-  /** Mounts the tool as an ordinary MCP tool. */
   readonly registerFlat: (server: McpServer) => void;
-  /** Parses `argsJson` at the boundary with the tool's own schema and runs the handler. */
   readonly invoke: (argsJson: string) => Promise<CallToolResult>;
 }
 
@@ -36,9 +32,6 @@ export function defineTool<Shape extends z.ZodRawShape>(def: {
   handler: (args: z.output<z.ZodObject<Shape>>) => Promise<CallToolResult>;
 }): EvaTool {
   const schema = z.object(def.input);
-  // Widened so the SDK's generic overload resolves against a plain raw shape.
-  // The SDK still validates with the real shape; the parse below re-derives
-  // the precise output type for the handler.
   const inputShape: z.ZodRawShape = def.input;
   return {
     name: def.name,

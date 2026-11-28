@@ -1,7 +1,3 @@
-// The headless browser the filming scripts share. playwright-core is the one
-// dependency filming needs and the kit doesn't, so a missing install says how
-// to fix it rather than failing on the import. Chrome is the installed one
-// (CHROME_PATH overrides), found on macOS, Windows and Linux alike.
 export async function launch() {
   let chromium
   try {

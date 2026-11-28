@@ -10,7 +10,6 @@ import {
 } from "../../_components/motion";
 import { FriLines, FriWindow } from "./FriMock";
 
-/** The pointer arrives, presses, and the button answers. */
 const CLICK_AT = 1.05;
 
 export function MoF1PreviewPanel() {

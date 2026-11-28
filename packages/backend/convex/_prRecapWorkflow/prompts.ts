@@ -120,8 +120,6 @@ export function parsePrRecapOutput(
     return { ok: false, reason: "invalid_markdown" };
   }
 
-  // Broken walkthrough JSON does not sink a good markdown recap: the reader
-  // gets every file in one step instead (see `fallbackRecapWalkthrough`).
   const walkthrough =
     parseRecapWalkthrough(
       raw.slice(markerIndex + PR_RECAP_WALKTHROUGH_MARKER.length),

@@ -34,7 +34,6 @@ export function OptionPill({
 }: {
   icon: ReactNode;
   label: string;
-  /** The chip holds a value: its label is in the foreground colour. */
   set: boolean;
   accessibilityLabel: string;
   expanded?: boolean;
@@ -49,7 +48,6 @@ export function OptionPill({
       accessibilityState={{ expanded, disabled }}
       disabled={disabled}
       onPress={onPress}
-      // 40 high, and 4 of slop above and below (not to the sides: the chips sit 6 apart).
       hitSlop={{ top: 2, bottom: 2 }}
       className="min-h-10 max-w-full flex-row items-center gap-1.5 rounded-full px-2.5 active:opacity-70"
       style={{ backgroundColor: theme.secondary }}
@@ -233,7 +231,6 @@ export function TagsSheet({ open, onOpenChange, allTags, value, onChange }: Shee
       }
     >
       {typed && !allTags.includes(typed) ? <SheetRow icon={IconPlus} title={`Create "${typed}"`} onPress={create} /> : null}
-      {/* Tags made here are not in `allTags` yet; list them so they can be removed. */}
       {[...value.filter((tag) => !allTags.includes(tag)), ...shown].map((tag) => (
         <SheetRow key={tag} icon={IconTag} title={tag} active={value.includes(tag)} multiple onPress={() => toggle(tag)} />
       ))}

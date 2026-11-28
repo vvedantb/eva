@@ -3,10 +3,6 @@ import type { ReactNode } from 'react'
 import '../parts/parts.css'
 import './extras.css'
 
-// A second specimen sheet: Chip, Swap, Avatar rings, Meter tones, Menu
-// hover, Expand, the solid glyphs and BrandMark. A catalog of how each
-// behaves, not a composition to copy.
-
 const LINES = ['Ship it on Friday.', 'Ship it on Friday, once QA has signed off on the release.']
 const STRENGTH = [
   { v: 0.2, tone: 'danger' },

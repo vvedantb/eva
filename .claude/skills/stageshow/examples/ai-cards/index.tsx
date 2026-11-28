@@ -1,29 +1,6 @@
 import { Bar, Check, Collapse, Field, Stage, Text, Window, type Act } from '../../kit'
 import './cards.css'
 
-// An assistant that answers with cards you act on. Beats: asked for a flight,
-// it asks which day with a multiple-choice card; a day is picked; it searches,
-// then a card of three flights opens; one is picked and booked from the card,
-// its button going busy, then Booked. Plays once; the still is the payoff.
-//
-// What makes interactive cards read:
-// - A card is part of the answer, not a popup: it opens in the thread with
-//   its own height (Collapse with a drop reveal) and the thread moves up as
-//   one, the way the text above it did.
-// - An answered question stays on the page as the record: the chosen option
-//   keeps its fill and a check, the others go quiet. Nothing is removed, so
-//   nothing below jumps.
-// - The card's own button says what will happen with the choice ("Book for
-//   £142"), then confirms on itself: busy, then Booked. No toast, no second
-//   card. Every label sits in the button's one cell and crossfades, so
-//   nothing in it moves sideways.
-// - Every option has a fixed size from the start; a pick changes color and
-//   a mark, never a width.
-// - The earlier turn is placeholder: the eye lands on the cards.
-//
-// Real strings: the request, the assistant's two lines, the days, the three
-// flights, the button.
-
 const DAYS = ['Mon 13', 'Tue 14', 'Wed 15']
 const FLIGHTS = [
   { dep: '07:10', arr: '09:55', line: 'Halcyon', price: 168 },
@@ -71,8 +48,6 @@ export default function AiCards() {
           <Window title="Assistant" className="aic-win">
             <div className="aic-body">
               <div className="aic-thread">
-                {/* Earlier turns as placeholder: they fill the window
-                    at the start and go up out of it as the cards open */}
                 {[[130, '70%', '48%'], [150, '76%', '52%'], [190, '84%', '64%']].map(([q, a1, a2], i) => (
                   <div className="aic-past" key={i}>
                     <Bar w={q!} h={30} r={15} tone={1} className="aic-past-q" />
@@ -92,8 +67,6 @@ export default function AiCards() {
                     ))}
                   </div>
                 </div>
-                {/* Searching and the flights share one slot in the thread, so
-                    the gap above them is the thread's one gap */}
                 <div className="aic-reply">
                 <Collapse open={s.phase === 'search'}>
                   <Text className="aic-thinking">Searching flights</Text>

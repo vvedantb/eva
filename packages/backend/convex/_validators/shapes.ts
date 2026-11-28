@@ -29,12 +29,6 @@ export const repoShaValidator = v.object({
 export const turnCheckpointArgs = {
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
-  /**
-   * Multi-repo turn checkpoints (see `messageFields.beforeShas`): one entry
-   * per checked-out repo. Every completion receiver accepts these so the
-   * sandbox callback's argument shape stays uniform across surfaces; the three
-   * chat surfaces persist them.
-   */
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
 };
@@ -59,14 +53,12 @@ export const completionCallbackArgs = {
   ...turnCheckpointArgs,
 };
 
-/** Fields every daemon claim returns, whether or not it hands over a prompt. */
 const daemonClaimDrainFields = {
   attachmentUrls: v.array(v.string()),
   stopTaskToolUseIds: v.array(v.string()),
   cancelRequested: v.boolean(),
   usageRefreshRequested: v.boolean(),
   interactionMode: v.optional(interactionModeValidator),
-  /** Queued messages the daemon injects into its live turn (`_chat/steer.ts`). */
   steers: v.optional(v.array(v.object({ id: v.string(), text: v.string() }))),
 };
 
@@ -177,9 +169,6 @@ export const conversationMessageValidator = v.object({
   content: v.string(),
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
-  // Set when the assistant placeholder is inserted; cleared at completion.
-  // Used by the project interview UI to show a live timer on the activity
-  // accordion (matching tasks/sessions chat behaviour).
   startedAt: v.optional(v.number()),
   finishedAt: v.optional(v.number()),
 });
@@ -219,23 +208,14 @@ export const changeKindValidator = v.union(
  * header alone.
  */
 export const scopeCheckHunkValidator = v.object({
-  /** Repo-relative path of the file the hunk touches. */
   file: v.string(),
-  /** The hunk's `@@ -a,b +c,d @@ context` line, for locating it in a diff. */
   header: v.string(),
-  /** P(the prompt asked for this change), 0..1. */
   requested: v.number(),
-  /** P(the change is required to make a requested change work), 0..1. */
   necessary: v.number(),
-  /** What a user sees change, for grouping and for the visible/invisible split. */
   kind: v.optional(changeKindValidator),
-  /** Plain-English headline, e.g. `Icon changed (IconAward → IconTrophy)`. */
   summary: v.optional(v.string()),
-  /** Plain-English screen name, e.g. `Awarded panel`. */
   surface: v.optional(v.string()),
-  /** P(the assistant's reply told the user about this change), 0..1. */
   mentioned: v.optional(v.number()),
-  /** P(the change shows in the turn's screenshots), 0..1; absent when none were judged. */
   visible: v.optional(v.number()),
 });
 
@@ -246,23 +226,15 @@ export const scopeCheckHunkValidator = v.object({
  * the turn changed no code, the diff never became fetchable, or Jev failed.
  */
 export const scopeCheckValidator = v.object({
-  /** P(this turn contains changes the prompt did not ask for), whole-diff question. */
   unrequestedProbability: v.number(),
-  /** Hunks in the turn diff after dropping lockfiles and binaries. */
   totalHunks: v.number(),
-  /** Hunks actually judged — capped, so may be below `totalHunks`. */
   judgedHunks: v.number(),
-  /** Judged hunks under the requested/necessary threshold, worst first, capped. */
   flagged: v.array(scopeCheckHunkValidator),
-  /** True when the diff was clipped or hunks past the cap were skipped. */
   partial: v.boolean(),
   evaluatedAt: v.number(),
-  /** The screenshot pass; absent when the turn posted no judgeable screenshot. */
   screenshots: v.optional(
     v.object({
-      /** Screenshots Jev read. */
       checked: v.number(),
-      /** P(the screenshots show what the prompt asked for); absent when unanswered. */
       showsRequest: v.optional(v.number()),
     }),
   ),
@@ -279,9 +251,6 @@ export const automationFindingValidator = v.object({
   triage: v.optional(findingTriageValidator),
 });
 
-// Task-count breakdown for a project, used by both the single-project
-// (getTaskProgress) and batched (listTaskProgress) queries. Defined once so the
-// two return shapes never drift apart.
 export const taskProgressFields = {
   total: v.number(),
   todo: v.number(),
@@ -400,7 +369,6 @@ export const envVarEntryValidator = v.object({
   key: v.string(),
   value: v.string(),
   sandboxExclude: v.optional(v.boolean()),
-  // Given to snapshot seed runs only; always stored with sandboxExclude: true.
   seedOnly: v.optional(v.boolean()),
 });
 

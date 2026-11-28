@@ -12,11 +12,6 @@ const DESIGNER_CLERK = "clerk|routed-designer";
 const DESIGNER_2_CLERK = "clerk|routed-designer-2";
 const STRANGER_CLERK = "clerk|routed-stranger";
 
-/**
- * `personalTeam` only flips the `isPersonal` flag; `soloTeam` is what decides
- * whether anyone else is on the team. They are separate because production has
- * personal-flagged teams with several members.
- */
 async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -70,7 +65,6 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       status: "active",
       numId: 9,
     });
-    // Every session holds a Main chat; its transcript, queue and model key on it.
     const mainChatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
@@ -96,7 +90,6 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
   };
 }
 
-/** A second designer, so `role: "designer"` resolves to a group. */
 async function addSecondDesigner(f: Awaited<ReturnType<typeof fixture>>) {
   const userId = await f.t.run(async (ctx) => {
     const id = await ctx.db.insert("users", {
@@ -115,10 +108,6 @@ async function addSecondDesigner(f: Awaited<ReturnType<typeof fixture>>) {
   return { userId, as: f.t.withIdentity({ subject: DESIGNER_2_CLERK }) };
 }
 
-/**
- * Wake payloads queued for the source chat. Only readable while the session is
- * mid-turn: once the queue drains, the chat keeps `displayContent` instead.
- */
 async function queuedWakes(f: Awaited<ReturnType<typeof fixture>>) {
   return await f.t.run(async (ctx) => {
     const rows = await ctx.db.query("queuedMessages").collect();
@@ -127,7 +116,6 @@ async function queuedWakes(f: Awaited<ReturnType<typeof fixture>>) {
   });
 }
 
-/** Pins the session mid-turn so replies stay queued instead of draining. */
 async function markSessionBusy(f: Awaited<ReturnType<typeof fixture>>) {
   await f.t.run(async (ctx) => {
     await ctx.db.insert("turns", {
@@ -234,7 +222,6 @@ describe("ask_teammate", () => {
 
       const notes = await f.asDesigner.query(api.notifications.list, {});
       const question = notes.find((row) => row.type === "routed_question");
-      // Teammates answer in Manager Ave, so the notification opens it.
       expect(question?.href).toBe("/ave");
     },
     TIMEOUT_MS,
@@ -300,8 +287,6 @@ describe("ask_teammate", () => {
   test(
     "routes on a personal-flagged team that has other members",
     async () => {
-      // Production shape: the team people actually work in is `isPersonal` and
-      // has five members, so the flag must not block routing.
       const f = await fixture({ personalTeam: true });
       const result = await f.asOwner.mutation(api.routedThreads.ask, {
         sourceKind: "session",
@@ -522,7 +507,6 @@ describe("reply wakes the source", () => {
       const thread = await f.asDesigner.query(api.routedThreads.get, {
         id: asked.threadId,
       });
-      // Sam still owes an answer, so the group thread still needs a human.
       expect(thread?.status).toBe("waiting_human");
       expect(thread?.needsMyReply).toBe(false);
       expect(thread?.participants).toEqual([
@@ -533,7 +517,6 @@ describe("reply wakes the source", () => {
         .toBe(0);
       expect(await second.as.query(api.routedThreads.countWaitingForMe, {}))
         .toBe(1);
-      // The Ave dock follows the same per-person flag as the badge.
       expect(
         await f.asDesigner.query(api.routedThreads.listWaitingForMe, {}),
       ).toEqual([]);

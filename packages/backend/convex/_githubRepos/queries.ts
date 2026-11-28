@@ -22,13 +22,10 @@ import { isSessionArchived } from "../_sessions/archive";
 import { isStandaloneSession } from "../_sessions/owner";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
-/** How many live sandboxes this app's quick tasks and projects hold (their sessions'). */
 async function repoActiveSandboxCount(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<number> {
-  // Indexed read pinning repo and status; the take caps a pathological app
-  // the way `countActiveSessions` does.
   const activeOwnedSessions = (
     await db
       .query("sessions")
@@ -45,7 +42,6 @@ async function repoActiveSandboxCount(
   return activeOwnedSessions.length;
 }
 
-/** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */
 async function attachLogoUrls(
   storage: StorageReader,
   repos: Array<Doc<"githubRepos">>,
@@ -208,10 +204,6 @@ export const getProviderAvailability = authQuery({
       keys.add(entry.key);
     }
 
-    // A provider account the viewer can run on makes that provider available
-    // even when the team has no key for it — the account's credentials are
-    // injected at launch. Their own accounts count, as do teammates' shared
-    // ones, matching exactly what the model picker offers.
     const accounts = await ctx.db
       .query("userProviderAccounts")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
@@ -428,19 +420,13 @@ export const listGroupedByCodebase = authQuery({
   args: {},
   returns: v.array(
     v.object({
-      /** Codebase identifier: "owner/name" */
       codebase: v.string(),
-      /** Display name for the codebase */
       displayName: v.string(),
-      /** Whether this codebase has multiple apps (monorepo) */
       isMonorepo: v.boolean(),
-      /** Apps within this codebase */
       apps: v.array(
         v.object({
           _id: v.id("githubRepos"),
-          /** App name (rootDirectory folder name) or repo name if root */
           appName: v.string(),
-          /** Full root directory path, null for root repo */
           rootDirectory: v.union(v.string(), v.null()),
         }),
       ),
@@ -449,7 +435,6 @@ export const listGroupedByCodebase = authQuery({
   handler: async (ctx) => {
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
 
-    // Group by owner/name
     const codebaseMap = new Map<
       string,
       {
@@ -484,14 +469,12 @@ export const listGroupedByCodebase = authQuery({
       });
     }
 
-    // Convert to array and sort
     const result = Array.from(codebaseMap.entries()).map(
       ([codebase, { name, apps }]) => ({
         codebase,
         displayName: name,
         isMonorepo: apps.length > 1,
         apps: apps.sort((a, b) => {
-          // Root repo first, then alphabetically by app name
           if (a.rootDirectory === null) return -1;
           if (b.rootDirectory === null) return 1;
           return a.appName.localeCompare(b.appName);
@@ -499,7 +482,6 @@ export const listGroupedByCodebase = authQuery({
       }),
     );
 
-    // Sort codebases alphabetically
     return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
   },
 });

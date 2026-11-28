@@ -165,8 +165,6 @@ describe("model handoff context", () => {
     ];
 
     it("does not hand off when the fallback provider matches the incoming one", () => {
-      // The native session of the only provider this entity has ever used
-      // already holds the unstamped history.
       expect(
         detectModelHandoffFromMessages(
           [
@@ -189,7 +187,6 @@ describe("model handoff context", () => {
 
       expect(result.kind).toBe("handoff");
       if (result.kind !== "handoff") return;
-      // Previous side is the provider label alone: the exact model is unknown.
       expect(result.alertContent).toBe(
         "Handed off from Claude to GPT-5.6 Sol (Codex)",
       );
@@ -220,8 +217,6 @@ describe("model handoff context", () => {
 });
 
 describe("readHandoffHistory", () => {
-  // Prod: a Main chat of 163 rows (~8.8 MB) failed every dequeue with
-  // "Too many bytes read", because one send read the whole tail twice.
   it("stops at the byte budget on a chat of large rows", async () => {
     const t = convexTest(schema, modules);
     const window = await t.run(async (ctx) => {
@@ -244,7 +239,6 @@ describe("readHandoffHistory", () => {
         repoId,
         userId,
       });
-      // 8 rows of ~600 KB: ~4.8 MB, more than twice the 2 MB budget.
       for (let index = 0; index < 8; index += 1) {
         await ctx.db.insert("messages", {
           parentId: chatId,

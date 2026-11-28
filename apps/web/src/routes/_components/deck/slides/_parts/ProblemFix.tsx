@@ -15,7 +15,6 @@ export function ProblemFix({
 }: {
   problem: string;
   fix: string;
-  /** Build step the line arrives on; the title's own step by default. */
   step?: number;
   className?: string;
 }) {

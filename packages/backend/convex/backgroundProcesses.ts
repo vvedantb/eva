@@ -55,11 +55,6 @@ export const listRunning = authQuery({
   },
 });
 
-/**
- * The daemon reports under its own entity id. A chat daemon's id resolves to
- * the chat's session — background shells belong to the sandbox, which every
- * chat of the session shares.
- */
 async function resolveOwningSession(
   db: DatabaseReader,
   id: Id<"sessions"> | Id<"sessionChats">,

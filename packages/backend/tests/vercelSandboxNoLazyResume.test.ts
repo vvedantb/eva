@@ -1,14 +1,6 @@
 import { Sandbox } from "@vercel/sandbox";
 import { describe, expect, test } from "bun:test";
 
-/**
- * The unpatched SDK resumes a stopped sandbox on any exec (`withResume`). A
- * background job that ran after Stop woke the VM and it billed for hours while
- * Eva showed it closed (Oct 2026). `patches/@vercel__sandbox.patch` adds
- * `setAutoResume(false)`; Eva sets it on every handle (`withoutLazyResume`).
- * These tests drive the patched SDK against a fake Vercel API.
- */
-
 const now = Date.now();
 const session = (status: "running" | "stopped") => ({
   id: `sess-${status}`,
@@ -46,7 +38,6 @@ function fakeVercel(initial: "running" | "stopped") {
         resumed: url.searchParams.get("resume") === "true",
       });
     }
-    // Any session call on a stopped VM: Vercel answers 410 Gone.
     return Response.json(
       { error: { code: "sandbox_stopped", message: "stopped" } },
       { status: 410 },

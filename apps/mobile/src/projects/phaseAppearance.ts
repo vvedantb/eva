@@ -10,11 +10,6 @@ import { IconAlertTriangle } from "@tabler/icons-react-native";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import type { Scheme } from "@/ui/theme";
 
-/**
- * A shared tone's icon, text colour and row stripe colour (`bar`), as the web
- * `ProjectPhaseBadge.tsx`: the warning ("Needs you") has its own look, every
- * other tone is the quick-task status of its name.
- */
 function toneAppearance(tone: ProjectTone, scheme: Scheme) {
   if (tone === "warning") {
     const warning = EVA_THEME[scheme].warning;

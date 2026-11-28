@@ -4,18 +4,6 @@ import {
   previewProxySource,
 } from "./_helpers/previewProxySource";
 
-/**
- * Vercel exposes four fixed ports and the preview auth proxy owns the public
- * one, so a custom tab (Supabase Studio on 54323, say) used to relaunch the
- * proxy onto its own upstream and clobber the Preview tab. Tabs now ride the
- * same proxy under `/__tab/<port>`, which forwards to that in-sandbox port,
- * rewrites its redirects and its root-relative HTML back under the prefix, and
- * falls back to the Referer for root-absolute asset requests.
- *
- * As with the other preview-proxy tests, the functions below are the exact
- * shipped source lifted out of the generated script template.
- */
-
 interface Route {
   port: number;
   path: string;
@@ -59,7 +47,6 @@ const locationFactory = new Function(
 const rewriteLocationHeader: (value: string, route: Route) => string =
   locationFactory();
 
-/** The skip-list regex is a const, not a function, so slice it by hand. */
 const tabSkipRegexStart = previewProxySource.indexOf(
   "const TAB_SKIP_PREFIX_RE",
 );

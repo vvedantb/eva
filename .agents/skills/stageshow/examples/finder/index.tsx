@@ -21,16 +21,6 @@ import {
 import { Bar, Collapse, Stage, Text, Window, type Act, type Layout, type Point } from '../../kit'
 import './finder.css'
 
-// Finder, list view. The user selects a photo, presses Space and Quick Look
-// zooms out of its thumbnail; Space again and it zooms back. Then they drag the
-// file onto Wallpapers in the sidebar: the drag image rides with the arrow (as
-// macOS draws it, no grabbing hand), Wallpapers lights up under it, the row
-// leaves the list. Cmd+Z puts it back and a click in the empty list clears the
-// selection, which is exactly where the loop began.
-//
-// Icons: Finder has no web icon pack, so lucide is used deliberately for its
-// SF Symbols-like outline sidebar glyphs (one family, one stroke).
-
 type Ghost = { on: boolean; dropped: boolean; off: Point; at: Point }
 type S = { sel: boolean; ql: boolean; moved: boolean; ghost: Ghost }
 
@@ -55,7 +45,6 @@ const GEO: Record<Layout, Geo> = {
 const QL_BAR = 38
 const qlHeight = (w: number) => QL_BAR + Math.round((w * 3) / 4)
 
-// The list: what each row is, and how long its placeholder name runs.
 type Kind = 'folder' | 'doc' | 'image' | 'hero'
 const ROWS: { kind: Kind; name: number; date: number; size: number; type: number }[] = [
   { kind: 'folder', name: 92, date: 88, size: 14, type: 40 },
@@ -73,26 +62,22 @@ const ROWS: { kind: Kind; name: number; date: number; size: number; type: number
 async function script(a: Act<S>) {
   await a.wait(500)
 
-  // 1. Select the photo: click the row, clear of its name
   a.mark('select')
   const row = a.rect('row-hero')
   await a.click({ x: row.x + 176, y: row.y + row.height * 0.6 })
   await a.set({ sel: true })
   await a.wait(650)
 
-  // 2. Space: Quick Look zooms out of the thumbnail
   a.mark('open')
   await a.key('space')
   await a.set({ ql: true })
   await a.wait(2400)
 
-  // 3. Space again: it zooms back into the row
   a.mark('close')
   await a.key('space')
   await a.set({ ql: false })
   await a.wait(700)
 
-  // 4. Drag the file by its icon onto Wallpapers in the sidebar
   a.mark('drag')
   const icon = a.rect('hero-drag')
   const thumb = a.rect('thumb')
@@ -101,9 +86,6 @@ async function script(a: Act<S>) {
   await a.wait(220)
   const line = a.rect('row-hero')
   const off = { x: grab.x - icon.x, y: grab.y - line.y }
-  // Finder keeps its arrow. Pickup and each carried position belong to the
-  // drag callback, so the image and cursor are painted together after press.
-  // Drop just past the folder's name, so the drag image never hides it.
   const drop = a.rect('side-drop')
   await a.drag({ x: drop.x + 114, y: drop.y + drop.height * 0.55 }, (at) => {
     a.put({ ghost: { on: true, dropped: false, off, at } })
@@ -112,13 +94,11 @@ async function script(a: Act<S>) {
   await a.set((s) => ({ moved: true, ghost: { ...s.ghost, dropped: true } }))
   await a.wait(1900)
 
-  // 5. Cmd+Z: the move is undone and the file comes back, still selected
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ moved: false, ghost: initial.ghost })
   await a.wait(1100)
 
-  // 6. A click in the empty list clears the selection: back to the start
   await a.click({ at: 'blank', x: 0.56, y: 0.5 })
   await a.set({ sel: false })
   await a.wait(900)
@@ -139,8 +119,6 @@ export default function FinderDemo() {
       {(s, rect, layout) => {
         const g = GEO[layout]
         const qh = qlHeight(g.ql.w)
-        // Quick Look closed sits on the thumbnail, shrunk to its width. It
-        // zooms by layout, not transform, so its text lands without a hop
         const t = rect('thumb')
         const k = t.width ? t.width / g.ql.w : 0.05
         const box = s.ql
@@ -186,8 +164,6 @@ export default function FinderDemo() {
                   <span>Kind</span>
                 </div>
                 <div className="fq-rows">
-                  {/* Stripes belong to positions, not to rows, as in AppKit:
-                      a row that leaves slides the rest up over them */}
                   <div className="fq-stripes" aria-hidden>
                     {Array.from({ length: g.rows + 4 }, (_, i) => (
                       <span key={i} />
@@ -289,14 +265,12 @@ function FileIcon({ kind }: { kind: Kind }) {
   )
 }
 
-// The same local photograph is shared by its thumbnail and Quick Look.
 const PHOTO = new URL('../wikipedia/kawaguchiko.jpg', import.meta.url).href
 const ALT_PHOTO = new URL('../wikipedia/fuji.jpg', import.meta.url).href
 function Photo({ className, alt }: { className?: string; alt?: boolean }) {
   return <img className={`fq-photo${className ? ` ${className}` : ''}`} src={alt ? ALT_PHOTO : PHOTO} alt="" draggable={false} />
 }
 
-/** The drag image uses the same frame's callback point, with no second RAF. */
 function DragImage({ ghost, children }: { ghost: Ghost; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const over = useRef<HTMLElement | null>(null)

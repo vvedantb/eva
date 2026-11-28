@@ -6,9 +6,6 @@ import {
 } from "./_chat/surfaceAdapters";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 
-// Re-exported so importers keep resolving this name from
-// "./workflowWatchdog"; the implementation lives in _chat/surfaceAdapters.ts.
-// One-shot agent jobs have their own backstop (`agentJobs.handleStale`).
 export { trackSessionChatWorkflow };
 
 /** Cancels a stale session chat workflow and starts the next queued message. */

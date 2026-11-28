@@ -9,7 +9,6 @@ type Repo = {
 };
 
 test("pickDefaultVisibleAppRepo prefers apps/web among visible siblings", () => {
-  // Shared automations / PR recaps resolve credentials via this pick first.
   const root: Repo = { _id: "root" };
   const eproc: Repo = { _id: "eproc", rootDirectory: "apps/eprocurement" };
   const web: Repo = { _id: "web", rootDirectory: "apps/web" };

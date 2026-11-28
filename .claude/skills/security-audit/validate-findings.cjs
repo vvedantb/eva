@@ -1,13 +1,3 @@
-#!/usr/bin/env node
-
-/**
- * Validates findings.json against report-schema.json.
- * Usage: node validate-findings.cjs <path-to-findings.json>
- *
- * This is a dependency-free interpreter for the JSON Schema keywords used by
- * report-schema.json, plus finding-specific checks that are clearer in code.
- */
-
 const fs = require("fs");
 const path = require("path");
 const { TextDecoder } = require("util");

@@ -12,7 +12,6 @@ import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
-/** Throws when this membership is its team's only owner, so a team never loses its last owner. */
 async function assertNotLastOwner(
   db: GenericDatabaseReader<DataModel>,
   membership: Doc<"teamMembers">,
@@ -48,8 +47,6 @@ export const list = authQuery({
           fullName: v.optional(v.string()),
           firstName: v.optional(v.string()),
           lastName: v.optional(v.string()),
-          // Presence, for the team page's Activity tab. Deliberately raw: only
-          // a client can re-evaluate "seen in the last two minutes" over time.
           lastSeenAt: v.optional(v.number()),
           lastSeenPath: v.optional(v.string()),
         }),
@@ -123,7 +120,6 @@ export const listForRepo = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
 
-    // The repo's connector can be outside its team: names only for them.
     const callerOnTeam = members.some((m) => m.userId === ctx.userId);
     const users = await Promise.all(
       members.map((member) => ctx.db.get(member.userId)),

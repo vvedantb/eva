@@ -29,14 +29,12 @@ import {
   type RepoEventKind,
 } from "../_automationEvents/labels";
 
-/** Return validator for a full automation document. */
 const automationDoc = v.object({
   _id: v.id("automations"),
   _creationTime: v.number(),
   ...automationFields,
 });
 
-/** Hides soft-deleted rows and applies the system-automation catalog overlay. */
 function visibleAutomation(
   automation: Doc<"automations"> | null,
 ): Doc<"automations"> | null {
@@ -44,10 +42,6 @@ function visibleAutomation(
   return visible ? resolveAutomationDoc(visible) : null;
 }
 
-/**
- * The weekly changelog title is reserved: `changelog.ts` finds that automation
- * by title and it broadcasts to every user, so no other automation may take it.
- */
 function assertTitleNotReserved(title: string): void {
   if (title.trim() === CHANGELOG_AUTOMATION_TITLE) {
     throw new Error("That automation title is reserved");
@@ -99,8 +93,6 @@ export const getByNumId = authQuery({
       .first();
     if (automation) return visibleAutomation(automation);
 
-    // Shared automations are stored on the canonical (parent) repo, so a
-    // child-app lookup misses them; mirror listAutomationsForRepo's fallback.
     const canonicalId = await resolveCanonicalRepoId(ctx.db, args.repoId);
     if (canonicalId === args.repoId) return null;
     const sharedAutomation = await ctx.db
@@ -149,7 +141,6 @@ function sameEvents(
   return a.length === b.length && a.every((event) => b.includes(event));
 }
 
-/** A user automation needs at least one event, all of them user-pickable. */
 function assertUserTrigger(trigger: AutomationTrigger): void {
   if (trigger.kind !== "event") return;
   if (trigger.events.length === 0) {
@@ -170,7 +161,6 @@ export const update = authMutation({
     cronSchedule: v.optional(v.string()),
     trigger: v.optional(automationTriggerValidator),
     model: v.optional(aiModelValidator),
-    /** Null switches back to the team credential. */
     providerAccountId: v.optional(
       v.union(v.id("userProviderAccounts"), v.null()),
     ),
@@ -194,10 +184,6 @@ export const update = authMutation({
       ctx.userId,
     );
 
-    // A system automation's definition is code-owned, but everything else —
-    // schedule, model, enabled, email — belongs to the install and takes the
-    // path below. `model` is not part of SystemAutomationDefinition, so it is
-    // the user's to pick here exactly as it is on a normal automation.
     if (automation.systemKey !== undefined) {
       const editsDefinition =
         args.title !== undefined ||
@@ -210,7 +196,6 @@ export const update = authMutation({
           "A system automation's title, prompt and mode are managed by eva",
         );
       }
-      // Only an event preset's label is the install's to change.
       const catalogTrigger = getSystemAutomation(automation.systemKey)?.trigger;
       if (
         args.trigger !== undefined &&
@@ -226,7 +211,6 @@ export const update = authMutation({
       assertUserTrigger(args.trigger);
     }
 
-    // The changelog automation itself may keep (re-save) its own title.
     if (args.title !== undefined && args.title !== automation.title) {
       assertTitleNotReserved(args.title);
     }
@@ -243,8 +227,6 @@ export const update = authMutation({
       patch.thinkingEnabled = args.thinkingEnabled;
     if (args.use1mContext !== undefined) patch.use1mContext = args.use1mContext;
     if (args.fastMode !== undefined) patch.fastMode = args.fastMode;
-    // Runs use the creator's credentials whoever edits, so the account must
-    // be one the creator may run on: their own, or shared by a teammate.
     if (args.providerAccountId !== undefined) {
       patch.providerAccountId = await assertProviderAccountUsableBy(
         ctx.db,
@@ -301,8 +283,6 @@ export const remove = authMutation({
     if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    // System rows delete the same way: a soft delete is the uninstall, and
-    // reinstalling from the Hub revives this row with its run history intact.
     const cronName = `automation-${String(args.id)}`;
     await safeDeleteCron(ctx, cronName);
 

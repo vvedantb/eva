@@ -14,10 +14,7 @@ export const projectValidator = v.object({
 /** List rows include the project session's sandbox status. */
 export const projectListItemValidator = v.object({
   ...projectValidator.fields,
-  /** The project session's sandbox status (`projectSandboxStatus`). */
   sandboxStatus: v.optional(sessionStatusValidator),
-  /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
-  /** The project chat is paused on a blocking question for the user. */
   isAwaitingAnswer: v.boolean(),
 });

@@ -19,11 +19,6 @@ import {
 import { buildEvaConfigDraft } from "./_evaConfig/config";
 import { findSnapshotForRepo } from "./_repoSnapshots/config";
 
-/**
- * Per-repo values baked into the served skill content. Runtime fields come from
- * the scoped repo row (the app being worked on in a monorepo); the base branch
- * comes from the canonical codebase.
- */
 async function buildHydration(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -52,13 +47,11 @@ async function buildHydration(
   };
 }
 
-/** Today's Convex commands for every app of the GitHub repo, as a draft file. */
 async function buildDraftFromConvex(
   db: GenericDatabaseReader<DataModel>,
   repo: Doc<"githubRepos">,
 ): Promise<string> {
   const siblings = await findSiblingsOf(db, repo);
-  // The monorepo root row is not an app unless it is the only row.
   const parentIds = new Set(siblings.map((row) => row.parentRepoId));
   const apps =
     siblings.length > 1

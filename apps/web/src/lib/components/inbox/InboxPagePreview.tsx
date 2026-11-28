@@ -43,7 +43,6 @@ export function InboxPagePreview({
 }) {
   const readyRef = useRef(false);
   const [booted, setBooted] = useState(false);
-  // The src and name only seed the first document; later rows arrive via postMessage.
   const [initial] = useState({ href, chatOnly });
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --

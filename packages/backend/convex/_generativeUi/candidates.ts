@@ -1,22 +1,10 @@
-/**
- * Turns the agent's content blocks into composition candidates.
- *
- * A candidate is an app-owned element recipe: its props are fixed here and the
- * evaluator may only choose whether to place it and where. That is the whole
- * safety story of this feature — Jev picks a layout, it never writes copy.
- *
- * Pure, so the candidate grammar can be read and tested without the composer.
- */
-
 import type { Experimental_CompositionCandidate } from "@json-render/core";
 import type { ChatUiBlock } from "./schema";
 
 type Candidate = Experimental_CompositionCandidate;
 
-/** Layout recipes are reusable; one content block may be placed once. */
 const LAYOUT_MAX_USES = 12;
 
-/** Ids of block candidates, so a composed spec can be checked back against them. */
 const BLOCK_ID_PREFIX = "block_";
 
 /** True for a candidate that carries the agent's content, not layout. */
@@ -57,7 +45,6 @@ function truncate(text: string): string {
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 
-/** The element a block renders as, with every prop already decided. */
 function blockElement(block: ChatUiBlock): Candidate["element"] {
   switch (block.kind) {
     case "heading":
@@ -109,8 +96,6 @@ function blockElement(block: ChatUiBlock): Candidate["element"] {
       return {
         type: "Button",
         props: { label: block.label, variant: block.variant },
-        // `reply` wins when both are set: posting back into the chat is the
-        // interaction this feature exists for, and a button cannot do both.
         on: block.reply
           ? { press: { action: "reply", params: { message: block.reply } } }
           : block.url

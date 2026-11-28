@@ -27,9 +27,7 @@ export type SteerDelivery = "native" | "interrupt" | "send";
 
 /** Pure routing for one steer. Exported for tests. */
 export function decideSteerDelivery(params: {
-  /** A real (workflow-backed) turn is running. */
   hasActiveTurn: boolean;
-  /** Something else keeps the chat busy (a synthetic turn). */
   isBusy: boolean;
   runningModel: string | undefined;
   steerModel: string | undefined;
@@ -45,13 +43,11 @@ export function decideSteerDelivery(params: {
   return native ? "native" : "interrupt";
 }
 
-/** What one chat surface tells the steer router. */
 type SteerTarget = {
   entityId: ChatEntityId;
   hasActiveTurn: boolean;
   isBusy: boolean;
   runningModel: string | undefined;
-  /** Cancels the running turn; the cancel drains the queue. */
   interrupt: () => Promise<void>;
 };
 
@@ -76,7 +72,6 @@ async function loadSteerTarget(
   return null;
 }
 
-/** Puts `message` ahead of every other queued message of its parent. */
 async function moveToFront(
   ctx: MutationCtx,
   message: Doc<"queuedMessages">,
@@ -100,8 +95,6 @@ export async function steerQueuedMessage(
   if (message.steer !== undefined) return null;
   const target = await loadSteerTarget(ctx, message.parentId);
   if (!target) return null;
-  // Steer is the user taking the queue back after a Stop: release the hold,
-  // or this message (queued before the Stop) could not start.
   await ctx.db.patch(target.entityId, { queueHeldAt: undefined });
   await moveToFront(ctx, message);
   const delivery = decideSteerDelivery({
@@ -121,8 +114,6 @@ export async function steerQueuedMessage(
   } else if (delivery === "interrupt") {
     await target.interrupt();
   } else {
-    // Steer is "send this now": it skips an open question, which would
-    // otherwise hold every message queued before it.
     const question = await findOpenChatQuestion(ctx.db, target.entityId);
     if (question) {
       await ctx.db.patch(question._id, { pendingQuestion: undefined });

@@ -68,9 +68,7 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
   const createProject = useMutation(api.projects.create);
   const [prompt, setPrompt] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
-  // The base branch is kept with its repo; a new repo starts on its default (web `useBaseBranchState`).
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
-  // Which button is saving, for its spinner; null when idle.
   const [saving, setSaving] = useState<"save" | "run" | null>(null);
   const repoBranch = repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const baseBranch = pickedBranch?.repoId === repo._id ? pickedBranch.branch : repoBranch;
@@ -95,10 +93,8 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
     }
   };
 
-
   return (
     <Screen onBack={leave}>
-      {/* The kit's: it pads frame by frame with the keyboard (`KeyboardControllerProvider`). */}
       <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
           <RepoPicker
@@ -109,7 +105,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
               rememberRepo(repoId);
             }}
           />
-          {/* Web: one borderless prompt, min 160 high. */}
           <TextInput
             value={prompt}
             onChangeText={setPrompt}
@@ -122,7 +117,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
             className="font-instrument-sans min-h-40 py-2 text-base"
             style={{ color: theme.foreground }}
           />
-          {/* Web: the chips wrap, in its order: base branch, priority. */}
           <View className="flex-row flex-wrap gap-1.5 pt-2">
             <OptionPillFrame>
               <BaseBranchChip repoId={repo._id} value={baseBranch} onChange={(branch) => setPickedBranch({ repoId: repo._id, branch })} />
@@ -130,7 +124,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
             <PriorityChip value={priority} onChange={setPriority} />
           </View>
         </ScrollView>
-        {/* Web footer: Save and Save and Run (Cancel is the header back). */}
         <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
           <View className="min-w-0 flex-1">
             <Button
@@ -154,7 +147,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
   );
 }
 
-/** The stack header ("New Project", back) over the screen body. */
 function Screen({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   return (
     <View className="flex-1">

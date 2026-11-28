@@ -6,20 +6,6 @@ import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 import { invalidatePrOverviewCache } from "./prOverview";
 
-/**
- * The three fields of a pull request's metadata column a reader can change from
- * eva: who is asked to review, who owns it, and how it is labelled.
- *
- * Each of these is a *set*, so every mutation here takes the whole set and lets
- * GitHub work out the delta. The alternative — add/remove calls per chip — needs
- * the client to diff against a payload that may be a minute stale, and gets it
- * wrong exactly when two people are editing at once.
- *
- * Reviewers and assignees are separate endpoints on separate resources (pulls vs
- * issues) even though they look identical in the column, which is GitHub's
- * inheritance showing through rather than a distinction worth preserving here.
- */
-
 const MAX_CANDIDATES = 100;
 
 const candidateValidator = v.object({
@@ -144,7 +130,6 @@ export const setPullRequestAssignees = action({
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
-    // `issues.update` takes the whole set, unlike the reviewer endpoints.
     await octokit.rest.issues.update({
       owner: repo.owner,
       repo: repo.name,

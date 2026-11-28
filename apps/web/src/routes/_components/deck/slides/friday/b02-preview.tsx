@@ -4,11 +4,6 @@ import type { CameraShot } from "../../_components/DeckCamera";
 import { Spotlight } from "../../_components/motion";
 import { MoF1PreviewFrame } from "../_parts/MoF1PreviewFrame";
 
-/**
- * Square on while the frame walks its widths, then a slow push towards the
- * heading as the note drops on it. The push stays small so the frame clears
- * the footnote.
- */
 const SHOTS: readonly CameraShot[] = [
   {},
   {},
@@ -24,7 +19,6 @@ export function FridayPreview() {
 
       <div className="flex flex-1 flex-col justify-center pb-8">
         <Reveal delay={0.15} className="relative isolate flex justify-center">
-          {/* A soft light gathers behind the heading when the note lands on it. */}
           <Spotlight shots={[null, null, { x: 330, y: 110, size: 520 }]} />
           <Camera shots={SHOTS}>
             <MoF1PreviewFrame />

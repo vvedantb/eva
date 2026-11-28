@@ -3,7 +3,6 @@ const DIGEST_HOUR_UTC = 8;
 export const DIGEST_CRON = `0 ${DIGEST_HOUR_UTC} * * 1-5`;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-/** `getUTCDay` values of Saturday and Sunday, when the digest does not run. */
 const WEEKEND_DAYS: ReadonlySet<number> = new Set([6, 0]);
 
 /**

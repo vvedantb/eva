@@ -5,16 +5,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { getUserCheckedOutBranch } from "../convex/_sandbox_runtime/git";
 import { git, localGitSandboxHandle } from "./_helpers/localGitSandbox";
 
-/**
- * A resumed sandbox must stay on a branch the user switched to (PR #952,
- * 13 Oct 2026: resume forced it back onto the chat branch). It must still
- * check out the chat branch when the startup checkout never ran (the eva/65
- * failed-checkout shape), or when HEAD is detached.
- *
- * Runs the real git probe against a temp repository standing in for the
- * sandbox workspace.
- */
-
 const SESSION_BRANCH = "eva/session-resume";
 
 let workspace: string;
@@ -47,7 +37,6 @@ describe("getUserCheckedOutBranch", () => {
   });
 
   test("returns null when the session branch was never created locally", async () => {
-    // HEAD on main is where setup left it, not a user choice.
     await expect(probe()).resolves.toBeNull();
   });
 

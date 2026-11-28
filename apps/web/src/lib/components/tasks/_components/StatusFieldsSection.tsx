@@ -34,12 +34,9 @@ interface StatusFieldsSectionProps {
   status: TaskStatus | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
-  /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
-  /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   deploymentStatus: TaskDeploymentStatus;
   allTags: string[];
-  /** An archived task (or one in an archived project): every field is disabled. */
   readOnly: boolean;
 }
 
@@ -148,12 +145,6 @@ export function StatusFieldsSection({
   );
 }
 
-/**
- * The model, traits and account the task runs on. It is the task chat's own
- * pick (`useTaskChatBinding`), so this row and the chat composer always
- * agree. Before the first run the row shows the chat seed; a pick creates
- * the task's session and chat (no sandbox start) and stores it there.
- */
 function TaskModelRow({
   taskId,
   disabled,
@@ -184,10 +175,6 @@ function TaskModelRow({
   );
 }
 
-/**
- * `agentTasks.update`, shown at once in the repo's task list and the task
- * itself before the server confirms it.
- */
 function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
   return useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {

@@ -9,10 +9,8 @@ import { SourceChip } from "./_parts/BeeBits";
 const LISTEN = 1;
 const ANSWER = 2;
 
-/** Meeting tiles under the notch: a call in progress, people as initials. */
 const TILES = ["A", "S", "J", "M", "R", "K"];
 
-/** Wide on the call, then in close on the notch as it starts listening, then back a little for the answer. */
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 10, translateZ: -40 },
   { rotateX: 0, scale: 1.9, y: 330 },
@@ -29,7 +27,6 @@ export function BeeNotch() {
       <Title size="md">A small bar at the top of your screen</Title>
 
       <Camera shots={SHOTS} className="mt-6">
-        {/* Your screen, mid-call. */}
         <div className="relative mx-auto h-[450px] w-[900px] overflow-hidden rounded-[26px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10">
           <div className="grid h-full grid-cols-3 gap-3 p-5 pt-20">
             {TILES.map((tile, index) => (
@@ -51,7 +48,6 @@ export function BeeNotch() {
             ))}
           </div>
 
-          {/* The notch, top centre, over everything. */}
           <div className="absolute top-4 left-1/2 -translate-x-1/2">
             <BeeIsland
               status={

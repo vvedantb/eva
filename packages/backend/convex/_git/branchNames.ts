@@ -67,7 +67,6 @@ export function taskBranchName(
   return task.branchName ?? buildTaskBranchName(task._id);
 }
 
-/** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */
 function slugify(text: string): string {
   const slug = text
     .toLowerCase()

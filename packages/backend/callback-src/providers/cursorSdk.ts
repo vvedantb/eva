@@ -62,15 +62,9 @@ import { resolvePinnedSdkEntry, type JsonLike } from "./claudeSdk.js";
 
 const SDK_PACKAGE = "@cursor/sdk";
 const SDK_VERSION = "1.0.28";
-/** ESM entry inside the package (its exports map's `import` target). */
 const SDK_ENTRY_RELPATH = "/dist/esm/index.js";
-/**
- * SQLite store entry (`@cursor/sdk/sqlite`). The package ships it apart from
- * the main entry so importing the SDK does not load the sqlite driver.
- */
 const SDK_SQLITE_ENTRY_RELPATH = "/dist/esm/sqlite.js";
 
-/** SDK setup should return a local handle quickly; model work happens later. */
 const CURSOR_AGENT_SETUP_TIMEOUT_MS = 30_000;
 /**
  * Env var the SDK reads inside `Agent.create`/`Agent.resume` instead of its own
@@ -84,20 +78,8 @@ const CURSOR_AGENT_SETUP_TIMEOUT_MS = 30_000;
  */
 export const CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV =
   "CURSOR_SDK_LOCAL_MODEL_CATALOG_JSON";
-/** `Agent.send` only creates the run. A minute here is a wedged SDK session. */
 const CURSOR_SEND_START_TIMEOUT_MS = 60_000;
-/**
- * Silence budget before the first visible event, rolling from the last SDK
- * event of ANY type: a stream still emitting lifecycle events (status, usage,
- * compaction summaries) is a live agent, not a stall. Only total silence
- * trips it — and before visible output, replaying the SAME agent is still
- * safe. Matches Claude's `NO_OUTPUT_TIMEOUT_MS × 5` silence kill: a resumed
- * grok-4.6 xhigh turn routinely thinks (or silently compacts) for more than
- * one minute before thinking/assistant/tool_call, and the old 60s budget
- * false-triggered a replacement agent that wiped the session.
- */
 const CURSOR_FIRST_VISIBLE_EVENT_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
-/** Once output exists, allow long model pauses without replaying or aborting. */
 const CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 const CURSOR_RESULT_SETTLE_TIMEOUT_MS = 30_000;
 
@@ -139,7 +121,6 @@ export async function waitForCursorPhase<T>(args: {
       try {
         args.onTimeout?.();
       } catch {
-        /* the timeout still owns the result */
       }
       reject(new CursorPhaseTimeoutError(args.phase, args.timeoutMs));
     }, args.timeoutMs);
@@ -194,9 +175,6 @@ export function cursorEventWaitTimeoutMs(args: {
   toolInFlight: boolean;
   compactionInFlight: boolean;
 }): number {
-  // An in-place compaction can outlast every silence budget and MUST NOT be
-  // mistaken for a hang: replacing a compacting agent is exactly the agent
-  // rotation the resume-always design exists to prevent.
   if (args.toolInFlight || args.compactionInFlight) return MAX_TOTAL_RUNTIME_MS;
   if (args.sawVisibleActivity) return CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS;
   return Math.max(
@@ -205,7 +183,6 @@ export function cursorEventWaitTimeoutMs(args: {
   );
 }
 
-/** Official SDK types are erased from the standalone callback bundle. */
 type SdkModelParameterValue = ModelParameterValue;
 type SdkModelSelection = ModelSelection;
 
@@ -279,43 +256,24 @@ type CursorSdkSqliteModule = {
   SqliteLocalAgentStore: typeof SqliteLocalAgentStore;
 };
 
-/**
- * Node's on-disk V8 code cache for the SDK's ~11 MB of ESM. Every turn worker
- * is a fresh process, so each turn re-compiled it: both imports measured 533ms
- * median cold vs 410ms cached (n=12). Entries are keyed by file content and
- * Node version, so a stale one is never used. Optional calls: the API landed
- * in Node 22.1, and a cache failure must never block the import.
- */
 function enableSdkCompileCache(): void {
   try {
     nodeModule.enableCompileCache?.();
   } catch {
-    /* best-effort */
   }
 }
 
-/** Writes the cache now: a cancelled worker dies by SIGTERM, not a clean exit. */
 function flushSdkCompileCache(): void {
   try {
     nodeModule.flushCompileCache?.();
   } catch {
-    /* best-effort */
   }
 }
 
 let loadedSdk: Promise<CursorSdkModule> | null = null;
 let loadedSdkSqlite: Promise<CursorSdkSqliteModule> | null = null;
 
-/**
- * Imports the Cursor SDK version `cursorParseLine` was written against. Taking
- * whatever the sandbox happens to hold is not safe here: the parser matches the
- * 1.0.x message type names exactly, so a drifted SDK streams events it drops on
- * the floor and the turn renders as a bare "Working..." for its whole duration.
- */
 function loadCursorSdk(): Promise<CursorSdkModule> {
-  // Memoized (as the promise, so `preloadCursorSdk` and the attempt share one
-  // import) so the warm daemon pays the resolve and the import once for the
-  // whole session instead of once per turn. A failed import is not cached.
   enableSdkCompileCache();
   loadedSdk ??= import(
     resolvePinnedSdkEntry({
@@ -336,12 +294,6 @@ function loadCursorSdk(): Promise<CursorSdkModule> {
   return loadedSdk;
 }
 
-/**
- * Imports the same pinned SDK's separate sqlite entry. Kept apart from
- * `loadCursorSdk` because the package ships it as its own export precisely so
- * the main entry does not pull in the sqlite driver, and the two imports must
- * stay independent for that to hold.
- */
 function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
   enableSdkCompileCache();
   loadedSdkSqlite ??= import(
@@ -373,8 +325,6 @@ export function preloadCursorSdk(): void {
     loadCursorSdk().catch(() => undefined);
     loadCursorSdkSqlite().catch(() => undefined);
   } catch {
-    // A failed resolve throws synchronously; the attempt retries it and posts
-    // the failure completion the user sees.
   }
 }
 
@@ -406,19 +356,11 @@ export function cursorModelCatalogJson(
   );
 }
 
-/** A model selection plus the catalog JSON to publish for agent setup. */
 type CursorModelResolution = {
   selection: SdkModelSelection;
   catalog: string | null;
 };
 
-/**
- * `Cursor.models.list()` is an API key exchange plus a fetch: 1.3–2.1s
- * measured, once 26s. Each turn runs in a fresh worker process, so every turn
- * paid it before agent setup. Workers share the last resolution through this
- * file instead (keyed by the inputs that shape it); see
- * `resolveCursorModelSelection`.
- */
 const CURSOR_MODEL_RESOLUTION_CACHE_FILE =
   CURSOR_RUNTIME_HOME_DIR + "/model-resolution.json";
 const CURSOR_MODEL_RESOLUTION_MAX_AGE_MS = 60 * 60 * 1000;
@@ -432,7 +374,6 @@ function cursorModelResolutionKey(): string {
   ].join("|");
 }
 
-/** The cached resolution for this model config, or null when absent/stale. */
 function readCachedCursorModelResolution(): CursorModelResolution | null {
   try {
     const ageMs =
@@ -486,7 +427,6 @@ function writeCachedCursorModelResolution(
       tmpFile,
       JSON.stringify({ key: cursorModelResolutionKey(), ...resolution }),
     );
-    // Atomic swap: a worker reading mid-write never sees a torn file.
     renameSync(tmpFile, CURSOR_MODEL_RESOLUTION_CACHE_FILE);
   } catch (error) {
     log(
@@ -497,16 +437,6 @@ function writeCachedCursorModelResolution(
   }
 }
 
-/**
- * Picks the model selection for this turn and publishes the model catalog the
- * SDK would otherwise fetch again itself inside Agent.create/Agent.resume.
- *
- * A cached resolution from an earlier turn (same model config, under an hour
- * old) skips the list wait; the list is then refreshed in the background for
- * the next turn, so each turn still makes one list request, just off the
- * critical path. Only a list that held the model is cached, so a model added
- * since the last fetch is looked up fresh.
- */
 async function resolveCursorModelSelection(
   sdk: CursorSdkModule,
 ): Promise<SdkModelSelection> {
@@ -521,19 +451,6 @@ async function resolveCursorModelSelection(
   return resolution.selection;
 }
 
-/**
- * Builds the SDK ModelSelection for the configured eva model. Eva slugs bake a
- * reasoning level into the id (grok-4.5-low); the SDK's model list carries the
- * base id with reasoning exposed as a per-model parameter whose id is not
- * documented — so discover it from Cursor.models.list() at runtime: first a
- * parameter definition allowing the level value, then a variant carrying it.
- * A reasoning miss (no level, list unavailable, model/parameter absent) keeps
- * the base id and any explicitly selected Fast or context parameters.
- *
- * The list is fetched even for a model with no level or mode params: without
- * the published catalog the SDK fetches the same list inside agent setup
- * (1.3s measured), and with it the result can be cached.
- */
 async function fetchCursorModelSelection(
   sdk: CursorSdkModule,
 ): Promise<CursorModelResolution> {
@@ -542,8 +459,6 @@ async function fetchCursorModelSelection(
   try {
     const list = sdk.Cursor?.models?.list;
     if (list) {
-      // The fetch had no deadline of its own, so a hung list could burn the
-      // whole turn before agent setup even started.
       const listed = await waitForCursorPhase({
         task: list(),
         phase: "fetching the model list",
@@ -577,13 +492,9 @@ async function fetchCursorModelSelection(
   return { selection, catalog };
 }
 
-/** The selection for the configured model, given its list entry (if any). */
 function selectCursorModel(model: SdkModel | undefined): SdkModelSelection {
   const base = normalizedCursorModel;
   const level = cursorReasoningLevel;
-  // Cursor first-party models can default to their higher-priced Fast variant,
-  // so send the explicit boolean — but only once the model's parameter list
-  // confirms the undocumented id (filterModeParamsByModel). Context is opt-in.
   const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
   const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
   const params = filterModeParamsByModel(candidates, model, opted);
@@ -645,7 +556,6 @@ function selectCursorModel(model: SdkModel | undefined): SdkModelSelection {
   return params.length > 0 ? { id: base, params } : { id: base };
 }
 
-/** Reads an SDK error's `code` field without assertions (Error → overlap via message). */
 function errorCode(error: Error): string {
   const withCode: { message: string; code?: string } = error;
   return typeof withCode.code === "string" ? withCode.code : "";
@@ -688,7 +598,6 @@ export type CursorTurnOutcome = {
   resultText: string;
   durationMs: number;
   usage: UsageTokens;
-  /** Undiscounted model cost of this turn, absent when Cursor did not report it. */
   costUsd?: number;
 };
 
@@ -698,9 +607,7 @@ export type CursorTurnOutcome = {
  * (request-priced, plan-included and BYOK usage all bill 0 raw cents).
  */
 export type CursorCostSnapshot = {
-  /** Agent-lifetime raw cost in float cents. */
   totalRawCents: number | null;
-  /** Per-turn groups, keyed by the backend's usage UUID (not our run id). */
   entries: { runId: string; rawCents: number | null }[];
 };
 
@@ -806,7 +713,6 @@ export async function resolveCursorTurnCostUsd(deps: {
       ? attributeCursorTurnRawCents(deps.before, after)
       : null;
     if (rawCents !== null) {
-      // Float cents to dollars, at a precision cents can actually carry.
       return Math.round((rawCents / 100) * 1e6) / 1e6;
     }
     const delayMs = COST_LOOKUP_RETRY_DELAYS_MS[attempt];
@@ -874,7 +780,6 @@ export async function runTurnWithResourceExhaustedRetries(deps: {
   }
 }
 
-/** Extracts camelCase TokenUsage fields from a stream `usage` event or RunResult. */
 function readUsageTokens(
   value: JsonLike | SdkTokenUsage | undefined,
 ): UsageTokens | null {
@@ -888,11 +793,6 @@ function readUsageTokens(
 }
 
 export type CursorAttemptOverrides = {
-  /**
-   * The turn's prompt. One-shot runs omit it and read the prompt file the
-   * launch uploaded; the warm daemon has no such file (it launches with an
-   * empty prompt) and passes the prompt it claimed instead.
-   */
   promptText?: string;
 };
 
@@ -930,40 +830,19 @@ export async function runCursorSdkAttempt(
   const cancelRun = (): void => {
     if (!activeRun) return;
     activeRun.cancel().catch(() => {
-      /* already finished */
     });
   };
 
   const sdk = await loadCursorSdk();
   const sqlite = await loadCursorSdkSqlite();
   mkdirSync(CURSOR_SDK_STORE_DIR, { recursive: true });
-  // SQLite, not the SDK's JSONL store, because the JSONL store re-reads and
-  // re-parses the whole file on every `get` and rewrites it whole on every
-  // append, while a resumed `send()` hydrates the conversation one
-  // `checkpoints.get` per stored blob — 56 of them after a single 12-tool-call
-  // turn. Resume therefore cost time quadratic in conversation length and blew
-  // CURSOR_SEND_START_TIMEOUT_MS twice per turn after a heavy first turn
-  // (prod, 3 Sep 2026). In that reproduction the same resumed `send()` took
-  // 24 ms against SQLite, whose reads and appends stay constant-time.
-  //
-  // Legacy `*.ndjson` files left in this directory are ignored: an agent id
-  // saved before this change resumes as `agent_not_found` and the existing
-  // recovery starts a fresh agent once. Deliberately no migration — reading
-  // those files is the slow path being removed.
   const store = await sqlite.SqliteLocalAgentStore.open({
-    // Same directory the agent runs in, so stored agents stay keyed to the
-    // workspace they were created against (AGENT_CWD is WORK_DIR unless a
-    // multi-repo session roots the harness at the workspace instead).
     workspaceRef: AGENT_CWD,
     stateRoot: CURSOR_SDK_STORE_DIR,
   });
   const options: SdkAgentOptions = {
     apiKey: (process.env.CURSOR_API_KEY || "").trim(),
     model: await resolveCursorModelSelection(sdk),
-    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
-    // Cursor can edit outside cwd in a multi-repo session; if not, set
-    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
-    // rebuild needed.
     local: { cwd: AGENT_CWD, store },
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
@@ -991,8 +870,6 @@ export async function runCursorSdkAttempt(
     try {
       created = await create();
     } catch (error) {
-      // First turn or a wiped store: a stalled create holds no context, so
-      // give it one more go before the turn dies.
       if (!(error instanceof Error) || !shouldRetryStalledCursorCreate(error)) {
         throw error;
       }
@@ -1024,12 +901,6 @@ export async function runCursorSdkAttempt(
     return resumed;
   };
 
-  // Resume is Claude-shaped: the persisted agent id is the conversation.
-  // A wiped store (`agent_not_found`) is the only case that may mint a
-  // replacement — Cursor cannot reopen a missing id the way Claude retries
-  // `session` with the same id. Transient resume failures retry the SAME
-  // agent; they must not fall through to createFreshAgent, which would
-  // persist a blank id and make every later turn start over.
   let resumedExistingAgent = false;
   let agent: SdkAgent;
   if (sessionMode.mode === "resume" && sessionMode.sessionId) {
@@ -1092,11 +963,6 @@ export async function runCursorSdkAttempt(
       cancelRun();
       return;
     }
-    // The SDK emits nothing between a tool call and its result, so a long
-    // silent tool is indistinguishable from a hang by message silence alone:
-    // while a tool is in flight only the hard runtime cap applies, and the
-    // silence clock restarts once the tool result lands. An in-place
-    // compaction (summary-started .. summary-completed) is the same shape.
     if (S.inFlightToolUses > 0 || compactionInFlight) {
       lastMessageAt = now;
     }
@@ -1115,7 +981,6 @@ export async function runCursorSdkAttempt(
     attemptOutput = trimBufferHead(attemptOutput + line);
   };
 
-  /** `getUsage()` is one cloud round trip; a failure only costs us the cost. */
   const readCostSnapshot = async (
     activeAgent: SdkAgent,
   ): Promise<CursorCostSnapshot | null> => {
@@ -1137,18 +1002,9 @@ export async function runCursorSdkAttempt(
     activeAgent: SdkAgent,
     agentIsFresh: boolean,
   ): Promise<CursorTurnOutcome> => {
-    // An agent created in this attempt has never been billed, so its baseline
-    // is zero by construction — no round trip, and a lookup failure can never
-    // cost a first turn its cost. A resumed agent's totals carry its prior
-    // turns, so read the baseline; the request is issued before the send and
-    // only awaited after the run, so it never delays the turn. (A rejected
-    // resource_exhausted retry bills nothing, so a fresh agent's baseline stays
-    // zero across the retries within this attempt.)
     const costBefore = agentIsFresh
       ? Promise.resolve(EMPTY_CURSOR_COST_SNAPSHOT)
       : readCostSnapshot(activeAgent);
-    // `force` expires a run left marked active by a killed prior callback
-    // (user stop is a process-level kill); a no-op otherwise.
     updateThinkingStep(
       "Waiting for Cursor...",
       "Starting the Grok model run...",
@@ -1165,9 +1021,6 @@ export async function runCursorSdkAttempt(
     updateThinkingStep("Waiting for Grok...", "The model is thinking...");
     const messages = run.stream()[Symbol.asyncIterator]();
     let sawVisibleActivity = false;
-    // Rolling liveness clock: any received SDK event restarts the pre-visible
-    // window, so a resume that streams lifecycle events (status, compaction
-    // summaries) while it warms up is never misread as a stall.
     lastMessageAt = Date.now();
     compactionInFlight = false;
     while (true) {
@@ -1237,7 +1090,6 @@ export async function runCursorSdkAttempt(
       is_error: outcome.isError,
       result: outcome.resultText,
       duration_ms: outcome.durationMs,
-      // Omitted when Cursor reported no cost; the parser then defaults to 0.
       ...(outcome.costUsd === undefined
         ? {}
         : { total_cost_usd: outcome.costUsd }),
@@ -1285,13 +1137,10 @@ export async function runCursorSdkAttempt(
     );
   };
 
-  // Closes the failed agent and clears the attempt's stall bookkeeping so the
-  // next recovery attempt starts from a clean clock.
   const resetForRecovery = (failedAgent: SdkAgent): void => {
     try {
       failedAgent.close();
     } catch {
-      /* already closed */
     }
     activeRun = null;
     timedOutForNoOutput = false;
@@ -1303,14 +1152,6 @@ export async function runCursorSdkAttempt(
     try {
       await runTurnWithRetries(agent, !resumedExistingAgent);
     } catch (error) {
-      // A resumed agent whose stored runs are unreadable can throw
-      // agent_not_found past resume (at send/stream/wait), and a resumed run
-      // can stall before its first event. The session's agent IS its memory
-      // (Claude just resumes the same id and lets the model compact), so a
-      // stall reopens the SAME agent once. A second stall fails the turn
-      // instead of minting a blank replacement — persistAgentId on create
-      // would overwrite the saved id and every later turn would start over.
-      // Only a definitive agent_not_found may create: the store is gone.
       if (!resumedExistingAgent || !(error instanceof Error)) {
         throw error;
       }
@@ -1383,12 +1224,10 @@ export async function runCursorSdkAttempt(
     try {
       agent.close();
     } catch {
-      /* already closed */
     }
     try {
       await store.dispose();
     } catch {
-      /* already closed */
     }
   }
 

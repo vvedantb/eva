@@ -10,15 +10,6 @@ import { buildChatUiCandidates } from "../convex/_generativeUi/candidates";
 import { appendMissingBlocks } from "../convex/_generativeUi/completeness";
 import { renderUiInput, type ChatUiBlock } from "../convex/_generativeUi/schema";
 
-/**
- * Composition itself is Jev's job, but the grammar around it is ours: the
- * candidates we hand the composer must be placeable, every block the agent
- * supplied has to reach the panel, and whatever comes back must survive the
- * catalog and the client's boundary parse. Stand-in evaluators prove all three
- * without a network call.
- */
-
-/** Takes the first option every time — which for a membership question is `omit`. */
 const omitEverything: Experimental_CompositionEvaluator = async ({
   questions,
 }) => ({
@@ -31,7 +22,6 @@ const omitEverything: Experimental_CompositionEvaluator = async ({
   ),
 });
 
-/** Includes every offered element, i.e. the opposite extreme. */
 const includeEverything: Experimental_CompositionEvaluator = async ({
   questions,
 }) => ({
@@ -82,7 +72,6 @@ async function compose(
   return appendMissingBlocks(composed, candidates).spec;
 }
 
-/** Every element that is not one of our layout containers. */
 function contentTypes(spec: Spec): string[] {
   const layout = new Set(["Stack", "Grid", "Panel", "Separator"]);
   return Object.values(spec.elements)

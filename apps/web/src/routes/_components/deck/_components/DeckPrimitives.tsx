@@ -7,11 +7,6 @@ import { Title } from "./DeckText";
 import { MaskedText } from "./motion/MaskedText";
 import { DUR, EASE } from "./motion/tokens";
 
-/*
- * The slide vocabulary. Contexts, tokens and the self-animating type
- * primitives live in their own files; they are re-exported here so every slide
- * keeps a single import.
- */
 export {
   DeckStepContext,
   DeckThemeContext,
@@ -47,11 +42,6 @@ function offset(from: RevealFrom, distance: number): { x: number; y: number } {
 
 const TEXT_TAGS = new Set(["p", "span", "strong", "em", "h1", "h2", "h3"]);
 
-/**
- * True when every child is a line of text. Blur reads as focus pulling on a
- * sentence, but on a chart or a panel it is a full-layer filter every frame,
- * so only text-sized reveals get it.
- */
 function isTextual(children: ReactNode): boolean {
   return Children.toArray(children).every(
     (child) =>
@@ -63,7 +53,6 @@ function isTextual(children: ReactNode): boolean {
   );
 }
 
-/** Titles bring their own entrance; a reveal around them only times it. */
 function isSelfAnimating(children: ReactNode): boolean {
   return Children.toArray(children).every(
     (child) =>
@@ -72,7 +61,6 @@ function isSelfAnimating(children: ReactNode): boolean {
   );
 }
 
-/** Soft rise: the fade finishes early, the travel decelerates long after. */
 const RISE: Transition = {
   duration: DUR.hero,
   ease: EASE.expo,
@@ -91,7 +79,6 @@ function risePair(
       opacity: 1,
       x: 0,
       y: 0,
-      // A resting `blur(0px)` would still flatten 3D and make a layer.
       ...(blur && { filter: "blur(0px)", transitionEnd: { filter: "none" } }),
     },
   };
@@ -104,7 +91,6 @@ interface RevealProps {
   className?: string;
   from?: RevealFrom;
   distance?: number;
-  /** Defaults to a 4px focus-pull on text-only children, none on anything else. */
   blur?: boolean;
 }
 

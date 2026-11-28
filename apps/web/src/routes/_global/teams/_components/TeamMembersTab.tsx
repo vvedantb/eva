@@ -40,7 +40,6 @@ interface TeamMembersTabProps {
   isOwner: boolean;
 }
 
-/** The row's own label, so the confirmation names whoever the user just saw. */
 function memberLabel(member: Member): string {
   return member.user?.fullName || member.user?.email || "this member";
 }
@@ -86,8 +85,6 @@ export function TeamMembersTab({
 
   const runRemove = (userId: Member["userId"]) => {
     setIsRemoving(true);
-    // `withMutationToast` rethrows after toasting; the dialog closes either way
-    // because the optimistic list already rolled back on failure.
     void withMutationToast(
       removeMember({ teamId, userId }),
       "Member removed",
@@ -152,8 +149,6 @@ export function TeamMembersTab({
                           )
                         }
                       >
-                        {/* 28px is under the comfortable tap floor, so the
-                          trigger grows to 40px on touch only. */}
                         <SelectTrigger className="h-10 w-[100px] border-0 bg-secondary text-xs sm:h-7">
                           <SelectValue />
                         </SelectTrigger>

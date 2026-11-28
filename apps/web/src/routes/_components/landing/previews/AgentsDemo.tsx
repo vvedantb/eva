@@ -15,15 +15,6 @@ import { BrandMark, type BrandName } from "../BrandMark";
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./AgentsDemo.css";
 
-// Any agent, chosen per task. Beats: a task is written in the composer with
-// Claude Code picked; the visitor opens the agent menu (all four installed),
-// picks Codex, and the key under the composer follows to OPENAI_API_KEY;
-// Start runs it, and the task opens, starting then running, at the top of the list with the Codex
-// mark beside earlier tasks run by the other agents (the payoff).
-//
-// Real strings: the task, the four agent names, the key, the new row's
-// agent and branch. Earlier tasks are bars beside their agent's mark.
-
 type Agent = "claude" | "codex";
 
 const AGENTS: readonly { brand: BrandName; name: string }[] = [
@@ -41,7 +32,6 @@ const KEY: Record<Agent, string> = {
 
 const TASK = "Add rate limiting to the public API";
 
-/** Earlier tasks, each run by a different agent. */
 const EARLIER: readonly { brand: BrandName; title: number; sub: number }[] = [
   { brand: "claude", title: 168, sub: 96 },
   { brand: "cursor", title: 136, sub: 112 },
@@ -91,7 +81,6 @@ async function story(a: Act<S>) {
   await a.move({ at: "start", x: 0.7, y: 1.9 });
   await a.wait(500);
 
-  // The CLI is already in the sandbox: no install step, it just runs
   a.mark("payoff");
   await a.set({ running: true });
   await a.wait(2300);

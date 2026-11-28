@@ -134,7 +134,6 @@ export const create = authMutation({
         docId: args.docId,
         commentId,
         message: commentMessage,
-        // Not judged by routing: toasts, pushes and emails at once.
         urgency: "normal",
       });
       notifiedUserIds.add(mentionedUserId);

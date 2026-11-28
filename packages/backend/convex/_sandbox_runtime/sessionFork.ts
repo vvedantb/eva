@@ -20,11 +20,6 @@ const NO_SANDBOX =
 const STOP_WAIT_MS = 3 * 60_000;
 const POLL_MS = 2_000;
 
-/**
- * Whether the source branch is on GitHub, which is what makes it a valid PR
- * base for the fork. A missing branch is a normal answer (never pushed, or
- * deleted after its PR merged); any other failure is a real error.
- */
 async function branchExistsOnGitHub(
   repo: ForkSource["repo"],
   branch: string,
@@ -92,8 +87,6 @@ export const forkSession = authAction({
       }
       const sourceSandboxId = source.sandboxId;
       if (!sourceSandboxId) throw new ConvexError(NO_SANDBOX);
-      // The fork itself runs when the new session boots; fail now, not then, if
-      // the provider has already dropped the source.
       try {
         await getSandboxHandle(ctx, source.repoId, sourceSandboxId);
       } catch (error) {
@@ -114,7 +107,6 @@ export const forkSession = authAction({
       );
       return { numId: fork.numId };
     } catch (error) {
-      // No fork session exists to restart the source later — do it now.
       if (wasRunning) {
         try {
           await ctx.runMutation(api.sessions.startSandbox, {

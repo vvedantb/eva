@@ -12,13 +12,9 @@ import {
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 
-// Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
-// Moved to `@eva/shared` so the mobile chat streams into the same bubble.
 export { findStreamingTargetMessage } from "@eva/shared";
-// Moved to `@eva/shared` so the mobile Stop button follows the same turn rule.
 export { isChatTurnExecuting } from "@eva/shared";
-// Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
   findBubbleGroups,
   firstNameByUserId,
@@ -33,21 +29,15 @@ export {
  */
 export interface ChatRepo {
   id: Id<"githubRepos">;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
   basePath: string;
 }
 
 /** The id a chat's messages hang off: a session chat, or a pre-chat session. */
 export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
-// `_id` is widened to `string` so client-built rows (optimistic sends) fit
-// without forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
-// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
 export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
-  /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */
   attachmentUrls?: (string | null)[];
   attachments?: {
     url: string | null;
@@ -97,7 +87,6 @@ export interface ChatHeldFollowUp {
   userId?: Id<"users">;
 }
 
-// Moved to `@eva/shared` so the phone draws the same rows.
 export { collectQuestionSteps, isSandboxLifecycleAlert, visibleChatMessages } from "@eva/shared";
 
 /** True when the transcript has a teammate bubble that needs a display name. */
@@ -129,7 +118,6 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
   };
 }
 
-// Moved to `@eva/shared` so the phone shows a failed turn the same way.
 export { stripErrorPrefix } from "@eva/shared";
 
 /** `@eva/shared`'s `turnErrorTitle`, naming providers as the web kit does. */
@@ -192,8 +180,6 @@ export function findTurnWindowStart(
   for (let i = endIndex - 1; i >= 0; i--) {
     const message = messages[i];
     if (message?.role !== "user" || message.isSystemAlert) continue;
-    // One turn past the window means older turns exist: start at the window's
-    // first user row. Otherwise the window runs to the top.
     if (seen === turns) return start;
     seen++;
     start = i;

@@ -1,5 +1,3 @@
-/** Entity-scoped warm-daemon marker paths on the sandbox filesystem. */
-
 export type DaemonPaths = {
   pid: string;
   entity: string;
@@ -143,7 +141,6 @@ export type DaemonMutationEnv = {
   openSyntheticTurnMutation: string;
   completeSyntheticTurnMutation: string;
   updateBackgroundAgentsMutation: string;
-  /** Mirrors Claude's native `/goal` onto the chat doc. */
   updateGoalMutation: string;
 };
 

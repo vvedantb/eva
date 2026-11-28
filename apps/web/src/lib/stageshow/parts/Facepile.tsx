@@ -11,7 +11,6 @@ import './Facepile.css'
  */
 export function Facepile({ names, size = 22, overlap = 6, gap = 2, tones, className, style, ...rest }: { names: string[]; size?: number; overlap?: number; gap?: number; tones?: AvatarProps['tone'][]; className?: string; style?: CSSProperties } & Record<`data-${string}`, unknown>) {
   const r = size / 2
-  // Center of the next avatar, measured from this one's left edge
   const next = size - overlap + r
   const mask = `radial-gradient(circle at ${next}px 50%, transparent ${r + gap}px, #000 ${r + gap + 0.5}px)`
   return (

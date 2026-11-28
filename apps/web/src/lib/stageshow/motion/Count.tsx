@@ -5,23 +5,14 @@ import './Count.css'
 
 export interface CountProps extends HTMLAttributes<HTMLSpanElement> {
   value: number
-  /** How a number is written, e.g. n => `$${n.toFixed(2)}` */
   format?: (n: number) => string
-  /** ms for a digit to roll from the old figure to the new one. */
   duration?: number
-  /** ms between one digit starting and the next, from the right. */
   stagger?: number
 }
 
-// Three decades of figures, so a digit can roll on past 9 into 0 (or back
-// past 0 into 9) without ever running off the end of the strip
 const STRIP = '012345678901234567890123456789'.split('')
 const MIDDLE = 10
 
-// A unit after the figure ("21°", "240ms", "40%", "12 min"): the run of
-// letters or signs that ends the text, after its last digit. It gets a box of
-// its own, a hair from the digits (a word space when the format writes one),
-// so the pair reads as one figure without the unit sitting on the last digit
 const unitOf = (text: string) => {
   const m = /^(.*\d)(\s*)([^\d\s.,]+)$/.exec(text)
   return m ? { head: m[1], space: m[2].length > 0, unit: m[3] } : { head: text, space: false, unit: '' }
@@ -56,9 +47,6 @@ export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-
   const { head, space, unit } = unitOf(text)
   const chars = head.split('')
   const digits = digitsFromRight(text)
-  // Where each column's strip sits, by column from the right. Starts in the
-  // middle decade; a change moves it by the shortest turn in the value's
-  // direction, and it is put back in the middle once the roll has settled
   const [idx, setIdx] = useState<number[]>(() => digits.map((d) => MIDDLE + d))
   const shown = useRef({ text, value, idx })
   shown.current.idx = idx
@@ -81,7 +69,6 @@ export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-
     })
     node.toggleAttribute('data-snap', instant)
     if (!instant) {
-      // Settle the old transforms in the browser first, so the new ones transition
       for (const strip of Array.from(node.querySelectorAll<HTMLElement>('.ss-count__strip'))) void getComputedStyle(strip).transform
       node.setAttribute('data-rolling', '')
     }
@@ -89,8 +76,6 @@ export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-
     setIdx(next)
   }, [text, value, reduced, duration]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Once every digit has landed, put the strips back in the middle decade
-  // without a transition, and drop the rolling mark a still waits on
   useEffect(() => {
     const node = el.current
     if (!node || !node.hasAttribute('data-rolling')) return
@@ -105,9 +90,6 @@ export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-
     return () => window.clearTimeout(id)
   }, [idx]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The snap comes off only after the home transforms are in the DOM (a
-  // frame callback could run before React commits them, and the strips
-  // would then roll a whole decade back to the middle)
   useLayoutEffect(() => {
     const node = el.current
     if (!node || !homing.current) return
@@ -116,8 +98,6 @@ export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-
     node.removeAttribute('data-snap')
   }, [idx])
 
-  // Columns are keyed from the right, so a total that gains a digit keeps the
-  // digits it already had rolling in place and only the new leading one appears
   let fromRight = digits.length
   return (
     <span {...rest} ref={el} className={`ss-count${className ? ` ${className}` : ''}`} style={style} aria-label={text}>

@@ -10,17 +10,6 @@ import {
   isSandboxUnresponsiveError,
 } from "../convex/_sandbox_runtime/sandboxErrors";
 
-/**
- * Replaces sandboxUnresumableMessage.test.ts. That test guarded a substring
- * match over error *messages*; the decision is now made from structured
- * provider signals, so the guarantees worth testing changed shape.
- *
- * Reuse falls through to a replacement sandbox when the classifier says
- * `sandbox-gone`. A Postgres schema error raised on resume used to match (bare
- * "does not exist") and mint a second VM while the first was still running.
- */
-
-/** Mirrors `@vercel/sandbox`'s APIError: `.response` is a fetch `Response`. */
 class FakeApiError extends Error {
   readonly response: { status: number };
   constructor(status: number) {
@@ -29,7 +18,6 @@ class FakeApiError extends Error {
   }
 }
 
-/** Mirrors the SDK auth client's NotOk. */
 class FakeNotOk extends Error {
   readonly response: { statusCode: number; responseText: string };
   constructor(statusCode: number) {
@@ -57,8 +45,6 @@ describe("in-sandbox failures can never condemn the sandbox", () => {
   });
 
   test("in-VM output naming the sandbox is still not a gone sandbox", () => {
-    // The exact string the old regex was built to catch. The type, not the
-    // wording, is what rules it out now.
     const error = new SandboxCommandFailedError(
       "Sandbox command failed (exit 2): fatal: sandbox volume not found",
       { exitCode: 2, output: "fatal: sandbox volume not found" },
@@ -78,8 +64,6 @@ describe("in-sandbox failures can never condemn the sandbox", () => {
   });
 
   test("a plain Error carrying command output is never classified", () => {
-    // VercelGit.sh throws this shape: in-VM stdout inside a bare Error. It has
-    // no provider tag, so the message fallback is unreachable for it.
     expect(
       isSandboxGoneError(
         new Error(
@@ -122,7 +106,6 @@ describe("structured provider signals", () => {
   });
 
   test("the status survives eva wrapping the SDK error", () => {
-    // vercelProvider.start() wraps its resume failure but carries the status.
     const wrapped = new SandboxProviderError(
       "vercel start: sandbox crimson-butterfly did not reach running within 180s",
       { httpStatus: 404, detail: '{"message":"Status code 404 is not ok"}' },
@@ -156,8 +139,6 @@ describe("structured provider signals", () => {
 
 describe("provider message fallback", () => {
   test("a missing snapshot in the API body is gone", () => {
-    // The provider reports an evicted snapshot only in the response body, with
-    // a 400 status — the one case the text fallback still earns its keep.
     expect(
       isSandboxGoneError(
         new SandboxProviderError("vercel start failed", {
@@ -169,9 +150,6 @@ describe("provider message fallback", () => {
   });
 
   test("only the provider detail is matched, never the message", () => {
-    // The message carries the command text eva interpolated for logging. If it
-    // were matched, any command mentioning a missing sandbox would condemn a
-    // live VM — the original bug, one layer up.
     const error = new SandboxProviderError(
       'vercel exec failed (cmd=psql -c \'select * from sandbox where name = "does not exist"\')',
       { httpStatus: 400, detail: '{"message":"Status code 400 is not ok"}' },
@@ -194,9 +172,6 @@ describe("provider message fallback", () => {
 });
 
 describe("unresponsive-VM signals", () => {
-  // The prod fingerprint this guards: exit 137 on `echo 1` and 25s exec
-  // timeouts from an OOM-wedged VM (silver-strategic-buzzard, 2026-09-01).
-  // These mean "restart or report unhealthy", never "mint a replacement".
   test("exit 137 on a trivial command is unresponsive, never gone", () => {
     const error = new SandboxCommandFailedError(
       'Sandbox command failed with exit code 137 (cmd="echo 1")',
@@ -246,8 +221,6 @@ describe("eva's own verdict survives a rethrow", () => {
   });
 
   test("the same wording in an untyped Error does not", () => {
-    // Prefix strings used to carry the verdict between layers. Forging one is
-    // now inert.
     expect(
       isSandboxGoneError(
         new Error("sandbox gone on refresh: Status code 404 is not ok"),

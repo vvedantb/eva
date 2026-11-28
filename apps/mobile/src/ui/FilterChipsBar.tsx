@@ -35,7 +35,6 @@ export function FilterChipsBar<Key extends string>({
           accessibilityRole="button"
           accessibilityLabel={`Remove filter ${chip.label}`}
           onPress={() => onClear(chip.key)}
-          // 40 high as the web chip below `sm`; 2 of slop above and below reach 44 without reaching a wrapped row 6 away.
           hitSlop={{ top: 2, bottom: 2 }}
           className="min-h-10 max-w-full flex-row items-center gap-1 rounded-md px-2 active:opacity-70"
           style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}

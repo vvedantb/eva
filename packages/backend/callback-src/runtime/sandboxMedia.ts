@@ -1,8 +1,3 @@
-/**
- * Shared helpers for finding media left by agent-browser.
- * Agents often write under the app rootDirectory; the uploader must check both.
- */
-
 /** Repo-root + optional app subdirectory (e.g. apps/eprocurement). */
 export function mediaCandidateRoots(
   workDir: string,

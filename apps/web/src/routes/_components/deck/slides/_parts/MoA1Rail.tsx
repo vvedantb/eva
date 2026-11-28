@@ -9,10 +9,8 @@ import {
   cueTransition,
 } from "../../_components/motion";
 
-/** The lit run travels like a camera: long, decelerating, never bouncy. */
 const TRAVEL = { duration: 1.2, ease: EASE.expo };
 
-/** Static glow, painted once; only its position animates. */
 const HEAD_GLOW = `radial-gradient(circle, #fff 0 2.5px, ${BRAND.blue}cc 3.5px, ${BRAND.purple}33 8px, transparent 13px)`;
 
 /**
@@ -30,12 +28,9 @@ export function MoA1Rail({
   className,
 }: {
   width: number;
-  /** Position of the rail's left end and centre line, in pixels of the parent. */
   left?: number;
   top?: number;
-  /** Fraction lit at each build step. The last entry holds. */
   stops: readonly number[];
-  /** Seconds before the track draws in on slide entry. */
   delay?: number;
   className?: string;
 }) {
@@ -96,7 +91,6 @@ export function MoA1Dot({
   step?: number;
   delay?: number;
   size?: number;
-  /** From this step on, one slow ring keeps breathing out: "still live". */
   liveStep?: number;
   className?: string;
 }) {

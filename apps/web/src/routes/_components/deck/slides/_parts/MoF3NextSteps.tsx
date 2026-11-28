@@ -70,7 +70,6 @@ export function MoF3NextSteps({ shown }: { shown: boolean }) {
           );
         })}
       </div>
-      {/* A light runs the length of the pipeline as each stage lands. */}
       <DrawPath
         d={`M0 1 L${RAIL_WIDTH} 1`}
         width={RAIL_WIDTH}

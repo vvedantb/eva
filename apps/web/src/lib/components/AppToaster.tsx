@@ -20,7 +20,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function AppToaster() {
   const { resolvedTheme } = useThemeMode();
 
-  // A window key listener has no declarative form; the effect is needed.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.shiftKey || event.altKey) return;

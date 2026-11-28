@@ -37,7 +37,6 @@ const WHY = 4;
 const PANEL_W = 524;
 const GAP = 40;
 
-/** Left camera on the writer, right on the judge, then back for the recipe. */
 const SHOTS: readonly CameraShot[] = [
   { translateZ: -20 },
   { rotateY: 6, x: 40, translateZ: 10 },
@@ -59,11 +58,6 @@ interface Benefit {
   label: string;
 }
 
-/**
- * Why a model this size is worth having: the reason it can run on everything.
- * "Fractions of a penny" is the product owner's own estimate per check, not a
- * billed figure; "under a second" matches the note in Eva's Jev client.
- */
 const BENEFITS: readonly Benefit[] = [
   { icon: IconFeather, label: "Very small model" },
   { icon: IconCoin, label: "Fractions of a penny per check" },
@@ -115,7 +109,6 @@ function Benefits() {
   );
 }
 
-/** What a writing model hands back: new words, a different answer each time. */
 const WRITTEN =
   "The export shows the wrong date because the time zone is not applied. A fix would convert the date before it is written, and…".split(
     " ",
@@ -126,7 +119,6 @@ interface Row {
   score: number;
 }
 
-/** The data, judged against one condition. Above the line, Eva acts. */
 const ROWS: readonly Row[] = [
   { item: "Login fails for everyone", score: 97 },
   { item: "Export shows the wrong date", score: 64 },
@@ -147,7 +139,6 @@ function Panel({
   label: string;
   focused: boolean;
   dimmed: boolean;
-  /** Carries the panel on to the next slide (see `SHARED`). */
   layoutId?: string;
   children: ReactNode;
 }) {
@@ -290,7 +281,6 @@ function Judge() {
         {ROWS.map((row, index) => (
           <ScoreRow key={row.item} row={row} index={index} />
         ))}
-        {/* The line you set: above it, Eva acts. */}
         <m.div
           aria-hidden
           className="absolute -top-2 -bottom-2 w-px bg-white/40"
@@ -317,7 +307,6 @@ function Judge() {
   );
 }
 
-/** The recipe, read left to right: what you bring, and what comes back. */
 function Recipe() {
   const shown = useDeckStep() >= RECIPE;
   const parts = [

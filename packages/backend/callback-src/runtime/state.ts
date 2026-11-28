@@ -76,7 +76,6 @@ function parsePriorAnswers(
   return Object.keys(answers).length > 0 ? answers : undefined;
 }
 
-/** Copies the structured payload fields (output, edits, todos, …) in key order. */
 function addPriorStepPayload(step: ProgressStep, value: JsonObject): void {
   const output = parsePriorOutput(value.output);
   if (output) step.output = output;
@@ -150,8 +149,6 @@ type ClaudeSessionMode = "none" | "session" | "resume";
 
 type CallbackState = {
   accumulatedSteps: ProgressStep[];
-  /** Live-only provider status. Included in streaming heartbeats, never in the
-   * completed message activity log or PRIOR_STEPS. */
   transientThinkingStep: ProgressStep | null;
   pendingQuestionData: string;
   lastStepType: string;
@@ -179,40 +176,19 @@ type CallbackState = {
   firstTextBlockAt: number;
   currentStreamedContent: string;
   streamedAssistantTextThisMessage: boolean;
-  /** Set at each assistant message boundary (message_start) so the next text
-   * append inserts a paragraph break instead of butting one message's last
-   * sentence against the next's first word ("design.Design settled."). */
   pendingParagraphBreak: boolean;
   fatalHeartbeatErrorMessage: string;
   consecutiveHeartbeatFailures: number;
   heartbeatFailureStreakStartedAt: number;
   inFlightToolUses: number;
   codexToolItemIds: Set<string>;
-  /** Cursor SDK tool_call ids already pushed as steps (dedup for repeated
-   * `running` events and terminal-without-running pairs). */
   cursorKnownToolIds: Set<string>;
-  /** Cursor SDK tool_call ids that reached a terminal status (dedup for
-   * repeated completed/error events). */
   cursorTerminalToolIds: Set<string>;
-  /** Current todo checklist for this turn, rebuilt from TodoWrite/TaskCreate/
-   * TaskUpdate calls and mirrored into the single "todos" activity step. */
   todoState: TodoItem[];
-  /** Answers a user gave to a blocking AskUserQuestion, keyed by tool_use id.
-   * Consumed by the tool_result handler so the step records the exact answers. */
   questionAnswers: Map<string, Record<string, string>>;
-  /** True while a turn is paused inside canUseTool waiting for the user's answer
-   * to a blocking AskUserQuestion. Suspends the per-turn watchdog so a genuinely
-   * waiting turn is never killed for producing no SDK messages. */
   awaitingQuestionAnswer: boolean;
-  /** Plan usage-limit state seen so far. Deliberately NOT per-turn: the plan
-   * windows describe the account, so a turn that observes nothing keeps the
-   * previous reading rather than reporting a blank row. */
   usageLimitSnapshot: UsageLimitSnapshot | null;
-  /** Fingerprint of the last snapshot successfully reported to Convex, so an
-   * unchanged reading is not rewritten once per turn. */
   lastReportedUsageLimits: string;
-  /** Time of that successful report. Unchanged readings are periodically
-   * refreshed so the server's stale-row cutoff reflects a live daemon. */
   lastReportedUsageLimitsAt: number;
   doneFileWritten: boolean;
   flushInProgress: boolean;
@@ -288,7 +264,6 @@ try {
     }
   }
 } catch {
-  /* ignore invalid PRIOR_STEPS */
 }
 
 export function shiftLastProcessed(trimAmount: number): void {
@@ -321,12 +296,6 @@ export function assignRawLogStream(stream: WriteStream | null): void {
   callbackState.rawLogStream = stream;
 }
 
-/**
- * Clears the per-turn slice of callback state. Every provider runner calls this
- * first so a retried attempt cannot inherit the previous one's stream position,
- * tool bookkeeping or fatal-heartbeat flag. Fields outside one turn's lifetime
- * (session ids, todo state, raw-log stream) deliberately survive.
- */
 /**
  * Clears the per-turn streaming accumulators shared by every warm daemon.
  * `rawOutput` and `lastProcessed` must reset together: a cleared buffer with a

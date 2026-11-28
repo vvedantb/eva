@@ -38,7 +38,6 @@ export function useSandboxRail({
   repoId: Id<"githubRepos">;
   devPort: number | undefined;
   devCommand: string | undefined;
-  /** The chat this sandbox belongs to. */
   binding: SandboxChatBinding;
   active?: boolean;
 }) {
@@ -62,7 +61,6 @@ export function useSandboxRail({
   return {
     preview,
     roster,
-    /** Review comments go to this chat's draft (`ReviewChatTargetProvider`). */
     reviewTarget: draftTarget ?? null,
     agentBrowsingAt: viewState?.agentBrowsingAt,
     paneSlots: {
@@ -81,7 +79,6 @@ export function useSandboxRail({
           "Couldn't unlock browser",
           "sandbox-browser-unlock",
         ).catch(() => undefined),
-      // The backend starts the app in the Console tmux session after startup.
       runConsoleDevCommandOnConnect: false,
       onScreen: active,
     },

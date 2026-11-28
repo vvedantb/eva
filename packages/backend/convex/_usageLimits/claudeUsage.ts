@@ -2,32 +2,8 @@ import { z } from "zod";
 import type { Infer } from "convex/values";
 import type { usageLimitWindowValidator } from "../validators";
 
-/**
- * Turning Claude's plan-usage payloads into the windows the chip shows.
- *
- * The sandbox captures the same numbers through the Agent SDK during a turn;
- * this is the server-side path, so the UI can pull a fresh reading without
- * waiting for one. The window keys, labels and display order are duplicated
- * from `callback-src/runtime/usageLimits.ts` — that is a separate esbuild
- * bundle which `convex/` cannot import — so a label added here belongs there
- * too.
- *
- * `readClaudeUsageWindows` reads a `GET /api/oauth/usage` body. The refresh
- * action no longer calls that endpoint (it 403s every setup-token Eva stores),
- * and feeds it a body built from a Messages response's
- * `anthropic-ratelimit-unified-*` headers instead — 5h, weekly-all and Fable,
- * the only windows a `user:inference` token can report. The `/usage` shapes are
- * still parsed here because that is what the payload is, and the endpoint is
- * undocumented enough to have moved its numbers between them twice.
- *
- * A body is parsed rather than trusted: `/usage` answers an expired or
- * wrong-scope token with HTTP 200 carrying an error envelope instead of any of
- * the window keys.
- */
-
 export type UsageWindow = Infer<typeof usageLimitWindowValidator>;
 
-/** Display labels for the endpoint's fixed window keys. */
 const CLAUDE_WINDOW_LABELS: Record<string, string> = {
   five_hour: "5h",
   seven_day: "Weekly (all models)",
@@ -36,7 +12,6 @@ const CLAUDE_WINDOW_LABELS: Record<string, string> = {
   seven_day_sonnet: "Weekly (Sonnet)",
 };
 
-/** The five fixed windows, in the order they are shown. */
 const FIXED_WINDOW_KEYS = [
   "five_hour",
   "seven_day",
@@ -47,9 +22,7 @@ const FIXED_WINDOW_KEYS = [
 
 const windowSchema = z
   .object({
-    /** Percentage of the window consumed, 0-100. */
     utilization: z.number().nullish(),
-    /** ISO 8601 timestamp, unlike some `limits[].resets_at` values below. */
     resets_at: z.string().nullish(),
   })
   .passthrough();
@@ -58,10 +31,6 @@ const scopedLimitSchema = z
   .object({
     kind: z.string().nullish(),
     percent: z.number().nullish(),
-    /**
-     * Epoch seconds on older payloads; ISO 8601 on current `/usage` responses.
-     * Both are accepted so a shape change cannot drop Weekly (Fable).
-     */
     resets_at: z.union([z.number(), z.string()]).nullish(),
     scope: z
       .object({
@@ -92,9 +61,6 @@ export const claudeUsageBodySchema = z
     seven_day_oauth_apps: windowSchema.nullish(),
     seven_day_opus: windowSchema.nullish(),
     seven_day_sonnet: windowSchema.nullish(),
-    // The Agent SDK wraps the same windows under `rate_limits`. The raw
-    // `/usage` endpoint usually sends them at the top level; both shapes are
-    // accepted so a wrapper change cannot look like "Claude reported nothing".
     rate_limits: rateLimitsSchema.nullish(),
     limits: z.array(scopedLimitSchema).nullish(),
   })
@@ -125,7 +91,6 @@ function isoToMs(value: string | null | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/** `limits[].resets_at` is either unix seconds or an ISO string. */
 function scopedResetsAtMs(
   value: number | string | null | undefined,
 ): number | undefined {
@@ -142,7 +107,6 @@ function pushWindow(
   utilization: number | undefined,
   resetsAt: number | undefined,
 ): void {
-  // A window the server reports as entirely null carries nothing to show.
   if (utilization === undefined && resetsAt === undefined) return;
   windows.push({
     key,
@@ -156,12 +120,6 @@ function msToIso(ms: number): string {
   return new Date(ms).toISOString();
 }
 
-/**
- * Unified rate-limit claim suffixes on Messages responses.
- *
- * Fable's weekly cap is `7d_oi` (shunt / Claude Code statusline), not a third
- * `7d` header — omitting it is why refresh only ever stored 5h + weekly-all.
- */
 const UNIFIED_HEADER_WINDOWS = [
   { key: "five_hour", suffix: "5h" },
   { key: "seven_day", suffix: "7d" },
@@ -200,7 +158,6 @@ export function readUnifiedRateLimitHeaders(
   return windows;
 }
 
-/** A `limits[]` entry as the header path writes one, before it is parsed. */
 type UnifiedScopedLimit = {
   kind: string;
   percent?: number;
@@ -217,8 +174,6 @@ export function claudeUsageBodyFromUnifiedHeaders(
   const raw: Record<string, { utilization?: number; resets_at?: string }> = {};
   const limits: UnifiedScopedLimit[] = [];
   for (const window of windows) {
-    // A model-scoped header goes back through `limits[]` so the one place that
-    // labels per-model weeklies stays `readClaudeUsageWindows`.
     if (window.key.startsWith("model_scoped:")) {
       const name = window.key.slice("model_scoped:".length);
       limits.push({
@@ -254,8 +209,6 @@ function fractionToPercent(value: string | undefined): number | undefined {
   if (value === undefined || value.length === 0) return undefined;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return undefined;
-  // Two decimal places, matching `/usage`'s percent encoding (1.03, not
-  // 1.0299999998 from 0.0103 × 100).
   return Math.round(parsed * 10_000) / 100;
 }
 
@@ -291,8 +244,6 @@ export function readClaudeUsageWindows(body: ClaudeUsageBody): UsageWindow[] {
   }
   for (const entry of body.limits ?? []) {
     const kind = entry.kind;
-    // Newer `/usage` bodies leave the legacy five_hour / seven_day keys null
-    // and put the same numbers in `limits[]` as session / weekly_all.
     if (kind === "session" && !seen.has("five_hour")) {
       pushWindow(
         windows,
@@ -318,8 +269,6 @@ export function readClaudeUsageWindows(body: ClaudeUsageBody): UsageWindow[] {
     if (kind !== "weekly_scoped") continue;
     const name = entry.scope?.model?.display_name?.trim();
     if (!name) continue;
-    // Model-scoped entries are weekly windows too, so they are labelled like
-    // the fixed ones ("Weekly (Fable)") rather than by bare model name.
     pushWindow(
       windows,
       `model_scoped:${name}`,

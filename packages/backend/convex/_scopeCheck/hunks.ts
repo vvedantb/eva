@@ -1,20 +1,6 @@
-/**
- * Splits a unified diff into the hunks Jev judges one at a time.
- *
- * Per hunk rather than per diff because the motivating case is a single stray
- * change — an icon swap in a file that was legitimately edited — which a
- * whole-diff question drowns in the surrounding legitimate work.
- *
- * Runtime-free so every parsing edge (deletions, binaries, lockfiles, renames
- * with no hunks) is testable without a deployment.
- */
-
 export interface DiffHunk {
-  /** Repo-relative path of the file the hunk touches. */
   file: string;
-  /** The hunk's `@@ -a,b +c,d @@ context` line, trimmed. */
   header: string;
-  /** The hunk's lines, `\n`-joined, clipped to {@link MAX_HUNK_CHARS}. */
   body: string;
 }
 
@@ -41,10 +27,10 @@ export const IGNORED_FILE_NAMES: ReadonlySet<string> = new Set([
  * turn that rebuilt them.
  */
 export const IGNORED_PATH_PATTERNS: ReadonlyArray<RegExp> = [
-  /\.generated\.[cm]?[jt]sx?$/, // foo.generated.ts / .js / .mjs / .tsx …
-  /(^|\/)_generated\//, // Convex codegen directory
-  /\.min\.[cm]?js$/, // pre-minified vendored scripts
-  /(^|\/)dist\//, // built output that some repos commit
+  /\.generated\.[cm]?[jt]sx?$/,
+  /(^|\/)_generated\//,
+  /\.min\.[cm]?js$/,
+  /(^|\/)dist\//,
 ];
 
 /**
@@ -74,7 +60,6 @@ export function clipToLineBoundary(
   };
 }
 
-/** The `+++ b/x` / `--- a/x` path, with git's one-letter prefix removed. */
 function stripPrefix(path: string): string {
   return path.startsWith("a/") || path.startsWith("b/") ? path.slice(2) : path;
 }
@@ -93,10 +78,6 @@ export function isIgnoredFile(path: string): boolean {
   return IGNORED_PATH_PATTERNS.some((pattern) => pattern.test(path));
 }
 
-/**
- * The path a block's hunks belong to. Deletions write `+++ /dev/null`, so the
- * old-side path is the only name the file has.
- */
 function blockFilePath(lines: readonly string[]): string | null {
   let newPath: string | null = null;
   let oldPath: string | null = null;
@@ -117,7 +98,6 @@ function isBinaryBlock(lines: readonly string[]): boolean {
   );
 }
 
-/** Hunks of one `diff --git` block, in diff order. */
 function blockHunks(lines: readonly string[]): DiffHunk[] {
   if (isBinaryBlock(lines)) return [];
   const file = blockFilePath(lines);

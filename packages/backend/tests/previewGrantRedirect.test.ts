@@ -7,16 +7,8 @@ import schema from "../convex/schema";
 import * as Helpers from "../convex/_sandbox_runtime/helpers";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `/preview-auth` used to take the redirect origin from the link's `return`
- * param, so a crafted link sent a signed-in user's preview grant to any
- * `*.vercel.run` host. The backend now builds the redirect from the sandbox's
- * own preview origin; only the path comes from the caller.
- */
-
 const SANDBOX_ORIGIN = "https://sb-own-3000.vercel.run";
 
-// The provider lookup is the only fake: the sandbox's real preview origin.
 const actualHelpers = { ...Helpers };
 mock.module("../convex/_sandbox_runtime/helpers", () => ({
   ...actualHelpers,

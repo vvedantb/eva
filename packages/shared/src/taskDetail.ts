@@ -2,12 +2,6 @@ import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { PRIORITY_LABELS, TASK_STATUS_LABELS, type TaskStatus } from "./taskMeta";
 
-/**
- * The task overview's rules, shared by the web task detail and the phone task
- * overview: who may edit the text, how comments thread, how the activity
- * timeline reads, and how reactions group.
- */
-
 export type TaskComment = FunctionReturnType<typeof api.taskComments.listByTask>[number];
 export type TaskActivityEvent = FunctionReturnType<typeof api.taskActivity.listByTask>[number];
 export type TaskReaction = FunctionReturnType<typeof api.taskReactions.listByTask>[number];
@@ -21,12 +15,6 @@ type UserNameFields = {
 };
 type TaskUser = UserNameFields & { _id: Id<"users"> };
 
-/**
- * Statuses where the title and description are still the person's to edit:
- * before a run starts, and again while a finished run waits in business review
- * (where refining the ask before a re-run is the point). Locked while an agent
- * runs, or once the task is terminal.
- */
 const TASK_TEXT_EDITABLE_STATUSES: TaskStatus[] = ["draft", "todo", "business_review"];
 
 export function canEditTaskText(status: TaskStatus | undefined, hasActiveRun: boolean): boolean {
@@ -51,8 +39,6 @@ export function getUserDisplayName(user: UserNameFields): string {
   return "Unnamed User";
 }
 
-// ── Comments ────────────────────────────────────────────────────────────────
-
 export const DELETED_COMMENT_PLACEHOLDER = "This comment has been deleted by the author";
 
 export function isCommentDeleted(comment: TaskComment): boolean {
@@ -76,8 +62,6 @@ export function buildRepliesByParentId(comments: TaskComment[]): Map<Id<"taskCom
   for (const siblings of map.values()) siblings.sort((a, b) => a.createdAt - b.createdAt);
   return map;
 }
-
-// ── Activity timeline ───────────────────────────────────────────────────────
 
 export type TaskTimelineItem =
   | { kind: "created"; timestamp: number }
@@ -131,7 +115,6 @@ const FIELD_LABELS: Record<TaskActivityEvent["field"], string> = {
   pr: "PR",
 };
 
-// Activity values are stored as plain strings; look them up by string key.
 const STATUS_LABEL_BY_VALUE = new Map<string, string>(Object.entries(TASK_STATUS_LABELS));
 const PRIORITY_LABEL_BY_VALUE = new Map<string, string>(Object.entries(PRIORITY_LABELS));
 
@@ -194,17 +177,13 @@ export function describeTaskActivity(
   };
 }
 
-// ── Reactions ───────────────────────────────────────────────────────────────
-
 /** The reactions offered first, before the full emoji list. */
 export const QUICK_REACTIONS = ["👍", "❤️", "🎉", "😄", "🚀", "👀"];
 
 export interface ReactionGroup {
   emoji: string;
   count: number;
-  /** Whether the current person reacted (the chip's highlight). */
   reactedByMe: boolean;
-  /** Everyone who reacted with this emoji; the current person reads "You". */
   reactors: { userId: Id<"users">; name: string }[];
 }
 

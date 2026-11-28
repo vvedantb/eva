@@ -97,7 +97,6 @@ export function SourceChip({
   domain,
 }: {
   label: string;
-  /** The website, for its favicon. Omit for one of your notes. */
   domain?: string;
 }) {
   return (

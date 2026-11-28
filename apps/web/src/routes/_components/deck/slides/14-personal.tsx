@@ -18,7 +18,6 @@ import {
 } from "../_components/motion";
 import { EvaSidebarDemo } from "./_parts/EvaSidebarDemo";
 
-/** The category, named without comment. The comment is in the notes. */
 const SIMILAR: readonly string[] = [
   "Cursor background agents",
   "OpenAI Codex",
@@ -34,7 +33,6 @@ const OURS: readonly string[] = [
   "Anything unused can go",
 ];
 
-/** Each step pulls focus to the part that carries it: ours, the demo, the line. */
 const LIGHT = [
   null,
   { x: 300, y: 360, size: 520 },
@@ -61,7 +59,6 @@ export function Slide14Personal() {
 
       <div className="mt-10 flex gap-14">
         <div className="w-[600px] shrink-0">
-          {/* The category steps back once ours is named. */}
           <m.div initial={false} {...fade(step >= 1 ? 0.4 : 1)}>
             <Stagger delayChildren={0.3} className="flex flex-wrap gap-2.5">
               {SIMILAR.map((name) => (

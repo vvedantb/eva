@@ -6,7 +6,6 @@ export const DESIGN_H = 720;
 
 interface StageScale {
   scale: number;
-  /** Attach to the element the canvas must fit inside. */
   measure: (el: HTMLElement | null) => (() => void) | undefined;
 }
 

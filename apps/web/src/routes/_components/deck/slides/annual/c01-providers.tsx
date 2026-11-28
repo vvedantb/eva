@@ -21,10 +21,6 @@ interface Provider {
   models: readonly string[];
 }
 
-/**
- * The shipped catalogue, provider by provider, legacy entries excluded.
- * Source: Eva repository model catalogue, 16 September 2026.
- */
 const PROVIDERS: readonly Provider[] = [
   {
     name: "Claude",
@@ -64,7 +60,6 @@ const MODEL_COUNT = PROVIDERS.reduce(
   0,
 );
 
-/** Where each column's first model sits in the catalogue, for the step 1 wave. */
 const FIRST_INDEX = PROVIDERS.map((_, index) =>
   PROVIDERS.slice(0, index).reduce(
     (total, provider) => total + provider.models.length,
@@ -72,7 +67,6 @@ const FIRST_INDEX = PROVIDERS.map((_, index) =>
   ),
 );
 
-/** One light passes down the whole catalogue as it gathers into one count. */
 const WAVE_GAP = 0.035;
 
 function ModelChip({
@@ -134,7 +128,6 @@ function ProviderColumn({
         transition={{ duration: DUR.hero, ease: EASE.expo, delay: base }}
       />
 
-      {/* On the last step a light crosses each supplier in turn: the work moving on. */}
       <Sheen
         step={2}
         delay={0.35 + index * 0.14}

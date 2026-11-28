@@ -7,13 +7,6 @@ import type { Doc } from "../convex/_generated/dataModel";
 import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * A quick task's Run is a task-mode message in its own chat
- * (`_agentTasks/taskRunTurn.ts`): it moves the card to In Progress, and its
- * turn's end moves the card to Review or back to To Do. A plain chat turn in the same chat never moves the card. Fake timers
- * keep the chat workflow and sandbox steps queued.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|quick-task-run";
 
@@ -28,7 +21,6 @@ async function fixture() {
       name: "eva",
       installationId: 1,
       connectedBy: userId,
-      // The task's chat starts on the repo's default.
       defaultModel: "claude:opus",
     });
     const taskId = await ctx.db.insert("agentTasks", {
@@ -49,7 +41,6 @@ async function fixture() {
   const facts = () =>
     asUser.query(api.agentTasks.getRunFacts, { taskId: ids.taskId });
 
-  /** Opens and closes one reply turn on the task's chat. */
   async function endTurn(
     taskRun: Doc<"turns">["taskRun"],
     state: "done" | "error" | "cancelled",
@@ -97,7 +88,6 @@ describe("a quick task's Run is a turn in its chat", () => {
       const queued = await t.run((ctx) =>
         ctx.db.query("queuedMessages").collect(),
       );
-      // The chat shows the task; the agent gets the implementation steps.
       expect(queued.map((row) => [row.displayContent, row.taskRun])).toEqual([
         [
           "Clean up the flag\n\nRemove the never events flag.",
@@ -130,7 +120,6 @@ describe("a quick task's Run is a turn in its chat", () => {
       await setStatus("in_progress");
       await endTurn(run, "error");
       expect(await status()).toBe("todo");
-      // The failed Run is the task's latest outcome: the card shows it.
       expect(
         await asUser.query(api.agentTasks.getTaskIdsWithFailedRun, {
           repoId: ids.repoId,

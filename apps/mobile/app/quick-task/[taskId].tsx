@@ -87,7 +87,6 @@ import { HeaderMoreButton } from "@/ui/HeaderRail";
 import { ArchivedBar } from "@/ui/ArchivedBar";
 import { TaskDescription, TaskTitle } from "@/quickTasks/TaskText";
 
-/** A quick-task row (`getAllTasks`); `listByProject` shares its validator. */
 type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -130,7 +129,6 @@ export default function QuickTaskScreen() {
   const byNumber =
     repo !== undefined && archivedTasks !== undefined && quickTask === undefined && Number.isInteger(numId);
   const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
-  // A project task is its chat.
   if (numbered?._id === params.taskId && numbered.projectId !== undefined) {
     return <Redirect href={{ pathname: "/chat/[target]", params: { target: numbered._id } }} />;
   }
@@ -148,7 +146,6 @@ export default function QuickTaskScreen() {
         {loading ? (
           <CenteredSpinner label="Loading task" />
         ) : (
-          // The web `EntityNotFound` for a task.
           <EmptyState
             icon={IconChecklist}
             title="Task not found"
@@ -179,13 +176,10 @@ function TaskOverview({
 }) {
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  // One read for both task kinds, as on the web (`useTaskDetail`).
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
   const hasActiveRun = runFacts?.hasActiveRun ?? false;
   const hasRuns = runFacts?.hasRuns ?? false;
-  // A project archives with its tasks, so its task is read-only too.
   const project = useQuery(api.projects.get, task.projectId ? { id: task.projectId } : "skip");
-  // The web page's sandbox and git actions, leading the "…" sheet.
   const git = useTaskGitActions({ task, projectPrUrl: project?.prUrl, hasRuns, hasActiveRun });
   const archived = task.archivedAt !== undefined;
   const readOnly = archived || project?.archivedAt !== undefined;
@@ -212,7 +206,6 @@ function TaskOverview({
   };
   const creator = users?.find((user) => user._id === task.createdBy);
   const scheduledAt = taskScheduledAt(task);
-  // The web `SchedulePopover`: a first run at a time, changed or removed until it starts.
   const [scheduling, setScheduling] = useState(false);
   const schedule = useMutation(api.agentTasks.scheduleExecution);
   const updateSchedule = useMutation(api.agentTasks.updateScheduledExecution);
@@ -225,7 +218,6 @@ function TaskOverview({
   const comments = useCommentMutations(task._id);
   const [commentMode, setCommentMode] = useState<CommentMode>({ kind: "new" });
   const scroll = useRef<KeyboardAwareScrollViewRef>(null);
-  // Reply and Edit happen in the comment box at the end: bring it into view.
   const changeCommentMode = (mode: CommentMode) => {
     setCommentMode(mode);
     if (mode.kind !== "new") scroll.current?.scrollToEnd({ animated: true });
@@ -239,11 +231,9 @@ function TaskOverview({
         headerRight={<HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
       />
       {archived ? <ArchivedBar onUnarchive={() => actions.unarchive(task._id)} /> : null}
-      {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
       <KeyboardAwareScrollView
         ref={scroll}
         bottomOffset={16}
-        // A style, not a class: the keyboard-controller view takes no NativeWind `className`.
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -340,7 +330,6 @@ function TaskOverview({
           </View>
         </FieldGroup>
         <View className="mt-4">
-          {/* Once the person is known: presence heartbeats need their id. */}
           {currentUserId && !readOnly ? (
             <CommentComposer
               currentUserId={currentUserId}
@@ -379,11 +368,6 @@ type UpdateTask = (
   failure: string,
 ) => void;
 
-/**
- * A quick task's web Properties pane (`StatusFieldsSection`): a row per
- * field; a tap opens its sheet, and a pick writes at once. Read-only
- * (archived), the rows only show their values.
- */
 function TaskProperties({
   task,
   users,
@@ -522,12 +506,6 @@ const COMMENT_PLACEHOLDER: Record<CommentMode["kind"], string> = {
   edit: "Edit comment...",
 };
 
-/**
- * The web comment boxes in one: "Add a comment..." posts a top-level comment;
- * after Reply it answers that comment, and after Edit it holds your comment's
- * text and saves it. The chip above it names the comment; its X goes back to
- * a new comment.
- */
 function CommentComposer({
   currentUserId,
   taskId,
@@ -545,8 +523,6 @@ function CommentComposer({
   mode: CommentMode;
   onModeChange: (mode: CommentMode) => void;
 }) {
-  // A new comment and each reply keep their own draft on the server, as the
-  // web boxes do; an edit has none. Each has its own typing room too.
   const draftTargetFor = (next: CommentMode): DraftTarget | null =>
     next.kind === "edit"
       ? null
@@ -572,9 +548,6 @@ function CommentComposer({
   );
   const comments = useCommentMutations(taskId);
   const [sending, setSending] = useState(false);
-  // A new mode resets the box during render: an edit loads its comment; a new
-  // comment or a reply loads its last known draft, and a draft from elsewhere
-  // (the web) comes in on a later render (`pull`).
   const [shownMode, setShownMode] = useState(mode);
   const modeChanged = shownMode !== mode;
   if (modeChanged) {
@@ -604,7 +577,6 @@ function CommentComposer({
         });
       }
       typing.stopTyping();
-      // An edit by the person, so the sent draft is cleared on the server too.
       composer.setText("");
       onModeChange({ kind: "new" });
     } catch {
@@ -658,21 +630,14 @@ function CommentComposer({
   );
 }
 
-/**
- * The bottom bar, as the project page: "Chat" (the task chat, with the unread
- * dot) and, when the web shows its Run button, "Run Eva" (outside a project;
- * a first run from To Do, or In Progress with no run going).
- */
 function TaskDock({
   task,
   hasRuns,
   hasActiveRun,
   onSchedule,
 }: {
-  /** The web Run button's schedule half: pick a time for the run instead. */
   onSchedule: () => void;
   task: QuickTask;
-  /** Undefined while the run facts load. */
   hasRuns: boolean | undefined;
   hasActiveRun: boolean;
 }) {
@@ -739,7 +704,6 @@ function TaskDock({
         </View>
       ) : null}
       {canRun && task.status === "todo" ? (
-        // The web split button's schedule half, as a 44 square beside Run Eva.
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Schedule run"

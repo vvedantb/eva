@@ -188,7 +188,6 @@ test("parseClaudeSdkTaxonomy announces new background tasks by description", () 
     "task-2",
   ]);
 
-  // A later change re-lists known tasks; only the unseen one gets a notice.
   applyCanonicalEvents(
     parseClaudeSdkTaxonomy({
       type: "system",
@@ -204,7 +203,6 @@ test("parseClaudeSdkTaxonomy announces new background tasks by description", () 
 });
 
 test("parseClaudeSdkTaxonomy ignores malformed events without throwing", () => {
-  // An active tool, so a malformed tool_progress has a step it could patch.
   applyCanonicalEvents([
     {
       kind: "push_step",

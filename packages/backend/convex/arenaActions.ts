@@ -17,10 +17,8 @@ import {
 import { buildHttpReadyProbeCommand } from "./_sandbox_runtime/httpReadyProbe";
 import { ARENA_SCREENSHOT_DIR } from "./_arena/browserRun";
 
-/** Gateway model for drafting scenarios: same one Ave uses, known to be on the gateway. */
 const DRAFT_MODEL = "openai/gpt-6-luna";
 const MAX_DRAFTED_SCENARIOS = 6;
-/** A screenshot past this is skipped rather than half-read. */
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
 
 const draftJsonSchema = z
@@ -144,7 +142,6 @@ export const collectScreenshots = internalAction({
       storageId: Id<"_storage">;
     }> = [];
     for (const scenarioId of args.scenarioIds) {
-      // Convex ids are alphanumeric, so the path needs no quoting.
       const path = `${ARENA_SCREENSHOT_DIR}/${scenarioId}.png`;
       try {
         const out = await execHandle(
@@ -206,7 +203,6 @@ export const createCheckRun = internalAction({
   },
 });
 
-/** Pipes and newlines would break the markdown table row. */
 function tableCell(text: string): string {
   return text.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
 }

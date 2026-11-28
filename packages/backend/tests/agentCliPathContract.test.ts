@@ -10,22 +10,9 @@ import {
   renderEvaEnvFile,
 } from "../convex/_sandbox/vercelEnvFile";
 
-/**
- * Fix #867: launches install the registry-latest Claude Code / Codex CLI under
- * /tmp, but terminal shells found the snapshot's older copy first, so `claude`
- * typed in a terminal ran a different version from the agent. `.eva-env.sh`
- * now ends with a PATH line putting both install dirs first.
- *
- * Sourcing it for real catches the quiet regression: moving the line into
- * `renderEvaEnvFile` single-quotes `$PATH` (wiping the shell's PATH).
- */
-
 function pathAfterSourcing(envFile: string): string[] {
   const file = join(mkdtempSync(join(tmpdir(), "eva-env-")), ".eva-env.sh");
   writeFileSync(file, envFile);
-  // --noprofile --norc: bash started without a terminal can still read the
-  // machine's rc files (e.g. an Eva sandbox's PATH setup). Only the env file
-  // under test may change PATH.
   return execFileSync(
     "bash",
     ["--noprofile", "--norc", "-c", `. "${file}" && printf %s "$PATH"`],

@@ -34,13 +34,6 @@ const modelArg = z
     'Claude model ("opus", "sonnet", "haiku", or "fable"). Sessions are locked to the provider they were created with, so omit this to reuse the agent\'s own model — passing a model from another provider is rejected.',
   );
 
-/**
- * Shared by the user-MCP fleet tools and the master-only send_agent_message.
- * Each backing action runs as the user against authQuery/authMutation, and
- * those hasRepoAccess checks are the enforcement — the tools skip the sandbox
- * token's single-repo pin so an OAuth connector can reach every agent the
- * user can already reach in Eva.
- */
 function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
   const { clerkUserId, aveThreadId } = credentials;
 
@@ -56,11 +49,6 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
     return { repos: [matched.repo] };
   }
 
-  /**
-   * Watch needs a live Manager Ave thread to wake. Ave's own run carries its
-   * id; any other MCP caller registers against the user's live thread. There
-   * is no way to wake an OAuth MCP client itself.
-   */
   async function resolveWatchThreadId(): Promise<
     string | ReturnType<typeof toolErrorResult>
   > {
@@ -95,10 +83,6 @@ export function fleetTools(
     fleetHelpers(credentials, ctx);
   const { entityId } = credentials;
   const caller = projectCallerOf(credentials.owner);
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_agents
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -157,8 +141,6 @@ export function fleetTools(
             clerkUserId,
             repos: repoScope.repos.map((repo) => ({
               id: repo.id,
-              // App-qualified so a monorepo's app rows are distinguishable in
-              // the fleet table (they are separate repo records sharing a name).
               fullName: repoRefLabel(repo),
             })),
             includeIdle,
@@ -170,10 +152,6 @@ export function fleetTools(
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // get_agent_state
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -202,10 +180,6 @@ export function fleetTools(
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // stop_agent
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "stop_agent",
@@ -218,7 +192,6 @@ export function fleetTools(
       },
       handler: async ({ kind, id }) => {
         await mcpGetContext(ctx, clerkUserId);
-        // A coordinator stops only its own project's tasks.
         if (caller?.role === "coordinator") {
           const projectId =
             kind === "task"
@@ -241,10 +214,6 @@ export function fleetTools(
       },
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // create_session
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -271,7 +240,6 @@ export function fleetTools(
         message: z
           .string()
           .describe("The first message to run in the session."),
-        // No `model`: the session runs on the repo's configured default model.
         baseBranch: z
           .string()
           .optional()
@@ -389,7 +357,6 @@ export function fleetTools(
             repoGroupId,
             installDependencies,
             providerAccountId,
-            // A session's agent links what it spins up, so the UI can group them.
             ...(credentials.entityKind === "session" && entityId
               ? { fromSessionId: entityId }
               : {}),
@@ -416,10 +383,6 @@ export function fleetTools(
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // add_to_session_group / rename_session_group / remove_from_session_group
-  // ───────────────────────────────────────────────────────────────────────────
-
   const sessionGroupTargetArg = z
     .string()
     .optional()
@@ -427,7 +390,6 @@ export function fleetTools(
       "Session id of any member of the group. Omit to use your own session.",
     );
 
-  /** The session a group tool acts on: the given id, or the caller's own. */
   const groupTargetSessionId = (sessionId: string | undefined) =>
     sessionId ?? (credentials.entityKind === "session" ? entityId : undefined);
 
@@ -519,10 +481,6 @@ export function fleetTools(
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // watch_agent / unwatch_agent
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "watch_agent",
@@ -583,10 +541,6 @@ export function orchestratorTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId, aveThreadId } = fleetHelpers(credentials, ctx);
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // send_agent_message
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({

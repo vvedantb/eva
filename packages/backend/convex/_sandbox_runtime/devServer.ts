@@ -19,7 +19,6 @@ const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
 const SUPABASE_RESTORE_MARKER = "/tmp/.eva-supabase-db-web-restored";
 
-/** Absolute shell path to the package root, defaulting to `baseDir`. */
 function packageDirShell(rootDir: string, baseDir: string): string {
   return rootDir ? `${baseDir}/${rootDir}` : baseDir;
 }
@@ -37,9 +36,6 @@ export async function detectPackageManager(
   baseDir: string = workspaceDirShell(),
 ): Promise<string> {
   const dir = packageDirShell(rootDir, baseDir);
-  // Prefer the package rootDir, then fall back to baseDir — monorepos often
-  // keep pnpm-lock.yaml at the repo root while rootDirectory points at an app.
-  // Also treat packageManager / workspace: deps as pnpm so npm never hits workspace:*.
   const detection = (
     await execHandle(
       sandbox,
@@ -101,7 +97,6 @@ export async function installPythonDependenciesBestEffort(
   try {
     await execHandle(
       sandbox,
-      // Match websockify / seed: --break-system-packages then plain --user.
       `cd ${baseDir} && (python3 -m pip install --user --break-system-packages ${pipArgs} || python3 -m pip install --user ${pipArgs})`,
       PIP_INSTALL_TIMEOUT_SECONDS,
     );
@@ -111,9 +106,6 @@ export async function installPythonDependenciesBestEffort(
   }
 }
 
-// Boundary schema for the sandbox package.json. Only the fields dev-port
-// detection needs are modelled; anything malformed falls back to empty via
-// `.catch`, so detection degrades to framework defaults instead of throwing.
 const packageJsonSchema = z
   .object({
     scripts: z.record(z.string(), z.string()).catch({}),
@@ -154,7 +146,6 @@ export async function detectDevPort(
       if (framework in allDeps) return port;
     }
   } catch {
-    // couldn't read package.json
   }
   return 3000;
 }
@@ -213,7 +204,6 @@ export async function restoreSeededRuntimeState(
     await execHandle(sandbox, `test -f ${SUPABASE_RESTORE_MARKER}`, 5);
     return;
   } catch {
-    // No marker means this fresh sandbox still needs its local service state.
   }
 
   const dockerReady =
@@ -225,10 +215,6 @@ export async function restoreSeededRuntimeState(
     );
     return;
   }
-  // Non-fatal: every caller runs this before the dev server resolves, so a
-  // throw here (e.g. a repo whose `supabase` CLI never installed, exit 127)
-  // left the Preview Console with no dev server at all. Background/startup
-  // commands still own Supabase and surface their own failures.
   try {
     await restoreSeededSupabaseDump(sandbox);
     return undefined;
@@ -255,10 +241,6 @@ async function restoreSeededSupabaseDump(
       "elif docker ps -a --filter name=supabase_db_web -q | grep -q . && docker start supabase_db_web >/dev/null 2>&1; then",
       '  echo "started existing supabase_db_web"',
       "else",
-      // `docker start` fails when the snapshot captured a half-cleaned docker
-      // state (e.g. `supabase stop` pruned the network but a stopped container
-      // survived). Wipe any leftover supabase containers so `pnpm start-db`
-      // recreates the network + containers from scratch.
       "  docker ps -aq --filter name=supabase | xargs -r docker rm -f",
       "  pnpm start-db",
       "fi",
@@ -267,10 +249,6 @@ async function restoreSeededSupabaseDump(
       "  sleep 1",
       "done",
       "docker exec supabase_db_web pg_isready -U postgres >/dev/null 2>&1",
-      // Resume wakes an already-populated Postgres. The skip marker lives in
-      // /tmp and does not survive Vercel stop, so a dump + no marker used to
-      // TRUNCATE public and reload — wiping session data and failing when the
-      // dump is ahead of the live schema (relation "X" does not exist).
       'table_count=$(docker exec supabase_db_web psql -U postgres -d postgres -tAc "SELECT count(*) FROM pg_tables WHERE schemaname = \'public\'" | tr -d "[:space:]")',
       'if [ "${table_count:-0}" -gt 0 ]; then',
       '  echo "public schema already has tables; skipping seeded dump restore"',
@@ -281,10 +259,6 @@ async function restoreSeededSupabaseDump(
       `  touch ${SUPABASE_RESTORE_MARKER}`,
       '  echo "restored supabase_db_web from seeded snapshot dump"',
       "fi",
-      // Join with newlines, not "; ": the script contains if/elif/else/for
-      // blocks, and "then; ", "else; ", "do; " are bash syntax errors
-      // ("syntax error near unexpected token ';'"). Newlines terminate those
-      // keywords correctly and are valid statement separators everywhere else.
     ].join("\n"),
     600,
   );
@@ -322,10 +296,6 @@ export async function launchDevServerInBackground(
     return;
   }
 
-  // Detached launcher used by the task-only dev server re-run
-  // (runDevServerInTaskSandbox), which reaches a running sandbox without a boot
-  // step. Guarded like the Console launcher so a cold compile cannot spike into
-  // a swapless VM. Placed after the lock check: no-op relaunches pay nothing.
   await ensureSwapFile(sandbox);
 
   const script = [
@@ -346,11 +316,6 @@ export async function launchDevServerInBackground(
     ...buildFreePortLines(port),
     'echo $$ > "$LOCK"',
     "trap 'rm -f \"$LOCK\"' EXIT",
-    // Cap the dev server's V8 heap: one leaky Next dev compile at ~5.5GB RSS
-    // was enough to trigger kernel OOM kills of unrelated processes on a 16GB
-    // VM. A clean heap error is the recoverable failure — the preview
-    // self-heal (ensureSessionPreviewServices) relaunches the server. Ours
-    // goes first so an env- or repo-provided NODE_OPTIONS still wins.
     'export NODE_OPTIONS="--max-old-space-size=6144${NODE_OPTIONS:+ $NODE_OPTIONS}"',
     devCommand,
   ].join("\n");

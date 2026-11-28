@@ -31,9 +31,6 @@ export function useTypingPresence(
       updateTyping({ roomId: room, isTyping }).catch(() => undefined);
     }),
   );
-  // Presence is an external system: leaving the screen (or the room) must say
-  // "stopped" there, or teammates see this person typing until the timeout.
-  // `roomId` on purpose: a new room stops the old one's flag.
   useEffect(() => signal.stop, [signal, roomId]);
   return {
     typingUsers: typingUsersFrom(members, userId ?? undefined),

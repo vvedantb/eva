@@ -6,7 +6,6 @@ import { useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { textColor, useScheme } from "@/ui/theme";
 
-/** Space between carousel tiles, in points. */
 const TILE_GAP = 8;
 
 /**
@@ -34,10 +33,6 @@ export function AgentMedia({ entries }: { entries: ResolvedMediaEntry[] }) {
   );
 }
 
-/**
- * One image fills the column. More scroll sideways, each tile 70% of the
- * column so the next one peeks in. A tap opens the full-screen viewer.
- */
 function ImageCarousel({ images }: { images: AgentMediaItem[] }) {
   const [columnWidth, setColumnWidth] = useState(0);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);

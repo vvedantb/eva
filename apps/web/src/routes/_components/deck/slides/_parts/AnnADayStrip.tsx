@@ -5,35 +5,25 @@ import { DUR, EASE, MaskedText, cueTransition } from "../../_components/motion";
 import { MoA1Dot, MoA1Rail } from "./MoA1Rail";
 
 export interface AnnADayMark {
-  /** Index into `days`. */
   day: number;
   title: string;
   date: string;
-  /** Build step that lands this marker. */
   step: number;
 }
 
-/** Design size of the strip: the full content column. */
 const TRACK_W = 1088;
 const BOX_H = 230;
-/** Vertical position of the rail inside the box. */
 const RAIL_Y = 172;
-/** Keeps the first and last day labels well inside the box. */
 const INSET = 96;
-/** The rail runs this far in from each edge. */
 const RAIL_PAD = 24;
-/** Stem length from the rail up to the marker label. */
 const STEM = 84;
-/** How far the markers sit in front of the rail they mark. */
 const DOT_DEPTH = 30;
-/** The light travels first; the marker lands as it arrives. */
 const LAND = 0.45;
 
 function xFor(index: number, count: number): number {
   return INSET + (index / (count - 1)) * (TRACK_W - INSET * 2);
 }
 
-/** Rail fraction under a given x, for the lit run. */
 function railAt(x: number): number {
   return (x - RAIL_PAD) / (TRACK_W - RAIL_PAD * 2);
 }

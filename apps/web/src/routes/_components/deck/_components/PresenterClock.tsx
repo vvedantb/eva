@@ -28,8 +28,6 @@ export function PresenterClock() {
     return { start: now, now };
   });
 
-  // Held in state so the ref callback keeps one identity across renders and the
-  // interval is created once rather than torn down and rebuilt every second.
   const [tick] = useState(() => (el: HTMLElement | null) => {
     if (!el) return;
     const id = window.setInterval(

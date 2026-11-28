@@ -42,8 +42,6 @@ export async function insertAutomationTask(
     numId,
   });
   await createTaskRunSummary(ctx, taskId, automation.repoId);
-  // The automation's model goes on the task's chat; without one the chat
-  // starts on the repo's defaults when first needed.
   const task = automation.model !== undefined ? await ctx.db.get(taskId) : null;
   if (task && automation.model !== undefined) {
     await ensureWorkSession(

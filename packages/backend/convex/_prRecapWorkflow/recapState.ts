@@ -1,20 +1,5 @@
-/**
- * The one definition of "this recap is really ready".
- *
- * `prRecapStatus: "ready"` cannot express that the walkthrough actually
- * arrived, so ready-with-no-walkthrough was a storable illegal state (a model
- * that returned narration instead of a walkthrough). A walkthrough is the
- * structured `recapWalkthrough` steps, or the HTML page older recaps stored. The write path now enforces the
- * invariant here, and the recap views read the same helper so a row written
- * before enforcement still renders as a failure rather than a blank tab.
- *
- * Dependency-free on purpose: imported by Convex mutations, by the workflow,
- * and by the web app through `@eva/backend`.
- */
-
 type PrRecapStatus = "pending" | "ready" | "error";
 
-/** The fields that can carry a walkthrough: structured steps, or legacy HTML. */
 type RecapWalkthroughFields = {
   recapWalkthrough?: ReadonlyArray<object>;
   html?: string;

@@ -1,12 +1,6 @@
 import { expect, test } from "bun:test";
 import { shouldArchiveSession } from "../convex/_sessions/prArchive";
 
-/**
- * A session can hold many PRs: the primary repo's, one per linked repo, and
- * any the agent opened on a side branch. It only auto-archives once every one
- * is terminal — a single still-open PR anywhere keeps the whole session live.
- */
-
 test("no PRs at all never auto-archives", () => {
   expect(shouldArchiveSession([])).toBe(false);
 });

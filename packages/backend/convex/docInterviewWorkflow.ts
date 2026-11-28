@@ -14,7 +14,6 @@ import type { AgentJobResult } from "./_agentJobs/completion";
 import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 import { startAgentJob } from "./_agentJobs/slot";
 
-/** Shape of the JSON the doc-generation LLM step is expected to return. */
 const generatedDocSchema = z.object({
   description: z.string().optional(),
   requirements: z.array(z.string()).optional(),
@@ -28,7 +27,6 @@ interface PreviousAnswer {
   answer: string;
 }
 
-/** Builds a prompt that asks one product-focused question based on previous answers. */
 function buildQuestionPrompt(
   docTitle: string,
   previousAnswers: PreviousAnswer[],
@@ -56,7 +54,6 @@ OR
   return prompt;
 }
 
-/** Builds the prompt that turns the interview answers into the doc's content. */
 function buildGeneratePrompt(
   docTitle: string,
   previousAnswers: PreviousAnswer[],
@@ -77,7 +74,6 @@ Generate a product description, acceptance criteria, and user journeys for this 
 Output ONLY valid JSON.`;
 }
 
-/** Replaces the content and activity log of the last entry in an interview history array. */
 function updateLastHistoryEntry<
   T extends {
     role: "user" | "assistant";
@@ -94,8 +90,6 @@ function updateLastHistoryEntry<
   return updated;
 }
 
-// --- Workflow definition ---
-
 const previousAnswersValidator = v.array(
   v.object({ question: v.string(), answer: v.string() }),
 );
@@ -108,11 +102,6 @@ const docJobArgs = {
   installationId: v.number(),
 };
 
-/**
- * Runs one doc agent on the doc's own sandbox with read-only tools. Its reply
- * fills the empty assistant entry pushed first for streaming; a failure fills
- * it with an error marker.
- */
 async function runDocAgent(
   step: WorkflowCtx,
   args: {
@@ -143,7 +132,6 @@ async function runDocAgent(
     agent: { model: "sonnet", allowedTools: "Read,Glob,Grep" },
     prompt: args.prompt,
     onSandboxReady: async (sandboxId) => {
-      // Saved so the next question reuses this sandbox.
       await step.runMutation(internal.docInterviewWorkflow.saveDocSandboxId, {
         docId: args.docId,
         sandboxId,
@@ -202,8 +190,6 @@ export const docGenerateWorkflow = workflow.define({
     });
   },
 });
-
-// --- Supporting internal functions ---
 
 /** Fetches document and repository data needed for sandbox preparation. */
 export const getDocData = internalQuery({
@@ -319,7 +305,6 @@ export const saveGenerateResult = internalMutation({
       if (parsed?.success) {
         const generated = parsed.data;
 
-        // Update doc with generated content
         await ctx.db.patch(args.docId, {
           description: generated.description,
           requirements: generated.requirements,
@@ -370,8 +355,6 @@ export const startInterview = authMutation({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    // One slot per doc: a busy slot refuses loudly, so the dialog leaves its
-    // loading state and tells the user why.
     await startAgentJob(ctx, args.docId, () =>
       workflow.start(ctx, internal.docInterviewWorkflow.docInterviewWorkflow, {
         ...args,

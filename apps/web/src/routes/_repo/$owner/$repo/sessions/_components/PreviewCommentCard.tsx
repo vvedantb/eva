@@ -31,7 +31,6 @@ export function PreviewCommentCard({
     <div
       className={cn(
         "rounded-surface bg-card p-2.5 smooth-shadow-ring",
-        // Done, but still readable: the reader may want to reopen it.
         resolved && "opacity-70",
       )}
     >
@@ -54,7 +53,6 @@ export function PreviewCommentCard({
       ) : null}
       {comment.kind === "message" ? (
         <div className="mt-2 flex items-center justify-between gap-2">
-          {/* Same controls as a doc comment thread (DocCommentThread). */}
           <Button
             size="sm"
             variant="ghost"
@@ -100,7 +98,6 @@ function CommentReply({ comment }: { comment: PreviewComment }) {
     );
   }
   const reply = comment.reply;
-  // Stopped and failed turns show their own row in the chat.
   if (!reply || reply.status === "stopped" || reply.status === "failed") {
     return null;
   }

@@ -30,7 +30,6 @@ export function useSessionChatBinding({
   isRouteActive,
 }: {
   session: Doc<"sessions">;
-  /** The chat tab shown. */
   chat: Doc<"sessionChats">;
   isRouteActive: boolean;
 }): SandboxChatBinding {
@@ -44,9 +43,6 @@ export function useSessionChatBinding({
     isRouteActive,
   );
   const { model, traits, providerAccountId } = chatModel;
-  // Every visible model, across providers: a session may move onto another
-  // provider mid-conversation, and each pick carries the account it was made
-  // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
   const ports = useSessionTurnPorts(chatId, accounts.options);
   const stopChat = useMutation(api.chats.stop);

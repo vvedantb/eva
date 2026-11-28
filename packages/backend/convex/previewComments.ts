@@ -17,15 +17,7 @@ import { findMainChat, getSessionChatWithAccess } from "./_sessionChats/helpers"
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
-/**
- * The preview comments drawer: every "Select element" annotation of one chat,
- * newest first, with the agent's reply to each. Not the Chrome extension's
- * `annotations` table (that holds the extension's page pins).
- */
-
-/** Newest comments only: the drawer is a review list, not an archive. */
 const MAX_COMMENTS = 200;
-/** Transcript rows read after a comment to find its reply. */
 const REPLY_SCAN_LIMIT = 6;
 const EXCERPT_LENGTH = 280;
 
@@ -48,9 +40,7 @@ const previewCommentValidator = v.union(
     kind: v.literal("message"),
     id: v.id("messages"),
     ...commentFields,
-    /** Unset until a reply row exists (the turn has not started yet). */
     reply: v.optional(replyValidator),
-    /** Set once someone marks the comment done; unset while it is open. */
     resolved: v.optional(v.object({ at: v.number(), byName: v.string() })),
   }),
   v.object({
@@ -60,7 +50,6 @@ const previewCommentValidator = v.union(
   }),
 );
 
-/** Markdown → one plain line, for a three-line clamp in the card. */
 function plainExcerpt(markdown: string): string {
   const text = markdown
     .replace(/```[\s\S]*?```/g, " ")
@@ -83,10 +72,6 @@ function replyOf(row: Doc<"messages">) {
   return { status: "done" as const, excerpt: plainExcerpt(row.content) };
 }
 
-/**
- * The first assistant row after a comment in the transcript, before the next
- * user row. Thread replies (`replyTo` set) and system alerts are skipped.
- */
 async function findReply(ctx: QueryCtx, comment: Doc<"messages">) {
   const after = await ctx.db
     .query("messages")
@@ -105,7 +90,6 @@ async function findReply(ctx: QueryCtx, comment: Doc<"messages">) {
   return undefined;
 }
 
-/** Display names for the people who resolved comments, one read each. */
 async function namesOf(
   ctx: QueryCtx,
   userIds: readonly Id<"users">[],
@@ -120,12 +104,10 @@ async function namesOf(
   return names;
 }
 
-/** The feedback without the `[Annotated …]` suffix the chat shows. */
 function feedbackOf(content: string): string {
   return parseAnnotationDisplay(content)?.feedback ?? content;
 }
 
-/** The drawer's list for one chat, for a caller who may open it. */
 async function listComments(
   ctx: QueryCtx,
   chatId: Id<"sessionChats">,
@@ -209,11 +191,6 @@ export const list = authQuery({
   handler: (ctx, args) => listComments(ctx, args.chatId, ctx.userId),
 });
 
-/**
- * Marks a preview comment done, or opens it again. Anyone who can open the
- * chat may do either, as with doc comments. Queued comments have no row yet,
- * so they cannot be resolved.
- */
 async function setCommentResolved(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -245,12 +222,6 @@ export const setResolved = authMutation({
 });
 
 /**
- * Direct sandbox links. The preview-link HTTP routes (`previewCommentsHttp.ts`)
- * act for the user a signed link token names, so these take the user id as an
- * argument and are internal: only the token check reaches them.
- */
-
-/**
  * The user and chat a link token is minted for: the signed-in caller and the
  * main chat of the session that owns `sandboxId`. Null when the sandbox has
  * no session or the caller may not open it.
@@ -261,7 +232,6 @@ export const linkTarget = authQuery({
     v.object({
       userId: v.id("users"),
       chatId: v.id("sessionChats"),
-      /** The chat's path in the Eva web app, for "View in chat". */
       webPath: v.string(),
     }),
     v.null(),
@@ -284,7 +254,6 @@ export const linkTarget = authQuery({
   },
 });
 
-// The direct-link action passes the ids from its signed token as strings.
 export const listForUser = internalQuery({
   args: { userId: v.string(), chatId: v.string() },
   returns: v.array(previewCommentValidator),
@@ -318,7 +287,6 @@ export const sendForUser = internalMutation({
     userId: v.string(),
     chatId: v.string(),
     feedback: v.string(),
-    /** The agent prompt, built from the element context. */
     prompt: v.string(),
     ref: v.object({
       element: v.string(),

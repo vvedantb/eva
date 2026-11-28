@@ -16,16 +16,11 @@ import {
 } from "../../_components/motion";
 
 interface Shift {
-  /** Build step this row arrives on. */
   step: number;
   before: string;
   after: string;
 }
 
-/**
- * Top to bottom, in the order they are spoken. The before-phrase says which
- * part of the job changed, so the rows carry no category label.
- */
 const SHIFTS: Shift[] = [
   {
     step: 1,
@@ -44,14 +39,8 @@ const SHIFTS: Shift[] = [
   },
 ];
 
-/**
- * Where a row's after-text starts, measured from its 32px inset: the 330px
- * before-column, a 32px gap, the 24px arrow and another 32px gap. Keep it in
- * step with the row's `w-[330px]` and `gap-8`.
- */
 const ARROW_W = 24;
 
-/** Row centres on the 1280×720 stage, under the after-column: a light per step. */
 const LIGHT = [
   null,
   { x: 800, y: 225, size: 560 },
@@ -59,7 +48,6 @@ const LIGHT = [
   { x: 800, y: 447, size: 560 },
 ];
 
-/** Within a row's step: the old way is struck out, then the new way rises. */
 const STRIKE_AT = 0.3;
 const ARROW_AT = 0.55;
 const AFTER_AT = 0.65;
@@ -69,8 +57,6 @@ function ShiftRow({ shift }: { shift: Shift }) {
 
   return (
     <Reveal step={shift.step} distance={20}>
-      {/* 32px gutters inside a 32px outer radius, so the row reads as one
-          block rather than a label stuck to a card edge. */}
       <Card className="flex h-[96px] items-center gap-8 rounded-[32px] px-8 py-0">
         <div className="w-[330px] shrink-0 text-xl">
           <m.span

@@ -30,11 +30,8 @@ describe("usage limit report semantics", () => {
 
   it("only replaces the stored row for a complete provider reading", () => {
     expect(isAuthoritativeReading("complete", undefined)).toBe(true);
-    // A refusal and a passing observation both merge: neither has seen the
-    // whole picture, so neither may clear windows an earlier read established.
     expect(isAuthoritativeReading("refused", undefined)).toBe(false);
     expect(isAuthoritativeReading("partial", undefined)).toBe(false);
-    // The discriminant wins over the legacy boolean when both arrive.
     expect(isAuthoritativeReading("refused", true)).toBe(false);
   });
 
@@ -54,7 +51,6 @@ describe("usage limit report semantics", () => {
   });
 });
 
-/** An ambiguous key would read one row and write another. */
 describe("row keys name exactly one credential", () => {
   it("rejects a key that names both credentials, or neither", () => {
     expect(() => parseUsageLimitRowKey({ provider: "claude" })).toThrow();
@@ -105,11 +101,6 @@ describe("presenting a stored reading", () => {
     });
   });
 
-  /**
-   * A status and a discriminant observed alongside windows expire with them:
-   * "complete" with no windows left would have the card claim the plan has no
-   * windows at all.
-   */
   it("drops status and completeness once every window has reset", () => {
     expect(
       presentReading(
@@ -126,7 +117,6 @@ describe("presenting a stored reading", () => {
     ).toEqual({ provider: "claude", capturedAt: NOW, subscriptionType: "max" });
   });
 
-  /** The windowless case the discriminant exists for keeps it. */
   it("keeps a refusal that never carried windows", () => {
     expect(
       presentReading(

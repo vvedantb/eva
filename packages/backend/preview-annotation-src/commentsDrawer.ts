@@ -1,9 +1,3 @@
-/**
- * The comments drawer for a direct sandbox link: every comment of the chat,
- * with Eva's reply, filters and Resolve. It mirrors Eva's own drawer
- * (`PreviewCommentsDrawer`, React, in the Eva page) in plain DOM.
- */
-
 import {
   listComments,
   setCommentResolved,
@@ -19,7 +13,6 @@ export interface CommentsDrawer {
 }
 
 const POLL_MS = 3_000;
-// Eva's drawer: at most 320px, at most 62% of the pane, 8px from its edges.
 const MAX_WIDTH_PX = 320;
 const MAX_SHARE = 0.62;
 const INSET_PX = 8;
@@ -70,7 +63,6 @@ const UNDO =
 const ARROW_UP_RIGHT =
   '<svg viewBox="0 0 24 24"><path d="M17 7l-10 10"/><path d="M8 7l9 0l0 9"/></svg>';
 
-/** "now", "5m", "3h", "2d": the drawer's compact time. */
 function ago(timestamp: number): string {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
   if (seconds < 60) return "now";
@@ -103,7 +95,6 @@ export function openCommentsDrawer({
 }: {
   session: EvaSession;
   onClose: () => void;
-  /** Open (unresolved) comment count, for the toolbar badge. */
   onCount: (count: number) => void;
 }): CommentsDrawer {
   const host = document.createElement("div");

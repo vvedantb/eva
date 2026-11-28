@@ -33,11 +33,6 @@ interface FindingsListProps {
 
 export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
   const findings = run.findings ?? [];
-  /**
-   * Which findings the user has flipped away from the triaged default, not
-   * which are ticked. Storing the diff means a triage landing while the panel
-   * is open re-ranks the list without discarding the user's clicks.
-   */
   const [overrides, setOverrides] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
   const createTasks = useMutation(api.automations.createTasksFromFindings);
@@ -64,8 +59,6 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
     setIsCreating(true);
-    // Ternaries inside the `try`, and a `try`/`finally` with no `catch`, each
-    // bail the React Compiler out of this whole file. See CLAUDE.md.
     const plural = count === 1 ? "" : "s";
     const successMessage = autoRun
       ? `Created and started ${count} task${plural}`
@@ -85,7 +78,6 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
         errorMessage,
         toastId,
       );
-      // Back to the defaults, which now exclude the findings just linked.
       setOverrides(new Set());
     } catch (error) {
       setIsCreating(false);

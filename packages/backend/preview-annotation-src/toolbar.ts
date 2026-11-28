@@ -1,21 +1,3 @@
-/**
- * Floating Eva toolbar, injected into the previewed page by the sandbox proxy.
- *
- * One toolbar serves both places the preview shows up: inside Eva's iframe and
- * on a direct sandbox link. It starts as a round Eva mark; a click expands it
- * to the full set of tools; the mark drags it anywhere on the page. Position
- * and open state persist per preview origin.
- *
- * It cannot import web components: this file is bundled into the injected
- * script (`scripts/build-annotation-script.mjs`) and runs in the previewed
- * page. The markup is plain DOM inside a shadow root, so the page's CSS cannot
- * reach it and its CSS cannot leak out. Colours are fixed: the page owns its
- * theme and Eva's tokens are not reachable from here.
- *
- * The toolbar only draws and reports clicks. What each tool does lives in
- * `index.ts` (it needs the page-side state); `update` mirrors that state back.
- */
-
 import {
   applyTheme,
   getTheme,
@@ -32,16 +14,13 @@ import {
 export interface ToolbarView {
   selecting: boolean;
   frozen: boolean;
-  /** Embedded in Eva: whether the parent can take an annotation. */
   selectEnabled: boolean;
-  /** Eva-only tools stay hidden on a direct link. */
   commentsEnabled: boolean;
   commentsActive: boolean;
   commentCount: number;
   sketchEnabled: boolean;
   sketchActive: boolean;
   capturing: boolean;
-  /** One-line result of the last action, e.g. "Copied". Empty hides it. */
   notice: string;
 }
 
@@ -56,7 +35,6 @@ export interface ToolbarActions {
 export interface Toolbar {
   update(patch: Partial<ToolbarView>): void;
   setTheme(theme: ToolbarTheme): void;
-  /** Hides the toolbar so a screenshot does not contain it. */
   setHiddenForCapture(hidden: boolean): void;
 }
 
@@ -69,11 +47,6 @@ const EDGE_PX = 8;
 const NOTICE_MS = 2500;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/**
- * The exact `@tabler/icons-react` outline paths the old Eva bar used
- * (IconClick, IconMessages, IconPlayerPause, IconPencil, IconCamera), copied
- * from the package: this script cannot import React components.
- */
 const TOOL_ICONS: Record<ToolName, string[]> = {
   select: [
     "M3 12l3 0",
@@ -101,7 +74,6 @@ const TOOL_ICONS: Record<ToolName, string[]> = {
   ],
 };
 
-/** `@tabler/icons-react` IconX outline paths. */
 const CLOSE_ICON = ["M18 6l-12 12", "M6 6l12 12"];
 
 const TOOL_LABELS: Record<ToolName, string> = {
@@ -120,7 +92,6 @@ const TOOL_ORDER: ToolName[] = [
   "screenshot",
 ];
 
-/** Larger than the old bar for reach: 44px targets, 22px icons, 14px text. */
 const STYLES = `
 :host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.3 var(--font); }
 .bar { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
@@ -168,7 +139,6 @@ function writeStored(value: StoredToolbar): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
-    // Storage blocked: the toolbar still works, it just forgets its place.
   }
 }
 
@@ -231,8 +201,6 @@ export function mountToolbar(
   let noticeTimer = 0;
 
   const host = document.createElement("div");
-  // The picker skips anything carrying this attribute, so clicks here are
-  // never read as "select this element".
   host.setAttribute("data-eva-annotate-overlay", "1");
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
@@ -246,8 +214,6 @@ export function mountToolbar(
   tip.className = "tip";
   tip.hidden = true;
   let tipTimer = 0;
-  // Same 300ms delay as Eva's tooltips; shown above the button, or below it
-  // when the toolbar sits at the top edge.
   function showTip(button: HTMLElement, label: string): void {
     window.clearTimeout(tipTimer);
     tipTimer = window.setTimeout(() => {
@@ -272,7 +238,6 @@ export function mountToolbar(
   const handle = document.createElement("button");
   handle.type = "button";
   handle.className = "handle";
-  // Closed: the Eva mark. Open: an X, so the mark reads as "close".
   const mark = evaMark();
   const closeIcon = svgElement("svg", { viewBox: "0 0 24 24", class: "icon" });
   for (const d of CLOSE_ICON) closeIcon.appendChild(svgElement("path", { d }));
@@ -314,7 +279,6 @@ export function mountToolbar(
     tools.hidden = !expanded;
     mark.style.display = expanded ? "none" : "";
     closeIcon.style.display = expanded ? "" : "none";
-    // A collapsed circle has no padding ring.
     bar.style.padding = expanded ? "6px" : "0";
     const pressed: Record<ToolName, boolean> = {
       select: view.selecting,
@@ -352,7 +316,6 @@ export function mountToolbar(
     host.style.top = `${top}px`;
   }
 
-  /** Keeps the whole toolbar on screen at its current size. */
   function clampIntoView(): void {
     const rect = host.getBoundingClientRect();
     const maxLeft = Math.max(EDGE_PX, window.innerWidth - rect.width - EDGE_PX);
@@ -368,7 +331,6 @@ export function mountToolbar(
     writeStored({ left: rect.left, top: rect.top, expanded });
   }
 
-  // Drag by the mark. A press that never moves past the threshold is a click.
   let dragStart: {
     pointerId: number;
     x: number;
@@ -408,13 +370,10 @@ export function mountToolbar(
   handle.addEventListener("pointerup", endDrag);
   handle.addEventListener("pointercancel", endDrag);
   handle.addEventListener("click", () => {
-    // The click that ends a drag must not toggle.
     if (dragged) {
       dragged = false;
       return;
     }
-    // The mark sits at the right end: keep it under the pointer, so the
-    // tools open and close towards the left.
     const markLeft = handle.getBoundingClientRect().left;
     expanded = !expanded;
     render();
@@ -448,7 +407,6 @@ export function mountToolbar(
           render();
         }, NOTICE_MS);
       }
-      // Tools appearing or vanishing change the width.
       clampIntoView();
     },
     setTheme(theme) {

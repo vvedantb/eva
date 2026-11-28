@@ -25,7 +25,6 @@ import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme } from "@/ui/theme";
 
-/** What the menu reads of a task: a `getAllTasks` row or an `agentTasks.listByProject` row. */
 type QuickTask = Pick<
   FunctionReturnType<typeof api.agentTasks.getAllTasks>[number],
   "_id" | "archivedAt" | "assignedTo" | "numId" | "projectId" | "status" | "title"
@@ -35,7 +34,6 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 type Page = "root" | "status" | "reviewer" | "project" | "move";
 
-/** A task's web page: its number under the repo's Quick Tasks, as the web card's `href`. */
 function taskWebPath(repo: Repo, task: QuickTask): string {
   const list = `${repoBasePath(repo)}/quick-tasks`;
   return task.numId === undefined ? list : `${list}/${task.numId}`;
@@ -61,16 +59,12 @@ export function useQuickTaskActions({
   onSelect,
   readOnly = false,
 }: {
-  /** Rows that lead the menu (the overview's sandbox and git actions); given the menu's `close`. */
   extraRows?: (close: () => void) => ReactNode;
   repo: Repo;
   users: User[] | undefined;
   projects: Project[] | undefined;
-  /** After an archive: the overview leaves the archived task. */
   onArchived?: () => void;
-  /** The list's select mode, starting with this task ticked: "Select" leads the menu when set. */
   onSelect?: (task: QuickTask) => void;
-  /** The task's project is archived: the task is read-only, with no edits. */
   readOnly?: boolean;
 }) {
   const scheme = useScheme();
@@ -81,7 +75,6 @@ export function useQuickTaskActions({
   const [moveTarget, setMoveTarget] = useState<{ task: QuickTask; repoId: Id<"githubRepos">; name: string } | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const codebases = useQuery(api.githubRepos.listGroupedByCodebase, {});
-  // The run facts decide whether Run Eva is on; only the open menu's task needs them, as on the web.
   const runFacts = useQuery(api.agentTasks.getRunFacts, target ? { taskId: target._id } : "skip");
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const updateTask = useMutation(api.agentTasks.update);
@@ -104,7 +97,6 @@ export function useQuickTaskActions({
       () => toast.error(copy.unarchiveFailed, { id: "task-unarchive" }),
     );
   };
-  // The session archive toast's shape: what happened, and Undo.
   const archive = (taskId: Id<"agentTasks">) => {
     archiveTask({ id: taskId }).then(
       () => {
@@ -118,7 +110,6 @@ export function useQuickTaskActions({
     );
   };
 
-  // Web: every other app, each codebase's apps by name (`codebase/app` in a monorepo).
   const moveTargets = (codebases ?? []).flatMap((codebase) =>
     codebase.apps
       .filter((app) => app._id !== repo._id)
@@ -151,7 +142,6 @@ export function useQuickTaskActions({
   );
 
   const body = (task: QuickTask) => {
-    // Web `showRunButton`: To Do only offers a first run.
     const canRun = (task.status === "todo" && runFacts?.hasRuns === false) || task.status === "in_progress";
     switch (page) {
       case "root":
@@ -307,7 +297,6 @@ export function useQuickTaskActions({
     project: "Project",
     move: "Move to codebase",
   };
-  // The web `<strong>` around the task title and the app name.
   const strong: TextStyle = { fontWeight: "600", color: theme.foreground };
   const strongClass = "font-instrument-sans-semibold";
 
@@ -323,7 +312,6 @@ export function useQuickTaskActions({
       >
         {target ? body(target) : null}
       </MenuSheet>
-      {/* The web `ArchiveTaskDialog`. */}
       <ConfirmDialog
         open={archiveTarget !== null}
         onOpenChange={(open) => {
@@ -336,7 +324,6 @@ export function useQuickTaskActions({
           if (archiveTarget) archive(archiveTarget._id);
         }}
       />
-      {/* The web `MoveTaskDialog`. */}
       <ConfirmDialog
         open={moveTarget !== null}
         onOpenChange={(open) => {
@@ -361,12 +348,10 @@ export function useQuickTaskActions({
   );
 
   return {
-    /** Opens the row menu for one task (the web right-click and kebab menu). */
     openSheet: (task: QuickTask) => {
       setPage("root");
       setTarget(task);
     },
-    /** Unarchive, with its toast: the archived page's `ArchivedBar`. */
     unarchive,
     dialogs,
   };

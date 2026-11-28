@@ -10,7 +10,6 @@ import { safePostgresStream } from "../_mcp/postgresSsrfGuard";
 const ENV_KEY = "POSTGRES_READ_REPLICA_URL";
 const CONNECT_TIMEOUT_MS = 10_000;
 const STATEMENT_TIMEOUT_MS = 30_000;
-// Keep the shaped payload well under Convex's function return size limits.
 const MAX_RESULT_BYTES = 1_000_000;
 
 type JsonValue =
@@ -21,8 +20,6 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-// Superset of values node-postgres can produce per cell (driver rows are
-// untyped, but every value it emits fits one of these shapes).
 type PgValue =
   | string
   | number
@@ -35,7 +32,6 @@ type PgValue =
   | PgValue[]
   | { [key: string]: PgValue };
 
-/** Converts a pg cell value into something JSON/Convex-serializable. */
 function toJsonSafe(value: PgValue): JsonValue {
   if (value === null || value === undefined) return null;
   if (typeof value === "bigint") return value.toString();
@@ -113,8 +109,6 @@ export const runPostgresQuery = internalAction({
       };
     }
 
-    // Fresh client per request; pg honours ?sslmode=... in the URL itself.
-    // The repo controls the URL, so the socket refuses private/metadata hosts.
     const client = new Client({
       connectionString: connEntry.value,
       connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
@@ -127,8 +121,6 @@ export const runPostgresQuery = internalAction({
       await client.query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
       await client.query("BEGIN TRANSACTION READ ONLY");
 
-      // values: [] forces the extended query protocol, which rejects
-      // multi-statement SQL at the server.
       const result = await client.query({ text: args.sql, values: [] });
 
       const fields = result.fields ?? [];
@@ -136,7 +128,6 @@ export const runPostgresQuery = internalAction({
       const maxRows = Math.max(0, Math.floor(args.maxRows));
       let truncated = allRows.length > maxRows;
 
-      // Shape rows up to maxRows, then drop tail rows past the byte cap.
       const rows: JsonValue[] = [];
       let bytes = 0;
       for (const row of allRows.slice(0, maxRows)) {
@@ -163,8 +154,6 @@ export const runPostgresQuery = internalAction({
         error: errorMessage(err),
       };
     } finally {
-      // Always roll back (read-only) and close; ignore failures on a
-      // connection that may already be dead.
       await client.query("ROLLBACK").catch(() => {});
       await client.end().catch(() => {});
     }

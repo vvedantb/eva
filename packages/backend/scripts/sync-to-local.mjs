@@ -1,40 +1,3 @@
-#!/usr/bin/env node
-// Replaces a LOCAL Convex backend's data with a snapshot from a cloud deployment.
-//
-// Runs with no `convex login`:
-//   Source auth — the deployment-scoped deploy key you pass is injected as
-//   CONVEX_DEPLOY_KEY into the export child process. dotenv never overrides an
-//   existing value and the deploy key is read before CONVEX_DEPLOYMENT, so the key
-//   wins over whatever the app's .env.local holds.
-//
-//   Target auth — `--url` + `--admin-key`, read off the local deployment's
-//   config.json. Those two flags together make the CLI skip every env var,
-//   including auth (convex/src/cli/lib/deploymentSelection.ts,
-//   `_getDeploymentSelection`), so the local backend is addressed directly.
-//
-// The import is `--replace-all`, so the target is guarded twice: the resolved URL
-// must be loopback, and the backend must already answer on /instance_name.
-//
-// A snapshot carries documents, plus file storage with --include-storage. It does
-// not carry env vars (hence --include-env, or --sandbox-env for an Eva sandbox),
-// pending scheduled functions, or code.
-//
-// It also carries every installed component's tables, nested under `_components/`
-// (checked 11 August 2026 against a dev export: actionCache, actionRetrier, crons,
-// migrations, presence, prosemirrorSync, timeline, workflow), and a component that
-// installs another nests again — `_components/workflow/_components/workpool/…`.
-// One whole-zip import of that fails with "New table `X` in '<component>' has IDs
-// that conflict with existing system table": the component namespaces are addressed
-// by name, not by the zip's layout. So the zip is split — the root tables stay in
-// the original zip, and each component subtree becomes its own zip imported with
-// `--component <path>`, where `<path>` is the component tree path the CLI expects
-// (`workflow`, `workflow/workpool`). Parents import before their children.
-// --skip-components drops `_components/**` instead, as an escape hatch.
-//
-// Snapshots hold real client data. The zip is deleted after a successful import
-// unless --keep-snapshot, and backups/ is gitignored. Never commit or share one.
-//
-//   node scripts/sync-to-local.mjs --deploy-key-file ../eva-prod.key
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -43,11 +6,6 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadSandboxEnv, resolveSandboxEnv } from "./sandbox-env.mjs";
 
-// Apps this script can sync, as paths relative to the directory above `scripts/`.
-// Cross-repo sharing would need a published package, so this file is a deliberate
-// near-copy of carepulse-ts's scripts/sync-to-local.mjs. Only this block, the usage
-// example above, and each repo's prettier formatting differ — keep any fix
-// appliable to both by diffing them.
 const APPS = {
   backend: ".",
 };
@@ -114,8 +72,6 @@ if (values["include-env"] && values["sandbox-env"]) {
   fail("Pass --include-env or --sandbox-env, not both.");
 }
 
-// --- app ---------------------------------------------------------------------
-
 const appName = values.app ?? (appNames.length === 1 ? appNames[0] : undefined);
 if (appName === undefined) {
   fail(`Pass --app with one of: ${appNames.join(", ")}`);
@@ -127,8 +83,6 @@ const appDir = join(rootDir, APPS[appName]);
 if (!existsSync(appDir)) {
   fail(`App directory not found: ${appDir}`);
 }
-
-// --- source key --------------------------------------------------------------
 
 function readSourceKey() {
   if (values["deploy-key-file"] !== undefined) {
@@ -153,9 +107,6 @@ function readSourceKey() {
 const sourceKey = readSourceKey();
 const keyPrefix = sourceKey.slice(0, sourceKey.indexOf("|"));
 
-// A deployment-scoped key names its own deployment, which is the whole point: the
-// key alone picks the source, so no deployment name is hardcoded here and no
-// selector flag can redirect the export. Project and preview keys do not name one.
 if (!/^(dev|prod):[^|]+$/.test(keyPrefix)) {
   const kind = sourceKey.startsWith("project:")
     ? "a project deploy key"
@@ -169,8 +120,6 @@ if (!/^(dev|prod):[^|]+$/.test(keyPrefix)) {
   );
 }
 const sourceName = keyPrefix.slice(keyPrefix.indexOf(":") + 1);
-
-// --- local target ------------------------------------------------------------
 
 function readJsonFile(path) {
   try {
@@ -203,7 +152,6 @@ function targetFromLocalConfig(configPath) {
   };
 }
 
-/** The deployment name in the app's .env.local, without its `dev:` / `anonymous:` prefix. */
 function configuredDeploymentName() {
   const envPath = join(appDir, ".env.local");
   if (!existsSync(envPath)) {
@@ -228,7 +176,6 @@ function resolveTarget() {
     return { url, adminKey, name: "override", from: "--local-url" };
   }
 
-  // Where `npx convex dev` puts a local deployment's credentials.
   const projectLocal = targetFromLocalConfig(
     join(appDir, ".convex", "local", "default", "config.json"),
   );
@@ -236,7 +183,6 @@ function resolveTarget() {
     return projectLocal;
   }
 
-  // Older CLI versions kept anonymous deployment state under the home directory.
   const deploymentName = configuredDeploymentName();
   if (deploymentName !== null) {
     const legacy = targetFromLocalConfig(
@@ -263,7 +209,6 @@ function resolveTarget() {
 
 const target = resolveTarget();
 
-// The import is destructive, so refuse anything that is not this machine.
 let targetHost;
 try {
   targetHost = new URL(target.url).hostname;
@@ -277,9 +222,6 @@ if (!LOOPBACK_HOSTS.has(targetHost)) {
   );
 }
 
-// A storage export can take a long time; check the target is up before starting.
-// 15s rather than 5s: a backend under load — a sandbox VM, or `convex dev` in the
-// middle of a push — can be slow to answer without being down.
 try {
   const response = await fetch(`${target.url}/instance_name`, {
     signal: AbortSignal.timeout(15_000),
@@ -294,9 +236,6 @@ try {
   );
 }
 
-// --- run ---------------------------------------------------------------------
-
-/** cmd.exe reads an unquoted `|` in an admin key as a pipe, so quote every argument. */
 function quoteForShell(arg) {
   return `"${String(arg).replace(/"/g, '\\"')}"`;
 }
@@ -318,7 +257,6 @@ function runConvex(args, options) {
   }
   console.log(`\n[${label}] npx ${printable}`);
 
-  // Only the source export gets a deploy key, and only from `env` below.
   const childEnv = { ...process.env };
   delete childEnv.CONVEX_DEPLOY_KEY;
   for (const name of unset) {
@@ -355,18 +293,6 @@ function runConvex(args, options) {
   return capture ? (result.stdout ?? "") : "";
 }
 
-// Rewrite the snapshot zip to hold only the root tables, and in "split" mode carve
-// each component subtree out into its own zip that `--component` can import.
-//
-// python does the rewriting because it can copy a member without re-compressing it
-// (writestr honours the ZipInfo's compress_type), so file-storage blobs are moved
-// byte-for-byte. `zip -d` is deliberately not used: its wildcard-vs-`/` behaviour is
-// ambiguous and would strip a nested component tree only partially.
-//
-// Leading `_components/<name>` pairs are consumed to build the component path, so a
-// parent's zip never swallows its child's entries and nesting maps straight onto the
-// CLI's path form: `_components/workflow/_components/workpool/globals/documents.jsonl`
-// becomes `globals/documents.jsonl` in the zip for component `workflow/workpool`.
 const SPLIT_PY = [
   "import sys, os, zipfile",
   "src, out_dir, mode = sys.argv[1], sys.argv[2], sys.argv[3]",
@@ -377,9 +303,6 @@ const SPLIT_PY = [
   "        comp.append(parts[i + 1])",
   "        i += 2",
   "    return '/'.join(comp), '/'.join(parts[i:])",
-  // A copy of a live deployment carries whatever was running at export time:
-  // sandboxes, turns, task runs and workflows that no local process will ever
-  // finish. Settle them in place so the local app shows them idle.
   "import json",
   "LIVE_TURN = {'staged', 'launching', 'running', 'finalizing'}",
   "settled = {}",
@@ -404,15 +327,11 @@ const SPLIT_PY = [
   "    if file != 'documents.jsonl' or table not in ('sessions', 'turns', 'agentRuns', 'agentTasks', 'projects'):",
   "        return data",
   "    out = []",
-  // Split on '\n' only: splitlines() also breaks on U+2028, U+0085 and other
-  // separators that JSON keeps raw inside strings, which cuts a row in half.
   "    for line in data.decode('utf-8').split('\\n'):",
   "        if not line.strip():",
   "            continue",
   "        doc = json.loads(line)",
   "        out.append(json.dumps(doc, ensure_ascii=False) if settle(table, doc) else line)",
-  // An empty table must stay an empty file: a lone newline is a blank row 1,
-  // which the import rejects ("Row 1 wasn't valid JSON").
   "    return ('\\n'.join(out) + '\\n').encode('utf-8') if out else b''",
   "root_tmp = src + '.root'",
   "buckets = {}",
@@ -429,7 +348,6 @@ const SPLIT_PY = [
   "                zout.writestr(info, settle_file(info.filename, zin.read(info.filename)))",
   "            elif mode == 'split' and rest:",
   "                buckets.setdefault(path, []).append((info, rest))",
-  // Shallowest first, so a parent component is imported before its children.
   "    for path in sorted(buckets, key=lambda p: (p.count('/'), p)):",
   "        target = os.path.join(out_dir, 'component-' + path.replace('/', '__') + '.zip')",
   "        with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as zc:",
@@ -444,7 +362,6 @@ const SPLIT_PY = [
   "    print('SETTLED\\t' + table + '\\t' + str(settled[table]))",
 ].join("\n");
 
-/** @returns {{path: string, zip: string}[]} component zips to import, in order. */
 function splitComponents(zip, outDir, mode) {
   console.log(
     `\n[${mode} components] rewriting the snapshot (mode: ${mode === "split" ? "import each component separately" : "drop component data"})`,
@@ -459,7 +376,6 @@ function splitComponents(zip, outDir, mode) {
       continue;
     }
     if (res.status !== 0) {
-      // python ran and the script itself failed; its traceback is on stderr.
       return fail(
         `The split script failed under ${python} (exit ${res.status}).`,
       );
@@ -475,10 +391,6 @@ function splitComponents(zip, outDir, mode) {
         return { path, zip: componentZip };
       });
 
-    // A successful snapshot build keeps no seed log, so silence has to be made
-    // impossible rather than merely unlikely: without this, an export that carried
-    // no component data at all would split into nothing, import nothing, and still
-    // go green.
     for (const line of lines.filter((l) => l.startsWith("SETTLED\t"))) {
       const [, table, count] = line.split("\t");
       console.log(
@@ -560,20 +472,6 @@ const componentZips = splitComponents(
 
 const targetFlags = ["--url", target.url, "--admin-key", target.adminKey];
 
-// Env vars before the component imports: a repo whose auth.config.ts reads one
-// cannot be pushed until they exist, and pushing is how the components get
-// installed (see installComponents).
-//
-// There is no bulk env import: `env set` takes one `<name>` and reads its value
-// from stdin (convex/src/cli/env.ts). A multi-line value — a PEM key — cannot be
-// split back out of an `env list` dump reliably, so take only the names, then
-// read each value with `env get`, whose entire stdout is the value.
-// Values move over stdin, so none is written to disk, logged, or put in argv.
-//
-// How to get names depends on the app's locked CLI. From 1.48 a plain
-// `env list` prints bare names when it detects an AI agent (or
-// CONVEX_AGENT_MODE), so ask for `--names-only` explicitly; that flag arrived
-// in 1.42.0. Older CLIs reject it, and they always print `NAME=value`.
 const sourceAuth = {
   env: { CONVEX_DEPLOY_KEY: sourceKey },
   secrets: [sourceKey],
@@ -597,7 +495,6 @@ function supportsNamesOnly() {
   return namesOnlyFlag;
 }
 
-/** Env var names on a deployment, minus the backend-managed CONVEX_*. */
 function listEnvNames(label, flags, auth) {
   const namesOnly = supportsNamesOnly();
   const dump = runConvex(
@@ -620,8 +517,6 @@ function listEnvNames(label, flags, auth) {
 }
 
 function readSourceEnv(name) {
-  // `env get` prints the value then a newline, so one trailing newline is the
-  // CLI's, not the value's. A value that genuinely ends in a newline loses it.
   return runConvex(["env", "get", name], {
     label: `env get ${name}`,
     ...sourceAuth,
@@ -652,13 +547,11 @@ if (values["include-env"]) {
 
 if (values["sandbox-env"]) {
   const rules = loadSandboxEnv(appDir);
-  // A "copy" var the source does not have stays unset, as a missing "eva" one.
   const sourceNames = listEnvNames(`env list ${sourceName}`, [], sourceAuth);
   const { values: env, missing } = await resolveSandboxEnv(rules, (name) =>
     sourceNames.includes(name) ? readSourceEnv(name) : undefined,
   );
   for (const [name, value] of env) setTargetEnv(name, value);
-  // Clear what an older seed copied: a stale source secret must not survive.
   const stale = listEnvNames(
     `env list ${target.name}`,
     targetFlags,
@@ -687,13 +580,6 @@ if (values["sandbox-env"]) {
   }
 }
 
-// A component's tables only exist once its code is installed, and an import into a
-// namespace the backend has never seen fails with "New table `<name>` in
-// '<component>' has IDs that conflict with existing system table". Pushing installs
-// them. It is done lazily, on the first component that needs it, because a backend
-// a `convex dev` daemon has already pushed to needs nothing: --url plus --admin-key
-// address the running backend directly, so this does not fight the daemon for the
-// port. One push serves every component.
 let pushed = false;
 function installComponents() {
   if (pushed) {
@@ -703,18 +589,10 @@ function installComponents() {
   runConvex(["dev", "--once", "--typecheck", "disable", ...targetFlags], {
     label: `push functions to ${target.name} (installs components)`,
     secrets: [target.adminKey],
-    // Anonymous mode (what a sandbox's own `convex dev` daemon runs under) makes
-    // the CLI manage its own local deployment instead of using --url.
     unset: ["CONVEX_AGENT_MODE"],
   });
 }
 
-// A sandbox's base image can hold an old local database: an old schema and old
-// rows. Import validates rows against the held schema, so new prod fields fail
-// (`sandboxSize`); a push validates the held rows against the new schema, so
-// removed fields fail (`sessions.summary`). So empty the backend first: the
-// snapshot's tables with no rows, imported with --replace-all (deployment-wide),
-// leave nothing to validate either way. 20 to 24 Nov 2026.
 const emptyZip = join(dirname(zipPath), `${appName}-empty.zip`);
 const EMPTY_PY = [
   "import sys, zipfile",
@@ -743,11 +621,6 @@ for (const python of ["python3", "python"]) {
 if (!emptied) {
   fail("python3 or python is required to build the empty snapshot.");
 }
-/**
- * A `--replace-all` import, retried: the sandbox's own `convex dev` daemon can
- * push a schema change mid-import ("Could not complete import because schema
- * changed"). Replacing everything again is safe, so try up to three times.
- */
 function importReplacingAll(zip, label) {
   const args = ["import", ...targetFlags, "--replace-all", "--yes", zip];
   for (let attempt = 1; attempt < 3; attempt++) {
@@ -771,21 +644,10 @@ function importReplacingAll(zip, label) {
 importReplacingAll(emptyZip, `empty ${target.name}`);
 rmSync(emptyZip, { force: true });
 
-// Push the checked-out schema before the real import, so the import validates
-// against it. Env vars are set above, so an auth.config.ts that reads one can push.
 installComponents();
 
-// Root tables first, and only here is --replace-all right: it clears tables the
-// snapshot omits, which is what makes the local deployment a mirror rather than a
-// merge. The component imports below must not repeat the flag — see there.
 importReplacingAll(zipPath, `import into ${target.name}`);
 
-// --replace, not --replace-all: --replace-all is deployment-wide even alongside
-// --component, so it also clears every ROOT table not present in the component's
-// zip — which is all of them. That silently undid the root import above (the
-// change summary read "githubRepos 0 create / 17 of 17 delete"), leaving every
-// seeded sandbox with an empty app database. --replace only replaces the tables
-// the component zip actually carries.
 for (const component of componentZips) {
   const args = [
     "import",

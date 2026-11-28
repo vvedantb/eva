@@ -10,7 +10,6 @@ import {
 import { tmuxSessionName } from "./consoleSessionName";
 import { errorMessage } from "@vvedantb/server";
 
-/** Browser WebSockets cannot set headers — pass the interactive token as a query param. */
 function buildVercelInteractiveWsUrl(url: string, token: string): string {
   const parsed = new URL(url);
   parsed.searchParams.set("token", token);
@@ -27,7 +26,6 @@ export async function ensureVercelSharedTerminal(
     `${PACKAGE_HELPER_SCRIPT}\ncommand -v tmux >/dev/null 2>&1 || ${pkgInstall("tmux")}`,
     { cwd: "/", timeoutSeconds: 120 },
   );
-  // Login/interactive bash (and new Console panes) should see repo secrets.
   try {
     await handle.exec(ensureEvaEnvInteractiveHookScript(), {
       cwd: "/",

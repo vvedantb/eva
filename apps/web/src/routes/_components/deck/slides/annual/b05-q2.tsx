@@ -2,10 +2,6 @@ import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
-/**
- * One beat per group of features, in the order they shipped.
- * Source: Eva git history, 10 and 17 June 2026.
- */
 const BEATS: readonly AnnABeat[] = [
   { heading: "Comments, suggestions, history", label: "Documents, 10 June" },
   { heading: "The projects roadmap", label: "Projects, 17 June" },

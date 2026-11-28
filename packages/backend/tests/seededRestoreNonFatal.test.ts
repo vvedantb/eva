@@ -5,17 +5,6 @@ import type {
 } from "../convex/_sandbox/provider";
 import { startSessionServices } from "../convex/_sandbox_runtime/devServer";
 
-/**
- * carepulse-ts session 87: the repo's `supabase` CLI never installed, so
- * `pnpm start-db` inside the seeded dump restore exited 127. The restore threw
- * out of `startSessionServices` before the dev command resolved, and the
- * Preview Console never got a dev server on start or resume (fix 395da8937).
- *
- * `sandboxReuseFallbackContract.test.ts` pins the try/catch by source text.
- * This runs the real path against a fake VM, so a refactor that keeps the
- * text but lets the error escape (or drops it before the chat alert) fails.
- */
-
 const DUMP_PROBE = "test -f /home/eva/.eva-snapshot-state/";
 const MARKER_PROBE = "test -f /tmp/.eva-supabase-db-web-restored";
 const DOCKER_PROBE = "docker info >/dev/null 2>&1";
@@ -28,8 +17,6 @@ function fakeHandle(options: {
   restore: SandboxExecResult;
 }): { handle: SandboxHandle; commands: string[] } {
   const commands: string[] = [];
-  // Anything the restore path does not deliberately reach is a fault: a new
-  // exec on this path should be added here on purpose, not silently pass.
   const outOfScope = (member: string): never => {
     throw new Error(`fake sandbox: ${member} is out of scope for this test`);
   };
@@ -80,7 +67,6 @@ describe("a failed seeded Supabase restore never blocks the dev server", () => {
     expect(commands.some((cmd) => cmd.startsWith(RESTORE_SCRIPT))).toBe(true);
     expect(services.port).toBe(3000);
     expect(services.devCommand).toContain("PORT=3000 pnpm dev");
-    // The chat alert (`startServicesWithRestoreAlert`) keys on this field.
     expect(services.restoreError).toContain("exit 127");
     expect(services.restoreError).toContain("supabase: command not found");
   });

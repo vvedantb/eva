@@ -13,7 +13,6 @@ import { UsageBar } from "./UsageBar";
 
 interface UsageWindowRowProps {
   usageWindow: UsageWindow;
-  /** Passed in so every row in one card measures against the same instant. */
   now: number;
 }
 

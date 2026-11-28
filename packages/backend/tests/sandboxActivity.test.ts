@@ -10,12 +10,6 @@ import {
 import { ACTIVITY_TOUCH_MIN_INTERVAL_MS } from "../convex/_sandbox/idlePolicy";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `sandboxActivity` is the idle-pause sweep's memory of "someone touched this
- * entity". It is written from hot paths (every message send, every preview
- * poll), so the throttle and the sandbox-id reverse lookup both matter.
- */
-
 const TIMEOUT_MS = 30_000;
 
 async function fixture() {
@@ -118,7 +112,6 @@ describe("sandbox activity record", () => {
       await t.run((ctx) =>
         touchUserActivity(ctx, ref, { source: "preview-page" }, 1_000),
       );
-      // A chat message right after preview traffic must not be hidden by it.
       await t.run((ctx) =>
         touchUserActivity(ctx, ref, { source: "chat", userId }, 1_001),
       );

@@ -21,7 +21,6 @@ const prDiffResultValidator = v.object({
   additions: v.number(),
   deletions: v.number(),
   changedFiles: v.number(),
-  /** Every changed path, including files the size cap left out of diffText. */
   filePaths: v.array(v.string()),
   truncated: v.boolean(),
 });
@@ -160,7 +159,6 @@ export const upsertPrRecapComment = internalAction({
     repo: v.string(),
     prNumber: v.number(),
     body: v.optional(v.string()),
-    /** Legacy; Reviews links use prNumber. Kept optional for older callers. */
     docNumId: v.optional(v.number()),
     headSha: v.optional(v.string()),
     status: v.optional(

@@ -1,8 +1,3 @@
-// eva's look for the @vvedantb/ui AI chat family: Conversation, Message,
-// PromptInput (+ settings, traits), Queue, Shimmer, CodeBlock, Artifact and
-// Attachments. The class strings are the ones the old @eva/ui components
-// rendered; `__parity__/aichat.test.tsx` checks the DOM stays the same.
-// FileChip and PromptInputSpeech moved as they were and need no entry.
 import { createElement } from "react";
 import { IconArrowUp, IconChevronDown } from "@tabler/icons-react";
 import {
@@ -18,7 +13,6 @@ export const aichatConfig = {
       content: "flex flex-col gap-8 p-4",
       scroll: "scrollbar scroll-fade",
       download: "absolute top-4 right-4 bg-background hover:bg-muted",
-      // The pill sits in a static frame; the animated wrapper has no class.
       scrollButtonFrame:
         "pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 justify-center",
       scrollButtonMotion: "",
@@ -28,19 +22,15 @@ export const aichatConfig = {
     scrollButton: {
       label: "Scroll to end",
       icon: createElement(IconChevronDown, { className: "size-3.5" }),
-      // Brief stick-to-bottom settles and thread switches must not flash it.
       showDelay: 150,
       size: "sm",
-      // Rises from, and sinks back toward, the bottom edge it points at.
       initial: { opacity: 0, y: 8, scale: 0.94 },
       animate: { opacity: 1, y: 0, scale: 1 },
       exit: { opacity: 0, y: 8, scale: 0.94 },
-      // `motionSpring` (utils/motion.ts).
       transition: { type: "spring", bounce: 0, duration: 0.35 },
     },
   },
   Message: {
-    // A long chat has hundreds of action buttons; tooltips mount on first hover.
     lazyActionTooltips: true,
     classes: {
       root: "group flex w-full flex-col gap-0.5",
@@ -56,16 +46,12 @@ export const aichatConfig = {
   },
   PromptInput: {
     classes: {
-      // A file drag is the composer's only feedback, so the border takes the
-      // primary colour and the field tints. Colour only, on the fast token.
       group:
         "overflow-hidden shadow-none transition-[color,box-shadow,border-color,border-radius] duration-[var(--motion-fast)]",
       groupIdle: "border-border",
       groupDragOver: "border-primary bg-primary/5",
       groupDefault: "rounded-control",
       textarea: "field-sizing-content min-h-16 max-h-40 overflow-y-auto",
-      // The footer carries the model picker, selects and send button, wider
-      // than a phone-width composer: wrap instead of squashing.
       footer: "justify-between gap-1 max-sm:flex-wrap",
       submit: "rounded-full",
       tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent-soft",
@@ -103,14 +89,11 @@ export const aichatConfig = {
     },
   },
   Shimmer: {
-    // Compositor sweep with the `.shimmer-*` classes in apps/web globals.css.
     mode: "mask",
     as: "p",
   },
   CodeBlock: {
-    // Plain text; callers pass their own `pre` as children.
     plain: true,
-    // eva's copy button copies on every click, also while it shows the check.
     copyEveryClick: true,
     copyButtonSize: "sm",
     copyLabel: "Copy code",
@@ -146,7 +129,6 @@ export const aichatConfig = {
         inline: "size-5 rounded bg-background",
         list: "size-12 rounded bg-muted",
       },
-      // `reveal-on-hover`: touch has no hover, so the button ships visible below `sm`.
       remove: {
         grid: "absolute top-2 right-2 size-6 rounded-full p-0 bg-background/80 reveal-on-hover transition-opacity hover:bg-background [&>svg]:size-3 after:absolute after:inset-[-7px]",
         inline:

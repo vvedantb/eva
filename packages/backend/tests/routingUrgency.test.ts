@@ -5,12 +5,6 @@ import {
   urgencyFromRouting,
 } from "../convex/_mentions/routingUrgency";
 
-/**
- * The mapping from Jev's answer to delivery loudness. Worth its own test
- * because the failure is silent in both directions: a mis-mapped `reply` means
- * a direct question sits unemailed in an inbox, and a mis-mapped `none` means
- * every offhand credit pages somebody.
- */
 describe("urgencyFromRouting", () => {
   test("a direct ask is high, a heads-up normal, an incidental mention low", () => {
     expect(urgencyFromRouting("reply")).toBe("high");
@@ -19,9 +13,6 @@ describe("urgencyFromRouting", () => {
   });
 
   test("an unrecognised route falls back to normal rather than silence", () => {
-    // The choice arrives off the wire. Guessing "low" would quietly drop a
-    // mention that might have needed an answer; normal is where an unrouted
-    // mention already sits.
     expect(urgencyFromRouting("")).toBe("normal");
     expect(urgencyFromRouting("reply ")).toBe("normal");
     expect(urgencyFromRouting("something-else")).toBe("normal");

@@ -25,14 +25,12 @@ import {
 } from "../../_components/motion";
 import { AnnCCountDown } from "../_parts/AnnCCountDown";
 
-/** A brand wash behind each habit icon, faint enough to stay a tone. */
 const HABIT_TINT =
   "linear-gradient(135deg, rgba(139,63,184,0.35), rgba(59,125,216,0.35))";
 
 interface Result {
   label: string;
   before: number;
-  /** The before figure as written in the source, so 64 does not read as 64.0. */
   beforeText: string;
   after: number;
   decimals: number;
@@ -40,10 +38,6 @@ interface Result {
   reduction: string;
 }
 
-/**
- * Medians of three runs, before and after the animation performance work.
- * Source: Eva animation performance write-up, 5 September 2026.
- */
 const RESULTS: readonly Result[] = [
   {
     label: "Loading shimmer",
@@ -136,7 +130,6 @@ function ResultRow({
           animate={{ scaleX: share }}
           transition={fall}
         />
-        {/* A lit edge rides the bar back to where the cost ended up. */}
         <m.span
           className="absolute top-1/2 left-0 -mt-3.5 -ml-3.5 size-7 rounded-full"
           style={{ background: HEAD_GLOW }}

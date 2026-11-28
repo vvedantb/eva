@@ -4,13 +4,6 @@ import {
   listFileToUnifiedDiff,
 } from "../convex/_github/prDiffFallback";
 
-/**
- * Regression cover for fix ca72203f: when a PR exceeds GitHub's 300-file diff
- * media-type ceiling we rebuild the unified diff from `pulls.listFiles`. Both
- * the too-large detection and the per-file diff shape must stay stable, or
- * `@pierre/diffs` fails to parse and the Diffs tab breaks on large PRs.
- */
-
 test("isPrDiffTooLargeError matches GitHub's oversized-diff wordings", () => {
   expect(
     isPrDiffTooLargeError(new Error('{"code":"too_large","message":"..."}')),
@@ -112,8 +105,6 @@ test("listFileToUnifiedDiff builds a modified-file section", () => {
 });
 
 test("listFileToUnifiedDiff emits a binary marker when patch is absent", () => {
-  // GitHub omits `patch` for binary blobs and individually oversized files; the
-  // path must still appear so the Diffs tab lists the file.
   const diff = listFileToUnifiedDiff({
     filename: "assets/logo.png",
     status: "modified",

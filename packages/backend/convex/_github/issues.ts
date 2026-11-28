@@ -58,7 +58,6 @@ export const fetchIssueCard = internalAction({
   },
 });
 
-/** Same 60s TTL as the PR card: hovers repeat, issue titles rarely change. */
 const issueCardCache = new ActionCache(components.actionCache, {
   action: internal._github.issues.fetchIssueCard,
   name: "issueCardV1",

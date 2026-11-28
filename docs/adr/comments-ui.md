@@ -1,0 +1,42 @@
+# Decision records moved out of comments: ui
+
+Source: comment triage, 27 November 2026. Each line is file, symbol, decision. Written by Haiku agents; some entries state behaviour that the code already shows.
+
+- `packages/ui/src/config/aiactivity.ts` | `ActivityTasks.markdown` | Uses `Markdown` rather than the package's bare Streamdown default, because it eases live reply text in with `useSmoothText` instead of letting it land in bursts.
+- `packages/ui/src/config/aichat.ts` | `Attachments.classes.remove` | The remove button shows on touch below `sm`, because touch devices have no hover to reveal it.
+- `packages/ui/src/config/aichat.ts` | `Message.lazyActionTooltips` | Tooltips mount on first hover, because a long chat has hundreds of action buttons.
+- `packages/ui/src/config/aichat.ts` | `PromptInput.classes.footer` | The footer wraps on narrow screens instead of squashing, because the model picker, selects and send button are wider than a phone-width composer.
+- `packages/ui/src/config/aichat.ts` | `PromptInput.classes.groupDragOver` | A file drag changes only the border and the field tint, because the composer gives no other drag feedback, and colour alone keeps the change on the fast token.
+- `packages/ui/src/config/aichat.ts` | `Shimmer.mode` | Mask mode runs the shimmer sweep on the compositor.
+- `packages/ui/src/config/aichat.ts` | `scrollButton.showDelay` | A 150 ms delay stops brief stick-to-bottom settles and thread switches from flashing the button.
+- `packages/ui/src/config/controls.ts` | `Accordion.icon` | The chevron uses the panel's duration and easing, so chevron and content finish together.
+- `packages/ui/src/config/controls.ts` | `Button.classes.shape` | One rounded class serves every size, so `xs` gets `rounded-lg` instead of the package's `rounded-md`.
+- `packages/ui/src/config/controls.ts` | `ButtonGroup.classes.base` | Children abut, so the small-button hit-target bleed is dropped, because a neighbour's bleed would steal taps.
+- `packages/ui/src/config/controls.ts` | `Carousel.classes.dot` | The 10px width step is not animated, because width changes relayout the dot row every frame and the step is too small to read as motion.
+- `packages/ui/src/config/controls.ts` | `ClearInput.classes.button` | The press scale composes with the centring translate, so the button presses in place.
+- `packages/ui/src/config/controls.ts` | `SearchInput` | No `label` is set, because the package default "Search" serves as the field's accessible name and call sites can still override it.
+- `packages/ui/src/config/controls.ts` | `Switch.classes.thumb` | The checked knob uses primary-foreground, because a near-white primary would leave the knob invisible.
+- `packages/ui/src/config/controls.ts` | `Tabs.classes.list` | Safe centring falls back to start alignment when tabs overflow, because centred overflow would make the leading tabs unreachable.
+- `packages/ui/src/config/controls.ts` | `fieldClasses` | Fields use `text-base` below `sm`, because iOS Safari zooms the page when a focused field's font size is under 16px.
+- `packages/ui/src/config/foundations.ts` | `Card.classes.header` | No `md:` padding step, so a call-site `p-3` wins outright, because tailwind-merge resolves conflicts within a variant and not across variants.
+- `packages/ui/src/config/foundations.ts` | `EVA_PURPLE` / `EVA_BLUE` | Loaders use fixed logo colours, not theme tokens, so they read the same on every surface and theme.
+- `packages/ui/src/config/foundations.ts` | `EmptyState.classes.root` | The part keeps its own vertical padding, because config defaults stay free of responsive padding.
+- `packages/ui/src/config/foundations.ts` | `ListRow.classes.root` | `scale` sits in the root transition, because a `motion-press` on the same element would lose to the later `transition-[...]` class.
+- `packages/ui/src/config/foundations.ts` | `SonnerToaster.classes.description` | The `!` modifier beats sonner's dark-theme description colour rule, which otherwise wins on specificity.
+- `packages/ui/src/config/foundations.ts` | `SonnerToaster.classes.icon` | The icon is `relative`, so sonner's absolutely positioned loader anchors to it.
+- `packages/ui/src/config/foundations.ts` | `SonnerToaster.loadingIcon` | The loading icon replaces sonner's 16px bar spinner, so the loading slot matches the 24px icons.
+- `packages/ui/src/config/foundations.ts` | `TOASTER_STYLE` | Sonner's own rules out-specify utility classes, so the toaster points its CSS variables at design tokens and sets `fontFamily: inherit` to beat sonner's system font stack.
+- `packages/ui/src/config/foundations.ts` | `Table.classes.wrapper` | `min-w-0` lets the wrapper shrink as a flex or grid child rather than widen the page.
+- `packages/ui/src/config/kibo-markdown.ts` | `(module)` | Kibo parts use Eva's own classes and `--motion-*` tokens rather than the package's fixed values, so Eva's motion follows the tokens if Eva changes them.
+- `packages/ui/src/config/overlays.ts` | `Command.classes.list` | The list caps at 60dvh on a phone, because 320px of results plus the input can exceed the keyboard-free space.
+- `packages/ui/src/config/overlays.ts` | `Command.emptyClassNameReplaces` | The empty-state `className` replaces the whole class list, as Eva's CommandEmpty always did, so existing call sites keep their look.
+- `packages/ui/src/config/overlays.ts` | `Dialog.classes.content` | The dialog height uses `dvh`, because mobile browser chrome makes `100vh` taller than the visible area and a `90vh` dialog would run off the bottom.
+- `packages/ui/src/config/overlays.ts` | `Dialog.viewportAware` | Dialogs stay centred at every size, because the app has no mobile bottom sheet.
+- `packages/ui/src/config/overlays.ts` | `HOVER_CARD_OPEN_DELAY_MS` / `HOVER_CARD_CLOSE_DELAY_MS` | One pair of hover card delays for the app, because call sites had drifted to 0, 200, 250 and 400 ms and the same gesture felt different; sites override only to opt out or to wait longer on easy-to-trip cards.
+- `packages/ui/src/config/overlays.ts` | `Popover.classes.content` | Popover content caps its height and scrolls internally, so a long popover stays on a phone screen.
+- `packages/ui/src/config/overlays.ts` | `Select.classes.trigger` | Text is 16px below `sm`, because iOS zooms the page when a form control smaller than that takes focus.
+- `packages/ui/src/config/overlays.ts` | `Select.triggerSlot` | The slot is on because ButtonGroup's CSS finds select triggers by it.
+- `packages/ui/src/config/overlays.ts` | `TOOLTIP_DELAY_MS` | 300 ms replaces Radix's 700 ms default, because on a desktop tool with a precise pointer the default reads as lag.
+- `packages/ui/src/config/overlays.ts` | `menuContentClass` (height and width caps) | The height cap follows the space Radix measured, with internal scroll, so a long menu never runs off screen, and the width cap stops `min-w-48` widening the page at 320px.
+- `packages/ui/src/config/overlays.ts` | `menuContentClass` | Menus use the package zoom animation with a 150 ms open and 100 ms close, so a menu never lingers after a selection, and the max-height class is passed as a literal so Tailwind can detect it.
+- `packages/ui/src/config/overlays.ts` | `menuRowClasses` | Rows grow their box to 40px below `sm` rather than changing padding, so a call site's `py-*` still wins above the breakpoint, because tailwind-merge resolves conflicts only within one variant.

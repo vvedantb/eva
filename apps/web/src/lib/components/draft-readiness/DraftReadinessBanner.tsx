@@ -13,7 +13,6 @@ import {
 interface DraftReadinessBannerProps {
   result: DraftReadiness | null;
   onDismiss: () => void;
-  /** Spacing and corners for the surface it sits on; the modal and composer differ. */
   className?: string;
 }
 
@@ -30,8 +29,6 @@ export function DraftReadinessBanner({
 }: DraftReadinessBannerProps) {
   const hints = result === null ? [] : readinessHints(result.missing);
   const lead = "May be too vague to run well.";
-  // Built as one string: JSX would put a stray space between the sentence and
-  // a conditional sibling expression.
   const message = hints.length > 0 ? `${lead} Add: ${hints.join(", ")}.` : lead;
 
   return (
@@ -57,7 +54,6 @@ export function DraftReadinessBanner({
             aria-label="Dismiss vagueness warning"
             className="shrink-0 text-warning-strong hover:bg-warning/15 hover:text-warning-strong"
             onClick={onDismiss}
-            // Keep composer focus when dismissing from the input.
             onPointerDown={(event) => event.preventDefault()}
           >
             <IconX aria-hidden className="size-3" />

@@ -7,19 +7,11 @@ import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { readAiGatewayKey } from "./_env/aiGateway";
 
-/**
- * Hardcoded streaming STT model. Swap here based on feedback — not a user
- * setting. $0.20/hr streaming via AI Gateway.
- *
- * TODO: team-wide AI Gateway ZDR currently blocks this model — turn ZDR off
- * (or add a ZDR-attested xAI BYOK key) when ready to use voice dictation.
- */
 const TRANSCRIPTION_MODEL = "xai/grok-stt";
 
 const GATEWAY_TRANSCRIPTION_URL =
   "https://ai-gateway.vercel.sh/v4/ai/transcription-model";
 
-/** ~100ms of silence at 16 kHz PCM16 — enough to probe provider routing. */
 const ZDR_PROBE_PCM = new Uint8Array(3200);
 
 function messageFromUnknownError(
@@ -40,11 +32,6 @@ function zdrBlockedMessage(text: string) {
   );
 }
 
-/**
- * Browser WS upgrades hide the HTTP error body, so ZDR rejections look like
- * generic connection failures. Probe the HTTP transcription route with the
- * server credential and surface a clear error before minting a client token.
- */
 async function assertTranscriptionRoutable(apiKey: string) {
   const response = await fetch(GATEWAY_TRANSCRIPTION_URL, {
     method: "POST",
@@ -69,7 +56,6 @@ async function assertTranscriptionRoutable(apiKey: string) {
   if (zdrMessage) {
     throw new Error(zdrMessage);
   }
-  // Other probe failures (empty audio, etc.) are non-fatal — mint anyway.
   console.warn(
     "[transcription.mintTranscriptionToken] probe status",
     response.status,

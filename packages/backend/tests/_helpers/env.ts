@@ -1,7 +1,3 @@
-/**
- * Sets env vars for one test and puts the old values back. `undefined`
- * removes the var.
- */
 const originals = new Map<string, string | undefined>();
 
 export function stubEnv(name: string, value: string | undefined): void {

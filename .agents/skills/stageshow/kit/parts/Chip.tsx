@@ -7,8 +7,7 @@ import './Chip.css'
  * chips after it slide over rather than jump) and leaves the same way.
  * Name the x with `remove` so the cursor can click it.
  */
-export function Chip({ show = true, remove, gap = 0, children, className, style, ...rest }: { show?: boolean; remove?: string; /** The row's own gap, so a removed chip takes no space at all. */ gap?: number; children: ReactNode; className?: string; style?: CSSProperties } & Record<`data-${string}`, unknown>) {
-  // Measured, so the slot opens to exactly the chip's width wherever it sits (a flex row would shrink a CSS-only version)
+export function Chip({ show = true, remove, gap = 0, children, className, style, ...rest }: { show?: boolean; remove?: string; gap?: number; children: ReactNode; className?: string; style?: CSSProperties } & Record<`data-${string}`, unknown>) {
   const chip = useRef<HTMLSpanElement>(null)
   const [w, setW] = useState<number | null>(null)
   useLayoutEffect(() => {

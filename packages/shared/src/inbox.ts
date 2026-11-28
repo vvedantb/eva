@@ -5,12 +5,6 @@ import type { Doc, Id } from "@eva/backend";
 import { getNotificationAppearance } from "./notificationAppearance";
 import { splitNotificationTitle } from "./notificationTitle";
 
-/**
- * The Inbox: one list, one row for each chat, grouped by how urgent it is.
- * The backend (`inbox.list`) builds and merges the rows; web and phone group
- * and label them here, so the two apps never drift.
- */
-
 /** The Inbox groups, in their on-screen order (most urgent first). */
 export const INBOX_GROUPS = ["holding", "waiting", "new"] as const;
 export type InboxGroup = (typeof INBOX_GROUPS)[number];
@@ -53,7 +47,6 @@ export function inboxActionForNeedsYou(row: {
 
 /** The fields merging reads. */
 export type MergeableInboxRow = {
-  /** The chat the row is about (its owner entity id), or the notification for an alert. */
   key: string;
   group: InboxGroup;
   kind: InboxRowKind;
@@ -79,7 +72,6 @@ export function mergeInboxRows<Row extends MergeableInboxRow>(
       continue;
     }
     const [winner, other] = ranksBefore(row, kept) ? [row, kept] : [kept, row];
-    // The newest line about the chat shows on its row, whichever row won.
     byKey.set(
       row.key,
       other.at > winner.at && other.preview !== undefined
@@ -127,7 +119,6 @@ export function inboxPreview(text: string): string {
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    // Line-start marks only: "#902" in a sentence is a task number, not a heading.
     .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
     .replace(/(\*\*|__|~~|`)/g, "")
     .replace(/\s+/g, " ")
@@ -153,7 +144,6 @@ export function inboxContextLabel(row: {
 }): string {
   const number = row.numId !== undefined ? `#${row.numId}` : undefined;
   if (row.source === "project") {
-    // No task number: the project's own chat, with Eva.
     return `${row.projectTitle ?? "Project"} · ${number ?? "Eva"}`;
   }
   if (row.source === "alert") return row.contextLabel ?? "Notification";
@@ -167,7 +157,6 @@ export function inboxContextLabel(row: {
  * once someone acts on them.
  */
 export type InboxDoneTarget<ChatId, NotificationId> =
-  /** A chat; `notificationId` is a notification folded into its row, read on Done. */
   | { kind: "chat"; chatId: ChatId; notificationId?: NotificationId }
   | { kind: "notification"; notificationId: NotificationId };
 
@@ -254,7 +243,6 @@ export function inboxHistoryRow(n: Doc<"notifications">): {
   };
 }
 
-/** Whether `text` already opens with `lead` ("PR merged · moved to done" opens with "PR Merged"). */
 function opensWith(text: string, lead: string): boolean {
   return text.toLowerCase().startsWith(lead.toLowerCase());
 }

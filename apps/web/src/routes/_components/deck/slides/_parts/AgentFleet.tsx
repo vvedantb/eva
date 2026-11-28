@@ -12,7 +12,6 @@ const LIT_STEP = 3;
 const TILE_STAGGER = 0.07;
 const WAVE_START = 0.35;
 
-/** The wave runs outward from the chat: column by column, then down each one. */
 const waveAt = (index: number) =>
   WAVE_START + ((index % 3) * 2 + Math.floor(index / 3)) * TILE_STAGGER;
 
@@ -34,7 +33,6 @@ function AgentTile({ index, lit }: { index: number; lit: boolean }) {
           : LEAVE
       }
     >
-      {/* The lit fill fades in over the resting tone rather than swapping classes. */}
       <m.span
         aria-hidden
         className="absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#8B3FB8]/45 to-[#3B7DD8]/45"

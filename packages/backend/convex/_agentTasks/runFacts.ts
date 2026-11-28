@@ -22,7 +22,6 @@ export const getRunFacts = authQuery({
   returns: v.union(
     v.object({
       hasRuns: v.boolean(),
-      /** A run is going or waiting to start. */
       hasActiveRun: v.boolean(),
       deploymentStatus: v.optional(deploymentStatusValidator),
     }),

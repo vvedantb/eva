@@ -13,8 +13,6 @@ import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 import { startAgentJob } from "./_agentJobs/slot";
 
-// --- Workflow definition ---
-
 /** Runs an evaluation: analyzes the codebase against the document and saves a severity-ranked issue list. Fixing issues is opt-in via startFix. */
 export const evaluationWorkflow = workflow.define({
   args: {
@@ -126,8 +124,6 @@ export const fixWorkflow = workflow.define({
             branchName: args.fixBranchName,
           },
         );
-        // No commits pushed → the fix agent changed nothing; a PR attempt
-        // would only 404 against a branch origin never received.
         if (!pushResult.pushed) {
           await saveFixError(
             "Fix agent completed without committing any code changes",
@@ -162,8 +158,6 @@ export const fixWorkflow = workflow.define({
   },
 });
 
-// --- Supporting internal functions ---
-
 /** Sets the evaluation report status to running. */
 export const setRunning = internalMutation({
   args: { reportId: v.id("evaluationReports") },
@@ -197,9 +191,6 @@ export const getDocData = internalQuery({
       repo.rootDirectory ?? "",
     );
 
-    // The document itself is the specification. The agent explores the codebase
-    // and reports whatever issues it finds, ranked by severity — no fixed
-    // checklist, so the result set may differ between runs.
     const prompt = `You are a QA engineer reviewing whether a codebase satisfies a specification document.
 
 ## Specification: ${doc.title}
@@ -230,12 +221,6 @@ No markdown, no explanation, no text outside the JSON.${rootDirInstruction}`;
   },
 });
 
-/**
- * Schema for the LLM evaluation JSON. Per-field `.catch()` defaults fold
- * validation and fallback values into a single parse: a malformed issue collapses
- * to a default entry, an unknown severity becomes "medium", a missing/non-array
- * `issues` becomes an empty list, and a non-string summary becomes a default.
- */
 const evalJsonSchema = z
   .object({
     issues: z
@@ -542,8 +527,6 @@ export const startFix = authMutation({
     const repo = await ctx.db.get(report.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    // Retries need a unique branch — the previous push is not forced, so reusing
-    // the name would fail if the prior attempt already pushed.
     const base = `${EVA_BRANCH_PREFIX}eval-fix-${String(args.reportId).slice(-8)}`;
     const fixBranchName = report.fixBranchName
       ? `${base}-r${Date.now().toString(36)}`

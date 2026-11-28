@@ -41,7 +41,6 @@ export function useOwnedChatBinding({
   ownedSession: OwnedSession;
   ownerLabel: SandboxChatBinding["ownerLabel"];
   prOwner: SandboxChatBinding["prOwner"];
-  /** The owner's title; undefined while it loads. */
   title: string | undefined;
   common: OwnedChatBindingCommon;
   stopTarget?: { taskId: Id<"agentTasks"> };
@@ -52,9 +51,7 @@ export function useOwnedChatBinding({
   const ports = useSessionTurnPorts(chatSource, common.accounts);
   const stopChat = useMutation(api.chats.stop);
   const { model, chat } = chatModel;
-  // No chat row yet: show what the backend will seed it with.
   const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
-  // Undefined while an existing chat loads, so it is not shown as Team.
   const providerAccountId =
     chat === undefined && typeof chatSource === "string"
       ? undefined
@@ -92,9 +89,6 @@ export function useOwnedChatBinding({
     switchProviderAccount: chatModel.setProviderAccountId,
     isSwitchingAccount: chatModel.isSwitchingAccount,
     ports,
-    // Stopping the chat also stops a task run streaming into it. Before the
-    // chat exists only `stopTarget` (a task) can have something running.
-    // Stopping never creates the session.
     cancel: () =>
       owned?.chatId !== undefined
         ? stopChat({ target: owned.chatId })

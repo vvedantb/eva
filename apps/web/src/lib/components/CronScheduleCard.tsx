@@ -27,10 +27,6 @@ interface CronScheduleCardProps {
   value: string;
   onChange: (value: string) => void;
   allowManual?: boolean;
-  /**
-   * Fired on blur with the normalised value, for callers that persist on blur
-   * rather than on every keystroke. Optional — omit for change-driven saves.
-   */
   onBlurCommit?: (value: string) => void;
 }
 

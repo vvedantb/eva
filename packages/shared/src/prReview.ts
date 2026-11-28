@@ -52,8 +52,6 @@ export function reviewStateMeta(state: string): {
   return { label: "Commented", tone: "neutral" };
 }
 
-// ── Checks and merge state ──────────────────────────────────────────────────
-
 export type CheckCounts = Record<StatusTone, number> & { total: number };
 
 export function countChecks(checks: readonly PrCheck[]): CheckCounts {
@@ -101,7 +99,6 @@ export function checksHeadline(counts: CheckCounts): string {
  * than leaving the reader at a dead end with GitHub's verdict.
  */
 export interface PrRemedy {
-  /** Button wording — an imperative naming what the session will do. */
   action: string;
   sessionTitle: string;
   prompt: string;
@@ -117,14 +114,10 @@ type PrBlockerKind =
   | "behind";
 
 export interface PrBlocker {
-  /** Discriminant, so a caller can filter a case without matching on wording. */
   kind: PrBlockerKind;
   tone: StatusTone;
-  /** Badge wording for the header, at GitHub's brevity. */
   label: string;
-  /** The merge box's headline sentence. */
   headline: string;
-  /** What the reader has to do about it, spelled out. */
   detail: string;
   remedy: PrRemedy | null;
 }
@@ -144,8 +137,6 @@ export function mergeBlocker(overview: PrOverview): PrBlocker | null {
     };
   }
 
-  // A lower entry that cannot land stops this one too: GitHub merges a stack
-  // from the base upwards, all or nothing.
   const stackReason = overview.stack ? stackBlockingReason(overview.stack) : null;
   if (stackReason !== null) {
     return {
@@ -264,11 +255,6 @@ export const MERGE_METHODS: ReadonlyArray<{ value: MergeMethod; label: string }>
   { value: "rebase", label: "Rebase and merge" },
 ];
 
-// ── Stacks ──────────────────────────────────────────────────────────────────
-// GitHub's native PR stacks, read from the overview. Merging entry N lands every
-// open entry from 1 to N together, so "can this merge" is a question about the
-// whole lower part of the stack, not only the pull request on screen.
-
 /** The open entries a merge of the current pull request lands, base first. */
 export function stackMergeTargets(stack: PrStack): PrStackEntry[] {
   return stack.entries.filter(
@@ -305,7 +291,6 @@ export interface StackVerdict {
 export function stackVerdict(stack: PrStack): StackVerdict {
   const targets = stackMergeTargets(stack);
   if (targets.length === 0) {
-    // This PR is merged, but entries above it may still be open.
     const openAbove = stack.entries.filter(
       (entry) => entry.status === "open",
     ).length;
@@ -318,8 +303,6 @@ export function stackVerdict(stack: PrStack): StackVerdict {
   if (stackBlockingReason(stack) !== null) {
     return { tone: "failure", label: "Stack needs attention" };
   }
-  // Branch protection (reviews, required checks) holds the merge on GitHub's
-  // side, so the popover must not promise what the header says is blocked.
   if (targets.some((entry) => entry.mergeableState === "blocked")) {
     return { tone: "failure", label: "Merge blocked" };
   }
@@ -359,8 +342,6 @@ export function revertSessionRequest(overview: PrOverview): {
     baseBranch: overview.baseRef,
   };
 }
-
-// ── Reviews ─────────────────────────────────────────────────────────────────
 
 /** Canonical GitHub PR URL for an owner/repo + PR number (the key a recap is stored under). */
 export function githubPrUrl(owner: string, repoName: string, prNumber: number): string {
@@ -453,15 +434,12 @@ export function verdictSuccessTitle(state: string): string {
   return "Review posted";
 }
 
-// ── Summary comments ────────────────────────────────────────────────────────
-
 /** One remark in Summary's comment list, whatever GitHub API it came from. */
 export interface SummaryComment {
   readonly key: string;
   readonly authorLogin: string | null;
   readonly authorAvatarUrl: string | null;
   readonly action: string;
-  /** Verdict word for a review summary ("Approved"); null for a plain remark. */
   readonly verdict: string | null;
   readonly at: string | null;
   readonly htmlUrl: string;
@@ -471,10 +449,6 @@ export interface SummaryComment {
   readonly isBot: boolean;
 }
 
-/**
- * GitHub marks apps with a `[bot]` suffix. Review bots are most of the volume on
- * an eva pull request, so Summary folds them into one group below the people.
- */
 function isBotLogin(login: string | null): boolean {
   return login !== null && login.endsWith("[bot]");
 }
@@ -551,7 +525,6 @@ export function splitSummaryComments(
 export function prReviewers(overview: PrOverview): Array<{
   login: string;
   avatarUrl: string | null;
-  /** A review state, or `REQUESTED` for a reviewer who has not answered. */
   state: string;
 }> {
   return [

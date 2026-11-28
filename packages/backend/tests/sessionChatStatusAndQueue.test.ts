@@ -8,12 +8,6 @@ import { sessionChatAdapter } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Since sessions hold several chats, the session composer reads turn status
- * and the queue by chat id. A null status made every follow-up start a new
- * turn (superseding the running one) instead of queueing behind it.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-status";
 const STRANGER_CLERK_ID = "clerk|session-chat-status-stranger";
@@ -114,8 +108,6 @@ describe("session chat status and queue", () => {
     "Stop kills a one-shot provider's process, not only a daemon pidfile",
     async () => {
       const f = await fixture();
-      // One-shot (non-daemon) runs use the sandbox-wide run-design pid, so the
-      // per-chat daemon reap alone would leave the agent running.
       const scheduled = await f.t.run(async (ctx) => {
         await ctx.db.patch(f.sessionId, { sandboxId: "sbx-1" });
         await ctx.db.patch(f.chatId, {

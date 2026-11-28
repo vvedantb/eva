@@ -7,12 +7,6 @@ import {
   type TaskStatus,
 } from "./taskMeta";
 
-/**
- * The Quick Tasks list's search, filters and sort, shared by the web list
- * (the toolbar Options menu and the active-filter chips) and the phone list.
- * Pure: the web keeps the state in the URL, the phone in the screen.
- */
-
 /** The web toolbar order of the sort fields. */
 export const QUICK_TASK_SORT_FIELDS = ["status", "updated", "lastRun", "created", "title", "priority"] as const;
 export type QuickTaskSortField = (typeof QUICK_TASK_SORT_FIELDS)[number];
@@ -125,15 +119,12 @@ export function applyQuickTaskFilters<T extends FilterableQuickTask>(
     if (tags.size > 0 && !task.tags?.some((tag) => tags.has(tag))) return false;
     return cutoff === undefined || task.createdAt >= cutoff;
   });
-  // `filter` copied the array, so `sort` mutates nothing shared; `toSorted` is missing in some Hermes release builds.
   return shown.sort((a, b) => {
     let cmp = 0;
     if (filters.sortField === "status") {
-      // Workflow order, not alphabetical; ties keep the newest update first in either direction.
       cmp = statusWorkflowOrder(a.status) - statusWorkflowOrder(b.status);
       if (cmp === 0) return b.updatedAt - a.updatedAt;
     } else if (filters.sortField === "lastRun") {
-      // A task that never ran sorts by when it was made, not as 0 at the bottom.
       cmp = (a.lastRunStartedAt ?? a.createdAt) - (b.lastRunStartedAt ?? b.createdAt);
     } else if (filters.sortField === "updated") {
       cmp = a.updatedAt - b.updatedAt;

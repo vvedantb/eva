@@ -22,33 +22,6 @@ import { hasActiveTaskRun } from "../_agentTasks/taskRunStatus";
 import { chatMessageRoute, mentionsEva } from "@eva/shared";
 import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
 
-/**
- * Hub awareness between a project's coordinator and its child tasks
- * (decision 14, plan step 6.6). A child task reports up with
- * `report_to_coordinator`: a `report` is a note and the task keeps working;
- * an `ask` is a question.
- *
- * The ask rules:
- * 1. The task's turn ends (the tool tells the agent to stop). A run that
- *    ended on its ask is a normal outcome, never an error: the task stays
- *    `in_progress` (`onTaskRunTurnClosed`) and reads as waiting, not failed
- *    (`projectTaskFacts`).
- * 2. An ask wakes the coordinator at once (`requestCoordinatorWake`).
- * 3. The coordinator answers with `send_chat_message`
- *    (`answerAskAsCoordinator`): the answer is the task's next run's chat
- *    message (`resumeWithAnswer`), and the agent gets it in its prompt. If it cannot answer, the task shows "needs you"
- *    once its turn ended (`openAskHolder` in the scheduler) and a person
- *    answers. An answer is taken only when the run can start, so a refused
- *    answer leaves the ask open.
- * 4. A person can always answer in the task chat (`routePersonChatMessage`).
- *    The first answer wins: it marks the ask answered, so a late coordinator
- *    answer is refused and starts no second run.
- * 5. One open ask for each task: a second is refused.
- * 6. No timeout: an unanswered ask stays open.
- * 7. Stopping or cancelling the task closes it (`closeTaskReports`).
- * 8. Asks and reports are rows, so the card state comes from data.
- */
-
 /** Longest report or ask text kept; the rest is cut. */
 export const MAX_TASK_REPORT_CHARS = 4_000;
 
@@ -125,7 +98,6 @@ export async function fileTaskReport(
   return reportId;
 }
 
-/** Marks the task's open ask answered (rule 4); null when none is open. */
 async function answerOpenAsk(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -155,7 +127,6 @@ export async function closeTaskReports(
   for (const row of open) await ctx.db.patch(row._id, { state: "closed" });
 }
 
-/** The prompt note that hands an answer to the task's next run. */
 function answerNote(
   ask: Pick<Doc<"projectTaskReports">, "text">,
   from: string,
@@ -164,12 +135,6 @@ function answerNote(
   return `You asked: ${ask.text}\nThe answer from ${from}:\n${answer.trim()}\nGo on with the task.`;
 }
 
-/**
- * Whether the task's next run can be asked for now: the task is live and no
- * run is going or queued. A chat turn still replying just runs first: the
- * run waits behind it in the queue. Checked before an answer is taken, so a
- * refused answer changes nothing.
- */
 async function canResumeAskingTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
@@ -178,11 +143,6 @@ async function canResumeAskingTask(
   return !(await hasActiveTaskRun(ctx.db, task));
 }
 
-/**
- * Starts the task's next run with an answer: the answer is the run's chat
- * message, and the agent gets the task prompt with the answer note. A start
- * that fails is logged; the ask stays answered and a person can run the task.
- */
 async function resumeWithAnswer(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
@@ -268,8 +228,6 @@ export async function routePersonChatMessage(
   if (!task?.projectId) return "continue";
   const ask = await findOpenAsk(ctx.db, task._id);
   if (!ask || !(await canResumeAskingTask(ctx, task))) return "continue";
-  // The answer is the run's own chat message: the queue writes its row when
-  // the run starts.
   await answerOpenAsk(ctx, task._id, params.userId);
   await resumeWithAnswer(ctx, task, {
     userId: params.userId,

@@ -1,10 +1,5 @@
 import { loadEnv, type Plugin } from "vite";
 
-/**
- * Same path the sandbox preview proxy forwards to the local Convex backend —
- * kept in sync with `PROXIED_CONVEX_PATH` in src/lib/convexDeploymentUrl.ts and
- * `CONVEX_PREFIX` in the preview proxy.
- */
 const CONVEX_PATH = "/__convex";
 
 /**
@@ -32,8 +27,6 @@ export function convexDevProxy(): Plugin {
       } catch {
         return undefined;
       }
-      // A hosted deployment is reachable from the browser directly; only a
-      // local backend needs the dev server to stand in front of it.
       if (hostname !== "127.0.0.1" && hostname !== "localhost") {
         return undefined;
       }

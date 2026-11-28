@@ -16,7 +16,6 @@ import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** The rail's left inset and the dot on it: the web `pl-6`, `size-2`, `ring-4`. */
 const RAIL_INSET = 24;
 const DOT = 8;
 const RING = 4;
@@ -93,7 +92,6 @@ function StandupList({ repoId }: { repoId: Id<"githubRepos"> }) {
       data={entries}
       keyExtractor={(entry) => entry.id}
       renderItem={({ item: entry, index }) => (
-        // The rail is a left border on every item with no gap between them, so it runs unbroken; the 16 between cards is padding.
         <View style={{ borderLeftWidth: 1, borderLeftColor: theme.border, paddingLeft: RAIL_INSET, paddingBottom: 16 }}>
           <View
             accessibilityElementsHidden
@@ -130,13 +128,11 @@ function StandupList({ repoId }: { repoId: Id<"githubRepos"> }) {
           </View>
         </View>
       )}
-      // The web list `pl-6` rail sits 16 in from the page edge, as the web `comfortable` page padding.
       contentContainerStyle={{ paddingLeft: 20, paddingRight: 16, paddingTop: 8, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
     />
   );
 }
 
-/** While the standups load: cards shaped as an entry, 16 apart, on the rail's inset. */
 function StandupPlaceholders() {
   const card = EVA_THEME[useScheme()].card;
   return (

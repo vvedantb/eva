@@ -28,7 +28,6 @@ export default function DiffScreen() {
   const pr = chat?.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber };
   const { state, reload } = usePrDiff(pr);
 
-  // After a deep link, Back opens the chat the diff belongs to.
   const fallbackHref: Href = { pathname: "/chat/[target]", params: { target } };
 
   if (pr === null) {

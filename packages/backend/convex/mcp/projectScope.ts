@@ -1,20 +1,6 @@
 import { toolErrorResult } from "@vvedantb/server";
 import type { EvaTool } from "./registry";
 
-/**
- * Who an MCP caller speaks for inside a project (decision 14, the hub
- * model). Resolved once for each request from the sandbox token's chat
- * (`mcp.queries.resolveCallerOwner`, which reads `chatOwner`):
- *
- *   coordinator  the Main chat of a project's own session
- *   child        a chat or run of a task that belongs to a project
- *
- * Any other caller (a session, a quick task, an OAuth client, Manager Ave)
- * is not a project caller and keeps today's tools unchanged.
- *
- * Pure, so the permission matrix is tested without a server.
- */
-
 /** The task or project a sandbox chat speaks for (`chatOwner`). */
 export type McpCallerOwner =
   | { kind: "project"; projectId: string }
@@ -36,7 +22,6 @@ export function projectCallerOf(
     : { role: "child", projectId: owner.projectId, taskId: owner.taskId };
 }
 
-/** Tools only a coordinator gets. */
 const COORDINATOR_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "update_project_summary",
   "retry_task",
@@ -44,30 +29,19 @@ const COORDINATOR_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "merge_task_into",
 ]);
 
-/** Tools only a child task gets. */
 const CHILD_ONLY_TOOLS: ReadonlySet<string> = new Set(["report_to_coordinator"]);
 
-/**
- * Tools a child task never gets: it cannot create tasks in batches or stop
- * an agent.
- */
 const CHILD_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   "create_tasks_batch",
   "stop_agent",
 ]);
 
-/**
- * Tools a coordinator never gets: its tasks start through the scheduler
- * (all of them, in task-number order), so no direct
- * run or schedule.
- */
 const COORDINATOR_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   "create_and_run_task",
   "schedule_task",
   "update_scheduled_task",
 ]);
 
-/** Session-only tools a project chat refuses with a clear error. */
 const SESSION_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "update_plan",
   "mark_plan_implemented",
@@ -106,7 +80,6 @@ export function projectToolAccess(
   return { kind: "allow" };
 }
 
-/** The same tool, answering every call with `message`. */
 function refusingTool(tool: EvaTool, message: string): EvaTool {
   const refuse = async () => toolErrorResult(message);
   return {
@@ -135,7 +108,6 @@ export function applyProjectToolPolicy(
 export interface ProjectTargetFacts {
   kind: "session" | "task" | "project";
   targetId: string;
-  /** The project the target belongs to: a project's own id, a task's project. */
   projectId?: string;
 }
 

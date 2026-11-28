@@ -15,14 +15,8 @@ import {
   SESSION_ROWS,
 } from "./EvaSidebarNav";
 
-/** The step at which the deck switches the demo into Simple Mode. */
 const SIMPLE_STEP = 2;
 
-/**
- * The app surface is drawn at its real pixel sizes (rail 64, panel 288, a slim
- * faded strip of main area) and scaled down to fit the slide. The window takes
- * its width from that scale so there is no dead space to the right.
- */
 const WINDOW_HEIGHT = 400;
 const TITLE_BAR = 36;
 const SURFACE_WIDTH = 64 + 288 + 120;
@@ -30,7 +24,6 @@ const SURFACE_HEIGHT = 452;
 const SCALE = (WINDOW_HEIGHT - TITLE_BAR) / SURFACE_HEIGHT;
 const WINDOW_WIDTH = Math.round(SURFACE_WIDTH * SCALE);
 
-/** The repo panel: workspace shortcuts, sessions, then Ship / Test / More. */
 function EvaNavPanel({ simple }: { simple: boolean }) {
   return (
     <div className="flex h-full w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
@@ -56,8 +49,6 @@ function EvaNavPanel({ simple }: { simple: boolean }) {
             (item) => !(simple && item.simpleHidden === true),
           );
           return (
-            // A group whose every row Simple Mode hides fades out with them,
-            // as the real sidebar drops the label rather than leaving it empty.
             <m.div
               key={group.label}
               animate={{ opacity: visible.length === 0 ? 0 : 1 }}
@@ -152,7 +143,6 @@ export function EvaSidebarDemo() {
           >
             <EvaRail simple={simple} />
             <EvaNavPanel simple={simple} />
-            {/* The main area is off-frame: fade it out rather than show a mock. */}
             <div
               className="flex-1 bg-background"
               style={{

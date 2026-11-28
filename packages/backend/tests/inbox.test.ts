@@ -5,16 +5,8 @@ import schema from "../convex/schema";
 import { inboxChatRefFromHref, mergeInboxRows } from "@eva/shared/inbox";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * The Inbox: the shared rule that keeps one row for each chat in its most
- * urgent group, and `inbox.list` over real rows (who "took part" in a chat,
- * Done hiding a chat until something newer happens in it, and Done reading
- * the notification a row holds).
- */
-
 const CLERK_ID = "clerk|inbox";
 const OTHER_CLERK_ID = "clerk|inbox-other";
-/** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
 describe("mergeInboxRows", () => {
@@ -30,7 +22,6 @@ describe("mergeInboxRows", () => {
     expect(merged.map((row) => [row.key, row.group, row.kind])).toEqual([
       ["task-a", "holding", "chat"],
       ["task-c", "waiting", "chat"],
-      // Newest first inside a group.
       ["note-d", "new", "alert"],
       ["task-b", "new", "chat"],
     ]);
@@ -69,8 +60,6 @@ describe("inbox.list", () => {
           installationId: 1,
           connectedBy: userId,
         });
-        // Someone else's project the caller is only a member of: Eva replied
-        // after the caller last read it, but membership alone is not taking part.
         const projectId = await ctx.db.insert("projects", {
           repoId,
           userId: otherUserId,
@@ -99,10 +88,8 @@ describe("inbox.list", () => {
       const listed = async () =>
         (await asUser.query(api.inbox.list, {})).map((row) => [row.title, row.group]);
 
-      // The caller made the quick task, so its new reply shows; the project does not.
       expect(await listed()).toEqual([["Fix login test", "new"]]);
 
-      // Posting in the project makes the caller part of it.
       await t.run(async (ctx) => {
         const row = await ctx.db
           .query("chatReads")
@@ -117,7 +104,6 @@ describe("inbox.list", () => {
         "Fix login test",
       ]);
 
-      // Done hides the task; Undo brings it back; new activity after Done does too.
       const { previousDoneAt } = await asUser.mutation(api.inbox.markDone, {
         chatId: ids.taskId,
       });
@@ -130,7 +116,6 @@ describe("inbox.list", () => {
       );
       expect((await listed()).map(([title]) => title)).toContain("Fix login test");
 
-      // Done on a row that holds a notification reads it; Undo makes it unread again.
       const notificationId = await t.run((ctx) =>
         ctx.db.insert("notifications", {
           userId: ids.userId,

@@ -59,19 +59,13 @@ export function Waveform({ live }: { live: boolean }) {
 }
 
 interface BeeIslandProps {
-  /** The line beside the logo in the pill. */
   status: ReactNode;
-  /** Bars move while Bee hears speech. */
   listening?: boolean;
-  /** What the mark shows. Defaults to listening or idle, from `listening`. */
   state?: LogoState;
-  /** Grows the answer panel out of the pill. */
   open?: boolean;
-  /** Seconds after `open` before the panel grows. */
   openDelay?: number;
   width?: number;
   className?: string;
-  /** The answer panel's contents. */
   children?: ReactNode;
 }
 
@@ -98,7 +92,6 @@ export function BeeIsland({
       transition={{ duration: 0.36 }}
     >
       <div className="flex h-[60px] items-center gap-3 pr-5 pl-4">
-        {/* Larger than the app's 32 of 52px (`NOTCH_LOGO_PX`), so its states read on a projector. */}
         <BeeLogo
           size={44}
           tone="dark"
@@ -110,9 +103,6 @@ export function BeeIsland({
         </span>
         <Waveform live={listening} />
       </div>
-      {/* Grows with grid rows, not Motion's `height: "auto"`: that measures
-          on screen, so under a zooming camera it picks a wrong height,
-          overshoots, then snaps back. Grid rows follow layout size. */}
       <div
         className="grid"
         style={{

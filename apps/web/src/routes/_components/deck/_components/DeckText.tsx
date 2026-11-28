@@ -21,9 +21,6 @@ export function Title({
   return (
     <h1
       className={cn(
-        // Balanced: a two-line title on a 1280px stage should not strand one
-        // word on the second line. The masks leave the spaces as real text,
-        // so balancing sees the same string it always did.
         "font-semibold tracking-[-0.02em] text-balance text-white",
         "leading-[1.05]",
         sizeClass,

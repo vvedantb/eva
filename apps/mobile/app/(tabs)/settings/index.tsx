@@ -36,8 +36,6 @@ export default function SettingsScreen() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const scheme = useScheme();
 
-  // Drop this phone's push token and badge first, so the next account on it
-  // does not get this account's pushes or count.
   const handleSignOut = async () => {
     const token = await getPushToken({ ask: false });
     if (token) await unregister({ token });
@@ -49,13 +47,11 @@ export default function SettingsScreen() {
     <TabScreen>
       <PageHeader title="Settings" />
       <ScreenContainer reserveTabBar>
-        {/* The web `SettingsStack` rhythm: 32 between sections. */}
         <View className="gap-8">
           <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
           </SettingsSection>
           <SettingsSection title="Email" bodyVariant="list">
-            {/* Urgent ones at once, the rest in the daily digest (as the web). */}
             <SettingsToggleRow
               title="Notifications"
               checked={emailOn}
@@ -72,7 +68,6 @@ export default function SettingsScreen() {
                 />
               }
             />
-            {/* The changelog broadcast: opt-in, apart from notification email (as the web). */}
             <SettingsToggleRow
               title="Product updates"
               checked={productUpdatesOn}
@@ -92,10 +87,8 @@ export default function SettingsScreen() {
           </SettingsSection>
           <SettingsSection
             title="Phone notifications"
-            // The web section is `bodyVariant="list"`: the row carries its own padding.
             bodyVariant="list"
           >
-            {/* The whole row toggles, as the web `<label htmlFor>`; TalkBack reads one switch. */}
             <SettingsToggleRow
               title="Push"
               checked={pushOn}
@@ -107,7 +100,6 @@ export default function SettingsScreen() {
                   checked={pushOn}
                   disabled={prefs === undefined}
                   onCheckedChange={togglePush}
-                  // Eva's web switch is off on `bg-muted` with a `bg-white` thumb in both schemes.
                   offColor={EVA_THEME[scheme].muted}
                   thumbStyle={{ backgroundColor: pushOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
                 />
@@ -115,7 +107,6 @@ export default function SettingsScreen() {
             />
           </SettingsSection>
           <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>
-            {/* `lg`, a whole 44 target (the web `default` is 40). */}
             <Button variant="outline" size="lg" onPress={() => setConfirmSignOut(true)}>
               Sign out
             </Button>

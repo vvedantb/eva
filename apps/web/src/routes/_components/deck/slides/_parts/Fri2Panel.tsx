@@ -3,7 +3,6 @@ import { cn } from "@eva/ui";
 
 interface Fri2PanelProps {
   children: ReactNode;
-  /** Optional chrome row above the screen, for a title or a set of tabs. */
   header?: ReactNode;
   className?: string;
   bodyClassName?: string;

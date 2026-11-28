@@ -1,12 +1,3 @@
-/**
- * The TypeSafe Jev request contract: what a caller may ask, its caps, and the
- * shape of the answer set that comes back.
- *
- * Runtime-free (zod only) so both the V8 isolate (the `evaluate` MCP tool) and
- * the `"use node"` client share one definition without either reaching across
- * a runtime boundary.
- */
-
 import { z } from "zod";
 import { jsonValue, type JsonValue } from "./jsonValue";
 

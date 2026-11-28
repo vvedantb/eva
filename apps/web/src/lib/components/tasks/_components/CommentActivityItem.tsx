@@ -46,11 +46,9 @@ interface CommentActivityItemProps {
   taskId: Id<"agentTasks">;
   users: Users | undefined;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
-  /** An archived task: no edit or delete. */
   readOnly?: boolean;
 }
 
-/** Author name: quieter than a heading, so the comment body stays the emphasis. */
 const AUTHOR_NAME_CLASS = "truncate text-2sm font-medium text-foreground";
 
 function CommentAuthorName({
@@ -104,9 +102,6 @@ export function CommentActivityItem({
   const [editText, setEditText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const editMentionRef = useRef<CommentMentionInputHandle>(null);
-  // Anchors a notification click-through. Every task comment renders through
-  // this component — root threads, replies, and the comment nested inside a run
-  // it triggered — so one hook here covers all three placements.
   const { ref: anchorRef, isAnchored } = useCommentAnchor(comment._id);
 
   const updateComment = useMutation(
@@ -142,9 +137,6 @@ export function CommentActivityItem({
     setIsSaving(true);
     try {
       await updateComment({ id: comment._id, content });
-      // Read into a local and guarded with an if rather than `?.`: React
-      // Compiler bails on the whole file when an optional-chaining call sits
-      // inside a try/catch.
       const editMention = editMentionRef.current;
       if (editMention) editMention.reset();
       setIsEditing(false);
@@ -163,8 +155,6 @@ export function CommentActivityItem({
       className={cn("group", isAnchored && "rounded-surface t-anchor-flash")}
     >
       <div className="flex min-h-6 items-center justify-between gap-2">
-        {/* Name and time sit together on the byline — the reading order is
-            "who, when", not "who … when" with the timestamp exiled right. */}
         <div className="flex min-w-0 items-center gap-2">
           {comment.authorId ? (
             <UserInitials userId={comment.authorId} size="sm" />
@@ -196,9 +186,6 @@ export function CommentActivityItem({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  // `icon-sm` carries `hit-target`, so the visible 32px button
-                  // has a 48px pressable area — the hand-rolled `h-7 w-7` it
-                  // replaces had neither that nor a way to be reached on touch.
                   className="reveal-on-hover text-muted-foreground"
                   aria-label="Comment options"
                 >
@@ -259,9 +246,6 @@ export function CommentActivityItem({
           {DELETED_COMMENT_PLACEHOLDER}
         </p>
       ) : (
-        /* Full-bleed body rather than indented under the avatar: the byline
-           already establishes the author, and long comments read better when
-           they use the whole row. */
         <MarkdownMentionText
           text={comment.content}
           repoBasePath={basePath}

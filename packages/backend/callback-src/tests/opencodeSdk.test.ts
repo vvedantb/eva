@@ -48,8 +48,6 @@ test("splitOpencodeModel splits provider from model id", () => {
     providerID: "openai",
     modelID: "gpt-5.4",
   });
-  // Model ids may contain further dashes but never a second slash in practice;
-  // split on the first so the remainder stays intact.
   expect(splitOpencodeModel("openai/gpt-5.3-codex")).toEqual({
     providerID: "openai",
     modelID: "gpt-5.3-codex",
@@ -84,7 +82,6 @@ test("text parts forward only the delta of a cumulative update", () => {
     opencodePartToCliLine(textPart("p1", "Hello world"), state),
   );
   expect(second.part).toMatchObject({ text: "lo world" });
-  // A repeat with no new characters produces nothing.
   expect(
     opencodePartToCliLine(textPart("p1", "Hello world"), state),
   ).toBeNull();
@@ -125,7 +122,6 @@ test("tool parts emit once per status transition", () => {
   expect(
     opencodePartToCliLine(toolPart("t1", "pending"), state),
   ).not.toBeNull();
-  // Same status re-sent on every mutation of the part — must not duplicate.
   expect(opencodePartToCliLine(toolPart("t1", "pending"), state)).toBeNull();
   const running = parseLine(
     opencodePartToCliLine(toolPart("t1", "running"), state),
@@ -171,8 +167,6 @@ test("translated tool lines drive the existing canonical parser", () => {
     parseLine(opencodePartToCliLine(completed, state)),
   );
   expect(done).toHaveLength(1);
-  // The push and its completion share a tracking id, so the UI step resolves
-  // rather than stranding an active row.
   expect(done[0]).toMatchObject({ kind: "complete_tool", trackingId: "t9" });
   expect(pushed[0]).toMatchObject({ trackingId: "t9" });
 });
@@ -392,7 +386,6 @@ test("ensureEvaMcpServers skips servers the opencode server already knows", asyn
   });
   expect(registered.added).toEqual([]);
 
-  // No MCP token in the environment means no status probe and no registration.
   const unconfigured = mcpClientStub({});
   await ensureEvaMcpServers(unconfigured.client, {});
   expect(unconfigured.calls.status).toBe(0);

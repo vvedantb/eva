@@ -4,15 +4,10 @@ import { m } from "motion/react";
 import { SETTLE } from "./tokens";
 
 export interface MagnifyProps {
-  /** The set. Each direct child becomes one magnifiable item. */
   children: ReactNode;
-  /** Index of the child to lift, or `null` for everyone at rest. Usually derived from the step. */
   focus: number | null;
-  /** Scale of the focused item. Keep it under 1.12 so neighbours are not covered. */
   scale?: number;
-  /** Opacity the other items drop to. */
   dimTo?: number;
-  /** Put the layout here (`flex gap-4`, `grid grid-cols-4 gap-6`). */
   className?: string;
 }
 

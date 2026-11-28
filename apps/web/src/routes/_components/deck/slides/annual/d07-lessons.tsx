@@ -9,17 +9,11 @@ import {
 } from "../../_components/DeckPrimitives";
 import { DUR, EASE, MaskedText, Spotlight } from "../../_components/motion";
 
-/** Verbatim from the project's written notes. */
 const QUOTES: readonly string[] = [
   "Most failures are not model failures. They are system design failures.",
   "Autonomy is an infrastructure decision.",
 ];
 
-/**
- * Each quote is set once, large, and only ever moved: on step 2 both shrink to
- * half size and glide into a pair. Half of the 900px measure is the 450px
- * column, so the lines wrap exactly as they did large.
- */
 const MEASURE = 900;
 const PAIR_X = 262;
 const PAIR_Y = -58;
@@ -37,7 +31,6 @@ const paired = (side: -1 | 1): TargetAndTransition => ({
 const GLIDE: Transition = { duration: DUR.hero + 0.2, ease: EASE.expo };
 const EXIT: Transition = { duration: DUR.base, ease: EASE.in };
 
-/** Glow behind the quote on screen, widening to hold both. The glow's box overhangs the stage by `GLOW_BLEED`. */
 const GLOW_BLEED = { x: 96, y: 128 };
 const GLOW = [
   { x: 544 + GLOW_BLEED.x, y: 200 + GLOW_BLEED.y, size: 520 },

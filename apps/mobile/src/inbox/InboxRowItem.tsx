@@ -123,7 +123,6 @@ export function InboxRowItem({
   );
 }
 
-/** The web `RepoLogo` at 28: the uploaded logo, else the repo initial on the muted fill. */
 function RepoMark({ repo }: { repo: InboxRepo }) {
   const scheme = useScheme();
   return (
@@ -141,7 +140,6 @@ function RepoMark({ repo }: { repo: InboxRepo }) {
   );
 }
 
-/** The row's one action, as the web bar: Reply to a question, Open PR, Retry. */
 function InboxRowAction({ row, onReply }: { row: InboxRow; onReply: () => void }) {
   const retry = useMutation(api.agentTasks.startExecution);
   const { prUrl, taskId } = row;

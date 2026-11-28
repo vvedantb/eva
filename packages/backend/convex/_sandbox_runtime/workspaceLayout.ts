@@ -1,15 +1,3 @@
-/**
- * Where a multi-repo session's checkouts live inside the sandbox.
- *
- * The primary repo keeps its historical home at `/tmp/repo` — every prompt,
- * script and tool path in Eva assumes it — and is exposed in the workspace as a
- * symlink so the agent sees one directory holding every repo. Linked repos are
- * real clones directly under the workspace root.
- *
- * Pure and dependency-free (no `"use node"`) so isolate queries, workflows and
- * node actions can all share one definition of the layout.
- */
-
 /** Parent directory holding one entry per repo in a session's sandbox. */
 export const WORKSPACE_ROOT = "/tmp/workspace";
 

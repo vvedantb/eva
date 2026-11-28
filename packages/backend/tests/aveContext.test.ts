@@ -4,10 +4,6 @@ import {
   buildModelMessages,
 } from "../convex/_ave/context";
 
-/**
- * Ave has no provider-side transcript: these rows are its whole memory, so a
- * replay that silently degrades would make it forget which agents it started.
- */
 describe("buildModelMessages", () => {
   test("user rows become user messages; alerts and empty rows are skipped", () => {
     expect(

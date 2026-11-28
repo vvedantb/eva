@@ -43,14 +43,11 @@ export async function resolveChatParent(
     const taskId = db.normalizeId("agentTasks", entityId);
     const task = taskId ? await db.get(taskId) : null;
     if (!task) return null;
-    // The chat the task talks in (`findWorkChat`): the Main chat of its own
-    // session. A run's cards land there too.
     const taskChat = await findWorkChat(db, { kind: "task", task });
     return taskChat?.chat._id ?? null;
   }
   const projectId = db.normalizeId("projects", entityId);
   if (!projectId) return null;
-  // A project's chat is its session's Main chat.
   const session = await findOwnedSession(db, { kind: "project", projectId });
   return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
 }

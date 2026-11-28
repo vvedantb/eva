@@ -47,16 +47,8 @@ interface ReviewableFileDiffProps {
   path: string;
   diffView: "unified" | "split";
   resolvedTheme: ThemeTypes;
-  /** When true, hide Pierre's built-in file header (parent accordion owns chrome). */
   hideFileHeader?: boolean;
-  /** Soft-wrap long lines instead of scrolling horizontally. */
   wrapLines?: boolean;
-  /**
-   * When present, the diff is regenerated from whole files instead of the PR
-   * patch. That is what unlocks GitHub-style "expand unchanged lines": a patch
-   * only carries a few lines of context, so Pierre marks it partial and hides
-   * the expansion controls.
-   */
   fullFile?: FullFileContents;
 }
 
@@ -100,10 +92,6 @@ function createCommentId(): string {
   return crypto.randomUUID();
 }
 
-/**
- * Rendering options shared by every path below. `line-info` separators and
- * word-level intra-line diffing are what make the output read like GitHub's.
- */
 function diffOptions<LAnnotation>({
   diffView,
   resolvedTheme,
@@ -111,14 +99,9 @@ function diffOptions<LAnnotation>({
   wrapLines,
 }: Pick<
   ReviewableFileDiffProps,
-  "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines"
-  // `Caret` types externally owned carets, which this surface never renders,
-  // so it stays `undefined` everywhere the options are named.
->): FileDiffOptions<LAnnotation, undefined> {
+  "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines">): FileDiffOptions<LAnnotation, undefined> {
   return {
     diffStyle: diffView,
-    // Must match the worker pool's own render options — the pool's win when one
-    // is mounted, so a mismatch here would silently restyle every diff.
     theme: DIFF_THEMES,
     themeType: resolvedTheme,
     disableFileHeader: hideFileHeader === true,
@@ -128,10 +111,6 @@ function diffOptions<LAnnotation>({
   };
 }
 
-/**
- * Read-only rendering, used outside a review session (no pending-comment
- * context) or when the patch cannot be parsed into a file diff.
- */
 function PlainDiff({
   patch,
   fileDiff,
@@ -159,14 +138,7 @@ function AnnotatableDiff({
   ReviewableFileDiffProps,
   "path" | "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines"
 > & {
-  /** The diff actually rendered — from whole files when expansion is on. */
   renderFileDiff: FileDiffMetadata;
-  /**
-   * The patch-derived diff comments are anchored against. Comment positions are
-   * indices into a hunk walk, and those indices differ between the patch and a
-   * whole-file diff, so anchoring always uses the patch. Ranges resolve to
-   * absolute line numbers, which are the same in both.
-   */
   commentFileDiff: FileDiffMetadata;
   review: NonNullable<ReturnType<typeof usePendingReviewComments>>;
 }) {
@@ -239,8 +211,6 @@ function AnnotatableDiff({
         range,
         text: "",
       });
-      // Null means the selection falls outside the PR's own diff (an expanded
-      // context line, say) — there is nothing for the agent to review there.
       if (!preview) return;
       setSelectedLines(range);
       setDraft({
@@ -306,7 +276,6 @@ function AnnotatableDiff({
   );
 }
 
-/** Parses the PR patch for one file; null when it is not a diff we can render. */
 function parsePatch(patch: string): FileDiffMetadata | null {
   try {
     return getSingularPatch(patch);
@@ -315,7 +284,6 @@ function parsePatch(patch: string): FileDiffMetadata | null {
   }
 }
 
-/** Builds a whole-file diff, which carries every line and so can be expanded. */
 function parseFullFile(
   path: string,
   fullFile: FullFileContents,

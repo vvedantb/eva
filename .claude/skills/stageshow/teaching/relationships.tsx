@@ -83,7 +83,6 @@ function Actions({ state, good }: { state: State; good: boolean }) {
   return <div className="tr-actions" data-good={good || undefined}>
     <div className="tr-trigger"><div className="tc-button" data-pressed={state.pressed || undefined}><Roll variant="fade" align="start">{state.active ? 'Disconnect account' : 'Connect'}</Roll></div></div>
     <span className="tr-actions__next">Settings</span>
-    {/* The input stays where it happened while the result changes size. */}
     <div className="tr-press-anchor" aria-hidden><div className="tc-button tr-press-measure">Connect</div><Pointer pressed={state.pressed} /></div>
   </div>
 }

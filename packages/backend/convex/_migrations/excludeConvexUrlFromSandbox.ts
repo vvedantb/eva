@@ -2,13 +2,6 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 
-/**
- * Convex URL keys that should be kept out of the sandbox. Mirrors the
- * `convex-url` / `prod-convex-url` slot `matchKeys` in
- * apps/web/src/lib/components/_utils/convexEnvVars.ts. PROD_CONVEX_URL already
- * defaulted to excluded, but is included here so the backfill is idempotent and
- * repairs any prod rows saved before that default landed.
- */
 const CONVEX_URL_KEYS = new Set([
   "NEXT_PUBLIC_CONVEX_URL",
   "VITE_CONVEX_URL",
@@ -72,7 +65,6 @@ export const excludeConvexUrlFromSandbox = internalMutation({
       return { varsPatched, done: false };
     }
 
-    // Finished the current table; chain into teamEnvVars after repoEnvVars.
     if (table === "repoEnvVars") {
       await ctx.scheduler.runAfter(
         0,

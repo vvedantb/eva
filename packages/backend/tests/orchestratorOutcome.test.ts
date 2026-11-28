@@ -5,13 +5,6 @@ import {
   REPLY_TAIL_CHARS,
 } from "../convex/orchestratorShared";
 
-/**
- * The orchestrator is told what happened to a child by the queue-drain hook,
- * which can only observe "it went idle" — so the child's own last assistant row
- * is what distinguishes a finished turn from a killed one. Getting this wrong
- * told the master a cancelled turn had succeeded, and quoted an unrelated older
- * reply as its result.
- */
 describe("decideChildOutcome", () => {
   test("keeps the reported status and tails a normal reply", () => {
     const result = decideChildOutcome(
@@ -38,7 +31,6 @@ describe("decideChildOutcome", () => {
   });
 
   test("a caller's specific failure status survives an alert", () => {
-    // sandboxError knows exactly what broke; flattening it loses the reason.
     const result = decideChildOutcome(
       { content: "Failed to start sandbox", isSystemAlert: true },
       "sandbox failed to start",
@@ -53,12 +45,10 @@ describe("decideChildOutcome", () => {
       { content: long("A"), isSystemAlert: true },
       DRAIN_IDLE_STATUS,
     );
-    // Head-first: an alert's meaning is its first line, not its stack trace.
     expect(alert.tail?.startsWith("A")).toBe(true);
     expect(alert.tail?.endsWith("…")).toBe(true);
 
     const reply = decideChildOutcome({ content: long("B") }, "success");
-    // Tail-first: a reply's conclusion is at its end.
     expect(reply.tail?.endsWith("END")).toBe(true);
     expect(reply.tail?.length).toBe(REPLY_TAIL_CHARS);
   });

@@ -3,27 +3,11 @@ import type { JsonObject } from "../types.js";
 import { readGitHeadSha } from "../utils.js";
 import { readCurrentBranch } from "./gitExec.js";
 
-/**
- * Turn checkpoint: the sandbox HEAD when a turn started and after
- * persistTurnWork committed/pushed at its end. Both shas ride on the completion
- * mutation (optional args, so old bundles and new servers stay compatible) and
- * land on the assistant message, where "Diff this turn" and "Restore to before
- * this turn" read them. Pushed commits are the only durable store — the VM
- * filesystem is not — so no hidden refs are kept.
- *
- * `beforeShas`/`afterShas` are the multi-repo extension: one `{ path, sha }`
- * entry per checked-out repo (primary first, then linked repos), so a
- * multi-repo session can diff/restore every repo it touched, not just the
- * primary. Sent alongside the scalar `beforeSha`/`afterSha` — which stay
- * primary-only — so old Convex deployments that don't know about the array
- * fields keep working.
- */
 type RepoSha = { path: string; sha: string };
 
 let turnStartSha = "";
 let turnStartShas: RepoSha[] = [];
 
-/** Reads `{ path, sha }` for every checked-out repo, skipping unreadable dirs. */
 function readAllRepoShas(): RepoSha[] {
   const shas: RepoSha[] = [];
   for (const path of REPO_CHECKOUT_DIRS) {

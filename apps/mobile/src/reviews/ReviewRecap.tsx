@@ -27,7 +27,6 @@ import { type Scheme, useScheme } from "@/ui/theme";
 
 type RecapDoc = NonNullable<FunctionReturnType<typeof api.docs.getRecapByPrUrl>>;
 
-/** Lines of one step file drawn at a time, as the Code tab's file screen. */
 const STEP_LINE_CHUNK = 400;
 
 /**
@@ -49,7 +48,6 @@ export function ReviewRecap({
 }: {
   pr: PrRef;
   prUrl: string;
-  /** Undefined while the query loads; null when the pull request has no recap. */
   recapDoc: RecapDoc | null | undefined;
   defaultModel: string | undefined;
 }) {
@@ -59,7 +57,6 @@ export function ReviewRecap({
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"recap" | "summary">("recap");
-  // Only the pending override is state; the last run's setup is read off the doc, as the web.
   const [pendingModel, setPendingModel] = useState<AIModel>();
   const [pendingTraits, setPendingTraits] = useState<StoredModelTraits>();
   const model = normalizeAIModel(pendingModel ?? recapDoc?.prRecapModel ?? defaultModel ?? DEFAULT_AI_MODEL);
@@ -76,7 +73,6 @@ export function ReviewRecap({
       },
     );
   };
-  // Filled in the empty state, quiet in the toolbar, as the web.
   const controls = (label: string, disabled: boolean, variant: "primary" | "ghost") => (
     <View className="flex-row flex-wrap items-center gap-1">
       <ModelChip
@@ -131,7 +127,6 @@ export function ReviewRecap({
   }
 
   const pending = recapDoc.prRecapStatus === "pending";
-  // Pending with no workflow behind it means the run died: show the failure and re-enable Generate.
   const stalled = pending && recapDoc.activeWorkflowId === undefined;
   const incomplete = isIncompleteReadyRecap(recapDoc);
   const failed = recapDoc.prRecapStatus === "error" || stalled || incomplete;
@@ -179,7 +174,6 @@ export function ReviewRecap({
   );
 }
 
-/** The walkthrough, or why there is none; with the out-of-date banner when the branch moved on. */
 function RecapBody({ pr, doc, stale, scheme }: { pr: PrRef; doc: RecapDoc; stale: boolean; scheme: Scheme }) {
   const steps = doc.recapWalkthrough ?? [];
   const theme = EVA_THEME[scheme];
@@ -197,11 +191,6 @@ function RecapBody({ pr, doc, stale, scheme }: { pr: PrRef; doc: RecapDoc; stale
   return <Walkthrough pr={pr} steps={steps} recapSha={stale ? (doc.headSha ?? null) : null} scheme={scheme} />;
 }
 
-/**
- * The web `RecapWalkthrough` at phone width: no step rail (the web hides it
- * below `md` too); the step's title, `n / total` and previous / next, its
- * summary, "Look closely", then the real diff of each file it covers.
- */
 function Walkthrough({
   pr,
   steps,
@@ -210,14 +199,12 @@ function Walkthrough({
 }: {
   pr: PrRef;
   steps: readonly RecapWalkthroughStep[];
-  /** The commit the recap was written for, when it may be out of date. */
   recapSha: string | null;
   scheme: Scheme;
 }) {
   const [index, setIndex] = useState(0);
   const { state } = usePrDiff(pr);
   const theme = EVA_THEME[scheme];
-  // A regenerated recap can have fewer steps than the one being read.
   const current = Math.min(index, steps.length - 1);
   const step = steps[current];
   if (step === undefined) return null;
@@ -255,7 +242,6 @@ function Walkthrough({
   );
 }
 
-/** One file of a step: its pull request diff, or why it cannot be shown (the web `StepFileDiff`). */
 function StepFile({ path, state, scheme }: { path: string; state: PrDiffState; scheme: Scheme }) {
   const theme = EVA_THEME[scheme];
   const [shown, setShown] = useState(STEP_LINE_CHUNK);
@@ -294,7 +280,6 @@ function StepFile({ path, state, scheme }: { path: string; state: PrDiffState; s
   );
 }
 
-/** The web recap banners: the failure (destructive at 5%) and the warnings (out of date, Look closely). */
 function Banner({ tone, scheme, title, children }: { tone: "destructive" | "warning"; scheme: Scheme; title: string; children: string }) {
   const color = EVA_THEME[scheme][tone];
   return (
@@ -314,7 +299,6 @@ function Banner({ tone, scheme, title, children }: { tone: "destructive" | "warn
   );
 }
 
-/** A 44 square step through the walkthrough. */
 function StepButton({
   label,
   icon: Icon,

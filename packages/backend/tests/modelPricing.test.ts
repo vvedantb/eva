@@ -6,11 +6,6 @@ import {
   resolveModelPricing,
 } from "@eva/shared/modelPricing";
 
-/**
- * Cache savings on the Usage page are derived from these lookups. A miss
- * silently under-reports savings; a wrong prefix match silently reports the
- * wrong model's rate.
- */
 describe("resolveModelPricing", () => {
   test("resolves undated ids directly", () => {
     expect(resolveModelPricing("claude-opus-4-6")).toBe(
@@ -28,14 +23,12 @@ describe("resolveModelPricing", () => {
   });
 
   test("prefers the longest matching key", () => {
-    // fable-5-1 has a different cache-read rate from fable-5.
     expect(resolveModelPricing("claude-fable-5-1")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5-1"],
     );
     expect(resolveModelPricing("claude-fable-5-1-20260801")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5-1"],
     );
-    // fable-5-2 is cheaper than fable-5-1; a miss would bill it at 5.1 rates.
     expect(resolveModelPricing("claude-fable-5-2")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5-2"],
     );
@@ -43,7 +36,6 @@ describe("resolveModelPricing", () => {
     expect(resolveModelPricing("claude-fable-5")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5"],
     );
-    // opus-5-5 is cheaper than opus-5; a miss would bill it at opus-5 rates.
     expect(resolveModelPricing("claude-opus-5-5")?.inputPerMillion).toBe(4);
     expect(resolveModelPricing("claude-sonnet-5-5")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-sonnet-5-5"],
@@ -84,7 +76,6 @@ describe("resolveModelPricing", () => {
 
 describe("computeCacheSavingsUsd", () => {
   test("is tokens times the input minus cache-read spread", () => {
-    // Opus 4.6: $5 input, $0.50 cache read → $4.50 saved per MTok.
     expect(computeCacheSavingsUsd("claude-opus-4-6", 1_000_000)).toBeCloseTo(
       4.5,
     );

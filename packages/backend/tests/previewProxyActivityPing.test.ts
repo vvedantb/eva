@@ -5,17 +5,6 @@ import {
   previewProxySource,
 } from "./_helpers/previewProxySource";
 
-/**
- * Regression guard for session 98, which stayed awake overnight: a proxied
- * page left visible on an unattended screen kept posting the on-screen ping.
- * The ping now needs a visible page AND input since the last ping, so the
- * idle-pause grace is the only timer after the last input.
- *
- * Runs the shipped ping function (lifted from the proxy template, with its
- * `${…}` placeholders filled the way the template fills them) against a stub
- * window/document, so a drift in the idle check fails here.
- */
-
 const SIGNATURE = 'const visibilityPingScript = "(" + function () {';
 
 const heartbeatMatch = previewProxySource.match(

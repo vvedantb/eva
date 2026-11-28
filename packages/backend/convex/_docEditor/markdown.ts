@@ -32,8 +32,6 @@ export function markdownToDocJson(markdown: string): JSONContent {
     markedOptions: { gfm: true },
   });
   const json = manager.parse(markdown);
-  // A doc node must have at least one block child; fall back if parsing yielded
-  // nothing usable.
   if (!json.content || json.content.length === 0) return EMPTY_DOC;
   return json;
 }

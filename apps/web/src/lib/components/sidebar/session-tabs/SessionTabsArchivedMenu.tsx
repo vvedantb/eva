@@ -33,7 +33,6 @@ interface ArchivedMenuSession {
   prState?: PrState;
   updatedAt?: number;
   _creationTime: number;
-  /** Linked-in row: the session's primary repo owns its URL. */
   linkedFrom?: RepoPathParts;
 }
 

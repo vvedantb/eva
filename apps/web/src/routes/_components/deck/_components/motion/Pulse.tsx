@@ -5,19 +5,12 @@ import { useMotionCue } from "../deckContext";
 import { ACCENT } from "./tokens";
 
 export interface PulseProps {
-  /** Wrapped content the rings expand from. Omit for a bare live dot. */
   children?: ReactNode;
-  /** Ring and dot colour. */
   color?: string;
-  /** Diameter of the bare dot, in pixels. Ignored when wrapping children. */
   size?: number;
-  /** Number of rings in flight. Two reads as "live"; three as "alarm". */
   rings?: number;
-  /** Seconds per ring. */
   period?: number;
-  /** How far a ring grows, as a multiple of the dot or child. */
   reach?: number;
-  /** Build step to start on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
   className?: string;

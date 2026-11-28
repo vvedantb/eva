@@ -2,19 +2,6 @@ import { m } from "motion/react";
 import { ACCENT } from "./motion/tokens";
 import type { DeckTheme } from "./deckContext";
 
-/**
- * The deck's persistent backdrop: a slow mesh of brand light, a faint dot
- * grid, fixed film grain and a vignette. It lives outside `AnimatePresence`
- * so it drifts continuously rather than restarting on every slide change.
- *
- * Cost: three transformed layers on 38–58 s loops and nothing else. The blobs
- * are radial gradients, soft by construction, so there is no blur filter to
- * re-rasterise; the grain is an SVG noise tile painted once and never moved.
- *
- * A light slide gets the same scene turned well down: fainter light, darker
- * grain at lower strength, and a vignette that closes to white.
- */
-
 interface AmbientTone {
   mesh: readonly [number, number, number];
   grain: string;
@@ -70,7 +57,6 @@ const BLOBS: readonly Blob[] = [
     period: 46,
   },
   {
-    // A third, in-between hue keeps the mesh from reading as two spotlights.
     color: ACCENT.c,
     size: 640,
     at: { top: "20%", left: "35%" },

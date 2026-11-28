@@ -40,7 +40,6 @@ export const clearSettings = authMutation({
 });
 
 export const getStored = internalQuery({
-  // A string, so the MCP tool can pass its token's user id without a cast.
   args: { userId: v.string() },
   returns: storedWebhookValidator,
   handler: async (ctx, args) => {

@@ -22,13 +22,6 @@ import {
 } from "./scheduler";
 
 /**
- * One table of a project's child tasks with their derived state, shared by
- * the coordinator's prompt (`formatProjectTaskTable`) and the coordinator's
- * `list_agents` project scope. The rules are the shared ones
- * (`@eva/shared/projectStatus`).
- */
-
-/**
  * Every child task's facts for the project, in no set order. The one loader
  * the list queries share.
  */
@@ -58,7 +51,6 @@ export async function derivedProjectStage(
 /** At most this many tasks go into the coordinator's prompt table. */
 export const PROJECT_TASK_TABLE_PROMPT_LIMIT = 60;
 
-/** Longest ask or report text one table row carries. */
 const ROW_TEXT_MAX = 300;
 
 export { projectTaskFactsValidator, projectTaskRowValidator };
@@ -69,7 +61,6 @@ function clip(text: string): string {
   return text.length > ROW_TEXT_MAX ? `${text.slice(0, ROW_TEXT_MAX)}…` : text;
 }
 
-/** One task's row, from its facts plus what only the table shows. */
 async function taskRow(
   db: DatabaseReader,
   task: Doc<"agentTasks">,
@@ -143,7 +134,6 @@ export async function loadProjectTaskRows(
   );
 }
 
-/** One line of the prompt table. */
 function formatRow(row: ProjectTaskRow): string {
   if (row.locked) return `| (a task in a repo you cannot open) | | | | | |`;
   const state = row.waitingForCoordinator

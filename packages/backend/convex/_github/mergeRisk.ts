@@ -1,12 +1,5 @@
 import { stripBlock, upsertBlockAboveFooter } from "./prBodyBlocks";
 
-/**
- * Fixed merge-risk rules over a pull request's changed files. No model: the
- * same diff always gets the same answer, and the agent that wrote the change
- * cannot argue its way to a lower score. Works for any repo Eva opens PRs in,
- * so the rules match common names (auth, billing, migrations), not eva paths.
- */
-
 export const MERGE_RISK_START = "<!-- eva-merge-risk -->";
 export const MERGE_RISK_END = "<!-- /eva-merge-risk -->";
 
@@ -14,11 +7,9 @@ export type RiskLevel = "low" | "medium" | "high";
 
 export interface ChangedFile {
   filename: string;
-  /** GitHub file status: added, removed, modified, renamed, … */
   status: string;
   additions: number;
   deletions: number;
-  /** Unified diff; GitHub omits it for binary and very large files. */
   patch?: string;
 }
 
@@ -39,7 +30,6 @@ interface PathRule {
   test: (path: string) => boolean;
 }
 
-/** Matches a whole path segment or file-name word, case-insensitive. */
 function segment(words: string): RegExp {
   return new RegExp(`(^|[/._-])(${words})([/._-]|$)`, "i");
 }
@@ -96,15 +86,9 @@ const PATH_RULES: ReadonlyArray<PathRule> = [
   },
 ];
 
-/**
- * Added lines that drop an error: an empty catch block, a no-op `.catch`, a
- * bare `except: pass`. Single-line forms only; a multi-line empty block is
- * left to review rather than guessed at.
- */
 const SWALLOWED_ERROR =
   /catch\s*(\([^)]*\))?\s*\{\s*\}|\.catch\(\s*\(\s*[\w\s,]*\)\s*=>\s*(\{\s*\}|undefined|null)\s*\)|except(\s+[\w.]+(\s+as\s+\w+)?)?\s*:\s*pass\b/;
 
-/** Over either size, a change is too big to review in one sitting. */
 const LARGE_CHANGED_LINES = 800;
 const LARGE_CHANGED_FILES = 40;
 
@@ -164,14 +148,12 @@ export function assessMergeRisk(files: ReadonlyArray<ChangedFile>): MergeRisk {
     : findings.length > 0
       ? "medium"
       : "low";
-  // High first, so the reviewer reads the worst finding first.
   findings.sort((a, b) =>
     a.level === b.level ? 0 : a.level === "high" ? -1 : 1,
   );
   return { level, findings };
 }
 
-/** Paths shown for one finding; the rest are counted. */
 const MAX_PATHS_SHOWN = 3;
 
 const LEVEL_LABEL: Record<RiskLevel, string> = {

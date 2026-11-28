@@ -1,9 +1,6 @@
 import { contextWindowForRawModel } from "@eva/backend";
 import { parseResultEvent } from "./resultEvent";
 
-// A chat's context-window use and spend from its run logs, for the web
-// context meter and the phone usage sheet.
-
 type AggregatableLog = { rawResultEvent: string | undefined };
 
 /**
@@ -31,9 +28,6 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
     latest = parseResultEvent(first.rawResultEvent);
   }
 
-  // The run's own reported window wins (it accounts for traits like Claude's 1M
-  // mode); otherwise fall back to the catalogue, which returns null rather than
-  // a guess when it does not recognise the model.
   const maxTokens =
     latest.contextWindow > 0
       ? latest.contextWindow

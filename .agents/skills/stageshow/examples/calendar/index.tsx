@@ -1,30 +1,22 @@
 import { Stage, Window, Bar, Avatar, Icon, Roll, Camera, cellOf, type Act, type Point, type Rect } from '../../kit'
 import './calendar.css'
 
-// Calendar hero, a week view with no sidebar so four days fit the column
-// whole and Friday runs off the right: a meeting is dragged from Tuesday afternoon to Wednesday
-// morning; once it lands, each attendee's availability is checked and their
-// avatar turns green. Cmd+Z puts it back, a caused reset, and the loop begins
-// again from the same frame.
-
 const COLS = 5
 const ROWS = 7
 const COL_W = 108
 const ROW_H = 40
 const SPAN = 2
 const GRIP = { x: 0.76, y: 0.28 }
-const START = { col: 1, row: 4 } // Tue 1 PM
-const END = { col: 2, row: 1 } // Wed 10 AM
+const START = { col: 1, row: 4 }
+const END = { col: 2, row: 1 }
 
 type Cell = { col: number; row: number }
 type Avail = 'idle' | 'pending' | 'ok'
-// `at` is the carried card's top-left in grid pixels
 type S = { cell: Cell; lifted: boolean; at: Point | null; target: Cell | null; avail: Avail[]; focus: Rect | null }
 
 const DAYS = ['Mon 19', 'Tue 20', 'Wed 21', 'Thu 22', 'Fri 23']
 const HOURS = ['9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM']
 const PEOPLE = ['Maya', 'Jonah', 'Priya']
-// [col, row, rows, bar width]
 const BUSY: [number, number, number, number][] = [
   [0, 0, 1, 46],
   [0, 3, 2, 58],
@@ -43,7 +35,6 @@ const span = (c: Cell) => {
   return a < 12 === b < 12 ? `${label(a).split(' ')[0]} – ${label(b)}` : `${label(a)} – ${label(b)}`
 }
 
-// A cell in grid pixels; offset by the grid's rect for stage pixels
 const cellRect = (grid: { x: number; y: number }, c: Cell): Rect => ({
   x: grid.x + c.col * COL_W + 3,
   y: grid.y + c.row * ROW_H + 2,
@@ -53,15 +44,11 @@ const cellRect = (grid: { x: number; y: number }, c: Cell): Rect => ({
 
 const idle: Avail[] = ['idle', 'idle', 'idle']
 
-// Compact starts the week at Tuesday, so the two days the story uses are
-// whole at the phone's width: cells stay in whole-week columns in state, and
-// are drawn `o` columns to the left
 const shift = (c: Cell, o: number): Cell => ({ ...c, col: c.col - o })
 
 async function carry(a: Act<S>, from: Cell, to: Cell, o: number) {
   const grid = a.rect('grid', { layout: true })
   const card = cellRect(grid, shift(from, o))
-  // Hold the upper body of the meeting, leaving its attendee row clear.
   const grab = { x: card.x + card.width * GRIP.x, y: card.y + card.height * GRIP.y }
   await a.move(grab)
   await a.wait(150)
@@ -71,12 +58,9 @@ async function carry(a: Act<S>, from: Cell, to: Cell, o: number) {
     { x: dest.x + (grab.x - card.x), y: dest.y + (grab.y - card.y) },
     (p) => {
       const at = { x: p.x - (grab.x - card.x), y: p.y - (grab.y - card.y) }
-      // The card's top-center decides the cell, with sticky borders
       const col = cellOf(at.x + card.width / 2 - grid.x, COL_W, prev.col - o) + o
       const row = cellOf(at.y + ROW_H / 2 - grid.y, ROW_H, prev.row)
       prev = { col: Math.max(o, Math.min(COLS - 1, col)), row: Math.max(0, Math.min(ROWS - SPAN, row)) }
-      // Lift only once drag has pressed and closed the hand. The callback
-      // paints the card and cursor together from the first movement frame.
       a.put({ lifted: true, at: { x: at.x - grid.x, y: at.y - grid.y }, target: prev })
     },
     { duration: 1300 },
@@ -87,15 +71,11 @@ async function carry(a: Act<S>, from: Cell, to: Cell, o: number) {
 const script = async (a: Act<S>) => {
   await a.wait(700)
   a.mark('drag')
-  // Match the rendered week: compact starts at Tuesday, wide starts at Monday.
   const o = a.layout === 'compact' ? 1 : 0
   await carry(a, START, END, o)
-  // Step the pointer off the card so the avatars are in clear view
   await a.move('aside')
   await a.wait(150)
   a.mark('check')
-  // Push in on the meeting while its attendees are checked (wide only: the
-  // compact crop is already close). The view keeps the month title in.
   const grid = a.rect('grid', { layout: true })
   const card = cellRect(grid, shift(END, o))
   const wide = o === 0
@@ -107,7 +87,6 @@ const script = async (a: Act<S>) => {
   await a.wait(2000)
   await a.set({ focus: null })
   await a.wait(1100)
-  // Undo: the meeting goes back and its availability is unknown again
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ cell: START, avail: idle })

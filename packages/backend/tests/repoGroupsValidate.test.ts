@@ -40,7 +40,6 @@ test("rejects a duplicated linked repo", () => {
 });
 
 test("rejects two rows of the same repository (monorepo sibling apps)", () => {
-  // Sibling app rows share owner/name; a linked repo is the whole checkout.
   const sibling: RepoGroupMember = {
     id: "r3",
     owner: "evalucom",

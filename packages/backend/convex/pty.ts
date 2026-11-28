@@ -47,15 +47,9 @@ export const connectPty = action({
 
     const resolved = await resolveOwner(ctx, args.owner);
     await getActionRepoWithAccess(ctx, resolved.repoId);
-    // Never open a terminal against a stopping/closed sandbox: the setup exec
-    // (ensureVercelSharedTerminal) would lazily resume a stopped Vercel VM,
-    // resurrecting a sandbox the user stopped and defeating a manual stop. A
-    // reconnecting terminal tab is what kept an idle sandbox running with no
-    // active session.
     if (resolved.isStoppingOrClosed) {
       throw new Error("Sandbox is not running. Start the sandbox first.");
     }
-    // Opening a terminal is a human interaction for the idle-pause sweep.
     await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
       sandboxId: resolved.sandboxId,
       source: "terminal",

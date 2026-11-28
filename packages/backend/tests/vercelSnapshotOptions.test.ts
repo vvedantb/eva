@@ -7,7 +7,6 @@ import {
 } from "../convex/_sandbox/vercelSnapshotOptions";
 
 test("vercelSnapshotCreateOptions always sets an explicit TTL", () => {
-  // Creating from a seed snap with expiration:0 otherwise inherits never-expire.
   expect(vercelSnapshotCreateOptions(true).snapshotExpiration).toBe(
     SNAPSHOT_TTL_MS,
   );

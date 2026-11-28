@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-// The `<review_comment>` blocks a diff review appends to a prompt
-// (`appendReviewCommentsToPrompt`), and read back out of a message: both apps
-// send pending diff comments this way and show a queued or sent prompt
-// without them.
-
 export type ReviewCommentSide = "LEFT" | "RIGHT";
 
 /**
@@ -27,10 +22,6 @@ export interface ReviewComment {
   readonly rangeLabel: string;
   readonly text: string;
   readonly diff: string;
-  /**
-   * Null for comments parsed back out of an agent message: those carry only
-   * diff-relative indices, which GitHub cannot anchor a review comment to.
-   */
   readonly anchor: ReviewCommentAnchor | null;
 }
 

@@ -11,10 +11,6 @@ import {
   VmemMark,
 } from "./_parts/ProjectMarks";
 
-/**
- * A section opener: the project's mark lands with a soft halo in the
- * section's own colours (`DeckSlide.section`), then its name rises.
- */
 function SectionOpener({
   mark,
   name,

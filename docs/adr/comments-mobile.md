@@ -1,0 +1,153 @@
+# Decision records moved out of comments: mobile
+
+Source: comment triage, 27 November 2026. Each line is file, symbol, decision. Written by Haiku agents; some entries state behaviour that the code already shows.
+
+- apps/mobile/app.config.ts, PROGUARD_RULES: extra R8 keep rules cover only reflection and JNI; reason: RN and Expo modules ship their own consumer rules and Convex is pure JS.
+- apps/mobile/app.config.ts, expo-video plugin: included for inline playback of agent screen recordings; reason: the agent's recordings play inline through @vvedantb/native-ui/video.
+- apps/mobile/app.config.ts, file header block: the app is Android-only and sideloaded as an APK; reason: no Play Store listing, and iOS installs and push need a paid Apple developer account. Push also needs owner-created google-services.json and EAS_PROJECT_ID, and without them the app builds but does not register for push.
+- apps/mobile/app.config.ts, icon: icon is read from the web app; reason: both apps share one icon file.
+- apps/mobile/app.config.ts, owner: owner is the shared Expo account; reason: the same Expo account is used by the other Project V apps.
+- apps/mobile/app.config.ts, platforms: web is enabled only for previews and sandbox screenshots, as no emulator is available; reason: sandbox has no emulator.
+- apps/mobile/app.config.ts, updates: over-the-air updates are disabled; reason: sideloaded APKs update by reinstall.
+- apps/mobile/app/(tabs)/_layout.tsx, SignedInEffects: mounted only when signed in; reason: push registration and crash reporting must use the right user.
+- apps/mobile/app/(tabs)/_layout.tsx, tab icons: icons match the web rail; reason: parity with web navigation.
+- apps/mobile/app/(tabs)/index.tsx, Android back handler effect: the effect sits before the derived values; reason: the React Compiler memoises nothing across a hook call, so the list and rows memoise only when no hook sits between the queries and the JSX.
+- apps/mobile/app/(tabs)/index.tsx, bulk bar: Archive is not styled destructive and labels are shortened; reason: Archive is reversible and five icon controls must fit 390 px width.
+- apps/mobile/app/(tabs)/index.tsx, list padding: one reserve value clears both the tab bar and the bulk bar; reason: the bulk bar takes the tab bar's slot and height.
+- apps/mobile/app/(tabs)/index.tsx, row handlers: handlers are shared across rows; reason: an unchanged row keeps its drawing when the list draws more rows.
+- apps/mobile/app/(tabs)/index.tsx, select mode tab bar: the bulk bar hides the tab bar with display none; reason: the bulk bar takes the tab bar's slot.
+- apps/mobile/app/(tabs)/index.tsx, selecting header: the header follows Android's contextual action bar (count, close, no page actions); reason: the bulk bar already holds the page actions.
+- apps/mobile/app/(tabs)/index.tsx, unarchive: Archive offers Undo at once; reason: the rows have already left the list.
+- apps/mobile/app/(tabs)/sessions.tsx, list queries: each repo's list query is cached per tab; reason: useQueries keeps its subscriptions.
+- apps/mobile/app/(tabs)/sessions.tsx, loading state: a failed repo list is left out rather than holding the tab on the skeleton; reason: one failed repo must not block the whole tab.
+- apps/mobile/app/(tabs)/sessions.tsx, renderItem: handlers and swipe look are stable across rows; reason: an unchanged session keeps its output when the list draws more rows.
+- apps/mobile/app/(tabs)/settings/index.tsx, handleSignOut: the push token is removed before sign-out; reason: the next account on the phone must not receive this account's pushes.
+- apps/mobile/app/_layout.tsx, ClerkGate: a timed probe of the environment endpoint is used; reason: Clerk rejects native clients with a promise, not a render throw.
+- apps/mobile/app/_layout.tsx, ErrorBoundary: the status query has its own provider; reason: the layout providers are gone at that point.
+- apps/mobile/app/_layout.tsx, WindowLayerHost: menus and image viewer draw in the app window; reason: a Modal's own window moved focus and the chat jumped to its newest message.
+- apps/mobile/app/_layout.tsx, convex client: one client lives outside render with stable result identity; reason: a reconnect on resume must not redraw every list.
+- apps/mobile/app/_layout.tsx, maintenance effect: an effect listens for the end of maintenance; reason: it is a server event and retry remounts the app.
+- apps/mobile/app/_layout.tsx, navigation: a Stack is used, not a Slot; reason: a Slot unmounts tabs under a pushed chat and loses their state.
+- apps/mobile/app/_layout.tsx, neutral scheme: Neutral is repainted by class variables; reason: global.css defines only light and dark.
+- apps/mobile/app/_layout.tsx, theme restore: the last appearance mode applies before the first screen; reason: the account mode follows once signed in.
+- apps/mobile/app/_layout.tsx, unhandled rejections: rejections are logged first and fatal errors saved before close; reason: a fatal error is shown on the next launch.
+- apps/mobile/app/_layout.tsx, useTimedOut: Clerk load errors reject as promises, so a timeout is used; reason: no error boundary sees them.
+- apps/mobile/app/automation/[automationId].tsx, route params: the automation resolves through the repo's list; reason: the id keeps its table type.
+- apps/mobile/app/automation/[automationId].tsx, run stop handling: the cleanup is chained, not try/finally; reason: React Compiler cannot compile try/finally.
+- apps/mobile/app/chat/[target]/index.tsx, ChatDock bottom padding: the dock is solid; reason: the keyboard lifts the dock over the transcript and the transcript must not show through it.
+- apps/mobile/app/chat/[target]/index.tsx, ChatDock: the dock owns the draft, attachments and model pick; reason: a keystroke redraws only the dock, not the transcript.
+- apps/mobile/app/chat/[target]/index.tsx, ChatMessageRow: a separate component with plain values and id-based handlers; reason: the React Compiler keeps an unchanged message's output when the inverted list draws a new batch.
+- apps/mobile/app/chat/[target]/index.tsx, ChatScreen header: the header carries Copy link, so the session's Copy link is left out; reason: it avoids a duplicate action.
+- apps/mobile/app/chat/[target]/index.tsx, agent page: rows are checked for on-screen visibility, so the WebView mounts only once its row shows; reason: it avoids mounting every agent page at once.
+- apps/mobile/app/chat/[target]/index.tsx, composer draft: the draft is kept on the server; reason: it survives closing the app and follows the user between devices.
+- apps/mobile/app/chat/[target]/index.tsx, composer placeholder: the placeholder is shortened when awake; reason: a native field cannot ellipsise its placeholder and the one-row pill would wrap.
+- apps/mobile/app/chat/[target]/index.tsx, fork: the transcript is built on the server outside the try block; reason: the React Compiler cannot compile a conditional inside a try.
+- apps/mobile/app/chat/[target]/index.tsx, hold countdown: a clock ticks once a minute in this component only; reason: the usage-limit hold lifts at the reset without redrawing the whole chat.
+- apps/mobile/app/chat/[target]/index.tsx, message row props: props are plain values and stable handlers; reason: a message that did not change keeps its output when the inverted list draws a new batch.
+- apps/mobile/app/chat/[target]/index.tsx, message row side padding: padding is set in each row; reason: Android flips an inverted list on both axes, which would swap the padding.
+- apps/mobile/app/chat/[target]/index.tsx, quotes and review comments: each leaves the composer only once the send lands; reason: a retry must still carry them.
+- apps/mobile/app/chat/[target]/index.tsx, waking or sleeping copy: the phone keeps the title when awake; reason: the web line teaches desktop drop, which does not apply on the phone.
+- apps/mobile/app/doc/[docId].tsx, PR recap route: old links are redirected; reason: PR recaps moved to Reviews and old links must keep working.
+- apps/mobile/app/doc/[docId].tsx, route params: the repo and doc resolve through the lists that hold them; reason: the ids keep their table types.
+- apps/mobile/app/doc/comments.tsx, route params: the repo and doc resolve through the lists that hold them; reason: the ids keep their table types.
+- apps/mobile/app/open/index.tsx, route params: the repo resolves through the user's list; reason: the id keeps its table type.
+- apps/mobile/app/project/[projectId].tsx, EMPTY_REPO: the menu hook receives an empty repo that is never shown; reason: the menu hook needs a repo before the screen has one.
+- apps/mobile/app/quick-task/[taskId].tsx, comment composer state: the box resets during render on a mode change; reason: an edit loads its comment and a new comment loads its last known draft without an effect.
+- apps/mobile/app/quick-task/[taskId].tsx, comment drafts: each comment box keeps its draft on the server; reason: a new comment and each reply keep their own draft, while an edit has none.
+- apps/mobile/app/quick-task/[taskId].tsx, keyboard view: the view takes inline style, not a NativeWind class; reason: the keyboard-controller view does not accept className.
+- apps/mobile/app/quick-task/new.tsx, leaving the screen: the draft saves from an effect; reason: leaving is a navigation event outside React, and Create skips it because saving is set while the task is made.
+- apps/mobile/app/review/[repoId]/[prNumber]/index.tsx, close action: closing a pull request asks for confirmation; reason: closing notifies every reviewer and stops CI.
+- apps/mobile/app/review/[repoId]/[prNumber]/index.tsx, header height: the header action height matches Code's menu button on every tab; reason: the tabs and content do not move when it shows.
+- apps/mobile/app/review/[repoId]/[prNumber]/index.tsx, review tabs: a tab mounts once visited and then stays mounted; reason: the scroll position survives and the diff downloads only once Code is visited.
+- apps/mobile/app/review/[repoId]/[prNumber]/index.tsx, review tabs: the tab is a route param set in place so a switch adds no history; reason: Back still leaves the pull request.
+- apps/mobile/app/session/new.tsx, base branch: the base branch re-seeds to each repo's default and is kept with the repo it was picked for; reason: the branch belongs to that repo.
+- apps/mobile/app/session/new.tsx, branch change: picking another branch abandons the stack; reason: the session's PR would no longer sit on that pull request.
+- apps/mobile/app/session/new.tsx, keyboard view: the column shrinks above the keyboard and the composer lifts within it; reason: the composer's own lift measures only the column and never sees the keyboard.
+- apps/mobile/babel.config.test.mjs, file header: this test loads the Babel config to catch a missing plugin link in seconds; reason: under pnpm isolation a missing link failed only after a long Gradle release build.
+- apps/mobile/metro.config.js, absolute paths: paths are absolute; reason: tools such as knip load this file from the repository root.
+- apps/mobile/metro.config.js, singleton resolution: React, Gesture Handler, keyboard-controller and the Convex client resolve from the app folder; reason: a second copy would break hooks, gestures or the provider context.
+- apps/mobile/plugins/withReleaseSigning.js, file header: release signing fails when a value is missing and the marker line is kept; reason: a release must never fall back to the debug key, and the build script greps for the marker.
+- apps/mobile/src/auth/EnsureUser.tsx, appearance mode: the account's appearance mode waits for the user row; reason: the mode needs the user row to exist.
+- apps/mobile/src/auth/EnsureUser.tsx, ensured guard: the user check runs once per app run and all signed-in layouts share it; reason: avoids repeated ensureUserExists calls.
+- apps/mobile/src/chat/AssistantMessage.tsx, timeline cap: keys follow the full list; reason: a block keeps its fold state when the cap moves.
+- apps/mobile/src/chat/BackgroundProcessesChip.tsx, process polling: the sandbox process list is polled from an effect while the app is in front; reason: the sandbox sits outside Convex subscriptions, and hidden tabs are skipped as on the web.
+- apps/mobile/src/chat/ComposerFooter.tsx, leading control: the leading control truncates before the model name; reason: the model keeps its name and trait, and the leading control never goes below an icon and a chevron or past 40% of the width.
+- apps/mobile/src/chat/ComposerFooter.tsx, mutedFooterFill: the footer fill is solid rather than 70% opacity; reason: at 70% the transcript shows through on a phone, where the keyboard lifts the composer over the messages.
+- apps/mobile/src/chat/ComposerFooter.tsx, stash restore: an already restored entry is kept; reason: the entry is not lost.
+- apps/mobile/src/chat/ComposerFooter.tsx, stash restore: restored tokens become picks and restored files are said to be uploaded only when picked; reason: a send still mentions the same people, and the phone composer cannot take stashed files.
+- apps/mobile/src/chat/ComposerFooter.tsx, stash save: the field clears at once and the text returns if the save fails; reason: the composer responds before the save finishes and the text is never lost.
+- apps/mobile/src/chat/ComposerFooter.tsx, stash sheet: the sheet starts with "Stash this prompt" because a phone has no keyboard shortcut for stashing; reason: the web uses Cmd+S, which a phone cannot send.
+- apps/mobile/src/chat/ComposerTasksPanel.tsx, task list: the list is deferred and the full parse skipped until a task list is present; reason: the payload is large and changes on every token.
+- apps/mobile/src/chat/GoalBanner.tsx, chained cleanup: the cleanup is chained, not try/finally; reason: React Compiler cannot compile try/finally.
+- apps/mobile/src/chat/ModelChip.tsx, trait option target: each option is padded to a 44 target; reason: the web pointer size of 24 is too small for touch.
+- apps/mobile/src/chat/ModelChip.tsx, trait rows: rows the model lacks are left out of the sheet; reason: a sheet grows from the bottom and would jump if rows were added later.
+- apps/mobile/src/chat/ProposedPlanCard.tsx, cleanup: the cleanup is chained, not try/finally; reason: React Compiler cannot compile try/finally.
+- apps/mobile/src/chat/ProposedPlanCard.tsx, success colour: the success colour is written as a literal class; reason: the phone theme does not carry text-success-foreground.
+- apps/mobile/src/chat/PublishRecoveryBanner.tsx, publish request: the request is marked requested before the mutation settles; reason: the button responds at once, and a failure removes the mark.
+- apps/mobile/src/chat/Quotes.tsx, reply text field: the reply text sits in a non-editable field that can still be highlighted, with no keyboard; reason: Android lets a field's text be selected only while it is editable, and only a field reports its selection.
+- apps/mobile/src/chat/ThreadFindBar.tsx, back handler: the back handler is an effect and closes the find bar first; reason: the hardware back button is a subscription outside React and closes a sheet first on Android.
+- apps/mobile/src/chat/ThreadFindBar.tsx, jumpTo: the matched message's top aligns to the list's far edge; reason: a long reply opens at its text, not at its cards.
+- apps/mobile/src/chat/UsageLimitRecovery.tsx, account switch: the switch finishes before the retry continues; reason: otherwise the new daemon would still run the spent account.
+- apps/mobile/src/chat/UsageLimitRecovery.tsx, handler: the cleanup is chained, not try/finally; reason: React Compiler cannot compile try/finally.
+- apps/mobile/src/chat/cards/AgentRequestCards.tsx, secret input: the field is masked and kept out of autofill, keyboard learning and clipboard suggestions; reason: the value is a secret.
+- apps/mobile/src/chat/cards/ChatCards.tsx, lazy page load: a card's page loads once its row is on screen; reason: the page must not load for rows the user has not reached.
+- apps/mobile/src/chat/cards/ChatHtmlFrame.tsx, theme: the page is built once with the current theme and later theme changes go in as a host message; reason: a new document would reload the page and drop its state.
+- apps/mobile/src/chat/cards/TurnOutputs.tsx, artifact page fill: the artifact page fill is white; reason: artifacts are written for a white page.
+- apps/mobile/src/chat/clipboardImage.ts, clipboard probe: the image check reads only the clip's MIME types; reason: Android then shows no "pasted from your clipboard" notice, and only the paste reads the image.
+- apps/mobile/src/chat/useAttachments.ts, attach files: a file type missing from the picker result comes from its extension; reason: Android names a .md file application/octet-stream.
+- apps/mobile/src/chat/useAttachments.ts, file upload: the image bytes are read through Expo's native fetch; reason: React Native's fetch of a file URI as a Blob sent nothing on Android.
+- apps/mobile/src/chat/useChatTranscript.ts, history anchor: the anchor is set once per chat during render; reason: re-anchoring on every tail change would slide the history window that exists to pin it.
+- apps/mobile/src/chat/useDraftSync.ts, module scope: the draft sync state lives at module scope, not in component state; reason: a late echo must still be recognised after the screen remounts.
+- apps/mobile/src/chat/useDraftSync.ts, save queue: saves run one at a time; reason: a later save must not land before an earlier one.
+- apps/mobile/src/chat/useSkillSuggestions.ts, pending call: a draft that no longer asks drops the waiting evaluation call; reason: the call would cost an evaluation for nothing.
+- apps/mobile/src/chat/useTypingPresence.ts, presence cleanup: leaving the screen or room sends stopped, and the room id is a dependency; reason: teammates otherwise see the person typing until the timeout, and a new room must stop the old room's flag.
+- apps/mobile/src/config.ts, env reads: each env read names its variable literally; reason: Expo inlines only fully written process.env.EXPO_PUBLIC_* references.
+- apps/mobile/src/config.ts, module header: no production defaults are baked into the build; reason: the values must match the web app's Clerk instance and Convex deployment.
+- apps/mobile/src/diff/DiffOptions.tsx, pending comments: the web refusal pins pending comments to the lines on screen and this rewrites them; reason: the phone must match the web rule.
+- apps/mobile/src/diff/PrFileDiff.tsx, line rows: line rows stay 22 high, below the 44 target rule; reason: taller rows spread the code apart, and each tap opens the comment sheet that names the lines.
+- apps/mobile/src/diff/PrFileDiff.tsx, range bar back handler: the back handler is an effect and closes the range bar first; reason: the hardware back button is a subscription outside React and Android closes a sheet first.
+- apps/mobile/src/diff/prDiffStore.ts, compare reads: two-commit reads send the ref, not a repo URL; reason: the ref carries the repo and head, which the compare endpoint does not take, and a commit not yet on GitHub is an error.
+- apps/mobile/src/diff/prDiffStore.ts, loadIfStale effect: the freshness check runs from an effect; reason: an action read has no query to subscribe to, so there is one check per key.
+- apps/mobile/src/inbox/NotificationRow.tsx, row handlers: the handlers are shared across rows and each row closes over its own notification; reason: a row whose notification did not change keeps its drawing when the list draws more rows or the inbox redraws.
+- file: apps/mobile/src/logging/lastCrash.ts | symbol: MAX_CHARS | The crash report is cut to 1,800 characters, because SecureStore values over 2 KB warn on iOS.
+- file: apps/mobile/src/logging/lastCrash.ts | symbol: module (KEY) | The last error is saved to SecureStore and shown on the next launch, because a release build closes with no visible message or readable log.
+- file: apps/mobile/src/logging/lastCrash.ts | symbol: nativeExitCrash (message) | The message uses the Java exception line, because a Java crash's description is only "crash".
+- file: apps/mobile/src/logging/lastCrash.ts | symbol: nativeExitCrash | Native crashes are read from Android's exit records, because the app closes before JavaScript runs, so no crash is saved by JS.
+- file: apps/mobile/src/logging/unhandledRejections.ts | symbol: installUnhandledRejectionLogging | Hermes' rejection tracker is installed and uncaught sync errors are logged, because release builds swallow unhandled rejections and no JS error reaches logcat.
+- file: apps/mobile/src/projects/ProjectOverview.tsx | symbol: ProjectOverview (project context field) | The context field is uncontrolled and saves on blur, because typing must not fight the live query.
+- file: apps/mobile/src/projects/useProjectStatus.ts | symbol: module | Status rules live in @eva/shared/projectView and the phone runs the same queries, because the phone and web must show one project status.
+- file: apps/mobile/src/projects/useProjectStatus.ts | symbol: useFailedTaskIds | Failed-task lookup is scoped to the project's home repo, because that repo is the access scope for the rows.
+- file: apps/mobile/src/quickTasks/QuickTaskBulk.tsx | symbol: QuickTaskBulkBar (Undo) | Undo unarchives each task only, because a cancelled scheduled run cannot be restored.
+- file: apps/mobile/src/quickTasks/QuickTaskBulk.tsx | symbol: QuickTaskBulkBar (moreActions) | Archive sits in More, not on the bar, because a fifth control does not fit a 390-wide screen beside Select all and More.
+- file: apps/mobile/src/quickTasks/QuickTaskBulk.tsx | symbol: QuickTaskBulkBar (primaryActions) | The bar uses short labels (Status, Assign, Run), because four controls must fit a 390-wide screen.
+- file: apps/mobile/src/quickTasks/QuickTaskRow.tsx | symbol: QuickTaskRow (turn mark) | An in-progress task shows no turn mark, because the web draws a border beam for it and the phone has no beam.
+- file: apps/mobile/src/quickTasks/QuickTasksSection.tsx | symbol: QuickTaskList (Android back) | Android back leaves select mode through a BackHandler effect, because the hardware back button is a subscription outside React.
+- file: apps/mobile/src/quickTasks/QuickTasksSection.tsx | symbol: QuickTaskModeList (tag list) | The tag list is sorted on a fresh array, not with toSorted, because Hermes lacks toSorted.
+- file: apps/mobile/src/quickTasks/TaskActivity.tsx | symbol: TaskActivity (More reactions) | The More reactions picker state lives in TaskActivity, because it must outlive the hold menu it opens from.
+- file: apps/mobile/src/quickTasks/TaskDiscussion.tsx | symbol: EMOJI_FALLBACK | A fallback emoji pattern without Unicode property escapes is used, because an engine without them would crash the screen at load.
+- file: apps/mobile/src/reviews/PrCloseDialog.tsx | symbol: PrCloseDialog | The dialog cannot be dismissed while the close request runs, because dismissing mid-request would hide the only progress the user sees.
+- file: apps/mobile/src/reviews/PrPrimaryAction.tsx | symbol: MergeAction (dialog) | The merge dialog cannot be dismissed while merging, because dismissing mid-merge would hide the only progress the user sees.
+- file: apps/mobile/src/reviews/PrPrimaryAction.tsx | symbol: MergeAction | Merge sits behind a confirm dialog and nothing reaches GitHub without the confirm press, because a merge cannot be undone from Eva.
+- file: apps/mobile/src/reviews/PrPrimaryAction.tsx | symbol: RevertAction | Revert starts a work session instead of calling an API, because GitHub has no call to undo a merge.
+- file: apps/mobile/src/reviews/PullRequestsSheet.tsx | symbol: PrActions (close) | Close without merging asks first, because closing notifies every reviewer and stops CI.
+- file: apps/mobile/src/reviews/PullRequestsSheet.tsx | symbol: PrActions | Open PR is listed first, because the phone has its own PR screen.
+- file: apps/mobile/src/reviews/PullRequestsSheet.tsx | symbol: usePullRequestsSheet | The picked PR is read from the live list, so a PR closed elsewhere shows its new state.
+- file: apps/mobile/src/reviews/ReviewComposer.tsx | symbol: ReviewComposer (line comments) | Line comments are drafted only on the pull request diff, because each pending comment needs a GitHub anchor.
+- file: apps/mobile/src/reviews/ReviewComposer.tsx | symbol: ReviewComposer (sheet close) | The sheet cannot be dismissed while posting, because dismissing mid-post would hide the only progress the user sees.
+- file: apps/mobile/src/reviews/ReviewRecap.tsx | symbol: ReviewRecap | Only the pending model override is held as state, because the stored recap doc is the source of truth for the last run's setup.
+- file: apps/mobile/src/reviews/ReviewSummary.tsx | symbol: Person | Reviewers show the login as text, because a phone has no hover to reveal a name.
+- file: apps/mobile/src/reviews/ReviewTimeline.tsx | symbol: VerdictRow | The whole verdict row (face, sentence and time) is one link, because a login is too small to be a thumb target.
+- file: apps/mobile/src/reviews/useActionResult.ts | symbol: useActionResult (dependencies) | The effect depends on key alone, not on load, because load is a new closure on every render.
+- file: apps/mobile/src/reviews/useActionResult.ts | symbol: useActionResult (effect) | An effect reads the action once per key, because an action read has no query to subscribe to.
+- file: apps/mobile/src/reviews/useStartReviewSession.ts | symbol: useStartReviewSession (onStarted) | onStarted runs before the chat opens, so a confirm dialog closes without waiting behind the chat.
+- file: apps/mobile/src/sandbox/OwnedSandboxActions.tsx | symbol: useTaskGitActions (Create PR) | Create PR is hidden for project tasks, because the project page creates the PR for its tasks.
+- file: apps/mobile/src/sessions/SessionGroup.tsx | symbol: SessionListRow | The row menu and swipe action are exposed as accessibility actions, because VoiceOver and TalkBack reach them only through the actions rotor.
+- file: apps/mobile/src/sessions/SessionGroup.tsx | symbol: entryRows | The group's sessions are sorted on a copy, not with toSorted, because Hermes lacks toSorted.
+- file: apps/mobile/src/sessions/SessionListOptions.tsx | symbol: settingsSchema | Settings parse field by field, because a stored value from an older build must fall back to its own default alone.
+- file: apps/mobile/src/sessions/useSessionActions.tsx | symbol: useSessionActions (group archive) | The group archive counts and archives every active member on the server, because the list may hide members under "Only mine".
+- file: apps/mobile/src/settings/AppearanceTiles.tsx | symbol: GradientSwatch | The Svg is sized by props, because an unsized Svg is 300 wide and would widen the tile.
+- file: apps/mobile/src/settings/themeMode.ts | symbol: AccountThemeSync | An effect applies the account mode, because NativeWind and the kit palette sit outside React.
+- file: apps/mobile/src/settings/themeMode.ts | symbol: apply | Neutral paints as the dark scheme with the Neutral palette in the kit's dark slot, and the palette is set first, because the redraw reads it.
+- file: apps/mobile/src/settings/themeMode.ts | symbol: restoreThemeMode | The saved phone mode is skipped once a mode was chosen, because a slow SecureStore read must not undo a pick.
+- file: apps/mobile/src/storage/persistedStore.ts | symbol: persistedStore (useValue) | The restore starts on the first subscription, not in an effect, because the first read is the natural trigger.
+- file: apps/mobile/src/update/UpdateDialog.tsx | symbol: RELEASES | Update checks read V Store rather than GitHub, because the repository is private and V Store still knows the newest release.

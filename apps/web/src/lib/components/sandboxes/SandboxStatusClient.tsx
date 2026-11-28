@@ -28,10 +28,6 @@ const SOURCE_LABELS: Record<
   services: "a service start or stop",
 };
 
-/**
- * An absolute local time, not "3 minutes ago": the page only re-renders when
- * the data changes, so a relative time would go stale.
- */
 function formatClock(at: number): string {
   const time = dayjs(at);
   return time.isSame(dayjs(), "day")
@@ -47,7 +43,6 @@ function keptAwakeLine(sandbox: AwakeSandbox): string {
   return `Kept awake${by}${via} at ${formatClock(sandbox.lastUserActivityAt)}`;
 }
 
-/** When idle pause will stop this sandbox, or what holds it awake. */
 function turnOffLabel(
   sandbox: AwakeSandbox,
   mode: AwakeSandboxes["mode"],
@@ -55,7 +50,6 @@ function turnOffLabel(
   if (mode === "off") return "Idle pause off";
   if (sandbox.busy) return "On while the agent works";
   if (sandbox.viewerName) return `On while ${sandbox.viewerName} views it`;
-  // The sweep runs every 5 minutes, so a passed deadline means the next tick.
   return dayjs(sandbox.idleDeadline).isAfter(dayjs())
     ? `Pauses at ${formatClock(sandbox.idleDeadline)}`
     : "Pauses within 5 min";
@@ -78,7 +72,6 @@ export function SandboxStatusClient() {
       </SettingsPage>
     );
   }
-
 
   return (
     <SettingsPage title="Sandbox status">

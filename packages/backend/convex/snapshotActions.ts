@@ -58,23 +58,10 @@ import { errorMessage } from "@vvedantb/server";
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
 
-// Pinned Supabase CLI version installed on fresh Vercel sandboxes (no base
-// toolchain baked in).
 const SUPABASE_CLI_VERSION = "2.90.0";
-// Pinned GitHub CLI for Vercel seeds. Neither base image's default repos ship
-// it, so we install the official release tarball, then fall back to the vendor
-// apt/yum repo (eva_pkg_install_gh) if that download dies.
 const GH_CLI_VERSION = "2.72.0";
-// GitHub Releases over HTTP/2 from a Vercel sandbox dies mid-transfer
-// (`curl: (56) Connection died, tried 5 times`). HTTP/1.1 has no stream
-// layer to fail; `--retry-all-errors` covers 56, which `--retry` alone skips.
 const GITHUB_RELEASE_CURL =
   "curl -fSL --http1.1 --retry 5 --retry-delay 5 --retry-all-errors";
-// A direct github.com release URL and the release-asset API take different
-// request paths before reaching the artifact CDN. Vercel's IPv4-only
-// sandboxes intermittently receive an empty reply from the direct path, so
-// retry every pinned artifact through GitHub's official asset API before
-// declaring the toolchain stage failed.
 const GITHUB_RELEASE_DOWNLOAD_FUNCTION = `github_release_download() {
   local repo="$1" tag="$2" asset="$3" output="$4" asset_url
   ${GITHUB_RELEASE_CURL} -o "$output" "https://github.com/$repo/releases/download/$tag/$asset" && return 0
@@ -83,50 +70,14 @@ const GITHUB_RELEASE_DOWNLOAD_FUNCTION = `github_release_download() {
   [ -n "$asset_url" ] && [ "$asset_url" != "null" ] || return 1
   ${GITHUB_RELEASE_CURL} -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -o "$output" "$asset_url"
 }`;
-// Search and VCS tooling the agent CLIs shell out to. Like gh, none of these
-// are in the AL2023 repos (and pinning beats Ubuntu's older packaged versions),
-// so each comes from its pinned upstream tarball.
-// Note the differing tag conventions: ripgrep tags have no `v` prefix, and
-// git-lfs drops the `v` from its archive's top-level directory.
 const RIPGREP_VERSION = "15.2.0";
 const FD_VERSION = "10.4.2";
 const GIT_LFS_VERSION = "3.7.1";
 const CODE_SERVER_VERSION = "4.132.0";
-// Keep the launcher, its platform package and @opencode-ai/sdk in lockstep:
-// the SDK is a generated client for one server release, and npm briefly exposed
-// opencode-ai 1.18.17 before any matching linux package existed, so `latest`
-// made every fresh snapshot fail deterministically during postinstall. Mirror
-// any bump in callback-src/providers/opencodeSdk.ts (SDK_VERSION).
 const OPENCODE_VERSION = "1.18.16";
-// Mirror any bump in callback-src/providers/{claudeSdk,cursorSdk}.ts
-// (SDK_VERSION): the callback's stream parsers match one SDK release's message
-// shapes exactly. Bump CLAUDE_CODE_VERSION (_sandbox_runtime/claudeCliVersion)
-// alongside the agent SDK — 0.3.X ships the CLI it spawns, 2.1.X.
 const CLAUDE_AGENT_SDK_VERSION = "0.3.282";
 const CURSOR_SDK_VERSION = "1.0.28";
 
-/**
- * Shell test that a globally installed package is at an exact version.
- *
- * Seeding used to test only that the package directory existed, so a snapshot
- * built before a pin moved kept serving the stale SDK forever. That drift is
- * silent rather than fatal: the callback's parsers drop every event they do not
- * recognise, so the turn renders no activity at all while still returning its
- * final answer.
- *
- * Two roots are tested, because the install below is `sudo npm install -g`,
- * which writes to node's own prefix (`/vercel/runtimes/node24/lib/node_modules`
- * on a Vercel sandbox), while this guard runs as the unprivileged sandbox user
- * whose `npm root -g` is a per-user prefix holding only pnpm. Testing `npm root
- * -g` alone therefore never matched, so every seed reinstalled the whole
- * toolchain. Mirrors `globalNpmRoots()` in
- * callback-src/providers/claudeSdk.ts. The node-derived root is computed inside
- * node to avoid nesting shell quotes in the `node -p` argument.
- *
- * Braced because the caller chains these with `&&` before an `|| sudo npm
- * install` fallback: a bare `[ a ] || [ b ]` would re-associate and let one
- * package's second test satisfy another package's first.
- */
 function globalPackageIsVersion(name: string, version: string): string {
   const nodePrefixRoot =
     "require('path').dirname(require('path').dirname(process.execPath)) + '/lib/node_modules'";
@@ -157,9 +108,6 @@ function seededRuntimeStateCaptureLines(
     'if [ "$REQUIRE_SUPABASE_DUMP" != "1" ]; then',
     '  echo "repo does not require Supabase state capture; skipping"',
     "elif ! docker ps --filter name=supabase_db_web --filter status=running -q | grep -q .; then",
-    // Fall back to a from-scratch start when `docker start` fails — a warm
-    // prep sandbox can carry a half-cleaned docker state (stopped container
-    // whose network was pruned by a prior `supabase stop`).
     "  if ! { docker ps -a --filter name=supabase_db_web -q | grep -q . && docker start supabase_db_web >/dev/null 2>&1; }; then",
     "    docker ps -aq --filter name=supabase | xargs -r docker rm -f",
     "    ( cd /tmp/repo && pnpm start-db ) || true",
@@ -180,10 +128,8 @@ function seededRuntimeStateCaptureLines(
   ];
 }
 
-/** Loaded and deleted by the seed script; see launchSeedRun. */
 const SEED_ENV_FILE = "/tmp/.eva-seed-env.sh";
 
-/** `export KEY='value'` lines for the seed-only vars, or null when none. */
 function renderSeedOnlyEnvFile(vars: Record<string, string>): string | null {
   const lines = Object.entries(vars)
     .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
@@ -206,26 +152,13 @@ export const launchSeedRun = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    // Branch to hard-reset /tmp/repo to (refs must already be fetched — the
-    // workflow runs sandbox.fetchBaseBranch first, which owns git auth).
     branch: v.string(),
-    // Repo build commands (pnpm install / codegen etc), run after the reset so
-    // the captured snapshot carries fresh node_modules and build artifacts.
     buildCommands: v.array(v.string()),
-    // Seed-once commands (env set, convex import) run in the post-daemon phase
-    // so services like `convex dev` are up. Build-time only — sandbox boots
-    // never re-run these, unlike startup commands.
     seedCommands: v.array(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    // Validates Vercel credentials are configured for this repo; the sandbox
-    // handle itself is resolved separately below via getSandboxHandle.
     await resolveSandboxCredentials(ctx, args.repoId);
-    // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
-    // the compiled floor made every launch npm-install the latest Claude CLI
-    // before its daemon could start: ~5-7s on half of all first turns.
-    // These reads are independent, so they run together.
     const [
       claudeCliVersion,
       codexCliVersion,
@@ -254,27 +187,12 @@ export const launchSeedRun = internalAction({
       "#!/bin/bash",
       "exec > /tmp/seedrun.log 2>&1",
       "set -x",
-      // Same Corepack env as the session env file: never fetch npm `latest`
-      // for an unpinned repo, never hang on the download prompt.
       renderEvaEnvFile(COREPACK_SANDBOX_ENV).trimEnd(),
-      // The seed run's `pnpm install` is the single biggest download in the
-      // whole system, and this sandbox holds the cache Drive's read-write
-      // mount — so it must point at the cache, or nothing ever populates it.
-      // The script is detached and does not source EVA_ENV_FILE, hence the
-      // second copy of these exports.
       renderEvaEnvFile(DRIVE_CACHE_ENV).trimEnd(),
       GITHUB_RELEASE_DOWNLOAD_FUNCTION,
-      // Defines eva_pkg_install / _ffmpeg / _chrome / _gh once for the whole
-      // script; every stage below installs through it so the seed runs
-      // unchanged on an AL2023 warm base and on an Ubuntu managed image.
       PACKAGE_HELPER_SCRIPT,
       "rm -f /tmp/.seedrun-done",
     ];
-    // Seed-only env vars (e.g. a staging deploy key) reach this run and no
-    // session. They ride a separate file that the script loads and deletes at
-    // once, so they never sit in seedrun.sh or the captured filesystem. xtrace
-    // goes off for the rest of the run: it would print expanded values into
-    // seedrun.log, which is captured too.
     const seedOnlyVars = await resolveSeedOnlyEnvVars(ctx, args.repoId);
     const seedEnvFile = renderSeedOnlyEnvFile(seedOnlyVars);
     if (seedEnvFile !== null) {
@@ -283,80 +201,32 @@ export const launchSeedRun = internalAction({
         `if [ -f ${SEED_ENV_FILE} ]; then set -a; . ${SEED_ENV_FILE}; set +a; rm -f ${SEED_ENV_FILE}; echo "seed-only env vars loaded; xtrace off"; else echo "SEEDRUN-FAILED:seed-env-missing"; exit 1; fi`,
       );
     }
-    // Vercel has NO custom Image for the agent-CLI toolchain (claude, codex,
-    // opencode, supabase, docker, ...): a fresh Vercel sandbox boots its
-    // bare base image with none of this installed. The ONLY place the CLIs get
-    // installed for Vercel is right here, once, on the seed-prep sandbox —
-    // they end up on disk only because this stage runs before the capture
-    // below (triggerSeededSnapshot) bakes the whole filesystem into the
-    // seeded `snap_*` snapshot. A session sandbox that boots from anything
-    // OTHER than that seeded snapshot (i.e. the bare base image, because no seed
-    // build has completed yet) will NOT have Claude/Codex/etc. (the Cursor
-    // SDK is installed via npm in the same global-install line).
-    // — this is expected, not a bug; see getRepoSnapshotName.
-    // Every install below must be idempotent: seed-prep often boots from a
-    // warm base Image snap that already has the toolchain, and re-running
-    // rpm/git-clone must skip (not fail) when the artifact is present.
     lines.push(
       'echo "SEEDRUN-STAGE:toolchain"',
       "sudo mkdir -p /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva",
-      // gcc/make: native npm modules need them; a fresh sandbox has none.
       `${pkgInstall(...CORE_TOOLCHAIN_PACKAGES)} || { echo "SEEDRUN-FAILED:toolchain-packages"; exit 1; }`,
       `${pkgInstall(...CHROME_RUNTIME_LIBRARY_PACKAGES)} || true`,
-      // ffmpeg for agent-browser WebM recording, baked into the seeded
-      // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
       buildSeedRunDockerStartCommand(),
       'corepack enable || sudo corepack enable || { echo "SEEDRUN-FAILED:corepack"; exit 1; }',
       'corepack prepare pnpm@10.33.4 --activate || { echo "SEEDRUN-FAILED:pnpm"; exit 1; }',
-      // Classic yarn for yarn.lock repos. Soft-fail: yarn installs are best-effort.
       "corepack prepare yarn@1.22.22 --activate || true",
       "git config --global --add safe.directory '*'",
       `command -v supabase >/dev/null 2>&1 || { github_release_download supabase/cli v${SUPABASE_CLI_VERSION} supabase_linux_amd64.tar.gz /tmp/sb.tgz && sudo tar -xzf /tmp/sb.tgz -C /usr/local/bin supabase; } || { echo "SEEDRUN-FAILED:supabase-cli"; exit 1; }`,
-      // We install to /usr/local/bin, but repo seed scripts may invoke the CLI by
-      // its absolute /usr/bin/supabase path (to avoid a node_modules/.bin shim).
-      // Symlink so both paths resolve to the one binary.
       '[ -e /usr/bin/supabase ] || sudo ln -sf "$(command -v supabase)" /usr/bin/supabase || { echo "SEEDRUN-FAILED:supabase-cli-symlink"; exit 1; }',
-      // GitHub CLI — neither base image ships a `gh` package in its default
-      // repos. The pinned release tarball is the primary path on both (one
-      // artifact, no repo registration); eva_pkg_install_gh registers the
-      // official apt/yum repo only when that download flakes.
       `command -v gh >/dev/null 2>&1 || { github_release_download cli/cli v${GH_CLI_VERSION} gh_${GH_CLI_VERSION}_linux_amd64.tar.gz /tmp/gh.tgz && sudo tar -xzf /tmp/gh.tgz -C /tmp && sudo mv /tmp/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && rm -rf /tmp/gh.tgz /tmp/gh_${GH_CLI_VERSION}_linux_amd64; } || eva_pkg_install_gh || { echo "SEEDRUN-FAILED:gh-cli"; exit 1; }`,
-      // ripgrep and fd — every agent CLI reaches for these to search a repo, and
-      // fall back to far slower `grep -r`/`find` when they are missing.
       `command -v rg >/dev/null 2>&1 || { github_release_download BurntSushi/ripgrep ${RIPGREP_VERSION} ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz /tmp/rg.tgz && sudo tar -xzf /tmp/rg.tgz -C /tmp && sudo mv /tmp/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl/rg /usr/local/bin/rg && rm -rf /tmp/rg.tgz /tmp/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl; } || { echo "SEEDRUN-FAILED:ripgrep"; exit 1; }`,
       `command -v fd >/dev/null 2>&1 || { github_release_download sharkdp/fd v${FD_VERSION} fd-v${FD_VERSION}-x86_64-unknown-linux-musl.tar.gz /tmp/fd.tgz && sudo tar -xzf /tmp/fd.tgz -C /tmp && sudo mv /tmp/fd-v${FD_VERSION}-x86_64-unknown-linux-musl/fd /usr/local/bin/fd && rm -rf /tmp/fd.tgz /tmp/fd-v${FD_VERSION}-x86_64-unknown-linux-musl; } || { echo "SEEDRUN-FAILED:fd"; exit 1; }`,
-      // Git LFS. Without it a clone of an LFS repo succeeds but leaves pointer
-      // stubs where the real files should be, which reads as corrupt content
-      // rather than a missing tool. Registering the --system filters is the half
-      // that makes checkout resolve pointers, so it must follow the binary; call
-      // the absolute path because sudo's secure_path may exclude /usr/local/bin.
       `command -v git-lfs >/dev/null 2>&1 || { github_release_download git-lfs/git-lfs v${GIT_LFS_VERSION} git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz /tmp/lfs.tgz && sudo tar -xzf /tmp/lfs.tgz -C /tmp && sudo mv /tmp/git-lfs-${GIT_LFS_VERSION}/git-lfs /usr/local/bin/git-lfs && rm -rf /tmp/lfs.tgz /tmp/git-lfs-${GIT_LFS_VERSION}; } || { echo "SEEDRUN-FAILED:git-lfs"; exit 1; }`,
-      // The Vercel managed Image ships git-lfs from its package manager (not
-      // /usr/local/bin), so the download above is skipped. Symlink so the
-      // absolute path below resolves either way.
       '[ -e /usr/local/bin/git-lfs ] || sudo ln -sf "$(command -v git-lfs)" /usr/local/bin/git-lfs || { echo "SEEDRUN-FAILED:git-lfs-symlink"; exit 1; }',
-      // The Image's primary git is a custom build under /opt/git, so its
-      // "system" config resolves to /opt/git/etc/gitconfig — a directory the
-      // image does not ship. `git lfs install --system` therefore failed with
-      // "could not lock config file" and broke EVERY seeded build from the day
-      // this step landed (the old >/dev/null redirect hid the message; keep
-      // output visible in seedrun.log). Create the dir, register the filters
-      // against the /opt/git git, then again against /etc/gitconfig so the
-      // dnf-installed /usr/bin/git resolves LFS pointers too.
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", codexCliVersion)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${claudeCliVersion} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${codexCliVersion} agent-browser convex @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
-      // code-server publishes one artifact per packaging format, and the two
-      // asset names differ by more than the extension (`code-server_V_amd64.deb`
-      // vs `code-server-V-amd64.rpm`), so the branch is on the filename rather
-      // than a shared template. Both hand the file to eva_pkg_install_file.
       `command -v code-server >/dev/null 2>&1 || { if [ "$(eva_pkg_file_ext)" = deb ]; then github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server_${CODE_SERVER_VERSION}_amd64.deb /tmp/code-server.deb; else github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm; fi && eva_pkg_install_file /tmp/code-server.$(eva_pkg_file_ext) && rm -f /tmp/code-server.deb /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
       "sudo ln -sf $(python3 -m site --user-base)/bin/websockify /usr/local/bin/websockify 2>/dev/null || true",
-      // Canonical path matches vercel-sandbox-gui + VercelDesktop (/opt/novnc).
       '[ -d /opt/novnc ] || { sudo rm -rf /opt/noVNC; sudo git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc; } || { echo "SEEDRUN-FAILED:novnc"; exit 1; }',
       'eva_pkg_install_chrome || { echo "SEEDRUN-FAILED:chrome"; exit 1; }',
       "mkdir -p /home/eva/.claude/plugins/marketplaces",
@@ -370,16 +240,10 @@ export const launchSeedRun = internalAction({
       'grep -qF "/home/eva/.local/bin" /vercel/sandbox/.eva-env.sh 2>/dev/null || echo \'export PATH="/home/eva/.local/bin:/usr/local/bin:$PATH"\' >> /vercel/sandbox/.eva-env.sh',
     );
 
-    // Swap before install/build/daemons: the seed run is the single most
-    // memory-hungry stretch a sandbox ever sees (dep install, then a full
-    // Convex import validated against every restored doc). Same script as the
-    // per-boot provisioning so there is one source of truth; base64 keeps its
-    // quoting intact inside this generated script.
     lines.push(
       'echo "SEEDRUN-STAGE:swap"',
       `echo ${Buffer.from(buildEnsureSwapScript(resolveSwapConfig()), "utf8").toString("base64")} | base64 -d > /tmp/eva-ensure-swap.sh && bash /tmp/eva-ensure-swap.sh || true`,
     );
-    // ---- update: latest code + fresh deps/artifacts ----
     lines.push(
       'echo "SEEDRUN-STAGE:update"',
       'cd /tmp/repo || { echo "SEEDRUN-FAILED:no-repo"; exit 1; }',
@@ -387,35 +251,15 @@ export const launchSeedRun = internalAction({
     );
     lines.push(
       'echo "SEEDRUN-STAGE:install"',
-      // Node: lockfile at repo root picks the manager. pnpm stays fatal (existing
-      // repos); yarn/npm warn and continue so polyglot / legacy roots can still
-      // finish the seed. Markers must never contain the substring SEEDRUN-FAILED.
-      // pnpm output is tee'd to /tmp/seed-install.log so fetchSeedDiagnostics
-      // can surface it: pnpm 10+ skips unapproved dependency build scripts with
-      // only a warning and exit 0, which leaves e.g. the `supabase` CLI binary
-      // missing and only fails much later, in a background command.
       'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile 2>&1 | tee /tmp/seed-install.log; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SEEDRUN-FAILED:install"; exit 1; }; grep -q "Ignored build scripts" /tmp/seed-install.log && echo "SEEDRUN-WARN:ignored-build-scripts"; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
-      // Python: independent of Node. Lazy-install compile deps only when a
-      // Python manifest exists (libpq-devel for psycopg2 source builds).
       `if [ -f requirements.txt ] || [ -f pyproject.toml ]; then ${pkgInstall("gcc", "g++", "make", "python3-dev", "libpq-dev")} || true; fi`,
       'if [ -f requirements.txt ]; then python3 -m pip install --user --break-system-packages -r requirements.txt >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -r requirements.txt >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; elif [ -f pyproject.toml ]; then python3 -m pip install --user --break-system-packages -e . >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -e . >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; fi',
     );
-    // No Vercel base image has a container runtime. Install Docker if missing,
-    // then ensure the daemon is running and the socket is group-accessible so
-    // startup/background commands can run `docker ps` without sudo. Kept as a
-    // defensive re-check even though the toolchain stage above already starts
-    // dockerd — idempotent, so harmless when it is already running.
     lines.push(
       'echo "SEEDRUN-STAGE:docker-bootstrap"',
-      // Install Docker if not already present (skip on warm snapshots that
-      // already have it baked in).
       `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || { echo "SEEDRUN-FAILED:docker-install"; exit 1; }`,
-      // Ensure daemon is running (Vercel does not auto-start dockerd on restore).
       'sudo docker info >/dev/null 2>&1 || sudo systemctl start docker 2>&1 || { echo "SEEDRUN-FAILED:docker-start"; exit 1; }',
-      // Open the socket so non-root `docker` commands work (background/startup
-      // commands run as the sandbox user without sudo).
       "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
-      // Block until the daemon is fully ready.
       "until docker info >/dev/null 2>&1; do sleep 1; done",
     );
     args.buildCommands.forEach((command, i) => {
@@ -423,12 +267,8 @@ export const launchSeedRun = internalAction({
         `( ${command} ) || { echo "SEEDRUN-FAILED:build-${i}"; exit 1; }`,
       );
     });
-    // ---- daemons: launch each background command detached (b64 per command
-    // so quoting inside user commands can never break the script) ----
     lines.push('echo "SEEDRUN-STAGE:daemons"');
     (backgroundCommands ?? []).forEach((command, i) => {
-      // Convex daemons need the same plant/agent-mode wrapper as
-      // runBackgroundCommands (anonymous CLI rejects --local-backend-version).
       const scriptBody = isConvexBackendCommand(command)
         ? buildConvexBackgroundScriptBody(command)
         : command;
@@ -437,17 +277,6 @@ export const launchSeedRun = internalAction({
         `echo ${cb64} | base64 -d > /tmp/bg-cmd-${i}.sh && chmod +x /tmp/bg-cmd-${i}.sh && setsid nohup bash -l /tmp/bg-cmd-${i}.sh </dev/null > /tmp/bg-${i}.log 2>&1 & echo $! > /tmp/bg-${i}.pid`,
       );
     });
-    // Native Convex readiness gate, in two parts. The *fatal* wait is on the
-    // backend health endpoint: seed commands (`npx convex env set`, `npx
-    // convex import`) need a running backend, and making a completed push
-    // mandatory deadlocks every repo whose auth.config.ts reads a deployment
-    // env var — the daemon's first push fails for the missing value, and the
-    // seed commands that would set it run after this gate. So the push happens
-    // after the seed commands instead (convex-push stage below). The second,
-    // non-fatal wait gives a push that *is* going to succeed the chance to
-    // land before the seeds touch the data. Detached script — a plain bash
-    // wait has no exec ceiling here. 900s covers cold binary plants; a daemon
-    // that exits early ends the wait instead of burning the full window.
     (backgroundCommands ?? []).forEach((command, i) => {
       if (!isConvexBackendCommand(command)) return;
       const backendUp = `{ curl -sf -m 3 ${CONVEX_LOCAL_BACKEND_HEALTH_URL} >/dev/null 2>&1 || grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null; }`;
@@ -459,18 +288,6 @@ export const launchSeedRun = internalAction({
         "  sleep 5",
         "done",
         `${backendUp} || { echo "SEEDRUN-FAILED:convex-ready-${i}"; tail -n 60 /tmp/bg-${i}.log 2>/dev/null; exit 1; }`,
-        // A live backend is necessary but not sufficient. The daemon's first
-        // push applies schema.ts and backfills its indexes, and `npx convex
-        // import` aborts the whole restore with "Could not complete import
-        // because schema changed" when that lands mid-import (observed
-        // 2026-09-21 on cost-model-ts: import got through every table, then
-        // died on the daemon's push finishing 8s in). So wait for the push
-        // too — but bounded and non-fatal, because the repos this gate was
-        // loosened for never finish that first push: their auth.config.ts
-        // reads an env var only the seed commands set, and their push is
-        // retried after the seeds instead (convex-push stage below). Repos
-        // that push cleanly break out in seconds; the cap is only ever paid
-        // by a repo that was going to skip the push anyway.
         `echo "SEEDRUN-STAGE:convex-functions-ready-${i}"`,
         `for s in $(seq 1 ${CONVEX_FUNCTIONS_READY_ATTEMPTS}); do`,
         `  grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && break`,
@@ -480,38 +297,27 @@ export const launchSeedRun = internalAction({
         `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
-    // From here on a dead backend fails the seed at once instead of hanging it
-    // until the workflow timeout — see buildConvexBackendWatchdogLines.
     const runsConvex = (backgroundCommands ?? []).some(isConvexBackendCommand);
     if (runsConvex) lines.push(...buildConvexBackendWatchdogLines("/tmp/repo"));
-    // ---- seed (post-daemon) ----
     lines.push('echo "SEEDRUN-STAGE:startup-post-daemon"');
     (startupCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:startup-post-${i}"; exit 1; }`,
       );
     });
-    // Seed-once commands run last, after the per-boot startup commands (whose
-    // readiness gates guarantee services are actually up for env set / import).
     lines.push('echo "SEEDRUN-STAGE:seed-commands"');
     args.seedCommands.forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:seed-${i}"; exit 1; }`,
       );
     });
-    // Functions land on the local backend only now, once the seeds have set the
-    // env vars its auth config needs — see buildConvexPostSeedPushLines.
     if (runsConvex) {
       lines.push(...buildConvexPostSeedPushLines("/tmp/repo"));
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
-    // Marker so a sandbox booting from the captured snapshot skips the seed.
-    // It carries the startup fingerprint: a branch with other startup
-    // commands sees a mismatch and reruns them (runStartupCommandsDirect).
     lines.push(
       `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
     );
-    // Stop commands shut the backend down on purpose.
     if (runsConvex) lines.push(STOP_CONVEX_BACKEND_WATCHDOG_LINE);
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
@@ -521,23 +327,12 @@ export const launchSeedRun = internalAction({
     lines.push('echo "SEEDRUN-DONE"', "touch /tmp/.seedrun-done");
     const script = lines.join("\n");
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Process-based guard makes the launch idempotent so the workflow can
-    // retry a timed-out launch exec without racing a second copy. It must be
-    // the LIVE process (pgrep, self-match-proof bracket pattern), not a
-    // lockfile: a prep sandbox warm-booted from a previously captured seeded
-    // snapshot carries that capture's marker files baked into /tmp, and a
-    // file-based guard would skip the launch and instantly report the baked
-    // "done" — capturing without ever re-seeding. Stale markers are scrubbed
-    // before every fresh launch for the same reason.
     const alreadyRunning = await execHandle(
       sandbox,
       'pgrep -f "[s]eedrun.sh" >/dev/null && echo ALREADY-RUNNING || echo NOT-RUNNING',
       30,
     );
     if (!alreadyRunning.includes("ALREADY-RUNNING")) {
-      // Never inline the script as base64 in a shell command — carepulse's
-      // startup/background arrays make the payload far larger than ARG_MAX.
-      // Use the provider writeFile API instead.
       await execHandle(
         sandbox,
         `rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh ${SEED_ENV_FILE}`,
@@ -584,25 +379,16 @@ export const fetchSeedDiagnostics = internalAction({
           "( cd /tmp/repo && git rev-parse --short HEAD 2>&1; git status -s 2>&1 | head -5 )",
           'echo "== convex versions =="',
           "( cd /tmp/repo && npx convex --version 2>&1; ls -la ~/.convex/ 2>&1 | head; ls -la ~/.cache/convex/ 2>&1 | head )",
-          // Which package manager actually ran, and why: Corepack resolves the
-          // repo pin, else its Last Known Good, else (DEFAULT_TO_LATEST) npm
-          // `latest`. The pnpm 12 incident was invisible without these lines.
           'echo "== toolchain =="',
           '( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo "pnpm $(pnpm --version 2>&1 | tail -n 1)"; grep -o \'"packageManager": *"[^"]*"\' package.json 2>/dev/null || echo \'packageManager: (none)\'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d \' \\n\') )',
-          // Install warnings pnpm prints and then forgets (ignored build
-          // scripts, peer/engine warnings). Written by the install stage.
           'echo "== install log (warnings) =="',
           "grep -aE 'Ignored build|ERR_PNPM|WARN|Done in .* using pnpm' /tmp/seed-install.log 2>/dev/null | tail -n 20",
-          // Fixed 32 GB disk; seeds that import large file storage hit ENOSPC
-          // mid-import and then only time out. Show the headroom at failure.
           'echo "== disk =="',
           "df -h / 2>&1; du -xsh /swapfile /tmp/repo/node_modules ~/.local/share/pnpm ~/.cache ~/.convex 2>/dev/null || true",
           'echo "== 3210 listening? =="',
           "curl -s -o /dev/null -w 'backend http:%{http_code}\\n' http://127.0.0.1:3210 2>&1 || echo '3210 unreachable'",
-          // A process killed for memory leaves no line in its own log.
           'echo "== memory =="',
           "free -m 2>&1; sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process' | tail -n 10",
-          // 4 KB held only the last few retry lines of a wedged `convex dev`.
           'echo "== seedrun.log (tail) =="; tail -c 16000 /tmp/seedrun.log 2>/dev/null',
           'for f in /tmp/bg-*.log; do echo; echo "== $f =="; tail -c 3000 "$f" 2>/dev/null; done',
           "true",
@@ -655,7 +441,6 @@ export const pollSeedRun = internalAction({
     const failed = out.match(/SEEDRUN-FAILED:([a-z0-9-]+)/);
     if (failed) return { state: `failed:${failed[1]}`, stage };
     if (out.includes("NO-SCRIPT")) return { state: "failed:no-script", stage };
-    // Script file exists but process died without writing done/failed markers.
     if (out.includes("NO-PROC") && !out.includes("DONE")) {
       const hasLog = await execHandle(
         sandbox,
@@ -678,7 +463,6 @@ export const pollSeedRun = internalAction({
 export const createSeedPrepSandbox = internalAction({
   args: {
     repoId: v.id("githubRepos"),
-    /** Base Image `snap_*` id; absent means a fresh sandbox + clone. */
     imageSnapshot: v.optional(v.string()),
   },
   returns: v.union(
@@ -718,22 +502,12 @@ export const createSeedPrepSandbox = internalAction({
       { ...sandboxEnvVars, REPO_ID: args.repoId },
       seedPrepLifecycle,
       args.imageSnapshot,
-      undefined, // onSandboxAcquired
-      undefined, // onProgress
-      { mode: "all" }, // syncStrategy
-      // Large seeded snapshots take well over the 30s default to boot; 180s
-      // avoids the spurious create timeout + orphaned sandbox on warm boots.
+      undefined,
+      undefined,
+      { mode: "all" },
       180,
-      // Skip pnpm/yarn install: launchSeedRun's buildCommands install deps
-      // inside the detached seed script. Installing here would blow Convex's
-      // 600s per-action ceiling on providers (Vercel) that don't have deps
-      // pre-baked into their base snapshot.
       true,
-      undefined, // forkFrom
-      // Cache WRITER: this is the sandbox where the seed run's `pnpm install`
-      // actually downloads the repo's dependency tree, and the snapshot
-      // workflow runs at most one per repo at a time — so it takes the Drive's
-      // single read-write mount and fills the cache every session then reads.
+      undefined,
       DRIVE_CACHE_WRITER,
     );
     return { ok: true, sandboxId: sandbox.id };
@@ -748,7 +522,6 @@ export const deleteSeedPrepSandbox = internalAction({
   args: {
     repoId: v.id("githubRepos"),
     sandboxId: v.string(),
-    /** Keep this snap_* when tearing down the prep sandbox (successful seed). */
     preserveSnapshotId: v.optional(v.string()),
   },
   returns: v.null(),
@@ -764,7 +537,6 @@ export const deleteSeedPrepSandbox = internalAction({
             : undefined,
       });
     } catch (e) {
-      // Best-effort: log but do not fail the build if delete fails.
       console.error(
         `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${errorMessage(
           e,
@@ -794,16 +566,11 @@ export const triggerSeededSnapshot = internalAction({
     sandboxId: v.string(),
     seededName: v.string(),
   },
-  // Returns the `snap_*` id Vercel generated (distinct from seededName). The workflow must use
-  // this value — not seededName — when polling and writing seededSnapshotName
-  // to the DB.
   returns: v.object({ snapshotId: v.string() }),
   handler: async (ctx, args): Promise<{ snapshotId: string }> => {
     const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
     const client = getSandboxClient(credentials);
     const handle = await client.get(args.sandboxId);
-    // The seeded snapshot is the base image for every sandbox of this repo —
-    // never bake the swapfile into it. Each boot recreates swap in seconds.
     await releaseSwapFile(handle);
     const { snapshotId } = await handle.createSnapshot({
       name: args.seededName,
@@ -836,7 +603,6 @@ export const pollSeededSnapshotState = internalAction({
   handler: async (ctx, args): Promise<SnapshotState> => {
     const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
     const client = getSandboxClient(credentials);
-    // Not registered yet (or a transient lookup miss) → treat as still pending.
     const snapshot = await client.getSnapshot(args.seededName);
     if (!snapshot) return "pending";
     return snapshot.status;
@@ -862,20 +628,12 @@ export const stopAllRepoSandboxes = internalAction({
         ctx,
         primaryRepoId,
       );
-      // Delete every seed-prep sandbox tagged for these repos so none
-      // keep running/billing. Filtered STRICTLY by the seed-prep purpose tag +
-      // repoId — session/task sandboxes use eva.purpose=persistent|ephemeral
-      // and are never matched. This is a safety net; the workflow already
-      // deletes the build's own prep sandbox explicitly on every exit path.
-      // It also reclaims orphans left by a crashed build.
       const seedableSet = new Set<string>(args.seedableRepoIds);
       const list = await Sandbox.list({
         token: credentials.token,
         teamId: credentials.teamId,
         projectId: credentials.projectId,
       });
-      // list() yields plain metadata (no .delete()); re-hydrate matches through
-      // the provider client to stop+remove them.
       const client = getSandboxClient(credentials);
       let deleted = 0;
       for await (const meta of list) {
@@ -924,8 +682,6 @@ export const deleteSeededSnapshot = internalAction({
       const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
       const client = getSandboxClient(credentials);
       const deleted = await client.deleteSnapshot(args.snapshotName);
-      // Explicit confirmation so "keep-last" / rebuild deletion can be
-      // verified in Convex logs, not just the build's UI log stream.
       console.log(
         deleted
           ? `[snapshot] deleteSeededSnapshot: deleted ${args.snapshotName}`
@@ -986,19 +742,12 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         {},
       ),
     );
-    // Group seeded snapshots (repoGroups.seededSnapshotName) never appear as a
-    // sandbox's currentSnapshotId or a repo's own seeded/base id, so they need
-    // their own entry in the protected set — otherwise the very first purge
-    // after a group build deletes it as an orphan.
     for (const name of await ctx.runQuery(
       internal.repoGroups.listAllGroupSnapshotNames,
       {},
     )) {
       protectedIds.add(name);
     }
-    // Only protect resume snaps for sandboxes Eva still points at. Vercel
-    // Sandbox.list also returns ghosts / stopped leftovers whose current snap
-    // would otherwise stay protected forever.
     const listedSandboxes: Array<{
       name: string;
       foreign: boolean;
@@ -1015,7 +764,6 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
             : undefined,
       });
     }
-    // Batched so one query's index lookups stay well under Convex's limits.
     const knownSandboxIds = new Set<string>();
     for (let i = 0; i < listedSandboxes.length; i += 500) {
       const batch = listedSandboxes.slice(i, i + 500).map((s) => s.name);
@@ -1041,7 +789,6 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     const idleCutoff = Date.now() - (args.minIdleMs ?? 0);
     let deletedCount = 0;
     let skippedCount = 0;
-    // list() yields plain metadata (`id`, no .delete()) — re-hydrate to delete.
     for await (const meta of listed) {
       if (protectedIds.has(meta.id)) {
         skippedCount += 1;
@@ -1206,7 +953,6 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
   },
 });
 
-/** Snapshots created or restored inside this window survive the weekly purge. */
 const SCHEDULED_PURGE_MIN_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

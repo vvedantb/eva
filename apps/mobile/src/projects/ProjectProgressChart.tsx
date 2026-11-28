@@ -82,7 +82,6 @@ export function ProjectProgressChart({ projectId }: { projectId: Id<"projects"> 
                       <Rect x={x} y={shippedTop} width={BAR_WIDTH} height={CHART_HEIGHT - shippedTop} rx={2} fill={theme.success} opacity={dim} />
                     ) : null}
                     {d.archived.length > 0 ? (
-                      // 2px gap above the shipped segment, as the web bars.
                       <Rect x={x} y={archivedTop} width={BAR_WIDTH} height={Math.max(0, shippedTop - archivedTop - 2)} rx={2} fill={theme.mutedForeground} opacity={dim} />
                     ) : null}
                   </G>
@@ -95,7 +94,6 @@ export function ProjectProgressChart({ projectId }: { projectId: Id<"projects"> 
                 strokeWidth={2}
               />
               {chart.days.map((d, i) => (
-                // A full-height hit target per day, wider than its bar.
                 <Rect
                   key={`hit-${d.start}`}
                   x={i * step}

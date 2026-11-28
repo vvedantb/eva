@@ -5,33 +5,13 @@ import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Nothing watches the dev server or the navigation proxy after launch. An OOM
- * kill (observed in prod: the kernel killed next-server twice in one boot) or
- * a lazily-resumed VM leaves the app port dead while the sandbox runs, and the
- * readiness poll is the only thing that notices — it schedules
- * `ensureSessionPreviewServices`, which relaunches through the single Console
- * launcher.
- *
- * These tests run that action. Every guard it has is about NOT touching the
- * sandbox: a recovery racing the startup flow launched a duplicate server on
- * the wrong port in prod (13000 by startup, 3001 by recovery a second later),
- * and any exec on a stopped Vercel sandbox resumes it. So the observable
- * property is whether the action reaches the sandbox at all — with no Vercel
- * credentials configured here, the first provider call throws, and a clean
- * `null` means the guards bailed before it.
- */
 
-
-/** Loading the sandbox module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const SANDBOX_ID = "sbx-preview-recovery-owners";
-/** The port the failing readiness probe reports, i.e. the one recovery owns. */
 const EXPECTED_PORT = 13000;
 const DEV_COMMAND = "pnpm dev";
 
 type Harness = ReturnType<typeof convexTest>;
-/** A session's sandbox lifecycle. */
 type SandboxLifecycle = "active" | "starting" | "stopping" | "closed";
 type OwnerState = {
   status: SandboxLifecycle;
@@ -39,7 +19,6 @@ type OwnerState = {
   devCommand?: string;
 };
 
-/** A healthy owner of a running preview: recovery should act on this one. */
 const RECOVERABLE: OwnerState = {
   status: "active",
   devPort: EXPECTED_PORT,
@@ -93,7 +72,6 @@ async function runRecovery(
   });
 }
 
-/** The action bailed on a guard: nothing was asked of the sandbox provider. */
 async function expectStoodDown(
   t: Harness,
   repoId: Id<"githubRepos">,
@@ -101,12 +79,6 @@ async function expectStoodDown(
   expect(await runRecovery(t, repoId)).toBeNull();
 }
 
-/**
- * The action cleared every guard and went for the sandbox. Without provider
- * credentials that call throws, which is the only signal available here that
- * recovery would have relaunched. Matching the message keeps an unrelated
- * throw (a bad seed, a renamed field) from reading as success.
- */
 async function expectReachedSandbox(
   t: Harness,
   repoId: Id<"githubRepos">,
@@ -138,8 +110,6 @@ describe("preview recovery only acts on an owner that is safe to relaunch", () =
           const t = convexTest(schema, modules);
           const { repoId, userId } = await seedRepo(t);
           await seed(t, repoId, userId, RECOVERABLE);
-          // Reads this owner's own status/devPort fields — a config mapped to
-          // the wrong field would leave them undefined and stand down.
           await expectReachedSandbox(t, repoId);
         },
         TIMEOUT_MS,
@@ -147,8 +117,6 @@ describe("preview recovery only acts on an owner that is safe to relaunch", () =
 
       test.each<{ why: string; owner: OwnerState }>([
         {
-          // Startup owns the launch: it resolves the real port and starts the
-          // dev server itself. Racing it duplicated the server in prod.
           why: "startup still owns the launch",
           owner: { ...RECOVERABLE, status: "starting" },
         },
@@ -161,8 +129,6 @@ describe("preview recovery only acts on an owner that is safe to relaunch", () =
           owner: { ...RECOVERABLE, status: "closed" },
         },
         {
-          // Multi-app repos preview secondary apps on their own ports; this
-          // recovery only owns the primary dev server.
           why: "another app's port failed the probe",
           owner: { ...RECOVERABLE, devPort: 3001 },
         },

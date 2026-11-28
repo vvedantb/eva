@@ -35,7 +35,6 @@ export default function AutomationScreen() {
   const params = useLocalSearchParams<{ automationId: string; repo?: string }>();
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
-  // The automation resolves through the repo's list, so its id keeps its table type.
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
   const automations = useQuery(api.automations.list, repo ? { repoId: repo._id } : "skip");
@@ -70,7 +69,6 @@ export default function AutomationScreen() {
   };
   const start = () => {
     setStarting(true);
-    // Chained, not try / finally, which React Compiler cannot compile.
     runNow({ automationId: automation._id })
       .then(() => toast.success("Run started"))
       .catch((cause: Error) => toast.error(cause.message || "Couldn't start the run"))
@@ -143,20 +141,17 @@ export default function AutomationScreen() {
   );
 }
 
-/** The web `RunAccordion` row: status, start time and duration; open, the report, the error and the PR, with Stop while it runs. */
 function RunRow({ run, first }: { run: Run; first: boolean }) {
   const theme = EVA_THEME[useScheme()];
   const acknowledge = useMutation(api.automations.acknowledgeRun);
   const cancel = useMutation(api.automations.cancelRun);
   const openPr = useOpenPr();
   const active = isAutomationRunActive(run.status);
-  // The newest run starts open, as the web Latest tab; a running one too.
   const [open, setOpen] = useState(first || active);
   const Chevron = open ? IconChevronDown : IconChevronRight;
   const toggle = () => {
     const next = !open;
     setOpen(next);
-    // Opening a finished run reads it, as the web.
     if (next && !run.acknowledged && !active) acknowledge({ runId: run._id }).catch(() => undefined);
   };
   return (

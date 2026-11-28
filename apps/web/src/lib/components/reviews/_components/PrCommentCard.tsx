@@ -30,7 +30,6 @@ export function PrCommentCard({
   authorLogin: string | null;
   authorAvatarUrl: string | null;
   action?: string;
-  /** A verdict word ("Approved") beside the action. */
   badge?: ReactNode;
   at: string | null;
   htmlUrl: string;

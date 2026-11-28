@@ -10,8 +10,6 @@ import type { ProviderAdapter } from "./types.js";
 
 export function opencodeParseLine(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
-  // Reasoning parts carry the model's actual thinking text (reasoning-capable
-  // models only); previously these events were ignored.
   if (
     event.type === "reasoning" &&
     event.part &&

@@ -23,7 +23,6 @@ export default function ReviewFileScreen() {
   const prNumber = Number(params.prNumber);
   const pr = repo !== undefined && Number.isInteger(prNumber) && prNumber > 0 ? { repoId: repo._id, prNumber } : null;
   const { state, reload } = usePrDiff(pr);
-  // After a deep link, Back opens the pull request on its Code tab.
   const header = (
     <RouterStackPageHeader
       title="Code"

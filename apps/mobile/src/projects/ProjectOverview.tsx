@@ -55,7 +55,6 @@ export function ProjectOverview({
   project: Project;
   repo: Repo;
   users: User[] | undefined;
-  /** The derived status (`useProjectTaskStatus`), undefined while the tasks load. */
   status: ProjectStatus | undefined;
 }) {
   const scheme = useScheme();
@@ -81,7 +80,6 @@ export function ProjectOverview({
   const userById = (id: Id<"users"> | undefined) => (id ? users?.find((user) => user._id === id) : undefined);
   const lead = userById(project.projectLead);
   const creator = userById(project.userId);
-  // The stage is derived from the child tasks.
   const stage = status ? { ...projectStageAppearance(status.stage, scheme), label: PROJECT_STAGE_LABELS[status.stage] } : undefined;
   const baseBranch = project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const memberCount = project.members?.length ?? 0;
@@ -92,7 +90,6 @@ export function ProjectOverview({
   const muted = theme.mutedForeground;
 
   return (
-    // The project context field scrolls into view 16 above the keyboard.
     <KeyboardAwareScrollView
       bottomOffset={16}
       style={{ flex: 1 }}
@@ -108,7 +105,6 @@ export function ProjectOverview({
         </Text>
         {editingContext ? (
           <Textarea
-            // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
             autoFocus
             defaultValue={project.description ?? ""}
             accessibilityLabel="Project context"
@@ -186,7 +182,6 @@ export function ProjectOverview({
           value={memberCount > 0 ? `${memberCount} member${memberCount > 1 ? "s" : ""}` : "Members"}
           color={memberCount > 0 ? undefined : muted}
         />
-        {/* No model row: Eva and her tasks run on the model in Eva's chat composer. */}
         <FieldRow label="Base branch for all tasks in this project" icon={<IconGitBranch size={16} color={muted} />} value={baseBranch} />
       </FieldGroup>
       <FieldGroup title="Dates">
@@ -209,7 +204,6 @@ export function ProjectOverview({
         />
       </FieldGroup>
 
-      {/* The web `PriorityPicker`. */}
       <FooterSheet open={sheet === "priority"} onOpenChange={(open) => setSheet(open ? "priority" : null)} title="Priority">
         <SheetRow
           leading={<PriorityIcon level={undefined} size={20} />}
@@ -227,7 +221,6 @@ export function ProjectOverview({
           />
         ))}
       </FooterSheet>
-      {/* The web Project Lead select: Unassigned, then every teammate. */}
       <FooterSheet open={sheet === "lead"} onOpenChange={(open) => setSheet(open ? "lead" : null)} title="Project Lead">
         <SheetRow title="Unassigned" active={project.projectLead === undefined} onPress={() => update({ projectLead: null }, "Couldn't set the lead")} />
         {(users ?? []).map((user) => (

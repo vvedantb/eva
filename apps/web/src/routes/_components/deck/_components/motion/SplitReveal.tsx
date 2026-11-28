@@ -5,14 +5,10 @@ import { AccentText } from "../DeckAccent";
 import { DUR, EASE, STAGGER, cueTransition } from "./tokens";
 
 export interface SplitRevealProps {
-  /** A short hero word or phrase, 20 characters or fewer. */
   text: string;
-  /** Build step to play on. Omit to follow the enclosing `Reveal`/`Stagger`. */
   step?: number;
   delay?: number;
-  /** Seconds between characters. */
   stagger?: number;
-  /** Paint the characters with the brand gradient, sliced so it stays continuous. */
   accent?: boolean;
   className?: string;
 }

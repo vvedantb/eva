@@ -6,7 +6,6 @@ const DOTS = ["red", "amber", "green"];
 
 interface FriWindowProps {
   label?: ReactNode;
-  /** Sits at the right of the title bar: device buttons, counters, chips. */
   trailing?: ReactNode;
   children: ReactNode;
   className?: string;

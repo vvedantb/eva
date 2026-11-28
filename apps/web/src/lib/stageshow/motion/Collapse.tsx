@@ -12,28 +12,12 @@ import './Collapse.css'
  */
 export function Collapse({ open, reveal = 'clip', from = 'above', solid = false, children, className, ...rest }: HTMLAttributes<HTMLDivElement> & {
   open: boolean
-  /**
-   * clip: the opening space uncovers the content, for rows and text. The
-   * content is faint while the edge passes it, so nothing is ever seen sliced.
-   * drop: the space opens and the content arrives whole, gliding into place.
-   * For cards and messages: a notification, a toast, a chat message.
-   */
   reveal?: 'clip' | 'drop'
-  /** Where drop content comes from: 'above' (a notification), or 'below' (a chat message landing at the bottom of a feed). */
   from?: 'above' | 'below'
-  /**
-   * Opaque throughout: the height opens and closes over the content without
-   * fading it. For a surface unlike the ground (a dark log panel on a light
-   * window), which would otherwise pass through gray. Its content is there
-   * from the first frame: open it with what it shows, never empty.
-   */
   solid?: boolean
   children: ReactNode
 }) {
-  // Marked moving from the frame open changes until the height settles
   const [moving, setMoving] = useState(false)
-  // Taller than a row: unfolding from the middle would cut its first line
-  // while it's already visible, so it reveals from the top and fades in late
   const [tall, setTall] = useState(false)
   const inner = useRef<HTMLDivElement>(null)
   const first = useRef(true)
@@ -42,7 +26,6 @@ export function Collapse({ open, reveal = 'clip', from = 'above', solid = false,
     if (h) setTall(h > 44)
     if (first.current) return void (first.current = false)
     setMoving(true)
-    // No transitionend without a transition (reduced motion): never leave it moving
     const t = setTimeout(() => setMoving(false), 900)
     return () => clearTimeout(t)
   }, [open])

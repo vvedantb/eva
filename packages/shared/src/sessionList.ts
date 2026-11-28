@@ -1,9 +1,3 @@
-/**
- * The cross-repo Sessions list, as pure data: the web sidebar
- * (`GlobalSessionsSidebar`) and the phone Sessions tab both order and group
- * the per-repo `sessions.list` / `sessions.listArchived` rows through it.
- */
-
 export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
 export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 
@@ -18,14 +12,6 @@ export function sessionActivityAt(session: {
   return session.updatedAt ?? session._creationTime;
 }
 
-// Sorting here copies with `[...list].sort`, not `toSorted`: Hermes on the
-// phone lacks the ES2023 copy methods (`toSorted`, `toReversed`), and the
-// phone Sessions tab crashed with "undefined is not a function".
-
-/**
- * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
- * list, chrome tabs, session switcher, the phone list) sorts through it.
- */
 /** The Sessions list options (the web sidebar's options menu), web and phone. */
 export const APP_SORT_LABELS: Record<AppSortOrder, string> = {
   updated_at: "Last user message",
@@ -48,7 +34,6 @@ export function clampSessionPreviewCount(value: number): number {
   return Math.min(MAX_SESSION_PREVIEW_COUNT, Math.max(MIN_SESSION_PREVIEW_COUNT, Math.round(value)));
 }
 
-/** The user who started a session; older rows have no `createdBy`. */
 function sessionStartedBy<T extends string>(session: { userId: T; createdBy?: T }): T {
   return session.createdBy ?? session.userId;
 }
@@ -94,31 +79,22 @@ export function sortAppsForSidebar<
   });
 }
 
-/** The session fields the grouping reads. */
 interface GroupableSession {
   _id: string;
   _creationTime: number;
   updatedAt?: number;
   title: string;
-  /** Linked-session group, when linked. */
   sessionGroupId?: string;
-  /** The group's user-set name, when it has one. */
   sessionGroupName?: string;
-  /** Set when a repo sees the row only through a linked checkout. */
   linkedFrom?: object;
 }
 
 export interface LinkedSessionGroup<S, R> {
   groupId: string;
-  /** User-set name, when the group has one. */
   name?: string;
-  /** What the sidebar shows: the name, or the oldest member's title. */
   label: string;
-  /** Oldest first. Each row carries the repo it came from. */
   members: Array<{ session: S; repo: R }>;
-  /** Creation time of the oldest member: the group's "Created at" sort key. */
   createdAt: number;
-  /** Latest member activity: the group's "Last user message" sort key. */
   latestAt: number;
 }
 
@@ -177,7 +153,6 @@ export type SessionListEntry<S, R> =
       _id: string;
       _creationTime: number;
       repo: R;
-      /** The app's rows minus the ones its linked groups took; undefined while loading. */
       sessions: S[] | undefined;
     };
 
@@ -253,7 +228,6 @@ export function perRepoQueryCache<Q, RepoId extends string>() {
     string,
     Record<string, { query: Q; args: { repoId: RepoId } }>
   >();
-  /** `queryKey` names `query` (say, the list mode) in the cache key. */
   return (
     query: Q,
     queryKey: string,

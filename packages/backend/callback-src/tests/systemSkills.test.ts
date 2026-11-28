@@ -14,11 +14,9 @@ import {
   renderExcludeContent,
 } from "../runtime/systemSkills.js";
 
-// A throwaway dir stands in for the sandbox checkout.
 const workspace: { dir: string } = { dir: "" };
 
 const originalConfig = { ...(await import("../config.js")) };
-// Bun copies a mocked module's exports once, so re-mock after each change.
 function setWorkspace(dir: string): void {
   workspace.dir = dir;
   mock.module("../config.js", () => ({ ...originalConfig, WORK_DIR: dir }));
@@ -60,7 +58,6 @@ test("parseSystemSkillsFile treats an empty list as a real instruction", () => {
 });
 
 test("parseSystemSkillsFile returns null on unusable input", () => {
-  // Null means "leave the checkout alone" — never prune on a bad payload.
   expect(parseSystemSkillsFile("not json")).toBeNull();
   expect(parseSystemSkillsFile("[]")).toBeNull();
   expect(parseSystemSkillsFile(JSON.stringify({ skills: "eva-capture" }))).toBeNull();
@@ -102,7 +99,6 @@ test("renderExcludeContent removes the block when nothing is installed", () => {
   expect(renderExcludeContent("", [])).toBe("");
 });
 
-// Regression: stubs only went to `.agents/skills`, which Claude Code never reads.
 test("reconcileSystemSkills writes each stub into both skill roots", () => {
   const stub = `${MARKER}\n# capture`;
   reconcileSystemSkills([{ name: "eva-capture", stub }]);

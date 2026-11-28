@@ -37,7 +37,6 @@ const MONTHS: readonly { label: string; date: string }[] = [
   { label: "Sep", date: "2026-09-01" },
 ];
 
-/** Low and tilted while the ladder climbs, square for the lanes, eased back to close. */
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 6, translateZ: -30 },
   { rotateX: 3, rotateY: -3 },
@@ -45,7 +44,6 @@ const SHOTS: readonly CameraShot[] = [
   { translateZ: -24, y: -18 },
 ];
 
-/** The light climbs with the ladder, then drops onto the problems and stays. */
 const GLOW = [
   null,
   { x: fri3X("2026-08-20"), y: 70, size: 560 },
@@ -53,7 +51,6 @@ const GLOW = [
   { x: fri3X("2026-06-01"), y: LANES_Y + FRI3_LANES_H / 2, size: 640 },
 ];
 
-/** The year draws itself on entry; the ladder then climbs off this line. */
 function Axis() {
   const ink = useInk();
   return (

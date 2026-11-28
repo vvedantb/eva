@@ -1,14 +1,3 @@
-/**
- * The `evaluate` MCP tool: typed questions about one piece of state, answered
- * by TypeSafe's Jev decision model with probabilities instead of prose.
- *
- * The request contract itself — the input schema, its caps and the result
- * shape — lives in `_jev/schema.ts`, shared with every non-MCP caller. What
- * stays here is the agent-facing surface: the description, the error copy and
- * the tool factory. The provider call is injected as `run`, which keeps the
- * SDK types confined to the node module.
- */
-
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import type { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
@@ -24,8 +13,6 @@ import {
   type EvaluateOutcome,
 } from "../_jev/schema";
 
-// Re-exported so the tool layer and its tests have one import for the whole
-// `evaluate` contract; the definitions live in `_jev/schema.ts`.
 export {
   EVALUATE_MODEL,
   MAX_STATE_CHARS,

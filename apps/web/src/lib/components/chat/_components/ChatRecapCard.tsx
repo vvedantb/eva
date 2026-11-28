@@ -24,11 +24,8 @@ export function ChatRecapCard({
   onDismiss,
 }: {
   kind: "away" | "full";
-  /** When the absence began (ms); only an "away" title shows it. */
   since: number;
-  /** Undefined while the model writes it. */
   text: string | undefined;
-  /** The viewer's thumbs on this recap. */
   rating: { sentiment: FeedbackSentiment; comment: string | undefined } | undefined;
   onRate: (sentiment: FeedbackSentiment | null, comment?: string) => Promise<unknown>;
   repo: ChatRepo;

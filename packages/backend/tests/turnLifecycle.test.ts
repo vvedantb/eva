@@ -122,12 +122,6 @@ describe("isStreamingActivityStale", () => {
   });
 });
 
-/**
- * A daemon on a swapping VM froze for ~6 minutes with its process alive; the
- * reconciler finalised its turn the moment the 2-minute lease lapsed and the
- * work was lost. An expired lease on a demonstrably live process now buys
- * grace, bounded so a permanently wedged turn still settles.
- */
 describe("expiredTurnLeaseDecision", () => {
   const now = STARTED_AT;
 

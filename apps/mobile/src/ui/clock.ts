@@ -1,10 +1,5 @@
 import { useSyncExternalStore } from "react";
 
-/**
- * A shared clock per tick length: one interval for every reader of it, running
- * only while one is mounted. `useNow(tickMs)` re-renders its reader each tick
- * with the time quantised to that tick, so readers on one clock agree.
- */
 type Clock = { now: number; listeners: Set<() => void>; timer: ReturnType<typeof setInterval> | null };
 const clocks = new Map<number, Clock>();
 

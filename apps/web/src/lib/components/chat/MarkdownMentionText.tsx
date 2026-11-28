@@ -28,28 +28,14 @@ import { ChatMarkdownLink } from "./ChatMarkdownLink";
 
 interface MarkdownMentionTextProps {
   text: string;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
   repoBasePath: string;
   repoId: Id<"githubRepos">;
   className?: string;
-  /**
-   * What an `@` mention can refer to in this context. `"user"` (comments) mixes
-   * People mentions with Data mentions, so each token's kind must be resolved
-   * before choosing a chip. `"doc"` (descriptions/chat) only ever contains Data
-   * mentions (docs/sessions/projects/quick tasks) — kept as the historical name
-   * to avoid a wider rename. `/` is always a skill. Defaults to `"doc"`.
-   */
   atKind?: "doc" | "user";
 }
 
-/** Caps embedded media so markdown screenshots/videos don't dominate the pane. */
 const MARKDOWN_MEDIA_CLASS = "max-h-80 w-auto max-w-full object-contain";
 
-/**
- * Extends the shared renderer's plugins: authors type single newlines
- * expecting a line break, not markdown's paragraph-continuation behaviour, and
- * `@`/`/` tokens become chips.
- */
 const REMARK_PLUGINS = [remarkBreaks, remarkMentionChips];
 const PLAIN_REMARK_PLUGINS = [remarkBreaks];
 
@@ -71,12 +57,10 @@ export function PlainMarkdownText({
   );
 }
 
-/** Stop parent click-to-edit handlers when interacting with media. */
 function stopParentClick(e: MouseEvent) {
   e.stopPropagation();
 }
 
-/** Flatten a markdown link's React children back to its plain label text. */
 function childrenToText(children: ReactNode): string {
   let out = "";
   Children.forEach(children, (child) => {
@@ -105,7 +89,6 @@ export function AtMentionChip({
   repoId: Id<"githubRepos">;
   onNavigateToData: (e: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  // `@Eva` names no row: nothing to look up, and no hover card.
   const isEva = id === EVA_MENTION_ID;
   const entity = useQuery(
     api.mentions.getEntity,
@@ -113,8 +96,6 @@ export function AtMentionChip({
   );
 
   if (isEva || entity === undefined) {
-    // Kind not resolved yet — render a neutral, non-interactive placeholder
-    // rather than guessing (a click during this window must not misfire).
     return <span className={MENTION_CHIP_CLASS}>@{label}</span>;
   }
   if (entity === null) {
@@ -147,13 +128,10 @@ export function MarkdownMentionText({
 
   return (
     <Markdown
-      // Sent messages are complete text; see `turnProse` in ChatMessage.
       mode="static"
       className={className}
       remarkPlugins={REMARK_PLUGINS}
       components={{
-        // Replace Streamdown's inline-block image wrapper (download-only hover)
-        // with the shared click-to-fullscreen preview used elsewhere.
         img: ({ src, alt }) => {
           if (typeof src !== "string" || src.length === 0) return null;
           const label =
@@ -194,7 +172,6 @@ export function MarkdownMentionText({
           const id = match.id;
           const label = childrenToText(children);
 
-          // `/` → skill
           if (prefix === "slash") {
             const navigateToSkills = (e: MouseEvent<HTMLButtonElement>) => {
               e.preventDefault();
@@ -224,7 +201,6 @@ export function MarkdownMentionText({
             );
           }
 
-          // `@` → data mention, or (comments only) a mix of data + user mentions
           const onNavigateToData = (e: MouseEvent<HTMLButtonElement>) => {
             e.preventDefault();
             e.stopPropagation();

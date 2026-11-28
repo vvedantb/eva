@@ -31,7 +31,6 @@ interface Way {
   height: number;
 }
 
-/** Smallest ask first, each card a little larger than the one before it. */
 const WAYS: readonly Way[] = [
   {
     size: "Small",
@@ -58,7 +57,6 @@ const WAYS: readonly Way[] = [
 
 const CLOSING_STEP = WAYS.length;
 
-/** The newest card leads; on the closing line all three stand level. */
 function useFocus(index: number): {
   opacity: number;
   scale: number;
@@ -93,7 +91,6 @@ function WayCard({ way, index }: { way: Way; index: number }) {
             : LEAVE
         }
       >
-        {/* One band crosses all three on the closing line: one engine. */}
         <Sheen
           step={CLOSING_STEP}
           delay={0.35 + index * 0.14}

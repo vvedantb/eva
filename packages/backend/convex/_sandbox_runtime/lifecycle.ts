@@ -19,32 +19,10 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 import { errorMessage } from "@vvedantb/server";
 
-/**
- * Total budget for one stopSandbox attempt. Must stay well under the 600s
- * action cap: the calling finalizeStop* actions share that cap, and if this
- * child eats the whole budget the parent is killed by timeout before its catch
- * can settle entity status — leaving the task/project/session wedged on
- * "stopping" forever (observed in prod: cold resume + swap release + stop
- * confirmation together overran 600s).
- */
 const STOP_SANDBOX_BUDGET_MS = 480_000;
 
-/** Bound on the pre-stop refresh — a wedged VM must not eat the stop budget. */
 const REFRESH_BUDGET_MS = 30_000;
-/** Bound on the pre-stop swap release (script exec timeout is 120s). */
 const SWAP_RELEASE_BUDGET_MS = 150_000;
-/** Agent still running even if callback PID bookkeeping is stale. Cursor and
- * OpenCode drive their turns from inside the callback (run-design.mjs) since
- * the SDK migrations, so the callback process itself counts as agent liveness;
- * cursor-agent and `opencode run` stay for pre-migration sandboxes. OpenCode's
- * `opencode serve` is deliberately absent: it idles between turns, so matching
- * it would report every sandbox alive forever.
- *
- * Every alternative brackets its first character (`[c]laude-code`, `/[.]claude/`)
- * for the same reason KILL_PRIOR_AGENT_PROCESSES_CMD in helpers.ts does: exec
- * wraps this in `bash -lc "<cmd>"`, so the wrapper's own cmdline contains the
- * pattern text and an unbracketed pattern always matched itself — every probe
- * reported the agent alive and the stall watchdog never killed a dead run. */
 const AGENT_PROCESS_LIVENESS_COMMAND =
   "pgrep -f '[c]laude-code|[c]ursor-agent|[c]odex run|[o]pencode run|/[.]claude/|[r]un-design[.]mjs' >/dev/null 2>&1";
 
@@ -108,9 +86,6 @@ export const verifySandboxLiveness = internalAction({
     }
 
     const state = sandbox.state;
-    // Anything that is not "running" means the callback cannot possibly be
-    // running. Not started => not alive, and the watchdog should proceed to
-    // clean up.
     if (state !== "running") {
       return {
         alive: false,
@@ -119,8 +94,6 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    // Sandbox is started — verify the callback runner PID is still alive.
-    // Short timeout so we never block the watchdog path on exec hangs.
     const callback = await probeSandbox(sandbox, CALLBACK_LIVENESS_COMMAND);
     if (callback === "yes") {
       return {
@@ -141,10 +114,6 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    // A probe that timed out or was killed proves nothing. A VM deep in swap
-    // answers that way while its daemon is frozen, not dead: session 1054's
-    // turn was finalised as process_dead, then heartbeated 3 minutes later
-    // (2026-11-26). Report alive, so the bounded silent-turn grace decides.
     if (callback === "unknown" || agent === "unknown") {
       return {
         alive: true,
@@ -162,11 +131,6 @@ export const verifySandboxLiveness = internalAction({
   },
 });
 
-/**
- * Runs a liveness check. "no" only when the command ran and exited 1–127 (a
- * real negative from `test`, `kill -0` or `pgrep`). A timeout, a transport
- * error or a signal exit (128+, e.g. 137 SIGKILL) is "unknown".
- */
 async function probeSandbox(
   sandbox: SandboxHandle,
   command: string,
@@ -190,7 +154,6 @@ export const killSandboxProcess = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      // Nothing to kill on a stopped VM, and an exec would resume it.
       const sandbox = await getRunningSandboxHandle(
         ctx,
         args.repoId,
@@ -198,7 +161,6 @@ export const killSandboxProcess = internalAction({
       );
       if (sandbox) await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
     } catch {
-      // Sandbox may already be stopped/deleted
     }
     return null;
   },
@@ -217,10 +179,6 @@ export const stopSandbox = internalAction({
             args.repoId,
             args.sandboxId,
           );
-          // Pre-stop steps are bounded individually: on a wedged VM the
-          // refresh or the swap-release exec can hang until the whole budget
-          // is gone, so stop() — a fast control-plane call — never fires.
-          // Each step is best-effort; only stop() itself is load-bearing.
           let state = "unknown";
           try {
             await withTimeout(
@@ -234,10 +192,6 @@ export const stopSandbox = internalAction({
               `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${errorMessage(refreshError)}`,
             );
           }
-          // Stop auto-snapshots the filesystem — drop the swapfile first so
-          // the resume image does not carry GBs the next boot recreates for
-          // free. Only on a running VM: exec on a stopped sandbox resumes it
-          // (minutes on a cold restore) just to stop it again.
           if (state === "running") {
             try {
               await withTimeout(
@@ -263,16 +217,6 @@ export const stopSandbox = internalAction({
       console.log(`[sandbox] stopSandbox ok sandboxId=${args.sandboxId}`);
     } catch (error) {
       const message = errorMessage(error);
-      // Already gone / already idle — treat as success so finalize can close.
-      //
-      // The structured verdict comes first. The provider's own 404 carries no
-      // prose at all — the SDK message is the bare status line ("Status code
-      // 404 is not ok") — so the regex below never matched it and every Stop
-      // click failed, finalize reverted the entity to "active", and the user
-      // could never stop a sandbox Vercel had already dropped (prod, 23 Sep
-      // 2026: quick task 107, gray-precise-lungfish-2cEbcB, nine failed stops).
-      // A sandbox record the provider no longer has cannot be running, so this
-      // is the one case where closing without a confirmed stop is honest.
       const benign =
         isSandboxGoneError(error) ||
         (/already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
@@ -285,8 +229,6 @@ export const stopSandbox = internalAction({
         );
         return null;
       }
-      // Real stop failures must propagate — swallowing them made Eva mark the
-      // session closed while Vercel still showed running.
       console.error(
         `[sandbox] stopSandbox failed for ${args.sandboxId}: ${message}`,
       );
@@ -296,13 +238,6 @@ export const stopSandbox = internalAction({
   },
 });
 
-// Evidence of why a run's callback process died — or stopped heartbeating —
-// gathered before the sandbox (and with it /tmp and the kernel log) is
-// destroyed. The dmesg grep directly confirms or rules out OOM kills; a missing
-// done file means the callback was SIGKILLed (its exit handler never ran); the
-// log tail shows its last words. The resource block distinguishes a dead
-// process from a live one starved by swap, which is what froze a session
-// daemon for six minutes and cost it its turn (see captureStalledTurnDiagnostics).
 const KILL_DIAGNOSTICS_COMMAND = [
   "echo '--- oom (dmesg) ---'",
   "(dmesg 2>/dev/null | grep -iE 'out of memory|oom[-_ ]kill|killed process' | tail -n 12) || true",
@@ -320,12 +255,6 @@ const KILL_DIAGNOSTICS_COMMAND = [
   "tail -n 30 /tmp/design.log 2>/dev/null || true",
 ].join("; ");
 
-/**
- * Runs KILL_DIAGNOSTICS_COMMAND and returns its capped, redacted output (the
- * process list and callback log can carry tokens). Throws when the sandbox is
- * not running: an exec on a stopped VM resumes it, and a parallel kill/stop
- * can then leave it running.
- */
 async function readKillDiagnostics(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
@@ -368,9 +297,7 @@ export const deleteSandbox = internalAction({
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
       await sandbox.delete();
     } catch {
-      // Sandbox may already be deleted or expired
     }
-    // Best-effort cleanup of the credential-helper row. No-op if absent.
     await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
       sandboxId: args.sandboxId,
     });
@@ -391,13 +318,11 @@ export const archiveSandbox = internalAction({
         `[sandbox] Archiving sandbox ${args.sandboxId}, current state: ${state}`,
       );
 
-      // Already archived - nothing to do
       if (state === "archived") {
         console.log(`[sandbox] Sandbox ${args.sandboxId} already archived`);
         return null;
       }
 
-      // Stop first if currently running (archive requires stopped state)
       if (state === "running") {
         await releaseSwapFile(sandbox);
         await sandbox.stop();
@@ -407,7 +332,6 @@ export const archiveSandbox = internalAction({
       await sandbox.archive();
       console.log(`[sandbox] Archived sandbox ${args.sandboxId}`);
     } catch (error) {
-      // Sandbox may already be archived, stopped, or deleted
       console.warn(
         `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${errorMessage(error)}`,
       );

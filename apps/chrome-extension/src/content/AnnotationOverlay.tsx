@@ -216,7 +216,6 @@ function pinStatusColor(status: TaskStatus | undefined): {
       return { bg: "#fb923c", opacity: 1 };
     case "code_review":
       return { bg: "#c084fc", opacity: 1 };
-    // Green, as the web shows Done (`statusDoneBar` in `evaTheme.ts`).
     case "done":
       return { bg: "#4ade80", opacity: 1 };
     case "cancelled":
@@ -544,7 +543,7 @@ function InputCard({
             </>
           ) : (
             <>
-              <div /> {/* spacer */}
+              <div />
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onCancel(pinId)}
@@ -1192,8 +1191,6 @@ export function AnnotationOverlay() {
         for (const { pinId } of items) next[pinId] = "todo";
         return next;
       });
-      // Persist so the new taskIds reach the backend and survive a reload —
-      // the status poller tracks tasks via the saved pins.
       persistAnnotations(pinsRef.current);
     };
 

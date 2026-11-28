@@ -23,7 +23,6 @@ export function SimpleModelLadder<TModel extends string>({
 }: {
   value: TModel;
   steps: ReadonlyArray<ModelOption<TModel>>;
-  /** Ladder id to park the thumb on when `value` is off-ladder. */
   snappedId: TModel;
   disabled?: boolean;
   onValueChange: (model: TModel) => void;

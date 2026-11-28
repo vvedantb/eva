@@ -34,7 +34,6 @@ const pullRequestValidator = v.object({
   ...pullRequestFields,
 });
 
-/** One row of the Review pane's Pull requests tab. */
 const pullRequestListItemValidator = v.object({
   _id: v.id("pullRequests"),
   prUrl: v.string(),
@@ -48,9 +47,7 @@ const pullRequestListItemValidator = v.object({
   repoId: v.id("githubRepos"),
   repoOwner: v.string(),
   repoName: v.string(),
-  /** True for a multi-repo session's or task's linked-repo PR. */
   linkedRepo: v.boolean(),
-  /** The agent is watching it (`watch_pull_request`). */
   watching: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -85,8 +82,6 @@ export const listForOwner = authQuery({
   handler: async (ctx, args) => {
     if (!(await canReadOwner(ctx.db, args.owner, ctx.userId))) return [];
     const own = await listOwnerPullRequests(ctx.db, args.owner);
-    // A multi-repo task also lists each linked repo's PR, in repos the
-    // reader can open.
     const linked =
       args.owner.kind === "task"
         ? await listTaskLinkedPullRequests(ctx.db, args.owner.taskId)

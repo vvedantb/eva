@@ -7,7 +7,7 @@ import {
   summariseUsage,
 } from "../convex/_logs/usageSummary";
 
-const T0 = Date.UTC(2026, 8, 1, 12, 0, 0); // 01 Sep 2026 12:00 UTC
+const T0 = Date.UTC(2026, 8, 1, 12, 0, 0);
 
 function row(fields: {
   createdAt?: number;
@@ -28,12 +28,8 @@ describe("bucketStartFor", () => {
     expect(bucketStartFor(T0, DAY_MS, 0)).toBe(Date.UTC(2026, 8, 1));
   });
 
-  /**
-   * `getTimezoneOffset` is UTC minus local: -60 for BST. 00:30 BST is 23:30
-   * UTC the previous day; the local-day bucket must still be 1 Sep 00:00 BST.
-   */
   test("aligns day buckets to the caller's local midnight", () => {
-    const bstMidnight = Date.UTC(2026, 7, 31, 23, 0, 0); // 1 Sep 00:00 BST
+    const bstMidnight = Date.UTC(2026, 7, 31, 23, 0, 0);
     const tzMs = -60 * 60_000;
     expect(bucketStartFor(bstMidnight + 30 * 60_000, DAY_MS, tzMs)).toBe(
       bstMidnight,
@@ -44,7 +40,7 @@ describe("bucketStartFor", () => {
   });
 
   test("positive offsets (west of UTC) shift the other way", () => {
-    const nyMidnight = Date.UTC(2026, 8, 1, 4, 0, 0); // 1 Sep 00:00 EDT
+    const nyMidnight = Date.UTC(2026, 8, 1, 4, 0, 0);
     const tzMs = 240 * 60_000;
     expect(bucketStartFor(nyMidnight + HOUR_MS, DAY_MS, tzMs)).toBe(
       nyMidnight,
@@ -81,7 +77,6 @@ describe("summariseUsage", () => {
     expect(totals.cacheCreationTokens).toBe(5);
     expect(totals.completions).toBe(2);
     expect(totals.unpricedCompletions).toBe(0);
-    // Opus 4.6: 1M cache reads × ($5 − $0.50) / 1M.
     expect(totals.cacheSavingsUsd).toBeCloseTo(4.5);
   });
 

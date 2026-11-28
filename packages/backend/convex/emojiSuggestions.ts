@@ -12,10 +12,6 @@ import {
   rankEmoji,
 } from "./_emojiSuggestions/rank";
 
-/**
- * Asks Jev which of the candidate reactions fit `state`. Never fatal: callers
- * are background hints, so an unusable answer comes back as no suggestions.
- */
 async function pickEmoji(
   ctx: ActionCtx,
   state: Record<string, string>,
@@ -80,8 +76,6 @@ export const forComment = action({
     return pickEmoji(
       ctx,
       { comment: text },
-      // Without the second sentence Jev illustrates the words ("add" → ➕)
-      // instead of reacting to them.
       "A teammate is about to react to this comment in a work thread. Which emoji would they most likely react with to show how they feel about it (agree, thanks, celebrate, on it, funny, concerned)? Pick a reaction, not an emoji that depicts words in the comment.",
       MIN_COMMENT_EMOJI_PROBABILITY,
     );

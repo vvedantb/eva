@@ -1,8 +1,5 @@
-// Ported from the Bee app (`src/renderer/src/logo.ts`): pure helpers for BeeLogo.
-
 /** Which parts of the mark to draw at a given pixel size. Below 24 px fine detail turns to mush, so it is dropped. */
 export type LogoDetail = {
-  /** The tiny view crops the empty glow margin so the orb fills more pixels. */
   viewBox: string;
   glow: boolean;
   antennae: boolean;
@@ -64,14 +61,12 @@ export type LogoState =
 export type LogoMotion = {
   viewBox: string;
   ringR: number;
-  /** Ring growth at full mic level, and the echo ring's end scale. */
   ringGain: number;
   echoScale: number;
   eightX: number;
   eightY: number;
   orbitX: number;
   loopR: number;
-  /** Where the larger done sparkle sits. */
   sparkAt: { x: number; y: number; scale: number };
 };
 
@@ -102,11 +97,8 @@ export function logoMotion(size: number): LogoMotion {
   };
 }
 
-// Paths are easier to state as maths than as hand-written keyframes. Amplitudes come from LogoMotion via CSS variables
-// (--eight-x, --eight-y, --orbit-x, --loop-r) set on the svg, so one set of keyframes serves every size.
 export const EIGHT = { periodS: 3.2, dots: 8, lagS: 0.17, rest: 0.12 };
 export const ORBIT = { periodS: 1.8, ry: 8, dy: 1 };
-// The loop takes the first 36 % of the 3 s done cycle; the sparkle is gone by 62 %.
 const LOOP_END = 36;
 const TAU = Math.PI * 2;
 const ORBIT_LAYERS: ("front" | "back")[] = ["front", "back"];
@@ -165,7 +157,6 @@ export function logoMotionCss(): string {
       "bee-eight",
       range(32).map((t) => [t * 100, eightAt(t)]),
     ),
-    // Searching's still pose (reduced motion), a little along the path.
     `.bee-logo[data-state="searching"] .bee-flight{${declarations(eightAt(EIGHT.rest))}}`,
     ...ORBIT_LAYERS.map((layer) =>
       keyframes(

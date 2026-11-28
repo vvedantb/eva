@@ -1,11 +1,5 @@
 import type { Doc } from "@eva/backend";
 
-/**
- * How each notification type looks in the inbox, shared by the web and mobile
- * inboxes. Data only: each app maps `icon` to its own Tabler component
- * (`@tabler/icons-react` or `-react-native`) and `tone` to its colours.
- */
-
 /** The colour family: the web `bg-<tone>/10` tint and `text-<tone>` glyph (secondary and muted are flat). */
 export type NotificationTone =
   | "primary"
@@ -71,7 +65,6 @@ const PR_CLOSED: NotificationAppearance = {
   tone: "secondary",
 };
 
-/** Title and message, lower case, for the reads below. */
 function haystack(notification: AppearanceInput): string {
   return `${notification.title} ${notification.message ?? ""}`.toLowerCase();
 }

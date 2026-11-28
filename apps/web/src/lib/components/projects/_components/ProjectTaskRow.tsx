@@ -94,7 +94,6 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
-  /** Open as a chat tab beside Eva. */
   open?: boolean;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
@@ -150,7 +149,6 @@ export function ProjectTaskRow({
       }}
       aria-label={task.title}
       aria-current={open ? "true" : undefined}
-      // The open task is a muted background, as a selected Inbox row: no stripe, no ring.
       className={open ? "bg-muted hover:bg-muted" : FLAT_ROW_CLASS}
       contentClassName={FLAT_ROW_CONTENT_CLASS}
     >

@@ -16,12 +16,6 @@ function request(headers: Record<string, string>, remoteAddress = "10.0.0.1"): R
   return { headers, socket: { remoteAddress } };
 }
 
-/**
- * Task 262 stayed awake for hours with nobody present: a hidden tab's polls
- * counted as a human. Session 98 later showed editor and desktop tabs had the
- * same hole. Browser traffic now never counts by itself on any proxy; only the
- * on-screen ping (visible + recent input) and non-browser callers do.
- */
 describe("which proxy traffic resets the idle clock", () => {
   const counts = (req: Req): boolean => countsAsActivityFactory()(req);
 

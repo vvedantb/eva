@@ -9,20 +9,6 @@ import {
   isTimeRange,
 } from "./timeRange";
 
-/**
- * These four values are the arguments the analytics queries run on, and both
- * properties that matter here are invisible on screen.
- *
- * Determinism: the functions used to read `dayjs()` themselves, so every render
- * produced a slightly different start time. Convex keys its cache and its
- * subscriptions on the argument object, so the stats page resubscribed and
- * recomputed every one of its five queries on every render — while the queries
- * that read the clock server-side did the opposite and never recomputed at all.
- *
- * Windowing: `previousStartTime` replaced arithmetic the backend used to do with
- * `Date.now()`. If it is not exactly one window earlier, every "vs. previous
- * period" delta on the page is wrong by however far it is off.
- */
 const NOW = 1_760_000_000_000;
 
 describe("getStartTime", () => {
@@ -37,7 +23,6 @@ describe("getStartTime", () => {
     expect(getStartTime("90d", NOW)).toBe(NOW - 90 * DAY_MS);
   });
 
-  /** The whole reason `now` is a parameter: same input, same query argument. */
   test("depends only on its arguments", () => {
     for (const range of TIME_RANGES) {
       expect(getStartTime(range, NOW)).toBe(getStartTime(range, NOW));
@@ -50,11 +35,6 @@ describe("getPreviousStartTime", () => {
     expect(getPreviousStartTime("all", NOW)).toBeUndefined();
   });
 
-  /**
-   * Equal length and immediately before, for every range — the backend subtracts
-   * the current window from this wider one to get the previous period's totals,
-   * so a window of the wrong size silently skews every delta.
-   */
   test("is the same-length window ending where the current one starts", () => {
     for (const range of TIME_RANGES) {
       const start = getStartTime(range, NOW);
@@ -75,11 +55,6 @@ describe("getPreviousStartTime", () => {
 });
 
 describe("getBucketSize", () => {
-  /**
-   * The timeline builds one bucket per step from the start time, so the bucket
-   * has to divide the window into a chart-sized number of points: daily over 30
-   * days is 30, daily over 90 would be 90.
-   */
   test("is hourly for a day, daily up to 30 days and weekly beyond", () => {
     expect(getBucketSize("24h")).toBe(HOUR_MS);
     expect(getBucketSize("7d")).toBe(DAY_MS);
@@ -90,7 +65,6 @@ describe("getBucketSize", () => {
 });
 
 describe("isTimeRange", () => {
-  /** Guards a URL search param, so it is fed arbitrary strings. */
   test("accepts every range and nothing else", () => {
     for (const range of TIME_RANGES) {
       expect(isTimeRange(range)).toBe(true);

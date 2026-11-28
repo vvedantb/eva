@@ -4,13 +4,6 @@ import {
   previewProxySource as proxySource,
 } from "./_helpers/previewProxySource";
 
-/**
- * Guards the Set-Cookie rewrite that keeps sandboxed-app sign-in alive inside
- * cross-site preview iframes (fix c3cbe297). Browsers silently drop
- * SameSite=Lax cookies set from a cross-site frame, so the proxy must rewrite
- * every upstream Set-Cookie to `Secure; SameSite=None; Partitioned`. If that
- * rewrite regresses, iframe sign-in breaks again with no runtime error.
- */
 const rewriteSetCookieSource = extractFunctionSource(
   "function rewriteSetCookie(value) {",
 );
@@ -58,12 +51,6 @@ describe("previewProxy rewriteSetCookie", () => {
   });
 });
 
-/**
- * Behaviour cannot cover where the rewrite is wired, so lock the two call-site
- * invariants of the fix as a source contract: the rewrite is applied to
- * Set-Cookie, and only for non-loopback clients (in-sandbox curl / agent
- * browser talk plain http to localhost and must keep their cookies untouched).
- */
 describe("previewProxy Set-Cookie rewrite wiring", () => {
   test("rewrite is gated on the set-cookie header", () => {
     expect(proxySource).toContain('lower === "set-cookie" && rewriteCookies');
@@ -74,14 +61,6 @@ describe("previewProxy Set-Cookie rewrite wiring", () => {
   });
 });
 
-/**
- * A partitioned and an unpartitioned cookie of the same name are two distinct
- * cookies under CHIPS and are both sent in the Cookie header, so once the proxy
- * partitions the server copy the app's own document.cookie copy lingers and the
- * upstream reads two values under one name (logout clears one, the other keeps
- * a signed-out session alive). Every rewritten cookie must therefore be
- * preceded by an expiry of the unpartitioned copy with the same name and path.
- */
 const unpartitionedCookieDeletionSource = extractFunctionSource(
   "function unpartitionedCookieDeletion(value) {",
 );
@@ -123,12 +102,6 @@ describe("previewProxy unpartitionedCookieDeletion", () => {
   });
 });
 
-/**
- * responseHeaders is what actually pairs the two: for every upstream cookie it
- * must emit the deletion first (so browsers without CHIPS, which share one jar
- * and ignore Partitioned, delete-then-set rather than set-then-delete) and the
- * rewritten cookie second — always as an array, even for one cookie.
- */
 const responseHeadersFactory = new Function(
   [
     "const targetPort = 3000;",
@@ -152,7 +125,6 @@ const responseHeaders: (
   },
 ) => Record<string, string | string[]> = responseHeadersFactory();
 
-/** The default (non-tab) dev-server route every cookie case runs on. */
 const DEV_ROUTE = { port: 3000, path: "/", injects: true, tabPrefix: null };
 
 describe("previewProxy responseHeaders Set-Cookie pairing", () => {
@@ -217,12 +189,6 @@ describe("previewProxy responseHeaders Set-Cookie pairing", () => {
   });
 });
 
-/**
- * Cookies the previewed app writes with document.cookie (e.g. the Supabase
- * browser client) never reach responseHeaders, so the injected script applies
- * the identical attribute rules in the page — reusing the proxy's own two
- * functions via toString() rather than a second copy that could drift.
- */
 const installPartitionedDocumentCookieSource = extractFunctionSource(
   "function installPartitionedDocumentCookie(rewrite, deletion) {",
 );
@@ -234,7 +200,6 @@ const installPartitionedDocumentCookie: (
   deletion: (value: string) => string,
 ) => void = installFactory();
 
-/** Records every raw write reaching the original document.cookie setter. */
 function fakeDocumentClass(writes: string[]): new () => { cookie: string } {
   class FakeDocument {
     declare cookie: string;

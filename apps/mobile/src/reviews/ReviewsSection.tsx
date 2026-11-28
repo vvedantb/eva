@@ -23,7 +23,6 @@ type PullRequest = FunctionReturnType<typeof api.github.listPullRequests>[number
 
 const STATE_LABEL: Record<PullRequestListState, string> = { open: "Open", closed: "Closed", all: "All" };
 
-/** The meta line: the Inbox row's `text-xs` (12 / 16), not the web sidebar's 11. */
 const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
 /**
@@ -57,7 +56,6 @@ export function ReviewsSection() {
         <RepoPicker repos={repos} value={repo} onChange={setRepo} />
       </View>
       <View className="px-4 pb-2">
-        {/* The web `ReviewsListStateTabs`. */}
         <SegmentedTabs
           value={listState}
           options={PR_LIST_STATES.map((value) => ({ value, label: STATE_LABEL[value] }))}
@@ -95,7 +93,6 @@ export function ReviewsSection() {
   );
 }
 
-/** While the pull requests load: rows shaped as `PullRequestRow` (icon and title over the meta line), divided as the list. */
 function PullRequestPlaceholders() {
   return (
     <SkeletonList
@@ -105,12 +102,6 @@ function PullRequestPlaceholders() {
   );
 }
 
-/**
- * The web `ReviewsSidebarRow` at the Inbox row's size, for a thumb: the PR
- * icon (emerald when open and ready), the 14 title in medium, then `#N`, the
- * author and the age in the Inbox `text-xs` muted; 64 high, divided. The web
- * sidebar's 58 rows with an 11 meta line, flush in a column, were a mouse's density.
- */
 function PullRequestRow({ pr, repoId }: { pr: PullRequest; repoId: string }) {
   const router = useRouter();
   const scheme = useScheme();

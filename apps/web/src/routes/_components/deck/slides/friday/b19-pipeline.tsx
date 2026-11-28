@@ -29,7 +29,6 @@ const W = 1088;
 const SIDE_X = BOARD_W + 24;
 const CLOSING = 3;
 
-/** Tilted on the board, square while the bot works, pulled back for the goal. */
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 7, rotateY: 4, translateZ: -30 },
   { rotateX: 3, rotateY: 2 },
@@ -37,7 +36,6 @@ const SHOTS: readonly CameraShot[] = [
   { translateZ: -36, y: -8 },
 ];
 
-/** The light follows the work: the card, the bot, the live page, then all. */
 const GLOW = [
   { x: 110, y: 160, size: 520 },
   { x: 330, y: 160, size: 560 },
@@ -45,11 +43,6 @@ const GLOW = [
   { x: W / 2, y: 200, size: 900 },
 ];
 
-/**
- * Eva today, CarePulse next: the one line the slide is building to. Eva
- * auto-merge landed 3 September 2026; "in minutes" is the CarePulse target,
- * not a measured time. The board, task and page are an illustration.
- */
 function Goal() {
   const shown = useDeckStep() >= CLOSING;
   const chip = "flex items-center gap-2 rounded-full px-4 py-2 text-base";
@@ -109,7 +102,6 @@ export function FridayPipeline() {
             <Fri4GrokRun />
             <Fri4LivePage />
           </div>
-          {/* The drop wakes the bot: a light runs from the card to its log. */}
           <m.div
             className="pointer-events-none absolute inset-0 z-30"
             initial={{ opacity: 0 }}

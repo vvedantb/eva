@@ -38,10 +38,8 @@ import { ReviewRecap } from "@/reviews/ReviewRecap";
 import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 
-/** The pull request comment order (the web `pr-summary-comment-order`), kept on the device. */
 const commentOrder = persistedStore<"newest" | "oldest">("prCommentOrder", "newest", jsonParser(z.enum(["newest", "oldest"])));
 
-/** What a first render carries, as the web: the recent remarks are the ones worth arriving for. */
 const COMMENT_PAGE = 10;
 
 /** The web `text-sm` (14 / 20): titles a thumb taps, and the meta rows' labels and values. */
@@ -49,7 +47,6 @@ export const TEXT_SM = { fontSize: 14, lineHeight: 20 };
 /** The web `text-xs` (12 / 16): the smallest text on these tabs (the web's 10 and 11 are a desktop size). */
 export const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
-/** The web reviewer ring: the verdict rides the face that earned it. */
 const VERDICT_RING: Record<string, keyof (typeof EVA_THEME)["light"]> = {
   APPROVED: "success",
   CHANGES_REQUESTED: "destructive",
@@ -71,9 +68,7 @@ export function ReviewSummary({
 }: {
   repoId: Id<"githubRepos">;
   overview: PrOverview;
-  /** The key the recap is stored under (`githubPrUrl`, as the web builds it). */
   prUrl: string;
-  /** The repo's model: the recap's first pick, as the web. */
   defaultModel: string | undefined;
   onChanged: () => void;
 }) {
@@ -87,7 +82,6 @@ export function ReviewSummary({
   return (
     <View>
       <MetaRows repoId={repoId} overview={overview} onChanged={onChanged} scheme={scheme} />
-      {/* Keyed on whether there is a walkthrough, so the default re-applies once the query settles. */}
       <Section key={`recap:${hasRecap}`} title="Recap" defaultOpen={hasRecap}>
         <ReviewRecap pr={{ repoId, prNumber: overview.number }} prUrl={prUrl} recapDoc={recapDoc} defaultModel={defaultModel} />
       </Section>
@@ -143,11 +137,6 @@ export function ReviewSummary({
   );
 }
 
-/**
- * The web `SummaryMetaRows`: a 96 label column (icon and label), then the
- * value, then the pencil that edits the set (`PrMetaEditButton`). Only
- * requested reviewers can be un-asked, so the reviewer picker ticks those.
- */
 function MetaRows({
   repoId,
   overview,
@@ -208,7 +197,6 @@ function MetaRows({
         {overview.labels.length === 0
           ? none
           : overview.labels.map((label) => (
-              // Web `LabelChip`: `bg-muted/60` pill, the GitHub colour kept to a dot.
               <View
                 key={label.name}
                 className="max-w-48 flex-row items-center gap-1.5 rounded-full px-2.5 py-1"
@@ -253,14 +241,10 @@ function MetaRow({
   icon: ComponentType<IconProps>;
   label: string;
   scheme: Scheme;
-  /** At the row's end: the pencil, a 44 square. */
   action?: ReactNode;
   children: ReactNode;
 }) {
   const muted = EVA_THEME[scheme].mutedForeground;
-  // A divided 56 row at the Inbox sizes (14 label and values, 16 icon); the
-  // label and pencil stay on the first line when the values wrap. The web 28
-  // rows with 12 text are a desktop density.
   return (
     <View className="min-h-14 flex-row items-center gap-2 py-1.5">
       <View className="w-28 flex-row items-center gap-2 self-start" style={{ minHeight: 44 }}>
@@ -273,7 +257,6 @@ function MetaRow({
   );
 }
 
-/** A face and a login. The web shows reviewers as faces with a hover name; a phone has no hover, so the name is written out. */
 function Person({
   login,
   avatarUrl,
@@ -317,7 +300,6 @@ export function PrAvatar({ login, avatarUrl, size }: { login: string | null; ava
   );
 }
 
-/** A 56 high row (the Sessions row) that opens `url` on GitHub (or the deploy), or a plain row when there is none. */
 function LinkRow({ url, label, children }: { url: string | null; label: string; children: ReactNode }) {
   if (url === null) return <View className="min-h-14 flex-row items-center gap-2 px-1.5">{children}</View>;
   return (
@@ -332,7 +314,6 @@ function LinkRow({ url, label, children }: { url: string | null; label: string; 
   );
 }
 
-/** The host, as the web preview row names it; the environment when there is no URL, the raw URL when it is not absolute. */
 function previewLabel(preview: PrOverview["previews"][number]): string {
   if (preview.url === null) return preview.environment;
   try {
@@ -342,11 +323,6 @@ function previewLabel(preview: PrOverview["previews"][number]): string {
   }
 }
 
-/**
- * The web `SummarySection`: a 48 high heading (`text-sm` medium in the
- * foreground, a tappable title, where the web has a quiet muted `text-xs`,
- * and a chevron that turns open) that folds its body. `actions` sit beside it.
- */
 function Section({
   title,
   defaultOpen = true,
@@ -385,7 +361,6 @@ function Section({
   );
 }
 
-/** A quiet notice; `boxed` is the web `NOTICE_CLASS` (`bg-muted/50`, radius 6). */
 function Note({ scheme, boxed = false, children }: { scheme: Scheme; boxed?: boolean; children: string }) {
   const theme = EVA_THEME[scheme];
   return (
@@ -398,11 +373,6 @@ function Note({ scheme, boxed = false, children }: { scheme: Scheme; boxed?: boo
   );
 }
 
-/**
- * The web `SummaryComments`: people first, newest first by default, ten at a
- * time; bots folded into one group beneath them. The order toggle is kept on
- * the device, as the web keeps it in local storage.
- */
 function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }) {
   const order = commentOrder.useValue("all");
   const setOrder = (next: "newest" | "oldest") => commentOrder.set("all", next);
@@ -508,7 +478,6 @@ export function CommentCard({ comment, scheme, framed }: { comment: SummaryComme
   );
 }
 
-/** The web `BotGroup`: bot remarks folded behind one row naming how many and when. */
 function BotGroup({ comments, scheme }: { comments: readonly SummaryComment[]; scheme: Scheme }) {
   const [open, setOpen] = useState(false);
   const theme = EVA_THEME[scheme];

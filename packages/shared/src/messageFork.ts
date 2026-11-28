@@ -83,9 +83,6 @@ export function formatForkPrompt(prefix: ForkTranscriptPrefix): string {
       return `${speaker}:\n${escapeForkText(clipTurn(turn.text))}`;
     })
     .join("\n");
-  // The turns are what gets budgeted, not the whole prompt: slicing the
-  // assembled string dropped the closing tag and the instruction, which left
-  // the forked session with an unterminated block and no task.
   const turnsBudget = Math.max(
     0,
     FORK_PROMPT_CHAR_LIMIT - header.length - footer.length - 2,

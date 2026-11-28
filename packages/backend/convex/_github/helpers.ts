@@ -5,7 +5,6 @@ import { z } from "zod";
 import { decodeGitHubContent } from "../_repoSkills/decodeGitHubContent";
 import { getAppOctokit, getInstallationOctokit } from "../githubAuth";
 
-/** Octokit throws RequestError, which carries the HTTP status as a property. */
 const requestErrorSchema = z.object({ status: z.number() });
 
 const NOT_IN_INSTALLATION = "Repository is not part of this GitHub installation";
@@ -81,12 +80,10 @@ export async function detectAppsForRepo(
           hasDevScript = typeof parsed.data?.scripts?.dev === "string";
         }
       } catch {
-        // no package.json in this app dir
       }
       apps.push({ name: entry.name, path: appPath, hasDevScript });
     }
   } catch {
-    // apps/ directory doesn't exist — not a monorepo with apps
   }
 
   return apps;

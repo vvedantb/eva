@@ -43,8 +43,6 @@ export const RUN_STATUSES = [
   "running",
   "success",
   "error",
-  // User-initiated cancellation. Distinct from "error" so cancelled runs are
-  // not flagged as failures (no red card border, neutral timeline badge).
   "cancelled",
 ] as const;
 export const runStatusValidator = v.union(
@@ -59,9 +57,6 @@ export const logLevelValidator = v.union(
 
 export const roleValidator = v.union(v.literal("user"), v.literal("assistant"));
 
-// What a reaction is attached to within a task. `comment` targets a
-// `taskComments` doc (targetId = commentId); `description` targets the task's
-// own description field (targetId = taskId).
 export const reactionTargetValidator = v.union(
   v.literal("comment"),
   v.literal("description"),
@@ -202,17 +197,10 @@ export const notificationTypeValidator = v.union(
   v.literal("comment_reply"),
   v.literal("mention"),
   v.literal("system"),
-  // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
-  // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
-  // A person replied in a reply thread you follow (task comment replies stay
-  // `comment_reply`: they route differently).
   v.literal("thread_reply"),
-  // Eva answered the question you asked her in a reply thread.
   v.literal("thread_answer"),
-  // routine_complete, run_completed and run_failed removed: no code created
-  // them. schema-narrowing-ok: deleteDeadNotifications
 );
 
 /** The chat surfaces: a session, a quick task or a project. */
@@ -278,9 +266,6 @@ export const snapshotBuildTriggerValidator = v.union(
   v.literal("manual"),
 );
 
-// "base" = base Image only (app has no Stop Commands). "seeded" = app boots and
-// seeds its DB before capture (app has Stop Commands). A forceImageRebuild that
-// also seeds is still "seeded" — the base rebuild is an implementation detail.
 export const snapshotBuildKindValidator = v.union(
   v.literal("base"),
   v.literal("seeded"),
@@ -392,8 +377,6 @@ export const taskActivityFieldValidator = v.union(
   v.literal("tags"),
   v.literal("model"),
   v.literal("baseBranch"),
-  // GitHub PR merged/closed event. newValue is "merged" or "closed"; the
-  // resulting task status (done/cancelled) is implied and rendered client-side.
   v.literal("pr"),
 );
 
@@ -458,14 +441,8 @@ export const notificationUrgencyValidator = v.union(
 
 /** A person's notification channels. Sparse: a missing key is the default. */
 export const notificationPrefsValidator = v.object({
-  /**
-   * Notification email: urgent ones at once, the rest in the daily digest.
-   * Unset means on.
-   */
   email: v.optional(v.boolean()),
-  /** Phone push. Unset means on. */
   push: v.optional(v.boolean()),
-  /** "What's new in Eva" changelog emails. Opt-in: unset means off. */
   productUpdates: v.optional(v.boolean()),
 });
 

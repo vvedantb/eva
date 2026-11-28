@@ -39,46 +39,28 @@ interface TerminalPanelProps {
   isForeground: boolean;
   runDevCommandOnConnect: boolean;
   devCommand?: string;
-  /**
-   * Session Preview Console only: Convex-backed scrollback seed (last ~500
-   * lines). Tab-local sessionStorage still caches a larger buffer.
-   */
   stickyHistoryTail?: string;
   onStickyHistoryTailChange?: (tail: string) => void;
 }
 
 const RECONNECT_DELAY_MS = 1000;
 
-/** One WebSocket. `close` marks it intentional so its onclose never reconnects. */
 interface PtySocket {
   ws: WebSocket;
   close: () => void;
 }
 
-/**
- * Owned by one run of the connect effect. `state` is the source of truth that
- * socket callbacks read synchronously; React state mirrors it for render.
- */
 interface ConnectionMount {
   active: boolean;
   state: TerminalConnection;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
-  /** Gives up on a socket that opened but never completed its handshake. */
   handshakeTimer: ReturnType<typeof setTimeout> | null;
   dispatch: (event: TerminalConnectionEvent) => TerminalConnection;
 }
 
 const CONNECT_FAILED_MESSAGE = "Failed to initialize terminal";
-/** How long a socket may wait for its handshake before it counts as lost. */
 const HANDSHAKE_TIMEOUT_MS = 20_000;
 
-/**
- * xterm takes the font size at construction, so this is read once per init
- * rather than tracked as reactive state. At 13px a 390px pane fits roughly 44
- * columns, which wraps most command output into unreadable soup; 10px gets it
- * to about 60. FitAddon still recomputes cols/rows on rotation, so only the
- * glyph size is fixed for the life of the connection.
- */
 function initialTerminalFontSize(): number {
   return window.matchMedia("(max-width: 767px)").matches ? 10 : 13;
 }
@@ -104,20 +86,12 @@ function getCssRgba(
   return `rgba(${value.split(/\s+/).join(", ")}, ${alpha})`;
 }
 
-/**
- * Draws on a WebGL canvas instead of xterm's DOM renderer. Background
- * terminals stay mounted under `display: none`, where the DOM renderer measures
- * every glyph as 0px wide, never caches it, and forces a full-page style
- * recalc per character on each redraw (a 12.9 s freeze in a prod profile).
- * Without WebGL2, or after a context loss, xterm keeps the DOM renderer.
- */
 function loadWebglRenderer(terminal: Terminal) {
   try {
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => webgl.dispose());
     terminal.loadAddon(webgl);
   } catch {
-    // WebGL2 unavailable: the DOM renderer stays.
   }
 }
 
@@ -151,7 +125,6 @@ export function TerminalPanel({
     terminalHistoryKey,
     "",
   );
-  // Prefer Convex sticky seed when this tab has no local scrollback yet.
   const seededHistoryRef = useRef(false);
   /* eslint-disable no-effect/no-event-handler --
      Seeds sessionStorage scrollback from the Convex sticky tail the first time
@@ -171,7 +144,6 @@ export function TerminalPanel({
     terminalHistoryRef.current = terminalHistory;
   }, [terminalHistory]);
 
-  // Debounced Convex persist of last 500 lines (sessions console only).
   const stickyPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -217,10 +189,6 @@ export function TerminalPanel({
     resizePtyRef.current = resizePtyAction;
   }, [resizePtyAction]);
 
-  // Keep connect logic off the connect-effect dep list. Listing the function
-  // itself re-ran the effect on every parent render (preview poll, Convex
-  // updates), which tore down the WebSocket, called connectPty again (log
-  // spam), and cleared the Vercel console — looks like a permanent refresh.
   const connectWebSocketRef = useRef<
     (
       terminal: Terminal,
@@ -229,8 +197,6 @@ export function TerminalPanel({
     ) => Promise<void>
   >(async () => {});
 
-  // Sync latest connect closure into a ref each commit (not during render) so
-  // the mount effect can call a stable ref without re-subscribing.
   useEffect(() => {
     connectWebSocketRef.current = async (
       terminal: Terminal,
@@ -259,8 +225,6 @@ export function TerminalPanel({
       }
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
-      // Socket-scoped: closing this socket on purpose must not touch the
-      // reconnect decision of any later socket.
       let closedIntentionally = false;
       socketRef.current = {
         ws,
@@ -270,9 +234,6 @@ export function TerminalPanel({
         },
       };
       mount.dispatch({ type: "ptyReady" });
-      // Without this, a socket that opens but never sends its handshake keeps
-      // the spinner up for good. Closing it (not on purpose) feeds the normal
-      // reconnect path, which retries and then shows "Terminal disconnected".
       if (mount.handshakeTimer !== null) clearTimeout(mount.handshakeTimer);
       mount.handshakeTimer = setTimeout(() => {
         mount.handshakeTimer = null;
@@ -294,15 +255,10 @@ export function TerminalPanel({
           clearTimeout(mount.handshakeTimer);
           mount.handshakeTimer = null;
         }
-        // Only clear reconnect budget after a real handshake — not on bare
-        // ws.onopen (shell can exit immediately and was resetting the counter).
         mount.dispatch({ type: "handshake" });
         terminalInstanceRef.current.writeln(
           "\x1b[32m* Connected to sandbox\x1b[0m\r\n",
         );
-        // Vercel Console attaches via tmux; sessions usually start the server
-        // from the backend into that tmux session. Tasks/projects still auto-
-        // start here when isNewPty (no prior tmux session).
         /* eslint-disable no-effect/no-event-handler --
            Runs on the PTY websocket's connect handshake, which is a socket
            event rather than anything React dispatched. */
@@ -334,8 +290,6 @@ export function TerminalPanel({
             rows: terminal.rows,
             sessionName: sharedPtySessionName,
           });
-          // Wait for the interactive "connected" frame before clearing
-          // reconnect budget — open alone can precede an immediate shell exit.
         } else {
           mount.dispatch({ type: "handshake" });
         }
@@ -383,8 +337,6 @@ export function TerminalPanel({
 
       ws.onclose = () => {
         if (closedIntentionally || !mount.active) return;
-        // Exited and exhausted are final states: the reducer keeps them, and
-        // exhaustion becomes `failed` so the UI shows Retry.
         const next = mount.dispatch({ type: "socketLost" });
         if (next.status !== "reconnecting") return;
 
@@ -483,9 +435,6 @@ export function TerminalPanel({
         detachWheelScroll = attachNormalBufferWheelScroll(terminal);
 
         terminal.onData((data) => {
-          // Early returns rather than `?.`: this callback is created inside the
-          // try below, and React Compiler bails on the whole file when an
-          // optional-chaining expression sits inside a try/catch.
           const socket = socketRef.current;
           if (!socket) return;
           const currentWs = socket.ws;
@@ -510,10 +459,6 @@ export function TerminalPanel({
         }
 
         if (restoredHistory.length === 0) {
-          // Pad the viewport so the connecting notice sits at the bottom.
-          // Written as one repeated string rather than a writeln loop: React
-          // Compiler bails on the whole file when a loop sits inside a
-          // try/catch.
           terminal.write("\r\n".repeat(Math.max(0, terminal.rows - 1)));
         }
         terminal.writeln("\x1b[33m* Connecting to sandbox...\x1b[0m");
@@ -550,9 +495,6 @@ export function TerminalPanel({
       }
       historyWriter.dispose();
     };
-    // connectWebSocketRef / setTerminalHistory intentionally omitted — see
-    // comment above connectWebSocketRef. ownerKey (not owner) so a fresh
-    // { kind, id } object from a parent render does not reconnect.
   }, [isActive, sandboxId, ownerKey, retryCount, ptyInstanceId]);
 
   useLayoutEffect(() => {
@@ -612,8 +554,6 @@ export function TerminalPanel({
     });
     observer.observe(el);
     return () => observer.disconnect();
-    // retryCount: Retry remounts the terminal container (the error view
-    // replaces it), so observe the new element.
   }, [ownerKey, owner, ptyInstanceId, isForeground, retryCount]);
 
   if (!isActive || !sandboxId) {
@@ -630,8 +570,6 @@ export function TerminalPanel({
   }
 
   const retry = () => {
-    // Back to `initialising` first so the terminal container is mounted when
-    // the connect effect re-runs for the new retryCount.
     setConnection({ status: "initialising" });
     setRetryCount((c) => c + 1);
   };
@@ -642,8 +580,6 @@ export function TerminalPanel({
     </Button>
   );
 
-  // A failure has no useful output to keep. An exited shell does — its last
-  // lines (and the "* Shell exited" line) stay visible, with Retry below.
   if (connection.status === "failed") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -662,7 +598,6 @@ export function TerminalPanel({
       )}
       <div ref={terminalRef} className="min-h-0 flex-1 overflow-hidden" />
       {connection.status === "exited" ? (
-        // Retry first: the right edge sits under the floating chat button.
         <div className="flex shrink-0 items-center gap-3 px-3 py-2">
           {retryButton}
           <p className="text-sm text-muted-foreground">
@@ -674,8 +609,6 @@ export function TerminalPanel({
         onKey={(data) => {
           const terminal = terminalInstanceRef.current;
           if (!terminal) return;
-          // `input` routes through the same `onData` handler as typing, so the
-          // bytes reach the pty over the existing socket.
           terminal.input(data);
           terminal.focus();
         }}

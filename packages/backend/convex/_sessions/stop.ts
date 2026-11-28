@@ -18,28 +18,6 @@ import {
 import { findWorkChat } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
 
-/**
- * The two Stops. Web, mobile and MCP all call these, so a Stop does the same
- * thing on every surface:
- *
- *   chats.stop       stops the agent in one chat (`stopChat` / `stopTask`
- *                    here): the chat's open turn, and the task run shown in
- *                    it (a quick task's or project task's run). What was
- *                    queued before it waits for Steer.
- *   stopWorkSandbox  sleeps the sandbox of a session, task or project. It is
- *                    refused while the agent works on that sandbox (any chat
- *                    turn or a task run): stop the
- *                    agent first, or wait.
- *
- * Neither creates a session: no session means there is nothing to stop.
- */
-
-/**
- * Stops what holds one chat: the owner task's run that is not a live turn (a
- * queued Run, or a project task's wait for the answer to its ask, rule 7 in
- * `_projects/reports.ts`; `stopTaskRun`), and the chat's own turn, a Run
- * included. Each half is a no-op when idle. The caller checks access.
- */
 async function stopOwnerTurn(
   ctx: MutationCtx,
   task: Doc<"agentTasks"> | null,
@@ -71,12 +49,10 @@ export async function stopTask(
   );
 }
 
-/** Stopping kills the VM under any agent still working on it. */
 async function sessionIsHeld(
   db: DatabaseReader,
   session: Doc<"sessions">,
 ): Promise<boolean> {
-  // A task's run is a chat turn too.
   return await hasOpenChatTurn(db, session._id);
 }
 

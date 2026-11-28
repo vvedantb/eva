@@ -17,7 +17,6 @@ type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
  */
 export function useQuickTaskBoardActions(
   tasks: readonly Task[],
-  /** The Archived list: tasks are read-only, so a drag changes nothing. */
   archived: boolean,
 ) {
   const { repoId } = useRepo();
@@ -78,10 +77,8 @@ export function useQuickTaskBoardActions(
     currentUserId,
     errorTaskIdSet: new Set<string>(errorTaskIds ?? []),
     changeStatus,
-    /** Run All shows on the To Do group of a live list with any To Do task. */
     showRunAll: !archived && tasks.some((task) => task.status === "todo"),
     isRunningAll,
-    /** The Run All button: opens the confirm, or runs at once on Alt-click. */
     requestRunAll: (event: MouseEvent) =>
       requestConfirm(
         () => setIsConfirmOpen(true),

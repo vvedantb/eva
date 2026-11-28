@@ -43,33 +43,23 @@ export type SessionActionTarget = {
   sessionId: Id<"sessions">;
   title: string;
   archived: boolean;
-  /** The session's web page, for Copy link. */
   webPath: string;
   branchName?: string;
   prUrl?: string;
-  /** Send for Review shows while the PR is a draft or there is none (`canSendSessionForReview`). */
   prState?: PrState;
-  /** Open PR opens the phone's PR screen in this repo (else the browser). */
   repoId?: Id<"githubRepos">;
-  /** The awake sandbox has work to push: Commit & push shows. */
   hasUnpushedWork?: boolean;
-  /** A row in a linked-session group: its menu has Remove from group. */
   inGroup?: boolean;
 };
 
 /** A linked-session group, for its header menu (Rename group, and Archive group in the active list). */
 export type SessionGroupTarget = {
-  /** Any member: `sessions.renameGroup` finds the group from it (the web passes the oldest). */
   sessionId: Id<"sessions">;
-  /** The user-set name, when the group has one. */
   name?: string;
-  /** What the list shows: the name, or the oldest member's title. */
   label: string;
-  /** In the active list: the menu offers Archive group, as the web sidebar's. */
   archivable?: boolean;
 };
 
-/** What the Rename dialog renames: a session's title or a group's name. */
 type RenameTarget = { kind: "session"; session: SessionActionTarget } | { kind: "group"; group: SessionGroupTarget };
 
 /** The web `SessionMenuItems` label and icon of each action; Archive is its `text-warning` item. */
@@ -103,7 +93,6 @@ export function useSessionActions({
   sessionId,
 }: {
   onArchived?: () => void;
-  /** The open chat's session, so its header menu knows how many PRs it has. */
   sessionId?: Id<"sessions">;
 } = {}) {
   const updateSession = useMutation(api.sessions.update);
@@ -116,8 +105,6 @@ export function useSessionActions({
   const scheme = useScheme();
   const [sheetTarget, setSheetTarget] = useState<SessionActionTarget | null>(null);
   const [groupSheetTarget, setGroupSheetTarget] = useState<SessionGroupTarget | null>(null);
-  // The web `SessionGroupArchiveDialog`: archives every active member, counted by the server while it is open
-  // (the list may hide members, "Only mine"; the archive reaches them all).
   const [archiveGroupTarget, setArchiveGroupTarget] = useState<SessionGroupTarget | null>(null);
   const archiveGroupMembers = useMutation(api.sessions.archiveGroup);
   const groupToArchive = useQuery(api.sessions.listGroup, archiveGroupTarget ? { id: archiveGroupTarget.sessionId } : "skip");
@@ -129,30 +116,23 @@ export function useSessionActions({
   const [reviewTarget, setReviewTarget] = useState<SessionActionTarget | null>(null);
   const createSessionPr = useAction(api.github.createSessionPr);
   const commitAndPush = useAction(api.sandbox.commitAndPushSandbox);
-  // The PRs of the session whose menu is open (a row's sheet, else the open chat's header):
-  // two or more turn "Open PR" into "Pull requests (N)", which opens the list sheet.
   const prOwnerSessionId = sheetTarget?.sessionId ?? sessionId;
   const ownerPrs = useOwnerPullRequests(prOwnerSessionId ? { kind: "session", sessionId: prOwnerSessionId } : undefined);
   const prSheet = usePullRequestsSheet();
   const openPr = useOpenPr();
   const prsOf = (target: SessionActionTarget) => (target.sessionId === prOwnerSessionId ? ownerPrs : []);
-  // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
   const renameInput = useRef<TextInput>(null);
 
-  /** An action's label and icon; Commit & push reads "Save to GitHub" in simple view, as the web. */
   const itemFor = (action: SessionMenuAction) => {
     if (action === "commitPush" && simpleView) return { ...SESSION_ACTION_ITEMS.commitPush, label: "Save to GitHub" };
     if (action === "openPr") return { ...SESSION_ACTION_ITEMS.openPr, label: prRowLabel(ownerPrs, SESSION_ACTION_ITEMS.openPr.label) };
     return SESSION_ACTION_ITEMS[action];
   };
 
-  /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
-  // A session whose PR predates `prUrl` (a linked or stacked one) still gets its PR row, as the web.
   const actionsFor = (target: SessionActionTarget) =>
     sessionMenuActions({ ...target, prUrl: target.prUrl ?? prsOf(target)[0]?.prUrl, simpleView });
 
   const openGroupRename = (group: SessionGroupTarget) => {
-    // A blank name clears it, so the group shows its oldest session's title again.
     setRenameValue(group.name ?? "");
     setRenameTarget({ kind: "group", group });
   };
@@ -201,7 +181,6 @@ export function useSessionActions({
         setReviewTarget(target);
         return;
       case "commitPush":
-        // The web `SandboxCommitPushButton`: no confirm, a toast either way.
         commitAndPush({ target: { kind: "session", sessionId: target.sessionId } }).then(
           () => toast.success(simpleView ? "Saved to GitHub" : "Pushed to GitHub", { id: "session-commit-push" }),
           () => toast.error("Couldn't push the branch", { id: "session-commit-push" }),
@@ -222,7 +201,6 @@ export function useSessionActions({
     }
   };
 
-  /** A session needs a title; a group's blank name is allowed (it clears the name). */
   const canSaveRename = renameTarget?.kind === "group" || renameValue.trim() !== "";
 
   const saveRename = async () => {
@@ -251,8 +229,6 @@ export function useSessionActions({
       toast.error("Couldn't archive session", { id: "session-archive" });
       return;
     }
-    // The web copy: archiving stops a sandbox and closes a PR, so it says so
-    // and offers the way back (`unarchive` reopens the PR it closed).
     toast.success("Session archived", {
       id: "session-archive",
       description: "The sandbox was stopped and any open PR closed.",
@@ -264,7 +240,6 @@ export function useSessionActions({
   const dialogs = (
     <>
       {prSheet.sheet}
-      {/* Up to eight rows: they scroll in a short window, under the title. */}
       <MenuSheet
         open={sheetTarget !== null}
         onOpenChange={(open) => {
@@ -275,7 +250,6 @@ export function useSessionActions({
         {sheetTarget
           ? actionsFor(sheetTarget).map((group, index) => (
               <Fragment key={group.join()}>
-                {/* A line parts the groups, as the web separators. */}
                 {index > 0 ? <MenuDivider /> : null}
                 {group.map((action) => {
                   const item = itemFor(action);
@@ -296,7 +270,6 @@ export function useSessionActions({
             ))
           : null}
       </MenuSheet>
-      {/* The web linked-group header menu (its right-click): Rename group. */}
       <MenuSheet
         open={groupSheetTarget !== null}
         onOpenChange={(open) => {
@@ -351,7 +324,6 @@ export function useSessionActions({
           );
         }}
       />
-      {/* The web "Rename session" and "Rename group" dialogs; the kit draws them as a bottom sheet at phone size. */}
       <Dialog
         open={renameTarget !== null}
         onOpenChange={(open) => {
@@ -382,7 +354,6 @@ export function useSessionActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* The web `SessionReviewModal` confirm: it marks the PR ready (opening one when there is none). */}
       <ConfirmDialog
         open={reviewTarget !== null}
         onOpenChange={(open) => {
@@ -428,12 +399,9 @@ export function useSessionActions({
   );
 
   return {
-    /** Opens the row menu sheet for one session (the web right-click menu). */
     openSheet: setSheetTarget,
-    /** Opens a linked group's header menu (the web right-click on the group): Rename group, and Archive group when `archivable`. */
     openGroupSheet: setGroupSheetTarget,
     actionsFor,
-    /** An action's label and icon, as the menus draw it. */
     itemFor,
     run,
     dialogs,

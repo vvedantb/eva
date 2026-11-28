@@ -1,18 +1,9 @@
 import { publishErrorNeedsForcePush, type Id } from "@eva/backend";
 import { repoDisplayLabel } from "./repoTile";
 
-/**
- * The publish recovery banner above a session chat's composer (web and phone
- * `PublishRecoveryBanner`): one force-push for a branch whose history was
- * rewritten. It shows only while the newest chat message is that refusal
- * alert; the force-push posts its own outcome alert, which removes it.
- */
-
 /** Which checkout a confirmed force-push rewrites. */
 export interface ForcePushTarget {
-  /** Absent for the primary repo, which is what the session branch means. */
   sessionRepoId?: Id<"sessionRepos">;
-  /** Repo label for the confirm dialog; absent for the primary. */
   label?: string;
 }
 

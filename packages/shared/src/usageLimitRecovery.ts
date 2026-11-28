@@ -11,11 +11,6 @@ import {
   type UsageTone,
 } from "./usageLimits";
 
-// The usage-limit recovery card of every chat, web and phone: when the newest
-// reply failed on the provider's usage limit, offer to retry that turn on
-// another account of the same provider, each with its own headroom.
-
-/** The newest message, as far as the card reads it. */
 interface RecoveryMessage {
   role: string;
   content: string;
@@ -104,17 +99,12 @@ export function usageLimitNoAccountCopy(providerLabel: string): string {
 
 /** One account the failed turn can be retried on. `null` id = Team. */
 export interface UsageLimitRetryCandidate<AccountId extends string = string> {
-  /** Stable key for the in-flight row: an account id, or `TEAM_KEY`. */
   key: string;
-  /** Row heading: the account owner's first name, or "Team". */
   name: string;
-  /** null = the team credential. */
   accountId: AccountId | null;
-  /** The viewer's own account, rather than one a teammate shared. */
   isOwn: boolean;
 }
 
-/** In-flight key for the team credential, which has no account id. */
 const TEAM_RETRY_KEY = "team";
 
 interface RetryCandidateInput<AccountId extends string> {
@@ -124,9 +114,7 @@ interface RetryCandidateInput<AccountId extends string> {
     label: string;
     isOwn: boolean;
   }>;
-  /** Provider of the chat's model — a Claude limit is no reason to run Codex. */
   provider: string;
-  /** null = the team credential is the one that ran out. */
   currentAccountId: string | null;
 }
 
@@ -150,20 +138,15 @@ export function usageLimitRetryCandidates<AccountId extends string>({
   return [...personal, { key: TEAM_RETRY_KEY, name: "Team", accountId: null, isOwn: false }];
 }
 
-/** Utilisation at which an account is no better than the one that just failed. */
 const AT_LIMIT_UTILIZATION = 95;
 
 /** What one retry row says about its account's headroom. */
 export interface UsageLimitHeadroom {
-  /** Name and the ownership after it: " · yours", " · shared with you", or none for Team. */
   name: string;
   ownership: string | undefined;
-  /** The tightest window's use, or undefined when the account never reported. */
   utilization: number | undefined;
-  /** "At limit too", "42% used", or "No usage reading yet". */
   usedLabel: string;
   tone: UsageTone;
-  /** "resets in 2h", for the tightest window, when it says. */
   resetsLabel: string | undefined;
 }
 

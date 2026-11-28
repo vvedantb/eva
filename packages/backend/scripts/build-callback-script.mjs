@@ -14,8 +14,6 @@ const outTs = join(
 );
 const callbackTsconfig = join(backendRoot, "callback-src/tsconfig.json");
 
-// Fail the bundle if callback-src doesn't typecheck — esbuild alone won't
-// catch missing imports (the cc8d1eed / unlinkSync production outage).
 const typecheck = spawnSync(
   process.platform === "win32" ? "npx.cmd" : "npx",
   ["tsc", "--noEmit", "-p", callbackTsconfig],

@@ -4,13 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Docs created from a sandbox token are stored against that session / task /
- * project so the chat Documents tab and the repo Documents sidebar share one
- * row. Plan → Save as document still uses `sessionId` (getBySession); MCP
- * create_eva_doc uses source* fields so it cannot steal the Plan save target.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|doc-source";
 const STRANGER_CLERK_ID = "clerk|doc-source-stranger";

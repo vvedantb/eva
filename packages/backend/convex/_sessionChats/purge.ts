@@ -70,7 +70,6 @@ export async function deleteChatRows(
     .collect();
   for (const row of proposals) await ctx.db.delete(row._id);
   deleted += proposals.length;
-  // Closed turns only: an open turn still has a live agent behind it.
   const turns = await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) => q.eq("entityId", parentId))

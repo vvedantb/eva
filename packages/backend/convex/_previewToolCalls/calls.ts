@@ -15,13 +15,6 @@ import { resolveChatParent } from "../_chat/chatParent";
 import { chatEntityKindValidator } from "../_validators/enums";
 import { findMainChat } from "../_sessionChats/helpers";
 
-/**
- * Relay for agent → live-preview WebMCP tool calls. The sandbox cannot reach
- * the user's browser, so the MCP tool `create`s a row and polls `get`; every
- * open Eva tab on the chat watches `listPending`, races to `claim` a row, and
- * the winner runs it inside the preview iframe and `complete`s it.
- */
-
 /** Result text is page-controlled and lands in the agent's context verbatim. */
 export const RESULT_JSON_MAX_CHARS = 32_000;
 export const ERROR_MAX_CHARS = 2_000;

@@ -4,7 +4,6 @@ import { cn } from "@eva/ui";
 import { useDeckStep } from "../../_components/DeckPrimitives";
 import { BRAND, DUR, EASE, LEAVE, Pulse } from "../../_components/motion";
 
-/** Six unnamed cards: one column at phone width, two at tablet, three wide. */
 const TONES: Record<string, string> = {
   New: "bg-[#3B7DD8]/25 text-[#9cc0f0]",
   Accepted: "bg-emerald-400/15 text-emerald-300",
@@ -23,7 +22,6 @@ const GAP = 12;
 
 const PIN = { duration: DUR.slow, ease: EASE.expo };
 
-/** Rides at the right-hand end of the heading it annotates. */
 function CommentPin() {
   const dropped = useDeckStep() >= 2;
   return (
@@ -64,7 +62,6 @@ function CommentPin() {
   );
 }
 
-/** The heading the note points at, with the selection ring clicking it adds. */
 function PageHeading({ pinned }: { pinned: boolean }) {
   const dropped = useDeckStep() >= 2 && pinned;
   return (

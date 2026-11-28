@@ -9,14 +9,6 @@ import schema from "../convex/schema";
 import { toWorkflowId } from "../convex/workflowManager";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * #1064: `prepareSandboxSteps` only hands the sandbox id back on success. When
- * a step after create threw (branch setup, seeded-runtime restore), the
- * ephemeral sandbox it had just made kept running, because no caller's
- * `finally` knew its id. It must delete that sandbox itself, and only that
- * one: a reused or entity-owned sandbox is not its to delete.
- */
-
 const FRESH_SANDBOX = "sbx_fresh";
 
 type Fake = {
@@ -24,14 +16,12 @@ type Fake = {
   deleted: Array<{ sandboxId: string | undefined; repoId: string }>;
 };
 
-/** The action args this fake reads; every action it sees passes `repoId`. */
 const actionArgs = z.object({
   repoId: z.string(),
   sandboxId: z.string().optional(),
   existingSandboxId: z.string().optional(),
 });
 
-/** A workflow step that runs every action at once and throws on `failOn`. */
 function fakeStep(failOn: string, opts: { deleteFails?: boolean } = {}): Fake {
   const deleted: Fake["deleted"] = [];
   return {
@@ -60,7 +50,6 @@ function fakeStep(failOn: string, opts: { deleteFails?: boolean } = {}): Fake {
             return null;
         }
       },
-      // Progress writes only; their results are never read.
       async runMutation() {
         return null;
       },

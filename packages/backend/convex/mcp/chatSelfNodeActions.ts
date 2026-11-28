@@ -13,24 +13,15 @@ import {
   buildPortListenProbeCommand,
 } from "../_sandbox_runtime/httpReadyProbe";
 
-// Sandbox-side halves of the chat-self MCP tools (chatSelfTools.ts). The tool
-// has already resolved and access-checked the chat; these only touch the VM.
-// Every action checks the VM's live state first and never execs on a stopped
-// one: on Vercel any exec lazily resumes a stopped VM (see previewRecovery.ts).
-
-/** Seconds to let a killed dev server release its port before relaunching. */
 const PORT_RELEASE_WAIT_SECONDS = 2;
 
 const sandboxArgs = {
   repoId: v.id("githubRepos"),
   sandboxId: v.string(),
-  /** `session-<id>` / `task-<id>` / `project-<id>`. */
   ownerKey: v.string(),
-  /** The logical Preview port; the app itself may listen elsewhere (see vercelAppPorts). */
   devPort: v.number(),
 };
 
-/** Same probe the Console launcher uses to decide the port is busy. */
 async function portListening(
   handle: SandboxHandle,
   port: number,
@@ -42,14 +33,11 @@ async function portListening(
   return result.output.trim() === "busy";
 }
 
-/** The handle when the VM is running right now, otherwise its state. */
 async function runningHandle(
   ctx: ActionCtx,
   repoId: Id<"githubRepos">,
   sandboxId: string,
 ): Promise<{ handle: SandboxHandle } | { state: string }> {
-  // getSandboxHandle fetches with resume:false, so `state` is fresh and the
-  // fetch itself never wakes the VM.
   const handle = await getSandboxHandle(ctx, repoId, sandboxId);
   if (handle.state !== "running") return { state: handle.state };
   return { handle };
@@ -86,7 +74,6 @@ export const tailDevServerLogs = internalAction({
     return {
       running: true,
       consoleSessionExists: marker?.trim() === "__EVA_HAS_SESSION__",
-      // Trailing blank rows are the unused part of the pane, not output.
       output: rest.join("\n").replace(/\s+$/, ""),
       listenPort,
       portListening: await portListening(handle, listenPort),
@@ -118,8 +105,6 @@ export const restartDevServer = internalAction({
 
     const sessionName = previewConsoleSessionName(args.ownerKey);
     const listenPort = vercelAppListenPort(args.devPort);
-    // Interrupt the Console's foreground job too, so the relaunch is typed at
-    // a shell prompt rather than into a wrapper (pnpm, turbo) still running.
     await handle.exec(
       [
         `tmux has-session -t ${sessionName} >/dev/null 2>&1 && tmux send-keys -t ${sessionName} C-c || true`,

@@ -14,10 +14,6 @@ import {
 import { CHAT_ENTITY_KINDS } from "../_validators/enums";
 import { projectCallerOf, projectTargetRefusal } from "./projectScope";
 
-// Leaf module shared by tools.ts and entityTools.ts. Holds the one definition
-// of "which session, quick task or project did the caller mean", so every tool
-// that acts on an existing chat resolves it — and checks access — identically.
-
 /** The three chat surfaces an MCP caller can name. */
 export const ENTITY_KINDS = CHAT_ENTITY_KINDS;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
@@ -103,13 +99,10 @@ export interface EntityTarget {
   repoOwner: string;
   repoName: string;
   repoRootDirectory?: string;
-  /** Preview VM state, `"closed"` when the entity has never started one. */
   sandboxStatus: string;
   sandboxId?: string;
   devPort?: number;
-  /** A task or project on its session: the session that holds its sandbox. */
   sandboxSessionId?: string;
-  /** The project a project or project task belongs to (its own id for a project). */
   projectId?: string;
 }
 
@@ -220,7 +213,6 @@ export function withSelfDefault<Ref extends EntityRef>(
 export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   const { scopedRepoId } = credentials;
 
-  /** The check the web mutations run: does this user reach this repo? */
   async function assertUserRepoAccess(
     repoId: string,
     userId: string,
@@ -234,10 +226,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     }
   }
 
-  /**
-   * Credential-grade check: the user check plus the token pin. Manager Ave
-   * carries no `scopedRepoId`, so it reaches every repo the user can reach.
-   */
   async function assertRepoAccess(
     repoId: string,
     userId: string,
@@ -266,14 +254,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     return { repoId: matched.repo.id };
   }
 
-  /**
-   * Turns whichever reference the caller gave into one chat they may act on.
-   * "No such chat" and "exists but you cannot reach it" come back as the same
-   * sentence, so a stranger's id confirms nothing. Inside a project the hub
-   * rules apply (`projectTargetRefusal`): a `write` from a child task may not
-   * touch a sibling or its project, and a coordinator writes only to its own
-   * project. Read tools pass `read`.
-   */
   async function resolveEntityTarget(
     ref: EntityRef,
     userId: string,
@@ -291,8 +271,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
       );
     }
 
-    // Parsed here, not in the lookup, so a mistyped link gets a useful
-    // sentence instead of a bare "nothing found".
     let canonicalPr: string | undefined;
     if (prUrl !== undefined) {
       const parsed = canonicalPrUrl(prUrl);
@@ -304,8 +282,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
       canonicalPr = parsed;
     }
 
-    // Only the numId path needs a repo — it is the one ref that is not unique
-    // on its own.
     let scopeRepoId: string | undefined;
     if (id === undefined && canonicalPr === undefined) {
       const repo = await resolveRepoRef(ref, userId);
@@ -323,8 +299,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
       );
     }
 
-    // Re-checked per user (the lookup already filtered on access; this is the
-    // belt for the braces). Deliberately not the token pin — see entityAccess.
     await assertUserRepoAccess(target.repoId, userId);
 
     const refusal = projectTargetRefusal(
@@ -337,7 +311,6 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     return { target };
   }
 
-  /** The caller's own chat when the ref names none, else the one it names. */
   async function resolveChat(
     ref: EntityRef,
     intent: "read" | "write" = "write",

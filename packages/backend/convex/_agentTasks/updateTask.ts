@@ -46,7 +46,6 @@ export async function buildTaskUpdates(
 ): Promise<TaskUpdates> {
   const updates: TaskUpdates = { updatedAt: Date.now() };
   await applyProjectUpdate(ctx, task, args, updates);
-  // After the project move, so an explicit taskNumber still wins.
   applyPlainFieldUpdates(args, updates);
   return updates;
 }
@@ -60,9 +59,6 @@ async function applyProjectUpdate(
   if (args.projectId === undefined) return;
   const newProjectId = args.projectId ?? undefined;
   updates.projectId = newProjectId;
-  // Position the task at the end when moving it into a different project
-  // by computing taskNumber as max(existing) + 1. Mirrors createQuickTask
-  // and assignToProject.
   if (newProjectId && newProjectId !== task.projectId) {
     const existingTasks = await ctx.db
       .query("agentTasks")
@@ -113,7 +109,6 @@ async function logTitleChange(
     task.title,
     args.title,
   );
-  // Every task owns its PR, so the PR follows the task's title.
   const primaryPr = await findPrimaryPullRequest(ctx.db, {
     kind: "task",
     taskId: args.id,

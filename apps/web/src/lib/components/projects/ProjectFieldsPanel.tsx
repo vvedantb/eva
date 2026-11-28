@@ -76,7 +76,6 @@ export function ProjectFieldsPanel({
   return (
     <div className="space-y-4">
       <FieldsSection title="Properties">
-        {/* Stage is derived from the child tasks. */}
         {status ? (
           <div className={FIELD_ROW_CLASS}>
             <ProjectStageBadge stage={status.stage} />
@@ -176,8 +175,6 @@ export function ProjectFieldsPanel({
             })()}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* No model row: Eva and her tasks run on the model in Eva's chat composer. */}
 
         <div className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}>
           <IconGitBranch size={14} className="text-muted-foreground" />

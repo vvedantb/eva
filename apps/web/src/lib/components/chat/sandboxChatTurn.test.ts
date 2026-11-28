@@ -12,7 +12,6 @@ import {
 
 type Call = { args: SandboxTurnSendArgs; expected: SandboxTurnExpectation };
 
-/** Ports that record each send and settle only when the test says so. */
 function deferredPorts() {
   const calls: Call[] = [];
   const settles: Array<(error?: Error) => void> = [];
@@ -60,7 +59,6 @@ describe("sendSandboxTurn", () => {
           annotation: undefined,
           attachmentStorageIds: undefined,
           sourceProposedPlanId: undefined,
-          // No picker effort: the execution effort is the fallback.
           settings: {
             model: "claude:opus",
             reasoningLevel: "high",
@@ -108,7 +106,6 @@ describe("sandboxChatKeys", () => {
   test("a quick task's session chat is addressed by the chat, not the session", () => {
     const sessionId = z.custom<Id<"sessions">>().parse("session_1");
     const chatId = z.custom<Id<"sessionChats">>().parse("chat_1");
-    // The stream id must match the backend's `sessionChatStreamingEntityId`.
     expect(sandboxChatKeys({ kind: "session", sessionId, chatId })).toEqual({
       parentId: chatId,
       streamingEntityId: "chat_1",

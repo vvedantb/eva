@@ -11,18 +11,14 @@ import { requestRun } from "./_ave/threads";
 import { findMainChat } from "./_sessionChats/helpers";
 import { findWorkChat } from "./_sessions/ownerState";
 
-/** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
   threadId: Id<"aveThreads">;
   kindLabel: string;
   title: string;
-  /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  /** The chat to report from; undefined when the child never chatted. */
   parentId: ChildParentId | undefined;
 };
 
-/** Where the child's messages hang off: a session's turns live on its chats. */
 type ChildParentId = Id<"sessionChats"> | Id<"sessions">;
 
 async function loadChildSummary(
@@ -32,8 +28,6 @@ async function loadChildSummary(
   if (child.kind === "session") {
     const session = await ctx.db.get(child.sessionId);
     if (!session || session.watchedByAve === undefined) return null;
-    // A session has no messages of its own; read the chat whose turn ended,
-    // else Main (sandbox-start failures name only the session).
     const chatId =
       child.chatId ?? (await findMainChat(ctx.db, session._id))?._id;
     return {
@@ -47,7 +41,6 @@ async function loadChildSummary(
   if (child.kind === "project") {
     const project = await ctx.db.get(child.projectId);
     if (!project || project.watchedByAve === undefined) return null;
-    // A project chats in its session's Main chat.
     const owned = await findWorkChat(ctx.db, { kind: "project", project });
     return {
       threadId: project.watchedByAve,
@@ -59,7 +52,6 @@ async function loadChildSummary(
   }
   const task = await ctx.db.get(child.taskId);
   if (!task || task.watchedByAve === undefined) return null;
-  // Every task, quick or in a project, chats in its own session's Main chat.
   const owned = await findWorkChat(ctx.db, { kind: "task", task });
   return {
     threadId: task.watchedByAve,
@@ -70,7 +62,6 @@ async function loadChildSummary(
   };
 }
 
-/** Drops the watch pointer: after each wake-up, or once its thread is gone. */
 async function clearWatch(
   ctx: MutationCtx,
   child: OrchestratorNotifyChild,
@@ -86,11 +77,6 @@ async function clearWatch(
   await ctx.db.patch(child.taskId, { watchedByAve: undefined });
 }
 
-/**
- * Reads the child's newest non-empty assistant row and hands it to
- * {@link decideChildOutcome}, which owns the labelling rules (and is unit
- * tested in `tests/orchestratorOutcome.test.ts`).
- */
 async function resolveChildOutcome(
   ctx: MutationCtx,
   parentId: ChildParentId | undefined,
@@ -125,7 +111,6 @@ async function resolveChildOutcome(
 export const notifyOrchestratorOfChild = internalMutation({
   args: {
     child: orchestratorNotifyChildValidator,
-    /** Terminal state of the child, e.g. "completed", "error", "cancelled". */
     status: v.string(),
   },
   returns: v.null(),

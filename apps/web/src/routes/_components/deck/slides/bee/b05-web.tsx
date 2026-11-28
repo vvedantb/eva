@@ -10,19 +10,9 @@ import { SourceChip } from "./_parts/BeeBits";
 interface Round {
   asked: string;
   answer: string;
-  /** The chips Bee shows under a web answer. */
   links: readonly string[];
 }
 
-/**
- * Example questions; the answers are real, checked October 2026:
- * - DSPT: Digital Care Hub (Better Security, Better Care). A contract
- *   requirement for NHS-funded services; whether it binds every care provider
- *   is disputed, so claim no more.
- * - CHC in any setting: National Framework for NHS Continuing Healthcare, GOV.UK.
- * - FNC: GOV.UK, "Better community care thanks to nursing funding boost",
- *   March 2026 (higher rate £368.24 a week).
- */
 const ROUNDS: readonly Round[] = [
   {
     asked: "Do they need to complete the Data Security and Protection Toolkit?",
@@ -44,22 +34,15 @@ const ROUNDS: readonly Round[] = [
   },
 ];
 
-/** Two steps per round: the question and Bee's search, then the sources. */
 const roundAt = (step: number) =>
   Math.min(ROUNDS.length - 1, Math.max(0, Math.ceil(step / 2) - 1));
 
 const LAST = ROUNDS.length * 2;
-/** Milliseconds each phase stays up while looping: answer, then sources. */
 const HOLD = { answer: 2800, sources: 2600 };
 
-/**
- * The deck step during the first pass. Once the last step is reached, the
- * rounds keep cycling on a timer, so the slide never sits still.
- */
 function useLoopedStep() {
   const step = useDeckStep();
   const [lap, setLap] = useState(0);
-  // Back below the end (deck went back): start the loop fresh next time.
   if (step < LAST && lap !== 0) setLap(0);
   const phase = step < LAST ? step : ((LAST - 1 + lap) % LAST) + 1;
 
@@ -106,7 +89,6 @@ export function BeeWeb() {
         <div className="relative isolate flex h-[460px] w-[1088px] flex-col items-center gap-6">
           <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
 
-          {/* What Bee just heard in the meeting. */}
           <div className="flex h-[64px] items-end">
             <AnimatePresence mode="wait" initial={false}>
               <m.div
@@ -148,7 +130,6 @@ export function BeeWeb() {
                   {round.answer}
                 </BeeTip>
 
-                {/* Grid rows, not `height: "auto"`, so the camera zoom cannot mis-measure it. */}
                 <div
                   className="grid"
                   style={{

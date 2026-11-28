@@ -38,16 +38,12 @@ export function useChatModel(
   defaultModel: AIModel,
   active = true,
 ): {
-  /** The live chat row; undefined while it loads or before it exists. */
   chat: Doc<"sessionChats"> | null | undefined;
   model: AIModel;
   setModel: (model: AIModel) => void;
-  /** Sticky traits from Convex; undefined fields use model defaults. */
   traits: StoredModelTraits;
   setTraits: (partial: Partial<StoredModelTraits>) => void;
-  /** undefined while the chat is loading — treat as Team until the query lands. */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
-  /** Resolves once the replacement daemon is warm. */
   setProviderAccountId: (
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<void>;
@@ -61,9 +57,6 @@ export function useChatModel(
   );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
   const setChatModel = useMutation(api.chats.setModel);
-  // The picker's model and traits write through `chats.setModel`, as on the
-  // phone. The optimistic patch is bound per call: it needs the chat id, and
-  // `chats.setModel` names its chat by a string target.
   const pick = (
     chatId: Id<"sessionChats">,
     pickArgs: Omit<FunctionArgs<typeof api.chats.setModel>, "target">,

@@ -5,11 +5,6 @@ import { Segmented, Stage, type Act } from '../../kit'
 import { CursorMorph, type MorphStyle } from './cursor-morph'
 import './cursor-morph.css'
 
-// The cursor styles, picked by the cursor itself: four options, and each
-// click turns the cursor into the one it chose. Round the four and back to
-// the default, so the loop ends where it began. Here the cursor is one
-// outline that morphs from style to style (cursor-morph.tsx).
-
 const STYLES: MorphStyle[] = ['real', 'large', 'circle', 'arrow']
 const LABELS = ['Real', 'Large', 'Circle', 'Arrow']
 const ORDER = [1, 2, 3, 0]

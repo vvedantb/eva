@@ -4,21 +4,6 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * `sandboxGit.reportBranch` is written by the in-sandbox branch watcher every
- * time it reads `.git/HEAD` — an inotify hit plus a 15s poll, on every live
- * sandbox at once. Two properties keep that cheap and safe, and neither is
- * visible from the daemon side:
- *
- *  - It patches `sandboxBranch` and nothing else. Bumping `updatedAt` or
- *    `lastSandboxActivity` here would reorder every sidebar on a timer.
- *  - An unchanged reading writes nothing at all, because several daemon
- *    processes can share one filesystem.
- *
- * A refactor routing this through a generic "touch the entity" helper would
- * break both without failing a type check.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|sandbox-branch";
 const STRANGER_CLERK_ID = "clerk|sandbox-branch-stranger";
@@ -64,7 +49,6 @@ async function fixture() {
       numId: 3,
       updatedAt: STAMP,
     });
-    // A task's and a project's checkout is their owned session's.
     const ownedSession = (
       title: string,
       owner:
@@ -135,7 +119,6 @@ describe("sandboxGit.reportBranch", () => {
           expect(session?.sandboxBranch).toBe("feature/live");
           expect(session?.updatedAt).toBe(STAMP);
         }
-        // The branch Eva booted on is a separate fact and stays put.
         expect(sessions[0]?.branchName).toBe("eva/session-boot");
         const task = await ctx.db.get(f.taskId);
         const project = await ctx.db.get(f.projectId);

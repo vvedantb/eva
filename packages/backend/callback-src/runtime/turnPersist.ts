@@ -15,12 +15,6 @@ type BranchSyncResult =
   | { status: "ready"; remoteExists: boolean }
   | { status: "failed" };
 
-/**
- * Keep in sync with `rewrittenBranchIsOwnHistory` in
- * convex/_sandbox_runtime/divergedPublish.ts: the local branch rewrote its own
- * history exactly when its reflog holds the remote tip. Any other remote tip
- * was pushed by someone else and is merged, whatever it touched.
- */
 function localBranchRewroteOwnHistory(branch: string, remoteRef: string): boolean {
   const remoteTip = git(["rev-parse", "--verify", remoteRef]);
   const reflog = git(["reflog", "show", "--format=%H", `refs/heads/${branch}`]);
@@ -50,7 +44,6 @@ function isNonFastForwardPush(message: string): boolean {
   );
 }
 
-/** Refreshes and safely incorporates the exact branch tip before pushing. */
 function synchronizeForPush(branch: string): BranchSyncResult {
   const remoteRef = `refs/remotes/origin/${branch}`;
   const fetch = git(
@@ -97,13 +90,6 @@ function synchronizeForPush(branch: string): BranchSyncResult {
     return { status: "failed" };
   }
   if (/^[1-9]\d*\s+[1-9]\d*$/.test(divergence.stdout)) {
-    // Merge, not rebase: a turn that merged the base branch in makes every
-    // base commit since the fork local-only, and a rebase replays all of them
-    // onto the remote tip (see synchronizeBranchForPublish in
-    // _sandbox_runtime/git.ts for the prod case this cost us).
-    // Skip that merge when the local branch rewrote its own history (task
-    // 231): merging the old tip back in conflicts only inside publish, and the
-    // workflow's publish step replaces origin with a leased push instead.
     if (localBranchRewroteOwnHistory(branch, remoteRef)) {
       log(
         `persistTurnWork: skipped merge — local branch rewrote its own history vs origin/${branch}; left to the workflow publish`,
@@ -124,7 +110,6 @@ function synchronizeForPush(branch: string): BranchSyncResult {
   return { status: "failed" };
 }
 
-/** True when every commit reachable from HEAD is already in `exclusion`. */
 function tipAlreadyPublished(exclusion: readonly string[]): boolean {
   const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
   return unpushed.ok && unpushed.stdout === "0";
@@ -157,7 +142,6 @@ export function persistTurnWork(): void {
   try {
     commitAndPushTurnWork();
   } finally {
-    // The commit and push move refs the HEAD watcher does not see.
     requestGitStateCheck();
   }
 }
@@ -196,25 +180,13 @@ function commitAndPushTurnWork(): void {
     }
   }
 
-  // Cheap local answer first: synthetic turns finalize on every background-agent
-  // continuation, and the common case is a clean tree whose tip the tracking ref
-  // already contains. The tracking ref only ever lags behind origin, so a zero
-  // count here means origin genuinely has HEAD — no fetch or push needed.
   if (tipAlreadyPublished([`refs/remotes/origin/${branch}`])) return;
 
-  // The exact remote branch is refreshed below before the ahead-of-remote gate
-  // and push, so a resumed sandbox cannot publish from a stale tracking ref.
-  // Fully-qualified refspec, both sides. `HEAD` resolves through whatever the
-  // branch currently points at and a bare name goes through the upstream, so
-  // either could aim at the base branch; this names the exact ref to update and
-  // cannot resolve anywhere else.
   const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const sync = synchronizeForPush(branch);
     if (sync.status === "failed") return;
 
-    // Chat-only turns have nothing to publish. Once the branch exists, compare
-    // to that exact ref; otherwise compare against all fetched origin refs.
     const exclusion = sync.remoteExists
       ? [`refs/remotes/origin/${branch}`]
       : ["--remotes=origin"];

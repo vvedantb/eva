@@ -14,7 +14,6 @@ const CAPTURE_TIMEOUT_MS = 20_000;
 
 interface PreviewSnapshotOptions {
   iframeElement: HTMLIFrameElement | null;
-  /** Opens the dialog with this snapshot instead of capturing (demo / tests). */
   seedSnapshot?: PreviewSnapshot;
 }
 

@@ -3,7 +3,6 @@ import { fetchWithTimeout } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
 import { isJsonObject, readResponseJson } from "../utils.js";
 
-/** Pulls `data.value.token` out of a Convex action JSON envelope. */
 function tokenFromActionResponse(data: JsonValue | null): string | null {
   if (!isJsonObject(data)) {
     return null;
@@ -15,11 +14,6 @@ function tokenFromActionResponse(data: JsonValue | null): string | null {
   return typeof value.token === "string" ? value.token : null;
 }
 
-/**
- * Fetches a GitHub App installation token from Convex. Best-effort: network
- * or parse failures return `{ token: null }` so git can keep using whatever
- * is already in the environment.
- */
 async function fetchInstallationToken(params: {
   convexUrl: string;
   convexToken: string;
@@ -46,7 +40,6 @@ async function fetchInstallationToken(params: {
   }
 }
 
-/** Writes the token into the env object the credential helper / `gh` read. */
 function applyGithubTokenToEnv(token: string): void {
   process.env.GITHUB_TOKEN = token;
   process.env.GH_TOKEN = token;

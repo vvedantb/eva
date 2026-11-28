@@ -2,13 +2,6 @@ import { useSyncExternalStore } from "react";
 import { z } from "zod";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
 
-/**
- * Support for embedding the app inside itself (same-origin iframe), used by
- * the inbox preview pane. The embedded document hides all chrome (sidebar,
- * paddings, overlays) and accepts navigation requests from its parent so the
- * host can switch pages without a full SPA reboot per selection.
- */
-
 /** Sent by the embedded app once its router is mounted and listening. */
 export const embedReadyMessage = z.object({
   type: z.literal("eva:embed-ready"),
@@ -22,7 +15,6 @@ export const embedReadyMessage = z.object({
 export const embedNavigateMessage = z.object({
   type: z.literal("eva:embed-navigate"),
   href: z.string().refine(isInternalAppHref),
-  /** Show only the page's chat (`useEmbedChatOnly`): the Inbox pane for a chat. */
   chatOnly: z.boolean(),
 });
 
@@ -61,7 +53,6 @@ function detectEmbedded(): boolean {
   try {
     return window.parent.location.origin === window.location.origin;
   } catch {
-    // Cross-origin parent: some other site framing us — keep full chrome.
     return false;
   }
 }

@@ -22,11 +22,6 @@ import type { AnnualPhase } from "../_parts/AnnualPhasePipeline";
 import { AnnualPhasePipeline } from "../_parts/AnnualPhasePipeline";
 import { MoA3AccentRoll } from "../_parts/MoA3AccentRoll";
 
-/**
- * The rail earns the strongest move on the deck: as the light runs through the
- * phases the camera swings in from the left and the far phases recede, then it
- * straightens to read the restore figure and settles square on.
- */
 const DESIGN_SHOTS: readonly CameraShot[] = [
   {},
   { rotateY: 10, translateZ: -40, x: -30 },
@@ -34,11 +29,6 @@ const DESIGN_SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-/**
- * The migration, in the order the phases shipped.
- * Sources: Eva git history and release notes, 6–29 July 2026 (restore figure
- * from the spike); rejected options 5 September 2026.
- */
 const PHASES: readonly AnnualPhase[] = [
   { label: "Spike", date: "6 Jul" },
   { label: "Neutral contract", date: "6 Jul" },
@@ -48,17 +38,14 @@ const PHASES: readonly AnnualPhase[] = [
   { label: "Old code removed", date: "29 Jul" },
 ];
 
-/** Options that were measured and then put down, kept on the record. */
 const OPTIONS: readonly { text: string; rejected: boolean }[] = [
   { text: "7 plans shelved", rejected: false },
   { text: "11% worse — rejected", rejected: true },
   { text: "5× more painting — rejected", rejected: true },
 ];
 
-/** 33 hundredths, shown as seconds: the count reads 0.00s up to 0.33s. */
 const seconds = (n: number) => (n / 100).toFixed(2);
 
-/** A hairline struck through a rejected option once it has landed. */
 function Strike({ on, delay }: { on: boolean; delay: number }) {
   return (
     <m.span
@@ -85,7 +72,6 @@ export function AnnualDesign() {
       </Reveal>
 
       <div className="relative isolate mt-24">
-        {/* Graph paper under the plan: it drifts, the plan holds still. */}
         <m.div
           aria-hidden
           className="pointer-events-none absolute -inset-x-24 -inset-y-16 -z-10"

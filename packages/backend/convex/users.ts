@@ -75,11 +75,6 @@ export const get = authQuery({
 
 type EmailRecipient = { userId: Id<"users">; email: string; name?: string };
 
-/**
- * The user as an automation email recipient, or null without an email address
- * or with notification email turned off. (The changelog broadcast follows
- * Product updates instead: `collectProductUpdateRecipients`.)
- */
 function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
   if (!user?.email) return null;
   if (!resolveNotificationPrefs(user.notificationPrefs).email) {
@@ -125,7 +120,6 @@ export async function collectEmailRecipientsAmong(
  * govern notifications and broadcasts, not mail the user's own agent was asked to send.
  */
 export const getEmailRecipientById = internalQuery({
-  // A string, not v.id: MCP's getContext hands back the user id as a string.
   args: { userId: v.string() },
   returns: v.union(
     v.object({ email: v.string(), name: v.optional(v.string()) }),
@@ -221,9 +215,6 @@ export const listTeamWithMembers = authQuery({
       )
     ).flat();
 
-    // By name: the previous online-first order changed with the clock, which is
-    // what made this query non-cacheable, and it reshuffled avatars under the
-    // pointer as people went idle.
     members.sort((a, b) =>
       (a.firstName ?? a.fullName ?? "").localeCompare(
         b.firstName ?? b.fullName ?? "",
@@ -271,7 +262,6 @@ export const listAll = authQuery({
   },
 });
 
-/** Public profiles for fetched users, in order, skipping deleted ones. */
 function toPublicProfiles(users: Array<Doc<"users"> | null>) {
   return users.flatMap((user) =>
     user

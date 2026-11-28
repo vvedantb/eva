@@ -60,7 +60,6 @@ export function NotificationsSettingsClient() {
           title="Notifications"
           action={<EmailNotificationsSwitch email={prefs.email} />}
         />
-        {/* The changelog broadcast: opt-in, apart from notification email. */}
         <SettingsToggleRow
           title="Product updates"
           action={

@@ -7,7 +7,6 @@ import { docVersionSourceValidator } from "./validators";
 
 const VERSION_CAP = 100;
 
-/** True when the latest saved version already holds this exact pmContent. */
 async function isSameAsLatestVersion(
   ctx: MutationCtx,
   docId: Id<"docs">,
@@ -21,7 +20,6 @@ async function isSameAsLatestVersion(
   return latest !== null && latest.pmContent === pmContent;
 }
 
-/** Prunes oldest versions when a doc exceeds the cap. */
 async function pruneOldVersions(
   ctx: MutationCtx,
   docId: Id<"docs">,

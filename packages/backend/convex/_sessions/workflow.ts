@@ -85,18 +85,11 @@ import { errorMessage } from "@vvedantb/server";
 import { insertTurnFollowUp } from "../_messages/replies";
 import { isStandaloneSession, sessionOwnerTaskId } from "./owner";
 
-// --- Completion event ---
-
 export const sessionCompleteEvent = defineEvent({
   name: "sessionComplete",
   validator: workflowCompleteValidator,
 });
 
-/**
- * The `eva-design` reply contract. `variations` must be present and non-empty:
- * an all-optional schema matched a bare `{}` in an ordinary reply and turned it
- * into an empty Designs tab.
- */
 const designResultSchema = z.object({
   summary: z.string().optional(),
   variations: z
@@ -110,7 +103,6 @@ const designResultSchema = z.object({
     .min(1),
 });
 
-/** Parses the design-variations JSON a turn may end with. */
 function parseDesignResult(
   text: string | null,
 ): z.infer<typeof designResultSchema> | null {
@@ -118,7 +110,6 @@ function parseDesignResult(
   return parseFirstJsonValue(text, designResultSchema) ?? null;
 }
 
-/** Finalizes and clears an open synthetic-turn placeholder on chat hygiene paths. */
 async function finalizeOpenSyntheticTurn(
   ctx: MutationCtx,
   chatId: Id<"sessionChats">,
@@ -138,8 +129,6 @@ async function finalizeOpenSyntheticTurn(
   await ctx.db.patch(chatId, { syntheticTurnMessageId: undefined });
 }
 
-// --- Workflows ---
-
 /** Starts a session sandbox (clone + branch setup) as a durable workflow step. */
 export const sessionSandboxStartupWorkflow = workflow.define({
   args: {
@@ -151,9 +140,7 @@ export const sessionSandboxStartupWorkflow = workflow.define({
     branchName: v.string(),
     baseBranch: v.string(),
     repoId: v.id("githubRepos"),
-    /** True when the session has `sessionRepos` rows to clone as well. */
     hasLinkedRepos: v.optional(v.boolean()),
-    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
     startAttempt: v.optional(v.number()),
   },
   handler: async (step, args): Promise<void> => {
@@ -172,18 +159,10 @@ export const sessionSandboxStartupWorkflow = workflow.define({
 
     if (args.hasLinkedRepos !== true) return;
 
-    // startSessionSandbox armed `sandboxSetupPending` instead of clearing it
-    // (see `prepareSessionSandboxInternal`) specifically so this step could
-    // clone/install every linked repo before the first turn runs. Whatever
-    // happens below, the gate must still come off — a linked repo that never
-    // finishes must not wedge the session forever.
     const session = await step.runQuery(internal.sessions.getInternal, {
       id: args.sessionId,
     });
     if (!session?.sandboxId) {
-      // startSessionSandbox failed before a sandbox existed (or the user
-      // stopped mid-start) — nothing to provision, and no gate was armed for
-      // a sandbox that was never created.
       return;
     }
     const sandboxId = session.sandboxId;
@@ -229,23 +208,10 @@ export const sessionExecuteWorkflow = workflow.define({
     });
     const sessionId = data.sessionId;
 
-    // Daemon-pull dispatch: the prompt is NOT pushed from here. The queue
-    // dequeue has already staged it in `session.pendingTurn` and scheduled a daemon to
-    // claim it; the warm daemon pulls it via `claimPendingTurn` in ~one poll,
-    // which is why we no longer probe/handoff/launch WITH a prompt here (doing
-    // so would double-execute the turn). This workflow's remaining job is to
-    // (a) make sure the sandbox is started (thawing cold/archived storage over
-    // durable steps) and a daemon is alive to do the claim, then (b) awaitEvent
-    // + run the unchanged post-turn bookkeeping (branch push, saveResult,
-    // deployment tracking).
     let sandboxId: string | null = null;
     let validatedSandboxId: string | null = null;
 
     if (data.sandboxId) {
-      // Bring an archived/stopped sandbox back to "started" via durable polling
-      // steps first, so a multi-minute cold-storage thaw doesn't blow the
-      // per-action 10-minute limit inside validateSandbox. Once started, the
-      // validate below hits its fast (echo) path.
       let started: Awaited<ReturnType<typeof ensureSandboxStartedSteps>>;
       try {
         started = await ensureSandboxStartedSteps(step, {
@@ -276,9 +242,6 @@ export const sessionExecuteWorkflow = workflow.define({
           {
             sandboxId: thawId,
             repoId: data.repoId,
-            // A just-created sandbox: startSessionSandbox provisions swap and
-            // Docker itself, and waiting on its Docker bootstrap here (2.8s
-            // p50, 14.6s p90) only delays the launch.
             skipDocker: data.sandboxSetupPending,
           },
           { retry: false },
@@ -312,8 +275,6 @@ export const sessionExecuteWorkflow = workflow.define({
         sandboxId,
         branchName: data.branchName,
       });
-      // A sandbox made here skipped the startup workflow, which clones the
-      // linked repos (a task's first run can land here).
       if ((data.linkedRepoCount ?? 0) > 0) {
         await prepareLinkedRepoSteps(step, {
           sessionId,
@@ -324,7 +285,6 @@ export const sessionExecuteWorkflow = workflow.define({
     }
 
     if (sandboxId === null) {
-      // Unreachable: sandboxId is assigned on both branches above.
       throw new Error("sessionExecuteWorkflow: sandbox was not resolved");
     }
 
@@ -342,8 +302,6 @@ export const sessionExecuteWorkflow = workflow.define({
       sessionId,
     });
 
-    // A cancel can race with a send staging the turn and wipe pendingTurn while a daemon
-    // workflow waits, so restage it before ensuring the warm process.
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.sessionWorkflow.ensurePendingTurn, {
         chatId: args.chatId,
@@ -353,7 +311,6 @@ export const sessionExecuteWorkflow = workflow.define({
       });
     }
 
-    // Persistent chat providers use prewarm + claimPendingTurn.
     if (usesChatDaemon(data.model)) {
       await step.runAction(internal.sandbox.prewarmSessionDaemon, {
         sandboxId,
@@ -371,14 +328,7 @@ export const sessionExecuteWorkflow = workflow.define({
         sessionPersistenceId: data.sessionPersistenceId,
       });
     } else {
-      // A failed launch must finalize the turn: without this catch the
-      // workflow dies after its step retries with no saveResult, leaving the
-      // empty placeholder (and the open turn) stuck on "Working…" until
-      // the `TURN_BACKSTOP_MS` backstop.
       try {
-        // One-shot providers push the prompt at launch, so hold it until the
-        // new sandbox is on the latest base (daemons get this from the
-        // claimPendingTurn gate). Read live: the gate may already be clear.
         if (data.sandboxSetupPending) {
           await step.runAction(internal.sessionWorkflow.waitForSessionSetup, {
             sessionId,
@@ -439,10 +389,6 @@ export const sessionExecuteWorkflow = workflow.define({
 
     const result = await step.awaitEvent(sessionCompleteEvent);
 
-    // Persist the assistant reply BEFORE publish. A hung/slow git push used to
-    // leave the UI on "Working…" forever even after the daemon had completed —
-    // streamed tokens may also be empty for short conversational-ish agent
-    // turns. Publish failures are patched onto the saved message below.
     await step.runMutation(internal.sessionWorkflow.saveResult, {
       chatId: args.chatId,
       turnId: args.turnId,
@@ -458,13 +404,6 @@ export const sessionExecuteWorkflow = workflow.define({
       afterShas: result.afterShas,
     });
 
-    // Eva owns publishing: the agent commits inside the sandbox but never
-    // pushes (see prompts.ts). Always attempt the push after a successful
-    // AGENT turn — matching project/task chat. Do NOT gate on
-    // `git status --porcelain`: after a proper commit the tree is clean, so
-    // that check skipped every publish and left commits stranded in the
-    // sandbox. pushBranchToOrigin itself skips when HEAD has no commits
-    // origin lacks, so chat-only turns publish nothing.
     let pushSucceeded = false;
     let pushedCommits = false;
     let branchPublished = false;
@@ -515,17 +454,6 @@ export const sessionExecuteWorkflow = workflow.define({
         },
       );
 
-      // The callback normally pushes before posting completion so the work is
-      // durable even if the sandbox dies immediately afterwards. In that path
-      // this workflow's redundant push reports `pushed: false`; recover a
-      // missing PR when it confirms the session branch already contains HEAD.
-      // A chat-only first turn has no remote session branch, so `published` is
-      // false and still avoids the old compare-404 alerts.
-      // A task's session never opens a session PR: the task owns its PRs.
-      // A quick task's chat push opens the task PR when the branch has none
-      // live, so a task worked on only through chat still gets one. The
-      // callback usually pushed already (`pushedCommits` false), so a turn
-      // that moved HEAD onto a published branch also counts.
       const turnCommitted =
         result.afterSha !== undefined && result.afterSha !== result.beforeSha;
       if (
@@ -571,19 +499,6 @@ export const sessionExecuteWorkflow = workflow.define({
       }
     }
 
-    // Multi-repo sessions and multi-repo tasks: one push + one draft PR per
-    // linked repo that has commits. Deliberately here and not in the
-    // callback's `persistTurnWork` (which pushes only WORK_DIR at turn end):
-    // PR creation needs the backend regardless, so keeping both halves of
-    // publishing in this workflow means one publish path to reason about and
-    // no `callback-src` rebuild. The trade-off is the callback's durability
-    // window — a linked repo's commits only reach origin once this step
-    // runs, whereas the primary's are pushed before completion is even posted.
-    // Not gated on the primary's `pushSucceeded`: a primary that failed to
-    // publish must not strand a linked repo's commits in the sandbox. A
-    // task's session publishes its linked repos too: the task owns its home
-    // repo's PR, and each linked repo's PR is the session's (by
-    // `sessionRepoId`), which the task's PR state reads.
     if (
       result.success &&
       (data.ownsPullRequests !== false || data.ownerTaskId !== undefined) &&
@@ -598,8 +513,6 @@ export const sessionExecuteWorkflow = workflow.define({
     }
   },
 });
-
-// --- Deployment tracking ---
 
 /** Queues deployment status polling for a session branch after a successful execute. */
 export const scheduleSessionDeploymentTracking = internalMutation({
@@ -633,8 +546,6 @@ export const scheduleSessionDeploymentTracking = internalMutation({
   },
 });
 
-// --- Supporting internal functions ---
-
 /**
  * Posts a non-streaming system alert into a chat (e.g. draft PR failure).
  * Session-level callers (PR webhooks, linked-repo setup) pass `sessionId` and
@@ -666,8 +577,6 @@ export const postSystemAlert = internalMutation({
       isSystemAlert: true,
       ...(args.errorDetail !== undefined && { errorDetail: args.errorDetail }),
     };
-    // A turn-level alert follows its turn into a thread; a session-level one
-    // stays in Main.
     if (args.chatId === undefined) {
       await ctx.db.insert("messages", { parentId: chatId, role: "assistant", ...alert });
     } else {
@@ -742,8 +651,6 @@ export const addAssistantPlaceholder = internalMutation({
     const chat = await ctx.db.get(args.chatId);
     if (!chat) throw new Error("Chat not found");
 
-    // Ignore system alerts (e.g. draft-PR failures) sitting on top — the staging
-    // may already have staged an empty placeholder underneath them.
     await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.chatId,
       recentLimit: 10,
@@ -776,26 +683,15 @@ export const getSessionData = internalQuery({
     model: aiModelValidator,
     deploymentProjectName: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
-    /** startSessionSandbox still owns repo prep, swap and Docker. */
     sandboxSetupPending: v.boolean(),
-    /**
-     * False for a task's session: it pushes the task branch, but the draft PR
-     * and linked-repo publish belong to the task. Optional only so a workflow
-     * journaled before this field replays.
-     */
     ownsPullRequests: v.optional(v.boolean()),
-    /** The quick task that owns this session; its chat pushes open its PR. */
     ownerTaskId: v.optional(v.id("agentTasks")),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
       getSessionChatOrThrow(ctx.db, args.chatId),
       ctx.db.get(args.userId),
-      // Input images attached to the triggering user message. Used to re-stage
-      // pendingTurn on the queued/cancel-race path (immediate sends stage them
-      // directly when they stage the turn).
       ctx.db
         .query("messages")
         .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
@@ -806,8 +702,6 @@ export const getSessionData = internalQuery({
 
     const [repo, primaryPr] = await Promise.all([
       ctx.db.get(session.repoId),
-      // The primary repo's own PR: a side-branch PR the agent opened must not
-      // stop Eva from opening the session's draft.
       findPrimaryPullRequest(ctx.db, {
         kind: "session",
         sessionId: session._id,
@@ -904,7 +798,6 @@ export const clearSessionClosedStatus = internalMutation({
     if (!session || session.status !== "closed") return null;
     await ctx.db.patch(args.sessionId, {
       status: "active",
-      // Awake again: whatever the last attempt failed on is history.
       sandboxError: undefined,
       updatedAt: Date.now(),
     });
@@ -915,10 +808,6 @@ export const clearSessionClosedStatus = internalMutation({
   },
 });
 
-/**
- * A thread turn that answered: the person whose @Eva reply woke her hears
- * about it (`thread_answer`), with her answer as the preview.
- */
 async function notifyAnswerInThread(
   ctx: MutationCtx,
   turn: Doc<"turns">,
@@ -949,11 +838,9 @@ export const saveResult = internalMutation({
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
-    /** Stamped onto the reply on success, making it this provider's checkpoint. */
     model: v.optional(aiModelValidator),
     planContent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
-    /** Turn checkpoint from the callback (see messageFields.beforeSha). */
     ...turnCheckpointArgs,
   },
   returns: v.null(),
@@ -968,8 +855,6 @@ export const saveResult = internalMutation({
       return null;
     }
 
-    // Any successful turn may have ended with the eva-design JSON, so this is
-    // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
     const extraPatch: Omit<AssistantTurnResultPatch, "content"> = {
       isSystemAlert: undefined,
@@ -1012,7 +897,6 @@ export const saveResult = internalMutation({
       agentBrowsingAt?: undefined;
     } = {
       updatedAt: now,
-      // Crash hygiene: drop stale soft-lock if the agent forgot browser_unlock.
       agentBrowsingAt: undefined,
     };
     if (args.planContent && args.planContent !== session.planContent) {
@@ -1053,8 +937,6 @@ export const claimPendingTurn = authMutation({
   args: {
     ...daemonChatTargetArgs,
     model: v.optional(aiModelValidator),
-    // When false, drain cancel/stop/usage only. Old sandboxes omit this and
-    // keep acquiring the running lease (previous behaviour).
     acceptTurn: v.optional(v.boolean()),
     ...steerClaimArgs,
   },
@@ -1079,15 +961,11 @@ export const claimPendingTurn = authMutation({
     if (chatId === null) return emptyClaim;
     const chat = await ctx.db.get(chatId);
     if (!chat) return emptyClaim;
-    // The owner path reads only the chat row on every 50ms poll.
     if (chat.userId !== ctx.userId) {
       if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
         throw new Error("Not authorized");
     }
 
-    // Level-triggered: an old callback that does not read this field must not
-    // consume it. The refresh action clears `usageRefreshRequestedAt` when it
-    // stops waiting so a failed lookup can retry until then.
     const usageRefreshRequested = chat.usageRefreshRequestedAt !== undefined;
 
     const stopTaskToolUseIds = chat.pendingTaskStops ?? [];
@@ -1095,15 +973,11 @@ export const claimPendingTurn = authMutation({
       await ctx.db.patch(chat._id, { pendingTaskStops: undefined });
     }
 
-    // Cancel must drain the same way as stopTaskToolUseIds above: the daemon
-    // polls this mutation continuously, including mid-turn, specifically to
-    // notice an interrupt — gating the drain on pendingTurn would strand it.
     const cancelRequested = chat.cancelRequestedAt !== undefined;
     if (cancelRequested) {
       await ctx.db.patch(chat._id, { cancelRequestedAt: undefined });
     }
 
-    // Steers drain mid-turn too: that is the only time a daemon takes one.
     const steers = await drainSteers(ctx, chat, args);
 
     const drained = {
@@ -1114,12 +988,6 @@ export const claimPendingTurn = authMutation({
       steers,
     };
 
-    // A prewarm is killing this daemon right now (stale callback bundle or a
-    // model/tools change). Handing it the turn in the milliseconds before the
-    // kill lands acquires the 2-minute running lease for a process that is
-    // already dying, and nothing heartbeats it — the "Turn stalled" alert of
-    // session 125. pendingTurn stays staged for the replacement daemon; the
-    // drains above still ran, so a cancel is never stranded by the pause.
     if (
       isDaemonClaimPaused({
         claimPausedUntil: chat.claimPausedUntil,
@@ -1131,17 +999,9 @@ export const claimPendingTurn = authMutation({
 
     if (!chat.pendingTurn) return drained;
 
-    // Withhold the turn while a new session's sandbox is still pulling the
-    // latest base branch and reinstalling drifted deps (flag set at early-ready,
-    // cleared when setup finishes). Returning an empty claim leaves pendingTurn
-    // intact; the daemon keeps polling (45m idle budget) and claims the moment
-    // the gate clears, so the agent never executes against a stale checkout.
     const session = await ctx.db.get(chat.sessionId);
     if (session?.sandboxSetupPending === true) return drained;
 
-    // The daemon is not ready to start (still finalizing, synthetic open, or
-    // a real turn in flight). Leave pendingTurn so the 2-minute running lease
-    // is not acquired with nobody heartbeating it (session 65 / session 125).
     if (args.acceptTurn === false) return drained;
 
     const pendingModel = chat.pendingTurn.model;
@@ -1161,8 +1021,6 @@ export const claimPendingTurn = authMutation({
       (id) => ctx.storage.getUrl(id),
       chat.pendingTurn.attachmentStorageIds,
     );
-    // Every staged chat prompt names its durable turn. A slot without one
-    // is dropped, not handed out without a lease.
     const pendingTurnId = chat.pendingTurn.turnId;
     const claim =
       pendingTurnId === undefined
@@ -1215,8 +1073,6 @@ export const updateBackgroundAgents = authMutation({
       backgroundAgents,
       updatedAt: Date.now(),
     });
-    // Queued messages wait for these agents, so their settling is a queue
-    // release the chat itself never signals otherwise.
     await scheduleQueueDrainAfterBackgroundAgents(
       ctx,
       chat._id,
@@ -1283,13 +1139,10 @@ export const ensurePendingTurn = internalMutation({
   handler: async (ctx, args) => {
     const chat = await ctx.db.get(args.chatId);
     if (!chat) return null;
-    // One-shot providers push the prompt; restaging would only spam a leftover
-    // daemon with claimPendingTurn mismatch logs.
     if (args.model !== undefined && !usesChatDaemon(args.model)) {
       return null;
     }
 
-    // Every chat workflow has a turn: no open turn, no restage.
     const openTurn = await findOpenTurn(ctx, args.chatId);
     if (!openTurn || isTurnClaimed(openTurn)) return null;
     const last = await ctx.db
@@ -1344,9 +1197,6 @@ export const restageOpenTurn = internalMutation({
     const context = await loadSessionChat(ctx.db, args.chatId);
     if (!context) return { restaged: false as const, reason: "chat not found" };
     const { chat, session } = context;
-    // Orphans do not count: a slot left behind by a turn that already closed is
-    // exactly the wedge this escape hatch exists to clear, and refusing on it
-    // made the hatch useless on the chats that needed it most.
     const openTurn = await findOpenTurn(ctx, args.chatId);
     if (!openTurn) return { restaged: false as const, reason: "no open turn" };
     const pendingTurnLive = isPendingTurnLive({
@@ -1362,8 +1212,6 @@ export const restageOpenTurn = internalMutation({
       .order("desc")
       .take(5);
     const lastAssistant = messages.find((m) => m.role === "assistant");
-    // Stricter than the in-workflow re-stage: this path rebuilds the prompt from
-    // the user message, so a bubble that already streamed text would replay it.
     if (
       lastAssistant === undefined ||
       !isUnclaimedOpenTurn({
@@ -1391,7 +1239,6 @@ export const restageOpenTurn = internalMutation({
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return { restaged: false as const, reason: "repo not found" };
-    // Daemon-pull recovery only — one-shot providers push via launch.
     if (!usesChatDaemon(chat.lastModel)) {
       return {
         restaged: false as const,
@@ -1432,9 +1279,6 @@ export const restageOpenTurn = internalMutation({
 export const openSyntheticTurn = authMutation({
   args: {
     ...daemonChatTargetArgs,
-    // The daemon's own model. Optional only for daemons launched before the
-    // field existed; those fall back to `chat.lastModel`, which the picker
-    // can move mid-flight and may therefore mis-attribute the checkpoint.
     model: v.optional(aiModelValidator),
   },
   returns: v.object({
@@ -1443,7 +1287,6 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    // No placeholder can open without a chat; the daemon logs and carries on.
     const chatId = await resolveDaemonChatId(ctx.db, args);
     if (chatId === null) throw new Error("Chat not found");
     const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
@@ -1451,7 +1294,6 @@ export const openSyntheticTurn = authMutation({
       throw new Error("Not authorized");
 
     const turnModel = normalizeAIModel(args.model ?? chat.lastModel);
-    // A continuation of a thread turn answers in the same thread.
     const { messageId, replyTo } = await insertTurnFollowUp(ctx, {
       parentId: chat._id,
       role: "assistant",
@@ -1459,9 +1301,6 @@ export const openSyntheticTurn = authMutation({
       timestamp: Date.now(),
       activityLog: "",
       isSyntheticTurn: true,
-      // Stamped at open time because the daemon protocol carries no model on
-      // completion. Not yet a checkpoint — that needs `finishedAt` too — and
-      // `completeSyntheticTurn` clears it again if the turn fails.
       model: turnModel,
     });
     const turnId = await openSessionChatTurn(ctx, {
@@ -1543,7 +1382,6 @@ export const completeSyntheticTurn = authMutation({
 
     const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
-    // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {
       _id: args.messageId,
       beforeSha: patch.beforeSha,
@@ -1600,7 +1438,6 @@ export const handleStaleSyntheticTurn = internalMutation({
       .first();
     const streamingStale = isStreamingActivityStale(streaming);
     if (!streamingStale) {
-      // Still live — re-arm so a later daemon death is still cleaned up.
       await ctx.scheduler.runAfter(
         10 * 60 * 1000,
         internal.sessionWorkflow.handleStaleSyntheticTurn,
@@ -1666,8 +1503,6 @@ export const handleCompletion = authMutation({
       `[sessionWorkflow] handleCompletion received chatId=${chat._id} success=${args.success} workflowId=${activeWorkflowId}`,
     );
 
-    // One-shot providers never claimPendingTurn, so clear any leftover staged
-    // prompt here. Persistent chat daemons already cleared it on claim.
     if (chat.pendingTurn !== undefined) {
       await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }

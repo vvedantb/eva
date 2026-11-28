@@ -10,12 +10,10 @@ import { errorMessage } from "@vvedantb/server";
 import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 import { startAgentJob, stopAgentJob } from "./_agentJobs/slot";
 
-/** Replaces double quotes with single quotes in a commit title for shell safety. */
 function sanitizeCommitTitle(title: string): string {
   return title.replace(/"/g, "'").trim() || "document";
 }
 
-/** Formats a list of requirements as a numbered list for the test generation prompt. */
 function formatRequirements(requirements: string[]): string {
   if (requirements.length === 0) {
     return "1. No explicit requirements provided. Infer coverage from the feature description and user flows.";
@@ -25,7 +23,6 @@ function formatRequirements(requirements: string[]): string {
     .join("\n");
 }
 
-/** Formats user flows as numbered markdown sections for the test generation prompt. */
 function formatUserFlows(
   userFlows: Array<{ name: string; steps: string[] }>,
 ): string {
@@ -43,8 +40,6 @@ function formatUserFlows(
     })
     .join("\n\n");
 }
-
-// --- Workflow definition ---
 
 /** Runs the test generation workflow: prepares sandbox, generates tests, and creates a PR. */
 export const testGenWorkflow = workflow.define({
@@ -104,8 +99,6 @@ export const testGenWorkflow = workflow.define({
               branchName: docData.branchName,
             },
           );
-          // No commits pushed → the agent wrote no tests; fail cleanly
-          // instead of letting a PR attempt 404 against a missing branch.
           if (!pushResult.pushed) {
             await saveResult(false);
             return;
@@ -139,8 +132,6 @@ export const testGenWorkflow = workflow.define({
     });
   },
 });
-
-// --- Supporting internal functions ---
 
 /** Fetches doc and repo data and builds the test generation prompt with requirements and user flows. */
 export const getDocData = internalQuery({
@@ -260,8 +251,6 @@ export const cancelTestGen = authMutation({
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
-    // The doc has one workflow slot shared with the interview, generate and
-    // PR recap flows. Only cancel it when test generation is what holds it.
     if (doc.testGenStatus !== "running") return null;
     await stopAgentJob(
       ctx,

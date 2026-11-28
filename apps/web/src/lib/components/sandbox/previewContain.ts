@@ -1,13 +1,3 @@
-/**
- * Letterbox a guest CSS viewport into a smaller painted box — the same
- * contain-and-center math t3code uses for the in-chat mini-player
- * (`resolveBrowserViewportLayout` + `fitSourceContent`).
- *
- * The hosted iframe overlay is the full mini-player body (so drag/resize
- * offsets stay a 1:1 map onto that box). Containment is a transform on the
- * iframe, not a second layout tree.
- */
-
 export const DEFAULT_MINI_PLAYER_LOGICAL_SIZE = {
   width: 1280,
   height: 800,

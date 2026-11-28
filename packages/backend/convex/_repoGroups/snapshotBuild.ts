@@ -1,19 +1,5 @@
 "use node";
 
-/**
- * Group seeded snapshots — BUILD step. Boots an ephemeral sandbox from the
- * primary repo's own seeded snapshot, clones every linked repo alongside it
- * under `/tmp/workspace/<name>` (installing dependencies), captures the whole
- * filesystem into one `snap_*`, and stores it on the group. Sessions created
- * from the group then boot straight from this snapshot instead of paying the
- * clone + install cost for every linked repo on every fresh sandbox — see
- * `getGroupSnapshotForBoot` / `resolveSandboxContext`.
- *
- * The clone and install steps are the same ones a live session's
- * `prepareLinkedRepo` runs (`cloneRepoInto` +
- * `detectPackageManager`/`installDependencies`), so a repo that clones and
- * installs in a session behaves identically when baked into a group snapshot.
- */
 import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -24,8 +10,6 @@ import {
   cloneRepoInto,
   createSandboxAndPrepareRepo,
   EPHEMERAL_LIFECYCLE,
-  // Aliased: `installDependencies` is also this module's local name for the
-  // group's own install-or-not flag.
   installDependencies as runDependencyInstall,
 } from "../_sandbox_runtime/git";
 import { detectPackageManager } from "../_sandbox_runtime/devServer";
@@ -40,14 +24,8 @@ import {
 } from "./snapshot";
 import { errorMessage } from "@vvedantb/server";
 
-// Large seeded snapshots take well over the SDK's 30s default to boot the
-// ephemeral builder sandbox — mirrors createSeedPrepSandbox's readyTimeoutSeconds.
 const BUILDER_SANDBOX_READY_TIMEOUT_SECONDS = 180;
 
-// Every convex action has a hard 600s ceiling. Cloning + installing more than
-// a handful of repos serially risks blowing through it, so installs (the slow
-// part) are skipped past this count — the snapshot still carries the clones,
-// just without warm node_modules.
 const MAX_LINKED_REPOS_TO_INSTALL = 3;
 
 const CLONE_TIMEOUT_SECONDS = 300;
@@ -56,14 +34,6 @@ function logBuild(message: string): void {
   console.log(`[repoGroups][snapshot] ${message}`);
 }
 
-/**
- * Clones one linked repo into `destDir` on `branch`. `cloneRepoInto` mints a
- * one-off installation token and does not install the sandbox's global git
- * credential helper, which is what this ephemeral builder wants — it is
- * deleted right after the capture. The token is stripped from the `origin`
- * remote immediately afterwards so it is never baked into the captured
- * snapshot's filesystem.
- */
 async function cloneLinkedRepo(
   sandbox: SandboxHandle,
   installationId: number,
@@ -75,17 +45,12 @@ async function cloneLinkedRepo(
   const repoUrl = `https://github.com/${owner}/${name}.git`;
   logBuild(`cloning ${owner}/${name}@${branch} into ${destDir}`);
   await cloneRepoInto(sandbox, installationId, owner, name, destDir);
-  // Plain `git clone` fetches every branch as a remote-tracking ref, so the
-  // target branch (if different from whatever HEAD defaulted to) is already
-  // available locally — no second authenticated network call needed.
   await execHandle(
     sandbox,
     `git -C ${destDir} checkout ${branch} 2>/dev/null || git -C ${destDir} checkout -b ${branch} origin/${branch}`,
     CLONE_TIMEOUT_SECONDS,
     "/",
   );
-  // Never leave the transient token sitting in `.git/config` — the snapshot's
-  // filesystem is what gets captured next.
   await execHandle(
     sandbox,
     `git -C ${destDir} remote set-url origin ${repoUrl}`,
@@ -153,16 +118,12 @@ export const buildGroupSnapshot = internalAction({
         sandboxEnvVars,
         EPHEMERAL_LIFECYCLE,
         snapshotName,
-        undefined, // onSandboxAcquired
-        undefined, // onProgress
-        { mode: "none" }, // syncStrategy — this builder is thrown away, no need to sync
+        undefined,
+        undefined,
+        { mode: "none" },
         BUILDER_SANDBOX_READY_TIMEOUT_SECONDS,
-        true, // skipInstallDeps — primary already carries its own deps
-        undefined, // forkFrom
-        // Cache WRITER: runDependencyInstall below installs every linked repo
-        // from scratch, so this builder both benefits most from a warm cache
-        // and is the right place to populate it. Falls back to a read-only
-        // mount automatically if a seed build already holds the write lock.
+        true,
+        undefined,
         DRIVE_CACHE_WRITER,
       );
       sandbox = created.sandbox;

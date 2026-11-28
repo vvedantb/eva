@@ -64,39 +64,22 @@ import {
 import { preloadCursorSdk, runCursorSdkAttempt } from "./cursorSdk.js";
 import { resolveDaemonPaths } from "./daemonPaths.js";
 
-// Same knobs as the Claude/Codex daemons (see claudeSdkDaemon.ts for the
-// reasoning behind each): keep the sandbox warm for a whole work session, poll
-// the claim mutation fast while anything is in flight and back off when idle so
-// an idle daemon does not burn ~20 mutations/s for turns that never come.
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 const WATCHDOG_TICK_MS = 5000;
-// Outer bound on one claimed turn. `runCursorSdkAttempt` already enforces the
-// runtime cap and the silence kill itself (cancelling the run so the attempt
-// returns and reports a failure completion like the one-shot path). This is the
-// backstop for the case that machinery cannot cover: a run whose `cancel()` never
-// unsticks `wait()`, which would otherwise leave the workflow's awaitEvent
-// hanging on an empty "Working…" bubble forever.
 const TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1000;
-// Safety net for a cancel whose run never settles (mirrors the Claude daemon's
-// CANCEL_SETTLE_TIMEOUT_MS): exit for respawn rather than wedge.
 const CANCEL_SETTLE_TIMEOUT_MS = 30_000;
 const CURSOR_TURN_WORKER_FILE_PREFIX = "/tmp/eva-cursor-turn-";
-// Cursor's SDK can retain several gigabytes of a long tool-heavy run. The
-// default V8 heap (~4 GB in production) aborted a healthy 17-minute turn, so
-// give the disposable worker room to finish while keeping the supervisor tiny.
 const CURSOR_TURN_WORKER_HEAP_MB = 8192;
 const CURSOR_TURN_WORKER_OOM_SCORE = "300";
 
 const daemonPaths = resolveDaemonPaths();
 
-/** Local lifecycle authority: claimed, running, cancelling, finalizing, stopping. */
 const supervisor = new DaemonSupervisor<ClaimedTurn, { kind: "worker" }>();
 let callbackRefreshDeferralLogged = false;
 let turnStartedAtMs = 0;
 let lastIdleActivityAtMs = Date.now();
 let cancelRequestedAtMs = 0;
-/** Stops the running turn worker; set by runClaimedTurn each turn. */
 let abortActiveTurn: (() => void) | null = null;
 
 export type CursorTurnWorkerExit =
@@ -113,7 +96,6 @@ function cursorTurnWorkerEntryPath(): string {
   return entryPath;
 }
 
-/** Reads the narrow, validated handoff written by the parent Cursor daemon. */
 function readCursorTurnWorkerClaim(): ClaimedTurn {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
@@ -209,26 +191,17 @@ function spawnCursorTurnWorker(
       stdio: "inherit",
     },
   );
-  // The parent daemon is deliberately OOM-protected by the launch script, and
-  // Linux inherits that score into children. Raise only the disposable worker
-  // so host-level pressure sacrifices it before the process that reports the
-  // failure and accepts the next message.
   if (child.pid !== undefined) {
     writeOomScoreAdj(child.pid, CURSOR_TURN_WORKER_OOM_SCORE);
   }
   return child;
 }
 
-/** Clears the per-turn accumulators so the next turn starts clean. */
 function resetTurnState(): void {
   resetDaemonTurnStreamingState();
 }
 
-/** Reports one finished turn to the chat workflow (mirrors the one-shot completion). */
 async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
-  // Only flushStreaming parses buffered lines into accumulatedSteps, so the
-  // drain has to happen before the activity log is read and before the
-  // completion mutation persists it.
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(attempt.output);
   const { success, error } = resolveProviderAttemptOutcome(
@@ -246,50 +219,29 @@ async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
     resultEvent,
   });
   appendClaimedTurnCompletion(completionArgs);
-  // Final streaming reconcile BEFORE completion: the completion mutation
-  // finalizes the assistant message and the server may dequeue the next turn
-  // straight after, so writing streaming state past that point resurrects this
-  // turn's text into the next turn's placeholder.
   if (await reconcileStreamingAndPersist()) return;
   await deliverCompletionWithMedia(completionArgs);
   syncCursorStateToPersist();
   log("cursor daemon: turn finalized success=" + success);
 }
 
-/**
- * Posts a failure completion for the running turn (resolving the workflow's
- * awaitEvent so the UI stops spinning) and exits, abandoning a possibly wedged
- * run — the next turn's prewarm boots a fresh daemon.
- */
 async function failTurnAndExit(error: string): Promise<never> {
   log("cursor daemon: failing turn — " + error);
-  // Durability BEFORE completion, as finalizeTurn does it: a failed turn's
-  // committed work is still the user's work and this process is about to exit.
   persistTurnWork();
   try {
-    // The disposable worker owns the live steps. A null log tells Convex to
-    // preserve the last streaming snapshot when the worker cannot report.
     await postClaimedTurnFailureCompletion({ error, activityLog: null });
   } catch {
-    /* best-effort: exit regardless so the daemon does not wedge */
   }
   cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
 }
 
-/**
- * Backstops the per-attempt watchdog inside `runCursorSdkAttempt`: a turn that
- * outlives the hard cap (or a cancel that never settles) means that machinery
- * failed, so resolve the turn server-side and exit for a clean respawn.
- */
 function startTurnWatchdog(): void {
   const timer = setInterval(() => {
     const now = Date.now();
     if (supervisor.isCancellationInFlight) {
       if (now - cancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS) {
-        // The server already finalized this turn when it drained the cancel, so
-        // posting a completion here could resolve the NEXT turn's event.
         log("cursor daemon: cancelled turn did not settle in time — exiting");
         cleanOwnedMarkers(daemonPaths);
         process.exit(1);
@@ -298,8 +250,6 @@ function startTurnWatchdog(): void {
     }
     if (supervisor.phase !== "running") return;
     if (now - turnStartedAtMs > TURN_HARD_TIMEOUT_MS) {
-      // Leaving "running" stops this 5 s tick from re-firing while the
-      // failure completion retries.
       supervisor.beginFinalizing();
       abortActiveTurn?.();
       void failTurnAndExit(TURN_MAX_RUNTIME_ERROR);
@@ -308,10 +258,6 @@ function startTurnWatchdog(): void {
   timer.unref?.();
 }
 
-/**
- * Polls the claim mutation: hands staged turns to the run loop, drains cancels
- * for the running turn, and stops claiming once a newer callback bundle lands.
- */
 function startClaimWatcher(): void {
   void (async () => {
     while (!supervisor.isStopping) {
@@ -337,7 +283,6 @@ function startClaimWatcher(): void {
         log(
           "cursor daemon: callback script updated on disk — exiting for respawn",
         );
-        // The main loop sees the stop and cleans owned markers before exiting.
         supervisor.stop();
         return;
       }
@@ -365,7 +310,6 @@ function startClaimWatcher(): void {
           });
         }
       } catch {
-        /* retry on the next poll */
       }
       await sleep(
         selectClaimPollIntervalMs({
@@ -377,11 +321,6 @@ function startClaimWatcher(): void {
   })();
 }
 
-/**
- * Handles a drained `cancelRequested` flag: stops the turn worker, and marks
- * the turn as server-finalized so no completion is posted for it. Idempotent;
- * a stale flag with no running turn is ignored.
- */
 function handleCancelRequested(): void {
   if (supervisor.currentTurn === null) {
     log("cursor daemon: cancelRequested with no active turn — ignored");
@@ -393,10 +332,6 @@ function handleCancelRequested(): void {
   abortActiveTurn?.();
 }
 
-/**
- * Runs a claimed turn inside the disposable Cursor worker process. The worker
- * runs no claim watcher: the parent cancels it with SIGTERM.
- */
 async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
   log("cursor turn worker: turn started");
   try {
@@ -425,7 +360,6 @@ async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
       appendClaimedTurnCompletion(completionArgs);
       await deliverCompletionWithMedia(completionArgs);
     } catch {
-      /* best-effort — the watchdog and stall recovery own the rest */
     }
   }
 }
@@ -439,9 +373,6 @@ export async function runCursorTurnWorker(): Promise<void> {
   resetTurnState();
   startClaimedTurn(turn);
   try {
-    // A fresh process per turn: import the SDK while the two independent
-    // Convex round trips (lease preflight, GitHub token) run side by side.
-    // Sessions may push git commits, so the token is refreshed every turn.
     preloadCursorSdk();
     const [preflightOk] = await Promise.all([
       runPreflightHeartbeat(),
@@ -463,18 +394,10 @@ async function reportCursorTurnWorkerFailure(
 ): Promise<void> {
   const error = cursorTurnWorkerFailureMessage(outcome);
   log("cursor daemon: " + error);
-  // The worker died too hard to publish its own work, so the supervisor does it
-  // from the same working tree — durability before the failure completion.
   persistTurnWork();
-  // Convex falls back to the last streamed activity so a hard worker crash
-  // cannot erase the reasoning/tools the user already saw.
   await postClaimedTurnFailureCompletion({ error, activityLog: null });
 }
 
-/**
- * The warm daemon only supervises a disposable worker. It retains cancellation
- * and claim polling without retaining the Cursor SDK's heap between messages.
- */
 async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
   const promptFile =
     CURSOR_TURN_WORKER_FILE_PREFIX +
@@ -526,7 +449,6 @@ async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
     try {
       unlinkSync(promptFile);
     } catch {
-      /* ignore */
     }
   }
 }

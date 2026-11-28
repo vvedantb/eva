@@ -73,7 +73,6 @@ export function TriggerSection({
   );
 }
 
-/** One switch per event. The last one on stays on: an event trigger needs one. */
 function EventSwitches({
   trigger,
   onChange,

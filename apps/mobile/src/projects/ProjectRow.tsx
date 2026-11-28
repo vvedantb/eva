@@ -20,10 +20,8 @@ import { useScheme } from "@/ui/theme";
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
-/** Avatars drawn on a card; the rest are a "+N", as the web. */
 const MAX_AVATARS = 3;
 
-/** A project with no tasks yet, until its tasks load. */
 const NO_TASKS: ProjectListStatus = {
   stage: "todo",
   counts: projectStatus([]).counts,
@@ -50,7 +48,6 @@ export function ProjectRow({
   onLongPress,
 }: {
   project: Project;
-  /** Derived from the child tasks (`useProjectListStatuses`); undefined while they load. */
   status: ProjectListStatus | undefined;
   users: User[] | undefined;
   onLongPress: () => void;
@@ -61,12 +58,10 @@ export function ProjectRow({
   const muted = theme.mutedForeground;
   const simpleView = useSimpleView();
   const shownStatus = status ?? NO_TASKS;
-  // Tasks that wait for a person.
   const needsYouLabel = projectListNeedsYouLabel(shownStatus);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
   const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
-  // The web `showsSandboxStatusDot`: simple view shows none.
   const showSandbox = sandbox !== undefined && !simpleView;
   const memberIds = [...new Set([project.projectLead, ...(project.members ?? [])].filter((id): id is Id<"users"> => id !== undefined))];
   const avatarIds = memberIds.length > 0 ? memberIds : [project.userId];
@@ -85,7 +80,6 @@ export function ProjectRow({
       accessibilityHint={hint}
       accentColor={projectStageAppearance(shownStatus.stage, scheme).bar}
       backgroundColor={theme.card}
-      // The web `px-3 py-2.5 pl-3.5` and `gap-1.5`; `py-3` for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
       onPress={() => router.push({ pathname: "/project/[projectId]", params: { projectId: project._id, repo: project.repoId } })}
       onLongPress={onLongPress}

@@ -17,22 +17,13 @@ import {
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
 
-// Every tool here calls the same public automations:* functions the web UI
-// does, as the caller (mcpCallAsUser), so hasRepoAccess and the system
-// automation guards apply unchanged.
-
 const DURABLE_NOTE =
   "Automations are durable: they live in Eva and keep running on their schedule after this session ends, unlike an agent's own in-session cron or loop.";
 const TIMEZONE_NOTE =
   'Schedules are standard 5-field cron expressions ("minute hour day-of-month month day-of-week") in UTC. The web UI shows them in the viewer\'s local time, so convert before writing one.';
 
-/** Long run text is cut to this many characters so one reply stays readable. */
 const SUMMARY_LIMIT = 2000;
 const FINDING_TEXT_LIMIT = 300;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Reply shapes, parsed at the boundary
-// ─────────────────────────────────────────────────────────────────────────────
 
 const automationSchema = z.object({
   _id: z.string(),
@@ -89,10 +80,6 @@ function scheduleSummary(automation: Automation) {
     : { cron: raw, timezone: "UTC" };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Small helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
 function truncate(text: string, limit: number): string {
   return text.length > limit
     ? `${text.slice(0, limit)}… [${text.length - limit} more characters]`
@@ -103,7 +90,6 @@ function isoTime(ms: number | undefined): string | null {
   return ms === undefined ? null : new Date(ms).toISOString();
 }
 
-/** Claude short names the other tools accept, mapped to Eva model ids. */
 const MODEL_ALIASES: Record<string, string> = {
   opus: "claude:opus",
   sonnet: "claude:sonnet",
@@ -185,7 +171,6 @@ interface UpdateFields {
   emailAutoSend?: boolean;
 }
 
-/** The checks automations:update would only hit on enable, or the UI enforces. */
 function fieldsError(fields: UpdateFields) {
   if (fields.readOnly === false && fields.actionsEnabled === true) {
     return toolErrorResult(
@@ -195,7 +180,6 @@ function fieldsError(fields: UpdateFields) {
   return null;
 }
 
-/** Builds the automations:update args, mirroring the UI's readOnly/actions coupling. */
 function buildUpdateArgs(
   id: string,
   fields: UpdateFields,
@@ -264,7 +248,6 @@ export function automationTools(
       "No automation matched that id, or you do not have access to it. Use list_automations to find one.",
     );
 
-  /** Resolves the optional repo ref to repos, or every repo the user can reach. */
   async function targetRepos(ref: {
     repoId?: string;
     repoName?: string;
@@ -278,10 +261,6 @@ export function automationTools(
     await assertUserRepoAccess(resolved.repoId, userId);
     return repos.filter((repo) => repo.id === resolved.repoId);
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // list_automations
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -363,10 +342,6 @@ A shared monorepo automation appears once, under the first app that surfaces it.
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // get_automation_runs
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "get_automation_runs",
@@ -385,8 +360,6 @@ Each finding has an "id" for create_tasks_from_automation_findings, a severity, 
       },
       handler: ({ automationId, limit }) =>
         guarded(async () => {
-          // automations:get is the access check; listRuns itself does not
-          // check the repo, so it is only called after this succeeds.
           const automation = await getAutomation(automationId);
           if (!automation) return notFound();
           const runs = (await listRuns(automationId)).slice(0, limit);
@@ -427,10 +400,6 @@ Each finding has an "id" for create_tasks_from_automation_findings, a severity, 
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // create_automation / update_automation
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "create_automation",
@@ -458,8 +427,6 @@ New automations start disabled unless you pass enabled: true, and use the repo's
           if ("content" in ref) return ref;
           await assertUserRepoAccess(ref.repoId, userId);
 
-          // The UI creates with a title, then saves settings through update;
-          // this follows the same two calls.
           const id = await mcpCallAsUser(
             ctx,
             clerkUserId,
@@ -531,10 +498,6 @@ System automations (listed with a "systemKey") only accept cronSchedule, model, 
         }),
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // run_automation_now / cancel_automation_run
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
@@ -611,10 +574,6 @@ Rejected when the automation has no prompt or already has a run queued or runnin
     }),
   );
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // delete_automation
-  // ───────────────────────────────────────────────────────────────────────────
-
   tools.push(
     defineTool({
       name: "delete_automation",
@@ -645,10 +604,6 @@ Ask the user first and pass confirmed: true only after they say yes. To pause in
         }),
     }),
   );
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // create_tasks_from_automation_findings
-  // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({

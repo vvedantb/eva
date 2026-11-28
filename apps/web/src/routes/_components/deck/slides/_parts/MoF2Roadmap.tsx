@@ -19,10 +19,8 @@ interface Span {
 
 export interface MoF2Bar {
   label: string;
-  /** Left edge and length in track pixels, at each zoom level. */
   month: Span;
   week: Span;
-  /** How far along the work is, 0 to 1. */
   done: number;
 }
 
@@ -35,10 +33,8 @@ const TICKS: Record<"month" | "week", readonly string[]> = {
   week: ["W1", "W2", "W3", "W4", "W5", "W6"],
 };
 
-/** "Today", in track pixels. Week pixels run about 1.84× month pixels. */
 const TODAY = { month: 340, week: 626 };
 
-/** Seconds after slide entry that the rows start to land. */
 const ROWS_AT = 0.55;
 const ROW_GAP = 0.09;
 
@@ -48,11 +44,6 @@ function useZoom(): "month" | "week" {
   return useDeckStep() >= 2 ? "week" : "month";
 }
 
-/**
- * One tick is a gridline plus its label. On the zoom each unit slides to its
- * new spacing while its label rises out of a mask, so the axis visibly
- * re-scales instead of cross-fading. Units past the month count arrive new.
- */
 function Tick({ index }: { index: number }) {
   const zoom = useZoom();
   const ticks = TICKS[zoom];
@@ -194,7 +185,6 @@ export function MoF2RoadmapRow({
         className="relative h-9 overflow-hidden rounded-[12px] bg-white/[0.035]"
         style={{ width: MOF2_TRACK }}
       >
-        {/* The shell draws in from the left; the bar inside owns the zoom. */}
         <m.div
           className="absolute inset-0 origin-left"
           initial={{ scaleX: 0, opacity: 0 }}

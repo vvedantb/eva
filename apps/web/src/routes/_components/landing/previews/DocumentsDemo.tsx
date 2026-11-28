@@ -13,21 +13,12 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./DocumentsDemo.css";
 
-// A spec the agent reads. Beats: Riya finishes a requirement in the shared
-// doc, her caret and name in her own colour; the visitor asks for the feature
-// in the task beside it; the agent reads the doc (a tool row, pending then
-// done); its reply quotes the line Riya just wrote (the payoff).
-//
-// Real strings: the section, the two requirements, Riya, the ask, the read
-// row and the reply. The rest of the doc and the earlier turn are bars.
-
 const ASK = "Build guest checkout";
 const TYPED = "7 days";
 const REPLY =
   "The spec keeps guest baskets for 7 days, so I will add an expiry to the basket table.";
 const REPLY_WORDS = REPLY.split(" ").length;
 
-/** Where the pointer waits: clear of the send button and the answer. */
 const REST = {
   wide: { x: 560, y: 318 },
   compact: { x: 250, y: 300 },
@@ -76,7 +67,6 @@ async function story(a: Act<S>) {
   await a.wait(250);
   await a.click({ at: "send", x: 0.5, y: 0.5 });
   await a.set({ sent: true, draft: "", focused: false });
-  // Off the button, so the answer has the stage to itself.
   void a.move(REST[a.layout]);
   await a.wait(450);
 

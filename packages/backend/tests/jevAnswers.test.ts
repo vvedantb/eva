@@ -7,12 +7,6 @@ import {
 } from "../convex/_jev/answers";
 import type { EvaluateOutcome } from "../convex/_jev/schema";
 
-/**
- * Feature code reads one answer at a time and falls back when it is missing,
- * so every reader has to be total: a failed call, an id Jev did not answer,
- * and an answer of the wrong question type all read as `null` rather than
- * throwing or returning a half-built value.
- */
 const ok = (
   overrides: Partial<Extract<EvaluateOutcome, { ok: true }>> = {},
 ): EvaluateOutcome => ({

@@ -16,19 +16,6 @@ import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 import { chatEntityKindValidator } from "../_validators/enums";
 
-/**
- * The agent's PR watch (`watch_pull_request`). No polling: the GitHub webhook
- * notes activity on a watched PR, one debounced check per burst reads the PR
- * (`watchCheck.ts`), and anything new wakes the chat through the same
- * `orchestratorSendMessage` path the CI and review automations use. The state
- * lives on the `pullRequests` row: one owner per PR, found by URL from every
- * webhook, and the Review pane already reads that row.
- */
-
-/**
- * Schedules one check for a watched PR. A check already waiting absorbs this
- * call, so a burst of webhooks makes one read and at most one wake.
- */
 async function scheduleWatchCheck(
   ctx: MutationCtx,
   row: Doc<"pullRequests">,
@@ -194,7 +181,6 @@ export const startWatch = internalMutation({
     const fresh = newPrWatch(Date.now());
     if (row.watch === undefined) {
       await setPullRequestWatch(ctx, row._id, fresh);
-      // Read the baseline now, so what is already true is never reported.
       await ctx.scheduler.runAfter(
         0,
         internal._pullRequests.watchCheck.check,
@@ -234,10 +220,6 @@ export const stopWatchForChat = internalMutation({
   },
 });
 
-/**
- * Where a wake goes, or null when nobody should be woken: the chat was
- * archived or deleted.
- */
 async function wakeTarget(
   ctx: MutationCtx,
   row: Doc<"pullRequests">,
@@ -304,8 +286,6 @@ export const claimCheck = internalMutation({
     const watch = row?.watch;
     if (!row || watch === undefined) return null;
     const debounced = watch.checkAt === checkAt;
-    // `startWatch` schedules the baseline read outside the debounce, keyed by
-    // `startedAt`, so a webhook meanwhile cannot cancel it.
     const baseline =
       watch.headSha === undefined && checkAt === watch.startedAt;
     if (!debounced && !baseline) return null;
@@ -353,7 +333,6 @@ export const recordCheck = internalMutation({
       await setPullRequestWatch(ctx, row._id, undefined);
       return null;
     }
-    // A check scheduled while this one ran stays scheduled.
     const stored = {
       ...next,
       ...(current.checkAt === undefined ? {} : { checkAt: current.checkAt }),

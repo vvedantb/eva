@@ -1,13 +1,8 @@
 import { z } from "zod";
 
-/** One channel for every deck; the `deck` field keeps the two routes apart. */
 const CHANNEL = "eva-deck";
 const WINDOW_NAME = "eva-presenter";
 
-/**
- * Anything arriving on a BroadcastChannel is untrusted input from another
- * window, so it is parsed rather than cast.
- */
 const message = z.object({
   slide: z.number().int().min(1),
   step: z.number().int().min(0),

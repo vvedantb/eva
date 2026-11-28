@@ -86,11 +86,9 @@ export const createForkedSession = internalAuthMutation({
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sourceSessionId))
       .collect();
-    // A group deleted since the source was created would fail validation.
     const repoGroup = source.repoGroupId
       ? await ctx.db.get(source.repoGroupId)
       : null;
-    // Composer picks live on the chat; the fork's Main chat inherits Main's.
     const picks: ChatSettingsSource =
       (await findMainChat(ctx.db, source._id)) ?? {};
     const { sessionId, numId } = await createSession(
@@ -155,8 +153,6 @@ export const settleForkSource = internalMutation({
     if (!fork) return null;
     if (fork.forkRestartsSource && fork.forkedFromSessionId) {
       const source = await ctx.db.get(fork.forkedFromSessionId);
-      // Only a source still parked by the fork: anything else means the user
-      // (or a message) already woke it, or archived it since.
       if (source && source.status === "closed" && source.sandboxId && !isSessionArchived(source)) {
         await requestSessionSandboxStart(ctx, source);
       }

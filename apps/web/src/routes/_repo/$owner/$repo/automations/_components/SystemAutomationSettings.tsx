@@ -93,7 +93,6 @@ export function SystemAutomationSettings({
         </p>
       </SettingsSection>
 
-      {/* On/off is the switch next to the title, as on custom automations. */}
       {createsTasks(trigger) || trigger.kind === "cron" ? (
       <SettingsSection title="Behaviour" bodyVariant="list">
         {createsTasks(trigger) ? (
@@ -109,8 +108,6 @@ export function SystemAutomationSettings({
             }
           />
         ) : null}
-        {/* Event presets post a one-line note per run, so there is no
-            summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (
           <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}

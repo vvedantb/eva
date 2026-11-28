@@ -14,17 +14,10 @@ import {
 } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
-/**
- * Reply threads (projects v2, PR D): a reply is a row of the same chat with
- * `replyTo` set. It never shows in the transcript, counts into its root, and
- * wakes Eva only when it @mentions her — her answer then joins the thread.
- */
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|reply-threads";
 const EVA = `@[Eva](${EVA_MENTION_ID})`;
 
-// Started workflows must not run their steps after the test.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
@@ -127,8 +120,6 @@ describe("reply threads", () => {
       expect(state.turns).toHaveLength(1);
       expect(state.placeholder?.replyTo).toBe(f.rootId);
 
-      // Still only the root in the transcript; the thread holds the reply
-      // and Eva's answer row.
       const rows = await transcript(f, f.chatId);
       expect(rows.map((row) => row._id)).toEqual([f.rootId]);
       expect(rows[0]?.replyCount).toBe(2);
@@ -152,7 +143,6 @@ describe("reply threads", () => {
         content: `${EVA} can you split it in two?`,
         model: "claude:sonnet",
       });
-      // A person replies while Eva works: her bubble is still the turn's own.
       await f.asUser.mutation(api.sessionWorkflow.addReply, {
         rootId: f.rootId,
         content: "Thanks!",
@@ -185,7 +175,6 @@ describe("reply threads", () => {
       ]);
       expect(rows[0]?.replyCount).toBe(4);
 
-      // A session-level alert is not the turn's: it stays in Main.
       const { sessionId } = await f.t.run(async (ctx) => {
         const chat = await ctx.db.get(f.chatId);
         if (!chat) throw new Error("chat missing");
@@ -209,7 +198,6 @@ describe("reply threads", () => {
         content: `${EVA} first`,
         model: "claude:sonnet",
       });
-      // Eva is busy with the first one, so the second waits in the queue.
       await f.asUser.mutation(api.sessionWorkflow.addReply, {
         rootId: f.rootId,
         content: `${EVA} second`,
@@ -247,7 +235,6 @@ describe("reply threads", () => {
         hasQuestion: false,
       });
 
-      // She asks a blocking question: the chat's line says so.
       await f.t.run(async (ctx) => {
         await ctx.db.insert("pendingQuestions", {
           entityId: String(f.chatId),
@@ -258,7 +245,6 @@ describe("reply threads", () => {
       });
       expect((await openThreadTurn())?.hasQuestion).toBe(true);
 
-      // Her turn closes: the chat has no thread turn again.
       await f.t.run(async (ctx) => {
         const turn = await ctx.db.query("turns").first();
         if (turn) await ctx.db.patch(turn._id, { open: false });

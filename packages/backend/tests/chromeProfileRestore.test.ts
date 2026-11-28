@@ -2,16 +2,6 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, test } from "bun:test";
 import { CHROME_PREFS_SCRIPT } from "../convex/_sandbox_runtime/desktop";
 
-/**
- * Chrome drops every session cookie on launch unless the profile asks to
- * restore the previous session, so a sandbox resume used to sign the user out
- * of the app under development. The fix is a node one-liner that patches
- * Chrome's Preferences before each launch — and it runs under
- * `2>/dev/null || true`, so a syntax error or a wrong key fails silently in
- * production. These tests run the shipped script for real against an
- * in-memory fs.
- */
-
 const PREFS_DIR = "/home/eva/.config/chrome-debug/Default";
 const PREFS_PATH = `${PREFS_DIR}/Preferences`;
 
@@ -20,7 +10,6 @@ interface FakeFs {
   dirs: Set<string>;
 }
 
-/** Minimal `fs` stand-in exposing only what the script calls. */
 function runPrefsScript(existing?: string): FakeFs {
   const fake: FakeFs = { files: new Map(), dirs: new Set() };
   if (existing !== undefined) {
@@ -61,8 +50,6 @@ function writtenPrefs(fake: FakeFs): Record<string, unknown> {
 
 describe("CHROME_PREFS_SCRIPT", () => {
   test("survives single-quote shell wrapping", () => {
-    // Embedded as node -e '<script>' — one apostrophe ends the sh string and
-    // silently breaks the whole launch command.
     expect(CHROME_PREFS_SCRIPT).not.toContain("'");
   });
 
@@ -77,8 +64,6 @@ describe("CHROME_PREFS_SCRIPT", () => {
   });
 
   test("clears the crash markers pkill leaves behind", () => {
-    // A killed Chrome looks crashed, and a crashed profile skips restore —
-    // so restore_on_startup alone would not keep the cookies.
     const fake = runPrefsScript(
       JSON.stringify({
         profile: { exit_type: "Crashed", exited_cleanly: false },

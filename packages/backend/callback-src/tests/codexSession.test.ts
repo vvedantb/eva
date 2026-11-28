@@ -1,7 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test";
 
-// The session reasoning-effort lever, set per test. Bun copies a mocked
-// module's exports once, so re-mock on every change.
 const originalConfig = { ...(await import("../config.js")) };
 function setEffort(effort: string): void {
   mock.module("../config.js", () => ({
@@ -48,7 +46,6 @@ test("the eva MCP server is appended as its own table after account config", () 
   expect(config).toContain(
     '\n[mcp_servers."eva"]\nurl = "https://example.convex.site/mcp"\nhttp_headers = { "Authorization" = "Bearer token-123" }\n',
   );
-  // A `[table]` in the preserved account config must not capture the MCP keys.
   expect(config.indexOf("[profiles.custom]")).toBeLessThan(
     config.indexOf('[mcp_servers."eva"]'),
   );
@@ -85,10 +82,6 @@ test("no account config and no MCP servers gives only Eva's runtime lines", () =
   );
 });
 
-/**
- * Eva runs codex unattended in a disposable sandbox: an account config that
- * asks for approvals or a sandbox would stall every tool call.
- */
 test("account approval and sandbox settings are replaced by Eva's", () => {
   const account = [
     'sandbox_mode = "read-only"',

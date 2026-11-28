@@ -5,7 +5,6 @@ import { DUR, DrawPath, EASE } from "../_components/motion";
 
 const RING = 160;
 const RADIUS = 72;
-/** A full circle, started at twelve o'clock so the draw reads as a clock hand. */
 const CIRCLE = `M${RING / 2} ${RING / 2 - RADIUS} A${RADIUS} ${RADIUS} 0 1 1 ${RING / 2 - 0.01} ${RING / 2 - RADIUS}`;
 
 const LOGO_AT = 1.4;
@@ -27,7 +26,6 @@ export function Slide15Closing() {
         className="relative mt-14 flex items-center justify-center"
         style={{ width: RING, height: RING }}
       >
-        {/* The slow turning halo. No blur: it spins for as long as the slide is up. */}
         <m.div
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-full"

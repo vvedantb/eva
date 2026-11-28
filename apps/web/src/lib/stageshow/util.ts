@@ -1,8 +1,3 @@
-// Small helpers shared by the stage and its script API.
-
-// Development only. Bundlers (Vite, Next, esbuild with a define) replace
-// process.env.NODE_ENV, so a production build never warns; with no bundler
-// to replace it, `process` is missing and this counts as development.
 export function isDev() {
   try {
     return process.env.NODE_ENV !== 'production'

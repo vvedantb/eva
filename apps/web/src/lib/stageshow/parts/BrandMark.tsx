@@ -8,7 +8,6 @@ type CommonProps = {
   size?: number
   width?: number
   tile?: boolean
-  /** The surface behind the mark. Defaults to the Stage theme. */
   surface?: 'light' | 'dark'
   className?: string
   style?: CSSProperties
@@ -30,8 +29,6 @@ export function BrandMark({ brand, name, src, size = 28, width, tile = true, sur
   const image = src ?? (tile && asset?.tileArtwork ? asset.tileArtwork : dark ? asset?.dark : asset?.light)
   const assetSizing = asset && !src
   const frameWidth = width ?? (assetSizing ? Math.round(size * asset.proportion) : size)
-  // Full-color marks without a supplied dark variant keep their original
-  // artwork on a light tile. Bare marks leave surface choice to the caller.
   const lightTile = tile && dark && assetSizing && asset.dark === asset.light
   return (
     <span className={`ss-brand${className ? ` ${className}` : ''}`} data-tile={tile || undefined} data-light-tile={lightTile || undefined} data-brand={brand} style={{ width: frameWidth, height: size, borderRadius: Math.round(size * 0.24), background: tile && assetSizing ? asset.tileBackground : undefined, ...style }} role="img" aria-label={label}>

@@ -16,10 +16,6 @@ import { loadProjectTaskRows } from "../_projects/taskTable";
 import { projectTaskRowValidator } from "../_validators/projectTasks";
 import { upsertProjectSummary } from "../_projects/summary";
 
-// The Convex side of the project-aware MCP tools (`mcp/projectScope.ts`
-// holds the pure rules). Every function here is internal: the tool that
-// calls it resolved the caller from its sandbox token first.
-
 const callerOwnerValidator = v.union(
   v.object({ kind: v.literal("project"), projectId: v.string() }),
   v.object({
@@ -31,7 +27,6 @@ const callerOwnerValidator = v.union(
 
 type CallerOwner = Infer<typeof callerOwnerValidator>;
 
-/** The task's project, as the caller owner carries it. */
 async function taskOwner(
   db: DatabaseReader,
   taskId: Id<"agentTasks">,
@@ -155,11 +150,6 @@ export const rowSourceScope = internalQuery({
   },
 });
 
-/**
- * The task of the coordinator's project it may change or archive: one that
- * has not started (still todo or draft, no run pending). Throws otherwise.
- * The one rule for `update_task` and `archive_task` in a coordinator chat.
- */
 async function notStartedProjectTask(
   db: DatabaseReader,
   projectId: string,

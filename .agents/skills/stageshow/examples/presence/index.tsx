@@ -2,28 +2,6 @@ import type { CSSProperties } from 'react'
 import { Bar, Facepile, Stage, Window, type Act, type Rect } from '../../kit'
 import './presence.css'
 
-// Presence: two teammates working in the same doc. Beats: Maya's cursor
-// comes to a sentence and selects it, her color sweeping across it under
-// her name; Jon's cursor comes to the next line and types two words with a
-// caret in his color; both rest. Loops; the reset fades their edits out
-// while the cursors are off at the margins.
-//
-// What makes presence read as people, not decoration:
-// - Each person is one color everywhere: their face in the pile, their
-//   cursor, their name flag, their selection, their caret. Two people, two
-//   colors, neither of them the doc's accent.
-// - The name rides the cursor, just below and right of its tip, so the eye
-//   reads who as well as where. A bare colored arrow is just a second
-//   pointer.
-// - They move like hands: an ease in and out over most of a second, never
-//   linear, never in step with each other.
-// - Their work is in the document's own marks: a selection is a text
-//   highlight, typing is words arriving at a caret. No bubbles, no badges.
-// - There is no own-cursor: the viewer is watching the others.
-//
-// Real strings: the doc's title, the two sentences in play, the typed words,
-// the two names. The rest is placeholder lines at a paragraph's measure.
-
 type Spot = 'rest' | 'start' | 'end' | 'ins' | 'away'
 type S = { maya: Spot; jon: Spot; sel: number; jonText: string; caret: boolean }
 
@@ -39,7 +17,6 @@ async function script(a: Act<S>) {
   await a.wait(500)
   a.mark('jon')
   a.put({ jon: 'ins' })
-  // His caret appears when he gets there, as his click places it
   await a.wait(1100)
   a.put({ caret: true })
   await a.wait(250)
@@ -55,7 +32,6 @@ async function script(a: Act<S>) {
 }
 
 function spot(who: 'maya' | 'jon', at: Spot, sel: Rect, ins: Rect, doc: Rect): { x: number; y: number } {
-  // A name flag never leaves the doc: about 60px from its right edge at most
   const right = doc.x + doc.width - 64
   if (!sel.width) return { x: -100, y: -100 }
   if (who === 'maya') {
@@ -93,7 +69,6 @@ export default function Presence() {
                     Pricing goes live on Thursday.
                   </span>{' '}
                   Checkout opens in the US
-                  {/* Where Jon clicked: his words arrive to the right of it */}
                   <span className="pr-anchor" data-target="ins" />
                   <span className="pr-typed" style={{ '--who': PEOPLE.jon } as CSSProperties}>
                     {s.jonText}

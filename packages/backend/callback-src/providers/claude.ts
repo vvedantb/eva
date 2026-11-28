@@ -37,8 +37,6 @@ function claudeToolCompleteResult(
   isError: boolean,
   toolUseId: string | undefined,
 ): ToolCompleteResult | undefined {
-  // A blocking AskUserQuestion parks the user's structured answers here (see
-  // runtime/pendingQuestion.ts); hand them to the step and drop the entry.
   let answers: Record<string, string> | undefined;
   if (toolUseId !== undefined) {
     const stored = S.questionAnswers.get(toolUseId);
@@ -58,7 +56,6 @@ function claudeToolCompleteResult(
   };
 }
 
-/** Pull plain text out of a tool_result content field (string or text blocks). */
 function extractToolResultText(content: JsonValue): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -79,18 +76,10 @@ function extractToolResultText(content: JsonValue): string {
   return parts.join("");
 }
 
-/** Coerces a raw todo status field to the checklist's fixed set. */
 function normalizeTodoStatus(value: JsonValue): TodoItem["status"] {
   return value === "in_progress" || value === "completed" ? value : "pending";
 }
 
-/**
- * Folds one todo tool call into `S.todoState` and returns the current snapshot.
- * `TodoWrite` (the tool the sandbox CLI emits) sends the full list every call,
- * so it is a straight replace. `TaskCreate`/`TaskUpdate` (newer CLI Task tools)
- * are handled best-effort — create appends, update patches the last item — so a
- * CLI upgrade degrades gracefully rather than losing the checklist entirely.
- */
 function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
   if (name === "TodoWrite") {
     const raw = Array.isArray(input.todos) ? input.todos : [];
@@ -124,18 +113,6 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
   return S.todoState.map((t) => ({ ...t }));
 }
 
-/**
- * Handles Anthropic partial (`stream_event`) messages emitted when the SDK is
- * run with `includePartialMessages: true`. These carry token-level deltas:
- *   { type: "stream_event", event: { type: "content_block_delta",
- *       delta: { type: "text_delta", text: "..." } } }
- * plus lifecycle frames (message_start / content_block_start / _stop /
- * message_stop) and `thinking_delta`. We stream text_delta tokens live and map
- * thinking_delta to the existing reasoning liveness signal. Tool/json deltas
- * (input_json_delta) are ignored — the final assistant message still carries
- * the complete tool_use block. All field accesses are guarded (objects, not
- * arrays/null) to match the rest of the parser.
- */
 function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
   const inner = isJsonObject(event.event) ? event.event : null;
@@ -145,10 +122,6 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
     return events;
   }
   if (inner.type === "content_block_start") {
-    // A new text block opening mid-message (interleaved thinking emits
-    // text → thinking → text with no message_start between) needs a paragraph
-    // break so the blocks do not clump. Only text blocks — thinking/tool blocks
-    // are not appended to the streamed content.
     const contentBlock = isJsonObject(inner.content_block)
       ? inner.content_block
       : null;
@@ -174,14 +147,12 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   return events;
 }
 
-/** Object blocks of `event.message.content`; non-object entries are skipped. */
 function messageContentBlocks(event: JsonObject): JsonObject[] {
   const content = asJsonObject(event.message).content;
   if (!Array.isArray(content)) return [];
   return content.filter(isJsonObject);
 }
 
-/** Builds the `complete_tool` event for one Claude tool_result payload. */
 function claudeToolResultEvent(
   toolUseId: string | undefined,
   content: JsonValue | undefined,
@@ -230,8 +201,6 @@ function pushClaudeToolUseEvents(
   parentToolUseId: string | undefined,
 ): void {
   const input = asJsonObject(block.input);
-  // Todo tools drive a single evolving checklist, not one activity row per
-  // call. Read-only variants add nothing to the timeline.
   if (TODO_TOOL_NAMES.has(name)) {
     events.push({ kind: "set_todos", todos: reduceTodoState(name, input) });
     return;
@@ -249,9 +218,6 @@ function pushClaudeToolUseEvents(
       ? { kind: "push_step", step, trackingId }
       : { kind: "push_step", step },
   );
-  // Fire-and-forget question metadata (surfaced after the turn). Skipped in
-  // blocking mode, where canUseTool owns the question round-trip and driving
-  // this too would double-render the question in the UI.
   if (
     !BLOCKING_QUESTIONS_ENABLED &&
     name === "AskUserQuestion" &&
@@ -264,12 +230,6 @@ function pushClaudeToolUseEvents(
   }
 }
 
-/**
- * forwardSubagentText also sends the subagent's own text and thinking. Its
- * text becomes a `response` step under the Agent row (the child thread view
- * reads it); its thinking is dropped so it never lands in the parent's
- * reasoning or reply.
- */
 function pushClaudeSubagentTextEvent(
   events: CanonicalEvent[],
   block: JsonObject,
@@ -306,11 +266,6 @@ function pushClaudeAssistantBlockEvents(
   ) {
     events.push({ kind: "update_reasoning", text: String(block.thinking) });
   } else if (block.type === "text" && "text" in block && block.text) {
-    // Dedup: when text was already streamed live via text_delta partials
-    // (flag set in applyCanonicalEvents), the final assistant message repeats
-    // the same complete text — skip it to avoid doubling. When no deltas
-    // streamed (flag false — non-partial path or other frames), append as the
-    // fallback so text is never lost.
     if (!S.streamedAssistantTextThisMessage) {
       events.push({ kind: "append_text", text: String(block.text) });
     }
@@ -323,8 +278,6 @@ function parseClaudeAssistantEvent(event: JsonObject): CanonicalEvent[] {
     events.push({ kind: "mark_first_assistant" });
   }
   const blocks = messageContentBlocks(event);
-  // Set on messages produced INSIDE a subagent — the parent `Agent` tool_use id.
-  // The UI nests these steps under the matching `subtask` row.
   const parentToolUseId = trimmedString(event.parent_tool_use_id);
   for (const block of blocks) {
     pushClaudeAssistantBlockEvents(events, block, parentToolUseId);
@@ -337,8 +290,6 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
     return parseClaudeSdkTaxonomy(event);
   }
   if (event.type === "stream_event") {
-    // Subagent partials must never stream into the parent's reply. Their
-    // finished text arrives as whole assistant messages (forwardSubagentText).
     if (trimmedString(event.parent_tool_use_id)) return [];
     return parseClaudeStreamEvent(event);
   }

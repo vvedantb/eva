@@ -4,24 +4,6 @@ import type { Act, Layout, Rect } from '../../kit'
 import { figma, notion, slack } from '../../assets/app-icons'
 import './bento.css'
 
-// The bar for a bento grid (references/bento.md): the features section of
-// Kite, a spend management app for small teams. Five tiles, hero and strip.
-//
-// The tile list, written before any tile was built:
-//
-//   Tile          Span   Kind        The one thing                    Moves
-//   Receipts      2 × 1  Hero UI     a receipt lands on its charge    the receipt drops in, Missing turns Matched
-//   Close         1 × 1  Stat        "2 days", on the one dark tile   counts down from 9
-//   Cards         1 × 1  Object      the card itself                  rises out of the crop
-//   Approvals     1 × 1  Component   one request, Approve             the button presses and turns Approved
-//   Coding        1 × 1  Diagram     three merchants, one account     the lines draw in
-//
-// One window in the whole grid (the hero's). Every neighbor is a different
-// kind, across and down. Each picture is its own Stage at 1:1, pinned to its
-// tile's bottom and cropped by the tile; the copy is page text beside it.
-// Each tile plays one beat, once, as it scrolls in, 110ms after the tile
-// before it in reading order.
-
 const STEP = 110
 const LEAD = 450
 
@@ -48,8 +30,6 @@ function Tile({ area, title, children, picture, dark }: { area: string; title: R
   )
 }
 
-/* ---------------- Receipts (hero) ---------------- */
-
 const ROWS = [
   { name: 74, who: 'A', amount: 44 },
   { real: true },
@@ -71,8 +51,6 @@ function Receipt() {
 
 function Ledger({ on, layout }: { on: boolean; layout: Layout }) {
   const wide = layout === 'wide'
-  // Columns: merchant, name, receipt and status, amount, then filler the
-  // tile crops. The status sits early in the row so it stays in view.
   const list = (
     <div className="kb-ledger">
       {ROWS.map((row, i) =>
@@ -155,8 +133,6 @@ function Ledger({ on, layout }: { on: boolean; layout: Layout }) {
   )
 }
 
-// The tile owns the crop. Match its current width so an inner Stage never
-// slices a window before the tile edge or shifts its content off the copy gutter.
 function usePictureWidth() {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(340)
@@ -191,10 +167,6 @@ function Receipts() {
   )
 }
 
-/* ---------------- Close (stat) ---------------- */
-
-// Type, not a picture: page text in the tile, with one number that counts
-// down once as the grid scrolls in.
 function useInView<T extends Element>(delay: number) {
   const ref = useRef<T>(null)
   const [seen, setSeen] = useState(false)
@@ -232,8 +204,6 @@ function Close() {
     </Tile>
   )
 }
-
-/* ---------------- Cards (object) ---------------- */
 
 function Cards() {
   const goldId = useId()
@@ -278,8 +248,6 @@ function Cards() {
     </Tile>
   )
 }
-
-/* ---------------- Approvals (component) ---------------- */
 
 function Approvals() {
   const [picture, width] = usePictureWidth()
@@ -331,9 +299,6 @@ function Approvals() {
   )
 }
 
-/* ---------------- Coding (diagram) ---------------- */
-
-// Real app icons, from the apps themselves (assets/app-icons.ts)
 const MERCHANTS = [
   { name: 'Figma', icon: figma },
   { name: 'Slack', icon: slack },
