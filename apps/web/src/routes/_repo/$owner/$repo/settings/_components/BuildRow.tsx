@@ -49,9 +49,6 @@ export function BuildRow({
     <>
       <tr className="cursor-pointer hover:bg-muted/30" onClick={onToggle}>
         <td className="px-2 py-2 sm:px-4">
-          {/* The row keeps its click target, but the disclosure also needs to be
-              a real control so it is reachable by keyboard and screen reader.
-              `stopPropagation` stops the row handler undoing this one. */}
           <button
             type="button"
             aria-expanded={isExpanded}

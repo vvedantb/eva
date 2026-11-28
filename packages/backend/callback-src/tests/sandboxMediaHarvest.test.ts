@@ -77,6 +77,9 @@ test("posts plain captures once and never follows a link", async () => {
     args: {
       parentId: "s1",
       mediaStorageIds: ["storage-1"],
+      mediaNames: {
+        "storage-1": expect.stringMatching(/^(first|retry)\.png$/),
+      },
       turnId: "turn-1",
     },
   });

@@ -1,28 +1,13 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import { authQuery, hasRepoAccess } from "../functions";
 import { sessionValidator } from "../_sessions/helpers";
 import {
-  findChatByNumber,
   findMainChat,
-  listSessionChats,
   loadSessionChat,
   sessionChatValidator,
 } from "./helpers";
-
-/** Chats of one session in tab order (Main first), closed ones included. */
-export const listForSession = authQuery({
-  args: { sessionId: v.id("sessions") },
-  returns: v.array(sessionChatValidator),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
-    const chats = await listSessionChats(ctx.db, args.sessionId);
-    return chats.toSorted((a, b) => a.number - b.number);
-  },
-});
 
 export const get = authQuery({
   args: { chatId: v.id("sessionChats") },
@@ -36,25 +21,16 @@ export const get = authQuery({
 });
 
 /**
- * Resolves the chat a session link opens: `?chat=N`, or Main when the param
- * is absent or names a closed chat. Null when the session has no Main chat yet — the page then calls
- * `ensureMain` and this query re-fires.
+ * A session's one chat (Main). Null when the session has no Main chat yet:
+ * the page then calls `ensureMain` and this query re-fires.
  */
 export const resolveForSession = authQuery({
-  args: {
-    sessionId: v.id("sessions"),
-    number: v.optional(v.number()),
-  },
+  args: { sessionId: v.id("sessions") },
   returns: v.union(sessionChatValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    const requested =
-      args.number !== undefined
-        ? await findChatByNumber(ctx.db, args.sessionId, args.number)
-        : null;
-    if (requested && requested.archived !== true) return requested;
     return await findMainChat(ctx.db, args.sessionId);
   },
 });
@@ -75,62 +51,27 @@ export const getInternal = internalQuery({
 
 const deliveryChatValidator = v.object({
   chatId: v.id("sessionChats"),
-  title: v.string(),
-  number: v.number(),
   lastModel: v.optional(v.string()),
 });
 
-function pickDeliveryChat(
-  chats: Doc<"sessionChats">[],
-  chat: string | undefined,
-): Doc<"sessionChats"> | null {
-  const live = chats.filter((candidate) => candidate.archived !== true);
-  if (chat === undefined) {
-    return live.find((candidate) => candidate.isMain) ?? live[0] ?? null;
-  }
-  const byId = live.find((candidate) => String(candidate._id) === chat);
-  if (byId) return byId;
-  const asNumber = Number(chat);
-  if (Number.isInteger(asNumber)) {
-    const byNumber = live.find((candidate) => candidate.number === asNumber);
-    if (byNumber) return byNumber;
-  }
-  const wanted = chat.trim().toLowerCase();
-  return (
-    live.find((candidate) => candidate.title.trim().toLowerCase() === wanted) ??
-    null
-  );
-}
-
 /**
- * Which chat of a session an outside message (`send_chat_message`) lands in:
- * the named chat (number or exact title) or Main. Runs as the sending user.
+ * The chat an outside message (`send_chat_message`) lands in: the session's
+ * one chat. Runs as the sending user.
  */
 export const resolveDeliveryChat = authQuery({
-  args: {
-    sessionId: v.id("sessions"),
-    chat: v.optional(v.string()),
-  },
+  args: { sessionId: v.id("sessions") },
   returns: v.union(deliveryChatValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    const chats = await listSessionChats(ctx.db, args.sessionId);
-    const chat = pickDeliveryChat(chats, args.chat);
+    const chat = await findMainChat(ctx.db, args.sessionId);
     if (!chat) return null;
-    return {
-      chatId: chat._id,
-      title: chat.title,
-      number: chat.number,
-      lastModel: chat.lastModel,
-    };
+    return { chatId: chat._id, lastModel: chat.lastModel };
   },
 });
 
 export type DeliveryChat = {
   chatId: Id<"sessionChats">;
-  title: string;
-  number: number;
   lastModel?: string;
 };

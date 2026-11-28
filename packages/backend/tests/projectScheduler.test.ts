@@ -11,6 +11,10 @@ import {
 import { sessionSandboxProfile } from "../convex/_sessions/owner";
 import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 import { modules } from "./_helpers/convexModules";
+import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
+import { ensureWorkSession } from "../convex/_sessions/ownedSession";
+import { findWorkChat } from "../convex/_sessions/ownerState";
+import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-scheduler";
@@ -102,29 +106,48 @@ const factsOf = async (f: Fixture, taskId: Id<"agentTasks">) => {
   return facts;
 };
 
-async function failLatestRun(f: Fixture, taskId: Id<"agentTasks">) {
+async function endRun(
+  f: Fixture,
+  taskId: Id<"agentTasks">,
+  state: "done" | "error",
+): Promise<Id<"turns">> {
   return f.t.run(async (ctx) => {
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    let runId = runs.at(-1)?._id;
-    if (runId === undefined) {
-      runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId: f.repoId,
-        status: "error",
-        logs: [],
-        startedAt: Date.now() - 1_000,
-        error: "Tests failed",
-      });
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new Error("task missing");
+    const { session, mainChat } = await ensureWorkSession(ctx, {
+      kind: "task",
+      task,
+    });
+    for (const row of await ctx.db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", mainChat._id))
+      .collect()) {
+      await ctx.db.delete(row._id);
     }
-    for (const run of runs) {
-      await ctx.db.patch(run._id, { status: "error", error: "Tests failed" });
-    }
-    await ctx.db.patch(taskId, { status: "todo", run: undefined });
-    return runId;
+    const turnId = await openSessionChatTurn(ctx, {
+      chatId: mainChat._id,
+      sessionId: session._id,
+      streamingEntityId: String(mainChat._id),
+      model: "claude:opus",
+      repoId: f.repoId,
+      taskRun: { mode: "implementation" },
+    });
+    const turn = await ctx.db.get(turnId);
+    if (!turn) throw new Error("turn missing");
+    await closeTurn(
+      ctx,
+      turn,
+      state,
+      state === "error" ? { error: "Tests failed" } : {},
+    );
+    return turnId;
   });
+}
+
+async function failLatestRun(f: Fixture, taskId: Id<"agentTasks">) {
+  const turnId = await endRun(f, taskId, "error");
+  await f.t.run((ctx) => ctx.db.patch(taskId, { status: "todo", run: undefined }));
+  return turnId;
 }
 
 async function finishTask(
@@ -132,15 +155,10 @@ async function finishTask(
   taskId: Id<"agentTasks">,
   prState: "open" | "merged",
 ) {
-  await f.t.run(async (ctx) => {
-    await ctx.db.patch(taskId, { status: "done", prState, run: undefined });
-    for (const run of await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect()) {
-      await ctx.db.patch(run._id, { status: "success" });
-    }
-  });
+  await endRun(f, taskId, "done");
+  await f.t.run((ctx) =>
+    ctx.db.patch(taskId, { status: "done", prState, run: undefined }),
+  );
 }
 
 describe("project scheduler", () => {
@@ -168,7 +186,7 @@ describe("project scheduler", () => {
   );
 
   test(
-    "a task run copies the project's model and account at its start",
+    "a task's chat starts on Eva's model and account",
     async () => {
       const f = await fixture(1);
       const accountId = await f.t.run(async (ctx) => {
@@ -180,18 +198,23 @@ describe("project scheduler", () => {
           createdAt: 0,
           updatedAt: 0,
         });
-        await ctx.db.patch(f.projectId, {
-          model: "claude:opus",
-          providerAccountId: accountId,
-        });
-        await ctx.db.patch(f.tasks[0], { model: "claude:sonnet" });
+        const project = await ctx.db.get(f.projectId);
+        if (!project) throw new Error("no project");
+        await ensureWorkSession(
+          ctx,
+          { kind: "project", project },
+          { lastModel: "claude:opus", providerAccountId: accountId },
+        );
         return accountId;
       });
       await schedule(f);
       const task = await taskDoc(f, f.tasks[0]);
       expect(task.status).toBe("in_progress");
-      expect(task.model).toBe("claude:opus");
-      expect(task.providerAccountId).toBe(accountId);
+      const chat = await f.t.run(
+        async (ctx) => (await findWorkChat(ctx.db, { kind: "task", task }))?.chat,
+      );
+      expect(chat?.lastModel).toBe("claude:opus");
+      expect(chat?.providerAccountId).toBe(accountId);
     },
     TIMEOUT_MS,
   );
@@ -199,7 +222,7 @@ describe("project scheduler", () => {
 
 describe("who starts project tasks", () => {
   test(
-    "the coordinator's tasks are approved and the scheduler runs at once; a person's waits in Triage",
+    "the coordinator's tasks are approved and the scheduler runs at once; a person's goes to the coordinator",
     async () => {
       const f = await fixture(0);
       const created = await f.t.mutation(
@@ -226,28 +249,18 @@ describe("who starts project tasks", () => {
         "in_progress",
       ]);
 
-      const triageId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
+      const personTaskId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: f.repoId,
         projectId: f.projectId,
         description: "The button is hard to find",
       });
       await schedule(f);
-      const triaged = await taskDoc(f, triageId);
-      expect(triaged.status).toBe("todo");
-      expect(triaged.approvedAt).toBeUndefined();
-      expect(projectTaskDisplayStatus(await factsOf(f, triageId))).toBe("triage");
-
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [triageId],
-      });
-      await schedule(f);
-      expect((await taskDoc(f, triageId)).status).toBe("todo");
+      expect((await taskDoc(f, personTaskId)).status).toBe("todo");
       await f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
         projectId: f.projectId,
-        taskId: triageId,
+        taskId: personTaskId,
       });
-      expect((await taskDoc(f, triageId)).status).toBe("in_progress");
+      expect((await taskDoc(f, personTaskId)).status).toBe("in_progress");
     },
     TIMEOUT_MS,
   );
@@ -497,12 +510,9 @@ describe("archiving project work", () => {
       await expect(check(running)).rejects.toThrow("has started");
       await expect(check(inReview)).rejects.toThrow("has started");
 
-      await f.t.run((ctx) =>
-        ctx.db.patch(running, {
-          status: "todo",
-          run: { state: "running", workflowId: "wf-1" },
-        }),
-      );
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
+      await f.asUser.mutation(api.agentTasks.startExecution, { id: running });
+      await f.t.run((ctx) => ctx.db.patch(running, { status: "todo" }));
       await expect(check(running)).rejects.toThrow("has started");
     },
     TIMEOUT_MS,
@@ -567,8 +577,8 @@ test(
   TIMEOUT_MS,
 );
 
-describe("approved Triage goes to the coordinator", () => {
-  const triageItem = (f: Fixture, title: string) =>
+describe("people's tasks go to the coordinator", () => {
+  const personTask = (f: Fixture, title: string) =>
     f.asUser.mutation(api.agentTasks.createQuickTask, {
       repoId: f.repoId,
       projectId: f.projectId,
@@ -579,17 +589,12 @@ describe("approved Triage goes to the coordinator", () => {
     f.t.run((ctx) => ctx.db.query("projectCoordinatorWakes").collect());
 
   test(
-    "approval hands the items over with one wake-up and starts nothing",
+    "a person's task is approved and handed at once, with one wake-up, and starts nothing",
     async () => {
       const f = await fixture(0);
-      const a = await triageItem(f, "Promo box is hard to find");
-      const b = await triageItem(f, "Rename Basket to Cart");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [a, b],
-      });
+      const a = await personTask(f, "Promo box is hard to find");
       await schedule(f);
-      expect(await statuses(f, [a, b])).toEqual(["todo", "todo"]);
+      expect(await statuses(f, [a])).toEqual(["todo"]);
       const handed = await taskDoc(f, a);
       expect(handed.approvedAt).toBeDefined();
       expect(handed.handedToCoordinatorAt).toBeDefined();
@@ -600,13 +605,69 @@ describe("approved Triage goes to the coordinator", () => {
       const rows = await wakes(f);
       expect(rows.map((row) => row.reason)).toEqual(["triage"]);
       expect(rows[0]?.text).toContain("Promo box is hard to find");
-      expect(rows[0]?.text).toContain("Rename Basket to Cart");
 
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [a, b],
-      });
-      expect(await wakes(f)).toHaveLength(1);
+      await personTask(f, "Rename Basket to Cart");
+      expect(await wakes(f)).toHaveLength(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the migration hands old Triage tasks over with one wake-up per project, once",
+    async () => {
+      const f = await fixture(0);
+      const old = (title: string, projectId: Id<"projects">) =>
+        f.t.run((ctx) =>
+          ctx.db.insert("agentTasks", {
+            repoId: f.repoId,
+            projectId,
+            title,
+            status: "todo",
+            numId: 100,
+            createdAt: 0,
+            updatedAt: 0,
+            createdBy: f.userId,
+          }),
+        );
+      const otherProject = await f.t.run((ctx) =>
+        ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Other",
+          rawInput: "Other",
+          numId: 2,
+        }),
+      );
+      const a = await old("Old ask A", f.projectId);
+      const b = await old("Old ask B", f.projectId);
+      const c = await old("Old ask C", otherProject);
+      const migrate = () =>
+        f.t.run(async (ctx) => {
+          const projects = await ctx.db.query("projects").collect();
+          for (const project of projects) {
+            await handProjectTriageToEva(ctx, project);
+          }
+        });
+      await migrate();
+      for (const id of [a, b, c]) {
+        const task = await taskDoc(f, id);
+        expect(task.approvedAt).toBeDefined();
+        expect(task.handedToCoordinatorAt).toBeDefined();
+      }
+      const rows = await wakes(f);
+      expect(rows.map((row) => String(row.projectId)).sort()).toEqual(
+        [String(f.projectId), String(otherProject)].sort(),
+      );
+      expect(rows.find((row) => row.projectId === f.projectId)?.text).toContain(
+        "Old ask B",
+      );
+
+      await migrate();
+      await f.t.run((ctx) =>
+        ctx.db.patch(a, { approvedAt: undefined, handedToCoordinatorAt: undefined }),
+      );
+      await migrate();
+      expect(await wakes(f)).toHaveLength(2);
     },
     TIMEOUT_MS,
   );
@@ -617,12 +678,8 @@ describe("approved Triage goes to the coordinator", () => {
       const f = await fixture(1);
       const open = f.tasks[0];
       if (open === undefined) throw new Error("fixture task missing");
-      const item = await triageItem(f, "Copy fix");
-      const other = await triageItem(f, "Another fix");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [item, other],
-      });
+      const item = await personTask(f, "Copy fix");
+      const other = await personTask(f, "Another fix");
       const merge = (taskId: Id<"agentTasks">, intoTaskId: Id<"agentTasks">) =>
         f.t.mutation(internal.buildWorkflow.mergeTaskIntoAsCoordinator, {
           projectId: f.projectId,
@@ -659,11 +716,7 @@ describe("approved Triage goes to the coordinator", () => {
           numId: 2,
         }),
       );
-      const item = await triageItem(f, "Copy fix");
-      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
-        projectId: f.projectId,
-        taskIds: [item],
-      });
+      const item = await personTask(f, "Copy fix");
       await expect(
         f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
           projectId: otherProject,

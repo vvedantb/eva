@@ -32,8 +32,6 @@ export async function prefetchSession(params: {
   if (!session) return;
   const sessionId = session._id;
   prewarm(api.sessions.get, { id: sessionId });
-  prewarm(api.sessionChats.listForSession, { sessionId });
-  prewarm(api.turns.listSessionChatStatuses, { sessionId });
   prewarm(api.sessionChats.resolveForSession, { sessionId });
   const chat = await convex.query(api.sessionChats.resolveForSession, {
     sessionId,

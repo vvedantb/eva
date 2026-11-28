@@ -2,28 +2,6 @@ import { RotateCw } from 'lucide-react'
 import { Avatar, Badge, Bar, Stage, Window, type Act } from '../../kit'
 import './loading.css'
 
-// Loading to content: a list of orders arrives into its own skeleton. Beats:
-// the skeleton holds a moment, the rows resolve top to bottom, the list
-// holds; then Refresh is pressed, the rows dim back to the skeleton and
-// resolve again. Loops; the reset is the refresh.
-//
-// What makes a skeleton resolve without a jolt:
-// - The skeleton is the content's own geometry. Each bar sits in the same
-//   grid cell as the words it stands for, at the words' x-height and about
-//   their width, so nothing moves when they arrive: the bar fades as its
-//   words fade in, in place.
-// - Only the data loads. The window, the title and the column heads are
-//   real from the first frame; a skeleton over the chrome reads as a page
-//   that hasn't loaded at all.
-// - Rows resolve top to bottom, 70ms apart, each whole (avatar, name,
-//   amount and status together), so the eye reads down the list once.
-// - The shimmer is faint and slow, and it stops the moment a row resolves.
-//
-// Four rows, the window running off just under the last: the stage may only
-// cut the window's empty foot, never a row's words.
-//
-// Real strings: the title, the column heads, every resolved row.
-
 type S = { ready: boolean; spin: number }
 
 const ROWS = [
@@ -32,7 +10,6 @@ const ROWS = [
   { who: 'Ana Ruiz', what: 'Pro, monthly', amount: '$49.00', status: 'Refunded' },
   { who: 'Leo Sato', what: 'Team, annual', amount: '$1,188.00', status: 'Paid' },
 ]
-// Each bar about its words' width
 const W = [[74, 70], [60, 82], [64, 74], [58, 76]]
 const AW = [52, 44, 40, 60]
 const BW = [42, 42, 62, 42]

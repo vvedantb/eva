@@ -199,8 +199,8 @@ export const notificationTypeValidator = v.union(
   v.literal("system"),
   v.literal("session_archived"),
   v.literal("routed_question"),
-  // routine_complete, run_completed and run_failed removed: no code created
-  // them. schema-narrowing-ok: deleteDeadNotifications
+  v.literal("thread_reply"),
+  v.literal("thread_answer"),
 );
 
 /** The chat surfaces: a session, a quick task or a project. */
@@ -281,7 +281,6 @@ export const runModeValidator = v.union(
   v.literal("resolve_conflicts"),
 );
 
-export const activityLogTypeValidator = v.literal("run");
 
 export const webhookEventStatusValidator = v.union(
   v.literal("pending"),
@@ -368,14 +367,6 @@ export const findingSeverityValidator = v.union(
 );
 export type FindingSeverity = Infer<typeof findingSeverityValidator>;
 
-export const taskSandboxEventValidator = v.union(
-  v.literal("started"),
-  v.literal("reconnected"),
-  v.literal("stopped"),
-  v.literal("stop_failed"),
-  v.literal("failed"),
-);
-
 export const taskActivityFieldValidator = v.union(
   v.literal("status"),
   v.literal("assignee"),
@@ -447,6 +438,13 @@ export const notificationUrgencyValidator = v.union(
   v.literal("normal"),
   v.literal("high"),
 );
+
+/** A person's notification channels. Sparse: a missing key is the default. */
+export const notificationPrefsValidator = v.object({
+  email: v.optional(v.boolean()),
+  push: v.optional(v.boolean()),
+  productUpdates: v.optional(v.boolean()),
+});
 
 export const presentationStatusValidator = v.union(
   v.literal("live"),

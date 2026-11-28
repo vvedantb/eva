@@ -24,12 +24,10 @@ export {
 export { waitForSessionSetup } from "./_sessions/setupGate";
 
 export {
-  startExecute,
   retryLastTurnWithAccount,
   prewarmDaemon,
   prewarmDaemonNow,
   getDaemonPrewarmData,
-  enqueueMessage,
   addReply,
   cancelSessionExecution,
 } from "./_sessions/execution";

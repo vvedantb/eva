@@ -1,23 +1,6 @@
 import { Bar, Stage, Text } from '../../kit'
 import './tilted.css'
 
-// A loose tilted stack: three receipts dropped on a desk, the newest on top.
-// A still. Tilt is the exception in faux UI, not a default: it earns its
-// place here because the story is a pile of paper (things gathered, not a
-// screen), and a straight stack would read as a list.
-//
-// What keeps a tilted stack from looking accidental:
-// - Small angles, alternating: about -6, 4 and -2 degrees. Past 8 the type
-//   on the top card stops reading as level.
-// - The top card is the straightest and the only one with words; the cards
-//   under it show a third or less, and that part is filler.
-// - Each card turns about its own center and is offset a little (12 to 20px),
-//   so the corners fan out unevenly, the way paper lands.
-// - The stack sits on the stage's center line with room on every side; the
-//   stage cuts nothing.
-//
-// Real strings: the top receipt's merchant, items and total.
-
 export default function TiltedStack() {
   return (
     <Stage width={480} height={360} compact={{ below: 480, width: 358, height: 340 }} className="ts">

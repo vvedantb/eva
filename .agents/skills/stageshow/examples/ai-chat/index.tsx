@@ -11,22 +11,6 @@ import {
 } from "../../kit";
 import "./chat.css";
 
-// An assistant answering in a desktop window. Beats: a question is typed into
-// the composer and sent; it lands as the user's message; a short Thinking
-// state; the answer streams in word by word; its sources arrive under it.
-// Plays once; the still is the payoff.
-//
-// What makes streaming read:
-// - Every word is laid out from the start (Stream), so the answer grows in
-//   place: no line reflows, the window never jumps as text arrives.
-// - The answer streams fast enough to feel like a model, slow enough to
-//   read: about 25 words a second, a beat after Thinking.
-// - The sent message carries what follows (Collapse with a drop reveal), so
-//   the thread moves as one, and the composer empties as it sends.
-// - The earlier turn is placeholder: the eye lands on the last exchange.
-//
-// Real strings: the question, the answer, the two sources, the placeholder.
-
 const Q = "Why did checkout conversion drop last week?";
 const A =
   "Conversion fell from 3.4% to 2.7% after the new address step went live on Tuesday. Mobile Safari accounts for most of the drop: the postcode field rejects spaces, so UK customers see an error and leave. Allowing spaces should recover most of it.";
@@ -103,10 +87,6 @@ export default function AiChat() {
                   <Text>{Q}</Text>
                 </div>
               </Collapse>
-              {/* Thinking is one line; the answer opens to its own height as
-                  Thinking closes, so the thread grows once, smoothly, and the
-                  earlier turns move up with it. Before the send neither takes
-                  any room */}
               <Collapse open={s.phase === 'thinking'}>
                 <Text className="ac-thinking">Thinking</Text>
               </Collapse>

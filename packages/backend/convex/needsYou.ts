@@ -1,3 +1,4 @@
+import { taskRunFailure } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import { entityHref, repoBasePath } from "@eva/shared";
 import {
@@ -12,7 +13,6 @@ import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import { loadProjectTaskRows } from "./_projects/taskTable";
-import { latestTaskRun } from "./_projects/runSettings";
 import { isSessionArchived } from "./_sessions/archive";
 
 const needsYouRowValidator = v.object({
@@ -20,7 +20,6 @@ const needsYouRowValidator = v.object({
   group: v.union(
     v.literal("question"),
     v.literal("review"),
-    v.literal("triage"),
     v.literal("failed"),
   ),
   title: v.string(),
@@ -36,11 +35,15 @@ const needsYouRowValidator = v.object({
   prUrl: v.optional(v.string()),
   href: v.optional(v.string()),
   chatTarget: v.optional(v.string()),
+  threadRootId: v.optional(v.id("messages")),
+  chatKey: v.string(),
+  numId: v.optional(v.number()),
+  notificationId: v.optional(v.id("notifications")),
   repoId: v.id("githubRepos"),
   at: v.number(),
 });
 
-type NeedsYouRow = typeof needsYouRowValidator.type;
+export type NeedsYouRow = typeof needsYouRowValidator.type;
 
 const PER_KIND_LIMIT = 100;
 
@@ -48,23 +51,40 @@ export const list = authQuery({
   args: { repoId: v.optional(v.id("githubRepos")) },
   returns: v.array(needsYouRowValidator),
   handler: async (ctx, args) => {
-    const repos =
-      args.repoId === undefined
-        ? await gatherAccessibleRepos(ctx.db, ctx.userId, false)
-        : (await hasRepoAccess(ctx.db, args.repoId, ctx.userId))
-          ? [await ctx.db.get(args.repoId)].filter((repo) => repo !== null)
-          : [];
-    const [perRepo, asks] = await Promise.all([
-      Promise.all(repos.map((repo) => repoRows(ctx.db, repo, ctx.userId))),
-      notificationRows(
-        ctx.db,
-        ctx.userId,
-        new Set(repos.map((repo) => repo._id)),
-      ),
-    ]);
-    return [...perRepo.flat(), ...asks];
+    const repos = await inboxRepos(ctx.db, ctx.userId, args.repoId);
+    const { live, asks } = await collectNeedsYou(ctx.db, ctx.userId, repos);
+    return [...live, ...asks];
   },
 });
+
+/** The repos the Inbox reads: every repo the caller can open, or the one asked for. */
+export async function inboxRepos(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos"> | undefined,
+): Promise<Doc<"githubRepos">[]> {
+  if (repoId === undefined) return await gatherAccessibleRepos(db, userId, false);
+  if (!(await hasRepoAccess(db, repoId, userId))) return [];
+  const repo = await db.get(repoId);
+  return repo ? [repo] : [];
+}
+
+/**
+ * The Needs you rows, split by where they come from: `live` from the state of
+ * tasks, sessions and turns, `asks` from unread notifications that ask for
+ * the caller in a chat. The Inbox files the two in different groups.
+ */
+export async function collectNeedsYou(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repos: readonly Doc<"githubRepos">[],
+): Promise<{ live: NeedsYouRow[]; asks: NeedsYouRow[] }> {
+  const [perRepo, asks] = await Promise.all([
+    Promise.all(repos.map((repo) => repoRows(db, repo, userId))),
+    notificationRows(db, userId, new Set(repos.map((repo) => repo._id))),
+  ]);
+  return { live: perRepo.flat(), asks };
+}
 
 async function repoRows(
   db: DatabaseReader,
@@ -118,6 +138,9 @@ async function notificationRows(
         projectId: source.projectId,
         href: row.href,
         chatTarget,
+        threadRootId: row.threadRootId,
+        chatKey: chatTarget,
+        notificationId: row._id,
         repoId,
         at: row.createdAt,
       };
@@ -205,6 +228,8 @@ async function projectRows(
                 ? `${base}/projects/${project.numId}/${task.numId}/activity`
                 : undefined,
             chatTarget: String(task._id),
+            chatKey: String(task._id),
+            numId: task.numId,
             repoId: repo._id,
             at: task.updatedAt,
           },
@@ -240,25 +265,27 @@ async function quickTaskRows(
   const quick = (tasks: Doc<"agentTasks">[]) =>
     tasks.filter((task) => task.projectId === undefined);
   const todoTasks = quick(todo);
-  const latestRuns = await Promise.all(
-    todoTasks.map((task) => latestTaskRun(db, task._id)),
+  const failures = await Promise.all(
+    todoTasks.map((task) => taskRunFailure(db, task)),
   );
   const candidates = [
     ...quick([...codeReview, ...businessReview]).map((task) => ({
       task,
       lastRunFailed: false,
+      runError: undefined,
       at: task.updatedAt,
     })),
     ...todoTasks.map((task, index) => {
-      const run = latestRuns[index];
+      const failure = failures[index] ?? null;
       return {
         task,
-        lastRunFailed: run?.status === "error",
-        at: run?.finishedAt ?? task.updatedAt,
+        lastRunFailed: failure !== null,
+        runError: failure?.error,
+        at: failure?.at ?? task.updatedAt,
       };
     }),
   ];
-  return candidates.flatMap(({ task, lastRunFailed, at }): NeedsYouRow[] => {
+  return candidates.flatMap(({ task, lastRunFailed, runError, at }): NeedsYouRow[] => {
     const group = needsYouGroupForQuickTask({
       status: task.status,
       prState: task.prState,
@@ -273,14 +300,16 @@ async function quickTaskRows(
         detail:
           group === "review" && task.prUrl
             ? `PR ${prLabel(task.prUrl)}`
-            : task.numId !== undefined
-              ? `#${task.numId}`
+            : group === "failed"
+              ? runError
               : undefined,
         source: "quick_task",
         taskId: task._id,
         prUrl: group === "review" ? task.prUrl : undefined,
         href: entityHref("task", repo, task.numId),
         chatTarget: String(task._id),
+        chatKey: String(task._id),
+        numId: task.numId,
         repoId: repo._id,
         at,
       },
@@ -318,6 +347,8 @@ async function sessionRows(
         prUrl: session.prUrl,
         href: entityHref("session", repo, session.numId),
         chatTarget: String(session._id),
+        chatKey: String(session._id),
+        numId: session.numId,
         repoId: repo._id,
         at: session.updatedAt ?? session._creationTime,
       },
@@ -337,7 +368,7 @@ async function questionRows(
         q.eq("repoId", repo._id).eq("open", true),
       )
       .collect()
-  ).filter((turn) => turn.lane === undefined && turn.sessionId !== undefined);
+  ).filter((turn) => turn.sessionId !== undefined);
   const base = repoBasePath(repo);
   const perTurn = await Promise.all(
     turns.map(async (turn): Promise<NeedsYouRow | null> => {
@@ -368,6 +399,8 @@ async function questionRows(
           ...common,
           title: session.title,
           source: "session",
+          chatKey: String(session._id),
+          numId: session.numId,
           href: entityHref("session", repo, session.numId),
         };
       }
@@ -380,6 +413,7 @@ async function questionRows(
           source: "project",
           projectTitle: project.title,
           projectId: project._id,
+          chatKey: String(project._id),
           href: entityHref("project", repo, project.numId),
         };
       }
@@ -392,6 +426,8 @@ async function questionRows(
           title: task.title,
           source: "quick_task",
           taskId: task._id,
+          chatKey: String(task._id),
+          numId: task.numId,
           href: entityHref("task", repo, task.numId),
         };
       }
@@ -404,6 +440,8 @@ async function questionRows(
         projectTitle: project.title,
         projectId: project._id,
         taskId: task._id,
+        chatKey: String(task._id),
+        numId: task.numId,
         href:
           project.numId !== undefined && task.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId}/activity`

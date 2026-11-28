@@ -1,11 +1,6 @@
 import { Stage, Phone, LockScreen, Notification, Bar, WALLPAPER } from '../../kit'
 import { mail } from '../../assets/app-icons'
 
-// Every phone frame in the kit, at the same width. Narrow, a 150 phone's
-// notification can't be read, so each frame is drawn at 300 and cropped to
-// the half that shows it: the notification and the frame's bottom corners
-// (the top, for the frames with an app on screen).
-
 const WALL = WALLPAPER
 
 

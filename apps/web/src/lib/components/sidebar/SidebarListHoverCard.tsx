@@ -199,6 +199,7 @@ interface SidebarListHoverCardProps {
   preview?: string | null;
   createdAt: number;
   userId?: Id<"users">;
+  details?: ReactNode;
   children: ReactNode;
 }
 
@@ -208,6 +209,7 @@ export function SidebarListHoverCard({
   preview,
   createdAt,
   userId,
+  details,
   children,
 }: SidebarListHoverCardProps) {
   return (
@@ -225,6 +227,7 @@ export function SidebarListHoverCard({
             {preview}
           </p>
         ) : null}
+        {details ? <div className="mt-3">{details}</div> : null}
         <div className="mt-3 flex items-center justify-between gap-2">
           {userId ? <HoverCardAuthor userId={userId} /> : <span />}
           <span className="shrink-0 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import type { FunctionArgs } from "convex/server";
 import type {
   AIModel,
   api,
@@ -7,6 +7,7 @@ import type {
   ReasoningLevel,
 } from "@eva/backend";
 import { chatStreamingEntityId } from "@eva/shared";
+import type { PreviewAnnotation } from "@eva/shared/previewAnnotationDisplay";
 import {
   annotationSender,
   type AnnotationSubmit,
@@ -33,35 +34,26 @@ export function withSessionChat<T>(
   return typeof chat === "string" ? run(chat) : chat().then(run);
 }
 
-type SessionAddArgs = FunctionArgs<typeof api.sessions.addMessage>;
-export type SandboxTurnAddArgs = Omit<SessionAddArgs, "chatId" | "role"> & {
-  role?: SessionAddArgs["role"];
-};
-export type SandboxTurnStartArgs = Omit<
-  FunctionArgs<typeof api.sessionWorkflow.startExecute>,
-  "chatId" | "attachmentStorageIds" | "sourceProposedPlanId"
->;
-export type SandboxTurnEnqueueArgs = Omit<
-  FunctionArgs<typeof api.sessionWorkflow.enqueueMessage>,
-  "chatId"
+/** `chats.send`, with the chat bound by the ports. */
+export type SandboxTurnSendArgs = Omit<
+  FunctionArgs<typeof api.chats.send>,
+  "target"
 >;
 
-/** Start fields passed apart from the composer settings. */
-export interface SandboxTurnStartExtras {
-  attachmentStorageIds?: Id<"_storage">[];
-  sourceProposedPlanId?: Id<"proposedPlans">;
-}
+/**
+ * How the client expects a send to land. The server alone decides; this only
+ * picks the optimistic paint: "start" shows the user bubble and opens the
+ * turn at once, "queue" waits for the queue row.
+ */
+export type SandboxTurnExpectation = "queue" | "start";
 
-/** One chat's workflow mutations, with the chat's id already bound. */
+/** One chat's mutations, with the chat already bound. */
 export interface SandboxTurnPorts {
-  add: (args: SandboxTurnAddArgs) => Promise<null>;
-  start: (
-    args: SandboxTurnStartArgs,
-    extras: SandboxTurnStartExtras,
-  ) => Promise<FunctionReturnType<
-    typeof api.sessionWorkflow.startExecute
-  > | null>;
-  enqueue: (args: SandboxTurnEnqueueArgs) => Promise<null>;
+  send: (
+    args: SandboxTurnSendArgs,
+    expected: SandboxTurnExpectation,
+  ) => Promise<null>;
+  postError: (content: string) => Promise<null>;
 }
 
 /** The composer settings a turn runs on. */
@@ -75,57 +67,40 @@ export interface SandboxTurnSettings {
 export interface SandboxTurnInput {
   message: string;
   displayContent?: string;
+  annotation?: PreviewAnnotation;
   attachmentStorageIds?: Id<"_storage">[];
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
 /**
- * Delivers one turn. `queue` parks it behind the running turn; `start` posts
- * the user row and starts the turn. Rejects when the server rejects, so a
- * caller can tell a delivered send from a failed one.
+ * Sends one turn through `chats.send`; the server starts or queues it.
+ * `expected` only picks the optimistic paint. Rejects when the server
+ * rejects, so a caller can tell a delivered send from a failed one.
  */
 export async function sendSandboxTurn(
   ports: SandboxTurnPorts,
   settings: SandboxTurnSettings,
   input: SandboxTurnInput,
-  mode: "queue" | "start",
+  expected: SandboxTurnExpectation,
 ): Promise<void> {
   const { model, effortLevel, executionTraits, providerAccountId } = settings;
   const reasoningLevel = effortLevel ?? executionTraits.reasoningLevel;
-  if (mode === "queue") {
-    await ports.enqueue({
+  await ports.send(
+    {
       message: input.message,
       displayContent: input.displayContent,
-      model,
-      ...executionTraits,
-      reasoningLevel,
-      providerAccountId,
+      annotation: input.annotation,
       attachmentStorageIds: input.attachmentStorageIds,
-    });
-    return;
-  }
-  await Promise.all([
-    ports.add({
-      content: input.displayContent ?? input.message,
-      attachmentStorageIds: input.attachmentStorageIds,
-      providerAccountId,
-      model,
-      reasoningLevel,
-    }),
-    ports.start(
-      {
-        message: input.message,
+      sourceProposedPlanId: input.sourceProposedPlanId,
+      settings: {
         model,
         ...executionTraits,
         reasoningLevel,
         providerAccountId,
       },
-      {
-        attachmentStorageIds: input.attachmentStorageIds,
-        sourceProposedPlanId: input.sourceProposedPlanId,
-      },
-    ),
-  ]);
+    },
+    expected,
+  );
 }
 
 /**
@@ -137,18 +112,20 @@ export function sandboxAnnotationSender(
   settings: SandboxTurnSettings,
   isExecuting: boolean,
 ): AnnotationSubmit {
-  const send = (mode: "queue" | "start") => (display: string, full: string) =>
-    sendSandboxTurn(
-      ports,
-      settings,
-      { message: full, displayContent: display },
-      mode,
-    );
+  const send =
+    (mode: "queue" | "start") =>
+    (display: string, full: string, annotation: PreviewAnnotation) =>
+      sendSandboxTurn(
+        ports,
+        settings,
+        { message: full, displayContent: display, annotation },
+        mode,
+      );
   return annotationSender({
     isExecuting,
     enqueue: send("queue"),
     send: send("start"),
-    postError: (content) => ports.add({ role: "assistant", content }),
+    postError: ports.postError,
   });
 }
 

@@ -4,8 +4,11 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { FALLBACK_GIT_BASE_BRANCH, taskCanCreatePr } from "@eva/shared";
-import { taskPrUrl } from "@/lib/githubPr";
+import {
+  FALLBACK_GIT_BASE_BRANCH,
+  taskCanCreatePr,
+  taskPrUrl,
+} from "@eva/shared";
 import { canEditTaskText } from "@eva/shared/taskDetail";
 import { useTaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
@@ -37,14 +40,9 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
   const taskSession = useTaskSession(taskId, task);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner = currentUserId === task?.createdBy;
-  const runs = useQuery(api.agentRuns.listByTask, { taskId });
-  const hasActiveRun = Boolean(
-    runs?.some((run) => run.status === "queued" || run.status === "running"),
-  );
-  const hasRuns = (runs?.length ?? 0) > 0;
-  const isProjectTask = task?.projectId !== undefined;
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId });
+  const hasActiveRun = runFacts?.hasActiveRun ?? false;
+  const hasRuns = runFacts?.hasRuns ?? false;
   const users = useQuery(api.users.listAll);
   const projects = useQuery(
     api.projects.list,
@@ -68,11 +66,9 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     isLoading: taskResult === undefined,
     isNotFound: taskResult === null,
     task,
-    isOwner,
-    runs,
+    runFacts,
     hasActiveRun,
     hasRuns,
-    isProjectTask,
     isArchived,
     users,
     projects,
@@ -87,7 +83,8 @@ type TaskDetailQueries = ReturnType<typeof useTaskDetailQueries>;
 
 function deriveRunSummary({
   task,
-  runs,
+  runFacts,
+  hasRuns,
   hasActiveRun,
   isArchived,
   comments,
@@ -95,21 +92,20 @@ function deriveRunSummary({
   projects,
 }: TaskDetailQueries) {
   const status = task?.status;
-  const latestPrUrl = taskPrUrl(task, projects);
+  const latestPrUrl = task
+    ? taskPrUrl(
+        task,
+        projects?.find((project) => project._id === task.projectId)?.prUrl,
+      )
+    : undefined;
   const hasTabContent =
-    (runs !== undefined && runs.length > 0) ||
-    (comments !== undefined && comments.length > 0);
+    hasRuns || (comments !== undefined && comments.length > 0);
   return {
     status,
     canEditTaskText: !isArchived && canEditTaskText(status, hasActiveRun),
     latestPrUrl,
-    latestPrError: runs?.find((r) => r.prError)?.prError,
-    latestDeployment: runs?.find((r) => r.deploymentStatus),
-    canCreatePr: taskCanCreatePr({
-      latestPrUrl,
-      runCount: runs?.length ?? 0,
-      hasActiveRun,
-    }),
+    deploymentStatus: runFacts?.deploymentStatus,
+    canCreatePr: taskCanCreatePr({ latestPrUrl, hasRuns, hasActiveRun }),
     showTabsColumn: status !== "todo" || hasTabContent,
     creatorUser: task?.createdBy
       ? users?.find((u) => u._id === task.createdBy)

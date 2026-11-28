@@ -3,10 +3,6 @@ import { ChevronDown, ChevronLeft, Ellipsis } from 'lucide-react'
 import { Stage, type Act } from '../kit'
 import './details.css'
 
-// Detail pairs: small scenes where one choice decides whether the demo looks
-// made or real. Four move (a swipe's throw, a reaction, a chart drawing
-// on, a label pinned to its chevron); two are stills (a top bar, copy length).
-
 export const detailLessons = [
   { id: 'detail-throw', title: 'Throw a swipe at the finger’s speed', note: 'The same row swiped left. Released, it should carry on at the speed the finger left it and the gap should close in one ease. A pause at the hand-over, an ease-in from rest or a gap that snaps shut each reads as harsh. See examples/swipe.', bad: 'Pauses at release, eases in from rest, gap snaps shut', good: 'Leaves at the finger’s speed, gap closes in one ease', motion: true },
   { id: 'detail-reaction', title: 'Draw a reaction as the app does', note: 'The same message getting a reaction. A drawn glyph in a disc over the bubble’s words, appearing in one frame, reads as made up. Use the real emoji in a small pill on the bubble’s lower corner, ringed in the ground so it sits on the edge, scaling in from the corner it hangs from.', bad: 'A drawn heart in a disc, over the words, in one frame', good: 'The emoji in a pill on the corner, scaling in', motion: true },
@@ -23,11 +19,11 @@ const ROLES = ['Can view', 'Can edit', 'Full access']
 
 async function throwScript(a: Act<S>) {
   await a.wait(700)
-  a.put({ phase: 1 }) // the drag
+  a.put({ phase: 1 })
   await a.wait(320)
-  a.put({ phase: 2 }) // released
+  a.put({ phase: 2 })
   await a.wait(700)
-  a.put({ phase: 3 }) // gap closes
+  a.put({ phase: 3 })
   await a.wait(1800)
   a.snap({ phase: 0 })
 }
@@ -144,8 +140,6 @@ function Pin({ s, good }: { s: S; good: boolean }) {
     <div className="dp-row">
       <span className="dp-who"><span className="dt-av dt-av--jp">J</span>Jon Park</span>
       <span className="dp-select" data-good={good || undefined}>
-        {/* Every value stacked in one cell, crossfading: the cell is as
-            wide as the longest, so nothing resizes or gets cut */}
         <span className="dp-labels">
           {ROLES.map((r, i) => <span key={r} className="dp-label" data-on={i === s.role || undefined}>{r}</span>)}
         </span>
@@ -186,10 +180,6 @@ export function DetailComparison({ lessonId }: { lessonId: string }) {
   )
 }
 
-// An emoji centered by its drawing, not its glyph box. Emoji fonts pad the
-// glyph unevenly (Apple's sits off center in its box), by an amount that
-// changes with the size and the screen. So the emoji is drawn to a canvas,
-// cropped to its ink, and the crop is what the pill centers
 function Emoji({ char, size = 15 }: { char: string; size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const [box, setBox] = useState<[number, number]>([size, size])
@@ -216,8 +206,6 @@ function Emoji({ char, size = 15 }: { char: string; size?: number }) {
     out.width = w
     out.height = h
     out.getContext('2d')!.drawImage(c, x0, y0, w, h, 0, 0, w, h)
-    // Shown at an even whole-pixel size, so it sits the same whole number
-    // of pixels from every side of an even-sized pill
     const side = Math.round(Math.max(w, h) / k / 2) * 2
     setBox([side * (w / Math.max(w, h)), side * (h / Math.max(w, h))])
   }, [char, size])

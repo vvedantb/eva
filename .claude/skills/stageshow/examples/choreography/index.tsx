@@ -19,8 +19,6 @@ type State = { locale: number }
 const initial: State = { locale: 0 }
 const poster: State = { locale: 2 }
 
-// Starts overlap. The currency identifies the change before the dependent
-// price, payment method and address respond. The final destination holds.
 export async function localeSequence(a: Act<State>) {
   await a.wait(1600)
   a.mark('germany')

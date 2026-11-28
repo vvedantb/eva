@@ -1,26 +1,6 @@
 import { Avatar, Stage, Phone, Thread, Bubble, Stamp, type Act } from '../../kit'
 import './telegram.css'
 
-// Telegram on an iPhone, the current iOS app: floating glass header (back,
-// a pill with the name and status, the avatar), the default green wallpaper
-// with its doodle pattern, white and pale green bubbles with the time and
-// ticks inside them, and the composer (attach, field, mic or send).
-//
-// The phone is cropped by the stage's top: the composer and the newest
-// messages are the story, so they stay in view and the header runs off.
-//
-// Four beats:
-//   1. Context: Nika asks about a sunrise hike, with a photo of the destination.
-//   2. The reply is typed and sent; it forms out of the field, a clock in its
-//      corner while it sends.
-//   3. The clock becomes one tick (sent), then a second tick draws in (read).
-//   4. Nika answers with a big animated emoji, the way Telegram shows a lone
-//      emoji: no bubble, just the emoji.
-// Hold the completed conversation. Replay is the explicit reset; sent
-// messages do not disappear from the live thread on their own.
-//
-// Real strings: the date pills, the messages, the typed reply, the times.
-
 type Tick = 'clock' | 'sent' | 'read'
 type S = { draft: string; sent: boolean; tick: Tick; reply: boolean }
 
@@ -28,7 +8,6 @@ const initial: S = { draft: '', sent: false, tick: 'clock', reply: false }
 const poster: S = { ...initial, sent: true, tick: 'read', reply: true }
 
 const MINE = "I'm in, I'll bring coffee"
-// Where the touch rests between taps, in stage pixels (below the composer)
 const REST = { x: 300, y: 470 }
 
 async function script(a: Act<S>) {
@@ -51,7 +30,6 @@ async function script(a: Act<S>) {
   a.mark('done')
 }
 
-/** Telegram's ticks: a clock while sending, one tick sent, two read. */
 function Ticks({ state }: { state: Tick }) {
   return (
     <svg className="tg-ticks" data-state={state} viewBox="0 0 17 11" width="17" height="11" aria-hidden>
@@ -74,7 +52,6 @@ function Meta({ time, tick }: { time: string; tick?: Tick }) {
   )
 }
 
-/** Local CC0 photograph shared with the Wikipedia study. */
 function Trail() {
   return <img className="tg-photo__img" src={new URL('../wikipedia/kawaguchiko.jpg', import.meta.url).href} width={252} height={168} alt="Mount Fuji above Lake Kawaguchi" />
 }

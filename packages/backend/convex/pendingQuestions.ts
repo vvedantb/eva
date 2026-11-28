@@ -103,16 +103,6 @@ async function repoIdForQuestionEntity(
   if (chatId) return (await db.get(chatId))?.repoId;
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) return (await db.get(sessionId))?.repoId;
-  const taskId = db.normalizeId("agentTasks", entityId);
-  if (taskId) return (await db.get(taskId))?.repoId;
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return (await db.get(projectId))?.repoId;
-  const runId = db.normalizeId("agentRuns", entityId);
-  if (runId) return (await db.get(runId))?.repoId;
-  const docId = db.normalizeId("docs", entityId);
-  if (docId) return (await db.get(docId))?.repoId;
-  const automationRunId = db.normalizeId("automationRuns", entityId);
-  if (automationRunId) return (await db.get(automationRunId))?.repoId;
   return undefined;
 }
 

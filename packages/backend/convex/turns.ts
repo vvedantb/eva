@@ -19,14 +19,12 @@ import {
   type ChatSurfaceAdapter,
   type ChatAlert,
 } from "./_chat/surfaceAdapters";
+import { tearDownStaleAgentJob } from "./_agentJobs/slot";
 import {
-  tearDownStaleDocWorkflow,
-  tearDownStaleEvaluationWorkflow,
-} from "./workflowWatchdog";
-import { tearDownStaleAutomationRun } from "./_automations/runs";
-import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
+  clearStreamingActivity,
+  touchStreamingEntity,
+  upsertStreamingActivity,
+} from "./streaming";
 import {
   authMutation,
   authQuery,
@@ -40,7 +38,6 @@ import {
   closeTurn,
   findOpenTurn,
   graceExpiredTurnLease,
-  listOpenSessionTurns,
   openTurn,
   renewTurnLease,
   type ChatTurnEntityId,
@@ -53,7 +50,6 @@ import {
 import {
   chatTurnEntityIdValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
@@ -140,36 +136,6 @@ export const getSessionStatus = authQuery({
   returns: v.union(chatTurnStatusValidator, v.null()),
   handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
     await readChatStatus(ctx, ctx.userId, args.sessionId),
-});
-
-/**
- * Open chat turns across one session, for the tab strip's running dots and
- * the "waiting for a free slot" caption. One indexed read per session, not
- * one status subscription per tab.
- */
-export const listSessionChatStatuses = authQuery({
-  args: { sessionId: v.id("sessions") },
-  returns: v.array(
-    v.object({
-      chatId: v.id("sessionChats"),
-      turnId: v.id("turns"),
-      state: turnStateValidator,
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
-    const turns = await listOpenSessionTurns(ctx, args.sessionId);
-    const statuses = [];
-    for (const turn of turns) {
-      if (turn.lane !== undefined) continue;
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (!chatId) continue;
-      statuses.push({ chatId, turnId: turn._id, state: turn.state });
-    }
-    return statuses;
-  },
 });
 
 const leaseIdentityValidator = v.object({
@@ -278,7 +244,6 @@ export const markLaunching = internalMutation({
 export const openAgentTurnLease = internalMutation({
   args: {
     entityId: turnEntityIdValidator,
-    lane: v.optional(turnLaneValidator),
     sessionId: v.optional(v.id("sessions")),
     streamingEntityId: v.string(),
     model: v.optional(v.string()),
@@ -290,7 +255,6 @@ export const openAgentTurnLease = internalMutation({
   handler: async (ctx, args) => {
     const turnId = await openTurn(ctx, {
       entityId: args.entityId,
-      lane: args.lane,
       sessionId: args.sessionId,
       streamingEntityId: args.streamingEntityId,
       model: normalizeAIModel(args.model),
@@ -455,41 +419,8 @@ async function finalizeExpiredAgentTurn(
   console.log(
     `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
   );
-  const workflowId = turn.workflowId;
-  switch (owner.kind) {
-    case "run":
-      await finalizeStalledRun(ctx, owner.id, {
-        ...stalledRunStop({
-          state: turn.state,
-          hasSandbox: turn.sandboxId !== undefined,
-          staleSeconds,
-        }),
-        sandboxId: turn.sandboxId,
-      });
-      break;
-    case "automation":
-      if (workflowId !== undefined) {
-        await tearDownStaleAutomationRun(
-          ctx,
-          owner.id,
-          workflowId,
-          { sandboxId: turn.sandboxId, repoId: turn.repoId },
-          error,
-        );
-      }
-      break;
-    case "doc":
-      if (workflowId !== undefined) {
-        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "evaluation":
-      if (workflowId !== undefined) {
-        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "interview":
-      break;
+  if (turn.workflowId !== undefined) {
+    await tearDownStaleAgentJob(ctx, owner, turn.workflowId, error);
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });

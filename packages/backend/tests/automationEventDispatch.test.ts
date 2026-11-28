@@ -36,6 +36,16 @@ const ciFailed = (headSha: string, prNumber = 7): RepoEvent => ({
   headSha,
 });
 
+const pushed = (headSha: string): RepoEvent => ({
+  kind: "pr_updated",
+  owner: "acme",
+  name: "eva",
+  prUrl: PR_URL,
+  prNumber: 7,
+  title: "Add retry",
+  headSha,
+});
+
 const feedback: RepoEvent = {
   kind: "pr_feedback",
   owner: "acme",
@@ -92,7 +102,7 @@ async function fixture() {
   const install = (
     repoId: Id<"githubRepos">,
     systemKey: string | undefined,
-    trigger: { kind: "event"; event: RepoEvent["kind"] },
+    trigger: { kind: "event"; events: Array<RepoEvent["kind"]> },
   ) =>
     t.run((ctx) =>
       ctx.db.insert("automations", {
@@ -125,16 +135,32 @@ async function fixture() {
 
 describe("event dispatch", () => {
   test(
+    "pushes during the debounce fold into one run on the newest commit",
+    async () => {
+      const { install, ids, runsOf, dispatch } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        events: ["pr_updated"],
+      });
+      await dispatch(pushed("first"));
+      await dispatch(pushed("second"));
+      const runs = await runsOf(automationId);
+      expect(runs.map((run) => run.headSha)).toEqual(["second"]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a preset installed on several apps fires once, on the PR's own app",
     async () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const onRoot = await install(ids.rootRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       const onApp = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
 
       await dispatch(ciFailed("sha1"));
@@ -151,11 +177,11 @@ describe("event dispatch", () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const a = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       const b = await install(ids.appRepoId, undefined, {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       await dispatch(labelled);
       expect(await runsOf(a)).toHaveLength(1);
@@ -170,7 +196,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const responder = await install(ids.appRepoId, "review-responder", {
         kind: "event",
-        event: "pr_feedback",
+        events: ["pr_feedback"],
       });
 
       await dispatch(feedback);
@@ -195,7 +221,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const toTask = await install(ids.rootRepoId, "issue-to-task", {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       await dispatch(labelled);
       const [run] = await runsOf(toTask);
@@ -222,7 +248,7 @@ describe("event dispatch", () => {
       const { t, ids, install, runsOf, dispatch } = await fixture();
       const fixer = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       await t.run(async (ctx) => {
         for (const sha of ["a", "b", "c", "d"]) {
@@ -258,7 +284,7 @@ describe("event dispatch", () => {
       const { ids, install, runsOf, dispatch } = await fixture();
       const fixer = await install(ids.appRepoId, "ci-autofix", {
         kind: "event",
-        event: "ci_failed",
+        events: ["ci_failed"],
       });
       await dispatch(ciFailed("x", 99));
       expect(await runsOf(fixer)).toHaveLength(0);
@@ -274,7 +300,7 @@ describe("event run lifecycle", () => {
       const { t, ids, install } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_merged",
+        events: ["pr_merged"],
       });
       const [stuck, withWorkflow] = await t.run(async (ctx) => [
         await ctx.db.insert("automationRuns", {
@@ -309,12 +335,86 @@ describe("event run lifecycle", () => {
   );
 
   test(
+    "the push an automation made to a PR does not start another run",
+    async () => {
+      const { t, ids, install, runsOf } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        events: ["pr_updated"],
+      });
+      const queued = await t.run(async (ctx) => {
+        await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "success",
+          startedAt: 0,
+          acknowledged: false,
+          pushedSha: "evas-push",
+        });
+        return await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "queued",
+          startedAt: Date.now(),
+          acknowledged: false,
+          eventKind: "pr_updated",
+          headSha: "evas-push",
+          headShas: ["evas-push"],
+        });
+      });
+      await t.mutation(internal.automations.startEventRun, {
+        runId: queued,
+        event: pushed("evas-push"),
+      });
+      const runs = await runsOf(automationId);
+      expect(runs.map((run) => run._id)).not.toContain(queued);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a person's push stays queued even when an automation pushes on top",
+    async () => {
+      const { t, ids, install, runsOf, dispatch } = await fixture();
+      const automationId = await install(ids.rootRepoId, undefined, {
+        kind: "event",
+        events: ["pr_updated"],
+      });
+      await t.run(async (ctx) => {
+        await ctx.db.insert("automationRuns", {
+          automationId,
+          repoId: ids.rootRepoId,
+          status: "running",
+          startedAt: Date.now(),
+          acknowledged: false,
+          activeWorkflowId: "busy",
+          pushedSha: "evas-push",
+        });
+      });
+      await dispatch(pushed("persons-push"));
+      await dispatch(pushed("evas-push"));
+      const queued = (await runsOf(automationId)).find(
+        (run) => run.status === "queued",
+      );
+      if (queued === undefined) throw new Error("no queued run");
+      expect(queued.headShas).toEqual(["persons-push", "evas-push"]);
+      await t.mutation(internal.automations.startEventRun, {
+        runId: queued._id,
+        event: pushed("persons-push"),
+      });
+      const after = await t.run((ctx) => ctx.db.get(queued._id));
+      expect(after?.status).toBe("queued");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a busy automation keeps the event waiting, then gives up after a day",
     async () => {
       const { t, ids, install } = await fixture();
       const automationId = await install(ids.rootRepoId, undefined, {
         kind: "event",
-        event: "pr_merged",
+        events: ["pr_merged"],
       });
       const [fresh, stale] = await t.run(async (ctx) => {
         await ctx.db.insert("automationRuns", {
@@ -342,7 +442,7 @@ describe("event run lifecycle", () => {
       for (const runId of [fresh, stale]) {
         await t.mutation(internal.automations.startEventRun, {
           runId,
-          context: "PR merged",
+          event: pushed("abc"),
         });
       }
       const [waiting, gaveUp] = await t.run(async (ctx) => [
@@ -372,7 +472,7 @@ describe("alert webhook", () => {
     const automationId = await fx.install(
       fx.ids.rootRepoId,
       "axiom-alert-to-task",
-      { kind: "event", event: "production_alert" },
+      { kind: "event", events: ["production_alert"] },
     );
     const secretHash = await sha256Hex("s3cret");
     await fx.t.run((ctx) =>
@@ -411,7 +511,7 @@ describe("alert webhook", () => {
       const { t, ids, install, secretHash, receive } = await alertFixture();
       const other = await install(ids.rootRepoId, "issue-to-task", {
         kind: "event",
-        event: "issue_labeled",
+        events: ["issue_labeled"],
       });
       expect(
         await t.mutation(internal._automationEvents.dispatch.receiveAlert, {
@@ -559,9 +659,9 @@ describe("pure helpers", () => {
     "presets collapse across apps; user automations never do",
     async () => {
       const { ids, install } = await fixture();
-      const trigger = { kind: "event", event: "ci_failed" } satisfies {
-        kind: "event";
-        event: RepoEvent["kind"];
+      const trigger: { kind: "event"; events: Array<RepoEvent["kind"]> } = {
+        kind: "event",
+        events: ["ci_failed"],
       };
       const p1 = await install(ids.rootRepoId, "ci-autofix", trigger);
       const p2 = await install(ids.appRepoId, "ci-autofix", trigger);

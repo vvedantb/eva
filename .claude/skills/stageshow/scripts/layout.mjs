@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-// Check actual box fit in a host page, including controls outside a Stage.
 import { launch } from './browser.mjs'
 import { auditLayout, layoutResult } from './layout-core.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'

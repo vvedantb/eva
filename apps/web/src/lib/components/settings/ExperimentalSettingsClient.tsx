@@ -58,6 +58,12 @@ const FLAG_GROUPS: FlagGroup[] = [
           "Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for. Text the agent writes between tool runs shows in order, between the steps (new turns only).",
       },
       {
+        key: "workspaceTabs",
+        title: "Editor, Computer and Files tabs",
+        description:
+          "Show the code editor, the sandbox desktop and the file viewer in the sandbox panel.",
+      },
+      {
         key: "simpleView",
         title: "Simple view",
         description:
@@ -97,6 +103,12 @@ const FLAG_GROUPS: FlagGroup[] = [
         title: "Skill suggestions",
         description:
           "Suggest a / skill that fits your message while you type. Chips appear above the composer; tap one to add it.",
+      },
+      {
+        key: "viewPrsChip",
+        title: "View PRs chip",
+        description:
+          "Show a chip above the composer when the chat has pull requests. Tap it to open one.",
       },
     ],
   },

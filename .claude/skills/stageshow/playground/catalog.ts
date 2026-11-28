@@ -1,6 +1,3 @@
-// Built from SKILL.md's example tables: Gold under Scenes, Product studies
-// under Real products, Specimen and reference sheets under Kit. Keep the
-// names and notes in step with SKILL.md when either changes.
 const curated = [
   { id: 'static-card', name: 'Static card', kind: 'Scene', note: 'Quiet hierarchy, a hard crop, one satellite, real words only on the selected customer, its neighbors and the total.' },
   { id: 'dark-bento', name: 'Dark card', kind: 'Scene', note: 'One signal said once; album art keeps it a music app.' },
@@ -80,8 +77,6 @@ const specimens = [
   ['glass', 'Glass', 'The glass theme on a window, a chip and a popover.'],
 ].map(([id, name, note]) => ({ id, name, note, kind: 'Reference', group: 'Kit' }))
 
-// A new example directory shows up at the end of Kit until it is listed above.
-// Vite updates this glob when a file is added; no restart needed.
 const listed = new Set<string>([...curated, ...products, ...specimens].map(example => example.id))
 const extra = Object.keys(import.meta.glob('../examples/*/index.tsx'))
   .map(path => path.split('/').at(-2)!)

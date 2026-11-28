@@ -2,31 +2,6 @@ import { useRef } from 'react'
 import { Chart, Roll, Stage, Window, chartPoints, type Act } from '../../kit'
 import './scrub.css'
 
-// Scrubbing a chart: the pointer runs along a revenue line and the headline
-// reads out each day it passes. Beats: the pointer comes onto the chart, a
-// hairline and a dot pick up the nearest day, the headline's label and value
-// change to that day, the pointer runs right to the peak and rests; then it
-// leaves and the headline returns to the total. Loops.
-//
-// What makes a scrub read as one gesture:
-// - The headline is the readout. No tooltip box over the line: the value
-//   that is already the biggest thing on the card changes, so the eye stays
-//   where it already was.
-// - Only the digits that change roll, and they roll quickly (UI feedback,
-//   not a story beat): $4,920 to $5,240 holds the "$" and moves the rest.
-// - One stroke. The pointer runs the line in a single eased move (a path
-//   along the points, not hop after hop), and the day under it updates as it
-//   goes; a run of short moves reads as stuttering.
-// - The readout is discrete, the motion is not: the value is always a real
-//   day (the nearest one), while the hairline sits at the pointer and the
-//   dot rides the drawn curve under it, read off the line's own path. A dot
-//   snapping day to day trails the hand.
-// - Over a plot the pointer is a crosshair, as charting apps show it.
-// - The day under the pointer is the only thing that's emphasized. The line
-//   doesn't dim; the axis doesn't move.
-//
-// Real strings: the card's title, the range, the day names, every value.
-
 type S = { day: number | null; x: number | null }
 
 const DAYS = [3240, 3610, 3480, 4120, 3950, 4630, 4410, 5240, 4920, 5810, 5530, 6320, 6050, 6890]
@@ -42,14 +17,11 @@ async function script(a: Act<S>) {
   const box = a.rect('plot')
   const pts = chartPoints({ data: DAYS, width: box.width, height: H, dot: false })
   const at = (i: number) => ({ x: box.x + pts[i]!.x, y: box.y + pts[i]!.y + 18 })
-  // Onto the line a third of the way along, then a steady run to the peak
   a.mark('hover')
   await a.move(at(4), { duration: 700 })
   a.put({ day: 4, x: pts[4]!.x })
   await a.wait(700)
   a.mark('scrub')
-  // One eased stroke, straight as a hand runs, from day 4 to the last. The
-  // hairline follows the pointer; the readout is the day nearest it
   await a.move(at(DAYS.length - 1), {
     duration: 1500,
     path: (e, from, to) => ({ x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e }),
@@ -61,10 +33,7 @@ async function script(a: Act<S>) {
     },
   })
   await a.wait(1900)
-  // Off the chart: the headline returns to the total
   a.mark('leave')
-  // The readout lets go as the pointer crosses the plot's edge; the hairline
-  // and dot fade where they were, rather than jumping as they go
   let gone = false
   await a.move({ x: box.x + box.width + 40, y: box.y + box.height + 60 }, {
     duration: 600,
@@ -78,7 +47,6 @@ async function script(a: Act<S>) {
   await a.wait(1600)
 }
 
-// The y of the drawn line at x: a short search along the path's length
 function yOn(path: SVGPathElement | null | undefined, x: number) {
   if (!path) return null
   let lo = 0
@@ -98,8 +66,6 @@ export default function ChartScrub() {
       {(s, _rect, layout) => {
         const w = layout === 'compact' ? W.compact : W.wide
         const pts = chartPoints({ data: DAYS, width: w, height: H, dot: false })
-        // The hairline at the pointer (or on the day, for the still); the dot
-        // on the curve beneath it
         const hx = s.x ?? (s.day === null ? null : pts[s.day]!.x)
         const on = s.day !== null
         const hy = hx === null ? null : (yOn(plot.current?.querySelector<SVGPathElement>('.ss-chart__line'), hx) ?? pts[s.day ?? 0]!.y)

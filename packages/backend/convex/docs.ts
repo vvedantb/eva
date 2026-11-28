@@ -1,6 +1,7 @@
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
+  assertMessageParentAccess,
   authAction,
   authQuery,
   authMutation,
@@ -28,7 +29,10 @@ import {
   docKindValidator,
   docFields,
   evaluationStatusValidator,
+  messageFields,
 } from "./validators";
+import { chatEntityKindValidator } from "./_validators/enums";
+import { chatTurnAnchor } from "./_chat/chatParent";
 import {
   hasStoredRecap,
   resolvePrRecapWrite,
@@ -40,7 +44,7 @@ import {
 import { prosemirrorSync } from "./prosemirrorSync";
 import { markdownToDocJson } from "./_docEditor/markdown";
 import { workflow } from "./workflowManager";
-import { trackDocWorkflow } from "./workflowWatchdog";
+import { startAgentJob } from "./_agentJobs/slot";
 import {
   findAllSiblingRepoIds,
   findSiblingRepos,
@@ -227,6 +231,74 @@ export const listForSource = authQuery({
     return Promise.all(
       visible.map((doc) => toDocListItemWithSource(ctx, doc, repoCache)),
     );
+  },
+});
+
+/**
+ * Anchors a doc the agent just made to its chat turn, so it shows as an inline
+ * card under that reply. Called by `create_eva_doc` after the row exists.
+ */
+export const anchorToChat = internalMutation({
+  args: {
+    docId: v.string(),
+    entityKind: chatEntityKindValidator,
+    entityId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const docId = ctx.db.normalizeId("docs", args.docId);
+    if (!docId) return null;
+    const anchor = await chatTurnAnchor(ctx.db, args.entityKind, args.entityId);
+    if (anchor) await ctx.db.patch(docId, anchor);
+    return null;
+  },
+});
+
+/**
+ * The docs the agent made in one chat thread, for its inline cards. Light rows
+ * only: a card loads the body when the user opens it.
+ */
+export const listForChat = authQuery({
+  args: { parentId: messageFields.parentId },
+  returns: v.array(
+    v.object({
+      _id: v.id("docs"),
+      numId: v.optional(v.number()),
+      title: v.string(),
+      contentPreview: v.union(v.string(), v.null()),
+      messageId: v.optional(v.id("messages")),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const rows = await ctx.db
+      .query("docs")
+      .withIndex("by_chat_parent", (q) => q.eq("chatParentId", args.parentId))
+      .collect();
+    const repoAccess = new Map<Id<"githubRepos">, Promise<boolean>>();
+    const canSee = (repoId: Id<"githubRepos">) => {
+      const cached = repoAccess.get(repoId);
+      if (cached) return cached;
+      const check = hasRepoAccess(ctx.db, repoId, ctx.userId);
+      repoAccess.set(repoId, check);
+      return check;
+    };
+    const live = rows.filter((doc) => !isEntityDeleted(doc));
+    const access = await Promise.all(live.map((doc) => canSee(doc.repoId)));
+    return live
+      .filter((_, i) => access[i])
+      .map((doc) => ({
+        _id: doc._id,
+        numId: doc.numId,
+        title: doc.title,
+        contentPreview: docListPreview({
+          description: doc.description,
+          content: doc.content.replace(/^\s*#\s+[^\n]*\n/, ""),
+        }),
+        ...(doc.messageId !== undefined ? { messageId: doc.messageId } : {}),
+        createdAt: doc.createdAt,
+      }));
   },
 });
 
@@ -833,10 +905,8 @@ export const startPrRecap = internalMutation({
       ...(prRecapOrigin !== undefined ? { prRecapOrigin } : {}),
     });
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.prRecapWorkflow.prRecapWorkflow,
-      {
+    const workflowId = await startAgentJob(ctx, docId, () =>
+      workflow.start(ctx, internal.prRecapWorkflow.prRecapWorkflow, {
         docId,
         repoId: workflowRepo._id,
         installationId: args.installationId,
@@ -852,12 +922,10 @@ export const startPrRecap = internalMutation({
         thinkingEnabled: args.thinkingEnabled,
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
-      },
+      }),
     );
 
-    await trackDocWorkflow(ctx, docId, workflowId);
-
-    return { docId, workflowId: String(workflowId) };
+    return { docId, workflowId };
   },
 });
 

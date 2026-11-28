@@ -6,12 +6,11 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
+import { authQuery, hasRepoAccess } from "./functions";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 import {
   AUTOMATION_RUN_STREAM_PREFIX,
   PR_RECAP_STREAM_PREFIX,
-  TASK_RUN_STREAM_PREFIX,
 } from "./_chat/agentStreamIds";
 import {
   parseSandboxStartupEntityId,
@@ -131,14 +130,26 @@ export async function upsertStreamingActivity(
   }
 }
 
+/** Deletes the streaming activity rows for an entity id. */
+export async function clearStreamingActivity(
+  ctx: MutationCtx,
+  entityId: string,
+): Promise<void> {
+  const streamingRows = await ctx.db
+    .query("streamingActivity")
+    .withIndex("by_entity", (q) => q.eq("entityId", entityId))
+    .collect();
+  for (const streaming of streamingRows) {
+    await ctx.db.delete(streaming._id);
+  }
+}
+
 type StreamOwner =
   | { kind: "sandboxOwner"; owner: SandboxOwner }
   | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
   | { kind: "doc"; docId: Id<"docs"> }
   | { kind: "report"; reportId: Id<"evaluationReports"> }
-  | { kind: "taskRun"; runId: Id<"agentRuns"> }
-  | { kind: "automationRun"; runId: Id<"automationRuns"> }
-  | { kind: "project"; projectId: Id<"projects"> };
+  | { kind: "automationRun"; runId: Id<"automationRuns"> };
 
 function parseStreamOwner(
   db: QueryCtx["db"],
@@ -149,11 +160,6 @@ function parseStreamOwner(
   const after = (prefix: string) =>
     entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
 
-  const taskRun = after(TASK_RUN_STREAM_PREFIX);
-  if (taskRun !== null) {
-    const runId = db.normalizeId("agentRuns", taskRun);
-    return runId ? { kind: "taskRun", runId } : null;
-  }
   const automationRun = after(AUTOMATION_RUN_STREAM_PREFIX);
   if (automationRun !== null) {
     const runId = db.normalizeId("automationRuns", automationRun);
@@ -175,8 +181,6 @@ function parseStreamOwner(
   if (docId) return { kind: "doc", docId };
   const reportId = db.normalizeId("evaluationReports", entityId);
   if (reportId) return { kind: "report", reportId };
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return { kind: "project", projectId };
   return null;
 }
 
@@ -199,20 +203,9 @@ async function canReadStream(
       const doc = report ? await db.get(report.docId) : null;
       return doc !== null && (await hasRepoAccess(db, doc.repoId, userId));
     }
-    case "taskRun": {
-      const run = await db.get(owner.runId);
-      const task = run ? await db.get(run.taskId) : null;
-      return task !== null && (await hasTaskAccess(db, task, userId));
-    }
     case "automationRun": {
       const run = await db.get(owner.runId);
       return run !== null && (await hasRepoAccess(db, run.repoId, userId));
-    }
-    case "project": {
-      const project = await db.get(owner.projectId);
-      return (
-        project !== null && (await hasRepoAccess(db, project.repoId, userId))
-      );
     }
   }
 }

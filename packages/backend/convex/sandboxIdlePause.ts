@@ -20,10 +20,13 @@ import {
   openChatEntityIdsFor,
   sessionIsExecuting,
 } from "./_chat/turnProjection";
-import { listLiveSessionChats } from "./_sessionChats/helpers";
+import { findMainChat } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
 import { sessionOwner } from "./_sessions/owner";
+import { listSandboxOwnerRows } from "./_sandbox/owner";
+import { findLatestTurn } from "./_chat/turnStore";
+import { isTrackedWorkflowRunning } from "./workflowManager";
 import {
   getSandboxActivity,
   sandboxActivityRefArgs,
@@ -307,13 +310,11 @@ async function inspectSession(
 ): Promise<Candidate | null> {
   const session = await ctx.db.get(sessionId);
   if (!session) return null;
-  const chats = await listLiveSessionChats(ctx.db, sessionId);
-  let chatBusy = false;
-  for (const chat of chats) {
-    if (chat.pendingTurn !== undefined) chatBusy = true;
-    else if (await hasPendingWork(ctx, String(chat._id))) chatBusy = true;
-    if (chatBusy) break;
-  }
+  const chat = await findMainChat(ctx.db, sessionId);
+  const chatBusy =
+    chat !== null &&
+    (chat.pendingTurn !== undefined ||
+      (await hasPendingWork(ctx, String(chat._id))));
   const busy =
     sessionIsExecuting(
       session,
@@ -371,18 +372,20 @@ export const inspectCandidate = internalQuery({
 });
 
 /**
- * What Eva wants for one Vercel sandbox, judged from every entity that points
- * at it:
- *   - `unknown`  — no session owns it (another
- *                  deployment, seed prep, arena): never touch it.
- *   - `wanted`   — an owner is active/starting, busy, or has a tab open.
- *   - `stopping` — an owner is mid-stop and nothing wants the VM.
- *   - `closed`   — every owner is stopped and idle, so a running VM is a leak.
+ * What Eva wants for one Vercel sandbox, judged from every row that points at
+ * it (`listSandboxOwnerRows`):
+ *   - `unknown`  — no row owns it (another deployment, seed prep, a one-shot
+ *                  agent that stores no sandbox id): never touch it.
+ *   - `wanted`   — a session is active/starting, busy, or has a tab open; or a
+ *                  doc or automation run still needs it (`oneShotWantsSandbox`).
+ *   - `stopping` — a session is mid-stop and nothing wants the VM.
+ *   - `closed`   — nothing wants it, so a running VM is a leak.
  *
  * The Vercel SDK resumes a stopped sandbox on any exec (lazy resume), so a
  * background job that runs a command after Stop silently wakes the VM while
- * the owner row still says `closed`. Idle pause only scans `active` rows, so
- * those VMs used to bill until someone stopped them by hand.
+ * the owner row still says `closed`. Idle pause only scans `active` sessions,
+ * so the leak sweep is what stops those VMs and every idle doc or automation
+ * VM.
  */
 export type SandboxOwnerState = "unknown" | "wanted" | "stopping" | "closed";
 
@@ -400,19 +403,16 @@ async function resolveSandboxOwnerState(
   | { state: "unknown" }
   | { state: Exclude<SandboxOwnerState, "unknown">; repoId: Id<"githubRepos"> }
 > {
-  const sessions = await ctx.db
-    .query("sessions")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .collect();
-  const owners = sessions.map((doc) => ({
-    repoId: doc.repoId,
-    inspect: () => inspectSession(ctx, doc._id),
-  }));
-  const repoId = owners.find((owner) => owner.repoId)?.repoId;
+  const { sessions, docs, automationRuns } = await listSandboxOwnerRows(
+    ctx.db,
+    sandboxId,
+  );
+  const oneShots = [...docs, ...automationRuns];
+  const repoId = sessions[0]?.repoId ?? oneShots[0]?.repoId;
   if (!repoId) return { state: "unknown" };
   let stopping = false;
-  for (const owner of owners) {
-    const candidate = await owner.inspect();
+  for (const session of sessions) {
+    const candidate = await inspectSession(ctx, session._id);
     if (!candidate) continue;
     if (
       candidate.status === "active" ||
@@ -424,7 +424,28 @@ async function resolveSandboxOwnerState(
     }
     if (candidate.status === "stopping") stopping = true;
   }
+  if (oneShots.length > 0) {
+    const { afterAgentMs } = resolveIdleThresholds(
+      await ctx.db.query("appSettings").first(),
+    );
+    for (const owner of oneShots) {
+      if (await oneShotWantsSandbox(ctx, owner, afterAgentMs)) {
+        return { state: "wanted", repoId };
+      }
+    }
+  }
   return { state: stopping ? "stopping" : "closed", repoId };
+}
+
+async function oneShotWantsSandbox(
+  ctx: QueryCtx,
+  owner: Doc<"docs"> | Doc<"automationRuns">,
+  afterAgentMs: number,
+): Promise<boolean> {
+  if (await isTrackedWorkflowRunning(ctx, owner.activeWorkflowId)) return true;
+  const turn = await findLatestTurn(ctx, owner._id);
+  if (turn === null) return false;
+  return turn.open || (turn.finishedAt ?? 0) + afterAgentMs > Date.now();
 }
 
 /** Internal: owner state for one sandbox. Background jobs check it before exec. */

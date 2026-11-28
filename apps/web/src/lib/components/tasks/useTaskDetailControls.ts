@@ -1,17 +1,16 @@
 "use client";
 
-import { toast, convexErrorMessage } from "@vvedantb/ui";
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { convexErrorMessage } from "@vvedantb/ui";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { sandboxStartupEntityId, taskCanStartSandbox } from "@eva/shared";
+import { taskCanStartSandbox } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
+import { useSandboxControls } from "@/lib/components/sandbox/useSandboxLifecycle";
 import type { TaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
@@ -38,6 +37,11 @@ export type UseTaskDetailRouting =
   | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-task" };
+
+/** A project task's own chat and sandbox, as on its full page. */
+export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
+  mode: "project-task",
+};
 
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
@@ -119,31 +123,18 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   };
 }
 
-function deriveSandboxFlags(
+function canViewTaskSandbox(
   task: TaskDetailTask,
   sandbox: OwnedSandboxFields,
   hasRuns: boolean,
-) {
-  const canStartSandbox = taskCanStartSandbox(task?.status, hasRuns);
-
-  const isSandboxActive = sandbox.status === "active";
-  const isSandboxStartingFromStatus = sandbox.status === "starting";
-  const isSandboxStoppingFromStatus = sandbox.status === "stopping";
-  const hasReviewSandbox = sandbox.sandboxId !== undefined;
-  const canViewSandbox =
-    canStartSandbox ||
-    hasReviewSandbox ||
-    isSandboxActive ||
-    isSandboxStartingFromStatus ||
-    isSandboxStoppingFromStatus;
-
-  return {
-    canStartSandbox,
-    isSandboxActive,
-    isSandboxStartingFromStatus,
-    isSandboxStoppingFromStatus,
-    canViewSandbox,
-  };
+): boolean {
+  return (
+    taskCanStartSandbox(task?.status, hasRuns) ||
+    sandbox.sandboxId !== undefined ||
+    sandbox.status === "active" ||
+    sandbox.status === "starting" ||
+    sandbox.status === "stopping"
+  );
 }
 
 function resolveShowSandbox(
@@ -202,65 +193,35 @@ export function useTaskSandboxControls({
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const { sandbox } = taskSession;
-  const onSession =
-    (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
-    async () => {
-      const { sessionId } = await taskSession.ensure();
-      return await action({ sessionId });
-    };
-  const startSandbox = onSession(startSessionSandbox);
-  const stopSandbox = () => stopWorkSandbox({ target: { taskId } });
-
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
-  const lifecycle = useSandboxLifecycle(sandbox.status);
 
-  const flags = deriveSandboxFlags(task, sandbox, hasRuns);
-  const sandboxStartupStreaming = useQuery(
-    api.streaming.get,
-    flags.isSandboxStartingFromStatus && sandbox.owner
-      ? { entityId: sandboxStartupEntityId(sandbox.owner) }
-      : "skip",
-  );
-
-  const openSandboxAfterStart = () => {
-    if (routing?.mode === "quick-detail") {
-      routing.quick.onOpenSandboxView("preview");
-    } else {
-      setEmbeddedShowSandbox(true);
-    }
-  };
-
-  const handleStartSandbox = () =>
-    lifecycle.run("start", async () => {
-      try {
-        await startSandbox();
-        openSandboxAfterStart();
-      } catch (err) {
-        console.error("Failed to start sandbox:", err);
-        toast.error("Could not start the sandbox. Try again.");
+  const controls = useSandboxControls({
+    status: sandbox.status,
+    owner: sandbox.owner,
+    start: async () => {
+      const { sessionId } = await taskSession.ensure();
+      return await startSessionSandbox({ sessionId });
+    },
+    stop: () => stopWorkSandbox({ target: { taskId } }),
+    onStarted: () => {
+      if (routing?.mode === "quick-detail") {
+        routing.quick.onOpenSandboxView("preview");
+      } else {
+        setEmbeddedShowSandbox(true);
       }
-    });
-
-  const handleStopSandbox = () =>
-    lifecycle.run("stop", async () => {
-      try {
-        await stopSandbox();
-      } catch (err) {
-        console.error("Failed to stop sandbox:", err);
-        toast.error("Could not stop the sandbox. Try again.");
-      }
-    });
+    },
+  });
 
   return {
-    canStartSandbox: flags.canStartSandbox,
-    canViewSandbox: flags.canViewSandbox,
+    canStartSandbox: taskCanStartSandbox(task?.status, hasRuns),
+    canViewSandbox: canViewTaskSandbox(task, sandbox, hasRuns),
     showSandbox: resolveShowSandbox(routing, embeddedShowSandbox),
-    isSandboxActive: flags.isSandboxActive,
-    isSandboxStarting: lifecycle.isStarting,
-    sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
-    isSandboxStopping: lifecycle.isStopping,
-    handleStartSandbox,
-    handleStopSandbox,
+    isSandboxActive: controls.isSandboxActive,
+    isSandboxStarting: controls.isSandboxStarting,
+    sandboxStartupActivity: controls.sandboxStartupActivity,
+    isSandboxStopping: controls.isSandboxStopping,
+    handleStartSandbox: controls.handleStartSandbox,
+    handleStopSandbox: controls.handleStopSandbox,
     handleSelectSurface: createSurfaceSelector(routing, setEmbeddedShowSandbox),
   };
 }

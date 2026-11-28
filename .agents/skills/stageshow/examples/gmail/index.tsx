@@ -1,15 +1,10 @@
 import { Avatar, Bar, BrandMark, Collapse, Roll, Stage, Text, Toast, Tooltip, Window, type Act } from '../../kit'
 import './gmail.css'
 
-// Gmail: the cursor hovers an email, the row's hover actions appear, it
-// clicks Archive, the row folds away and "Conversation archived" slides up.
-// The loop resets with a cause: Undo brings the row back.
-
 type S = { tip: boolean; archived: boolean; toast: boolean }
 
 const initial: S = { tip: false, archived: false, toast: false }
 
-// Material Symbols paths (Gmail's own icon family), 24px grid
 const M = {
   menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
   search:
@@ -48,10 +43,9 @@ function Sym({ d, size = 20 }: { d: keyof typeof M; size?: number }) {
   )
 }
 
-// Rows around the story row: sender, subject and snippet widths vary
 const ROWS: { unread?: boolean; s: number; t: number; n: number; d: number }[] = [
   { unread: true, s: 62, t: 74, n: 120, d: 34 },
-  { unread: true, s: 0, t: 0, n: 0, d: 0 }, // the story row
+  { unread: true, s: 0, t: 0, n: 0, d: 0 },
   { unread: true, s: 54, t: 92, n: 86, d: 30 },
   { s: 70, t: 60, n: 132, d: 36 },
   { s: 48, t: 84, n: 104, d: 32 },
@@ -149,31 +143,26 @@ function Nav({ count }: { count: string }) {
 async function script(a: Act<S>) {
   await a.wait(700)
 
-  // 1. Hover the email: the row lifts and its actions replace the date
   a.mark('hover')
   await a.move({ at: 'row', x: 0.5, y: 0.55 })
   await a.wait(900)
 
-  // 2. Over to Archive; its tooltip names it
   await a.move({ at: 'archive', x: 0.6, y: 0.62 })
   await a.wait(350)
   await a.set({ tip: true })
   await a.wait(700)
 
-  // 3. Click: the row folds away, the count drops, the toast rises in
   a.mark('archive')
   const at = a.center('archive')
   await a.click()
   await a.set({ tip: false, archived: true })
   await a.wait(320)
   await a.set({ toast: true })
-  // The next email slides up under the still pointer and picks up the hover
   await a.wait(280)
   const next = a.rect('r2')
   await a.move({ at: 'r2', x: (at.x + 1 - next.x) / next.width, y: 0.62 }, { duration: 160 })
   await a.wait(1800)
 
-  // 4. Undo: the toast leaves and the email folds back in
   a.mark('undo')
   await a.click({ at: 'undo', x: 0.92, y: 0.86 })
   await a.set({ toast: false, archived: false })

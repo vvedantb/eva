@@ -18,8 +18,7 @@ export {
 } from "./_sessions/repos";
 
 export {
-  create,
-  addMessage,
+  postSendError,
   update,
   archive,
   archiveGroup,
@@ -33,9 +32,6 @@ export {
   forcePushBranch,
   stopSandbox,
   requestStopSandbox,
-  claimSandboxForTaskRun,
-  finishTaskRunSandboxMutation,
-  attachTaskRunSandbox,
 
   patchSessionDevServer,
   sandboxReady,
@@ -45,7 +41,7 @@ export {
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
 
-export { stopChatTurn, stopWorkSandbox } from "./_sessions/stop";
+export { stopWorkSandbox } from "./_sessions/stop";
 
 export {
   addToGroup,

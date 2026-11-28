@@ -29,13 +29,6 @@ import {
 import { Bar, Collapse, Stage, Text, Window, type Act } from '../../kit'
 import './slack.css'
 
-// Slack, in #design. Maya's message arrives, the user hovers it and taps 👀
-// from the quick reactions, opens the thread and replies. Closing the thread
-// leaves the reaction and reply summary in place until the host's Replay.
-//
-// Icons: Slack's own set isn't available, so Lucide is used on purpose: its
-// rounded 1.75 stroke is the closest match to Slack's outline glyphs.
-
 type S = {
   arrived: boolean
   reacted: boolean
@@ -48,7 +41,6 @@ type S = {
 
 const initial: S = { arrived: true, reacted: false, thread: false, focus: false, typing: false, draft: '', replied: false }
 
-// Under reduced motion: the finished moment, reacted and replied in the open thread
 const poster: S = { ...initial, arrived: true, reacted: true, thread: true, replied: true }
 
 const MESSAGE = 'The new onboarding flow is ready for review. Can you take a look before standup?'
@@ -56,15 +48,12 @@ const REPLY = "On it, I'll leave notes in the file"
 const REST = { x: 560, y: 250 }
 
 async function script(a: Act<S>) {
-  // Opens on the channel with Maya's message already in.
   await a.wait(1200)
 
-  // Hover the message: the row lights up and its toolbar shows
   a.mark('hover')
   await a.move({ at: 'msg', x: 0.42, y: 0.55 })
   await a.wait(500)
 
-  // 👀 from the quick reactions
   await a.move({ at: 'react-eyes', x: 0.82, y: 0.86 })
   await a.wait(220)
   a.mark('react')
@@ -72,7 +61,6 @@ async function script(a: Act<S>) {
   await a.set({ reacted: true })
   await a.wait(1000)
 
-  // Reply in thread
   await a.move({ at: 'reply-btn', x: 0.78, y: 0.82 })
   await a.wait(260)
   a.mark('thread')
@@ -80,7 +68,6 @@ async function script(a: Act<S>) {
   await a.set({ thread: true })
   await a.wait(800)
 
-  // Write the reply
   await a.move({ at: 'tbox', x: 0.62, y: 0.3 })
   await a.click()
   await a.set({ focus: true })
@@ -93,12 +80,10 @@ async function script(a: Act<S>) {
   await a.key('enter')
   await a.set({ draft: '', replied: true })
   await a.wait(500)
-  // Step off the reply as it lands, so the pointer isn't parked on its words
   const box = a.rect('tbox')
   await a.move({ x: box.x + box.width * 0.7, y: box.y + box.height + 60 })
   await a.wait(1800)
 
-  // Close the thread and hold the result. Replay is the explicit reset.
   a.mark('exit')
   await a.move({ at: 'tclose', x: 0.5, y: 0.5 })
   await a.wait(200)
@@ -114,8 +99,6 @@ function I({ icon: Glyph, size = 16 }: { icon: LucideIcon; size?: number }) {
   return <Glyph size={size} strokeWidth={1.75} className="sl-i" aria-hidden />
 }
 
-/* ---- Pieces ---- */
-
 function Face({ who, size = 36 }: { who: 'maya' | 'alex' | 'p1' | 'p2' | 'p3'; size?: number }) {
   const letter = { maya: 'M', alex: 'A', p1: 'J', p2: 'R', p3: 'T' }[who]
   return (
@@ -126,7 +109,6 @@ function Face({ who, size = 36 }: { who: 'maya' | 'alex' | 'p1' | 'p2' | 'p3'; s
 }
 
 function SideBar({ w, light }: { w: number; light?: boolean }) {
-  // The sidebar is aubergine, so its placeholders are a light purple from the same family
   return <Bar w={w} h={6} style={{ background: light ? '#b192b3' : '#8c6a8e' }} />
 }
 
@@ -295,8 +277,6 @@ function Composer({ placeholder, draft = '', focus, typing, target }: { placehol
     </div>
   )
 }
-
-/* ---- Scene ---- */
 
 export default function SlackDemo() {
   return (

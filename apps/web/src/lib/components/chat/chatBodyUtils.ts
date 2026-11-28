@@ -1,5 +1,4 @@
-import { getAIModelProvider, type api, type Doc, type Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
@@ -15,6 +14,7 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 
 export { buildPrecedingUserTurns } from "@eva/shared";
 export { findStreamingTargetMessage } from "@eva/shared";
+export { isChatTurnExecuting } from "@eva/shared";
 export {
   findBubbleGroups,
   firstNameByUserId,
@@ -38,7 +38,6 @@ export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
-  /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */
   attachmentUrls?: (string | null)[];
   attachments?: {
     url: string | null;
@@ -186,64 +185,4 @@ export function findTurnWindowStart(
     start = i;
   }
   return 0;
-}
-
-type TurnShapeMessage = Pick<
-  ChatBodyMessage,
-  "role" | "content" | "isSystemAlert" | "finishedAt"
-> & { _id: string };
-
-type ChatTurnStatus = NonNullable<
-  FunctionReturnType<typeof api.turns.getChatStatus>
->;
-
-/**
- * Whether an assistant turn is executing for one chat. One rule for every
- * surface (session, quick task, project) and every reader of it (composer,
- * queue, subagent thread, Agents roster, design panel), so they cannot
- * disagree on the same chat:
- * - a run the surface renders as a turn (a quick task's first run) counts
- *   while it runs;
- * - otherwise the chat's durable turn is canonical, synthetic turns included;
- * - except when that turn's own reply bubble has finished: the server closes
- *   the turn and finishes its bubble in one mutation, so a finished bubble
- *   proves the turn is over even if the status the client holds is stale
- *   (seen in prod: Stop button and beam stayed until a refresh);
- * - message shape only covers the first render while that status loads, so a
- *   stale empty bubble cannot keep a settled turn "executing".
- * Streaming rows are not an input: they can outlive their turn, so callers
- * gate them on this result instead.
- */
-export function isChatTurnExecuting({
-  status,
-  messages,
-  isFirstRunInProgress = false,
-}: {
-  status: ChatTurnStatus | null | undefined;
-  messages: ReadonlyArray<TurnShapeMessage> | undefined;
-  isFirstRunInProgress?: boolean;
-}): boolean {
-  if (isFirstRunInProgress) return true;
-  if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
-  if (status === null) return false;
-  if (status.source !== "durable" || status.placeholderMessageId === undefined) {
-    return true;
-  }
-  const reply = messages?.find((m) => m._id === status.placeholderMessageId);
-  return reply?.finishedAt === undefined;
-}
-
-function isAssistantTurnInProgress(
-  messages: ReadonlyArray<TurnShapeMessage>,
-): boolean {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    return (
-      message.role === "assistant" &&
-      !message.content &&
-      message.finishedAt === undefined
-    );
-  }
-  return false;
 }

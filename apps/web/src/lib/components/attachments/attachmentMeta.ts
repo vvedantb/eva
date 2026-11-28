@@ -5,8 +5,12 @@ import {
   IconMarkdown,
   type Icon,
 } from "@tabler/icons-react";
+import { toast } from "@vvedantb/ui";
 import {
   attachmentFileKind,
+  chatAttachmentErrorMessage,
+  isAllowedAttachmentFile,
+  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENTS,
   type AttachmentFileKind,
 } from "@eva/shared";
@@ -49,6 +53,33 @@ const ATTACHMENT_ICONS: Record<AttachmentFileKind, Icon> = {
   text: IconFileTypeTxt,
   file: IconFile,
 };
+
+/**
+ * Splits picked or pasted files into the ones a task or composer accepts,
+ * given how many it already holds, and toasts once per kind of rejection.
+ */
+export function acceptAttachmentFiles(
+  files: File[],
+  currentCount: number,
+): File[] {
+  const rejections = new Set<"max_files" | "max_file_size" | "accept">();
+  const accepted: File[] = [];
+  for (const file of files) {
+    if (!isAllowedAttachmentFile({ mediaType: file.type, filename: file.name })) {
+      rejections.add("accept");
+    } else if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+      rejections.add("max_file_size");
+    } else if (currentCount + accepted.length >= MAX_CHAT_ATTACHMENTS) {
+      rejections.add("max_files");
+    } else {
+      accepted.push(file);
+    }
+  }
+  for (const code of rejections) {
+    toast.error(chatAttachmentErrorMessage({ code }));
+  }
+  return accepted;
+}
 
 /** Build a plain-text File for a large paste that should attach instead of inline. */
 export function buildPastedTextFile(text: string): File {

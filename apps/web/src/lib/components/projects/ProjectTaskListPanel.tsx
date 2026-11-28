@@ -2,33 +2,29 @@
 
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
-import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
+import { repoDisplayLabel } from "@eva/shared";
 import {
   PROJECT_TASK_DISPLAY_STATUS_LABELS,
   projectTaskPullRequests,
   projectTaskStatusSections,
   projectTaskSummaryLine,
-  unapprovedTodoTaskIds,
   type ProjectTaskNotes,
   type ProjectTaskView,
 } from "@eva/shared/projectView";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { Virtuoso } from "react-virtuoso";
-import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
-  Button,
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
-import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ProjectTaskRow } from "./_components/ProjectTaskRow";
 import { ProjectTaskPrRow } from "./_components/ProjectTaskPrRow";
 import {
@@ -51,7 +47,6 @@ interface RowContext {
   basePath: string;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  authorNames: ReadonlyMap<string, string>;
   numIdOf: (taskId: string) => number | undefined;
   readOnly: boolean;
 }
@@ -76,10 +71,6 @@ function ProjectTaskRowFor({
         open: context.openTaskIds.has(row._id),
         notes: context.notesByTask.get(row._id),
         failed: context.failedTaskIds.has(row._id),
-        authorName:
-          row.createdBy === undefined
-            ? undefined
-            : context.authorNames.get(row.createdBy),
         otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
         numIdOf: context.numIdOf,
       })}
@@ -90,15 +81,7 @@ function ProjectTaskRowFor({
   );
 }
 
-function GroupHeader({
-  label,
-  count,
-  actions,
-}: {
-  label: string;
-  count: number;
-  actions?: ReactNode;
-}) {
+function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-1 rounded-control bg-muted/60 pr-1">
       <AccordionTrigger
@@ -118,7 +101,6 @@ function GroupHeader({
         <span>{label}</span>
         <span className="tabular-nums text-muted-foreground/60">{count}</span>
       </AccordionTrigger>
-      {actions}
     </div>
   );
 }
@@ -135,8 +117,8 @@ interface ProjectTaskListPanelProps {
 }
 
 /**
- * The project's tasks as flat rows under muted group headers: Triage,
- * Working, Blocked, Idle, Archived (`projectTaskStatusSections`), then the
+ * The project's tasks as flat rows under muted group headers: Needs you,
+ * Working, Idle, Archived (`projectTaskStatusSections`), then the
  * tasks' Pull requests. Archived starts closed.
  */
 export function ProjectTaskListPanel({
@@ -151,8 +133,6 @@ export function ProjectTaskListPanel({
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
   const firstPaint = useFirstPaintGate();
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  const [isApproving, setIsApproving] = useState(false);
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
   const repos = useQuery(api.githubRepos.list, {});
@@ -170,31 +150,6 @@ export function ProjectTaskListPanel({
     archivedTasks,
   );
   const pullRequests = projectTaskPullRequests(tasks);
-  const toApprove = unapprovedTodoTaskIds(tasks);
-  const triageAuthorIds = [
-    ...new Set(
-      (
-        sections.find((section) => section.status === "triage")?.tasks ?? []
-      ).flatMap(({ row }) =>
-        row.createdBy !== undefined ? [row.createdBy] : [],
-      ),
-    ),
-  ];
-  const authors = useQuery(
-    api.users.getMany,
-    triageAuthorIds.length > 0 ? { ids: triageAuthorIds } : "skip",
-  );
-
-  const approveAll = async () => {
-    setIsApproving(true);
-    await withMutationToast(
-      approveTasks({ projectId, taskIds: toApprove }),
-      toApprove.length === 1 ? "Task approved" : "Tasks approved",
-      "Couldn't approve the tasks",
-      "project-approve",
-    ).catch(() => undefined);
-    setIsApproving(false);
-  };
 
   const groups = [
     ...sections.map((section) => ({
@@ -231,22 +186,9 @@ export function ProjectTaskListPanel({
     basePath,
     homeRepoId,
     reposById,
-    authorNames: firstNameByUserId(authors ?? []),
     numIdOf: (taskId) => numIdById.get(taskId),
     readOnly,
   };
-
-  const triageActions =
-    !readOnly && toApprove.length > 0 ? (
-      <Button
-        size="xs"
-        variant="ghost"
-        disabled={isApproving}
-        onClick={() => void approveAll()}
-      >
-        Approve all
-      </Button>
-    ) : undefined;
 
   return (
     <div
@@ -266,7 +208,6 @@ export function ProjectTaskListPanel({
             <GroupHeader
               label={PROJECT_TASK_DISPLAY_STATUS_LABELS[status]}
               count={sectionTasks.length}
-              actions={status === "triage" ? triageActions : undefined}
             />
             <AccordionContent className="pt-1 pb-0">
               {scrollParent ? (

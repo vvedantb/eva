@@ -11,8 +11,11 @@ import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-deta
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { QuickTaskRouteState } from "../_utils/useQuickTaskRouteState";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 
 interface QuickTaskTaskPageContentProps {
   taskId: Id<"agentTasks">;
@@ -26,6 +29,7 @@ export function QuickTaskTaskPageContent({
   const navigate = useNavigate();
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   const params = useParams({ strict: false });
   const pathSegment =
     typeof params.numId === "string" ? params.numId : undefined;
@@ -76,7 +80,7 @@ export function QuickTaskTaskPageContent({
             });
           },
           onOpenFile: (path: string) => {
-            if (simpleView) return;
+            if (isHiddenTab("files")) return;
             navigate({
               to: toInternalRepoHref(
                 `${basePath}/quick-tasks/${pathSegment}/sandbox/files`,
@@ -161,7 +165,7 @@ export function QuickTaskTaskPageContent({
       sandboxTab !== undefined &&
       typeof ownerParam === "string" &&
       typeof repoParam === "string" ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={sandboxTab}
           to="/$owner/$repo/quick-tasks/$numId/sandbox/$sandboxTab"
           params={{

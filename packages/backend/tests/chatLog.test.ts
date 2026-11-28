@@ -170,7 +170,7 @@ describe("chat log", () => {
     "claiming a question answer logs the question and answer",
     async () => {
       const f = await fixture();
-      const entityId = String(f.projectId);
+      const entityId = String(f.sessionId);
       const payload = JSON.stringify({
         questions: [
           { question: "Which tab?", header: "Tab", options: [], multiSelect: false },
@@ -191,7 +191,7 @@ describe("chat log", () => {
         toolUseId: "tool-1",
       });
       const rows = await f.asUser.query(api.chatLog.listForSource, {
-        source: { kind: "project", projectId: f.projectId },
+        source: { kind: "session", sessionId: f.sessionId },
       });
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
@@ -342,9 +342,6 @@ describe("chat log", () => {
           sessionId: f.sessionId,
           repoId: session.repoId,
           userId: session.userId,
-          title: "Chat 2",
-          number: 2,
-          isMain: false,
         });
         const messageId = await ctx.db.insert("messages", {
           parentId: chatId,

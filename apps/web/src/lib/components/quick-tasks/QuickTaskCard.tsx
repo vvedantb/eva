@@ -54,14 +54,13 @@ import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { useTaskMenu } from "./_components/useTaskMenu";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
+import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
 >[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
-
-type DeploymentStatus = "queued" | "building" | "deployed" | "error";
 
 interface QuickTaskCardProps {
   id: Id<"agentTasks">;
@@ -75,7 +74,6 @@ interface QuickTaskCardProps {
   createdByUser?: User;
   createdAt: number;
   hasError?: boolean;
-  deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
   groupedCodebases?: GroupedCodebase[];
   href?: string;
@@ -94,11 +92,13 @@ interface QuickTaskCardProps {
   hasUnread?: boolean;
   isAwaitingAnswer?: boolean;
   archived?: boolean;
+  layout?: "card" | "row";
 }
 
 export function QuickTaskCard({
   id,
   title,
+  description,
   status,
   priority,
   numId,
@@ -107,7 +107,6 @@ export function QuickTaskCard({
   createdByUser,
   createdAt,
   hasError = false,
-  deploymentStatus: _deploymentStatus,
   sandboxStatus,
   groupedCodebases,
   href,
@@ -126,7 +125,9 @@ export function QuickTaskCard({
   hasUnread = false,
   isAwaitingAnswer = false,
   archived = false,
+  layout = "card",
 }: QuickTaskCardProps) {
+  const isRow = layout === "row";
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
   const accentClass = showError ? "bg-destructive" : statusMeta.bar;
@@ -149,6 +150,7 @@ export function QuickTaskCard({
     projects,
     archived,
   });
+
   const draftMarks = useQuery(
     api.drafts.listMarks,
     repoId ? { repoId } : "skip",
@@ -162,164 +164,163 @@ export function QuickTaskCard({
   const creatorFirstName =
     createdByUser?.firstName ?? createdByUser?.fullName?.split(/\s+/)[0];
 
-  const ageAndMenu = (
-    <>
-      <span className="text-2xs tabular-nums text-muted-foreground/70">
-        {compactRelativeTime(createdAt)}
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)}
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Task actions"
-          >
-            <IconDots className="size-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
+  const age = (
+    <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/70">
+      {compactRelativeTime(createdAt)}
+    </span>
+  );
+
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)}
           onClick={(e) => e.stopPropagation()}
+          aria-label="Task actions"
         >
-          <TaskCardMenuItems variant="dropdown" {...menuProps} />
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <IconDots className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <TaskCardMenuItems variant="dropdown" {...menuProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const tagBadges = tags?.map((tag) => (
+    <Badge
+      key={tag}
+      variant="secondary"
+      className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
+    >
+      <span className="flex min-w-0 items-center gap-0.5">
+        <IconTag className="size-2.5 shrink-0" />
+        <span className="truncate">{tag}</span>
+      </span>
+    </Badge>
+  ));
+
+  const checkbox = isSelecting ? (
+    <Checkbox
+      checked={isSelected}
+      onClick={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        onToggleSelect?.({ shiftKey: event.shiftKey });
+      }}
+      className={cn("shrink-0", !isRow && "mt-0.5", LIST_ROW_CONTROL_CLASS)}
+    />
+  ) : null;
+
+  const titleBlock = (
+    <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+      <EntityNumLabel numId={numId} />
+      <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+        {title}
+      </MarqueeOnHover>
+    </div>
+  );
+
+  const marks = (
+    <>
+      {priority ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <PriorityIcon level={priority} size={14} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {isAwaitingAnswer ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <AwaitingAnswerMark />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Eva asked you a question</TooltipContent>
+        </Tooltip>
+      ) : showAgentPulse ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center hit-target">
+              <LoadingState
+                label="Working"
+                variant="Drive"
+                size="sm"
+                iconOnly
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Eva is replying</TooltipContent>
+        </Tooltip>
+      ) : sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                "relative size-2 shrink-0 rounded-full hit-target",
+                SANDBOX_STATUS_STYLES[sandboxStatus].dot,
+              )}
+            />
+          </TooltipTrigger>
+          <TooltipContent>
+            {SANDBOX_STATUS_STYLES[sandboxStatus].label}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <UnreadDot show={hasUnread && !isAgentActive} />
+      {scheduledAt ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="relative flex items-center text-primary hit-target">
+              <IconClock className="size-3.5" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {status === "todo"
+              ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
+              : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </>
   );
 
-  const card = (
-    <ListRow
-      accentClassName={accentClass}
-      selected={isActive}
-      link={
-        href ? (
-          <DynamicLink to={toInternalRepoHref(href)} search={true} />
-        ) : undefined
-      }
-      onClick={
-        hasDialogOpen || onClick
-          ? (event) => {
-              if (hasDialogOpen) {
-                event.preventDefault();
-                return;
-              }
-              onClick?.(event);
-            }
-          : undefined
-      }
-      aria-label={title}
-      contentClassName="flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
-      className={cn(
-        showError
-          ? "border border-destructive/30 bg-destructive/5"
-          : isInProgress
-            ? "bg-card"
-            : undefined,
-        isSelected && "ring-2 ring-primary/40",
-      )}
-    >
-      <div className="flex min-w-0 items-start gap-2">
-        {isSelecting ? (
-          <Checkbox
-            checked={isSelected}
-            onClick={(event) => {
-              event.stopPropagation();
-              event.preventDefault();
-              onToggleSelect?.({ shiftKey: event.shiftKey });
-            }}
-            className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
+  const rowBody = (
+    <div className="flex min-w-0 items-center gap-2">
+      {checkbox}
+      {titleBlock}
+      {age}
+      <div className="flex shrink-0 items-center gap-1.5">
+        {marks}
+        {hasDraftComment ? (
+          <IconPencil
+            className="size-3 shrink-0 text-muted-foreground"
+            aria-label="Draft comment"
           />
         ) : null}
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <EntityNumLabel numId={numId} />
-          <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
-            {title}
-          </MarqueeOnHover>
-        </div>
+        {menu}
+      </div>
+    </div>
+  );
 
+  const cardBody = (
+    <>
+      <div className="flex min-w-0 items-start gap-2">
+        {checkbox}
+        {titleBlock}
         <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-          {priority ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <PriorityIcon level={priority} size={14} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {isAwaitingAnswer ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <AwaitingAnswerMark />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Eva asked you a question</TooltipContent>
-            </Tooltip>
-          ) : showAgentPulse ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <LoadingState
-                    label="Working"
-                    variant="Drive"
-                    size="sm"
-                    iconOnly
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Eva is replying</TooltipContent>
-            </Tooltip>
-          ) : sandboxStatus &&
-            showsSandboxStatusDot(sandboxStatus, simpleView) ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "relative size-2 shrink-0 rounded-full hit-target",
-                    SANDBOX_STATUS_STYLES[sandboxStatus].dot,
-                  )}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                {SANDBOX_STATUS_STYLES[sandboxStatus].label}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          <UnreadDot show={hasUnread && !isAgentActive} />
-          {scheduledAt ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center text-primary hit-target">
-                  <IconClock className="size-3.5" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {status === "todo"
-                  ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
-                  : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          {marks}
         </div>
       </div>
 
       {hasMetadata ? (
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
-            >
-              <span className="flex min-w-0 items-center gap-0.5">
-                <IconTag className="size-2.5 shrink-0" />
-                <span className="truncate">{tag}</span>
-              </span>
-            </Badge>
-          ))}
+          {tagBadges}
           {hasDraftComment ? (
             <Badge
               variant="secondary"
@@ -348,18 +349,76 @@ export function QuickTaskCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {ageAndMenu}
+          {age}
+          {menu}
         </div>
       </div>
+    </>
+  );
+
+  const card = (
+    <ListRow
+      accentClassName={accentClass}
+      selected={isActive}
+      link={
+        href ? (
+          <DynamicLink to={toInternalRepoHref(href)} search={true} />
+        ) : undefined
+      }
+      onClick={
+        hasDialogOpen || onClick
+          ? (event) => {
+              if (hasDialogOpen) {
+                event.preventDefault();
+                return;
+              }
+              onClick?.(event);
+            }
+          : undefined
+      }
+      aria-label={title}
+      contentClassName={
+        isRow
+          ? "px-2.5 py-1.5 pl-3 sm:pl-3.5"
+          : "flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
+      }
+      className={cn(
+        showError
+          ? "border border-destructive/30 bg-destructive/5"
+          : isInProgress
+            ? "bg-card"
+            : undefined,
+        isSelected && "ring-2 ring-primary/40",
+      )}
+    >
+      {isRow ? rowBody : cardBody}
     </ListRow>
   );
 
-  const wrappedCard = isInProgress ? (
+  const beamedCard = isInProgress ? (
     <BorderBeam active colorVariant="progress" className="rounded-surface">
       {card}
     </BorderBeam>
   ) : (
     card
+  );
+
+  const wrappedCard = isRow ? (
+    <SidebarListHoverCard
+      title={title}
+      preview={description}
+      createdAt={createdAt}
+      userId={createdByUser?._id}
+      details={
+        tagBadges && tagBadges.length > 0 ? (
+          <div className="flex flex-wrap gap-1">{tagBadges}</div>
+        ) : undefined
+      }
+    >
+      {beamedCard}
+    </SidebarListHoverCard>
+  ) : (
+    beamedCard
   );
 
   return (

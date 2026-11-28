@@ -10,7 +10,6 @@ export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
 export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPublish";
 export {
-  isTaskRunning,
   taskScheduledAt,
   type TaskRunSource,
 } from "./convex/_agentTasks/runState";
@@ -18,13 +17,16 @@ export {
   findUsageLimitHold,
   isHeldByUsageLimit,
   parseUsageLimitResetTime,
-} from "./convex/_taskWorkflow/usageLimitReset";
+} from "./convex/_queues/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
+  canRunByHand,
   DEFAULT_ISSUE_LABEL,
   REPO_EVENT_LABELS,
+  triggerHasEvent,
   USER_REPO_EVENTS,
   type AutomationTrigger,
+  type RepoEventKind,
 } from "./convex/_automationEvents/labels";
 export {
   INCOMPLETE_PR_RECAP_MESSAGE,
@@ -79,3 +81,4 @@ export {
   type ShortcutDef,
   type ShortcutId,
 } from "./convex/validators";
+export { buildAutomationEmailHtml } from "./convex/emailTemplates";

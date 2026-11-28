@@ -105,12 +105,8 @@ export function SystemAutomationCard({
           </div>
         </div>
 
-        {/* Pre-install the schedule is only a seed value, so showing a clock
-            time would read as a fixed property of the automation. */}
         {(installed || readOnly || eventText !== null) && (
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* An event trigger is fixed by the catalog, so unlike a
-                schedule it is shown before install too. */}
             {eventText !== null ? (
               <Chip icon={IconBolt}>{eventText}</Chip>
             ) : (

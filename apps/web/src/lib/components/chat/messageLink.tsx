@@ -9,7 +9,7 @@ import { messageLinkParser } from "@/lib/search-params";
 
 /**
  * The current page URL aimed at one message. The rest of the URL stays
- * (`?chat=2`, `?subagent=…`), so the link opens the same chat it came from.
+ * (`?tasks=…`, `?subagent=…`), so the link opens the same chat it came from.
  */
 export function messageLinkUrl(messageId: string): string {
   return messageLinkHref(window.location.href, messageId);

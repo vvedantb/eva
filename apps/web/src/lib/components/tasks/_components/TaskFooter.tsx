@@ -2,8 +2,7 @@
 
 import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useRef } from "react";
-import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { taskScheduledAt, type Doc, type Id } from "@eva/backend";
 import {
   Button,
   Tooltip,
@@ -34,10 +33,8 @@ import {
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
 import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
+import type { TaskDeploymentStatus } from "./StatusFieldsControls";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
 
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
@@ -48,8 +45,7 @@ interface TaskFooterProps {
   hasActiveRun: boolean;
   hasRuns: boolean;
   latestPrUrl: string | undefined;
-  latestPrError: string | undefined;
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
   executionError: string | null;
   isStarting: boolean;
   canStartSandbox: boolean;
@@ -117,17 +113,15 @@ function TaskFooterError({
   motionKey,
   className,
   executionError,
-  latestPrError,
 }: {
   visible: boolean;
   motionKey: string;
   className: string;
   executionError: string | null;
-  latestPrError: string | undefined;
 }) {
   return (
     <AnimatePresence initial={false}>
-      {visible && (executionError || latestPrError) ? (
+      {visible && executionError ? (
         <m.p
           key={motionKey}
           className={className}
@@ -136,7 +130,7 @@ function TaskFooterError({
           exit={{ opacity: 0 }}
           transition={tokenTransition.fast}
         >
-          {executionError ?? latestPrError}
+          {executionError}
         </m.p>
       ) : null}
     </AnimatePresence>
@@ -152,8 +146,7 @@ export function TaskFooter({
   hasActiveRun,
   hasRuns,
   latestPrUrl,
-  latestPrError,
-  latestDeployment,
+  deploymentStatus,
   executionError,
   isStarting,
   canStartSandbox,
@@ -190,7 +183,7 @@ export function TaskFooter({
     },
     prUrl: latestPrUrl,
     owner: { kind: "task", taskId },
-    hasDeployment: Boolean(latestDeployment?.deploymentStatus),
+    hasDeployment: deploymentStatus !== undefined,
   });
   const moreMenu = getMoreMenuVisibility({
     simpleView,
@@ -209,7 +202,6 @@ export function TaskFooter({
         motionKey="footer-error"
         className="text-xs text-destructive text-right"
         executionError={executionError}
-        latestPrError={latestPrError}
       />
       <div className={layout.row}>
         <TaskFooterError
@@ -217,7 +209,6 @@ export function TaskFooter({
           motionKey="header-error"
           className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
           executionError={executionError}
-          latestPrError={latestPrError}
         />
         <AnimatePresence initial={false} mode="popLayout">
           {showRunButton ? (

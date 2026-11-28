@@ -5,7 +5,6 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|fork-stack";
 
@@ -31,7 +30,6 @@ async function fixture() {
       sandboxId: "sbx_source",
       baseBranch: "develop",
       branchName: "eva/session-source",
-      lastModel: "claude:opus",
       planContent: "# Seed plan",
       lastInteractionMode: "plan",
     });
@@ -39,9 +37,6 @@ async function fixture() {
       sessionId: id,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: "claude:sonnet",
     });
     await ctx.db.insert("messages", {
@@ -84,9 +79,7 @@ async function createFork(stackOnSource: boolean) {
   return await t.run(async (ctx) => {
     const mainChat = await ctx.db
       .query("sessionChats")
-      .withIndex("by_session_and_number", (q) =>
-        q.eq("sessionId", sessionId).eq("number", 1),
-      )
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .first();
     const chatId = mainChat?._id ?? sessionId;
     return {
@@ -118,7 +111,6 @@ describe("createForkedSession", () => {
         forkSourceSandboxId: "sbx_source",
         planContent: "# Seed plan",
         lastInteractionMode: "plan",
-        lastModel: "claude:sonnet",
       });
       expect(fork?.branchName).not.toBe("eva/session-source");
       expect(queued).toEqual([]);

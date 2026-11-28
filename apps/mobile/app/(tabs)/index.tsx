@@ -1,16 +1,13 @@
-import { api, type Doc, type Id } from "@eva/backend";
-import { getNotificationAppearance } from "@eva/shared";
+import { api } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGroups";
-import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened, IconX } from "@tabler/icons-react-native";
+import { groupInboxRows, inboxDoneTarget, inboxHistoryRow } from "@eva/shared/inbox";
+import { IconArrowLeft, IconHistory, IconInbox } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
-import { impactHaptic } from "@vvedantb/native-ui/haptics";
 import { PageHeader, SectionLabel } from "@vvedantb/native-ui/layout";
 import {
-  BulkActionBar,
+  Button,
   closeSwipeRows,
   EmptyState,
-  HeaderIconButton,
   ListDivider,
   SkeletonList,
   SkeletonRow,
@@ -18,247 +15,131 @@ import {
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
-import { Tabs } from "expo-router/js-tabs";
-import { useEffect, useState } from "react";
-import { BackHandler, SectionList, View } from "react-native";
+import { useState } from "react";
+import { SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { openAppLink } from "@/push/openLink";
-import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
-import { NeedsYouList } from "@/inbox/NeedsYouList";
-import { NotificationRow, type NotificationRepo } from "@/inbox/NotificationRow";
-import { SegmentedTabs } from "@/ui/SegmentedTabs";
+import { InboxRowItem, type InboxRepo, type InboxRow } from "@/inbox/InboxRowItem";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
 /**
- * The web inbox at phone width, in its two views. Needs you (the default):
- * what waits for a person (`NeedsYouList`). Updates: All / Unread / Archived, grouped by day,
- * repo, type or urgency (`@eva/shared/notificationGroups`), sticky group
- * headers, and select mode with the web bulk bar. The web row menu is a
- * swipe on each row (`NotificationRow`). A `SectionList`: the inbox holds up
- * to 100 rows, and only those near the view are drawn.
- *
- * Select mode is Android's contextual action bar: it starts from the header
- * Select button or a long press on a row, the header shows "N selected" with
- * a close X, and the bulk bar takes the tab bar's place (the tab bar hides,
- * so no tab switch mid-selection). Back, either X, a filter change or a bulk
- * action leaves it.
+ * The web Inbox at phone width: one list, grouped by how urgent it is
+ * (`@eva/shared/inbox`): Holding up work, Waiting on you, New since you
+ * looked, with sticky labels and counts. A tap opens the chat; a swipe left
+ * is Done, with Undo in the toast. A `SectionList`: only rows near the view
+ * are drawn.
  */
 export default function InboxScreen() {
-  const [view, setView] = useState<"needs" | "updates">("needs");
-  const needsYou = useQuery(api.needsYou.list, view === "needs" ? {} : "skip");
-  const [filter, setFilter] = useState<InboxFilter>("all");
-  const [group, setGroup] = useState<InboxGroup>("day");
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<ReadonlySet<Id<"notifications">>>(new Set());
-  const listed = useQuery(api.notifications.list, { archived: filter === "archived" });
-  const unreadCount = useQuery(api.notifications.countUnread, {}) ?? 0;
+  const [history, setHistory] = useState(false);
+  const inboxRows = useQuery(api.inbox.list, history ? "skip" : {});
+  const feed = useQuery(api.notifications.list, history ? { history: true } : "skip");
+  const rows: InboxRow[] | undefined = history ? feed?.map(inboxHistoryRow) : inboxRows;
   const repos = useQuery(api.githubRepos.list, {});
-  const markAsRead = useMutation(api.notifications.markAsRead);
-  const markAsUnread = useMutation(api.notifications.markAsUnread);
-  const markAllAsRead = useMutation(api.notifications.markAllAsRead);
-  const markManyAsRead = useMutation(api.notifications.markManyAsRead);
-  const markManyAsUnread = useMutation(api.notifications.markManyAsUnread);
+  const repoById = new Map<string, InboxRepo>(
+    (repos ?? []).map((repo) => [String(repo._id), { label: repo.label ?? repo.name, logoUrl: repo.logoUrl }]),
+  );
+  const markDone = useMutation(api.inbox.markDone);
+  const undoDone = useMutation(api.inbox.undoDone);
   const archiveMany = useMutation(api.notifications.archiveMany);
   const unarchiveMany = useMutation(api.notifications.unarchiveMany);
   const scheme = useScheme();
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (!selecting) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setSelecting(false);
-      setSelected(new Set());
-      return true;
-    });
-    return () => subscription.remove();
-  }, [selecting]);
-  const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
-  const repoById = new Map<Id<"githubRepos">, NotificationRepo>(
-    (repos ?? []).map((repo) => [repo._id, { label: repo.label ?? repo.name, logoUrl: repo.logoUrl }]),
-  );
-  const repoOf = (notification: Doc<"notifications">) =>
-    notification.repoId ? repoById.get(notification.repoId) : undefined;
-  const groups = groupNotifications(notifications ?? [], group, {
-    typeLabel: (notification) => getNotificationAppearance(notification).label,
-    repoLabel: (notification) => repoOf(notification)?.label,
-  });
-
-  const exitSelect = () => {
-    setSelecting(false);
-    setSelected(new Set());
-  };
-  const startSelect = ({ _id: id }: Doc<"notifications">) => {
-    closeSwipeRows();
-    impactHaptic("light");
-    setSelecting(true);
-    setSelected(new Set([id]));
-  };
-  const toggle = ({ _id: id }: Doc<"notifications">) => {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelected(next);
-  };
-  const bulk = (run: (ids: Id<"notifications">[]) => Promise<unknown>) => () => {
-    void run([...selected]);
-    exitSelect();
-  };
-  const unarchive = (ids: Id<"notifications">[]) => {
-    const done = unarchiveMany({ ids });
-    done.catch(() => toast.error("Couldn't unarchive", { id: "inbox-unarchive" }));
-    return done;
-  };
-  const archive = (ids: Id<"notifications">[]) => {
-    const done = archiveMany({ ids });
-    done.catch(() => toast.error("Couldn't archive", { id: "inbox-archive" }));
-    toast.success(`${ids.length} archived`, { action: { label: "Undo", onPress: () => void unarchive(ids) } });
-    return done;
-  };
-  const toggleRead = (notification: Doc<"notifications">) => {
-    const id = notification._id;
-    if (notification.read) {
-      markAsUnread({ id }).catch(() => toast.error("Couldn't mark as unread", { id: "inbox-mark-unread" }));
-    } else {
-      markAsRead({ id }).catch(() => toast.error("Couldn't mark as read", { id: "inbox-mark-read" }));
+  const done = async (row: InboxRow): Promise<void> => {
+    const target = inboxDoneTarget(row);
+    if (!target) return;
+    if (target.kind === "chat") {
+      const { chatId, notificationId } = target;
+      const marked = markDone({ chatId, notificationId });
+      marked.catch(() => toast.error("Couldn't mark as done", { id: "inbox-done" }));
+      toast.success("Done", {
+        action: {
+          label: "Undo",
+          onPress: () => void marked.then((undo) => undoDone({ chatId, ...undo })),
+        },
+      });
+      await marked;
+      return;
     }
+    const ids = [target.notificationId];
+    const archived = archiveMany({ ids });
+    archived.catch(() => toast.error("Couldn't mark as done", { id: "inbox-done" }));
+    toast.success("Done", { action: { label: "Undo", onPress: () => void unarchiveMany({ ids }) } });
+    await archived;
   };
-  const markRead = (notification: Doc<"notifications">) => void markAsRead({ id: notification._id });
-  const toggleArchive = (notification: Doc<"notifications">) =>
-    notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
-  const open = (notification: Doc<"notifications">) => {
-    if (!notification.read) void markAsRead({ id: notification._id });
-    openAppLink({ chatTarget: notification.chatTarget, href: notification.href, repoId: notification.repoId });
-  };
+
+  const historyToggle = (
+    <View
+      className="items-start px-2 pt-2"
+      style={{
+        paddingBottom: tabBarReserve(largerText, insets.bottom),
+        borderTopWidth: 1,
+        borderColor: EVA_THEME[scheme].border,
+      }}
+    >
+      <Button
+        size="sm"
+        variant="ghost"
+        fullWidth={false}
+        leftIcon={
+          history ? (
+            <IconArrowLeft size={14} color={EVA_THEME[scheme].mutedForeground} />
+          ) : (
+            <IconHistory size={14} color={EVA_THEME[scheme].mutedForeground} />
+          )
+        }
+        onPress={() => setHistory(!history)}
+      >
+        {history ? "Back to Inbox" : "History"}
+      </Button>
+    </View>
+  );
 
   return (
     <TabScreen>
-      <Tabs.Screen options={{ tabBarStyle: selecting ? { display: "none" } : undefined }} />
-      {selecting ? (
-        <PageHeader
-          title={`${selected.size} selected`}
-          leading={
-            <HeaderIconButton label="Cancel selection" onPress={exitSelect}>
-              <IconX size={18} color={EVA_THEME[scheme].foreground} />
-            </HeaderIconButton>
-          }
-        />
-      ) : (
-        <PageHeader
-          title="Inbox"
-          action={
-            view === "needs" ? undefined : (
-            <InboxHeaderActions
-              filter={filter}
-              onFilterChange={(next) => {
-                setFilter(next);
-                exitSelect();
-              }}
-              group={group}
-              onGroupChange={setGroup}
-              unreadCount={unreadCount}
-              onMarkAllRead={() => void markAllAsRead({})}
-              onSelect={() => {
-                closeSwipeRows();
-                setSelecting(true);
-              }}
-            />
-            )
-          }
-        />
-      )}
-      {selecting ? null : (
-        <View className="px-4 pb-2">
-          <SegmentedTabs
-            value={view}
-            options={[
-              { value: "needs", label: "Needs you" },
-              { value: "updates", label: "Updates" },
-            ]}
-            onChange={setView}
-          />
-        </View>
-      )}
-      {view === "needs" ? (
-        <NeedsYouList rows={needsYou} />
-      ) : notifications === undefined ? (
+      <PageHeader title="Inbox" />
+      {rows === undefined ? (
         <SkeletonList
-          label="Loading notifications"
+          label="Loading inbox"
           count={8}
-          renderRow={(row) => <SkeletonRow index={row} leading={28} lines={2} minHeight={64} />}
+          renderRow={(row) => <SkeletonRow index={row} lines={2} minHeight={72} />}
         />
-      ) : notifications.length === 0 ? (
-        <EmptyState
-          icon={IconInbox}
-          title={filter === "all" ? "No notifications" : `No ${filter} notifications`}
-          description={filter === "all" ? "Mentions and agent questions show up here." : undefined}
-        />
+      ) : rows.length === 0 ? (
+        <View className="flex-1">
+          <EmptyState icon={IconInbox} title={history ? "No notifications yet" : "Nothing new since you looked"} />
+        </View>
       ) : (
         <SectionList
-          sections={groups.map((section) => ({ label: section.label, data: section.items }))}
-          keyExtractor={(notification) => notification._id}
+          sections={
+            history
+              ? [{ label: `History ${rows.length}`, data: rows }]
+              : groupInboxRows(rows).map((section) => ({
+                  label: `${section.label} ${section.rows.length}`,
+                  data: section.rows,
+                }))
+          }
+          keyExtractor={(row) => row.key}
           stickySectionHeadersEnabled
           {...LIST_WINDOW}
           renderSectionHeader={({ section }) => (
-            <View
-              className="px-4 py-1.5"
-              style={{
-                backgroundColor: EVA_THEME[scheme].background,
-                borderBottomWidth: 1,
-                borderBottomColor: EVA_THEME[scheme].border,
-              }}
-            >
+            <View className="px-4 py-1.5" style={{ backgroundColor: EVA_THEME[scheme].background }}>
               <SectionLabel style={{ letterSpacing: XS_TRACKING, lineHeight: 24 }}>{section.label}</SectionLabel>
             </View>
           )}
           ItemSeparatorComponent={ListDivider}
-          renderItem={({ item: notification }) => (
-            <NotificationRow
-              notification={notification}
-              repo={repoOf(notification)}
-              onOpen={open}
-              onMarkRead={markRead}
-              onToggleRead={toggleRead}
-              onToggleArchive={toggleArchive}
-              onStartSelect={startSelect}
-              selection={selecting ? { checked: selected.has(notification._id), onToggle: toggle } : undefined}
+          renderItem={({ item }) => (
+            <InboxRowItem
+              row={item}
+              repo={item.repoId ? repoById.get(String(item.repoId)) : undefined}
+              onDone={done}
             />
           )}
           onScrollBeginDrag={closeSwipeRows}
-          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
-      <BulkActionBar
-        barKey="inbox-bulk-bar"
-        isSelecting={selecting}
-        selectedCount={selected.size}
-        totalCount={notifications?.length ?? 0}
-        onExitSelect={exitSelect}
-        onSelectAll={() => setSelected(new Set((notifications ?? []).map((notification) => notification._id)))}
-        onClearSelection={() => setSelected(new Set())}
-        placement="tabBar"
-        primaryActions={[
-          {
-            key: "read",
-            label: "Mark read",
-            shortLabel: "Read",
-            icon: IconMailOpened,
-            onClick: bulk((ids) => markManyAsRead({ ids })),
-          },
-          {
-            key: "unread",
-            label: "Mark unread",
-            shortLabel: "Unread",
-            icon: IconMail,
-            onClick: bulk((ids) => markManyAsUnread({ ids })),
-          },
-          filter === "archived"
-            ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onClick: bulk(unarchive) }
-            : { key: "archive", label: "Archive", icon: IconArchive, onClick: bulk(archive) },
-        ]}
-      />
+      {rows === undefined ? null : historyToggle}
     </TabScreen>
   );
 }

@@ -49,7 +49,7 @@ The callback owns seven core capabilities:
 
 - Single evolving todo checklist across tool-use/tool-result deltas
 - Subagent steps nested under parent `toolUseId` for drill-in UI
-- Feeds `packages/ui/src/ai-elements/activity-tasks.tsx`
+- Feeds the chat activity UI (`apps/web/src/lib/components/StreamingActivityDisplay.tsx`)
 - **Files:** `callback-src/parse/canonical.ts`, `callback-src/parse/toolSteps.ts`
 
 ### 3. Usage & Cost Capture
@@ -62,7 +62,7 @@ The callback owns seven core capabilities:
 
 - In-sandbox: 150 ms flush + 10 s keep-alive ping; fatal-failure escalation
 - Per-turn daemon watchdog on `NO_MESSAGE_TIMEOUT` / `MAX_TOTAL_RUNTIME`
-- Host-side liveness via `convex/workflowWatchdog.ts`, `convex/_taskWorkflow/watchdog.ts`
+- Host-side liveness via the turn lease reconciler (`convex/turns.ts` `reconcile`) and the backstops in `convex/workflowWatchdog.ts` (chat turns) and `convex/agentJobs.ts` (one-shot agents)
 - **Files:** `callback-src/runtime/heartbeats.ts`, `callback-src/providers/claudeSdkDaemon.ts:131`
 
 ### 5. MCP-Config Injection
@@ -152,7 +152,7 @@ Only if eva stands up a long-lived Node host tier (e.g. for sub-150 ms token str
 - `convex/http.ts` — heartbeat + mutation endpoints
 - `convex/_sessions/workflow.ts` — durable-workflow main loop, `awaitEvent` on completion
 - `convex/_sessions/execution.ts` — prompt staging, daemon prewarm trigger
-- `convex/workflowWatchdog.ts`, `convex/_taskWorkflow/watchdog.ts` — liveness checks
+- `convex/turns.ts`, `convex/workflowWatchdog.ts`, `convex/agentJobs.ts` — liveness checks and backstops
 - `convex/pendingQuestions.ts` — blocking question round-trip table + mutations
 - `callback-src/` — in-sandbox agent source (entry: `index.ts`)
   - `providers/claudeSdk.ts` — SDK integration, `query()` call

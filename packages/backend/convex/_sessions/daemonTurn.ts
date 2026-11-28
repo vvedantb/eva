@@ -4,7 +4,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { AIModel, ModelTraitsExecutionArgs } from "../validators";
 import { sessionChatPersistenceId } from "../_sessionChats/helpers";
 import { SESSION_TOOLS } from "./sessionPrompt";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 
 /** The `pendingTurn` a chat's warm daemon claims through claimPendingTurn. */
 export function buildDaemonPendingTurn(turn: {

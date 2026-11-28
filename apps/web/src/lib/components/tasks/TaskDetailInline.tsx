@@ -6,18 +6,18 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { Spinner, TabsTransition, useRequestConfirm } from "@vvedantb/ui";
 import { useTaskDetail } from "./useTaskDetail";
-import {
-  TASK_DETAILS_TAB,
-  TaskDetailsPane,
-  type TaskDetailsTab,
-} from "./TaskDetailsPane";
-import { TaskDetailsRailFrame } from "./TaskDetailsRailFrame";
+import { TaskDetailsPane } from "./TaskDetailsPane";
+import { ProjectTaskPageRedirect } from "./ProjectTaskPageRedirect";
 import { TaskFooter } from "./_components/TaskFooter";
 import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
-import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
+import {
+  TaskChatUsageLimits,
+  TaskSandboxChatPanel,
+} from "./TaskSandboxChatPanel";
 import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
@@ -47,7 +47,10 @@ import {
 import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 import { useRepo } from "@/lib/contexts/RepoContext";
 
 interface TaskDetailInlineProps {
@@ -55,14 +58,12 @@ interface TaskDetailInlineProps {
   taskId: Id<"agentTasks">;
   allTags?: string[];
   routing?: UseTaskDetailRouting;
-  openOnDetails?: boolean;
 }
 
 export function TaskDetailInline({
   taskId,
   allTags = [],
   routing,
-  openOnDetails = false,
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
   const { basePath } = useRepo();
@@ -73,24 +74,10 @@ export function TaskDetailInline({
   const { diffFile } = useDiffSearchParams();
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
-  const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<
-    SandboxTab | TaskDetailsTab | null
-  >(
-    routing?.mode === "project-task" &&
-      openOnDetails &&
-      !fileViewerPath &&
-      !diffFile
-      ? TASK_DETAILS_TAB.value
-      : null,
+  const isHiddenTab = useIsHiddenSandboxTab();
+  const [pickedSandboxTab, setEmbeddedSandboxTab] = useState<SandboxTab | null>(
+    null,
   );
-  const urlSandboxTab: SandboxTab = simpleView
-    ? "preview"
-    : fileViewerPath
-      ? "files"
-      : diffFile
-        ? "review"
-        : "preview";
-  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,
@@ -106,8 +93,7 @@ export function TaskDetailInline({
     isArchived,
     hasRuns,
     latestPrUrl,
-    latestPrError,
-    latestDeployment,
+    deploymentStatus,
     executionError,
     showResolveConfirm,
     setShowResolveConfirm,
@@ -131,9 +117,18 @@ export function TaskDetailInline({
     taskSession,
   } = detail;
   const { sandbox } = taskSession;
+  const urlSandboxTab: SandboxTab = simpleView
+    ? "preview"
+    : fileViewerPath && !isHiddenTab("files")
+      ? "files"
+      : diffFile ||
+          (routing?.mode === "project-task" && latestPrUrl !== undefined)
+        ? "review"
+        : "preview";
+  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId;
-  const isAgentActive = useTaskAgentActive(chatParentId, task);
+  const isAgentActive = useTaskAgentActive(chatParentId);
   const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -145,7 +140,7 @@ export function TaskDetailInline({
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   const openFile = (path: string) => {
-    if (simpleView) return;
+    if (isHiddenTab("files")) return;
     if (routing?.mode === "quick-sandbox") {
       routing.quick.onOpenFile(path);
       return;
@@ -171,7 +166,7 @@ export function TaskDetailInline({
     setExpandRightSignal((n) => n + 1);
   };
 
-  const handleSandboxTabChange = (tab: SandboxTab | TaskDetailsTab) => {
+  const handleSandboxTabChange = (tab: SandboxTab) => {
     if (routing?.mode === "quick-sandbox") {
       if (tab === "prd" || !isTaskRouteSandboxTab(tab)) {
         routing.quick.onSandboxTabChange("preview");
@@ -205,11 +200,14 @@ export function TaskDetailInline({
   }
 
   const isQuickTask = task.projectId === undefined;
+  if (!isQuickTask && routing?.mode !== "project-task") {
+    return <ProjectTaskPageRedirect task={task} />;
+  }
   const isSandboxViewActive = showSandbox;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
-  const activeSandboxTab: SandboxTab | TaskDetailsTab =
+  const activeSandboxTab: SandboxTab =
     routing?.mode === "quick-sandbox" ? routeSandboxTab : embeddedSandboxTab;
 
   const detailsPane = (
@@ -221,28 +219,6 @@ export function TaskDetailInline({
     />
   );
   const isProjectTaskPage = routing?.mode === "project-task";
-  const withDetailsRail = (
-    emptyState: ReactNode,
-    collapsed: boolean,
-    onToggle: () => void,
-  ) =>
-    isProjectTaskPage ? (
-      <TaskDetailsRailFrame
-        activeTab={
-          activeSandboxTab === TASK_DETAILS_TAB.value
-            ? TASK_DETAILS_TAB.value
-            : "preview"
-        }
-        onTabChange={handleSandboxTabChange}
-        collapsed={collapsed}
-        onToggle={onToggle}
-        details={detailsPane}
-      >
-        {emptyState}
-      </TaskDetailsRailFrame>
-    ) : (
-      emptyState
-    );
 
   const sandboxRightPanel = (
     panes: SandboxPanesApi,
@@ -269,15 +245,16 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          sandbox.status === "closed" &&
-          sandboxId !== undefined &&
-          canStartSandbox &&
-          !hasActiveRun
-        }
+        autoWakeEligible={sandboxAutoWakeEligible({
+          status: sandbox.status,
+          sandboxId,
+          sandboxError: sandbox.sandboxError,
+          canStart: canStartSandbox,
+          isBusy: hasActiveRun,
+        })}
+        isArchived={isArchived}
         collapsed={collapsed}
         onToggle={onToggle}
-        details={isProjectTaskPage ? detailsPane : undefined}
         miniPlayer={
           isQuickTask && task.numId !== undefined
             ? {
@@ -288,22 +265,18 @@ export function TaskDetailInline({
         }
       />
     ) : (
-      withDetailsRail(
-        <SandboxEmptyRailFrame
-          collapsed={isProjectTaskPage ? false : collapsed}
-          onToggle={onToggle}
-          showToggle={!isProjectTaskPage}
-        >
-          <div className="flex flex-col items-center gap-3 text-center">
-            <p className="text-sm text-muted-foreground">
-              No sandbox for this task yet — it becomes available once the task
-              has run
-            </p>
-          </div>
-        </SandboxEmptyRailFrame>,
-        collapsed,
-        onToggle,
-      )
+      <SandboxEmptyRailFrame
+        collapsed={isProjectTaskPage ? false : collapsed}
+        onToggle={onToggle}
+        showToggle={!isProjectTaskPage}
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">
+            No sandbox for this task yet — it becomes available once the task
+            has run
+          </p>
+        </div>
+      </SandboxEmptyRailFrame>
     );
 
   const layout = (
@@ -315,6 +288,7 @@ export function TaskDetailInline({
     <ResizablePanelLayout
       key={taskId}
       storageKey="task-sandbox-panel"
+      chatPane="left"
       collapsedStorageKey={`task-sandbox-panel:${taskId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}
@@ -329,6 +303,7 @@ export function TaskDetailInline({
           taskId={taskId}
           isSandboxActive={isSandboxActive}
           isSandboxToggling={isSandboxStarting || isSandboxStopping}
+          isSandboxStopping={isSandboxStopping}
           sandboxStartupActivity={sandboxStartupActivity}
           onOpenFile={openFile}
           onViewDiff={openDiffs}
@@ -374,25 +349,21 @@ export function TaskDetailInline({
           }
         </SandboxWorkspace>
       ) : (
-        layout(({ rightPanelCollapsed, onToggleRightPanel }) =>
-          withDetailsRail(
-            <SandboxNotStartedRail
-              collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
-              onToggle={onToggleRightPanel}
-              ownerLabel="task"
-              showToggle={!isProjectTaskPage}
-              isPending={sandbox.sessionPending}
-              onStart={
-                canStartSandbox && !isSandboxStopping
-                  ? () => void handleStartSandbox()
-                  : undefined
-              }
-              isStarting={isSandboxStarting}
-            />,
-            rightPanelCollapsed,
-            onToggleRightPanel,
-          ),
-        )
+        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
+          <SandboxNotStartedRail
+            collapsed={isProjectTaskPage ? false : rightPanelCollapsed}
+            onToggle={onToggleRightPanel}
+            ownerLabel="task"
+            showToggle={!isProjectTaskPage}
+            isPending={sandbox.sessionPending}
+            onStart={
+              canStartSandbox && !isSandboxStopping
+                ? () => void handleStartSandbox()
+                : undefined
+            }
+            isStarting={isSandboxStarting}
+          />
+        ))
       )}
     </SandboxSurfaceProviders>
   );
@@ -402,38 +373,40 @@ export function TaskDetailInline({
 
   const quickTaskHeaderActions =
     isQuickTask && actionsSlotElement ? (
-      <TaskFooter
-        variant="header"
-        taskId={taskId}
-        task={task}
-        chatId={chatId}
-        isAgentActive={isAgentActive}
-        status={status}
-        hasActiveRun={hasActiveRun}
-        hasRuns={hasRuns}
-        latestPrUrl={latestPrUrl}
-        latestPrError={latestPrError}
-        latestDeployment={latestDeployment}
-        executionError={executionError}
-        isStarting={isStarting}
-        canStartSandbox={canStartSandbox}
-        isSandboxActive={isSandboxActive}
-        isSandboxStarting={isSandboxStarting}
-        isSandboxStopping={isSandboxStopping}
-        sandbox={sandbox}
-        canCreatePr={canCreatePr}
-        isCreatingPr={isCreatingPr}
-        onCreatePr={handleCreatePr}
-        onStartSandbox={handleStartSandbox}
-        onStopSandbox={handleStopSandbox}
-        onStartExecution={handleStartExecution}
-        onResolveConfirm={() =>
-          requestConfirm(
-            () => setShowResolveConfirm(true),
-            handleResolveConflicts,
-          )
-        }
-      />
+      <>
+        <TaskChatUsageLimits taskId={taskId} />
+        <TaskFooter
+          variant="header"
+          taskId={taskId}
+          task={task}
+          chatId={chatId}
+          isAgentActive={isAgentActive}
+          status={status}
+          hasActiveRun={hasActiveRun}
+          hasRuns={hasRuns}
+          latestPrUrl={latestPrUrl}
+          deploymentStatus={deploymentStatus}
+          executionError={executionError}
+          isStarting={isStarting}
+          canStartSandbox={canStartSandbox}
+          isSandboxActive={isSandboxActive}
+          isSandboxStarting={isSandboxStarting}
+          isSandboxStopping={isSandboxStopping}
+          sandbox={sandbox}
+          canCreatePr={canCreatePr}
+          isCreatingPr={isCreatingPr}
+          onCreatePr={handleCreatePr}
+          onStartSandbox={handleStartSandbox}
+          onStopSandbox={handleStopSandbox}
+          onStartExecution={handleStartExecution}
+          onResolveConfirm={() =>
+            requestConfirm(
+              () => setShowResolveConfirm(true),
+              handleResolveConflicts,
+            )
+          }
+        />
+      </>
     ) : null;
 
   const quickTaskSurfaceTabs =

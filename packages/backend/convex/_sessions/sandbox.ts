@@ -18,14 +18,16 @@ import {
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
 import { markAllRunningExited } from "../backgroundProcesses";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import {
   ensureMainChat,
-  listLiveSessionChats,
+  findMainChat,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import {
@@ -265,8 +267,8 @@ export async function requestSessionSandboxStop(
   if (!session) return;
   const { stopReason } = options;
 
-  const chats = await listLiveSessionChats(ctx.db, sessionId);
-  for (const chat of chats) {
+  const chat = await findMainChat(ctx.db, sessionId);
+  if (chat) {
     await detachPendingQuestions(
       ctx.db,
       sessionChatStreamingEntityId(chat._id),
@@ -312,8 +314,7 @@ export async function requestSessionSandboxStop(
     sandboxStartupEntityId({ kind: "session", sessionId }),
   );
 
-  for (const chat of chats) {
-    if (!chat.syntheticTurnMessageId) continue;
+  if (chat?.syntheticTurnMessageId) {
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const syntheticMessage = await ctx.db.get(chat.syntheticTurnMessageId);
     if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
@@ -355,176 +356,6 @@ export const requestStopSandbox = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await requestSessionSandboxStop(ctx, args.sessionId);
-    return null;
-  },
-});
-
-const taskRunClaimValidator = v.object({
-  sandboxId: v.optional(v.string()),
-  attempt: v.number(),
-  wasActive: v.boolean(),
-});
-
-/** Claims the session's sandbox for a task run: `closed` → `starting`. */
-export const claimSandboxForTaskRun = internalMutation({
-  args: {
-    sessionId: v.id("sessions"),
-    runId: v.optional(v.id("agentRuns")),
-  },
-  returns: v.union(taskRunClaimValidator, v.null()),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
-    if (session.status === "active") {
-      return {
-        sandboxId: session.sandboxId,
-        attempt: session.sandboxStartAttempt ?? 0,
-        wasActive: true,
-      };
-    }
-    if (session.status !== "closed") return null;
-    const attempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
-    await ctx.db.patch(args.sessionId, {
-      status: "starting",
-      sandboxStartAttempt: attempt,
-      sandboxError: undefined,
-      updatedAt: Date.now(),
-    });
-    if (args.runId !== undefined) {
-      await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
-    }
-    await scheduleStuckStartExpiry(ctx, args.sessionId, attempt);
-    return { sandboxId: session.sandboxId, attempt, wasActive: false };
-  },
-});
-
-/**
- * The run's VM is up: `starting` → `active` with that VM, fenced by the
- * claim's attempt. A stop or newer start since the claim wins; the VM then
- * stays the run's own. Returns whether the session took the VM.
- */
-export const attachTaskRunSandbox = internalMutation({
-  args: {
-    sessionId: v.id("sessions"),
-    sandboxId: v.string(),
-    attempt: v.number(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (
-      !session ||
-      !isCurrentSandboxStartAttempt(session.sandboxStartAttempt, args.attempt) ||
-      (session.status !== "starting" && session.status !== "active")
-    ) {
-      return false;
-    }
-    await ctx.db.patch(args.sessionId, {
-      sandboxId: args.sandboxId,
-      status: "active",
-      sandboxError: undefined,
-      updatedAt: Date.now(),
-    });
-    return true;
-  },
-});
-
-/**
- * A quick task's run (finished or cancelled) is done with `sandboxId`. A VM
- * the session took stops through the session stop path unless `keepActive`
- * (the reviewer had it open), silently (no divider, like the task sandbox it
- * replaces). A VM the session never took is the run's alone and stops
- * directly.
- */
-export async function finishTaskRunSandbox(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-  sandboxId: string,
-  options: { keepActive: boolean },
-): Promise<void> {
-  const session = await ctx.db.get(sessionId);
-  if (!session) return;
-  if (session.sandboxId !== sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
-      sandboxId,
-      repoId: session.repoId,
-    });
-    return;
-  }
-  if (options.keepActive || session.status !== "active") return;
-  if (await sessionHasQueuedMessage(ctx.db, sessionId)) return;
-  await requestSessionSandboxStop(ctx, sessionId, {
-    stopReason: { kind: "task" },
-  });
-}
-
-async function sessionHasQueuedMessage(
-  db: DatabaseReader,
-  sessionId: Id<"sessions">,
-): Promise<boolean> {
-  for (const chat of await listLiveSessionChats(db, sessionId)) {
-    const queued = await db
-      .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", chat._id))
-      .first();
-    if (queued) return true;
-  }
-  return false;
-}
-
-/**
- * A task run (or a project interview) was cancelled. Before its attach, the
- * start it claimed fails through the normal start-failure transition (fenced
- * by its recorded attempt, `shouldApplySandboxStartFailure`) and any VM it
- * already prepared stops; after it, the VM finishes like at a run's end.
- */
-export async function abandonTaskRunSandbox(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-  run: { sandboxId?: string; sessionStartAttempt?: number },
-  options: { keepActive: boolean } = { keepActive: false },
-): Promise<void> {
-  const session = await ctx.db.get(sessionId);
-  if (!session) return;
-  const claimPending =
-    run.sessionStartAttempt !== undefined &&
-    shouldApplySandboxStartFailure(session.status) &&
-    isCurrentSandboxStartAttempt(
-      session.sandboxStartAttempt,
-      run.sessionStartAttempt,
-    );
-  if (!claimPending) {
-    if (run.sandboxId) {
-      await finishTaskRunSandbox(ctx, sessionId, run.sandboxId, {
-        keepActive: options.keepActive,
-      });
-    }
-    return;
-  }
-  await ctx.runMutation(internal.sessions.sandboxError, {
-    sessionId,
-    error: "The run was cancelled before its sandbox was ready.",
-    startAttempt: run.sessionStartAttempt,
-  });
-  if (run.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
-      sandboxId: run.sandboxId,
-      repoId: session.repoId,
-    });
-  }
-}
-
-export const finishTaskRunSandboxMutation = internalMutation({
-  args: {
-    sessionId: v.id("sessions"),
-    sandboxId: v.string(),
-    keepActive: v.boolean(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await finishTaskRunSandbox(ctx, args.sessionId, args.sandboxId, {
-      keepActive: args.keepActive,
-    });
     return null;
   },
 });
@@ -723,14 +554,12 @@ export const sandboxReady = internalMutation({
     const mainChat = await ensureMainChat(ctx, session);
     if (!alreadyActive) {
       await markAllRunningExited(ctx.db, args.sessionId);
-      for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
-        const settledAgents = settleOrphanedBackgroundAgents(
-          chat.backgroundAgents,
-          Date.now(),
-        );
-        if (settledAgents) {
-          await ctx.db.patch(chat._id, { backgroundAgents: settledAgents });
-        }
+      const settledAgents = settleOrphanedBackgroundAgents(
+        mainChat.backgroundAgents,
+        Date.now(),
+      );
+      if (settledAgents) {
+        await ctx.db.patch(mainChat._id, { backgroundAgents: settledAgents });
       }
       const content = args.resumeFellBack
         ? "Previous sandbox expired — started a fresh one. Uncommitted changes from the old sandbox are gone."

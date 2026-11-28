@@ -111,7 +111,7 @@ function createHarness(options: HarnessOptions = {}) {
   };
 
   const handleUpstream: HandleUpstream = handleUpstreamFactory(
-    /^\/(?:__tab\/|__convex|__agentation|__eva_preview_proxy)/,
+    /^\/(?:__tab\/|__convex|__eva_preview_proxy)/,
     bufferWholeHtml,
     injectionTag,
     3000,

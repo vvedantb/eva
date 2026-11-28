@@ -5,9 +5,7 @@ import { useStill } from '../reduced-motion'
 import './Follow.css'
 
 export interface FollowProps extends HTMLAttributes<HTMLDivElement> {
-  /** The rect to sit on, in stage pixels. null hides it. */
   to: Rect | null
-  /** Higher is snappier. 0.25 is a quick, settled follow. */
   stiffness?: number
   children?: ReactNode
 }
@@ -25,7 +23,6 @@ export function Follow({ to, stiffness = 0.25, className, style, children, ...re
   const vel = useRef({ x: 0, y: 0, width: 0, height: 0 })
   const target = useRef(to)
   target.current = to
-  // The loop sleeps once it has settled; a new target wakes it
   const wake = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     let id = 0
@@ -50,7 +47,6 @@ export function Follow({ to, stiffness = 0.25, className, style, children, ...re
       previous = time
       const t = target.current
       const node = el.current
-      // Hidden: forget where it was, so it next appears on its target rather than sliding in from the last one
       if (!t || reduced) {
         cur.current = t ? { ...t } : null
         vel.current = { x: 0, y: 0, width: 0, height: 0 }
@@ -61,8 +57,6 @@ export function Follow({ to, stiffness = 0.25, className, style, children, ...re
       if (node && t) {
         if (!cur.current) cur.current = { ...t }
         if (!simulation || !priorTarget || keys.some(key => priorTarget![key] !== t[key])) {
-          // Retarget from the last rendered position and velocity, including
-          // a partial simulation step, so an interruption cannot rewind.
           simulation = { ...cur.current }
           velocity = { ...vel.current }
           remainder = 0
@@ -70,8 +64,6 @@ export function Follow({ to, stiffness = 0.25, className, style, children, ...re
         priorTarget = { ...t }
         const c = cur.current
         const v = vel.current
-        // Preserve the existing 60Hz spring trajectory. Interpolate its next
-        // step at higher refresh rates instead of integrating faster per RAF.
         remainder += elapsed
         while (remainder >= frame - 1e-6) {
           integrate(simulation, velocity, t)
@@ -100,8 +92,6 @@ export function Follow({ to, stiffness = 0.25, className, style, children, ...re
     }
     wake.current = () => {
       if (reduced || !target.current || !cur.current) {
-        // Initial placement and reappearance are layout, not spring motion.
-        // A paused host must not need Step just to reveal the first target.
         cancelAnimationFrame(id)
         running = false
         step()

@@ -128,7 +128,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "ci_failed" },
+    trigger: { kind: "event", events: ["ci_failed"] },
     action: "route_to_pr_chat",
   },
   {
@@ -140,7 +140,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "pr_feedback" },
+    trigger: { kind: "event", events: ["pr_feedback"] },
     action: "route_to_pr_chat",
   },
   {
@@ -152,7 +152,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "issue_labeled" },
+    trigger: { kind: "event", events: ["issue_labeled"] },
     action: "create_task",
   },
   {
@@ -164,7 +164,7 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "",
     readOnly: false,
     actionsEnabled: false,
-    trigger: { kind: "event", event: "production_alert" },
+    trigger: { kind: "event", events: ["production_alert"] },
     action: "create_task",
   },
   {

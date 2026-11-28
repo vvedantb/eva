@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { api, type Id, type SandboxOwner } from "@eva/backend";
+import { type Id, type SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { IconArrowsDiagonal } from "@tabler/icons-react";
 import {
   Button,
@@ -15,32 +14,23 @@ import {
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { useTaskChatBinding } from "@/lib/components/tasks/TaskSandboxChatPanel";
 import { useTaskDetail } from "@/lib/components/tasks/useTaskDetail";
-import type { UseTaskDetailRouting } from "@/lib/components/tasks/useTaskDetailControls";
-import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailControls";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { useSandboxPanes } from "@/lib/components/sandbox/useSandboxPanes";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
+import { useSandboxRail } from "@/lib/components/sandbox/useSandboxRail";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
-import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
-import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { TaskDetailsPane } from "@/lib/components/tasks/TaskDetailsPane";
 import type { ProjectTaskTab } from "./projectSandboxTabs";
+import { ProjectTaskFacts } from "./ProjectTaskFacts";
+import type { ProjectTaskListRow } from "./useProjectStatus";
 
-/** The task's own chat and sandbox, as on its full page. */
-export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
-  mode: "project-task",
+const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review"> = {
+  "task-preview": "preview",
+  "task-browser": "browser",
+  "task-review": "review",
 };
-
-const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> =
-  {
-    "task-details": null,
-    "task-preview": "preview",
-    "task-browser": "browser",
-    "task-review": "review",
-  };
 
 /**
  * What the panel has no room for opens the task's full page: Files
@@ -67,34 +57,26 @@ export function useProjectTaskExpand({
 }
 
 /**
- * The selected task tab's panel: a header with its number and title and
- * Expand (its full page), then its Details (the quick task's overview) and
- * its Preview, Browser and Review panes. Its chat is in the chat column
+ * The selected task tab's panel: a header with its number, title, status and
+ * PR line (`ProjectTaskFacts`) and Expand (its full page), then its Preview,
+ * Browser and Review panes. Its chat is in the chat column
  * (`ProjectTaskChat`). An archived task is read-only, as on its full page.
  */
 export function ProjectTaskPane({
-  taskId,
-  numId,
-  title,
-  prUrl,
+  row,
   tab,
   fullPageHref,
   collapsed,
   onSelectTab,
 }: {
-  taskId: Id<"agentTasks">;
-  numId: number | undefined;
-  title: string;
-  prUrl: string | undefined;
+  row: ProjectTaskListRow;
   tab: ProjectTaskTab;
   fullPageHref: string;
   collapsed: boolean;
   onSelectTab: (tab: ProjectTaskTab) => void;
 }) {
+  const { _id: taskId, prUrl } = row;
   const detail = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
-  const paneTab = PANE_TAB[tab];
-  const [panesVisited, setPanesVisited] = useState(paneTab !== null);
-  if (paneTab !== null && !panesVisited) setPanesVisited(true);
   const { expand, openDiffs } = useProjectTaskExpand({
     fullPageHref,
     prUrl,
@@ -115,11 +97,16 @@ export function ProjectTaskPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex h-10 shrink-0 items-center gap-2 px-3">
-        <EntityNumLabel numId={numId} className="text-xs" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {title}
-        </span>
+      <div className="flex shrink-0 items-center gap-2 px-3 py-1.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <EntityNumLabel numId={row.numId} className="text-xs" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {row.title}
+            </span>
+          </div>
+          <ProjectTaskFacts task={row} />
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -144,27 +131,14 @@ export function ProjectTaskPane({
           onOpenDiffsTab={openDiffs}
         >
           <div className="min-h-0 flex-1 overflow-hidden">
-            {task ? (
-              <KeepAlivePane
-                active={tab === "task-details"}
-                className="flex h-full min-h-0 flex-col overflow-hidden"
-              >
-                <TaskDetailsPane
-                  taskId={taskId}
-                  task={task}
-                  detail={detail}
-                  showHeader={false}
-                />
-              </KeepAlivePane>
-            ) : null}
-            {sandbox.owner && task?.repoId && panesVisited ? (
+            {sandbox.owner && task?.repoId ? (
               <ProjectTaskSandboxPanes
                 taskId={taskId}
                 owner={sandbox.owner}
                 sandbox={sandbox}
                 repoId={task.repoId}
                 isActive={isSandboxActive}
-                paneTab={paneTab}
+                paneTab={PANE_TAB[tab]}
                 prUrl={prUrl}
                 onStartSandbox={
                   canStartSandbox && !isSandboxStopping
@@ -172,12 +146,13 @@ export function ProjectTaskPane({
                     : undefined
                 }
                 isSandboxStarting={isSandboxStarting}
-                autoWakeEligible={
-                  sandbox.status === "closed" &&
-                  sandbox.sandboxId !== undefined &&
-                  canStartSandbox &&
-                  !hasActiveRun
-                }
+                autoWakeEligible={sandboxAutoWakeEligible({
+                  status: sandbox.status,
+                  sandboxId: sandbox.sandboxId,
+                  sandboxError: sandbox.sandboxError,
+                  canStart: canStartSandbox,
+                  isBusy: hasActiveRun,
+                })}
                 onScreen={!collapsed}
               />
             ) : null}
@@ -206,7 +181,7 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  paneTab: "preview" | "browser" | "review" | null;
+  paneTab: "preview" | "browser" | "review";
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;
   isSandboxStarting: boolean;
@@ -220,45 +195,31 @@ function ProjectTaskSandboxPanes({
     terminalPanes: sandbox.terminalPanes,
   });
   const chatBinding = useTaskChatBinding(taskId);
-  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
-  const chatKeys = sandboxChatKeys(chatBinding.entity);
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
-  const preview = useSandboxPreview({
+  const rail = useSandboxRail({
     owner,
     sandboxId: sandbox.sandboxId,
     isActive,
-    isRouteActive: paneTab !== null,
     repoId,
     devPort: sandbox.devPort,
+    devCommand: sandbox.devCommand,
+    binding: chatBinding,
   });
-  const visible = paneTab !== null && onScreen;
 
   return (
-    <div className={paneTab === null ? "hidden" : "h-full overflow-hidden"}>
-      <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
+    <div className="h-full overflow-hidden">
+      <ReviewChatTargetProvider value={rail.reviewTarget}>
         <SandboxPaneSlots
-          activeTab={paneTab ?? "none"}
+          {...rail.paneSlots}
+          activeTab={paneTab}
           panes={panes}
-          preview={preview}
-          owner={owner}
-          sandboxId={sandbox.sandboxId}
-          isActive={isActive}
-          repoId={repoId}
           cacheKey={String(taskId)}
-          devCommand={sandbox.devCommand}
           prUrl={prUrl}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
-          onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
-          onAnnotationSubmit={submitAnnotation}
-          presenceEnabled={visible}
-          onScreen={visible}
+          presenceEnabled={onScreen}
+          onScreen={onScreen}
           miniPlayer={undefined}
-          viewState={viewState}
         />
       </ReviewChatTargetProvider>
     </div>

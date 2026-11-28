@@ -128,17 +128,17 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
           <View className="min-w-0 flex-1">
             <Button
               variant="secondary"
-              onPress={() => void submit(false)}
+              onPress={() => void submit(true)}
               disabled={blocker !== undefined}
-              loading={saving === "save"}
+              loading={saving === "run"}
               accessibilityHint={blocker}
             >
-              Save
+              Save and Run
             </Button>
           </View>
           <View className="min-w-0 flex-1">
-            <Button onPress={() => void submit(true)} disabled={blocker !== undefined} loading={saving === "run"} accessibilityHint={blocker}>
-              Save and Run
+            <Button onPress={() => void submit(false)} disabled={blocker !== undefined} loading={saving === "save"} accessibilityHint={blocker}>
+              Save
             </Button>
           </View>
         </View>

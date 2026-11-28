@@ -3,6 +3,7 @@ import type { DatabaseReader, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
+import type { ChatParentId } from "./_validators/tableFields";
 import { sessionOwnerEntityId } from "./_sessions/owner";
 import { expireRecap, maybeStartRecap } from "./chatRecaps";
 
@@ -33,21 +34,38 @@ export function isOwnChat(
   );
 }
 
-/** A read row means the user opened the chat once, so it counts like their own. */
+/**
+ * The chat's unread clock: its last activity in the main transcript, an Eva
+ * turn finishing or a person posting. Undefined: nothing happened yet.
+ */
+export function lastChatActivityAt(entity: {
+  lastTurnFinishedAt?: number;
+  lastPersonMessageAt?: number;
+}): number | undefined {
+  const { lastTurnFinishedAt, lastPersonMessageAt } = entity;
+  if (lastTurnFinishedAt === undefined) return lastPersonMessageAt;
+  if (lastPersonMessageAt === undefined) return lastTurnFinishedAt;
+  return Math.max(lastTurnFinishedAt, lastPersonMessageAt);
+}
+
+/**
+ * A read row means the user opened, posted in or was mentioned in the chat,
+ * so it counts like their own.
+ */
 export function computeHasUnread(input: {
   isOwn: boolean;
   hasReadRow: boolean;
-  lastTurnFinishedAt: number | undefined;
+  lastActivityAt: number | undefined;
   lastReadAt: number | undefined;
 }): boolean {
   return (
     (input.isOwn || input.hasReadRow) &&
-    input.lastTurnFinishedAt !== undefined &&
-    input.lastTurnFinishedAt > (input.lastReadAt ?? 0)
+    input.lastActivityAt !== undefined &&
+    input.lastActivityAt > (input.lastReadAt ?? 0)
   );
 }
 
-function getReadRow(
+export function getReadRow(
   db: DatabaseReader,
   userId: Id<"users">,
   parentId: ChatEntityId,
@@ -69,7 +87,7 @@ function hasUnreadFor(
   return computeHasUnread({
     isOwn: isOwnChat(userId, entity),
     hasReadRow: row !== null,
-    lastTurnFinishedAt: entity.lastTurnFinishedAt,
+    lastActivityAt: lastChatActivityAt(entity),
     lastReadAt: row?.lastReadAt,
   });
 }
@@ -88,7 +106,7 @@ export async function unreadLookupForRepo(
     .collect();
   const byParent = new Map(rows.map((row) => [String(row.parentId), row]));
   return async (entity) => {
-    if (entity.lastTurnFinishedAt === undefined) return false;
+    if (lastChatActivityAt(entity) === undefined) return false;
     const cached = byParent.get(String(entity._id));
     if (cached) return hasUnreadFor(userId, entity, cached);
     if (entity.repoId === undefined || entity.repoId === repoId) {
@@ -136,7 +154,7 @@ export async function hasUnreadByPointRead(
   userId: Id<"users">,
   entity: ChatEntity,
 ): Promise<boolean> {
-  if (entity.lastTurnFinishedAt === undefined) return false;
+  if (lastChatActivityAt(entity) === undefined) return false;
   const row = await getReadRow(db, userId, entity._id);
   return hasUnreadFor(
     userId,
@@ -170,21 +188,131 @@ async function upsertReadRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   entity: ChatEntity,
+  seen: boolean,
 ): Promise<void> {
   if (entity.repoId === undefined) return;
   const row = await getReadRow(ctx.db, userId, entity._id);
   const lastReadAt = Date.now();
+  const activityAt = lastChatActivityAt(entity);
   if (!row) {
     await ctx.db.insert("chatReads", {
       userId,
       parentId: entity._id,
       repoId: entity.repoId,
       lastReadAt,
+      ...(seen && activityAt !== undefined ? { seenNewAt: lastReadAt } : {}),
     });
     return;
   }
-  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return;
-  await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
+  if (row.lastReadAt >= (activityAt ?? 0)) return;
+  await ctx.db.patch(row._id, {
+    lastReadAt,
+    repoId: entity.repoId,
+    ...(seen ? { seenNewAt: lastReadAt } : {}),
+  });
+}
+
+async function loadChatChain(
+  db: DatabaseReader,
+  parentId: ChatParentId,
+): Promise<ChatEntity[]> {
+  const chatId = db.normalizeId("sessionChats", parentId);
+  const chat = chatId ? await db.get(chatId) : null;
+  if (chatId && !chat) return [];
+  const sessionId = chat ? chat.sessionId : db.normalizeId("sessions", parentId);
+  const session = sessionId ? await db.get(sessionId) : null;
+  const ownerId = session ? sessionOwnerEntityId(session) : undefined;
+  const taskId = ownerId ? db.normalizeId("agentTasks", ownerId) : null;
+  const projectId = ownerId ? db.normalizeId("projects", ownerId) : null;
+  const owner = taskId
+    ? await db.get(taskId)
+    : projectId
+      ? await db.get(projectId)
+      : null;
+  const chain: ChatEntity[] = [];
+  for (const entity of [chat, session, owner]) {
+    if (entity) chain.push(entity);
+  }
+  return chain;
+}
+
+type ChatActivity =
+  | { lastTurnFinishedAt: number }
+  | { lastPersonMessageAt: number };
+
+/**
+ * Moves a chat's unread clock (`lastChatActivityAt`) on the chat and every row
+ * that shows its dot (`loadChatChain`). Returns those rows as patched.
+ */
+export async function stampChatActivity(
+  ctx: MutationCtx,
+  parentId: ChatParentId,
+  activity: ChatActivity,
+): Promise<ChatEntity[]> {
+  const chain = await loadChatChain(ctx.db, parentId);
+  await Promise.all(
+    chain.map((entity) => ctx.db.patch(entity._id, activity)),
+  );
+  return chain.map((entity) => ({ ...entity, ...activity }));
+}
+
+/**
+ * A person posted in a chat's main transcript (a thread reply is not one;
+ * threads keep their own read state). The chat goes unread for its other
+ * readers. The author has read it, and the author and each person the post
+ * mentions become readers: a mentioned person reads from just before it, so
+ * the post is their first new message.
+ */
+export async function recordPersonChatPost(
+  ctx: MutationCtx,
+  params: {
+    parentId: ChatParentId;
+    authorId: Id<"users">;
+    mentionedIds: ReadonlyArray<Id<"users">>;
+  },
+): Promise<void> {
+  const now = Date.now();
+  const chain = await stampChatActivity(ctx, params.parentId, {
+    lastPersonMessageAt: now,
+  });
+  const mentioned = params.mentionedIds.filter(
+    (userId) => userId !== params.authorId,
+  );
+  const joinAsReader = async (userId: Id<"users">, entity: ChatEntity) => {
+    const { repoId } = entity;
+    if (repoId === undefined) return;
+    const row = await getReadRow(ctx.db, userId, entity._id);
+    if (row) {
+      await markJoined(ctx, row, now);
+      return;
+    }
+    await ctx.db.insert("chatReads", {
+      userId,
+      parentId: entity._id,
+      repoId,
+      lastReadAt: now - 1,
+      joinedAt: now,
+    });
+  };
+  const authorReads = async (entity: ChatEntity) => {
+    await upsertReadRow(ctx, params.authorId, entity, false);
+    const row = await getReadRow(ctx.db, params.authorId, entity._id);
+    if (row) await markJoined(ctx, row, now);
+  };
+  await Promise.all(
+    chain.flatMap((entity) => [
+      authorReads(entity),
+      ...mentioned.map((userId) => joinAsReader(userId, entity)),
+    ]),
+  );
+}
+
+async function markJoined(
+  ctx: MutationCtx,
+  row: Doc<"chatReads">,
+  now: number,
+): Promise<void> {
+  if (row.joinedAt === undefined) await ctx.db.patch(row._id, { joinedAt: now });
 }
 
 /**
@@ -215,11 +343,14 @@ export const markRead = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
-    const entity = await ctx.db.get(args.parentId);
+    const chain = await loadChatChain(ctx.db, args.parentId);
+    const [entity] = chain;
     if (!entity) return null;
     const now = Date.now();
     const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
-    await upsertReadRow(ctx, ctx.userId, entity);
+    await Promise.all(
+      chain.map((link) => upsertReadRow(ctx, ctx.userId, link, true)),
+    );
     if (args.opened === true) await expireRecap(ctx, ctx.userId, args.parentId, now);
     if (row && args.opened === true) {
       await maybeStartRecap(ctx, {
@@ -236,19 +367,6 @@ export const markRead = authMutation({
         await ctx.db.patch(row._id, { lastVisitedAt: now });
       }
     }
-    const chatId = ctx.db.normalizeId("sessionChats", args.parentId);
-    const chat = chatId ? await ctx.db.get(chatId) : null;
-    const session = chat ? await ctx.db.get(chat.sessionId) : null;
-    if (session) await upsertReadRow(ctx, ctx.userId, session);
-    const ownerId = session ? sessionOwnerEntityId(session) : undefined;
-    const taskId = ownerId ? ctx.db.normalizeId("agentTasks", ownerId) : null;
-    const projectId = ownerId ? ctx.db.normalizeId("projects", ownerId) : null;
-    const owner = taskId
-      ? await ctx.db.get(taskId)
-      : projectId
-        ? await ctx.db.get(projectId)
-        : null;
-    if (owner) await upsertReadRow(ctx, ctx.userId, owner);
     return null;
   },
 });

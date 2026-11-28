@@ -1,8 +1,6 @@
 import { Icon } from '../../kit'
 import './studies.css'
 
-// These are quiet, static product studies. Their anatomy changes with the
-// product; tokens alone cannot turn an invitation form into a finance tool.
 export function ConsoleLook() {
   return <div className="lk-product lk-console">
     <header className="lk-product-head"><span className="lk-console-command">&gt;_</span><strong>Deployments</strong><span className="lk-console-env">production</span></header>

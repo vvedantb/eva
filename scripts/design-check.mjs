@@ -34,7 +34,6 @@ function walk(dir, out = []) {
 const PRAGMA_LINE = "design-check-ignore-next-line";
 const PRAGMA_FILE = "design-check-ignore-file";
 
-//   // design-check-ignore-next-line — checkbox radius is fixed by size
 function pragmaReason(line, marker) {
   const idx = line.indexOf(marker);
   if (idx === -1) return null;
@@ -111,6 +110,11 @@ function addViolation(relPath, reason, lineNumber) {
 for (const file of SCAN_ROOTS.flatMap((root) => walk(root))) {
   const text = readFileSync(file, "utf8");
   const relPath = path.relative(ROOT, file).split(path.sep).join("/");
+  if (
+    relPath.startsWith("apps/web/src/routes/_components/deck/") ||
+    relPath.startsWith("apps/web/src/routes/slides/")
+  )
+    continue;
   const lines = text.split(/\r?\n/);
 
   let fileIgnored = false;

@@ -3,24 +3,6 @@ import { Count, Icon, Phone, Stage, useReducedMotion } from '../../kit'
 import type { Act } from '../../kit'
 import './grid.css'
 
-// A staggered pair, light: the features section of Wayline, an invented
-// travel journal for iPhone. Two columns of rounded tiles, tall and short
-// alternating so no row lines up across the columns (Apple's MacBook grid).
-//
-//   Tile       Column  Size   Kind        The one thing                       Moves
-//   Coast      left    tall   Picture     a blue-and-white tile pattern     (still)
-//   Private    right   short  Statement   one sentence, a blue lock           (still)
-//   Distance   left    short  Stat        "38,604 km" this year                counts up
-//   Voice      right   short  Component   the voice-note recorder              the waveform rises
-//   Book       left    short  Object      the printed, clothbound trip         rises into the crop
-//   Day        right   tall   Hero UI     one phone, one day's page            the route draws
-//
-// One phone and no window: two of six tiles are UI. The coast is the one
-// tile with its own ground. Across and down, no kind sits next to itself.
-// Each picture is its own Stage at 1:1, pinned to its tile's bottom. The
-// coast holds still; each tile that moves plays one beat, once, 110ms after
-// the one before it in reading order.
-
 const STEP = 110
 const LEAD = 450
 
@@ -83,10 +65,6 @@ function usePictureWidth() {
   return [ref, size] as const
 }
 
-/* ---------------- Coast (the hero picture) ---------------- */
-
-// One still, a blue-and-white tile pattern: a different visual role from
-// every neighboring tile, with no external image or asset dependency.
 function Coast() {
   return (
     <Tile
@@ -112,14 +90,8 @@ function Coast() {
   )
 }
 
-/* Azulejo: one tile drawn once and repeated by an SVG pattern. The motif is
-   the classic lattice of lenses: arcs of circles centered on the tile corners,
-   meeting in a cross at each tile's center, so the joins across the grout
-   make one continuous net. A cobalt field above, a frieze, then the field
-   of tiles running off the bottom and sides. */
 const AZ = { blue: '#1f3f8f', wash: '#8ea5d4', white: '#f6f3ec', grout: '#d3d9e5' }
 const T = 80
-// A lens from (0,-L) to (0,L), half-width w: both arcs share radius r
 const lens = (L: number, w: number) => {
   const r = (L * L + w * w) / (2 * w)
   return `M0 ${-L} A${r} ${r} 0 0 1 0 ${L} A${r} ${r} 0 0 1 0 ${-L} Z`
@@ -129,26 +101,23 @@ const CORNERS = [[0, 0], [T, 0], [0, T], [T, T]]
 function Azulejo() {
   const tileId = useId()
   const friezeId = useId()
-  const P = 300 // the field's top edge, on a row of tile corners
-  const F = 40 // the frieze: a row of half tiles
+  const P = 300
+  const F = 40
   return (
     <svg className="sg-art__svg" viewBox="0 0 600 600" width="600" height="600" aria-hidden>
       <defs>
         <pattern id={tileId} width={T} height={T} patternUnits="userSpaceOnUse" x={300 - T / 2} y={P}>
           <rect width={T} height={T} fill={AZ.grout} />
           <rect x="0.6" y="0.6" width={T - 1.2} height={T - 1.2} rx="1" fill={AZ.white} />
-          {/* the net: a lens on each edge, center to center across the joint */}
           {[[T / 2, 0, 0], [T, T / 2, 90], [T / 2, T, 0], [0, T / 2, 90]].map(([x, y, r], i) => (
             <g key={i} transform={`translate(${x} ${y}) rotate(${r})`}>
               <path d={lens(T / 2, 10)} fill={AZ.blue} />
               <path d={lens(T / 2 - 13, 3.5)} fill={AZ.wash} />
             </g>
           ))}
-          {/* the boss where the lenses cross */}
           <circle cx={T / 2} cy={T / 2} r="10" fill={AZ.blue} />
           <circle cx={T / 2} cy={T / 2} r="5.5" fill={AZ.white} />
           <circle cx={T / 2} cy={T / 2} r="2.25" fill={AZ.blue} />
-          {/* a four-petal flower on every corner, completed by four tiles */}
           {CORNERS.map(([x, y], i) => (
             <g key={i} transform={`translate(${x} ${y})`}>
               {[45, 135, 225, 315].map((d) => (
@@ -182,8 +151,6 @@ function Azulejo() {
   )
 }
 
-/* ---------------- Private (statement) ---------------- */
-
 function Private() {
   return (
     <Tile area="private" title={null}>
@@ -196,8 +163,6 @@ function Private() {
     </Tile>
   )
 }
-
-/* ---------------- Distance (stat) ---------------- */
 
 function Distance() {
   const reduced = useReducedMotion()
@@ -218,8 +183,6 @@ function Distance() {
     </Tile>
   )
 }
-
-/* ---------------- Voice (component) ---------------- */
 
 const WAVE = Array.from({ length: 30 }, (_, i) => {
   const v = 0.3 + 0.45 * Math.abs(Math.sin(i * 0.55)) * (0.6 + 0.4 * Math.cos(i * 0.23)) + 0.2 * Math.abs(Math.sin(i * 1.9))
@@ -266,8 +229,6 @@ function Voice() {
   )
 }
 
-/* ---------------- Book (object) ---------------- */
-
 function Book() {
   const [ref, { width }] = usePictureWidth()
   return (
@@ -296,8 +257,6 @@ function Book() {
   )
 }
 
-/* ---------------- Day (hero UI: the one phone) ---------------- */
-
 function Day() {
   const [ref, { width, gutter }] = usePictureWidth()
   return (
@@ -308,8 +267,6 @@ function Day() {
         <div ref={ref} className="sg-picture sg-picture--phone">
           <Stage<Beat> width={width} height={400} initial={before} poster={after} play="once" script={beat(5)} className="sg-stage">
             {(s) => (
-              // Centered in its tile: the one device in the grid stands in
-              // the middle of its card, running off the bottom
               <Phone width={Math.min(276, width - gutter * 2)} className="sg-phone" style={{ left: (width - Math.min(276, width - gutter * 2)) / 2 }} data-on={s.on || undefined}>
                 <div className="sg-page">
                   <div className="sg-page__head">
@@ -317,7 +274,6 @@ function Day() {
                     <span className="sg-page__title">Sintra</span>
                   </div>
                   <div className="sg-mapcard">
-                    {/* Fills the card at the page width, so its edge lines up with the photos under it */}
                     <svg viewBox="0 0 345 190" width="100%" height="190" preserveAspectRatio="xMidYMid slice" aria-hidden>
                       <rect width="345" height="190" fill="#eef0e6" />
                       <path d="M0 150 C60 140 110 160 170 150 C230 140 290 120 345 128 L345 190 L0 190 Z" fill="#cfe1ea" />

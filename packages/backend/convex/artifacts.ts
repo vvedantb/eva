@@ -15,7 +15,7 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { artifactFields, messageFields } from "./validators";
-import { latestChatMessageId, resolveChatParent } from "./_chat/chatParent";
+import { chatTurnAnchor } from "./_chat/chatParent";
 import { chatEntityKindValidator } from "./_validators/enums";
 import { deleteAllArtifactState } from "./artifactState";
 import {
@@ -200,7 +200,7 @@ export const listForSource = authQuery({
 /**
  * Anchors a new artifact to the chat turn that created it, so it shows as an
  * inline card under that reply. Called by `create_artifact` after the row
- * exists; the same anchor rule as `render_html` (`latestChatMessageId`).
+ * exists; the same anchor rule as `render_html` (`chatTurnAnchor`).
  */
 export const anchorToChat = internalMutation({
   args: {
@@ -212,17 +212,8 @@ export const anchorToChat = internalMutation({
   handler: async (ctx, args) => {
     const artifactId = ctx.db.normalizeId("artifacts", args.artifactId);
     if (!artifactId) return null;
-    const chatParentId = await resolveChatParent(
-      ctx.db,
-      args.entityKind,
-      args.entityId,
-    );
-    if (!chatParentId) return null;
-    const messageId = await latestChatMessageId(ctx.db, chatParentId);
-    await ctx.db.patch(artifactId, {
-      chatParentId,
-      ...(messageId ? { messageId } : {}),
-    });
+    const anchor = await chatTurnAnchor(ctx.db, args.entityKind, args.entityId);
+    if (anchor) await ctx.db.patch(artifactId, anchor);
     return null;
   },
 });

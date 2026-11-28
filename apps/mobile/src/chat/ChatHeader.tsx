@@ -64,6 +64,7 @@ export function ChatHeader({
   leadingItems = NO_ITEMS,
   usage,
   sandbox,
+  subtitle,
 }: {
   repoId: Id<"githubRepos">;
   repoLabel: string;
@@ -80,6 +81,7 @@ export function ChatHeader({
   leadingItems?: MenuEntry[];
   usage?: ReactNode;
   sandbox?: ReactNode;
+  subtitle?: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -109,31 +111,34 @@ export function ChatHeader({
       <HeaderIconButton label="Back" onPress={onBack}>
         <IconChevronLeft size={20} color={foreground} />
       </HeaderIconButton>
-      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
-        <RepoLogo
-          logoUrl={logoUrl}
-          size={16}
-          bordered={false}
-          fallback={
-            <View
-              className="h-4 w-4 items-center justify-center rounded"
-              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
-            >
-              <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
-                {repoLabel.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          }
-        />
-        <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
-          {repoLabel}
-        </Text>
-        <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
-          /
-        </Text>
-        <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
-          {displayTitle(title)}
-        </Text>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <View className="min-w-0 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
+          <RepoLogo
+            logoUrl={logoUrl}
+            size={16}
+            bordered={false}
+            fallback={
+              <View
+                className="h-4 w-4 items-center justify-center rounded"
+                style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
+              >
+                <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
+                  {repoLabel.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            }
+          />
+          <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
+            {repoLabel}
+          </Text>
+          <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
+            /
+          </Text>
+          <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
+            {displayTitle(title)}
+          </Text>
+        </View>
+        {subtitle}
       </View>
       <HeaderRail>
         {sandbox}

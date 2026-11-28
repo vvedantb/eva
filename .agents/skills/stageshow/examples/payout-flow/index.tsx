@@ -1,12 +1,6 @@
 import { Stage, Bar, Check, Count, Roll, Connector, Icon, Swap, type Act } from '../../kit'
 import './pace.css'
 
-// A cursorless payout story played once as it scrolls into view.
-// Things reveal, then move to make room for what comes next; groups stagger;
-// a line ties the new card to the row it came from; the payoff is annotated.
-// This scene uses long arrivals and overlapping beats. Other stories can
-// need different timing; see references/choreography.md.
-
 type S = { step: number; sent: boolean }
 const START: S = { step: 0, sent: false }
 
@@ -20,21 +14,21 @@ const ROWS = [
 const script = async (a: Act<S>) => {
   await a.wait(300)
   a.mark('reveal')
-  a.put({ step: 1 }) // the balance rises in, centered, and counts up
+  a.put({ step: 1 })
   await a.wait(700)
-  a.put({ step: 2 }) // payout rows stagger in under it
+  a.put({ step: 2 })
   await a.wait(1500)
   a.mark('move')
-  a.put({ step: 3 }) // it slides aside as the payout card arrives
+  a.put({ step: 3 })
   await a.wait(1300)
-  a.put({ step: 4 }) // the line draws from the row to the card
+  a.put({ step: 4 })
   await a.wait(1100)
   a.mark('send')
-  a.put({ step: 5 }) // sending
+  a.put({ step: 5 })
   await a.wait(1300)
   a.put({ sent: true })
   await a.wait(500)
-  a.put({ step: 6 }) // the annotation lands
+  a.put({ step: 6 })
 }
 
 export default function PayoutFlow() {
@@ -66,7 +60,6 @@ export default function PayoutFlow() {
                   <span className="sp-bank" />
                   <Bar w={r.w} h={5} tone={3} />
                   <span className="sp-amount">{r.amount}</span>
-                  {/* The payout's own row settles when it sends, closing the loop with the line */}
                   <span className="sp-paid" data-pending={(i === 0 && !s.sent) || undefined}>
                     {i === 0 ? <Roll variant="fade">{s.sent ? 'Paid' : 'Pending'}</Roll> : 'Paid'}
                   </span>
@@ -74,8 +67,6 @@ export default function PayoutFlow() {
               ))}
             </section>
 
-            {/* A full column beside the balance, top-aligned: no dead corners.
-                Its contents build in a stagger once it has landed. */}
             <section className="sp-instant" data-target="instant" data-in={s.step >= 3 || undefined}>
               <div className="sp-instant__head" style={{ ['--i' as string]: 0 }}>
                 <span className="sp-instant__mark">
@@ -97,16 +88,10 @@ export default function PayoutFlow() {
                   <span>$124.00</span>
                 </div>
               </div>
-              {/* Each state is its own centered group, crossfading in place: nothing
-                  ever re-centers or slides sideways between states */}
               <div className="sp-button" style={{ ['--i' as string]: 3 }} data-sent={s.sent || undefined}>
                 <span className="sp-state" data-on={s.step < 5 || undefined}>
                   Pay out now
                 </span>
-                {/* Sending and Sent are one group: one Check turns pending, then
-                    fills and draws its tick. The label is a Swap, so its box
-                    eases to the new word and the group re-centers with it: a
-                    box held at "Sending" would leave "Sent" off center */}
                 <span className="sp-state" data-on={s.step >= 5 || undefined}>
                   <Check on={s.sent} pending={!s.sent} size={14} />
                   <Swap id={s.sent ? 'sent' : 'sending'}>{s.sent ? 'Sent' : 'Sending'}</Swap>

@@ -14,7 +14,8 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
-import { isSandboxGoneError } from "./sandboxErrors";
+import { isSandboxGoneError, SandboxCommandFailedError } from "./sandboxErrors";
+import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 import { errorMessage } from "@vvedantb/server";
 
@@ -93,11 +94,8 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    const pidAlive = await execHandle(sandbox, CALLBACK_LIVENESS_COMMAND, 5)
-      .then(() => true)
-      .catch(() => false);
-
-    if (pidAlive) {
+    const callback = await probeSandbox(sandbox, CALLBACK_LIVENESS_COMMAND);
+    if (callback === "yes") {
       return {
         alive: true,
         reason: "sandbox_started_pid_alive",
@@ -106,14 +104,8 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
-    const agentAlive = await execHandle(
-      sandbox,
-      AGENT_PROCESS_LIVENESS_COMMAND,
-      5,
-    )
-      .then(() => true)
-      .catch(() => false);
-    if (agentAlive) {
+    const agent = await probeSandbox(sandbox, AGENT_PROCESS_LIVENESS_COMMAND);
+    if (agent === "yes") {
       return {
         alive: true,
         reason: "agent_process_running_callback_pid_stale",
@@ -122,14 +114,36 @@ export const verifySandboxLiveness = internalAction({
       };
     }
 
+    if (callback === "unknown" || agent === "unknown") {
+      return {
+        alive: true,
+        reason: "probe_exec_failed",
+        sandboxState: state,
+      };
+    }
+
     return {
       alive: false,
-      reason: "pid_dead_or_exec_failed",
+      reason: "pid_dead",
       sandboxState: state,
       pidAlive: false,
     };
   },
 });
+
+async function probeSandbox(
+  sandbox: SandboxHandle,
+  command: string,
+): Promise<"yes" | "no" | "unknown"> {
+  try {
+    await execHandle(sandbox, command, 5);
+    return "yes";
+  } catch (error) {
+    return error instanceof SandboxCommandFailedError && error.exitCode < 128
+      ? "no"
+      : "unknown";
+  }
+}
 
 /** Kills running CLI processes (claude-code, codex, run-design) inside a sandbox. */
 export const killSandboxProcess = internalAction({
@@ -271,47 +285,6 @@ export const captureStalledTurnDiagnostics = internalAction({
     } catch (error) {
       return `diagnostics capture failed: ${errorMessage(error)}`;
     }
-  },
-});
-
-/**
- * Captures post-mortem diagnostics from a sandbox whose run was killed by the
- * watchdog, persists them on the run, then stops (not deletes) the sandbox.
- * Quick-task sandboxes are persistent — the paused filesystem keeps any
- * uncommitted work and unpushed commits recoverable, and the next run resumes
- * it. Capture is best-effort — the stop proceeds regardless.
- */
-export const captureDiagnosticsAndStopSandbox = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    runId: v.id("agentRuns"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    try {
-      const trimmed = await readKillDiagnostics(
-        ctx,
-        args.repoId,
-        args.sandboxId,
-      );
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
-      );
-      await ctx.runMutation(internal.taskWorkflow.appendRunLog, {
-        runId: args.runId,
-        message: `Sandbox diagnostics captured before stop:\n${trimmed}`,
-      });
-    } catch (error) {
-      console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorMessage(error)}`,
-      );
-    }
-    await ctx.runAction(internal.sandbox.stopSandbox, {
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-    });
-    return null;
   },
 });
 

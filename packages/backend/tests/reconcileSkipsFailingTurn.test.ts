@@ -57,7 +57,6 @@ test(
         status: "active",
       });
       const openExpiredTurn = async (
-        number: number,
         leaseExpiresAt: number,
         workflowId?: string,
       ) => {
@@ -65,9 +64,6 @@ test(
           sessionId,
           repoId,
           userId,
-          title: `Chat ${number}`,
-          number,
-          isMain: number === 1,
         });
         const placeholderMessageId = await ctx.db.insert("messages", {
           parentId: chatId,
@@ -93,8 +89,8 @@ test(
       };
       const now = Date.now();
       return {
-        poisonedTurnId: await openExpiredTurn(1, now - 2000, poison.workflowId),
-        healthyTurnId: await openExpiredTurn(2, now - 1000),
+        poisonedTurnId: await openExpiredTurn(now - 2000, poison.workflowId),
+        healthyTurnId: await openExpiredTurn(now - 1000),
       };
     });
 

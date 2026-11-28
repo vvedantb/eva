@@ -1,6 +1,4 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 /** Identifies the finished child a master session is being woken about. */
@@ -23,24 +21,6 @@ export type OrchestratorNotifyChild =
     }
   | { kind: "task"; taskId: Id<"agentTasks"> }
   | { kind: "project"; projectId: Id<"projects"> };
-
-/**
- * Schedules a master wake-up for a finished quick-task run. No-op when the task
- * is not watched, so run completion pays one read and nothing else.
- */
-export async function scheduleTaskOrchestratorNotify(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-  status: string,
-): Promise<void> {
-  const task = await ctx.db.get(taskId);
-  if (!task || task.watchedByAve === undefined) return;
-  await ctx.scheduler.runAfter(
-    0,
-    internal.orchestratorNotify.notifyOrchestratorOfChild,
-    { child: { kind: "task", taskId }, status },
-  );
-}
 
 /** How much of the child's last message is quoted back to the master. */
 export const REPLY_TAIL_CHARS = 500;

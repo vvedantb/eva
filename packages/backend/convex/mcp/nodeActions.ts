@@ -32,15 +32,12 @@ import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
   awaitSandboxActive,
-  buildChatMessageCalls,
-  resolveAgentDelivery,
+  resolveAgentModel,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
-  type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import {
-  CHAT_ENTITY_KINDS,
   chatEntityKindValidator,
   prStateValidator,
   type ChatEntityKind,
@@ -66,7 +63,7 @@ const internalTokenClaims = z.object({
   aud: z.literal("mcp-internal"),
   repoId: z.string(),
   entityId: z.string().optional(),
-  entityKind: z.enum(CHAT_ENTITY_KINDS).optional(),
+  entityKind: z.literal("session").optional(),
   chatId: z.string().optional(),
 });
 
@@ -106,7 +103,7 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(chatEntityKindValidator),
+      entityKind: v.optional(v.literal("session")),
       chatId: v.optional(v.string()),
     }),
     v.null(),
@@ -641,7 +638,6 @@ const sessionListItemSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number().optional(),
-  lastModel: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -653,7 +649,6 @@ const agentTaskSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number(),
-  model: z.string().optional(),
   projectId: z.string().optional(),
 });
 
@@ -664,7 +659,6 @@ const agentTaskListItemSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number(),
-  model: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -674,32 +668,23 @@ const projectDocSchema = z.object({
   numId: z.number().optional(),
   title: z.string(),
   updatedAt: z.number().optional(),
-  model: z.string().optional(),
 });
 
 const deliveryChatSchema = z.object({
   chatId: z.string(),
-  title: z.string(),
-  number: z.number(),
   lastModel: z.string().optional(),
 });
 
-const sessionChatRowSchema = z.object({
-  _id: z.string(),
-  title: z.string(),
-  number: z.number(),
-  isMain: z.boolean(),
-  archived: z.boolean().optional(),
-  lastModel: z.string().optional(),
-});
+const sessionChatRowSchema = z
+  .object({ _id: z.string(), lastModel: z.string().optional() })
+  .nullable();
 
-async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
-  const rows = z.array(sessionChatRowSchema).parse(
-    await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
+async function loadSessionChatAsUser(clerkUserId: string, sessionId: string) {
+  return sessionChatRowSchema.parse(
+    await runAsUser("query", clerkUserId, "sessionChats:resolveForSession", {
       sessionId,
     }),
   );
-  return rows.filter((row) => row.archived !== true);
 }
 
 const sessionDocSchema = z.object({
@@ -710,7 +695,6 @@ const sessionDocSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number().optional(),
-  lastModel: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
   linkedRepoCount: z.number().optional(),
@@ -807,7 +791,6 @@ export const orchestratorListAgents = internalAction({
           title: item.title,
           status: item.status,
           isExecuting: item.isExecuting,
-          model: item.lastModel,
           updatedAt: item.updatedAt ?? item._creationTime,
         });
       }
@@ -824,7 +807,6 @@ export const orchestratorListAgents = internalAction({
         title: task.title,
         status: task.status,
         isExecuting: task.isExecuting,
-        model: task.model,
         updatedAt: task.updatedAt,
       });
     }
@@ -948,19 +930,15 @@ export const orchestratorGetAgentState = internalAction({
     const ownedRead =
       kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
     const owned = ownedRead?.session;
-    const [sessionChats, isExecuting, pullRequests] = await Promise.all([
+    const [ownChat, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
-        ? loadSessionChatsAsUser(clerkUserId, id)
+        ? loadSessionChatAsUser(clerkUserId, id)
         : owned
-          ? loadSessionChatsAsUser(clerkUserId, owned.sessionId)
-          : [],
+          ? loadSessionChatAsUser(clerkUserId, owned.sessionId)
+          : null,
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
       ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
     ]);
-    const ownChat =
-      kind === "session"
-        ? (sessionChats.find((chat) => chat.isMain) ?? sessionChats[0])
-        : sessionChats.find((chat) => chat._id === owned?.chatId);
     const transcriptParentId =
       kind === "session" ? (ownChat?._id ?? id) : owned?.chatId;
 
@@ -1015,7 +993,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: ownChat?.lastModel ?? session.lastModel,
+        model: ownChat?.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1131,19 +1109,6 @@ async function ensureSessionSandboxActive(
   });
 }
 
-function chatDelivery(
-  chat: z.infer<typeof deliveryChatSchema>,
-  queuedAhead: number,
-  requestedModel: string | undefined,
-  isExecuting: boolean,
-): AgentDelivery {
-  return resolveAgentDelivery({
-    isBusy: isExecuting || queuedAhead > 0,
-    requestedModel,
-    storedModel: chat.lastModel,
-  });
-}
-
 const ownedSessionRefSchema = z.object({
   sessionId: z.string(),
   chatId: z.string(),
@@ -1205,16 +1170,18 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
-    chat: v.optional(v.string()),
     excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
     sentViaOrchestrator: v.boolean(),
     account: v.optional(v.string()),
   },
   returns: v.object({
-    delivered: v.union(v.literal("started"), v.literal("queued")),
+    delivered: v.union(
+      v.literal("started"),
+      v.literal("queued"),
+      v.literal("posted"),
+    ),
     model: v.string(),
-    chat: v.optional(v.object({ title: v.string(), number: v.number() })),
   }),
   handler: async (
     ctx,
@@ -1224,30 +1191,24 @@ export const orchestratorSendMessage = internalAction({
       id,
       message,
       model,
-      chat,
       excludeChatId,
       aveThreadId,
       sentViaOrchestrator,
       account,
     },
-  ) => {
+  ): Promise<{
+    delivered: "started" | "queued" | "posted";
+    model: string;
+  }> => {
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
-    const chatName = delivery.chatId ?? chat;
     const rawDoc = await runAsUser(
       "query",
       clerkUserId,
       "sessionChats:resolveDeliveryChat",
-      {
-        sessionId: delivery.sessionId,
-        ...(chatName !== undefined ? { chat: chatName } : {}),
-      },
+      { sessionId: delivery.sessionId },
     );
     if (rawDoc === null) {
-      throw new Error(
-        chat === undefined
-          ? `No session ${id} found, or you do not have access.`
-          : `Session ${id} has no open chat named "${chat}".`,
-      );
+      throw new Error(`No session ${id} found, or you do not have access.`);
     }
     const deliveryChat = deliveryChatSchema.parse(rawDoc);
     if (deliveryChat.chatId === excludeChatId) {
@@ -1257,46 +1218,29 @@ export const orchestratorSendMessage = internalAction({
     }
     const targetId = deliveryChat.chatId;
 
-    const queuedAhead = (await listQueuedAsUser(clerkUserId, targetId)).length;
-
-    const isExecuting: boolean = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind: "session", id: targetId },
-    );
-    const agentDelivery = chatDelivery(
-      deliveryChat,
-      queuedAhead,
-      model,
-      isExecuting,
-    );
+    const sendModel = resolveAgentModel(model, deliveryChat.lastModel);
     const resolvedAccount = await ctx.runQuery(
       internal.mcp.queries.resolveMcpProviderAccount,
       {
         account,
-        scope: { kind: "chat", chatId: targetId, model: agentDelivery.model },
+        scope: { kind: "chat", chatId: targetId, model: sendModel },
       },
     );
     if (!resolvedAccount.ok) throw new Error(resolvedAccount.error);
-    for (const call of buildChatMessageCalls({
-      chatId: targetId,
-      message,
-      delivery: agentDelivery,
-      sentViaOrchestrator,
-      providerAccountId: resolvedAccount.providerAccountId,
-    })) {
-      await runAsUser("mutation", clerkUserId, call.fn, call.args);
-    }
+    const delivered: "started" | "queued" | "posted" = await ctx.runMutation(
+      internal._sessions.execution.sendFromMcp,
+      {
+        clerkUserId,
+        chatId: targetId,
+        message,
+        model: sendModel,
+        providerAccountId: resolvedAccount.providerAccountId ?? undefined,
+        sentViaOrchestrator,
+      },
+    );
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
-    const delivered: "queued" | "started" =
-      agentDelivery.action === "queue" ? "queued" : "started";
-    return {
-      delivered,
-      model: agentDelivery.model,
-      ...(kind === "session"
-        ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
-        : {}),
-    };
+    return { delivered, model: sendModel };
   },
 });
 
@@ -1317,18 +1261,7 @@ export const orchestratorStopAgent = internalAction({
       );
       return null;
     }
-    if (kind === "task") {
-      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
-        target: { taskId: id },
-      });
-      return null;
-    }
-    const owned = (await readOwnedChatAsUser(clerkUserId, kind, id))?.session;
-    if (owned?.chatId !== undefined) {
-      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
-        target: { chatId: owned.chatId },
-      });
-    }
+    await runAsUser("mutation", clerkUserId, "chats:stop", { target: id });
     return null;
   },
 });
@@ -1487,7 +1420,7 @@ export const orchestratorCreateSession = internalAction({
   ) => {
     const createArgs: Record<string, JsonValue> = {
       repoId,
-      message,
+      prompt: message,
       sentViaOrchestrator: true,
     };
     if (title) createArgs.title = title;
@@ -1508,7 +1441,7 @@ export const orchestratorCreateSession = internalAction({
       await runAsUser(
         "mutation",
         clerkUserId,
-        "_sessions/mutations:create",
+        "chats:start",
         createArgs,
       ),
     );
@@ -1601,7 +1534,7 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(chatEntityKindValidator),
+    entityKind: v.optional(v.literal("session")),
     chatId: v.optional(v.string()),
     body: v.string(),
   },
@@ -1622,7 +1555,7 @@ export const handleMcpRequest = internalAction({
           entityId !== undefined || chatId !== undefined
             ? await ctx.runQuery(
                 internal.mcp.projectQueries.resolveCallerOwner,
-                { entityKind, entityId, chatId },
+                { entityId, chatId },
               )
             : null;
         const credentials: McpCredentials = {

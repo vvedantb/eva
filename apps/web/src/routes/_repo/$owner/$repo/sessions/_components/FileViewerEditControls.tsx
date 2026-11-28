@@ -42,8 +42,6 @@ export function FileViewerEditControls({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* A disabled button swallows pointer events, so the tooltip needs a
-              wrapper to hover — otherwise the reason is unreachable. */}
           <span className="shrink-0">
             <Button
               shape="rounded"

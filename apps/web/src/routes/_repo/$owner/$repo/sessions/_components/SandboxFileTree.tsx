@@ -124,8 +124,6 @@ export function SandboxFileTree({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* h-10 matches the viewer pane header so the two line up. The hairline
-          is a list/detail region divider, not decoration. */}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs">
           <IconFolder className="size-3.5 shrink-0 text-muted-foreground" />
@@ -187,9 +185,6 @@ export function SandboxFileTree({
             {expanded ? "Collapse all" : "Expand all"}
           </TooltipContent>
         </Tooltip>
-        {/* Hidden below `md`: there the tree and the viewer are separate panes
-            reached through the switcher, so neither is beside the other and
-            "which side" means nothing. */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

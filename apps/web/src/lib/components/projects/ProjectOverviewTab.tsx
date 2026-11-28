@@ -3,12 +3,13 @@
 import type { Id } from "@eva/backend";
 import { ProjectDescription } from "./ProjectDescription";
 import { ProjectFieldsPanel } from "./ProjectFieldsPanel";
+import { ProjectProgressChart } from "./ProjectProgressChart";
 import { ProjectSummarySection } from "./ProjectSummarySection";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
- * Overview tab: title + project context on the left, every project field in a
- * single column on the right. Same two-column shape as the task detail page.
+ * Overview tab: title, project context, the 30-day progress chart and the
+ * summary on the left, every project field in a single column on the right. Same two-column shape as the task detail page.
  */
 export function ProjectOverviewTab({
   projectId,
@@ -16,6 +17,7 @@ export function ProjectOverviewTab({
   title,
   description,
   documentsHref,
+  projectHref,
   readOnly,
 }: {
   projectId: Id<"projects">;
@@ -23,6 +25,7 @@ export function ProjectOverviewTab({
   title: string;
   description: string | undefined;
   documentsHref: string | undefined;
+  projectHref: string | undefined;
   readOnly: boolean;
 }) {
   const { status } = useProjectTaskStatus(projectId, repoId);
@@ -40,6 +43,7 @@ export function ProjectOverviewTab({
             clamp={false}
             readOnly={readOnly}
           />
+          <ProjectProgressChart projectId={projectId} projectHref={projectHref} />
           <ProjectSummarySection
             projectId={projectId}
             status={status}

@@ -82,6 +82,7 @@ export function QuickTasksListSplit({
       <div className="min-h-0 flex-1 overflow-hidden">
         <ResizablePanelLayout
           storageKey="quick-tasks-split"
+          chatPane="right"
           leftDefaultSize="33%"
           leftMinWidthPx={260}
           rightMinWidthPx={360}
@@ -116,9 +117,6 @@ export function QuickTasksListSplit({
                 />
               ) : selectedTaskId ? (
                 <>
-                  {/* Outside the keyed pane so the portal targets survive a
-                      task switch — remounting them mid-switch would drop the
-                      surface switcher and actions for a frame. */}
                   <QuickTaskSplitDetailHeader
                     taskId={selectedTaskId}
                     navSurface={navSurface}

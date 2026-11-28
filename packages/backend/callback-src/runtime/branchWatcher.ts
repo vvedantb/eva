@@ -9,26 +9,19 @@ const GIT_TIMEOUT_MS = 5_000;
 const POLL_INTERVAL_MS = 15_000;
 const DEBOUNCE_MS = 300;
 
-export type BranchTarget =
-  | { kind: "session"; sessionId: string }
-  | { kind: "sessionChat"; chatId: string }
-  | { kind: "task"; taskId: string }
-  | { kind: "project"; projectId: string };
+export type BranchTarget = { kind: "sessionChat"; chatId: string };
 
 /**
  * Maps the launcher's `ENTITY_ID_FIELD` / `ENTITY_ID` pair onto the mutation's
- * target union. Null for any other owner (arena runs, automations) — those have
- * no document to report onto.
+ * target union. Only a chat turn (`chatId`) reports; any other owner (docs,
+ * reports, automations) has no sandbox branch to show.
  */
 export function resolveBranchTarget(
   field: string | undefined,
   id: string | undefined,
 ): BranchTarget | null {
   if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
   if (field === "chatId") return { kind: "sessionChat", chatId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
   return null;
 }
 

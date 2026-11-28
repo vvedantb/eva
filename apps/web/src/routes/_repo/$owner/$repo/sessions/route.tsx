@@ -65,9 +65,6 @@ function SessionsLayout() {
         const isActive = entry.key === activeEntry?.key;
         return (
           <Activity key={entry.key} mode={isActive ? "visible" : "hidden"}>
-            {/* Flex column: the shell's per-entry RepoGate sizes itself with
-                `flex-1`, which is inert in a block parent (height collapses
-                and the composer falls below the fold). */}
             <div className="flex h-full min-h-0 flex-col">
               <CachedSessionShell
                 numId={entry.numId}

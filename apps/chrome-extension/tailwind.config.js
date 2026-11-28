@@ -1,7 +1,5 @@
 import tailwindcssAnimate from "tailwindcss-animate";
 
-/** @type {import('tailwindcss').Config} */
-
 function c(name) {
   return `rgb(var(--${name}) / <alpha-value>)`;
 }

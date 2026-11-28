@@ -29,11 +29,6 @@ export function taskTextLockReason(hasActiveRun: boolean, field: "Title" | "Desc
     : `${field} can only be edited in To Do or Business Review`;
 }
 
-/** A model can change on any active task; only terminal statuses lock it. */
-export function canEditTaskModel(status: TaskStatus | undefined): boolean {
-  return status !== "done" && status !== "cancelled";
-}
-
 export function getUserDisplayName(user: UserNameFields): string {
   if (user.fullName?.trim()) return user.fullName.trim();
   const parts = [user.firstName, user.lastName].filter(

@@ -1,30 +1,73 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Doc } from "@eva/backend";
+import { api, type Doc, type SandboxOwner } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type SandboxStatus = Doc<"sessions">["status"];
 
 type SandboxAction = "start" | "stop";
 
 /**
- * Start / stop flags of one sandbox owner. A flag is on from the click (the
- * mutation is in flight) until the server status leaves `starting` /
- * `stopping`, so the button reacts at once and never flickers back between
- * the mutation and the status patch.
+ * Start / stop of one sandbox, the same for a session, a quick task, a
+ * project task and a project. Each host only says how to start and stop.
+ *
+ * A flag is on from the click (the mutation is in flight) until the server
+ * status leaves `starting` / `stopping`, so the button reacts at once and
+ * never flickers back between the mutation and the status patch. A failure
+ * is one toast, with the same copy everywhere.
  */
-export function useSandboxLifecycle(status: SandboxStatus | undefined) {
+export function useSandboxControls({
+  status,
+  owner,
+  active = true,
+  start,
+  stop,
+  onStarted,
+}: {
+  status: SandboxStatus | undefined;
+  owner: SandboxOwner | undefined;
+  active?: boolean;
+  start: () => Promise<unknown>;
+  stop: () => Promise<unknown>;
+  onStarted?: () => void;
+}) {
   const [pending, setPending] = useState<SandboxAction | null>(null);
+  const startupStreaming = useQuery(
+    api.streaming.get,
+    active && status === "starting" && owner
+      ? { entityId: sandboxStartupEntityId(owner) }
+      : "skip",
+  );
 
   const run = async (action: SandboxAction, request: () => Promise<void>) => {
     setPending(action);
-    await request().finally(() => setPending(null));
+    await request()
+      .catch(() => undefined)
+      .finally(() => setPending(null));
   };
 
+  const handleStartSandbox = () =>
+    run("start", async () => {
+      await catchMutationError(start(), "Couldn't start sandbox", "sandbox-start");
+      onStarted?.();
+    });
+  const handleStopSandbox = () =>
+    run("stop", async () => {
+      await catchMutationError(stop(), "Couldn't stop sandbox", "sandbox-stop");
+    });
+
   return {
-    isStarting: pending === "start" || status === "starting",
-    isStopping: pending === "stop" || status === "stopping",
-    run,
+    isSandboxActive: status === "active",
+    isSandboxStarting: pending === "start" || status === "starting",
+    isSandboxStopping: pending === "stop" || status === "stopping",
+    sandboxStartupActivity: startupStreaming?.currentActivity,
+    handleStartSandbox,
+    handleStopSandbox,
+    handleSandboxToggle: (action: SandboxAction) =>
+      action === "start" ? handleStartSandbox() : handleStopSandbox(),
   };
 }
 

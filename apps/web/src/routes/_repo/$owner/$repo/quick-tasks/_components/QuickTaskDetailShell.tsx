@@ -76,7 +76,6 @@ export function QuickTaskDetailShell({
         fillHeight
         childPadding={false}
       >
-        {/* Detail keeps page gutters; sandbox is flush like sessions/projects. */}
         <div
           className={
             navSurface === "detail"

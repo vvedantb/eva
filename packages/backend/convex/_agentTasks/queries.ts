@@ -6,7 +6,6 @@ import { internalQuery } from "../_generated/server";
 import {
   NON_DRAFT_TASK_STATUSES,
   OPEN_TASK_STATUSES,
-  aiModelValidator,
   prStateValidator,
   taskStatusValidator,
 } from "../validators";
@@ -208,23 +207,9 @@ async function enrichTasksWithLastRun(
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       const row = { ...task, sandboxStatus: taskSandboxStatus(task) };
-      if (summary) {
-        return {
-          ...row,
-          lastRunStartedAt: summary.lastRunStartedAt,
-          isExecuting,
-          hasUnread,
-          isAwaitingAnswer,
-        };
-      }
-      const latestRun = await db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .order("desc")
-        .first();
       return {
         ...row,
-        lastRunStartedAt: latestRun?.startedAt,
+        lastRunStartedAt: summary?.lastRunStartedAt,
         isExecuting,
         hasUnread,
         isAwaitingAnswer,
@@ -433,7 +418,6 @@ const orchestratorTaskValidator = v.object({
   title: v.string(),
   status: taskStatusValidator,
   updatedAt: v.number(),
-  model: v.optional(aiModelValidator),
   isExecuting: v.boolean(),
 });
 
@@ -458,7 +442,6 @@ export const getActiveTasksSlim = authQuery({
       title: task.title,
       status: task.status,
       updatedAt: task.updatedAt,
-      model: task.model,
       isExecuting: taskIsExecuting(task, openChatEntityIds),
     }));
   },
@@ -537,6 +520,7 @@ export const getStatusesByIds = authQuery({
     return statuses;
   },
 });
+
 
 const OPEN_TASK_TITLE_LIMIT = 150;
 

@@ -22,3 +22,7 @@ export { getSummaryDoc } from "./_projects/summary";
 
 export { listTaskReports } from "./_projects/reports";
 
+export { listChatTaskCards } from "./_projects/chatTaskCards";
+
+export { progressChart } from "./_projects/progress";
+

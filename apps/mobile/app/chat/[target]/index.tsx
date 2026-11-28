@@ -3,7 +3,6 @@ import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findNewMessageIds, useChatReadState, useChatRecap } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
-  EVA_SENDER_NAME,
   buildPrecedingUserTurns,
   chatStreamingEntityId,
   collectForkPrefix,
@@ -12,14 +11,15 @@ import {
   forkThreadTitle,
   getSessionReadOnlyMessage,
   formatForkPrompt,
+  isChatTurnExecuting,
   isOtherUserChatMessage,
-  MAX_PARALLEL_CHATS,
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
   appendReviewCommentsToPrompt,
   prNumberFromGithubUrl,
   SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
   sandboxComposerState,
   type SessionMenuAction,
   tokenizedToDisplayText,
@@ -34,6 +34,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
@@ -71,7 +72,7 @@ import { DayDivider, NewDivider } from "@/chat/DayDivider";
 import { ThreadSummary } from "@/chat/ThreadSummary";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
-import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { EvaReply, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
@@ -80,7 +81,6 @@ import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFo
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader, type MenuEntry } from "@/chat/ChatHeader";
 import { ThreadFindBar } from "@/chat/ThreadFindBar";
-import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
@@ -114,13 +114,17 @@ import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
+import { ProjectTaskFacts, useProjectTaskRow } from "@/projects/ProjectTaskFacts";
+import { ProjectTaskPromptCard } from "@/projects/ProjectTaskPromptCard";
 
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
 
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
- * One chat (session, quick task or project): the transcript with the web
+ * One chat (session, quick task, project task or project; a project task's
+ * chat is the task, with its status and PR line under the title and, before
+ * its first run, its prompt card in place of the empty chat): the transcript with the web
  * message actions (a teammate's turn on the left with their avatar and first
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
@@ -147,15 +151,13 @@ export default function ChatScreen() {
   const appActive = useAppActive();
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   const me = useQuery(api.auth.me, {});
-  const { recap, dismiss: dismissRecap } = useChatRecap({
+  const { recap, dismiss: dismissRecap, rate: rateRecap } = useChatRecap({
     parentId,
     active: focused && appActive,
     messages: messages ?? [],
     currentUserId: me ?? undefined,
   });
   const sandbox = useSessionSandbox(chat?.session?.id);
-  const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
-  const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
   const threadTurn = useQuery(
     api.messages.openThreadTurn,
     parentId && chat?.project !== undefined ? { parentId } : "skip",
@@ -180,7 +182,8 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  const chatProject = chat?.project ? { projectId: chat.project.id, repoId: chat.repoId } : undefined;
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chatProject);
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   const [seenRows] = useState(createSeenRows);
   const restore = useTurnRestore();
@@ -190,6 +193,7 @@ export default function ChatScreen() {
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
   const requestRecap = useMutation(api.chatRecaps.requestFull);
+  const projectTask = useProjectTaskRow(chat?.task?.id);
 
   if (chat === undefined || chat === null) {
     return (
@@ -204,19 +208,17 @@ export default function ChatScreen() {
     );
   }
 
-  const working = turn !== undefined && turn !== null;
+  const working = isChatTurnExecuting({ status: turn, messages });
   const { canReply } = chat;
-  const runningCount = runningChats?.length ?? 0;
-  const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
   const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
-  const emptyTitle = sandboxAwake
-    ? "No messages yet. Start the conversation!"
-    : sandbox.isStopping
-      ? SANDBOX_CHAT_COPY.stoppingTitle
-      : sandbox.isToggling
-        ? SANDBOX_CHAT_COPY.startingTitle
-        : SANDBOX_CHAT_COPY.asleepTitle;
-  const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
+  const empty = sandboxChatEmptyState({
+    isSandboxActive: sandboxAwake,
+    isSandboxStopping: sandbox.isStopping,
+    isSandboxToggling: sandbox.isToggling,
+    activeTitle: "No messages yet. Start the conversation!",
+  });
+  const emptyTitle = empty.title;
+  const emptyDescription = sandboxAwake ? "" : empty.description;
   const closedReason = chat.archived
     ? archiveCopy(chat.archived).readOnly
     : chat.session
@@ -362,6 +364,7 @@ export default function ChatScreen() {
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
+        subtitle={projectTask ? <ProjectTaskFacts task={projectTask} /> : undefined}
         sessionMenu={
           sessionTarget
             ? {
@@ -375,7 +378,6 @@ export default function ChatScreen() {
         }
       />
       <SandboxErrorBanner sandbox={sandbox} />
-      {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
       {sessionActions.dialogs}
       <Conversation>
         {findOpen ? (
@@ -404,27 +406,32 @@ export default function ChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            messages === undefined ? (
+            messages === undefined && parentId !== undefined ? (
               <CenteredSpinner label="Loading messages" />
-            ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+            ) : (messages?.length ?? 0) === 0 ? (
+              projectTask && showsProjectTaskPrompt(projectTask) ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <ProjectTaskPromptCard task={projectTask} repoId={chat.repoId} readOnly={chat.archived !== undefined} />
+                </View>
+              ) : (
+                <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+              )
             ) : null
           }
           ListHeaderComponent={
             <>
               {recap && visible.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <RecapCard kind={recap.kind} text={recap.text} onDismiss={dismissRecap} />
+                  <RecapCard kind={recap.kind} since={recap.since}
+                    text={recap.text}
+                    rating={recap.rating?.sentiment}
+                    onRate={(next) => rateRecap(next).catch(() => toast.error("Couldn't save your rating"))}
+                    onDismiss={dismissRecap} />
                 </View>
               ) : null}
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <Shimmer>Working…</Shimmer>
-                </View>
-              ) : null}
-              {waitingForSlot ? (
-                <View className={`pt-3 ${THREAD_INSET}`}>
-                  <Shimmer>{`Waiting for a free slot — ${runningCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`}</Shimmer>
                 </View>
               ) : null}
               {cards.trailing.length > 0 ? (
@@ -452,13 +459,9 @@ export default function ChatScreen() {
                 joinsPrevious={bubbleGroups.joinsPrevious.has(message._id)}
                 joinsNext={bubbleGroups.joinsNext.has(message._id)}
                 senderName={
-                  bubbleGroups.joinsPrevious.has(message._id)
-                    ? undefined
-                    : chat.project !== undefined && message.role === "assistant"
-                      ? EVA_SENDER_NAME
-                      : fromTeammate && message.userId
-                        ? teammateNames.get(message.userId)
-                        : undefined
+                  fromTeammate && message.userId && !bubbleGroups.joinsPrevious.has(message._id)
+                    ? teammateNames.get(message.userId)
+                    : undefined
                 }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
@@ -842,7 +845,7 @@ function ChatMessageRow({
   const evaReply = evaBubble && !isUser;
   const threadControl =
     onOpenThread && (message.replyCount ?? 0) > 0 ? (
-      <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+      <ThreadSummary rootId={message._id} replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
     ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
@@ -851,7 +854,7 @@ function ChatMessageRow({
                 <Message
                   from={message.role}
                   className={message.role === "user" ? (evaBubble ? "max-w-[70%] gap-0.5" : "gap-0.5") : "max-w-full gap-0.5"}
-                  style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
@@ -860,7 +863,7 @@ function ChatMessageRow({
                       {userBody}
                     </TeammateBubble>
                   ) : evaReply ? (
-                    <EvaBubble joinsNext={joinsNext}>{replyBody}</EvaBubble>
+                    <EvaReply>{replyBody}</EvaReply>
                   ) : (
                     <MessageContent bubble="tint" className={isUser ? undefined : "px-1 py-2"}>
                       {isUser ? userBody : replyBody}
@@ -872,14 +875,14 @@ function ChatMessageRow({
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" && !joinsNext ? (
                     <MessageFooter
-                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}
+                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : undefined}
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
                       leading={threadControl}
                     />
                   ) : threadControl ? (
-                    <View className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}>{threadControl}</View>
+                    <View className={fromTeammate ? TEAMMATE_FOOTER_INSET : evaReply ? "pl-1" : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
                 {after}

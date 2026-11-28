@@ -3,18 +3,6 @@ import { ChevronLeft, ChevronRight, File, Folder, LayoutGrid, List, Search, Shar
 import { Bar, Collapse, Count, Stage, States, Window, type Act, type Layout, type Point, Meter } from '../../kit'
 import './upload.css'
 
-// A file storage app, list view. A PDF sits on the desktop beside the
-// Projects window. The user drags it in: the drag image rides with the arrow,
-// the list lights up under it, and on the drop an upload row opens at the top
-// (newest first). Its bar fills while the size counts up, then the row settles
-// into an ordinary file row: Just now, 4.2 MB. Cmd+Z takes the upload back,
-// which is exactly where the loop began.
-//
-// The upload is the story, so it gets the room: no sidebar, rows at reading
-// size, and a list short enough that the new row is a tenth of the window, not
-// a sliver at the top of a long one. Everything else is placeholder bars. The
-// desktop strip holds the file at the start and the keycaps at the end.
-
 type Ghost = { on: boolean; dropped: boolean; off: Point; at: Point }
 type S = { up: boolean; mb: number; done: boolean; ghost: Ghost }
 
@@ -30,10 +18,6 @@ type Geo = {
   desk: { x: number; y: number }
 }
 
-// Wide: one gutter (40) above the window and left of the file; the window
-// runs off the right and bottom, its Size column still whole in the crop.
-// Compact: the file sits above the window, which runs off the bottom only
-// with equal side gutters, so all three columns stay whole.
 const GEO: Record<Layout, Geo> = {
   wide: { win: { x: 184, y: 40, w: 620, h: 420 }, rows: 9, cols: 'minmax(0, 1fr) 132px 118px', desk: { x: 40, y: 124 } },
   compact: { win: { x: 24, y: 120, w: 352, h: 300 }, rows: 6, cols: 'minmax(0, 1fr) 92px 76px', desk: { x: 20, y: 18 } },
@@ -55,7 +39,6 @@ const ROWS: { kind: Kind; name: number; date: number; size: number }[] = [
 async function script(a: Act<S>) {
   await a.wait(600)
 
-  // 1. Pick the PDF up off the desktop by its icon
   a.mark('grab')
   const icon = a.rect('desk-icon')
   const file = a.rect('desk-file')
@@ -64,15 +47,12 @@ async function script(a: Act<S>) {
   await a.wait(240)
   const off = { x: grab.x - file.x, y: grab.y - file.y }
 
-  // 2. Carry it into the window; the list lights up under it
   a.mark('drag')
   const list = a.rect('drop')
   await a.drag({ x: list.x + list.width * 0.36, y: list.y + list.height * 0.32 }, (at) => {
     a.put({ ghost: { on: true, dropped: false, off, at } })
   }, { duration: 1300, cursor: 'preserve' })
 
-  // 3. Drop: the upload row opens at the top, its bar fills and the size
-  //    counts up with it
   a.mark('drop')
   await a.set((s) => ({ up: true, ghost: { ...s.ghost, dropped: true } }))
   await a.wait(500)
@@ -81,12 +61,10 @@ async function script(a: Act<S>) {
     await a.wait(ms)
   }
 
-  // 4. Uploaded: the bar gives way to Just now and the tint fades
   a.mark('done')
   await a.set({ done: true })
   await a.wait(2400)
 
-  // 5. Cmd+Z takes the upload back; the row closes: back to the start
   a.mark('undo')
   await a.key('cmd+z')
   await a.set({ up: false, ghost: initial.ghost })
@@ -214,7 +192,6 @@ function Row({ r, k }: { r: (typeof ROWS)[number]; k: number }) {
   )
 }
 
-/** A page with a folded corner and a red PDF band: the file being uploaded. */
 function PdfIcon({ small }: { small?: boolean }) {
   return (
     <span className="up-pdf" data-small={small || undefined}>
@@ -223,8 +200,6 @@ function PdfIcon({ small }: { small?: boolean }) {
   )
 }
 
-/** The drag image follows the cursor on the drag's own frame callback, and
- *  lights whatever [data-drop] it is over. */
 function DragImage({ ghost, children }: { ghost: Ghost; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const over = useRef<HTMLElement | null>(null)

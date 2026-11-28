@@ -91,7 +91,7 @@ describe("buildCanUseTool Agent/Task background policy", () => {
 describe("buildCanUseTool AskUserQuestion answers", () => {
   test("records the user's string answers under the tool_use id", async () => {
     process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
-    process.env.ENTITY_ID_FIELD = "sessionId";
+    process.env.ENTITY_ID_FIELD = "chatId";
     freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
@@ -122,7 +122,7 @@ describe("AskUserQuestion past the wait", () => {
 
   async function askPastTheWait(releaseAnswer: string | null) {
     process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
-    process.env.ENTITY_ID_FIELD = "sessionId";
+    process.env.ENTITY_ID_FIELD = "chatId";
     freshModules();
     const { buildCanUseTool, QUESTION_WAIT_MS } =
       await import("../runtime/pendingQuestion.js");
@@ -192,14 +192,14 @@ describe("the canUseTool gate grants MCP on every surface", () => {
 
   const options = () => permissionOptions("toolu_test");
 
-  test("an MCP tool is allowed on a task chat", async () => {
-    const canUseTool = await gateFor("taskId");
+  test("an MCP tool is allowed on a chat turn", async () => {
+    const canUseTool = await gateFor("chatId");
     const result = await canUseTool("mcp__eva__list_repos", {}, options());
     expect(result?.behavior).toBe("allow");
   });
 
   test("a surface with no answering UI lets AskUserQuestion through instead of blocking", async () => {
-    const canUseTool = await gateFor("docId");
+    const canUseTool = await gateFor("entityId");
     const result = await canUseTool(
       "AskUserQuestion",
       { questions: [] },

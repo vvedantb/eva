@@ -1,5 +1,20 @@
 import type { Doc } from "@eva/backend";
 
+/**
+ * Where each notification type is delivered: the one routing table
+ * (`internal/plans/implemented/notifications-v2-5.md`, "Proposed design"). The
+ * backend reads it to push and to pick the instant email or the daily digest;
+ * the web reads it to toast and raise desktop pop-ups; Inbox → Needs you reads
+ * it for its question rows.
+ *
+ * Urgency is a modifier on top of the table. Mention routing (Jev) sets it on
+ * chat mentions; agent `notify_user` and comment mentions set it at creation.
+ * - `high`: push, toast and an instant email, whatever the type says.
+ * - `normal`: the table, except a chat mention Jev judged fyi, which waits
+ *   for the digest.
+ * - `low`: inbox only (no toast, push or email).
+ */
+
 export type NotificationType = Doc<"notifications">["type"];
 type Urgency = NonNullable<Doc<"notifications">["urgency"]>;
 
@@ -22,11 +37,23 @@ export const NOTIFICATION_ROUTES: Record<NotificationType, NotificationRoute> =
       push: true,
       email: "instant",
     },
+    thread_answer: {
+      inbox: "needs_you",
+      toast: true,
+      push: true,
+      email: "digest",
+    },
     comment_reply: {
       inbox: "updates",
       toast: true,
       push: true,
       email: "instant",
+    },
+    thread_reply: {
+      inbox: "updates",
+      toast: true,
+      push: true,
+      email: "digest",
     },
     task_assigned: {
       inbox: "updates",
@@ -116,6 +143,42 @@ export function notificationEmail(
     return "digest";
   }
   return NOTIFICATION_ROUTES[notification.type].email;
+}
+
+type StoredNotificationPrefs = Doc<"users">["notificationPrefs"];
+
+/** A person's notification channels with the defaults filled in. */
+export type NotificationPrefs = {
+  email: boolean;
+  push: boolean;
+  productUpdates: boolean;
+};
+
+/**
+ * The stored choices with defaults: notification email on (decision 3, plan
+ * `notifications-v2-5.md`), push on, product updates off (opt-in: product
+ * news, not your own work). Desktop pop-ups are per device
+ * (web `desktopNotifications.ts`), not stored here.
+ */
+export function resolveNotificationPrefs(
+  prefs: StoredNotificationPrefs,
+): NotificationPrefs {
+  return {
+    email: prefs?.email ?? true,
+    push: prefs?.push ?? true,
+    productUpdates: prefs?.productUpdates ?? false,
+  };
+}
+
+/**
+ * How a notification is emailed to a person: as its route says (at once or
+ * in the digest) with notification email on, never with it off.
+ */
+export function notificationEmailFor(
+  notification: RoutableNotification,
+  emailOn: boolean,
+): NotificationEmail {
+  return emailOn ? notificationEmail(notification) : "none";
 }
 
 /**

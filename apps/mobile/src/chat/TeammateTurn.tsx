@@ -1,4 +1,3 @@
-import { IconEva } from "@vvedantb/native-ui/brand";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { MessageContent } from "@vvedantb/native-ui/ai";
 import type { ReactNode } from "react";
@@ -50,13 +49,13 @@ export function TeammateBubble({
   );
 }
 
-/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with the rail's `IconEva`. */
-export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
-  return (
-    <SideBubble avatar={<IconEva size={16} />} joinsNext={joinsNext} className="max-w-[70%]">
-      {children}
-    </SideBubble>
-  );
+/**
+ * Eva's reply in the project coordinator chat, as the web `assistantBubble`:
+ * plain text at full width, with no bubble, avatar or name, so people's
+ * bubbles and Eva's answers read apart.
+ */
+export function EvaReply({ children }: { children: ReactNode }) {
+  return <View className="min-w-0 max-w-full px-1">{children}</View>;
 }
 
 function SideBubble({

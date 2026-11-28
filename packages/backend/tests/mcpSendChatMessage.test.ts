@@ -5,10 +5,7 @@ import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
 import { canonicalPrUrl } from "../convex/mcp/sessionRef";
 import { MCP_CLAUDE_MODELS } from "../convex/mcp/toolShared";
-import {
-  buildChatMessageCalls,
-  resolveAgentDelivery,
-} from "../convex/mcp/orchestratorDelivery";
+import { resolveAgentModel } from "../convex/mcp/orchestratorDelivery";
 import { normalizeAIModel } from "../convex/_validators/aiModels";
 import { z } from "zod";
 import { modules } from "./_helpers/convexModules";
@@ -62,13 +59,8 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "success",
-      logs: [],
-    });
     await recordPullRequest(ctx, {
-      owner: { kind: "task", taskId, runId },
+      owner: { kind: "task", taskId },
       repoId,
       prUrl: TASK_PR_URL,
       state: "open",
@@ -373,86 +365,6 @@ describe("PR links the tool accepts", () => {
   });
 });
 
-describe("what a send does to the chat", () => {
-  const BUSY = [false, true];
-
-  test("an idle chat gets a user message and then a turn", () => {
-    const calls = buildChatMessageCalls({
-      chatId: "c1",
-      message: "keep going",
-      delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
-      sentViaOrchestrator: false,
-      providerAccountId: "acct1",
-    });
-
-    expect(calls.map((call) => call.fn)).toEqual([
-      "_sessions/mutations:addMessage",
-      "_sessions/execution:startExecute",
-    ]);
-    expect(calls[0]?.args).toEqual({
-      chatId: "c1",
-      role: "user",
-      content: "keep going",
-      model: "claude:opus",
-      sentViaOrchestrator: false,
-      providerAccountId: "acct1",
-    });
-    expect(calls[1]?.args).toEqual({
-      chatId: "c1",
-      message: "keep going",
-      model: "claude:opus",
-      providerAccountId: "acct1",
-    });
-  });
-
-  test("a busy chat queues one message instead of starting a second turn", () => {
-    const calls = buildChatMessageCalls({
-      chatId: "x1",
-      message: "and this next",
-      delivery: resolveAgentDelivery({ isBusy: true }),
-      sentViaOrchestrator: true,
-      providerAccountId: null,
-    });
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.fn).toBe("_sessions/execution:enqueueMessage");
-    expect(calls[0]?.args).toEqual({
-      chatId: "x1",
-      message: "and this next",
-      model: normalizeAIModel(undefined),
-      sentViaOrchestrator: true,
-    });
-  });
-
-  test("no send path creates a task, session or project", () => {
-    const everyCall = BUSY.flatMap((isBusy) =>
-      buildChatMessageCalls({
-        chatId: "x1",
-        message: "hi",
-        delivery: resolveAgentDelivery({ isBusy }),
-        sentViaOrchestrator: false,
-        providerAccountId: null,
-      }),
-    );
-    for (const call of everyCall) {
-      expect(call.fn).not.toContain("create");
-      expect(call.fn.startsWith("_sessions/")).toBe(true);
-    }
-  });
-
-  test("no argument is sent that the chat mutations do not declare", () => {
-    const args = BUSY.flatMap((isBusy) =>
-      buildChatMessageCalls({
-        chatId: "x1",
-        message: "hi",
-        delivery: resolveAgentDelivery({ isBusy }),
-        sentViaOrchestrator: false,
-      }).flatMap((call) => Object.keys(call.args)),
-    );
-    expect(args).not.toContain("mode");
-  });
-});
-
 describe("user-MCP watch resolves the live Manager Ave thread", () => {
   test("the owner’s live thread is returned, a stranger’s is not", async () => {
     const f = await fixture();
@@ -520,12 +432,8 @@ describe("user MCP accepts fable on per-turn sends and runs it as Eva's Fable mo
 
   test("send_chat_message canonicalizes fable", () => {
     expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-2");
-    expect(
-      resolveAgentDelivery({
-        isBusy: false,
-        requestedModel: "fable",
-        storedModel: "cursor:grok-4.6",
-      }).model,
-    ).toBe("claude:claude-fable-5-2");
+    expect(resolveAgentModel("fable", "cursor:grok-4.6")).toBe(
+      "claude:claude-fable-5-2",
+    );
   });
 });

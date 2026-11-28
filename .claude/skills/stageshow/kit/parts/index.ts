@@ -1,7 +1,3 @@
-// Small parts: avatars, status marks, a few icons, a meter, chips. Starting
-// points with quiet defaults, there so a demo doesn't hand-draw the same
-// circle twice. Restyle or replace them to match the product being shown.
-// One file per part, each importing its own CSS.
 export { Avatar } from './Avatar'
 export type { AvatarProps } from './Avatar'
 export { Check } from './Check'

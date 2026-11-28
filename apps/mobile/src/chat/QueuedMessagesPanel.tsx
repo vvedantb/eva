@@ -1,5 +1,6 @@
 import { api, type Id } from "@eva/backend";
-import { moveQueuedId, orderQueuedRows, QUEUE_PANEL_LABEL, queuedMessagePreview, queuePanelLabel } from "@eva/shared";
+import { moveQueuedId, QUEUE_PANEL_LABEL, queuedMessagePreview, queuePanelLabel } from "@eva/shared";
+import { useQueuedMessageMutations } from "@eva/shared/queuedMessageMutations";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArrowBarToUp,
@@ -26,8 +27,7 @@ import {
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { impactHaptic } from "@vvedantb/native-ui/haptics";
 import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
-import type { OptimisticLocalStore } from "convex/browser";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View, type TextInput } from "react-native";
@@ -70,23 +70,12 @@ export function QueuedMessagesPanel({
   const [editing, setEditing] = useState<QueuedRow | null>(null);
   const [deleting, setDeleting] = useState<QueuedRow | null>(null);
 
-  const patchQueue = (store: OptimisticLocalStore, change: (current: QueuedRow[]) => QueuedRow[]) => {
-    if (!parentId) return;
-    const current = store.getQuery(api.queuedMessages.listByParent, { parentId });
-    if (current !== undefined) store.setQuery(api.queuedMessages.listByParent, { parentId }, change(current));
-  };
-  const update = useMutation(api.queuedMessages.update).withOptimisticUpdate((store, args) =>
-    patchQueue(store, (current) => current.map((row) => (row._id === args.id ? { ...row, content: args.content } : row))),
-  );
-  const remove = useMutation(api.queuedMessages.remove).withOptimisticUpdate((store, args) =>
-    patchQueue(store, (current) => current.filter((row) => row._id !== args.id)),
-  );
-  const reorder = useMutation(api.queuedMessages.reorder).withOptimisticUpdate((store, args) =>
-    patchQueue(store, (current) => orderQueuedRows(current, args.orderedIds)),
-  );
-  const steer = useMutation(api.queuedMessages.steer).withOptimisticUpdate((store, args) =>
-    patchQueue(store, (current) => current.map((row): QueuedRow => (row._id === args.id ? { ...row, steer: "requested" } : row))),
-  );
+  const {
+    updateQueuedMessage: update,
+    deleteQueuedMessage: remove,
+    reorderQueuedMessages: reorder,
+    steerQueuedMessage: steer,
+  } = useQueuedMessageMutations(parentId);
 
   if (!parentId || rows === undefined || rows.length === 0) return null;
 

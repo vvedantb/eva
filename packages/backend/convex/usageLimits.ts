@@ -12,7 +12,6 @@ import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
 import { listSelectableAccountsFor } from "./_userProviderAccounts/listing";
 import {
   findUsageLimitRow,
-  listLegacyUsageLimitRows,
   parseUsageLimitRowKey,
   presentReading,
   usageLimitRowIdentity,
@@ -32,7 +31,6 @@ export type UsageLimitCompleteness = NonNullable<
 >;
 
 const {
-  repoId: _legacyRepoId,
   providerAccountId: _accountIsRowIdentity,
   teamId: _teamIsRowIdentity,
   ...usageLimitReadingFields
@@ -40,6 +38,7 @@ const {
 
 const USAGE_LIMIT_PROVIDER = usageLimitProviderValidator.value;
 
+/** New same-key windows win while unobserved stored windows remain intact. */
 export function mergeUsageLimitWindows(
   stored: readonly UsageWindow[] | undefined,
   reported: readonly UsageWindow[] | undefined,
@@ -50,6 +49,12 @@ export function mergeUsageLimitWindows(
   return [...byKey.values()];
 }
 
+/**
+ * Whether a reading may replace the stored row wholesale. Only a complete
+ * provider response may: everything else has seen part of the picture, so it is
+ * merged. `snapshotComplete` is the pre-discriminant wire form of the same
+ * question, honoured for callback bundles that predate `completeness`.
+ */
 export function isAuthoritativeReading(
   completeness: UsageLimitCompleteness | undefined,
   snapshotComplete: boolean | undefined,
@@ -120,9 +125,6 @@ export const report = authMutation({
       return null;
     }
     const existing = await findUsageLimitRow(ctx.db, key);
-    for (const legacy of await listLegacyUsageLimitRows(ctx.db, key)) {
-      await ctx.db.delete(legacy._id);
-    }
     const reading = { ...observed, ...usageLimitRowIdentity(key) };
     if (existing) {
       if (isAuthoritativeReading(reading.completeness, snapshotComplete)) {

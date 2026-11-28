@@ -3,12 +3,12 @@ import { z } from "zod";
 import {
   DEFAULT_ISSUE_LABEL,
   type AutomationTrigger,
-  type RepoEventKind,
 } from "./labels";
 
 export {
   DEFAULT_ISSUE_LABEL,
   REPO_EVENT_LABELS,
+  triggerHasEvent,
   type AutomationTrigger,
   type RepoEventKind,
 } from "./labels";
@@ -55,11 +55,17 @@ export const repoEventValidator = v.union(
     body: v.string(),
   }),
   v.object({
-    kind: v.union(v.literal("pr_opened"), v.literal("pr_merged")),
+    kind: v.union(
+      v.literal("pr_opened"),
+      v.literal("pr_merged"),
+      v.literal("pr_updated"),
+    ),
     ...repoRef,
     prUrl: v.string(),
     prNumber: v.number(),
     title: v.string(),
+    headSha: v.string(),
+    headBranch: v.optional(v.string()),
   }),
   v.object({ ...alertFields, ...repoRef }),
 );
@@ -81,12 +87,13 @@ export const ciPassedValidator = v.object({
 export type CiPassed = Infer<typeof ciPassedValidator>;
 
 /** Delay before a queued event runs, so a burst of webhooks lands as one run. */
-export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
+export const EVENT_DEBOUNCE_MS: Record<RepoEvent["kind"], number> = {
   ci_failed: 90_000,
   pr_feedback: 60_000,
   issue_labeled: 0,
   pr_opened: 0,
   pr_merged: 0,
+  pr_updated: 60_000,
   production_alert: 30_000,
 };
 
@@ -118,6 +125,7 @@ export function repoEventKey(event: RepoEvent): string {
     case "pr_feedback":
     case "pr_opened":
     case "pr_merged":
+    case "pr_updated":
       return event.prUrl;
     case "production_alert":
       return `${event.source}:${event.monitorId}`;
@@ -141,10 +149,51 @@ export function triggerMatchesEvent(
   event: RepoEvent,
 ): boolean {
   if (trigger === undefined || trigger.kind !== "event") return false;
-  if (trigger.event !== event.kind) return false;
+  if (!trigger.events.includes(event.kind)) return false;
   if (event.kind !== "issue_labeled") return true;
   const wanted = (trigger.label ?? DEFAULT_ISSUE_LABEL).trim().toLowerCase();
   return wanted === event.label.trim().toLowerCase();
+}
+
+type PrEvent = Extract<
+  RepoEvent,
+  { kind: "pr_opened" | "pr_merged" | "pr_updated" }
+>;
+
+function isPrEvent(event: RepoEvent): event is PrEvent {
+  return (
+    event.kind === "pr_opened" ||
+    event.kind === "pr_merged" ||
+    event.kind === "pr_updated"
+  );
+}
+
+/**
+ * The commit an Eva check run goes on. Only PR open, push and merge events
+ * have one; CI and review events belong to the presets, which post no check.
+ */
+export function prEventHeadSha(event: RepoEvent): string | undefined {
+  return isPrEvent(event) ? event.headSha : undefined;
+}
+
+/** The open PR branch a run works on and pushes to, or none (see `headBranch`). */
+export function prEventHeadBranch(event: RepoEvent): string | undefined {
+  return isPrEvent(event) && event.kind !== "pr_merged"
+    ? event.headBranch
+    : undefined;
+}
+
+/**
+ * The event with the newest head a queued run absorbed, so a burst of pushes
+ * describes the last commit, not the first.
+ */
+export function withLatestHead(
+  event: RepoEvent,
+  headSha: string | undefined,
+): RepoEvent {
+  return isPrEvent(event) && headSha !== undefined
+    ? { ...event, headSha }
+    : event;
 }
 
 /** Plain-text event block appended to a `run` automation's prompt. */
@@ -158,9 +207,11 @@ export function describeRepoEvent(event: RepoEvent): string {
     case "issue_labeled":
       return `Issue ${event.issueUrl} was labelled "${event.label}".\nTitle: ${event.title}\n\n${event.body}`;
     case "pr_opened":
-      return `PR opened: ${event.prUrl} — ${event.title}`;
+      return `PR opened: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
     case "pr_merged":
-      return `PR merged: ${event.prUrl} — ${event.title}`;
+      return `PR merged: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
+    case "pr_updated":
+      return `PR updated: ${event.prUrl} — ${event.title}\nHead commit: ${event.headSha}`;
     case "production_alert":
       return describeAlert(event);
   }
@@ -276,6 +327,11 @@ const pullRequestSchema = z.object({
     html_url: z.string(),
     title: z.string(),
     merged: z.boolean().nullable().catch(null),
+    head: z.object({
+      sha: z.string(),
+      ref: z.string(),
+      repo: z.object({ full_name: z.string() }).nullable().catch(null),
+    }),
   }),
   repository: repositorySchema,
   sender: senderSchema,
@@ -493,8 +549,15 @@ function parseRepoEventsOrThrow(
         prUrl: pr.html_url,
         prNumber: pr.number,
         title: pr.title,
+        headSha: pr.head.sha,
+        headBranch:
+          pr.head.repo?.full_name.toLowerCase() ===
+          `${repository.owner.login}/${repository.name}`.toLowerCase()
+            ? pr.head.ref
+            : undefined,
       };
       if (action === "opened") return [{ kind: "pr_opened", ...base }];
+      if (action === "synchronize") return [{ kind: "pr_updated", ...base }];
       if (action === "closed" && pr.merged === true) {
         return [{ kind: "pr_merged", ...base }];
       }

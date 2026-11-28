@@ -1,42 +1,26 @@
 import { v } from "convex/values";
-import {
-  closeTurn,
-  findOpenTurn,
-  settleAgentTurnCompletion,
-} from "../_chat/turnStore";
 import type { GenericDatabaseReader } from "convex/server";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-} from "../_generated/server";
+import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   automationRunFields,
   automationFindingValidator,
   findingTriageValidator,
   runStatusValidator,
-  completionCallbackArgs,
-  turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
-import { cancelTrackedWorkflow } from "../workflowManager";
 import { isTerminalRunStatus } from "./runStatus";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   gatherAccessibleRepos,
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
-import { automationAction, resolveAutomationDoc } from "./systemAutomations";
+import { automationAction } from "./systemAutomations";
 import { queueRunEmail } from "./email";
-import { taskCompleteEvent } from "../_taskWorkflow/events";
-import {
-  clearStreamingActivity,
-  recordCompletionLog,
-  sendCompletionEvent,
-} from "../_taskWorkflow/helpers";
 import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
-import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
+import { stopAgentJob } from "../_agentJobs/slot";
+import { syncCheckRunLater } from "./checkRun";
+import { postRunCommentLater } from "./prComment";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
 export const listRuns = authQuery({
@@ -203,6 +187,8 @@ export const updateRunStatus = internalMutation({
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);
+    await syncCheckRunLater(ctx, current);
+    if (args.status === "success") await postRunCommentLater(ctx, current);
 
     if (args.findings !== undefined && args.findings.length > 0) {
       await ctx.scheduler.runAfter(
@@ -284,7 +270,7 @@ export const clearRunWorkflow = internalMutation({
   },
 });
 
-/** Cancels an active automation run, stopping the workflow and cleaning up streaming state. */
+/** Cancels an active automation run: stops its job and marks it cancelled. */
 export const cancelRun = authMutation({
   args: { runId: v.id("automationRuns") },
   returns: v.null(),
@@ -292,108 +278,18 @@ export const cancelRun = authMutation({
     const { run } = await loadRunWithAccess(ctx.db, ctx.userId, args.runId);
     if (isTerminalRunStatus(run.status)) return null;
 
-    await cancelTrackedWorkflow(ctx, run.activeWorkflowId);
-
+    await stopAgentJob(
+      ctx,
+      { kind: "automation", id: args.runId },
+      run.activeWorkflowId,
+      { state: "cancelled" },
+    );
     await ctx.db.patch(args.runId, {
       status: "cancelled",
       finishedAt: Date.now(),
       activeWorkflowId: undefined,
     });
-
-    const turn = await findOpenTurn(ctx, args.runId);
-    if (turn) await closeTurn(ctx, turn, "cancelled");
-    const sandboxId = turn?.sandboxId ?? run.sandboxId;
-    if (sandboxId !== undefined) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId,
-        repoId: turn?.repoId ?? (await resolveSandboxRepoId(ctx.db, run.repoId)),
-      });
-    }
-
-    const streamingEntityId = automationRunStreamingEntityId(args.runId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-    if (streaming) await ctx.db.delete(streaming._id);
-
+    await syncCheckRunLater(ctx, run);
     return null;
   },
 });
-
-/** Receives sandbox completion callback and forwards the event to the active automation workflow. */
-export const handleCompletion = authMutation({
-  args: {
-    automationRunId: v.id("automationRuns"),
-    runId: v.optional(v.string()),
-    ...completionCallbackArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.automationRunId);
-    if (!run || !run.activeWorkflowId) return null;
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.automationRunId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(ctx, taskCompleteEvent, run.activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-    });
-
-    const automation = await ctx.db.get(run.automationId);
-    if (automation) {
-      await recordCompletionLog(ctx, {
-        entityType: "automation",
-        entityId: String(args.automationRunId),
-        entityTitle: resolveAutomationDoc(automation).title,
-        repoId: run.repoId,
-        rawResultEvent: args.rawResultEvent,
-      });
-    }
-
-    return null;
-  },
-});
-
-/**
- * Tears down an automation run whose agent stalled (the lease reconciler gave
- * up on it). Cancelling the workflow skips its `finally`, so the ephemeral
- * sandbox is deleted here too.
- */
-export async function tearDownStaleAutomationRun(
-  ctx: MutationCtx,
-  runId: Id<"automationRuns">,
-  workflowId: string,
-  sandbox: { sandboxId: string | undefined; repoId: Id<"githubRepos"> },
-  error: string,
-): Promise<void> {
-  const run = await ctx.db.get(runId);
-  if (!run || run.activeWorkflowId !== workflowId) return;
-
-  await cancelTrackedWorkflow(ctx, workflowId);
-  await ctx.db.patch(runId, {
-    status: "error",
-    error,
-    finishedAt: Date.now(),
-    activeWorkflowId: undefined,
-  });
-  await clearStreamingActivity(ctx, automationRunStreamingEntityId(runId));
-  if (sandbox.sandboxId !== undefined) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: sandbox.sandboxId,
-      repoId: sandbox.repoId,
-    });
-  }
-}

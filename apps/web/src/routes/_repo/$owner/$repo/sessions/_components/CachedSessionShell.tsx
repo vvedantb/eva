@@ -2,16 +2,17 @@
 
 import { useDeferredValue, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryState } from "nuqs";
-import { chatParser } from "@/lib/search-params";
 import { RepoProvider, RepoGate, useRepo } from "@/lib/contexts/RepoContext";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
 import { SessionDetailClient } from "../SessionDetailClient";
 import { useSessionRouteSandboxTab } from "../_utils/useSessionRouteSandboxTab";
 import { workspaceRootPath } from "@eva/shared";
-import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { HiddenSandboxTabRedirect } from "@/lib/components/sandbox/HiddenSandboxTabRedirect";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 
 interface CachedSessionShellProps {
   numId: string;
@@ -20,6 +21,14 @@ interface CachedSessionShellProps {
   isActiveRoute: boolean;
 }
 
+/**
+ * One kept-alive session detail tree. While `isActiveRoute` is false the shell
+ * keeps its DOM and state (parent uses a hidden `<Activity>`, so its effects
+ * are torn down) and freezes its sandbox tab and chat
+ * tab so the active session's URL does not rewrite sibling caches. Each shell
+ * carries its own passive RepoProvider so shells from other apps stay
+ * resolvable.
+ */
 export function CachedSessionShell({
   numId,
   owner,
@@ -49,6 +58,7 @@ function CachedSessionShellInner({
   const navigate = useNavigate();
   const { basePath, repoId } = useRepo();
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
   const deferredActive = useDeferredValue(isActiveRoute);
@@ -64,25 +74,10 @@ function CachedSessionShellInner({
   }, [isActiveRoute, urlSandboxTab]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
-  const [urlChat] = useQueryState("chat", chatParser);
-  const [chatNumber, setChatNumber] = useState(urlChat);
-  if (isActiveRoute && chatNumber !== urlChat) {
-    setChatNumber(urlChat);
-  }
-  const onChatChange = (number: number | null) => {
-    void navigate({
-      to: ".",
-      search: (prev) => ({
-        ...prev,
-        chat: number === null || number === 1 ? undefined : number,
-      }),
-    });
-  };
-
   const sessionParams = { owner, repo: repoParam, numId };
 
   const openFile = (path: string) => {
-    if (simpleView) return;
+    if (isHiddenTab("files")) return;
     const filesRoot = workspaceRootPath(path) ?? undefined;
     void navigate({
       to: "/$owner/$repo/sessions/$numId/$sandboxTab",
@@ -121,10 +116,8 @@ function CachedSessionShellInner({
 
   return (
     <>
-      {/* Only the visible shell may redirect — a hidden shell firing Navigate
-          would hijack the active session's URL. */}
       {isActiveRoute ? (
-        <SimpleViewSandboxRedirect
+        <HiddenSandboxTabRedirect
           activeTab={sandboxTab}
           to="/$owner/$repo/sessions/$numId/$sandboxTab"
           params={{ owner, repo: repoParam, numId }}
@@ -138,8 +131,6 @@ function CachedSessionShellInner({
         {(sessionDoc) => (
           <SessionDetailClient
             sessionId={sessionDoc._id}
-            chatNumber={chatNumber}
-            onChatChange={onChatChange}
             activeSandboxTab={sandboxTab}
             onSandboxTabChange={onSandboxTabChange}
             onOpenFile={openFile}

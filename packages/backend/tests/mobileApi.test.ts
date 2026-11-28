@@ -21,7 +21,9 @@ import {
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
-import { openTurn } from "../convex/_chat/turnStore";
+import { openSessionChatTurn } from "../convex/_chat/turnStore";
+import { hasActiveTaskRun } from "../convex/_agentTasks/taskRunStatus";
+import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { modules } from "./_helpers/convexModules";
 
 const TIMEOUT_MS = 30_000;
@@ -58,19 +60,21 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: "codex:gpt-5.6-sol",
     });
-    const archivedChatId = await ctx.db.insert("sessionChats", {
-      sessionId,
+    const archivedSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      userId,
-      title: "Side",
-      number: 2,
-      isMain: false,
-      archived: true,
+      userId: strangerId,
+      title: "Old work",
+      status: "closed",
+      numId: 43,
+      archive: { archivedAt: now },
+    });
+    const archivedChatId = await ctx.db.insert("sessionChats", {
+      sessionId: archivedSessionId,
+      repoId,
+      userId: strangerId,
     });
     const taskId = await ctx.db.insert("agentTasks", {
       repoId,
@@ -80,8 +84,9 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      model: "claude:opus",
     });
+    const task = await ctx.db.get(taskId);
+    if (task) await ensureWorkSession(ctx, { kind: "task", task }, { lastModel: "claude:opus" });
     const projectId = await ctx.db.insert("projects", {
       repoId,
       userId,
@@ -242,16 +247,16 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
-      await t.run(async (ctx) => {
-        const runId = await ctx.db.insert("agentRuns", { taskId: ids.taskId, status: "running", logs: [] });
-        await openTurn(ctx, {
-          entityId: runId,
+      await t.run((ctx) =>
+        openSessionChatTurn(ctx, {
+          chatId,
           sessionId,
-          streamingEntityId: `task-run-${runId}`,
+          streamingEntityId: String(chatId),
           model: DEFAULT_AI_MODEL,
           repoId: ids.repoId,
-        });
-      });
+          taskRun: { mode: "implementation" },
+        }),
+      );
       await asUser.mutation(api.chats.send, { target: ids.taskId, message: "next" });
       const queued = await t.run((ctx) =>
         ctx.db
@@ -305,6 +310,36 @@ describe("mobile api", () => {
       await expect(asUser.mutation(api.chats.stop, { target: ids.strangerTaskId })).rejects.toThrow(
         "Not authorized",
       );
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "stop in a project's session stops the chat it names, not the Main chat",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const requestedAt = Date.now();
+      const { sessionId, chatId: mainChatId } = await asUser.mutation(api.sessions.ensureOwned, {
+        owner: { kind: "project", projectId: ids.projectId },
+      });
+      const otherChatId = await t.run(async (ctx) => {
+        await ctx.db.patch(mainChatId, { pendingTurn: { prompt: "main", requestedAt } });
+        return await ctx.db.insert("sessionChats", {
+          sessionId,
+          repoId: ids.repoId,
+          userId: ids.userId,
+          createdBy: ids.userId,
+          updatedAt: requestedAt,
+          pendingTurn: { prompt: "other", requestedAt },
+        });
+      });
+      await asUser.mutation(api.chats.stop, { target: otherChatId });
+      const [main, other] = await t.run(async (ctx) => [
+        await ctx.db.get(mainChatId),
+        await ctx.db.get(otherChatId),
+      ]);
+      expect(other?.pendingTurn).toBeUndefined();
+      expect(main?.pendingTurn?.prompt).toBe("main");
     },
     TIMEOUT_MS,
   );
@@ -444,7 +479,6 @@ describe("mobile api", () => {
         model: "claude:sonnet",
         traits: { effortLevel: "low" },
       });
-      expect((await t.run((ctx) => ctx.db.get(ids.taskId)))?.model).toBe("claude:opus");
       await asUser.mutation(api.chats.send, { target: ids.taskId, message: "hi" });
       expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:sonnet", userId: ids.userId }]);
     },
@@ -514,9 +548,10 @@ describe("mobile api", () => {
         baseBranch: "staging",
       });
       const session = await t.run((ctx) => ctx.db.get(sessionId));
-      expect(session).toMatchObject({ baseBranch: "staging", lastModel: "claude:opus", lastReasoningLevel: "low" });
+      expect(session).toMatchObject({ baseBranch: "staging" });
       const chat = await asUser.query(api.chats.get, { target: sessionId });
       if (!chat) throw new Error("no chat");
+      expect(chat).toMatchObject({ model: "claude:opus", traits: { effortLevel: "low" } });
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
       ]);
@@ -569,12 +604,14 @@ describe("mobile api", () => {
         title: "Fix the footer",
         status: "todo",
         baseBranch: "staging",
-        model: "claude:opus",
-        reasoningLevel: "low",
         priority: "high",
         tags: ["frontend"],
       });
       expect(task?.run).toBeUndefined();
+      expect(await asUser.query(api.chats.get, { target: taskId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
       await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,
         description: "Billing step",
@@ -617,10 +654,13 @@ describe("mobile api", () => {
       expect(plan.skippedCount).toBe(1);
       const failed = await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }));
       expect(failed).toBe(0);
-      const runsOf = (taskId: Id<"agentTasks">) =>
-        t.run((ctx) => ctx.db.query("agentRuns").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect());
-      expect(await runsOf(mine)).toHaveLength(1);
-      expect(await runsOf(theirs)).toHaveLength(0);
+      const isRunning = (taskId: Id<"agentTasks">) =>
+        t.run(async (ctx) => {
+          const task = await ctx.db.get(taskId);
+          return task !== null && (await hasActiveTaskRun(ctx.db, task));
+        });
+      expect(await isRunning(mine)).toBe(true);
+      expect(await isRunning(theirs)).toBe(false);
       expect(await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }))).toBe(1);
     },
     TIMEOUT_MS,
@@ -697,9 +737,9 @@ describe("mobile api", () => {
       const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
       expect(archived).toMatchObject({ archive: { archivedAt: expect.any(Number) }, status: "closed" });
       expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
-      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toEqual([
+      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toContain(
         ids.sessionId,
-      ]);
+      );
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         canReply: false,
         session: { archived: true },

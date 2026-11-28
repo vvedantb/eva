@@ -2,17 +2,6 @@ import type { CSSProperties } from 'react'
 import { BrandMark, Avatar, Bar, Collapse, Stage, Window, type Act, type Layout } from '../../kit'
 import './docs.css'
 
-// Google Docs: comment on a sentence, get a reply.
-// Context: a planning doc is open, a collaborator is in it too.
-// 1. The writer drag-selects one sentence; the margin buttons appear beside it.
-// 2. Add comment: the sentence turns yellow and a comment box opens in the margin.
-// 3. They type the comment and post it; the box settles into a comment card.
-// 4. Priya's reply lands in the thread.
-// 5. They resolve the thread: the card and the highlight leave, the doc is as it began.
-//
-// Real strings: the doc title, the one paragraph, the comment, the reply, the
-// two names, the menu bar and the comment buttons. The rest is placeholder.
-
 const LEAD = 'Beta opens to the waitlist in October. '
 const SENTENCE = 'The public launch is planned for November 12, alongside the new pricing page.'
 const PARA = LEAD + SENTENCE
@@ -41,7 +30,6 @@ async function script(a: Act<S>) {
   a.mark('start')
   await a.wait(900)
 
-  // 1. Select the sentence
   const s0 = a.rect('sent-start')
   const e0 = a.rect('sent-end')
   await a.move({ x: s0.x + 1, y: s0.y + s0.height / 2 })
@@ -54,20 +42,17 @@ async function script(a: Act<S>) {
   await a.set({ margin: true })
   await a.wait(450)
 
-  // 2. Add a comment from the margin
   await a.move('add-comment')
   await a.wait(250)
   a.mark('compose')
   await a.click()
   await a.set({ margin: false, hl: 'comment', card: 'compose' })
   await a.wait(350)
-  // Step out of the way of the box while typing
   await a.move('rest-type')
   await a.wait(150)
   await a.type('draft', COMMENT, { interval: 42 })
   await a.wait(400)
 
-  // 3. Post it
   a.mark('post')
   await a.click({ at: 'post', x: 0.9, y: 0.82 })
   await a.set({ card: 'posted' })
@@ -75,12 +60,10 @@ async function script(a: Act<S>) {
   await a.move('rest-read')
   await a.wait(1200)
 
-  // 4. The collaborator replies
   a.mark('reply')
   await a.set({ reply: true })
   await a.wait(2600)
 
-  // 5. Resolve the thread: a caused reset back to the opening frame
   a.mark('resolve')
   await a.click({ at: 'resolve', x: 0.5, y: 0.5 })
   await a.set({ card: 'resolved', hl: 'none' })
@@ -112,8 +95,6 @@ function Docs({ s, rect, layout }: { s: S; rect: (n: string) => { x: number; y: 
   const canvas = rect('canvas')
   const anchor = rect('sent-start')
   const end = rect('sent-end')
-  // Wide: the card sits in the margin beside the sentence. Compact: there is no
-  // margin, so it floats over the page just under the sentence, as Docs does when narrow.
   const cardTop = compact ? end.y - canvas.y + end.height + 14 : anchor.y - canvas.y - 10
   const marginTop = end.y - canvas.y + end.height / 2 - 52
   const posted = s.card === 'posted' || s.card === 'resolved'
@@ -132,7 +113,6 @@ function Docs({ s, rect, layout }: { s: S; rect: (n: string) => { x: number; y: 
           <div className="gd-h1">Q4 launch plan</div>
           <p className="gd-para" data-target="para" data-cursor="ibeam">
             {PARA.slice(0, START)}
-            {/* Keep a wrapped selection moving forward: its compact anchor starts a line. */}
             {compact && <br />}
             <span data-target="sent-start" className="gd-anchor" />
             <span className="gd-sel" data-hl={s.hl}>
@@ -160,7 +140,6 @@ function Docs({ s, rect, layout }: { s: S; rect: (n: string) => { x: number; y: 
           </div>
         </div>
 
-        {/* The margin buttons beside a selection: comment, react, suggest */}
         <div className="gd-margin" data-show={s.margin || undefined} style={{ top: marginTop }}>
           <span className="gd-margin__btn" data-target="add-comment">
             <Sym n="add_comment" size={18} />
@@ -226,7 +205,6 @@ function Docs({ s, rect, layout }: { s: S; rect: (n: string) => { x: number; y: 
           </Collapse>
         </div>
 
-        {/* Where the cursor waits while the keys do the work */}
         <span className="gd-rest" data-target="rest-type" style={{ left: compact ? 60 : 470, top: Math.max(0, cardTop + (compact ? 120 : 150)) }} />
         <span className="gd-rest" data-target="rest-read" style={{ left: compact ? 70 : 440, top: Math.max(0, cardTop + (compact ? 170 : 210)) }} />
       </div>
@@ -320,8 +298,6 @@ function Sym({ n, size = 20, style }: { n: keyof typeof P; size?: number; style?
   )
 }
 
-// Material Symbols (Outlined, weight 400), Google's own icon set for Docs.
-// Path data from @material-symbols/svg-400, Apache 2.0. viewBox 0 -960 960 960.
 const P = {
   'add_comment': 'M450-400h60v-130h130v-60H510v-130h-60v130H320v60h130v130ZM80-80v-740q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H240L80-80Zm134-220h606v-520H140v600l74-80Zm-74 0v-520 520Z',
   'add_photo_alternate': 'M480-480ZM180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h365v60H180v600h600v-365h60v365q0 24-18 42t-42 18H180Zm60-162h480L576-474 449-307l-94-124-115 149Zm453-323v-87h-88v-60h88v-88h60v88h87v60h-87v87h-60Z',

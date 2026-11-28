@@ -4,6 +4,7 @@ import {
   aiModelValidator,
   automationFields,
   automationTriggerValidator,
+  reasoningLevelValidator,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible } from "../numId";
@@ -15,12 +16,18 @@ import {
   resolveAutomationRepoId,
 } from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
+import { assertProviderAccountUsableBy } from "../_userProviderAccounts/defaults";
 import { CHANGELOG_AUTOMATION_TITLE } from "../_changelog/entry";
 import {
   automationCronspec,
   getSystemAutomation,
   resolveAutomationDoc,
 } from "./systemAutomations";
+import {
+  USER_REPO_EVENTS,
+  type AutomationTrigger,
+  type RepoEventKind,
+} from "../_automationEvents/labels";
 
 const automationDoc = v.object({
   _id: v.id("automations"),
@@ -127,6 +134,23 @@ export const create = authMutation({
   },
 });
 
+function sameEvents(
+  a: ReadonlyArray<RepoEventKind>,
+  b: ReadonlyArray<RepoEventKind>,
+): boolean {
+  return a.length === b.length && a.every((event) => b.includes(event));
+}
+
+function assertUserTrigger(trigger: AutomationTrigger): void {
+  if (trigger.kind !== "event") return;
+  if (trigger.events.length === 0) {
+    throw new Error("Switch on at least one event");
+  }
+  if (!trigger.events.every((event) => USER_REPO_EVENTS.includes(event))) {
+    throw new Error("That event is only for Eva's built-in automations");
+  }
+}
+
 /** Updates automation fields and syncs the cron schedule (re-registers or deletes as needed). */
 export const update = authMutation({
   args: {
@@ -137,6 +161,13 @@ export const update = authMutation({
     cronSchedule: v.optional(v.string()),
     trigger: v.optional(automationTriggerValidator),
     model: v.optional(aiModelValidator),
+    providerAccountId: v.optional(
+      v.union(v.id("userProviderAccounts"), v.null()),
+    ),
+    reasoningLevel: v.optional(reasoningLevelValidator),
+    thinkingEnabled: v.optional(v.boolean()),
+    use1mContext: v.optional(v.boolean()),
+    fastMode: v.optional(v.boolean()),
     enabled: v.optional(v.boolean()),
     readOnly: v.optional(v.boolean()),
     actionsEnabled: v.optional(v.boolean()),
@@ -172,10 +203,12 @@ export const update = authMutation({
           catalogTrigger.kind !== args.trigger.kind ||
           (catalogTrigger.kind === "event" &&
             args.trigger.kind === "event" &&
-            catalogTrigger.event !== args.trigger.event))
+            !sameEvents(catalogTrigger.events, args.trigger.events)))
       ) {
         throw new Error("A system automation's trigger is managed by eva");
       }
+    } else if (args.trigger !== undefined) {
+      assertUserTrigger(args.trigger);
     }
 
     if (args.title !== undefined && args.title !== automation.title) {
@@ -188,6 +221,19 @@ export const update = authMutation({
     if (args.cronSchedule !== undefined) patch.cronSchedule = args.cronSchedule;
     if (args.trigger !== undefined) patch.trigger = args.trigger;
     if (args.model !== undefined) patch.model = args.model;
+    if (args.reasoningLevel !== undefined)
+      patch.reasoningLevel = args.reasoningLevel;
+    if (args.thinkingEnabled !== undefined)
+      patch.thinkingEnabled = args.thinkingEnabled;
+    if (args.use1mContext !== undefined) patch.use1mContext = args.use1mContext;
+    if (args.fastMode !== undefined) patch.fastMode = args.fastMode;
+    if (args.providerAccountId !== undefined) {
+      patch.providerAccountId = await assertProviderAccountUsableBy(
+        ctx.db,
+        args.providerAccountId,
+        automation.createdBy,
+      );
+    }
     if (args.enabled !== undefined) patch.enabled = args.enabled;
     if (args.readOnly !== undefined) patch.readOnly = args.readOnly;
     if (args.actionsEnabled !== undefined)

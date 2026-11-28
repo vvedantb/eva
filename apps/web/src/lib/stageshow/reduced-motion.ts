@@ -1,6 +1,5 @@
 import { createContext, useContext } from 'react'
 
-// Static stages settle motion parts too.
 export const StillContext = createContext(false)
 
 /**

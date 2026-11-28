@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
+import { isSandboxNetworkIssue } from "../convex/_sandbox/networkIssue";
 import {
-  isSandboxNetworkIssue,
   isUsageLimitError,
   parseUsageLimitResetTime,
-} from "../convex/_taskWorkflow/recovery";
+} from "../convex/_queues/usageLimitReset";
 
 test("isSandboxNetworkIssue requires sandbox/snapshot marker plus network/status", () => {
   expect(isSandboxNetworkIssue("Sandbox timed out: status code 503")).toBe(

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -333,7 +332,7 @@ const SPLIT_PY = [
   "            continue",
   "        doc = json.loads(line)",
   "        out.append(json.dumps(doc, ensure_ascii=False) if settle(table, doc) else line)",
-  "    return ('\\n'.join(out) + '\\n').encode('utf-8')",
+  "    return ('\\n'.join(out) + '\\n').encode('utf-8') if out else b''",
   "root_tmp = src + '.root'",
   "buckets = {}",
   "stats = {'component': 0, 'storage': 0, 'root': 0}",
@@ -548,9 +547,9 @@ if (values["include-env"]) {
 
 if (values["sandbox-env"]) {
   const rules = loadSandboxEnv(appDir);
-  const { values: env, missing } = await resolveSandboxEnv(
-    rules,
-    readSourceEnv,
+  const sourceNames = listEnvNames(`env list ${sourceName}`, [], sourceAuth);
+  const { values: env, missing } = await resolveSandboxEnv(rules, (name) =>
+    sourceNames.includes(name) ? readSourceEnv(name) : undefined,
   );
   for (const [name, value] of env) setTargetEnv(name, value);
   const stale = listEnvNames(
@@ -564,11 +563,7 @@ if (values["sandbox-env"]) {
       ...targetAuth,
     });
   }
-  const unlisted = listEnvNames(
-    `env list ${sourceName}`,
-    [],
-    sourceAuth,
-  ).filter((name) => !Object.hasOwn(rules, name));
+  const unlisted = sourceNames.filter((name) => !Object.hasOwn(rules, name));
   console.log(
     `\nSet ${env.size} sandbox env var(s): ${[...env.keys()].join(", ")}`,
   );
@@ -626,18 +621,32 @@ for (const python of ["python3", "python"]) {
 if (!emptied) {
   fail("python3 or python is required to build the empty snapshot.");
 }
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", emptyZip], {
-  label: `empty ${target.name}`,
-  secrets: [target.adminKey],
-});
+function importReplacingAll(zip, label) {
+  const args = ["import", ...targetFlags, "--replace-all", "--yes", zip];
+  for (let attempt = 1; attempt < 3; attempt++) {
+    if (
+      runConvex(args, {
+        label,
+        secrets: [target.adminKey],
+        allowFailure: true,
+      }) !== null
+    ) {
+      return;
+    }
+    console.log(
+      `\n[${label}] failed; retrying in 15s (attempt ${attempt + 1} of 3)`,
+    );
+    spawnSync("sleep", ["15"]);
+  }
+  runConvex(args, { label: `${label} (last try)`, secrets: [target.adminKey] });
+}
+
+importReplacingAll(emptyZip, `empty ${target.name}`);
 rmSync(emptyZip, { force: true });
 
 installComponents();
 
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
-  label: `import into ${target.name}`,
-  secrets: [target.adminKey],
-});
+importReplacingAll(zipPath, `import into ${target.name}`);
 
 for (const component of componentZips) {
   const args = [

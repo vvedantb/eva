@@ -82,9 +82,6 @@ export function AnnotationCommentCard({
     >
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
         <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          {/* The identity chips double as the disclosure: the reader already
-              reads them to check they hit the right element, so there is no
-              second control to explain. */}
           <CollapsibleTrigger className="motion-press flex min-w-0 shrink-0 items-center gap-1.5 active:scale-[0.98] [&[data-state=open]>svg]:rotate-90">
             <IconChevronRight
               size={13}
@@ -100,8 +97,6 @@ export function AnnotationCommentCard({
               </span>
             ) : null}
           </CollapsibleTrigger>
-          {/* Outside the trigger: it is the widest, most compressible part of
-              the row, and it should give up its space before the chips do. */}
           {previewText ? (
             <span className="min-w-0 truncate italic">{previewText}</span>
           ) : null}
@@ -117,9 +112,6 @@ export function AnnotationCommentCard({
           <div className="mb-2 space-y-2">
             <CodeBlock code={prettyHtml} language="html" className="text-xs">
               <CodeBlockCopyButton />
-              {/* Scroll on the `pre`, not on the CodeBlock wrapper: the copy
-                  button anchors to the wrapper, and a scrolling wrapper would
-                  carry it out of view on the first drag. */}
               <pre className="max-h-40 overflow-auto p-3 text-xs">
                 <code>{prettyHtml}</code>
               </pre>

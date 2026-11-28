@@ -48,18 +48,11 @@ export interface IdleThresholds {
   afterInteractionMs: number;
 }
 
-/**
- * Shape of the optional idle fields on the `appSettings` row. The two
- * `sandboxIdleStop*` fields belong to the earlier idle-stop sweep; they are
- * read only when the newer `sandboxIdlePause*` fields were never saved, so a
- * row configured before the sweeps were unified keeps its behaviour.
- */
+/** Shape of the optional idle fields on the `appSettings` row. */
 export interface IdleSettingsSource {
   sandboxIdlePauseMode?: SandboxIdlePauseMode;
   sandboxIdleAfterAgentMinutes?: number;
   sandboxIdleAfterInteractionMinutes?: number;
-  sandboxIdleStopEnabled?: boolean;
-  sandboxIdleStopMinutes?: number;
 }
 
 const MINUTE_MS = 60_000;
@@ -73,18 +66,16 @@ function clampMinutes(value: number | undefined, fallback: number): number {
 export function resolveIdleThresholds(
   doc: IdleSettingsSource | null | undefined,
 ): IdleThresholds {
-  const legacyMode: SandboxIdlePauseMode =
-    doc?.sandboxIdleStopEnabled === false ? "off" : IDLE_PAUSE_DEFAULTS.mode;
   const afterAgentMinutes = clampMinutes(
     doc?.sandboxIdleAfterAgentMinutes,
     IDLE_PAUSE_DEFAULTS.afterAgentMinutes,
   );
   const afterInteractionMinutes = clampMinutes(
-    doc?.sandboxIdleAfterInteractionMinutes ?? doc?.sandboxIdleStopMinutes,
+    doc?.sandboxIdleAfterInteractionMinutes,
     IDLE_PAUSE_DEFAULTS.afterInteractionMinutes,
   );
   return {
-    mode: doc?.sandboxIdlePauseMode ?? legacyMode,
+    mode: doc?.sandboxIdlePauseMode ?? IDLE_PAUSE_DEFAULTS.mode,
     afterAgentMs: afterAgentMinutes * MINUTE_MS,
     afterInteractionMs: afterInteractionMinutes * MINUTE_MS,
   };

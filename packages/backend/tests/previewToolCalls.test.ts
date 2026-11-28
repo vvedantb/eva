@@ -14,7 +14,6 @@ import {
 } from "../convex/_mcp/previewTools";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|preview-tool-calls";
 
@@ -39,9 +38,6 @@ async function fixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     return { sessionId, chatId };
   });
@@ -96,24 +92,12 @@ describe("previewToolCalls relay", () => {
   );
 
   test(
-    "the session-wide preview pane sees calls filed under any of its chats",
+    "the session-wide preview pane sees calls filed under its chat",
     async () => {
       const f = await fixture();
-      const sideChatId = await f.t.run(async (ctx) => {
-        const session = await ctx.db.get(f.sessionId);
-        if (!session) throw new Error("fixture: session missing");
-        return await ctx.db.insert("sessionChats", {
-          sessionId: f.sessionId,
-          repoId: session.repoId,
-          userId: session.userId,
-          title: "Side",
-          number: 2,
-          isMain: false,
-        });
-      });
       const sideCallId = await f.t.mutation(internal.previewToolCalls.create, {
         entityKind: "session",
-        entityId: sideChatId,
+        entityId: f.chatId,
         kind: "list",
       });
       const pending = await f.asUser.query(api.previewToolCalls.listPending, {

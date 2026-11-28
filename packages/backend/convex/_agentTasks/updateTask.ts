@@ -1,21 +1,13 @@
 import { v, type ObjectType } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { aiModelValidator, priorityValidator } from "../validators";
+import { priorityValidator } from "../validators";
 import { createNotification } from "../notifications";
 import { ensureSubscribed } from "../taskSubscribers";
 import { logTaskActivity } from "../taskActivity";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import {
-  assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
-} from "../_userProviderAccounts/defaults";
-import {
-  normalizeTaskTags,
-  buildTaskNotificationMessage,
-  runTraitFields,
-} from "./helpers";
+import { normalizeTaskTags, buildTaskNotificationMessage } from "./helpers";
 
 /** Args for `agentTasks.update`. */
 export const updateTaskArgs = {
@@ -27,11 +19,6 @@ export const updateTaskArgs = {
   tags: v.optional(v.array(v.string())),
   taskNumber: v.optional(v.number()),
   assignedTo: v.optional(v.union(v.id("users"), v.null())),
-  model: v.optional(aiModelValidator),
-  providerAccountId: v.optional(
-    v.union(v.id("userProviderAccounts"), v.null()),
-  ),
-  ...runTraitFields,
   baseBranch: v.optional(v.string()),
   priority: v.optional(v.union(priorityValidator, v.null())),
 };
@@ -51,7 +38,7 @@ export function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
   return max;
 }
 
-/** Builds the patch for `update`. Reads only; throws on a bad provider account. */
+/** Builds the patch for `update`. Reads only. The model lives on the task's chat. */
 export async function buildTaskUpdates(
   ctx: AuthMutationCtx,
   task: Doc<"agentTasks">,
@@ -60,7 +47,6 @@ export async function buildTaskUpdates(
   const updates: TaskUpdates = { updatedAt: Date.now() };
   await applyProjectUpdate(ctx, task, args, updates);
   applyPlainFieldUpdates(args, updates);
-  await applyProviderAccountUpdate(ctx, task, args, updates);
   return updates;
 }
 
@@ -93,50 +79,9 @@ function applyPlainFieldUpdates(
   if (args.taskNumber !== undefined) updates.taskNumber = args.taskNumber;
   if (args.assignedTo !== undefined)
     updates.assignedTo = args.assignedTo ?? undefined;
-  if (args.model !== undefined) updates.model = args.model;
-  if (args.reasoningLevel !== undefined)
-    updates.reasoningLevel = args.reasoningLevel;
-  if (args.thinkingEnabled !== undefined)
-    updates.thinkingEnabled = args.thinkingEnabled;
-  if (args.use1mContext !== undefined)
-    updates.use1mContext = args.use1mContext;
-  if (args.fastMode !== undefined) updates.fastMode = args.fastMode;
   if (args.baseBranch !== undefined) updates.baseBranch = args.baseBranch;
   if (args.priority !== undefined)
     updates.priority = args.priority ?? undefined;
-}
-
-async function applyProviderAccountUpdate(
-  ctx: AuthMutationCtx,
-  task: Doc<"agentTasks">,
-  args: UpdateTaskArgs,
-  updates: TaskUpdates,
-): Promise<void> {
-  let nextProviderAccountId = task.providerAccountId;
-  if (args.providerAccountId !== undefined) {
-    if (ctx.userId !== task.createdBy) {
-      throw new Error("Only the task owner can change the provider account");
-    }
-    nextProviderAccountId = await assertProviderAccountUsableBy(
-      ctx.db,
-      args.providerAccountId,
-      task.createdBy,
-    );
-    updates.providerAccountId = nextProviderAccountId;
-  }
-  if (
-    args.model !== undefined &&
-    args.providerAccountId === undefined &&
-    ctx.userId === task.createdBy
-  ) {
-    nextProviderAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      task.createdBy,
-      args.model,
-      nextProviderAccountId,
-    );
-    updates.providerAccountId = nextProviderAccountId;
-  }
 }
 
 /** Logs one activity entry per changed field, in a fixed field order. */
@@ -147,7 +92,7 @@ export async function logTaskUpdateActivity(
 ): Promise<void> {
   await logTitleChange(ctx, task, args);
   await logDetailChanges(ctx, task, args);
-  await logTagsModelBranchChanges(ctx, task, args);
+  await logTagsBranchChanges(ctx, task, args);
 }
 
 async function logTitleChange(
@@ -236,7 +181,7 @@ async function logDetailChanges(
   }
 }
 
-async function logTagsModelBranchChanges(
+async function logTagsBranchChanges(
   ctx: AuthMutationCtx,
   task: Doc<"agentTasks">,
   args: UpdateTaskArgs,
@@ -255,16 +200,6 @@ async function logTagsModelBranchChanges(
         newTags || undefined,
       );
     }
-  }
-  if (args.model !== undefined && args.model !== task.model) {
-    await logTaskActivity(
-      ctx,
-      args.id,
-      ctx.userId,
-      "model",
-      task.model,
-      args.model,
-    );
   }
   if (args.baseBranch !== undefined && args.baseBranch !== task.baseBranch) {
     await logTaskActivity(

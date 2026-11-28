@@ -26,10 +26,7 @@ export function SystemSkillRow({
 
   return (
     <>
-      {/* A row inside the skills list section, so the section owns the border. */}
       <div className="px-4 py-3 transition-colors hover:bg-muted/40">
-        {/* Stacks below `sm`: "View contents" + Install is ~200px, which leaves
-            no room for the skill name on a phone. */}
         <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0 max-sm:max-w-full">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -53,8 +50,6 @@ export function SystemSkillRow({
               <IconFileText size={14} />
               View contents
             </Button>
-            {/* Eva needs these on every repo (the "Set up with Eva" button runs
-                eva-setup), so there is nothing to toggle. */}
             {!skill.alwaysInstalled ? (
               <Button
                 type="button"

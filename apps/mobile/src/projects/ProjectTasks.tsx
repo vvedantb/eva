@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
+import { repoDisplayLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   PROJECT_TASK_DISPLAY_STATUS_LABELS,
@@ -8,16 +8,13 @@ import {
   projectTaskPullRequests,
   projectTaskStatusSections,
   projectTaskSummaryLine,
-  unapprovedTodoTaskIds,
   type ProjectTaskView,
 } from "@eva/shared/projectView";
 import { IconLayoutList, IconPlus } from "@tabler/icons-react-native";
 import { Button, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
-import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { Pressable, SectionList, Text, View } from "react-native";
 import { ProjectProgress } from "@/projects/ProjectProgress";
 import { ProjectTaskPrRow, ProjectTaskRow } from "@/projects/ProjectTaskRow";
@@ -40,14 +37,13 @@ const PULL_REQUESTS = "pull_requests";
 /**
  * The web project Tasks panel at phone width: a thin progress bar and the
  * counts as one muted line, then a collapsible group per display status
- * that has tasks, Triage, Working, Blocked, Idle, Archived
+ * that has tasks, Needs you, Working, Idle, Archived
  * (`projectTaskStatusSections`; Archived starts folded, and holds the tasks
  * archived on their own, whose menu offers Unarchive), and the tasks'
  * Pull requests. Rows are flat (`ProjectTaskRow`, `ProjectTaskPrRow`).
- * Triage carries "Approve all" (every todo task nobody approved yet). The
- * first group carries "+" (a new task, to Triage unless "Start now"), or the
- * empty state does when there are no tasks. An archived project's list is
- * read-only: no "+", no "Approve all", no Reject / Approve, no row menu.
+ * The first group carries "+" (New task: Eva's chat, as the web "+"; work
+ * goes in through her chat), or the empty state does when there are no
+ * tasks. An archived project's list is read-only: no "+", no row menu.
  */
 export function ProjectTasks({
   project,
@@ -70,19 +66,8 @@ export function ProjectTasks({
   const notesByTask = useProjectTaskNotes(project._id);
   const archivedTasks = useQuery(api.agentTasks.listByProject, { projectId: project._id, archived: true });
   const actions = useQuickTaskActions({ repo, users, projects });
-  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
-  const [approving, setApproving] = useState(false);
   const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
   const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds, archivedTasks ?? []);
-  const authorIds = [
-    ...new Set(
-      (sections.find((section) => section.status === "triage")?.tasks ?? []).flatMap(({ row }) =>
-        row.createdBy !== undefined ? [row.createdBy] : [],
-      ),
-    ),
-  ];
-  const authors = useQuery(api.users.getMany, authorIds.length > 0 ? { ids: authorIds } : "skip");
-  const authorNames = firstNameByUserId(authors ?? []);
 
   if (tasks === undefined) {
     return (
@@ -95,10 +80,8 @@ export function ProjectTasks({
     );
   }
   const live = project.archivedAt === undefined;
-  const openNewTask = () =>
-    router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
+  const openNewTask = () => router.push({ pathname: "/chat/[target]", params: { target: project._id } });
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
-  const toApprove = unapprovedTodoTaskIds(tasks);
   const numIdById = new Map([...tasks, ...(archivedTasks ?? [])].map((task) => [String(task._id), task.numId]));
   const pullRequests = projectTaskPullRequests(tasks);
   const status = projectStatusFromRows(tasks, failedTaskIds);
@@ -119,20 +102,9 @@ export function ProjectTasks({
     return projectTaskSummaryLine(row, view, {
       notes: notesByTask.get(row._id),
       failed: failedTaskIds.has(row._id),
-      authorName: row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined,
       otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
       numIdOf: (taskId) => numIdById.get(taskId),
     });
-  };
-
-  const approveAll = () => {
-    setApproving(true);
-    approveTasks({ projectId: project._id, taskIds: toApprove })
-      .then(
-        () => toast.success(toApprove.length === 1 ? "Task approved" : "Tasks approved"),
-        () => toast.error("Couldn't approve the tasks"),
-      )
-      .then(() => setApproving(false));
   };
 
   return (
@@ -167,23 +139,16 @@ export function ProjectTasks({
               open={section.open}
               onToggle={() => toggle(section.key)}
               trailing={
-                live && (section.first || section.key === "triage") ? (
+                live && section.first ? (
                   <View className="mr-1 flex-row items-center gap-1">
-                    {section.key === "triage" && toApprove.length > 0 ? (
-                      <Button size="sm" variant="ghost" fullWidth={false} loading={approving} disabled={approving} onPress={approveAll}>
-                        Approve all
-                      </Button>
-                    ) : null}
-                    {section.first ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New task"
-                        onPress={openNewTask}
-                        className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-                      >
-                        <IconPlus size={14} color={muted} />
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="New task"
+                      onPress={openNewTask}
+                      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
+                    >
+                      <IconPlus size={14} color={muted} />
+                    </Pressable>
                   </View>
                 ) : undefined
               }
@@ -198,8 +163,6 @@ export function ProjectTasks({
               task={item.row}
               view={item.view}
               line={lineFor(item.row, item.view)}
-              projectId={project._id}
-              readOnly={!live}
               onLongPress={live ? () => actions.openSheet(item.row) : undefined}
             />
           )

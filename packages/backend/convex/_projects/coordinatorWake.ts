@@ -9,7 +9,7 @@ type WakeReason = Doc<"projectCoordinatorWakes">["reason"];
 
 /**
  * Asks for a coordinator turn for one reason. Idempotent by `key`: a second
- * request with the same key does nothing. An ask or a Triage handoff is
+ * request with the same key does nothing. An ask or a handoff is
  * delivered at once; a failure or a finished batch waits for the batch window.
  */
 export async function requestCoordinatorWake(

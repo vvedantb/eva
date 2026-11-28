@@ -1,8 +1,10 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { cancelTrackedWorkflow } from "../workflowManager";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "./chatResult";
 import {
   closeOpenTurn,
@@ -13,7 +15,7 @@ import {
 const CANCELLED_BY_USER = "Cancelled by the user";
 
 /**
- * Cancel vs concurrent startExecute: a newer staged prompt or a different
+ * Cancel vs a concurrent send staging a turn: a newer staged prompt or a different
  * tracked workflow must not be treated as the cancel's own turn.
  */
 export function detectCancelSupersession(input: {

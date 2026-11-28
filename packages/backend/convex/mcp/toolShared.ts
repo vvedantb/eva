@@ -31,12 +31,16 @@ export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  entityKind?: "session";
   chatId?: string;
   aveThreadId?: string;
   owner?: McpCallerOwner;
 }
 
+/**
+ * The queue a chat tool acts on. A session daemon's own session means its own
+ * chat; any other id passes through (the server maps a session to Main).
+ */
 export function queueParentId(
   target: { kind: string; targetId: string },
   credentials: McpCredentials,

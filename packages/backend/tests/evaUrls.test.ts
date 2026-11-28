@@ -5,7 +5,7 @@ import {
   buildEvaReviewUrl,
   buildEvaSessionUrl,
   buildEvaTaskUrl,
-} from "../convex/_taskWorkflow/urls";
+} from "../convex/_env/webAppUrl";
 
 const PREV_WEB_APP_URL = process.env.WEB_APP_URL;
 

@@ -6,5 +6,4 @@ export {
   getByUrlInternal,
   record,
   setStateByUrl,
-  applyGitHubSnapshot,
 } from "./_pullRequests/functions";

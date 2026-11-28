@@ -1,4 +1,5 @@
 import { ConvexError, v, type ObjectType } from "convex/values";
+import { reconcileTaskCloseTimes } from "./closeTimes";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -27,14 +28,11 @@ import {
   buildTaskNotificationMessage,
   runTraitFields,
 } from "./helpers";
-import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveNewTaskBaseBranch } from "../_agentTasks/resolveBaseBranch";
+import { FALLBACK_GIT_BASE_BRANCH, MAX_CHAT_ATTACHMENTS } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
-import {
-  assertProviderAccountUsableBy,
-  resolveDefaultProviderAccountId,
-} from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
+import { seedNewTaskChat } from "./taskChatSeed";
 import { cancelTaskRunSchedule } from "./runState";
 import {
   detachOwnedSession,
@@ -61,6 +59,7 @@ import {
   updateTaskArgs,
 } from "./updateTask";
 import { closeTaskReports } from "../_projects/reports";
+import { handTasksToCoordinator } from "../_projects/scheduler";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { startTaskExecution } from "./execution";
 
@@ -100,6 +99,9 @@ export const update = authMutation({
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
+    if (args.projectId && args.projectId !== task.projectId) {
+      await handTasksToCoordinator(ctx, args.projectId, [task._id]);
+    }
     await logTaskUpdateActivity(ctx, task, args);
     await notifyTaskAssignee(ctx, task, args);
     return null;
@@ -118,12 +120,15 @@ export const updateStatus = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await assertTaskNotArchived(ctx.db, task);
-      if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
+    if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
     await ctx.db.patch(args.id, {
       status: args.status,
       updatedAt: Date.now(),
     });
+    if (task.projectId !== undefined && args.status === "todo") {
+      await handTasksToCoordinator(ctx, task.projectId, [task._id]);
+    }
 
     if (previousStatus !== args.status) {
       await logTaskActivity(
@@ -141,6 +146,7 @@ export const updateStatus = authMutation({
       previousStatus,
       args.status,
     );
+    await reconcileTaskCloseTimes(ctx, args.id);
 
     const enteringCodeReview =
       args.status === "code_review" && previousStatus !== "code_review";
@@ -224,6 +230,37 @@ export const updateStatus = authMutation({
 });
 
 /**
+ * Attaches files the user uploaded to an existing task, after the ones it has.
+ * The task keeps at most `MAX_CHAT_ATTACHMENTS` files, the same cap as create.
+ * The next run sends the files added since the last run (`taskRunTurn.ts`).
+ */
+export const addAttachments = authMutation({
+  args: {
+    taskId: v.id("agentTasks"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+      throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
+    const current = task.attachmentStorageIds ?? [];
+    const added = args.storageIds.filter((id) => !current.includes(id));
+    if (added.length === 0) return null;
+    if (current.length + added.length > MAX_CHAT_ATTACHMENTS)
+      throw new ConvexError(
+        `A task can have up to ${MAX_CHAT_ATTACHMENTS} files.`,
+      );
+    await ctx.db.patch(args.taskId, {
+      attachmentStorageIds: [...current, ...added],
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/**
  * Detaches one user-attached file from a task and deletes its blob. Destructive
  * and irreversible: the blob is gone, so the UI confirms first. A no-op when the
  * file is already detached, which keeps double-clicks harmless.
@@ -286,6 +323,7 @@ export const unarchive = authMutation({
       archivedAt: undefined,
       updatedAt: Date.now(),
     });
+    await reconcileTaskCloseTimes(ctx, args.id);
     if (!isTerminalTaskStatus(task.status)) {
       await reviveOwnedSession(ctx, { kind: "task", taskId: task._id });
     }
@@ -320,13 +358,16 @@ type NewTodoTask = ObjectType<typeof newTaskFields> & {
  * Creates one `todo` task, in a project when `projectId` is set (next
  * `taskNumber`; the repo may be any the user can access).
  * The one insert for `createQuickTask`, agents' `create_task` and the
- * coordinator's tasks (`_projects/batches.ts`).
+ * coordinator's tasks (`_projects/batches.ts`). A project task either starts
+ * (`start`: approved, the scheduler runs it) or goes to the project's
+ * coordinator at once (`handTasksToCoordinator`), which starts it or adds it
+ * to an open task.
  */
 export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: NewTodoTask,
   options: {
-    approved: boolean;
+    start: boolean;
   },
 ): Promise<Id<"agentTasks">> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
@@ -347,15 +388,6 @@ export async function createTodoTask(
     taskNumber = maxTaskNumberOf(existingTasks) + 1;
   }
   const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
-  const model = args.model ?? repo.defaultModel;
-  const providerAccountId =
-    args.providerAccountId === undefined
-      ? await resolveDefaultProviderAccountId(ctx.db, ctx.userId, model)
-      : await assertProviderAccountUsableBy(
-          ctx.db,
-          args.providerAccountId,
-          ctx.userId,
-        );
   const taskId = await ctx.db.insert("agentTasks", {
     title,
     description: args.description,
@@ -368,12 +400,6 @@ export async function createTodoTask(
     updatedAt: now,
     createdBy: ctx.userId,
     baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
-    model,
-    providerAccountId,
-    reasoningLevel: args.reasoningLevel ?? repo.defaultReasoningLevel,
-    thinkingEnabled: args.thinkingEnabled ?? repo.defaultThinkingEnabled,
-    use1mContext: args.use1mContext ?? repo.defaultUse1mContext,
-    fastMode: args.fastMode ?? repo.defaultFastMode,
     projectId: args.projectId,
     taskNumber,
     tags: normalizeTaskTags(args.tags),
@@ -383,10 +409,11 @@ export async function createTodoTask(
     phaseLabel:
       args.projectId !== undefined ? args.phaseLabel?.trim() || undefined : undefined,
     approvedAt:
-      args.projectId !== undefined && options.approved ? now : undefined,
+      args.projectId !== undefined && options.start ? now : undefined,
     numId,
   });
   await createTaskRunSummary(ctx, taskId, args.repoId);
+  await seedNewTaskChat(ctx, taskId, repo, args);
   await ensureSubscribed(ctx, taskId, ctx.userId);
   if (generate) {
     await scheduleGeneratedTitle(
@@ -396,12 +423,16 @@ export async function createTodoTask(
       title,
     );
   }
-  if (args.projectId !== undefined && options.approved) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.buildWorkflow.scheduleReadyTasks,
-      { projectId: args.projectId },
-    );
+  if (args.projectId !== undefined) {
+    if (options.start) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.projectId },
+      );
+    } else {
+      await handTasksToCoordinator(ctx, args.projectId, [taskId]);
+    }
   }
   await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
     taskId,
@@ -431,9 +462,9 @@ export async function createTodoTask(
 
 /**
  * Creates a task from a person's prompt; the title comes from it. "Save"
- * files it in To Do, or a project's Triage. "Save and Run" (`run`) starts
- * it: a project task is approved, so the project's scheduler runs it; any
- * other task starts now.
+ * files it in To Do, or hands a project task to the project's coordinator.
+ * "Save and Run" (`run`) starts it: a project task is approved, so the
+ * project's scheduler runs it; any other task starts now.
  */
 export const createQuickTask = authMutation({
   args: {
@@ -445,7 +476,7 @@ export const createQuickTask = authMutation({
   handler: async (ctx, args) => {
     const { run, ...fields } = args;
     const taskId = await createTodoTask(ctx, fields, {
-      approved: run === true,
+      start: run === true,
     });
     if (run && args.projectId === undefined) {
       await startTaskExecution(ctx, taskId);
@@ -457,11 +488,13 @@ export const createQuickTask = authMutation({
 /**
  * An agent's `create_task` / `create_and_run_task` outside a project's
  * coordinator (`mcp/tools.ts`): as `createQuickTask`, with the agent's own
- * title when it gives one. A project task waits in Triage for a person.
+ * title when it gives one. A project task starts when `run` (its project's
+ * scheduler runs it), else it goes to the project's coordinator.
  */
 export const createAgentTask = internalMutation({
   args: {
     userId: v.string(),
+    run: v.boolean(),
     repoId: v.string(),
     projectId: v.optional(v.string()),
     title: v.optional(v.string()),
@@ -485,7 +518,7 @@ export const createAgentTask = internalMutation({
         baseBranch: args.baseBranch,
         phaseLabel: args.phaseLabel,
       },
-      { approved: false },
+      { start: args.run },
     );
   },
 });
@@ -520,11 +553,6 @@ export const createQuickTasksBatch = authMutation({
         updatedAt: now,
         createdBy: ctx.userId,
         baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-        model: repo.defaultModel,
-        reasoningLevel: repo.defaultReasoningLevel,
-        thinkingEnabled: repo.defaultThinkingEnabled,
-        use1mContext: repo.defaultUse1mContext,
-        fastMode: repo.defaultFastMode,
         numId,
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
@@ -561,20 +589,21 @@ export const assignToProject = authMutation({
         maxTaskNumber = t.taskNumber;
       }
     }
-    let assigned = 0;
+    const moved: Id<"agentTasks">[] = [];
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
       await assertTaskNotArchived(ctx.db, task);
-      assigned++;
+      moved.push(taskId);
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
-        taskNumber: maxTaskNumber + assigned,
+        taskNumber: maxTaskNumber + moved.length,
         updatedAt: Date.now(),
       });
     }
+    await handTasksToCoordinator(ctx, args.projectId, moved);
     return null;
   },
 });
@@ -609,7 +638,6 @@ export const createTasksBatch = authMutation({
     const now = Date.now();
     const baseBranch =
       args.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const model = args.model ?? repo.defaultModel;
 
     const taskIds: Id<"agentTasks">[] = [];
     for (let i = 0; i < args.tasks.length; i++) {
@@ -626,14 +654,12 @@ export const createTasksBatch = authMutation({
         updatedAt: now,
         createdBy: ctx.userId,
         baseBranch,
-        model,
-        reasoningLevel: repo.defaultReasoningLevel,
-        thinkingEnabled: repo.defaultThinkingEnabled,
-        use1mContext: repo.defaultUse1mContext,
-        fastMode: repo.defaultFastMode,
         numId,
       });
       await createTaskRunSummary(ctx, taskId, args.repoId);
+      if (args.model !== undefined) {
+        await seedNewTaskChat(ctx, taskId, repo, { model: args.model });
+      }
       await ensureSubscribed(ctx, taskId, ctx.userId);
       if (generate) {
         await scheduleGeneratedTitle(
@@ -661,6 +687,7 @@ export const createTasksBatch = authMutation({
       for (const taskId of taskIds) {
         await ctx.db.patch(taskId, { projectId });
       }
+      await handTasksToCoordinator(ctx, projectId, taskIds);
       await onProjectTasksChanged(ctx, projectId);
     }
 

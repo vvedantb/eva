@@ -106,6 +106,62 @@ export const rateTurn = authMutation({
 });
 
 /**
+ * Sets, changes or clears the caller's thumbs on their recap of a chat, as
+ * `rateTurn` does for a turn. One row per user per recap; it outlives the
+ * recap row, so the Feedback page keeps it after Dismiss.
+ */
+export const rateRecap = authMutation({
+  args: {
+    recapId: v.id("chatRecaps"),
+    sentiment: v.union(feedbackSentimentValidator, v.null()),
+    comment: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const recap = await ctx.db.get(args.recapId);
+    if (!recap || recap.userId !== ctx.userId) {
+      throw new Error("Only your own recap can take feedback.");
+    }
+    await assertMessageParentAccess(ctx.db, recap.parentId, ctx.userId);
+    const rows = await ctx.db
+      .query("feedback")
+      .withIndex("by_parent", (q) => q.eq("parentId", recap.parentId))
+      .collect();
+    const existing = rows.find(
+      (row) => row.recapId === recap._id && row.userId === ctx.userId,
+    );
+
+    if (args.sentiment === null) {
+      if (existing) await ctx.db.delete(existing._id);
+      return null;
+    }
+    const comment =
+      args.comment === undefined ? existing?.comment : cleanComment(args.comment);
+    if (existing) {
+      await ctx.db.patch(existing._id, { sentiment: args.sentiment, comment });
+      return null;
+    }
+    const source = await chatSourceFieldsForEntityId(
+      ctx.db,
+      String(recap.parentId),
+    );
+    const repoId = source ? await repoIdForSource(ctx.db, source) : undefined;
+    await ctx.db.insert("feedback", {
+      ...source,
+      parentId: recap.parentId,
+      ...(repoId ? { repoId } : {}),
+      recapId: recap._id,
+      userId: ctx.userId,
+      author: "user",
+      sentiment: args.sentiment,
+      ...(comment ? { comment } : {}),
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/**
  * Deletes one row. A user's thumbs can only be removed by that user; an
  * agent's report by anyone who can open the chat, since it is about them.
  */
@@ -171,6 +227,7 @@ const feedbackListRowValidator = v.object({
   comment: v.optional(v.string()),
   createdAt: v.number(),
   messageId: v.optional(v.id("messages")),
+  recapId: v.optional(v.id("chatRecaps")),
   repoId: v.optional(v.id("githubRepos")),
   userName: v.optional(v.string()),
   source: chatSourceSummaryValidator,
@@ -226,6 +283,7 @@ export const list = authQuery({
         ...(row.comment ? { comment: row.comment } : {}),
         createdAt: row.createdAt,
         ...(row.messageId ? { messageId: row.messageId } : {}),
+        ...(row.recapId ? { recapId: row.recapId } : {}),
         ...(row.repoId ? { repoId: row.repoId } : {}),
         ...(name ? { userName: name } : {}),
         source,

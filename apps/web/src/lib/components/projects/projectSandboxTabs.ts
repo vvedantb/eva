@@ -4,7 +4,6 @@ import {
 } from "@/lib/search-params";
 
 const PROJECT_TASK_TABS = [
-  "task-details",
   "task-preview",
   "task-browser",
   "task-review",
@@ -13,16 +12,6 @@ export type ProjectTaskTab = (typeof PROJECT_TASK_TABS)[number];
 
 export function isProjectTaskTab(value: string): value is ProjectTaskTab {
   return PROJECT_TASK_TABS.some((tab) => tab === value);
-}
-
-/**
- * A project task's full page opens on Details while the task is still in To
- * Do (added and never started, or sent back after a run), else on its chat.
- * The status is the fact every row carries; run summaries can outlive their
- * runs.
- */
-export function projectTaskOpensOnDetails(task: { status: string }): boolean {
-  return task.status === "todo" || task.status === "draft";
 }
 
 /** The most task tabs a project's chat column holds; a 6th closes the oldest. */
@@ -49,19 +38,32 @@ export function projectTaskTabList(
 }
 
 /**
- * The selected task's tabs that have content: Details always; Preview and
- * Browser while its sandbox runs; Review once it has a PR.
+ * The selected task's tabs that have content: Preview and Browser while its
+ * sandbox runs; Review once it has a PR. A task is its chat, so a task with
+ * neither has no tabs.
  */
 export function visibleProjectTaskTabs(task: {
   sandboxStatus?: string;
   prUrl?: string;
 }): ProjectTaskTab[] {
   const running = task.sandboxStatus === "active";
-  return PROJECT_TASK_TABS.filter((tab) => {
-    if (tab === "task-preview" || tab === "task-browser") return running;
-    if (tab === "task-review") return task.prUrl !== undefined;
-    return true;
-  });
+  return PROJECT_TASK_TABS.filter((tab) =>
+    tab === "task-review" ? task.prUrl !== undefined : running,
+  );
+}
+
+/**
+ * The panel tab a selected task shows when the URL names none of its tabs:
+ * Review once it has a PR, else Preview while its sandbox runs, else the
+ * coordinator's Tasks (a task with no tabs; an old `task-details` link).
+ */
+export function defaultProjectTaskTab(task: {
+  sandboxStatus?: string;
+  prUrl?: string;
+}): ProjectSandboxTab {
+  const tabs = visibleProjectTaskTabs(task);
+  if (tabs.includes("task-review")) return "task-review";
+  return tabs[0] ?? PROJECT_DEFAULT_SANDBOX_TAB;
 }
 
 /**

@@ -12,8 +12,6 @@ import './Roll.css'
  * For prices, counts in words, statuses and labels.
  */
 export function Roll({ delay = 0, children, ...rest }: Parameters<typeof RollNow>[0] & {
-  /** Hold the old text this many ms before rolling: a total that changes
-   * after the row that caused it has landed, not on the same frame. */
   delay?: number
 }) {
   const reduced = useReducedMotion()
@@ -36,13 +34,7 @@ function RollNow({
 }: {
   children: string
   stagger?: number
-  /** The side the text is pinned to. Found from the layout when left out: a
-   * right-aligned value (text-align right, or last in a space-between or
-   * flex-end row) changes against its right edge, so it never drifts. */
   align?: 'start' | 'end'
-  /** 'roll' slides text up through the line, for numbers and inline text. 'fade'
-   * crossfades in place with a small lift, for labels on buttons and other
-   * controls, where a full roll shows two lines at once. */
   variant?: 'roll' | 'fade'
   className?: string
   style?: CSSProperties
@@ -52,9 +44,6 @@ function RollNow({
   const mid = useRef<HTMLSpanElement>(null)
   const root = useRef<HTMLSpanElement>(null)
   const fromWidth = useRef<number | null>(null)
-  // Inline text has no computed width. Use the line box's scale to convert
-  // its painted width back to local CSS pixels, including inside a Phone or
-  // Camera. offsetWidth rounds away the fractions that keep a suffix still.
   const rootWidth = () => {
     if (!root.current || !mid.current) return 0
     const height = parseFloat(getComputedStyle(mid.current).height)
@@ -66,16 +55,12 @@ function RollNow({
     if (align) return setSide(align)
     const el = root.current
     if (!el?.parentElement) return
-    // Look through wrappers that only hold the roll (a <b>, a value span):
-    // they size to it, so where the wrapper sits is where the text pins
     let box: HTMLElement = el
     while (box.parentElement && box.parentElement.childElementCount === 1 && Math.abs(box.parentElement.getBoundingClientRect().width - box.getBoundingClientRect().width) < 1) box = box.parentElement
     const parent = box.parentElement
     if (!parent) return
     const p = getComputedStyle(parent)
     const flex = /flex/.test(p.display) && p.flexDirection.startsWith('row')
-    // Pushed to the right edge by an auto margin (or anything else) reads the
-    // same from the layout: flush with the row's end, slack before it
     const pushed = () => {
       const prev = box.previousElementSibling
       const r = box.getBoundingClientRect()
@@ -101,8 +86,6 @@ function RollNow({
     while (head < a.length && head < b.length && a[head] === b[head]) head++
     let tail = 0
     while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
-    // Digits can change one at a time; words can't. Snap a wordy change out to
-    // whole words.
     const numeric = /^[\d.,$€£%+\-−\s]*$/.test(a.slice(head, a.length - tail) + b.slice(head, b.length - tail))
     if (!numeric) {
       const space = (c: string | undefined) => c === undefined || /\s/.test(c)
@@ -110,17 +93,11 @@ function RollNow({
       while (tail > 0 && !space(b[b.length - tail - 1]) && !space(b[b.length - tail])) tail--
     }
     const key = view.key + 1
-    // Capture the rendered width before repartitioning head/middle/tail.
-    // During interruption this is between endpoints, not the old target.
     fromWidth.current = rootWidth()
     setView({ text: b, head, tail, old: a.slice(head, a.length - tail), key, numeric })
     const id = setTimeout(() => setView((v) => (v.key === key ? { ...v, old: '' } : v)), 700)
     return () => clearTimeout(id)
   }, [children, reduced]) // eslint-disable-line react-hooks/exhaustive-deps
-  // While the old and new text swap, the box starts at the old text's width,
-  // opens to the wider of the two so neither runs into what follows, then
-  // settles to the new width. Set on the element directly so the starting
-  // width never animates from a stale value.
   useLayoutEffect(() => {
     const el = mid.current
     const live = el?.querySelector<HTMLElement>('[data-live]')
@@ -134,8 +111,6 @@ function RollNow({
       fromWidth.current = null
       return
     }
-    // Repartitioning moves unchanged text out of the grid. Subtract its new
-    // width from the old rendered total so that move itself changes no room.
     const affixes = rootWidth() - width(el)
     const previous = fromWidth.current
     fromWidth.current = null
@@ -144,8 +119,6 @@ function RollNow({
     el.style.width = `${start}px`
     void el.offsetWidth
     el.style.transition = ''
-    // A control's label: the box and the crossfade are one move, straight to
-    // the new width, and the box clips the old label as it goes
     if (variant === 'fade') {
       el.style.width = `${next}px`
       return
@@ -156,13 +129,10 @@ function RollNow({
     const id = setTimeout(() => (el.style.width = `${next}px`), 360)
     return () => clearTimeout(id)
   }, [view.key, reduced, reduced ? children : undefined])
-  // The settled render must not wait for an effect: a Stage poster can
-  // arrive in the same commit that disables its CSS animations.
   const { text, head, tail, old, key, numeric } = reduced
     ? { text: children, head: 0, tail: 0, old: '', key: 0, numeric: true }
     : view
   const now = text.slice(head, text.length - tail)
-  // Characters for numbers, whole words (with their spaces) for text
   const units = numeric ? now.split('') : now.split(/(?<=\s)/)
   return (
     <span ref={root} className={`ss-roll${className ? ` ${className}` : ''}`} data-variant={variant} data-align={side} style={style}>

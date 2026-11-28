@@ -85,12 +85,11 @@ describe("project status", () => {
       task("c", 3, { approved: false }),
     ]);
     expect(reopened.stage).toBe("in_progress");
-    expect(reopened.needsYou).toEqual([{ id: "c", reason: "approve" }]);
+    expect(reopened.needsYou).toEqual([]);
     expect(reopened.counts).toEqual({
-      triage: 1,
       working: 0,
       blocked: 0,
-      idle: 0,
+      idle: 1,
       archived: 1,
     });
     expect(
@@ -103,7 +102,6 @@ describe("project status", () => {
     ]);
     expect(reviewing.stage).toBe("in_progress");
     expect(reviewing.counts).toEqual({
-      triage: 0,
       working: 0,
       blocked: 1,
       idle: 1,
@@ -177,8 +175,9 @@ describe("project status", () => {
 describe("projectTaskDisplayStatus", () => {
   const cases: Array<[string, Partial<ProjectTaskFacts>, string]> = [
     ["running", { status: "in_progress", runPending: true }, "working"],
-    ["unapproved todo", { approved: false }, "triage"],
-    ["unapproved draft", { status: "draft", approved: false }, "triage"],
+    ["unapproved todo", { approved: false }, "idle"],
+    ["unapproved draft", { status: "draft", approved: false }, "idle"],
+    ["handed to the coordinator", { withCoordinator: true }, "idle"],
     ["PR open", { status: "done", prState: "open" }, "blocked"],
     ["code review", { status: "code_review" }, "blocked"],
     ["business review", { status: "business_review" }, "blocked"],

@@ -15,7 +15,6 @@ async function fixture() {
   const ids = await t.run(async (ctx) => {
     const ownerUserId = await ctx.db.insert("users", {
       email: "vedant@example.com",
-      emailNotificationsEnabled: true,
     });
     const repoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",

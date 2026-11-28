@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import {
   Spinner,
@@ -15,18 +15,18 @@ import {
   enableDesktopNotifications,
   useDesktopNotifications,
 } from "@/lib/components/notifications/desktopNotifications";
+import {
+  EmailNotificationsSwitch,
+  useSetNotificationPrefs,
+} from "@/lib/components/notifications/EmailNotificationsSwitch";
 
+/**
+ * Email is stored per person (`users.notificationPrefs`); desktop pop-ups are
+ * per device. Phone push is set in the phone app.
+ */
 export function NotificationsSettingsClient() {
-  const enabled = useQuery(api.auth.getEmailNotificationsEnabled);
-  const setEnabled = useMutation(
-    api.auth.setEmailNotificationsEnabled,
-  ).withOptimisticUpdate((localStore, args) => {
-    localStore.setQuery(
-      api.auth.getEmailNotificationsEnabled,
-      {},
-      args.enabled,
-    );
-  });
+  const prefs = useQuery(api.auth.getNotificationPrefs);
+  const setPrefs = useSetNotificationPrefs();
   const desktop = useDesktopNotifications();
 
   const toggleDesktop = async (checked: boolean) => {
@@ -43,7 +43,7 @@ export function NotificationsSettingsClient() {
     }
   };
 
-  if (enabled === undefined) {
+  if (prefs === undefined) {
     return (
       <SettingsPage title="Notifications">
         <div className="flex items-center justify-center py-12">
@@ -55,31 +55,29 @@ export function NotificationsSettingsClient() {
 
   return (
     <SettingsPage title="Notifications">
-      <SettingsSection
-        title="Email notifications"
-        bodyVariant="list"
-      >
+      <SettingsSection title="Email" bodyVariant="list">
         <SettingsToggleRow
-          title="Send summary and changelog"
+          title="Notifications"
+          action={<EmailNotificationsSwitch email={prefs.email} />}
+        />
+        <SettingsToggleRow
+          title="Product updates"
           action={
             <Switch
-              checked={enabled}
-              onCheckedChange={(checked) =>
-                catchMutationError(
-                  setEnabled({ enabled: checked }),
+              checked={prefs.productUpdates}
+              onCheckedChange={(productUpdates) =>
+                void catchMutationError(
+                  setPrefs({ productUpdates }),
                   "Couldn't update notifications",
-                  "email-notifications",
+                  "product-updates",
                 )
               }
-              aria-label="Email notifications"
+              aria-label="Product updates"
             />
           }
         />
       </SettingsSection>
-      <SettingsSection
-        title="Desktop notifications"
-        bodyVariant="list"
-      >
+      <SettingsSection title="Desktop notifications" bodyVariant="list">
         <SettingsToggleRow
           title="Show pop-ups"
           description={

@@ -248,7 +248,7 @@ export const append = authMutation({
 
 /**
  * Saves selected chat text as a user note. Takes the chat's message parent
- * (a parallel chat resolves to its session), since `ChatBody` knows that id
+ * (a session chat resolves to its session), since `ChatBody` knows that id
  * and not the source.
  */
 export const saveQuote = authMutation({

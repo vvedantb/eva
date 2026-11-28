@@ -23,7 +23,7 @@ const EVA_SETUP_SKILL = "eva-setup";
 export function SetUpWithEvaButton() {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const [starting, setStarting] = useState(false);
 
   const start = async () => {
@@ -32,7 +32,7 @@ export function SetUpWithEvaButton() {
       const { numId } = await createSession({
         repoId,
         title: "Set up with Eva",
-        message: formatSkillToken(
+        prompt: formatSkillToken(
           EVA_SETUP_SKILL,
           systemSkillTokenId(EVA_SETUP_SKILL),
         ),

@@ -78,10 +78,6 @@ export function FileViewerHeader({
 }: FileViewerHeaderProps) {
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 px-2">
-      {/* `direction: rtl` on the scroller starts it scrolled to the end, so a
-          path too long for the header keeps its file name in view instead of
-          its first directory. The inner strip flips back to ltr and fills the
-          width, so a short path still sits on the left. */}
       <div
         className="min-w-0 flex-1 overflow-x-auto scrollbar-none [direction:rtl]"
         title={title}

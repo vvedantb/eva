@@ -1,23 +1,6 @@
 import { Badge, Bar, Row, Stage, Text, Window } from '../../kit'
 import './fade.css'
 
-// A fade crop: a deployments page that sinks into the page instead of running
-// off an edge. A still.
-//
-// What makes the fade read as deliberate:
-// - Only the foot fades. The top and both sides are whole and hard-edged, so
-//   the window is plainly a window, placed, not a smear.
-// - It's a mask, not a color laid over the foot, so the window fades to
-//   transparent and dissolves into whatever it sits on.
-// - Only filler is under the fade: the real rows sit in the top half, the
-//   placeholder rows carry on into the fade so the list reads as going on.
-// - The mask is on a wrapper with room around the window, so the window
-//   keeps its shadow on the top and sides; a mask on the window itself would
-//   clip the shadow off.
-//
-// Real strings: the project, the newest deployment (status, branch, commit,
-// age), and the one before it.
-
 const ROWS = [
   { status: 'Ready', branch: 'main', commit: 'Fix checkout redirect loop', age: '2m ago', tone: 'success' as const },
   { status: 'Ready', branch: 'pricing-copy', commit: 'New annual plan wording', age: '1h ago', tone: 'success' as const },

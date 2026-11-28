@@ -14,7 +14,6 @@ export function Tabs({ items, value, targets, className, style, ...rest }: { ite
   }, [value, items.length])
   return (
     <div {...rest} ref={row} className={`ss-tabs${className ? ` ${className}` : ''}`} style={style}>
-      {/* A 1px line scaled to the tab's width: it slides on transform alone */}
       <span className="ss-tabs__bar" style={{ transform: `translateX(${bar.x}px) scaleX(${bar.w})` }} />
       {items.map((t, i) => (
         <span key={i} className="ss-tabs__tab" data-on={i === value || undefined} data-target={targets?.[i]}>

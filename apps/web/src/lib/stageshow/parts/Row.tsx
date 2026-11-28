@@ -3,20 +3,13 @@ import { Bar } from '../window'
 import './Row.css'
 
 export interface RowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  /** The disc on the left: an `Avatar`, an icon tile, a thumbnail. */
   lead?: ReactNode
-  /** The first line: a name, a title. A `Text` or a `Bar`. */
   title: ReactNode
-  /** The second line: a preview, a description. A `Text` or a `Bar`. */
   subtitle?: ReactNode
-  /** Trailing detail on the first line: a time, a count, a badge. */
   meta?: ReactNode
-  /** Preview lines under the subtitle: bar widths in px for placeholder (Mail's two-line preview: `[220, 150]`), or the real text. */
   preview?: number[] | ReactNode
-  /** An unread dot hanging in the margin left of the lead; the row never moves. */
   unread?: boolean
   selected?: boolean
-  /** Inset of the row's fill, in px. 12 by default; a dense list takes 8. */
   pad?: number
 }
 

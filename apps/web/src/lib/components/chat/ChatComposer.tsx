@@ -59,7 +59,7 @@ import type {
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
-import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
+import { useQueuedMessageMutations } from "@eva/shared/queuedMessageMutations";
 import { PendingSketchDrain } from "@/lib/components/chat/_components/PendingSketchDrain";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
@@ -81,13 +81,13 @@ export interface ChatModelPicker {
   accounts?: ReadonlyArray<ModelAccount>;
   accountId?: string | null;
   onAccountChange?: (accountId: string | null) => void;
-  displayTraits?: {
+  displayTraits: {
     effortLevel: ReasoningLevel | undefined;
     thinkingEnabled: boolean;
     use1mContext: boolean;
     fastMode: boolean;
   };
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+  onTraitsChange: (partial: Partial<StoredModelTraits>) => void;
 }
 
 interface ChatComposerProps {
@@ -174,7 +174,7 @@ export function ChatComposer({
     deleteQueuedMessage,
     reorderQueuedMessages,
     steerQueuedMessage,
-  } = useQueuedMessageMutations(queuedMessages);
+  } = useQueuedMessageMutations(queuedMessages[0]?.parentId);
   const seed = draft ?? localDraft;
 
   const handleSubmit = async (
@@ -329,7 +329,7 @@ export function ChatComposer({
   );
 
   return (
-    <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
+    <div className="relative p-3 md:px-4 md:pt-4 md:pb-2 max-w-3xl mx-auto w-full">
       {preInputContent}
       <div className="mx-auto flex w-[calc(100%-1.5rem)] flex-wrap items-center gap-x-1.5">
         {statusChips}

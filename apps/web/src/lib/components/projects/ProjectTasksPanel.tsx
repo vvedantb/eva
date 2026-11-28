@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useNavigate } from "@tanstack/react-router";
 import { api, type Id } from "@eva/backend";
@@ -12,13 +11,12 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
-import { ProjectNewTaskModal } from "./ProjectNewTaskModal";
 
 /**
- * The coordinator rail's Tasks tab: the title with "+" (a new task, to Triage
- * unless "Start now"), a thin progress bar
- * and the counts as one muted line, then the tasks grouped Triage, Working,
- * Blocked, Idle, Archived (with the tasks archived on their own), and their
+ * The coordinator rail's Tasks tab: the title with "+" (Eva's tab with her
+ * composer focused, `onAskEva`), a thin progress bar
+ * and the counts as one muted line, then the tasks grouped Needs you,
+ * Working, Idle, Archived (with the tasks archived on their own), and their
  * Pull requests. A row opens the task as a chat tab beside Eva
  * (`onOpenTask`), else its full page; rows open as tabs are marked. An
  * archived project's list is read-only.
@@ -30,6 +28,7 @@ export function ProjectTasksPanel({
   basePath,
   openTaskIds,
   onOpenTask,
+  onAskEva,
 }: {
   projectId: Id<"projects">;
   projectNumId: number | undefined;
@@ -37,9 +36,9 @@ export function ProjectTasksPanel({
   basePath: string;
   openTaskIds?: ReadonlySet<string>;
   onOpenTask?: (taskNumId: number) => void;
+  onAskEva: () => void;
 }) {
   const navigate = useNavigate();
-  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const { tasks, failedTaskIds, status } = useProjectTaskStatus(
     projectId,
     repoId,
@@ -79,7 +78,7 @@ export function ProjectTasksPanel({
               size="icon-sm"
               variant="ghost"
               aria-label="New task"
-              onClick={() => setCreateTaskOpen(true)}
+              onClick={onAskEva}
             >
               <IconPlus size={14} />
             </Button>
@@ -104,12 +103,6 @@ export function ProjectTasksPanel({
           homeRepoId={repoId}
         />
       </div>
-      <ProjectNewTaskModal
-        projectId={projectId}
-        repoId={repoId}
-        isOpen={createTaskOpen}
-        onClose={() => setCreateTaskOpen(false)}
-      />
     </div>
   );
 }

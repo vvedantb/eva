@@ -20,7 +20,7 @@ interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   session: Doc<"sessions">;
   chatId: Id<"sessionChats">;
-  isAnyChatExecuting: boolean;
+  isExecuting: boolean;
   messageCount: number;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
@@ -42,7 +42,7 @@ export function useSessionChatHeader({
   repoId,
   session,
   chatId,
-  isAnyChatExecuting,
+  isExecuting,
   messageCount,
   isSandboxActive,
   isSandboxToggling,
@@ -97,7 +97,7 @@ export function useSessionChatHeader({
       />
       <SessionHeaderMenu
         session={session}
-        isExecuting={isAnyChatExecuting}
+        isExecuting={isExecuting}
         chatId={chatId}
         canRecap={messageCount > 0}
         onOpenReviewModal={canSendForReview ? onOpenReviewModal : undefined}

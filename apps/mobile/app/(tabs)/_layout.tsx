@@ -15,7 +15,7 @@ import { Tabs } from "expo-router/js-tabs";
 import type { ColorValue } from "react-native";
 import { EnsureUser } from "@/auth/EnsureUser";
 import { useReportLastCrash } from "@/logging/useReportLastCrash";
-import { usePush } from "@/push/push";
+import { useAppBadge, usePush } from "@/push/push";
 
 type TabIconProps = { color: ColorValue; size: number };
 
@@ -40,6 +40,7 @@ const settingsIcon = ({ color, size }: TabIconProps) => (
 
 function SignedInEffects() {
   usePush();
+  useAppBadge();
   useReportLastCrash();
   return null;
 }

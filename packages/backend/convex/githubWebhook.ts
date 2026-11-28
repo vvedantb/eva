@@ -1,4 +1,5 @@
 import { FALLBACK_GIT_BASE_BRANCH, isLivePrState } from "@eva/shared";
+import { reconcileTaskCloseTimes } from "./_agentTasks/closeTimes";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -211,6 +212,7 @@ async function applyTaskPrClosed(
   );
 
   await syncOwnedSessionWithTaskStatus(ctx, task, task.status, newStatus);
+  await reconcileTaskCloseTimes(ctx, task._id);
   return true;
 }
 

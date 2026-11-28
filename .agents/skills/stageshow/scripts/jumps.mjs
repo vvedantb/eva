@@ -1,6 +1,3 @@
-#!/usr/bin/env node
-// Record every visible Stage from its first rendered frame, on any host page.
-// Geometry detects snaps/drift; same-box text/icon changes require visual review.
 import { launch } from './browser.mjs'
 import { record, analyse, contentChanges } from './jumps-core.mjs'
 import { instrumentationSource, coverage, reportResult, printCoverage } from './verification.mjs'

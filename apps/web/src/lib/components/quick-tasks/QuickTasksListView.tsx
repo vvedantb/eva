@@ -3,11 +3,8 @@
 import { useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api, taskScheduledAt } from "@eva/backend";
-import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
-import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   useQuickTaskFilters,
@@ -26,10 +23,8 @@ import {
   SortableListHeader,
   SortableListItems,
   SortableListItem,
-  toast,
   ConfirmSkipHint,
   skipConfirmTitle,
-  useRequestConfirm,
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
@@ -45,6 +40,7 @@ import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
+import { useQuickTaskBoardActions } from "./useQuickTaskBoardActions";
 
 type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 
@@ -82,65 +78,36 @@ export function QuickTasksListView({
 }: QuickTasksListViewProps) {
   const { repoId, basePath, owner, name } = useRepo();
   const firstPaint = useFirstPaintGate();
-  const currentUserId = useQuery(api.auth.me);
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
   const projectsList = useQuery(api.projects.list, { repoId });
-  const updateStatus = useMutation(
-    api.agentTasks.updateStatus,
-  ).withOptimisticUpdate((localStore, args) => {
-    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
-      cur.map((task) =>
-        task._id === args.id ? { ...task, status: args.status } : task,
-      ),
-    );
-  });
-  const startExecution = useMutation(api.agentTasks.startExecution);
+  const tasks = externalTasks;
+  const {
+    currentUserId,
+    errorTaskIdSet,
+    changeStatus,
+    showRunAll,
+    isRunningAll,
+    requestRunAll,
+    runAllDialog,
+  } = useQuickTaskBoardActions(tasks, archived);
 
-  const taskIds = externalTasks.map((t) => t._id);
-  const errorTaskIds = useQuery(api.agentRuns.getTaskIdsWithLatestRunError, {
-    repoId,
-    taskIds,
-  });
-  const errorTaskIdSet = new Set(errorTaskIds ?? []);
-
-  const [isRunningAll, setIsRunningAll] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const { request: requestConfirm } = useRequestConfirm();
   const [openSections, setOpenSections] = useState<Set<DisplayTaskStatus>>(
     () => new Set(TASK_STATUSES),
   );
 
-  const [{ q, statuses }] = useQuickTaskFilters();
+  const [{ statuses }] = useQuickTaskFilters();
   const liveTodoDrafts = useQuickTaskTodoDrafts(repoId);
   const todoDrafts = archived ? [] : liveTodoDrafts;
-  const searchQuery = q;
   const visibleStatuses = new Set(statuses);
-  const tasks = externalTasks;
-
-  const filteredTasks = (() => {
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) return tasks;
-    return tasks.filter(
-      (t) =>
-        t.title.toLowerCase().includes(query) ||
-        t.description?.toLowerCase().includes(query),
-    );
-  })();
 
   const tasksByStatus = (() => {
     const result: Partial<Record<DisplayTaskStatus, Task[]>> = {};
     for (const status of TASK_STATUSES) {
-      result[status] = filteredTasks.filter((t) => t.status === status);
+      result[status] = tasks.filter((t) => t.status === status);
     }
     return result;
   })();
-
-  const todoTasks = tasks.filter((t) => t.status === "todo");
-  const { owned: ownedTodoTasks, skippedCount } = runAllPlan(
-    tasks,
-    currentUserId,
-  );
 
   const toggleSection = (status: DisplayTaskStatus) => {
     setOpenSections((prev) => {
@@ -164,30 +131,7 @@ export function QuickTasksListView({
 
     const task = tasks.find((t) => t._id === data.itemId);
     if (!task) return;
-
-    try {
-      await updateStatus({ id: task._id, status: targetStatus });
-    } catch (err) {
-      console.error("Failed to update status:", err);
-      toast.error("Could not change the task status. Try again.");
-    }
-  };
-
-  const handleRunAll = async () => {
-    if (ownedTodoTasks.length === 0) return;
-    setIsRunningAll(true);
-    const failedCount = await startAll(ownedTodoTasks, (task) =>
-      startExecution({ id: task._id }),
-    );
-    if (failedCount > 0) {
-      console.error(
-        `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
-      );
-      toast.error(
-        `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
-      );
-    }
-    setIsRunningAll(false);
+    await changeStatus(task._id, targetStatus);
   };
 
   const { scrollParent, scrollRef } = usePersistedScrollParent(
@@ -238,19 +182,11 @@ export function QuickTasksListView({
                           </span>
                         </button>
                       </CollapsibleTrigger>
-                      {status === "todo" && todoTasks.length > 0 && !archived && (
+                      {status === "todo" && showRunAll && (
                         <Button
                           size="sm"
                           title={skipConfirmTitle("Run All")}
-                          onClick={(event) =>
-                            requestConfirm(
-                              () => setIsConfirmOpen(true),
-                              () => {
-                                void handleRunAll();
-                              },
-                              event,
-                            )
-                          }
+                          onClick={requestRunAll}
                           disabled={isRunningAll}
                           className="mr-2 min-h-[36px]"
                         >
@@ -298,13 +234,14 @@ export function QuickTasksListView({
                                   name={task.title}
                                   index={index}
                                   parent={status}
-                                  className="pb-1.5"
+                                  className="pb-1"
                                 >
                                   <ListEnter
                                     index={index}
                                     firstPaint={firstPaint.current}
                                   >
                                     <QuickTaskCard
+                                      layout="row"
                                       id={task._id}
                                       title={task.title}
                                       description={task.description}
@@ -377,14 +314,7 @@ export function QuickTasksListView({
           })}
         </div>
       </SortableListProvider>
-      <RunAllDialog
-        isOpen={isConfirmOpen}
-        onOpenChange={setIsConfirmOpen}
-        ownedCount={ownedTodoTasks.length}
-        skippedCount={skippedCount}
-        onConfirm={handleRunAll}
-        isLoading={isRunningAll}
-      />
+      <RunAllDialog {...runAllDialog} />
     </>
   );
 }

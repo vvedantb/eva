@@ -13,7 +13,7 @@ import {
 import { previewToolCallFields } from "../validators";
 import { resolveChatParent } from "../_chat/chatParent";
 import { chatEntityKindValidator } from "../_validators/enums";
-import { listSessionChats } from "../_sessionChats/helpers";
+import { findMainChat } from "../_sessionChats/helpers";
 
 /** Result text is page-controlled and lands in the agent's context verbatim. */
 export const RESULT_JSON_MAX_CHARS = 32_000;
@@ -47,7 +47,7 @@ const callValidator = v.object({
 /**
  * Unclaimed requests for the open tab to run, oldest first. The preview pane
  * is session-wide while the MCP tool files rows under the calling chat, so a
- * session id also collects the rows of each of its chats.
+ * session id also collects its chat's rows.
  */
 export const listPending = authQuery({
   args: { parentId: previewToolCallFields.parentId },
@@ -55,11 +55,10 @@ export const listPending = authQuery({
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const sessionId = ctx.db.normalizeId("sessions", args.parentId);
-    const chats = sessionId ? await listSessionChats(ctx.db, sessionId) : [];
-    const parentIds: Doc<"previewToolCalls">["parentId"][] = [
-      args.parentId,
-      ...chats.map((chat) => chat._id),
-    ];
+    const chat = sessionId ? await findMainChat(ctx.db, sessionId) : null;
+    const parentIds: Doc<"previewToolCalls">["parentId"][] = chat
+      ? [args.parentId, chat._id]
+      : [args.parentId];
     const pages = await Promise.all(
       parentIds.map((parentId) =>
         ctx.db

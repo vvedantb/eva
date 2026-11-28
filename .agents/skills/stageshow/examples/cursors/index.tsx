@@ -1,16 +1,6 @@
 import { Stage, Window, States, Icon, type Act, type CursorStyle } from '../../kit'
 import './cursors.css'
 
-// One small invoice form, driven four ways: the real macOS cursor, a larger
-// one for small or busy embeds, a glass circle for a gestural, touch-like
-// feel, and no cursor at all. With a cursor, it changes kind the way a real
-// one does: an I-beam over the text field, a pointing hand on options and
-// links, an open hand over the slider and a closed one while it's held. The
-// script never sets a kind: each element says its cursor with data-cursor, and
-// the cursor switches the moment it crosses that element's edge.
-// Without one, the product changes state without a surrogate spotlight. Only
-// the text input shows focus. Pick per site and per demo; not every story needs a hand.
-
 type S = { name: string; focus: string | null; typing: boolean; terms: number; disc: number; select: boolean; note: boolean }
 const START: S = { name: '', focus: null, typing: false, terms: 0, disc: 0, select: false, note: false }
 
@@ -18,27 +8,22 @@ const TRACK = { w: 112 }
 
 const withCursor = async (a: Act<S>) => {
   await a.wait(500)
-  // Text: an I-beam from the moment it's over the field
   await a.move({ at: 'field', x: 0.3, y: 0.5 })
   await a.click()
   a.put({ typing: true })
   await a.type('name', 'Ada Lovelace')
-  // Options: a pointing hand
   await a.move({ at: 'net-1', x: 0.9, y: 0.7 })
   await a.click()
   a.put({ terms: 1, typing: false })
-  // Dragging: a closed hand while it's held
   await a.move('handle')
   const track = a.rect('track')
   await a.drag({ at: 'track', x: 0.5, y: 0.5 }, (at) => a.put({ disc: Math.max(0, Math.min(1, (at.x - track.x) / track.width)) }))
   await a.wait(300)
-  // A link
   await a.move('add-note')
   await a.click()
   a.put({ note: true })
   await a.move('rest')
   await a.wait(1400)
-  // Put it back by hand, so the reset has a cause
   await a.move('handle')
   await a.drag({ at: 'track', x: 0, y: 0.5 }, (at) => a.put({ disc: Math.max(0, Math.min(1, (at.x - track.x) / track.width)) }))
   await a.click('remove-note')

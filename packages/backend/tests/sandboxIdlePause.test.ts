@@ -109,24 +109,6 @@ describe("idle pause sweep", () => {
   );
 
   test(
-    "the earlier idle-stop toggle still switches the sweep off",
-    async () => {
-      const { t, sessionId } = await fixture();
-      await t.run(async (ctx) => {
-        await ctx.db.insert("appSettings", {
-          sandboxAutoStopEnabled: false,
-          sandboxAutoStopTime: "22:00",
-          sandboxAutoStopTimeZone: "UTC",
-          sandboxIdleStopEnabled: false,
-        });
-      });
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await sessionStatus(t, sessionId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "on: an hours-idle session and task are moved to stopping with their sandbox ids kept",
     async () => {
       const { t, sessionId, taskSessionId } = await fixture();
@@ -283,7 +265,7 @@ describe("sandbox owner state (leak sweep)", () => {
   test(
     "closed and idle is a leak; active, stopping, busy and unowned are not",
     async () => {
-      const { t, sessionId, taskId, taskSessionId, repoId } = await fixture();
+      const { t, sessionId, taskSessionId, repoId } = await fixture();
       const state = (sandboxId: string) =>
         t.query(internal.sandboxIdlePause.getSandboxOwnerState, { sandboxId });
 
@@ -294,13 +276,10 @@ describe("sandbox owner state (leak sweep)", () => {
         await ctx.db.patch(sessionId, { status: "stopping" });
         await ctx.db.patch(taskSessionId, { status: "closed" });
         await ctx.db.insert("turns", {
-          entityId: await ctx.db.insert("agentRuns", {
-            taskId,
-            status: "running",
-            logs: [],
-          }),
+          entityId: taskSessionId,
           sessionId: taskSessionId,
-          streamingEntityId: "task-run",
+          streamingEntityId: String(taskSessionId),
+          taskRun: { mode: "implementation" },
           state: "running",
           open: true,
           turnStartedAt: Date.now(),
@@ -327,6 +306,58 @@ describe("sandbox owner state (leak sweep)", () => {
         { sandboxId: "sbx-session", repoId },
         { sandboxId: "sbx-task", repoId },
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a doc interview VM is wanted only through its agent grace",
+    async () => {
+      const { t, repoId } = await fixture();
+      await setMode(t, "on");
+      const now = Date.now();
+      const docId = await t.run(async (ctx) => {
+        const docId = await ctx.db.insert("docs", {
+          repoId,
+          title: "Spec",
+          content: "",
+          sandboxId: "sbx-doc",
+          createdAt: now - 3 * HOUR,
+          updatedAt: now - 3 * HOUR,
+        });
+        await ctx.db.insert("turns", {
+          entityId: docId,
+          streamingEntityId: String(docId),
+          state: "done",
+          open: false,
+          turnStartedAt: now - 2 * 60_000,
+          finishedAt: now - 60_000,
+          leaseExpiresAt: now,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId,
+        });
+        return docId;
+      });
+      const state = () =>
+        t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
+          sandboxId: "sbx-doc",
+        });
+
+      expect(await state()).toBe("wanted");
+
+      await t.run(async (ctx) => {
+        for (const turn of await ctx.db.query("turns").collect()) {
+          await ctx.db.patch(turn._id, { finishedAt: now - HOUR });
+        }
+        await ctx.db.patch(docId, { activeWorkflowId: "stale-workflow" });
+      });
+      expect(await state()).toBe("closed");
+      expect(
+        await t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
+          sandboxIds: ["sbx-doc"],
+        }),
+      ).toEqual([{ sandboxId: "sbx-doc", repoId }]);
     },
     TIMEOUT_MS,
   );

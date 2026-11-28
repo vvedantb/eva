@@ -131,9 +131,6 @@ export function DesktopPanel({
       />
       {showLockOverlay ? (
         <>
-          {/* Browser pane: the colorful beam circles the "Agent is browsing"
-              pill (below) instead of the iframe. Computer keeps a static
-              ring — same Chrome, different tab. The click layer swallows taps. */}
           <div
             className={cn(
               "absolute inset-0 z-10 cursor-not-allowed",

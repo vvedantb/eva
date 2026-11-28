@@ -7,19 +7,13 @@ import {
   getSessionWithAccess,
   getTaskWithAccess,
 } from "../functions";
-import { isTaskRunning } from "../_agentTasks/runState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
-import {
-  getSessionChatWithAccess,
-  type SessionChatContext,
-} from "../_sessionChats/helpers";
-import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
-import { findOpenAsk } from "../_projects/reports";
+import type { SessionChatContext } from "../_sessionChats/helpers";
+import { stopTaskRun } from "../_agentTasks/taskRunTurn";
 import { cancelChatExecution } from "./execution";
 import {
   sessionOwner,
   findWorkSession,
-  sessionOwnerTaskId,
 } from "./owner";
 import { findWorkChat } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
@@ -29,12 +23,7 @@ async function stopOwnerTurn(
   task: Doc<"agentTasks"> | null,
   chat: SessionChatContext | null,
 ): Promise<void> {
-  if (
-    task &&
-    (isTaskRunning(task) || (await findOpenAsk(ctx.db, task._id)) !== null)
-  ) {
-    await cancelTaskRun(ctx, task);
-  }
+  if (task) await stopTaskRun(ctx, task);
   if (chat) await cancelChatExecution(ctx, chat, { holdQueue: true });
 }
 
@@ -60,44 +49,11 @@ export async function stopTask(
   );
 }
 
-/**
- * The Stop button of a chat. Name the chat, or the task when its chat may not
- * exist yet (a quick task's first run).
- */
-export const stopChatTurn = authMutation({
-  args: {
-    target: v.union(
-      v.object({ chatId: v.id("sessionChats") }),
-      v.object({ taskId: v.id("agentTasks") }),
-    ),
-  },
-  returns: v.null(),
-  handler: async (ctx, { target }) => {
-    if ("chatId" in target) {
-      await stopChat(
-        ctx,
-        await getSessionChatWithAccess(ctx.db, target.chatId, ctx.userId),
-      );
-      return null;
-    }
-    await stopTask(
-      ctx,
-      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId),
-    );
-    return null;
-  },
-});
-
 async function sessionIsHeld(
   db: DatabaseReader,
   session: Doc<"sessions">,
 ): Promise<boolean> {
-  const ownerTaskId = sessionOwnerTaskId(session);
-  const ownerTask = ownerTaskId ? await db.get(ownerTaskId) : null;
-  return (
-    (ownerTask !== null && isTaskRunning(ownerTask)) ||
-    (await hasOpenChatTurn(db, session._id))
-  );
+  return await hasOpenChatTurn(db, session._id);
 }
 
 export const SANDBOX_HELD_ERROR =

@@ -1,4 +1,4 @@
-import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
+import { TURN_BACKSTOP_ERROR, TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
@@ -9,19 +9,15 @@ import {
   openSessionChatTurn,
   openTurn,
   renewTurnLease,
-  findOpenTurn,
 } from "../convex/_chat/turnStore";
 import {
   sessionChatAdapter,
   turnAdapterForEntity,
 } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
-import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
-import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
-import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
 import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
@@ -54,9 +50,6 @@ async function createSessionFixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const placeholderMessageId = await ctx.db.insert("messages", {
       parentId: chatId,
@@ -278,7 +271,7 @@ describe("turn lifecycle integration", () => {
     await t.run(async (ctx) => {
       await ctx.db.patch(turnId, {
         state: "running",
-        turnStartedAt: Date.now() - RUN_TIMEOUT_MS - 1,
+        turnStartedAt: Date.now() - TURN_BACKSTOP_MS - 1,
         leaseExpiresAt: Date.now() - 1,
       });
       const turn = await ctx.db.get(turnId);
@@ -473,126 +466,20 @@ describe("a stale session chat turn torn down by the backstop", () => {
         rawInput: "pick",
         updatedAt: now,
       });
-      const runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        status: "running",
-        logs: [],
-      });
       const visit = {
         chat: (adapter: { kind: string }) => adapter.kind,
         agent: (owner: { kind: string }) => owner.kind,
       };
-      return [
-        ...[f.chatId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
-          turnAdapterForEntity(ctx.db, { entityId }, visit),
-        ),
-        turnAdapterForEntity(
-          ctx.db,
-          { entityId: f.sessionId, lane: "interview" },
-          visit,
-        ),
-        turnAdapterForEntity(
-          ctx.db,
-          { entityId: projectId, lane: "interview" },
-          visit,
-        ),
-      ];
+      return [f.chatId, taskId, projectId, "not-an-id"].map((entityId) =>
+        turnAdapterForEntity(ctx.db, { entityId }, visit),
+      );
     });
-    expect(kinds).toEqual([
-      "sessionChat",
-      null,
-      null,
-      "run",
-      null,
-      "interview",
-      null,
-    ]);
-  });
-});
-
-describe("quick-task run as a turn owner", () => {
-  async function createRunTurnFixture() {
-    const t = convexTest(schema, modules);
-    const ids = await t.run(async (ctx) => {
-      const userId = await ctx.db.insert("users", {});
-      const repoId = await ctx.db.insert("githubRepos", {
-        owner: "eva",
-        name: "run-turn-test",
-        installationId: 1,
-      });
-      const now = Date.now();
-      const taskId = await ctx.db.insert("agentTasks", {
-        repoId,
-        title: "Run turn",
-        status: "in_progress",
-        createdAt: now,
-        updatedAt: now,
-        createdBy: userId,
-      });
-      const runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId,
-        status: "running",
-        logs: [],
-        startedAt: Date.now(),
-      });
-      const turnId = await openTurn(ctx, {
-        entityId: runId,
-        streamingEntityId: getTaskRunStreamingEntityId(runId),
-        model: "claude:sonnet",
-        repoId,
-      });
-      const turn = await ctx.db.get(turnId);
-      if (turn) await acquireTurnLease(ctx, turn, "running");
-      return { taskId, runId, turnId };
-    });
-    return { t, ...ids };
-  }
-
-  test("a run turn renews and fences like any other turn", async () => {
-    const { t, runId, turnId } = await createRunTurnFixture();
-    const verdicts = await t.run(async (ctx) => ({
-      current: await renewTurnLease(ctx, {
-        turnId,
-        leaseGeneration: 1,
-        streamingEntityId: getTaskRunStreamingEntityId(runId),
-      }),
-      old: await renewTurnLease(ctx, { turnId, leaseGeneration: 0 }),
-    }));
-    expect(verdicts.current.status).toBe("renewed");
-    expect(verdicts.old).toEqual({ status: "terminal", reason: "superseded" });
-  });
-
-  test("an expired run turn stops the run with the old watchdog text", async () => {
-    vi.useFakeTimers();
-    try {
-      const { t, runId, turnId, taskId } = await createRunTurnFixture();
-      await t.run(async (ctx) => {
-        await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
-      });
-      await t.mutation(internal.turns.finalizeExpired, {
-        turnId,
-        cause: "process_dead",
-      });
-      const after = await t.run(async (ctx) => ({
-        turn: await ctx.db.get(turnId),
-        run: await ctx.db.get(runId),
-        task: await ctx.db.get(taskId),
-      }));
-      expect(after.turn?.open).toBe(false);
-      expect(after.turn?.state).toBe("error");
-      expect(after.run?.status).toBe("error");
-      expect(after.run?.exitReason).toBe("watchdog_killed");
-      expect(after.run?.error).toMatch(/^Run killed by watchdog: no heartbeat/);
-      expect(after.task?.status).toBe("todo");
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(kinds).toEqual(["sessionChat", null, null, null]);
   });
 });
 
 describe("expired turns with no owning surface", () => {
-  test("a lane-less turn keyed by a session id is closed", async () => {
+  test("a turn keyed by a session id is closed", async () => {
     vi.useFakeTimers();
     try {
       const { t, sessionId } = await createSessionFixture();
@@ -618,35 +505,6 @@ describe("expired turns with no owning surface", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("lane turns stay apart from chat turns", () => {
-  test("an interview turn is not the session's chat turn", async () => {
-    const { t, sessionId, chatId } = await createSessionFixture();
-    const result = await t.run(async (ctx) => {
-      const session = await ctx.db.get(sessionId);
-      if (!session) throw new Error("missing session");
-      const chatTurn = await findOpenTurn(ctx, chatId);
-      const laneTurnId = await openTurn(ctx, {
-        entityId: sessionId,
-        lane: "interview",
-        streamingEntityId: String(sessionId),
-        model: "claude:sonnet",
-        repoId: session.repoId,
-      });
-      return {
-        chatTurnId: chatTurn?._id,
-        chatTurnAfter: (await findOpenTurn(ctx, chatId))?._id,
-        laneTurn: await findOpenTurn(ctx, sessionId, "interview"),
-        laneTurnId,
-        hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
-      };
-    });
-    expect(result.chatTurnAfter).toBe(result.chatTurnId);
-    expect(result.laneTurn?._id).toBe(result.laneTurnId);
-    expect(result.laneTurn?.lane).toBe("interview");
-    expect(result.hasChatTurn).toBe(result.chatTurnId !== undefined);
   });
 });
 

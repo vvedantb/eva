@@ -76,7 +76,11 @@ export const update = authMutation({
       throw new Error("Queued message cannot be empty");
     }
 
-    await ctx.db.patch(args.id, { content, displayContent: undefined });
+    await ctx.db.patch(args.id, {
+      content,
+      displayContent: undefined,
+      annotation: undefined,
+    });
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });
     return null;
   },

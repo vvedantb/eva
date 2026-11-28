@@ -1,9 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyzeSchemaNarrowing } from "./check-schema-narrowing.mjs";
+import {
+  analyzeSchemaNarrowing,
+  historicMigrationExports,
+  unresolvedMigrations,
+} from "./check-schema-narrowing.mjs";
 
 const TABLE_FIELDS = "packages/backend/convex/_validators/tableFields.ts";
 const SCHEMA = "packages/backend/convex/schema.ts";
+const ENUMS = "packages/backend/convex/_validators/enums.ts";
 
 function diffFor(file, body) {
   return [
@@ -141,6 +146,22 @@ test("never flags comment lines", () => {
   assert.equal(result.ok, true);
 });
 
+test("flags a removed union member in the stored enums file", () => {
+  const result = analyzeSchemaNarrowing({
+    diff: diffFor(
+      ENUMS,
+      ["@@ -44 +43,0 @@", '-  "cancelled",'].join("\n") +
+        "\n" +
+        ["@@ -60 +59,0 @@", '-  v.literal("retry_pending"),'].join("\n"),
+    ),
+    newContent: 'v.union(v.literal("scheduled"))',
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.removals[0].name, "retry_pending");
+  assert.equal(result.removals[0].file, ENUMS);
+});
+
 test("ignores diffs to files outside the watched set", () => {
   const result = analyzeSchemaNarrowing({
     diff: diffFor(
@@ -261,4 +282,42 @@ test("a quoted field key is recognised", () => {
   });
   assert.equal(result.ok, false);
   assert.equal(result.removals[0].name, "legacy.flag");
+});
+
+test("a marker that names its field still needs a real migration", () => {
+  const result = analyzeSchemaNarrowing({
+    diff: diffFor(
+      TABLE_FIELDS,
+      [
+        "@@ -374,2 +372,1 @@",
+        "-  turnLifecycleVersion: v.optional(v.literal(2)),",
+        "+  // turnLifecycleVersion removed. schema-narrowing-ok: clearTurnLifecycle",
+      ].join("\n"),
+    ),
+    newContent:
+      "export const sessionFields = {\n  // turnLifecycleVersion removed. schema-narrowing-ok: clearTurnLifecycle\n};",
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "missing-migration");
+  assert.deepEqual(result.removals, []);
+  assert.deepEqual(result.missingMigrations, ["clearTurnLifecycle"]);
+});
+
+test("an existing marker outside the diff is checked too", () => {
+  const result = analyzeSchemaNarrowing({
+    diff: "",
+    newContent: "// schema-narrowing-ok: neverWritten\nexport const a = {};",
+    migrationsSource: NO_MIGRATIONS,
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.missingMigrations, ["neverWritten"]);
+});
+
+test("git history resolves a one-off migration deleted after it ran", () => {
+  const names = ["clearLegacyFields", "zzzNeverAMigration"];
+  assert.deepEqual(
+    unresolvedMigrations(names, historicMigrationExports(names)),
+    ["zzzNeverAMigration"],
+  );
 });

@@ -12,47 +12,49 @@ import type {
 import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { appendReviewCommentsToPrompt } from "@eva/shared";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
+import { usePreviewViewport } from "@/lib/contexts/PreviewViewportContext";
+import { appendPreviewViewportToPrompt } from "@/lib/components/sandbox/previewViewportPrompt";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { readableSendError } from "./chatBodyUtils";
 import type { ChatSendOptions } from "./ChatBody";
 import {
   sendSandboxTurn,
-  type SandboxTurnAddArgs,
   type SandboxTurnPorts,
+  type SandboxTurnSendArgs,
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
 import type { ChatDraftTarget } from "./useChatDraftSeed";
 
 /**
- * Optimistic update for a chat's `addMessage`: the user's bubble and an empty
- * assistant placeholder show at once, before the mutation round-trips. Every
- * chat (session, quick task, project) attaches this to its own `addMessage`.
- * Patches every live transcript subscription of the chat (`useChatTranscript`):
- * the tail it paints first and the `since` list it follows.
+ * Optimistic paint for a send the client expects to start (`chats.send`):
+ * the user's bubble and an empty assistant placeholder show at once, before
+ * the mutation round-trips. Every chat (session, quick task, project) sends
+ * through `useSessionTurnPorts`, which applies this. Patches every live
+ * transcript subscription of the chat (`useChatTranscript`): the tail it
+ * paints first and the `since` list it follows.
  */
 export function insertSentTurnOptimistically(
   localStore: OptimisticLocalStore,
   parentId: TranscriptParentId,
-  args: SandboxTurnAddArgs,
+  args: SandboxTurnSendArgs,
   accounts: ReadonlyArray<ModelAccount>,
 ) {
-  if ((args.role ?? "user") !== "user") return;
   const now = Date.now();
   const userMsg: TranscriptMessage = {
     _id: tempId("messages"),
     _creationTime: now,
     parentId,
     role: "user",
-    content: args.content,
+    content: args.displayContent ?? args.message,
     timestamp: now,
     activityLog: "",
     attachmentStorageIds: args.attachmentStorageIds,
     credentialSourceLabel: resolveCredentialSourceLabel(
-      args.providerAccountId,
+      args.settings?.providerAccountId,
       accounts,
     ),
-    model: args.model,
-    reasoningLevel: args.reasoningLevel,
+    model: args.settings?.model,
+    reasoningLevel: args.settings?.reasoningLevel,
   };
   const assistantPlaceholder: TranscriptMessage = {
     _id: tempId("messages"),
@@ -87,9 +89,10 @@ export interface ChatTurnSendOptions extends ChatSendOptions {
 }
 
 /**
- * Send / queue / cancel for one chat: a session chat tab, a quick task or a
+ * Send / queue / cancel for one chat: a session's chat, a quick task or a
  * project. The surface hands over its mutations (`ports`) and settings; the
- * prompt, the queue-or-start rule and the failure toast live here only.
+ * prompt, the optimistic queue-or-start guess and the failure toast live here
+ * only. The server makes the real queue-or-start decision (`chats.send`).
  */
 export function useChatSend({
   ports,
@@ -107,6 +110,7 @@ export function useChatSend({
   queuesSends: boolean;
 }) {
   const review = usePendingReviewComments();
+  const previewViewport = usePreviewViewport();
   const setDraft = useMutation(api.drafts.set);
 
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
@@ -134,14 +138,20 @@ export function useChatSend({
     const sentComments =
       options?.skipReviewComments === true ? [] : (review?.comments ?? []);
     const draftContent = options?.draftContent ?? content;
-    const mode = isExecuting || queuesSends ? "queue" : "start";
+    const expected = isExecuting || queuesSends ? "queue" : "start";
+    const typed = appendReviewCommentsToPrompt(content, sentComments);
+    const message =
+      options?.skipReviewComments === true
+        ? typed
+        : appendPreviewViewportToPrompt(typed, previewViewport);
     const input = {
-      message: appendReviewCommentsToPrompt(content, sentComments),
+      message,
+      displayContent: message === typed ? undefined : typed,
       attachmentStorageIds,
       sourceProposedPlanId: options?.sourceProposedPlanId,
     };
     try {
-      await sendSandboxTurn(ports, settings, input, mode);
+      await sendSandboxTurn(ports, settings, input, expected);
     } catch (error) {
       raiseSendFailure(
         error instanceof Error ? error.message : "",

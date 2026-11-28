@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
   Select,
@@ -26,10 +26,7 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import {
-  FALLBACK_GIT_BASE_BRANCH,
-  projectPickerAccounts,
-} from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -42,13 +39,7 @@ import { ProjectStageBadge } from "./ProjectPhaseBadge";
 import { useProjectTaskStatus } from "./useProjectStatus";
 import { ProjectDateRangeField } from "./_components/ProjectDateRangeField";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
-import {
-  useAvailableAiModels,
-  useProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
 import { ProjectTagsPopover } from "./_components/ProjectTagsPopover";
-import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useUpdateProject } from "./useUpdateProject";
 
 /**
@@ -62,10 +53,8 @@ export function ProjectFieldsPanel({
   projectId: Id<"projects">;
 }) {
   const { repo } = useRepo();
-  const simpleView = useSimpleView();
   const project = useQuery(api.projects.get, { id: projectId });
   const users = useQuery(api.users.listAll);
-  const currentUserId = useQuery(api.auth.me);
   const updateProject = useUpdateProject(projectId);
   const { status } = useProjectTaskStatus(projectId, repo._id);
 
@@ -74,27 +63,10 @@ export function ProjectFieldsPanel({
     [user.firstName, user.lastName].filter(Boolean).join(" ") ||
     "Unnamed User";
 
-  const currentModel = normalizeAIModel(project?.model);
-  const { options: modelOptions } = useAvailableAiModels(
-    project?.repoId,
-    currentModel,
-  );
-  const { options: accounts, resolveId: resolveAccountId } =
-    useProviderAccounts();
-
   if (!project) return null;
 
   const readOnly = project.archivedAt !== undefined;
-  const isOwner =
-    currentUserId !== undefined && currentUserId === project.userId;
   const creator = (users ?? []).find((user) => user._id === project.userId);
-  const displayAccounts = projectPickerAccounts(accounts, {
-    isOwner,
-    providerAccountId: project.providerAccountId,
-    provider: getAIModelProvider(currentModel),
-    ownerLabel:
-      creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
-  });
   const displayBaseBranch =
     project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const lead = project.projectLead
@@ -203,29 +175,6 @@ export function ProjectFieldsPanel({
             })()}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {simpleView ? null : (
-          <div className={FIELD_ROW_CLASS}>
-            <ModelSelectWithTraits
-              value={currentModel}
-              options={modelOptions}
-              onValueChange={(nextModel) =>
-                updateProject({ id: projectId, model: nextModel })
-              }
-              accounts={displayAccounts}
-              accountId={project.providerAccountId ?? null}
-              onAccountChange={(nextAccountId) => {
-                if (!isOwner) return;
-                updateProject({
-                  id: projectId,
-                  providerAccountId: resolveAccountId(nextAccountId) ?? null,
-                });
-              }}
-              disabled={readOnly}
-              className={`px-0 ${FIELD_TEXT_CLASS}`}
-            />
-          </div>
-        )}
 
         <div className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}>
           <IconGitBranch size={14} className="text-muted-foreground" />

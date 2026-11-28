@@ -1,5 +1,4 @@
 export {
-  listForSession,
   get,
   resolveForSession,
   getInternal,
@@ -8,10 +7,5 @@ export {
 
 export {
   ensureMain,
-  create,
-  rename,
-  remove,
-  setModel,
   setProviderAccountId,
-  setTraits,
 } from "./_sessionChats/mutations";

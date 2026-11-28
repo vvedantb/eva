@@ -238,9 +238,6 @@ describe("readHandoffHistory", () => {
         sessionId,
         repoId,
         userId,
-        title: "Main",
-        number: 1,
-        isMain: true,
       });
       for (let index = 0; index < 8; index += 1) {
         await ctx.db.insert("messages", {

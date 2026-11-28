@@ -104,7 +104,6 @@ function undefinedIfEmpty<T>(items: T[]): T[] | undefined {
 interface QuickTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectId?: Id<"projects">;
   users?: User[];
   projects?: Project[];
   allTags?: string[];
@@ -181,6 +180,7 @@ function useModelAndAccount(repo: Repo) {
     resolveId: resolveAccountId,
     ready: accountsReady,
   } = useProviderAccounts();
+
   if (accountsReady && !accountDefaulted) {
     if (!accounts.some((account) => account.id === providerAccountId)) {
       setProviderAccountId(defaultProviderAccountId(accounts, model));
@@ -544,7 +544,6 @@ function DraftsMenu({
 export function QuickTaskModal({
   isOpen,
   onClose,
-  projectId,
   users,
   projects,
   allTags,
@@ -569,7 +568,7 @@ export function QuickTaskModal({
   const { request: requestConfirm } = useRequestConfirm();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
-  >(initialDraft?.projectId ?? projectId);
+  >(initialDraft?.projectId);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(
     undefined,
   );
@@ -618,11 +617,12 @@ export function QuickTaskModal({
     accounts,
     resolveAccountId,
   } = useModelAndAccount(repo);
+
   const [isDragOver, setIsDragOver] = useState(false);
   const dragEnterDepth = useRef(0);
 
   const { branchLockedToProject, displayBaseBranch } = useEffectiveProject(
-    projectId ?? selectedProjectId,
+    selectedProjectId,
     defaultBranch,
   );
 
@@ -639,7 +639,7 @@ export function QuickTaskModal({
     setProviderAccountId(defaultProviderAccountId(accounts, defaultModel));
     setAccountDefaulted(accounts.length > 0);
     setActiveDraftId(null);
-    setSelectedProjectId(projectId);
+    setSelectedProjectId(undefined);
     setAssignedTo(undefined);
     setSelectedTags([]);
     setTagSearch("");
@@ -729,7 +729,7 @@ export function QuickTaskModal({
     setDescription(draftPrompt(draft));
     setBaseBranch(draft.baseBranch ?? defaultBranch);
     setActiveDraftId(draft._id);
-    setSelectedProjectId(draft.projectId ?? projectId);
+    setSelectedProjectId(draft.projectId);
     setSelectedTags(draft.tags ?? []);
     readiness.reset();
   };
@@ -770,7 +770,7 @@ export function QuickTaskModal({
     "submitComposerForm",
     (e) => {
       e.preventDefault();
-      void handleSubmit(true);
+      void handleSubmit(false);
     },
     { enabled: isOpen },
   );
@@ -941,17 +941,17 @@ export function QuickTaskModal({
             <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
-                onClick={() => void handleSubmit(false)}
-                disabled={!canSubmit}
-              >
-                Save
-              </Button>
-              <Button
                 onClick={() => void handleSubmit(true)}
                 disabled={!canSubmit}
               >
-                {isLoading && <Spinner size="sm" />}
                 Save and Run
+              </Button>
+              <Button
+                onClick={() => void handleSubmit(false)}
+                disabled={!canSubmit}
+              >
+                {isLoading && <Spinner size="sm" />}
+                Save
                 <ShortcutKbd
                   id="submitComposerForm"
                   className="ml-1.5 border-0 bg-transparent p-0 text-current opacity-60"

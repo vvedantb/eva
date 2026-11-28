@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { projectTaskTabList } from "./projectSandboxTabs";
+import {
+  defaultProjectTaskTab,
+  projectTaskTabList,
+} from "./projectSandboxTabs";
 
 describe("projectTaskTabList", () => {
   it("adds a lone selected task as a tab", () => {
@@ -17,5 +20,18 @@ describe("projectTaskTabList", () => {
     expect(projectTaskTabList([1, 2, 3, 4, 5, 6], null)).toEqual([
       2, 3, 4, 5, 6,
     ]);
+  });
+});
+
+describe("defaultProjectTaskTab", () => {
+  it("opens on Review with a PR, else Preview while running, else Tasks", () => {
+    const prUrl = "https://github.com/o/r/pull/1";
+    expect(defaultProjectTaskTab({ sandboxStatus: "active", prUrl })).toBe(
+      "task-review",
+    );
+    expect(defaultProjectTaskTab({ sandboxStatus: "active" })).toBe(
+      "task-preview",
+    );
+    expect(defaultProjectTaskTab({ sandboxStatus: "closed" })).toBe("tasks");
   });
 });

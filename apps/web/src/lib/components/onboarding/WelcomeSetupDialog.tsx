@@ -48,7 +48,7 @@ function stepDescription(step: number): string {
   if (step === 2) return "Tell us how you’d like Eva to communicate.";
   if (step === 3) return "Choose light or dark mode and an accent color.";
   if (step === 4) return "Fine-tune fonts, spacing, and corner radius.";
-  return "Optional emails to stay up to date.";
+  return "Choose how Eva emails you.";
 }
 
 export function WelcomeSetupDialog() {

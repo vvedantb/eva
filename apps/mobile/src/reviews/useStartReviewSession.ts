@@ -6,8 +6,8 @@ import { useState } from "react";
 
 /**
  * Starts the session a review action asks for (Revert, a blocker's fix) and
- * opens its chat, as the web `sessions.create` then navigate: a titled
- * session on the branch the work must land on, through `mobile.startSession`.
+ * opens its chat, as the web does: a titled
+ * session on the branch the work must land on, through `chats.start`.
  * The chat is pushed, so Back returns to the pull request.
  */
 export function useStartReviewSession(repoId: Id<"githubRepos">): {

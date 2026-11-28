@@ -11,7 +11,7 @@ const workspace: {
   checkoutDirs: string[];
 } = {
   dir: "",
-  entityIdField: "sessionId",
+  entityIdField: "chatId",
   checkoutDirs: [],
 };
 
@@ -61,7 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetTurnCheckpoint();
-  workspace.entityIdField = "sessionId";
+  workspace.entityIdField = "chatId";
   workspace.checkoutDirs = [];
   mockConfig();
 });
@@ -101,28 +101,8 @@ describe("appendTurnCheckpoint", () => {
     expect(args).toEqual({});
   });
 
-  test("stamps task and project chat turns", () => {
-    for (const entityIdField of ["taskId", "projectId"]) {
-      workspace.entityIdField = entityIdField;
-      mockConfig();
-      const before = commit("start " + entityIdField);
-      beginTurnCheckpoint();
-      const after = commit("turn work " + entityIdField);
-      const args: JsonObject = { success: true };
-      appendTurnCheckpoint(args);
-      expect(args).toEqual({
-        success: true,
-        beforeSha: before,
-        afterSha: after,
-        beforeShas: [{ path: workspace.dir, sha: before }],
-        afterShas: [{ path: workspace.dir, sha: after }],
-      });
-      resetTurnCheckpoint();
-    }
-  });
-
   test("skips entity kinds with no persistence path", () => {
-    for (const entityIdField of ["docId", "reportId", "automationRunId"]) {
+    for (const entityIdField of ["entityId"]) {
       workspace.entityIdField = entityIdField;
       mockConfig();
       commit("start " + entityIdField);

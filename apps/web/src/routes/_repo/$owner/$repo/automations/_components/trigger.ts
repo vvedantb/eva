@@ -1,4 +1,4 @@
-import type { AutomationTrigger } from "@eva/backend";
+import { triggerHasEvent, type AutomationTrigger } from "@eva/backend";
 
 /** Pure trigger copy and defaults, shared by the settings forms and Hub cards. */
 
@@ -11,8 +11,8 @@ export {
 /** Event presets whose run creates a quick task rather than a chat message. */
 export function createsTasks(trigger: AutomationTrigger): boolean {
   return (
-    trigger.kind === "event" &&
-    (trigger.event === "issue_labeled" || trigger.event === "production_alert")
+    triggerHasEvent(trigger, "issue_labeled") ||
+    triggerHasEvent(trigger, "production_alert")
   );
 }
 

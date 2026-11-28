@@ -1,10 +1,9 @@
 import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
-import type { Doc, Id } from "@eva/backend";
-import { chatStreamingEntityId, sandboxStartupEntityId } from "@eva/shared";
+import type { Id } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
-import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
@@ -15,20 +14,14 @@ import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLa
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import {
-  catchMutationError,
-  withMutationToast,
-} from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAgentBrowsingAutoSwitch,
-  useSandboxLifecycle,
+  useSandboxControls,
 } from "@/lib/components/sandbox/useSandboxLifecycle";
 
 export function SessionDetailClient({
   sessionId,
-  chatNumber,
-  onChatChange,
   activeSandboxTab,
   onSandboxTabChange,
   onOpenFile,
@@ -36,8 +29,6 @@ export function SessionDetailClient({
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
-  chatNumber: number | null;
-  onChatChange: (number: number | null) => void;
   activeSandboxTab: string;
   onSandboxTabChange: (tab: string) => void;
   onOpenFile: (path: string) => void;
@@ -50,49 +41,19 @@ export function SessionDetailClient({
     api.sessions.get,
     isRouteActive ? { id: sessionId } : "skip",
   );
-  const chats = useHeldQuery(
-    api.sessionChats.listForSession,
-    isRouteActive ? { sessionId } : "skip",
-  );
   const activeChat = useHeldQuery(
     api.sessionChats.resolveForSession,
-    isRouteActive
-      ? { sessionId, ...(chatNumber !== null ? { number: chatNumber } : {}) }
-      : "skip",
+    isRouteActive ? { sessionId } : "skip",
     sessionId,
   );
-  const chatStatuses = useHeldQuery(
-    api.turns.listSessionChatStatuses,
-    isRouteActive ? { sessionId } : "skip",
-  );
   const chatId = activeChat?._id;
-  const messages = useChatTranscript(isRouteActive && chatId ? chatId : "skip");
-  const queuedMessages = useHeldQuery(
-    api.queuedMessages.listByParent,
-    isRouteActive && chatId ? { parentId: chatId } : "skip",
-  );
-  const streaming = useHeldQuery(
-    api.streaming.get,
-    isRouteActive && chatId
-      ? { entityId: chatStreamingEntityId(chatId) }
-      : "skip",
-  );
-  const startupStreaming = useHeldQuery(
-    api.streaming.get,
-    isRouteActive
-      ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
-      : "skip",
-  );
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const ensureMainChat = useMutation(api.sessionChats.ensureMain);
-  const createChat = useMutation(api.sessionChats.create);
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
-  const needsMainChat =
-    isRouteActive && chats !== undefined && chats.length === 0;
+  const needsMainChat = isRouteActive && activeChat === null;
   /* eslint-disable no-effect/no-event-handler --
      The missing Main chat is a server-side fact about a legacy session that
      only the live query reveals; there is no click to hang this on. */
@@ -110,7 +71,7 @@ export function SessionDetailClient({
      Prewarms the sandbox daemon for the session the route landed on; the
      trigger is navigation plus server-side status, not a click. */
   useEffect(() => {
-      if (!isRouteActive) return;
+    if (!isRouteActive) return;
     if (!sandboxId || !chatId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     if (sessionArchived) return;
@@ -144,26 +105,20 @@ export function SessionDetailClient({
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
   /* eslint-enable no-effect/no-event-handler */
-  const lifecycle = useSandboxLifecycle(session?.status);
-  const isSandboxStarting = lifecycle.isStarting;
-  const isSandboxStopping = lifecycle.isStopping;
+  const {
+    isSandboxActive,
+    isSandboxStarting,
+    isSandboxStopping,
+    sandboxStartupActivity,
+    handleSandboxToggle,
+  } = useSandboxControls({
+    status: session?.status,
+    owner: { kind: "session", sessionId },
+    active: isRouteActive,
+    start: () => startSandboxMutation({ sessionId }),
+    stop: () => stopWorkSandbox({ target: { sessionId } }),
+  });
   const simpleView = useSimpleView();
-  const handleSandboxToggle = (action: "start" | "stop") =>
-    lifecycle.run(action, async () => {
-      await (
-        action === "start"
-          ? catchMutationError(
-              startSandboxMutation({ sessionId }),
-              "Couldn't start sandbox",
-              "session-sandbox-start",
-            )
-          : catchMutationError(
-              stopWorkSandbox({ target: { sessionId } }),
-              "Couldn't stop sandbox",
-              "session-sandbox-stop",
-            )
-      ).catch(() => undefined);
-    });
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
@@ -176,36 +131,9 @@ export function SessionDetailClient({
     }
     setExpandRightSignal((n) => n + 1);
   };
-  const openPrdTab = () => {
-    onSandboxTabChange("prd");
-    setExpandRightSignal((n) => n + 1);
-  };
   const openAgentsTab = () => {
     onSandboxTabChange("agents");
     setExpandRightSignal((n) => n + 1);
-  };
-
-  const handleCreateChat = async () => {
-    if (isCreatingChat) return;
-    setIsCreatingChat(true);
-    const createArgs = { sessionId, ...(chatId ? { fromChatId: chatId } : {}) };
-    try {
-      const created = await withMutationToast(
-        createChat(createArgs),
-        "New chat opened",
-        "Couldn't open a new chat",
-        "session-chat-create",
-      );
-      onChatChange(created.number);
-    } catch {
-      setIsCreatingChat(false);
-      return;
-    }
-    setIsCreatingChat(false);
-  };
-
-  const handleSelectChat = (chat: Doc<"sessionChats">) => {
-    onChatChange(chat.number);
   };
 
   useAgentBrowsingAutoSwitch(
@@ -231,44 +159,23 @@ export function SessionDetailClient({
     return <CenteredSpinner label="Opening chat" />;
   }
 
-  const isSandboxActive = session.status === "active";
   const isArchived = session.archive !== undefined;
 
   const chatPanel = (
     <ChatPanel
       key={activeChat._id}
-      sessionId={sessionId}
       session={session}
       chat={activeChat}
-      chats={chats ?? []}
-      chatStatuses={chatStatuses ?? []}
-      onSelectChat={handleSelectChat}
-      onCreateChat={() => void handleCreateChat()}
-      isCreatingChat={isCreatingChat}
-      title={session.title}
-      branchName={session.branchName}
-      sandboxBranch={session.sandboxBranch}
-      sandboxGitSync={session.sandboxGitSync}
-      prState={session.prState}
-      messages={messages ?? []}
-      isLoadingMessages={messages === undefined}
-      queuedMessages={queuedMessages ?? []}
-      streamingActivity={streaming?.currentActivity}
-      streamingContent={streaming?.currentContent}
-      streamingPendingQuestion={streaming?.pendingQuestion}
-      startupStreamingActivity={startupStreaming?.currentActivity}
+      sandboxStartupActivity={sandboxStartupActivity}
       isSandboxActive={isSandboxActive}
       isSandboxToggling={isSandboxStarting || isSandboxStopping}
       isSandboxStopping={isSandboxStopping}
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
-      isReadOnly={isArchived}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
-      onOpenPrdTab={openPrdTab}
       onOpenAgentsTab={openAgentsTab}
-      backgroundAgents={activeChat.backgroundAgents}
     />
   );
 
@@ -287,29 +194,22 @@ export function SessionDetailClient({
       >
         {(panes, owner, terminalPanel) => (
           <ResizablePanelLayout
+            chatPane="left"
             leftPanel={() => chatPanel}
             rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
               <SandboxPanel
-                sessionId={sessionId}
-                chatId={activeChat._id}
-                sandboxId={session.sandboxId}
+                session={session}
+                chat={activeChat}
                 isActive={isSandboxActive}
                 isRouteActive={isRouteActive}
-                repoId={session.repoId}
-                prUrl={session.prUrl}
                 devPort={session.devPort ?? repo.devPort}
                 devCommand={session.devCommand ?? repo.devCommand}
                 owner={owner}
                 panes={panes}
                 terminalPanel={terminalPanel}
-                planContent={session.planContent}
-                messages={messages ?? []}
-                backgroundAgents={activeChat.backgroundAgents}
-                streamingActivity={streaming?.currentActivity}
                 isArchived={isArchived}
                 activeTab={activeSandboxTab}
                 onTabChange={onSandboxTabChange}
-                agentBrowsingAt={session.agentBrowsingAt}
                 onStartSandbox={
                   isArchived || isSandboxStopping
                     ? undefined
@@ -318,12 +218,13 @@ export function SessionDetailClient({
                       }
                 }
                 isSandboxStarting={isSandboxStarting}
-                autoWakeEligible={
-                  session.status === "closed" &&
-                  session.sandboxId !== undefined &&
-                  session.sandboxError === undefined &&
-                  !isArchived
-                }
+                autoWakeEligible={sandboxAutoWakeEligible({
+                  status: session.status,
+                  sandboxId: session.sandboxId,
+                  sandboxError: session.sandboxError,
+                  canStart: !isArchived,
+                  isBusy: false,
+                })}
                 collapsed={rightPanelCollapsed}
                 onToggle={onToggleRightPanel}
                 miniPlayer={

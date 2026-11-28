@@ -13,6 +13,7 @@ import {
 import type { LocalChatDraft } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
+import { takePageSelection } from "@/lib/components/ave/pageSelection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 const DRAFT_STORAGE_KEY = "eva:ave-draft";
@@ -98,7 +99,16 @@ export function useAveChat() {
     ]);
     try {
       await catchMutationError(
-        sendMessage({ content, clientId }),
+        sendMessage({
+          content,
+          clientId,
+          pageContext: {
+            path: `${window.location.pathname}${window.location.search}`,
+            title: document.title,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            selection: takePageSelection(),
+          },
+        }),
         "Couldn't send to Manager Ave",
         "ave-send",
       );

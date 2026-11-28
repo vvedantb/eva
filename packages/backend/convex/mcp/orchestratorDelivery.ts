@@ -5,31 +5,16 @@ import {
 } from "../validators";
 
 /**
- * How an orchestrator-sent message must reach a child agent.
- *
- * - `queue`  — the agent already has a workflow in flight, so the message goes
- *              into `queuedMessages` and the queue drain inserts the user row.
- * - `start`  — the agent is idle, so the caller must insert the user message
- *              itself and then kick off a turn.
+ * The model an MCP send runs on. The stored model is the fallback when the
+ * caller names none, and an explicit `requestedModel` wins even when it
+ * belongs to another provider. `normalizeAIModel` supplies the platform
+ * default when neither is set.
  */
-export type AgentDelivery =
-  | { action: "queue"; model: AIModel }
-  | { action: "start"; model: AIModel };
-
-/**
- * Pure busy-vs-queue + model-fallback decision for `send_agent_message`.
- *
- * The stored model is the fallback when the caller names none, and an explicit
- * `requestedModel` wins even when it belongs to another provider.
- * `normalizeAIModel` supplies the platform default when neither is set.
- */
-export function resolveAgentDelivery(input: {
-  isBusy: boolean;
-  requestedModel?: string;
-  storedModel?: string;
-}): AgentDelivery {
-  const model = normalizeAIModel(input.requestedModel ?? input.storedModel);
-  return input.isBusy ? { action: "queue", model } : { action: "start", model };
+export function resolveAgentModel(
+  requestedModel: string | undefined,
+  storedModel: string | undefined,
+): AIModel {
+  return normalizeAIModel(requestedModel ?? storedModel);
 }
 
 /**
@@ -121,73 +106,3 @@ export const SANDBOX_STOP_SETTLE_TIMEOUT_MS = 120_000;
  * `orchestratorSendMessage`).
  */
 export type ChatTargetKind = ChatEntityKind;
-
-/** One mutation to run as the sending user, by Convex function path. */
-export interface SessionMessageCall {
-  fn: string;
-  args: Record<string, string | boolean>;
-}
-
-const SESSION_CHAT_MUTATIONS = {
-  addMessage: "_sessions/mutations:addMessage",
-  startExecute: "_sessions/execution:startExecute",
-  enqueueMessage: "_sessions/execution:enqueueMessage",
-};
-
-/**
- * The mutations that put one message into an existing chat, in order. Shared
- * by every MCP send path (master session and user token alike) so a message
- * from outside the web app lands exactly as a composer send does — and never
- * as a new task, session or project.
- *
- * `start` is two calls because `startExecute` only stages the assistant
- * placeholder: the user row has to be inserted first or the turn runs with no
- * visible prompt. `queue` is one, because the queue drain inserts the user row
- * itself on dequeue.
- */
-export function buildChatMessageCalls(input: {
-  chatId: string;
-  message: string;
-  delivery: AgentDelivery;
-  sentViaOrchestrator: boolean;
-  providerAccountId: string | null;
-}): SessionMessageCall[] {
-  const { chatId, message, delivery, sentViaOrchestrator } = input;
-  const account: Record<string, string> = {};
-  if (input.providerAccountId !== null) {
-    account.providerAccountId = input.providerAccountId;
-  }
-
-  if (delivery.action === "queue") {
-    return [
-      {
-        fn: SESSION_CHAT_MUTATIONS.enqueueMessage,
-        args: {
-          chatId,
-          message,
-          model: delivery.model,
-          sentViaOrchestrator,
-          ...account,
-        },
-      },
-    ];
-  }
-
-  return [
-    {
-      fn: SESSION_CHAT_MUTATIONS.addMessage,
-      args: {
-        chatId,
-        role: "user",
-        content: message,
-        model: delivery.model,
-        sentViaOrchestrator,
-        ...account,
-      },
-    },
-    {
-      fn: SESSION_CHAT_MUTATIONS.startExecute,
-      args: { chatId, message, model: delivery.model, ...account },
-    },
-  ];
-}

@@ -635,25 +635,13 @@ async function attachChatMediaIfAny(
   const mediaArgs: JsonObject = {
     parentId: ENTITY_ID ?? "",
     mediaStorageIds: uploaded.map((item) => item.storageId),
+    mediaNames: Object.fromEntries(
+      uploaded.map((item) => [item.storageId, item.fileName]),
+    ),
   };
   if (target.messageId) mediaArgs.messageId = target.messageId;
   if (target.turnId) mediaArgs.turnId = target.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
-}
-
-async function attachRunMediaIfAny(
-  uploaded: { storageId: string; fileName: string }[],
-): Promise<void> {
-  if (uploaded.length === 0) return;
-  await callConvexWithRetry(
-    "mutation",
-    "agentRuns:attachMedia",
-    {
-      id: RUN_ID ?? "",
-      mediaStorageIds: uploaded.map((item) => item.storageId),
-    },
-    3,
-  );
 }
 
 const REDACTED_COMPLETION_FIELDS: readonly string[] = [
@@ -681,18 +669,13 @@ export async function sendTurnCompletion(
 }
 
 /**
- * Sends the completion mutation and attaches sandbox media around it.
- *
- * A chat turn harvests after completion, so `screenshots:attachMedia` can patch
- * the assistant message that was just written. A task run harvests *before*:
- * its media hangs off the run doc, which already exists, and completing a run
- * hands control back to the task workflow — which pushes, opens the PR and
- * stops the sandbox out from under a late upload.
+ * Sends the completion mutation, then attaches sandbox media to the chat
+ * reply it just wrote (`screenshots:attachMedia`). A one-shot automation run
+ * (`RUN_ID`) has no chat reply, so it harvests nothing.
  */
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) {
@@ -781,11 +764,7 @@ export async function uploadAndAttachSandboxMedia(
   }
 
   try {
-    if (RUN_ID) {
-      await attachRunMediaIfAny(uploaded);
-    } else {
-      await attachChatMediaIfAny(uploaded, target);
-    }
+    await attachChatMediaIfAny(uploaded, target);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }

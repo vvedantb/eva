@@ -114,7 +114,7 @@ export function trackClaudeToolResult(
 function canFlushBackgroundShells(): boolean {
   return (
     PROVIDER === "claude" &&
-    (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") &&
+    ENTITY_ID_FIELD === "chatId" &&
     typeof ENTITY_ID === "string" &&
     ENTITY_ID.length > 0
   );

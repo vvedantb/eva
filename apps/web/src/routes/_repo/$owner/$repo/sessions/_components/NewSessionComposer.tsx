@@ -43,7 +43,7 @@ export function NewSessionComposer() {
   const { user } = useUser();
   const { repo, basePath } = useRepo();
   const firstName = user?.firstName?.trim();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stack] = useQueryStates({
     stackOn: stackOnPrParser,
@@ -107,7 +107,7 @@ export function NewSessionComposer() {
     try {
       const { numId } = await createSession({
         repoId: repo._id,
-        message: content,
+        prompt: content,
         model,
         baseBranch,
         ...executionTraits,
@@ -134,8 +134,6 @@ export function NewSessionComposer() {
 
   return (
     <div className="relative isolate flex h-full items-center justify-center p-4 sm:p-6">
-      {/* Own clip box: the blobs drift past the edges, and the content
-          must keep its normal overflow. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"

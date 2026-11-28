@@ -15,11 +15,14 @@ export {
   updateStatus,
   archive,
   unarchive,
+  addAttachments,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,
   assignToProject,
 } from "./_agentTasks/mutations";
+
+export { getRunFacts, getTaskIdsWithFailedRun } from "./_agentTasks/runFacts";
 
 export {
   startExecution,

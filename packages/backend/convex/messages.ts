@@ -30,6 +30,7 @@ const messageValidator = v.object({
       v.object({
         url: v.union(v.string(), v.null()),
         contentType: v.union(v.string(), v.null()),
+        name: v.union(v.string(), v.null()),
       }),
     ),
   ),
@@ -176,6 +177,7 @@ async function resolveMessageUrls(
         media: mediaEntries?.map((entry) => ({
           url: entry.url,
           contentType: entry.contentType,
+          name: m.mediaNames?.[entry.id] ?? null,
         })),
         attachmentUrls: attachmentEntries
           ? attachmentEntries.map((entry) => entry.url)
@@ -283,6 +285,44 @@ export const listThreadRoots = authQuery({
     return roots
       .sort((a, b) => a._creationTime - b._creationTime)
       .map((root) => root._id);
+  },
+});
+
+/**
+ * A chat's threads for the Replies tab list, latest reply first: each root's
+ * first words, its reply count and when it last got a reply.
+ */
+export const listThreadSummaries = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.array(
+    v.object({
+      rootId: v.id("messages"),
+      preview: v.string(),
+      authorId: v.optional(v.id("users")),
+      rootAt: v.number(),
+      replyCount: v.number(),
+      lastReplyAt: v.number(),
+      replierIds: v.array(v.id("users")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const roots = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_last_reply_at", (q) =>
+        q.eq("parentId", args.parentId).gt("lastReplyAt", 0),
+      )
+      .order("desc")
+      .take(MAX_THREAD_REPLIES);
+    return roots.map((root) => ({
+      rootId: root._id,
+      preview: threadRootPreview(root.content),
+      authorId: root.role === "user" ? root.userId : undefined,
+      rootAt: root.timestamp,
+      replyCount: root.replyCount ?? 0,
+      lastReplyAt: root.lastReplyAt ?? 0,
+      replierIds: root.replierIds ?? [],
+    }));
   },
 });
 
@@ -522,6 +562,7 @@ export const updateLastInternal = internalMutation({
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+    mediaNames: messageFields.mediaNames,
     requesterUserId: v.optional(v.id("users")),
   },
   returns: v.null(),
@@ -548,6 +589,7 @@ export const updateLastInternal = internalMutation({
       activityLog?: string;
       variations?: (typeof variationValidator.type)[];
       mediaStorageIds?: Id<"_storage">[];
+      mediaNames?: Record<Id<"_storage">, string>;
     } = {};
     if (args.content !== undefined) patch.content = args.content;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
@@ -556,6 +598,9 @@ export const updateLastInternal = internalMutation({
     const mediaStorageIds = appendMediaStorageIds(target.mediaStorageIds, args);
     if (mediaStorageIds !== undefined) {
       patch.mediaStorageIds = mediaStorageIds;
+    }
+    if (args.mediaNames !== undefined) {
+      patch.mediaNames = { ...target.mediaNames, ...args.mediaNames };
     }
 
     await ctx.db.patch(target._id, patch);

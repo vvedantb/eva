@@ -4,8 +4,6 @@ import { DimensionalLook } from './skeuomorphic'
 import './radix.css'
 import './looks.css'
 
-// The same invitation in three product identities. Copy a look's tokens,
-// then preserve the target product's typography and density, not this UI.
 function Scene() {
   return (
     <Window url="app.northwind.co" className="lk-window">

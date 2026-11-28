@@ -5,6 +5,7 @@ import {
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,
+  taskPrUrl,
   WAKE_EVA_LABEL,
   WAKE_EVA_RETRY_LABEL,
 } from "@eva/shared";
@@ -62,7 +63,7 @@ function useOwnedSandbox(owner: Owner | null) {
         const { sessionId } = await ensureOwned({ owner });
         await startSandbox({ sessionId });
       } catch {
-        toast.error("Could not start the sandbox. Try again.");
+        toast.error("Couldn't start sandbox");
       }
       setWaking(false);
     },
@@ -149,22 +150,23 @@ function ResolveDialog({
  */
 export function useTaskGitActions({
   task,
-  runCount,
+  projectPrUrl,
+  hasRuns,
   hasActiveRun,
 }: {
   task: Pick<Task, "_id" | "status" | "prUrl" | "projectId" | "repoId">;
-  runCount: number;
+  projectPrUrl: string | undefined;
+  hasRuns: boolean;
   hasActiveRun: boolean;
 }) {
+  const prUrl = taskPrUrl(task, projectPrUrl);
   const sandbox = useOwnedSandbox({ kind: "task", taskId: task._id });
   const simpleView = useSimpleView();
-  const prRow = useOwnerPrRow({ kind: "task", taskId: task._id }, task.prUrl, task.repoId);
+  const prRow = useOwnerPrRow({ kind: "task", taskId: task._id }, prUrl, task.repoId);
   const createTaskPr = useAction(api.taskWorkflowActions.createTaskPr);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [resolving, setResolving] = useState(false);
-  const canCreatePr =
-    task.projectId === undefined &&
-    taskCanCreatePr({ latestPrUrl: task.prUrl, runCount, hasActiveRun });
+  const canCreatePr = taskCanCreatePr({ latestPrUrl: prUrl, hasRuns, hasActiveRun });
   const canResolve =
     !simpleView &&
     taskCanResolveConflicts(
@@ -175,7 +177,7 @@ export function useTaskGitActions({
     <>
       <SandboxRows
         sandbox={sandbox}
-        canWake={taskCanStartSandbox(task.status, runCount > 0)}
+        canWake={taskCanStartSandbox(task.status, hasRuns)}
         agentActive={hasActiveRun}
         close={close}
       />

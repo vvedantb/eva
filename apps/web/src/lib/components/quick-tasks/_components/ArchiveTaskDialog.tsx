@@ -6,7 +6,8 @@ import { archiveCopy } from "@eva/shared";
 import { patchLoadedQuery } from "@vvedantb/server";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast, ConfirmDialog } from "@vvedantb/ui";
+import { ConfirmDialog } from "@vvedantb/ui";
+import { undoToast } from "@/lib/utils/undoToast";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
@@ -43,15 +44,13 @@ export function useTaskArchive() {
     const copy = archiveCopy("task", ids.length);
     return Promise.all(ids.map((id) => archiveTask({ id }))).then(
       () => {
-        toast.success(copy.archived, {
-          id: "task-archive",
-          action: {
-            label: "Undo",
-            onClick: () => {
-              void unarchive(ids);
-            },
+        undoToast(
+          copy.archived,
+          () => {
+            void unarchive(ids);
           },
-        });
+          { id: "task-archive" },
+        );
         return true;
       },
       () => {

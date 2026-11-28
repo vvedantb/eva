@@ -38,8 +38,6 @@ export function ProjectsSelectButton({
                 onClick={onClick}
               >
                 <IconCheckbox size={16} aria-hidden />
-                {/* `sr-only`, not `hidden`: the tooltip below is hover-only,
-                    so on touch this span is the button's only name. */}
                 <span className="max-sm:sr-only">Select</span>
               </Button>
             </TooltipTrigger>

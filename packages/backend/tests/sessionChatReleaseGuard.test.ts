@@ -31,9 +31,6 @@ async function sessionChatWithProcess(status: SessionStatus) {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     const processId = await ctx.db.insert("backgroundProcesses", {
       sessionId,

@@ -5,9 +5,8 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
-import { ownedSessionBusy } from "../convex/_sessions/ownedSession";
-import { taskWorkSessionBusy } from "../convex/_taskWorkflow/startRun";
-import { sessionAccountHolder } from "../convex/_projects/runSettings";
+import { ensureWorkSession, ownedSessionBusy } from "../convex/_sessions/ownedSession";
+import { sessionAccountHolder } from "../convex/_projects/projectAccount";
 import {
   buildProjectBranchName,
   buildTaskBranchName,
@@ -91,7 +90,7 @@ describe("projects on sessions", () => {
           await ctx.db.get(first.sessionId),
         ],
       );
-      expect(chat).toMatchObject({ isMain: true });
+      expect(chat?.sessionId).toBe(taskSession?._id);
       expect(chat?.taskId).toBeUndefined();
       expect(taskSession).toMatchObject({
         owner: { kind: "task", taskId: f.taskId },
@@ -102,11 +101,6 @@ describe("projects on sessions", () => {
         owner: { kind: "project", projectId: f.projectId },
         branchName: buildProjectBranchName(f.projectId),
       });
-      await expect(
-        f.asUser.mutation(api.sessionChats.create, {
-          sessionId: first.sessionId,
-        }),
-      ).rejects.toThrow("A project's session cannot open another chat.");
     },
     TIMEOUT_MS,
   );
@@ -142,8 +136,8 @@ describe("projects on sessions", () => {
         });
       });
       const busy = await f.t.run(async (ctx) => [
-        await taskWorkSessionBusy(ctx.db, { _id: f.taskId }),
-        await taskWorkSessionBusy(ctx.db, { _id: other }),
+        await ownedSessionBusy(ctx.db, { kind: "task", taskId: f.taskId }),
+        await ownedSessionBusy(ctx.db, { kind: "task", taskId: other }),
         await ownedSessionBusy(ctx.db, {
           kind: "project",
           projectId: f.projectId,
@@ -189,7 +183,7 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a person chatting in a child task runs on the project's account, unlocked as the project owner (decision 20)",
+    "a person chatting in a child task runs on Eva's account, unlocked as the project owner",
     async () => {
       const f = await fixture();
       const { creatorId, accountId } = await f.t.run(async (ctx) => {
@@ -205,10 +199,13 @@ describe("projects on sessions", () => {
           createdAt: now,
           updatedAt: now,
         });
-        await ctx.db.patch(f.projectId, {
-          model: DEFAULT_AI_MODEL,
-          providerAccountId: accountId,
-        });
+        const project = await ctx.db.get(f.projectId);
+        if (!project) throw new Error("project missing");
+        await ensureWorkSession(
+          ctx,
+          { kind: "project", project },
+          { lastModel: DEFAULT_AI_MODEL, providerAccountId: accountId },
+        );
         await ctx.db.patch(f.taskId, { createdBy: creatorId });
         return { creatorId, accountId };
       });

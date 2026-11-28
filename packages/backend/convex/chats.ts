@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import {
   authMutation,
   authQuery,
@@ -8,11 +8,10 @@ import {
 import { assertStandaloneSession } from "./_sessions/owner";
 import { stopChat, stopTask } from "./_sessions/stop";
 import { ensureOwnerChat } from "./_sessions/ownedSession";
-import { findWorkChat } from "./_sessions/ownerState";
 import { mobileChatValidator, resolveMobileChat } from "./_mobile/chatTarget";
 import {
-  sendOwnerChatMessage,
-  sendStickyChatMessage,
+  sendSessionChatMessage,
+  stickyTurnSettings,
 } from "./_sessions/execution";
 import {
   createSession,
@@ -23,9 +22,11 @@ import {
   setSessionChatModel,
   setSessionChatTraits,
 } from "./_sessionChats/mutations";
+import type { Id } from "./_generated/dataModel";
 import {
   aiModelValidator,
   normalizeAIModel,
+  previewAnnotationValidator,
   reasoningLevelValidator,
 } from "./validators";
 
@@ -50,48 +51,6 @@ async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
   return resolved;
 }
 
-/**
- * Replies in any chat the app opens (session chat, quick task, project) with
- * the chat's sticky model and traits. Sends at once when the chat is idle and
- * queues behind a running turn otherwise, like the web composer.
- * `attachmentStorageIds` come from `messages.generateUploadUrl` uploads.
- */
-export const send = authMutation({
-  args: {
-    target: v.string(),
-    message: v.string(),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const message = args.message.trim();
-    if (!message) return null;
-    const { chat, entity } = await resolveWritableChat(ctx, args.target);
-    if (!chat.canReply) throw new Error("This chat is closed");
-    const { attachmentStorageIds } = args;
-    switch (entity.kind) {
-      case "session":
-        await sendStickyChatMessage(ctx, {
-          context: entity.context,
-          model: normalizeAIModel(chat.model),
-          userId: ctx.userId,
-          content: message,
-          attachmentStorageIds,
-        });
-        return null;
-      case "task":
-      case "project":
-        await sendOwnerChatMessage(ctx, {
-          entity,
-          userId: ctx.userId,
-          content: message,
-          attachmentStorageIds,
-        });
-        return null;
-    }
-  },
-});
-
 const traitArgs = {
   reasoningLevel: v.optional(reasoningLevelValidator),
   thinkingEnabled: v.optional(v.boolean()),
@@ -99,12 +58,100 @@ const traitArgs = {
   fastMode: v.optional(v.boolean()),
 };
 
+const sendArgs = {
+  target: v.string(),
+  message: v.string(),
+  displayContent: v.optional(v.string()),
+  annotation: v.optional(previewAnnotationValidator),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  settings: v.optional(
+    v.object({
+      model: aiModelValidator,
+      ...traitArgs,
+      providerAccountId: v.optional(v.id("userProviderAccounts")),
+    }),
+  ),
+  sourceProposedPlanId: v.optional(v.id("proposedPlans")),
+};
+
+const sendArgsValidator = v.object(sendArgs);
+
 /**
- * The composer model picker: sets a chat's sticky model and traits, which
- * `sendMessage` then uses. Shares the writes of the web picker's mutations
- * (`sessionChats.setModel` / `setTraits`), so a pick reconciles the sticky
- * account as on the web. A task's or project's pick lands on its session
- * chat, created on first need.
+ * The whole decision of `send` for one caller. The web and phone mutation and
+ * the preview-link HTTP route (`previewComments.sendForUser`) both run it, so
+ * a message from a direct sandbox link takes the same path as one from the app.
+ */
+export async function sendChatMessage(
+  ctx: AuthMutationCtx,
+  args: Infer<typeof sendArgsValidator>,
+): Promise<null> {
+  const message = args.message.trim();
+  if (!message) return null;
+  const { chat, entity } = await resolveWritableChat(ctx, args.target);
+  if (!chat.canReply) throw new Error("This chat is closed");
+  const context =
+    entity.kind === "session"
+      ? entity.context
+      : await ensureOwnerChat(ctx, entity);
+  if (args.sourceProposedPlanId !== undefined) {
+    await markPlanImplementedIn(
+      ctx,
+      args.sourceProposedPlanId,
+      context.session._id,
+    );
+  }
+  const { attachmentStorageIds } = args;
+  await sendSessionChatMessage(ctx, {
+    context,
+    userId: ctx.userId,
+    content: message,
+    displayContent: args.displayContent?.trim() || undefined,
+    annotation: args.annotation,
+    settings: args.settings
+      ? { ...args.settings, attachmentStorageIds }
+      : stickyTurnSettings(
+          context.chat,
+          normalizeAIModel(context.chat.lastModel ?? chat.model),
+          attachmentStorageIds,
+        ),
+  });
+  return null;
+}
+
+/**
+ * Sends a person's message in any chat the apps open (session chat, quick
+ * task, project). The server alone decides whether it runs now or queues:
+ * behind a running turn, for a free parallel-chat slot, for a usage-limit
+ * reset, or for Eva to wake (`sendSessionChatMessage`). A project task that
+ * waits on its question takes the message as the answer.
+ * `attachmentStorageIds` come from `messages.generateUploadUrl` uploads.
+ */
+export const send = authMutation({
+  args: sendArgs,
+  returns: v.null(),
+  handler: (ctx, args) => sendChatMessage(ctx, args),
+});
+
+async function markPlanImplementedIn(
+  ctx: AuthMutationCtx,
+  planId: Id<"proposedPlans">,
+  sessionId: Id<"sessions">,
+): Promise<void> {
+  const plan = await ctx.db.get(planId);
+  if (!plan || plan.sessionId !== sessionId) return;
+  const now = Date.now();
+  await ctx.db.patch(planId, {
+    implementedAt: now,
+    implementationSessionId: sessionId,
+    updatedAt: now,
+  });
+}
+
+/**
+ * The composer model picker on the web and the phone: sets a chat's sticky
+ * model and traits, which `send` then uses. A model pick reconciles the
+ * sticky account to the model's provider (`setSessionChatModel`). A task's or
+ * project's pick lands on its session chat, created on first need.
  */
 export const setModel = authMutation({
   args: {
@@ -135,8 +182,10 @@ export const setModel = authMutation({
 });
 
 /**
- * The Stop button: the web chat Stop (`sessions.stopChatTurn`) for a mobile
- * target. Stops the chat's turn and its task's run, then starts its queue.
+ * The chat Stop button, on the web, the phone and MCP: stops the exact chat
+ * the target names (its open turn) and the task run shown in it (a quick or
+ * project task's). What was queued before it waits for Steer. Name the task
+ * when its chat may not exist yet (a quick task's first run).
  */
 export const stop = authMutation({
   args: { target: v.string() },
@@ -150,20 +199,18 @@ export const stop = authMutation({
       case "task":
         await stopTask(ctx, entity.task);
         return null;
-      case "project": {
-        const found = await findWorkChat(ctx.db, entity);
-        if (found) await stopChat(ctx, found);
+      case "project":
         return null;
-      }
     }
   },
 });
 
 /**
- * Starts a session from the phone, as the web sessions landing composer does:
- * `prompt` is the first message. The composer footer's model, traits, account
- * and base branch are optional; each absent one is the default, as on the web.
- * Open the returned `sessionId` as the chat target.
+ * Starts a session with `prompt` as its first message: the sessions landing
+ * composer on the web and the phone, and every "start a session for this"
+ * button. The composer footer's model, traits, account and base branch are
+ * optional; each absent one is the default. MCP `create_session` starts its
+ * sessions here too. Open the returned `sessionId` (or `numId`) as the chat.
  */
 export const start = authMutation({
   args: {
@@ -178,6 +225,11 @@ export const start = authMutation({
     ),
     baseBranch: v.optional(v.string()),
     stackOnPrNumber: v.optional(v.number()),
+    linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
+    repoGroupId: v.optional(v.id("repoGroups")),
+    installDependencies: v.optional(v.boolean()),
+    fromSessionId: v.optional(v.id("sessions")),
+    sentViaOrchestrator: v.optional(v.boolean()),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
   handler: async (ctx, { prompt: rawPrompt, ...args }) => {

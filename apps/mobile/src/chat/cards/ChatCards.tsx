@@ -8,6 +8,7 @@ import { MediaCard } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
 import * as WebBrowser from "expo-web-browser";
 import { View } from "react-native";
+import { ProjectChatTaskCard } from "@/projects/ProjectChatTaskCard";
 import { copyText } from "@/ui/copyText";
 import { useScheme } from "@/ui/theme";
 import { EnvVarRequestCard, SessionProposalCard } from "./AgentRequestCards";
@@ -33,13 +34,18 @@ export type TurnOutput = {
   createdAt: number;
   output:
     | { kind: "artifact"; artifact: { _id: Id<"artifacts">; name: string; description?: string } }
-    | { kind: "report"; report: ChatFeedbackRow };
+    | { kind: "report"; report: ChatFeedbackRow }
+    | { kind: "task"; taskId: Id<"agentTasks">; project: ChatProject };
 };
+
+/** A project's coordinator chat: what its task cards read (`ProjectChatTaskCard`). */
+export type ChatProject = { projectId: Id<"projects">; repoId: Id<"githubRepos"> };
 
 /**
  * The chat's agent-posted cards (`render_ui` panels, `render_html` pages, a
  * secret the agent asked for, a session it proposes) and
- * turn outputs (`create_artifact` artifacts, `submit_feedback` reports), each
+ * turn outputs (`create_artifact` artifacts, `submit_feedback` reports, and
+ * in a project's coordinator chat the tasks Eva created or gave work to), each
  * placed under its turn, else under the newest row before it, else after the
  * last message, as the web `ChatBody`. One query each per chat. The
  * transcript loads in pages: while `hasOlderHistory`, a card whose turn is
@@ -51,12 +57,14 @@ export function useChatCards(
   rows: readonly PlacementMessage[],
   agentReports: readonly ChatFeedbackRow[],
   hasOlderHistory: boolean,
+  project?: ChatProject,
 ) {
   const panels = useQuery(api.chatUi.listByParent, parentId ? { parentId } : "skip");
   const htmlRenders = useQuery(api.chatHtml.listByParent, parentId ? { parentId } : "skip");
   const envVarRequests = useQuery(api.envVarRequests.listByParent, parentId ? { parentId } : "skip");
   const sessionProposals = useQuery(api.sessionProposals.listByParent, parentId ? { parentId } : "skip");
   const artifacts = useQuery(api.artifacts.listForChat, parentId ? { parentId } : "skip");
+  const taskCards = useQuery(api.projects.listChatTaskCards, project ? { projectId: project.projectId } : "skip");
   const cards = placeChatUiPanels<InlineCard>(
     [
       ...(panels ?? []).map((panel) => ({
@@ -91,6 +99,14 @@ export function useChatCards(
     rows,
     hasOlderHistory,
   );
+  const taskOutputs: TurnOutput[] = project
+    ? (taskCards ?? []).map((card) => ({
+        _id: card.key,
+        messageId: card.messageId,
+        createdAt: card.createdAt,
+        output: { kind: "task", taskId: card.taskId, project },
+      }))
+    : [];
   const outputs = placeChatUiPanels<TurnOutput>(
     [
       ...(artifacts ?? []).map((artifact) => ({
@@ -99,6 +115,7 @@ export function useChatCards(
         createdAt: artifact.createdAt,
         output: { kind: "artifact" as const, artifact },
       })),
+      ...taskOutputs,
       ...agentReports.map((report) => ({
         _id: report._id,
         messageId: report.messageId,
@@ -151,17 +168,27 @@ export function InlineCards({
   );
 }
 
-/** A turn's artifacts and reports, `mt-1 gap-2`, as the web's `artifacts`. */
+/** A turn's artifacts, reports and task cards, `mt-1 gap-2`, as the web's `artifacts`. */
 export function TurnOutputs({ outputs }: { outputs: readonly TurnOutput[] }) {
   return (
     <View className="mt-1 gap-2">
-      {outputs.map(({ _id, output }) =>
-        output.kind === "artifact" ? (
-          <ChatArtifactCard key={_id} artifact={output.artifact} />
-        ) : (
-          <AgentFeedbackCard key={_id} feedback={output.report} />
-        ),
-      )}
+      {outputs.map(({ _id, output }) => {
+        switch (output.kind) {
+          case "artifact":
+            return <ChatArtifactCard key={_id} artifact={output.artifact} />;
+          case "report":
+            return <AgentFeedbackCard key={_id} feedback={output.report} />;
+          case "task":
+            return (
+              <ProjectChatTaskCard
+                key={_id}
+                taskId={output.taskId}
+                projectId={output.project.projectId}
+                repoId={output.project.repoId}
+              />
+            );
+        }
+      })}
     </View>
   );
 }

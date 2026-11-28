@@ -24,9 +24,9 @@ import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
-import type { AnnotationSubmit } from "./annotationSend";
+import type { PreviewAnnotationTarget } from "./annotationSend";
 import {
-  isSimpleViewHiddenSandboxTab,
+  useIsHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
@@ -48,7 +48,7 @@ interface SandboxPaneSlotsProps {
   runConsoleDevCommandOnConnect?: boolean;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  onAnnotationSubmit: AnnotationSubmit;
+  annotation: PreviewAnnotationTarget;
   miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;
   previewPortOptions?: readonly PreviewPortOption[];
   viewState: SandboxViewState | undefined;
@@ -108,7 +108,7 @@ export function SandboxPaneSlots({
   runConsoleDevCommandOnConnect = true,
   onStartSandbox,
   isSandboxStarting,
-  onAnnotationSubmit,
+  annotation,
   miniPlayer,
   previewPortOptions,
   viewState,
@@ -118,10 +118,8 @@ export function SandboxPaneSlots({
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
   const wake = { onStartSandbox, isSandboxStarting };
-  const resolvedTab =
-    simpleView && isSimpleViewHiddenSandboxTab(activeTab)
-      ? "preview"
-      : activeTab;
+  const isHiddenTab = useIsHiddenSandboxTab();
+  const resolvedTab = isHiddenTab(activeTab) ? "preview" : activeTab;
   const entityId = sandboxOwnerParentId(owner);
   const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
@@ -161,6 +159,7 @@ export function SandboxPaneSlots({
     setPreviewActive,
     handleClosePreview,
   } = panes;
+
   const previewRegion = (
     <div className="flex h-full min-h-0 flex-col">
       <div className={resolvedTab === "preview" ? undefined : "hidden"}>
@@ -222,7 +221,7 @@ export function SandboxPaneSlots({
               }}
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
-              onAnnotationSubmit={onAnnotationSubmit}
+              annotation={annotation}
               miniPlayer={
                 resolvedTab === "preview" && resolvedPreviewActive === id
                   ? miniPlayer

@@ -1,8 +1,10 @@
 import type { Infer } from "convex/values";
+import { reconcileTaskCloseTimes } from "../_agentTasks/closeTimes";
 import {
   combineRepoPrStates,
   isLivePrState,
   type LivePrState,
+  taskPrUrl,
 } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
@@ -27,6 +29,14 @@ import {
 import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
 import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
 import type { SiblingPr } from "../prBody";
+
+/**
+ * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
+ * session opens, each linked repo's PR, a task run's PR, a project PR, and any
+ * PR the agent opens itself on an Eva branch — is a row here, and every write
+ * re-derives the owner's `prUrl` / `prState` / `prCount` summary so list rows
+ * never need a join.
+ */
 
 export type PrOwner = Infer<typeof prOwnerValidator>;
 export type PrState = Infer<typeof prStateValidator>;
@@ -346,7 +356,6 @@ export async function syncOwnerPrSummary(
         : await ctx.db.get(owner.projectId);
   if (
     doc === null ||
-    (rows.length + linked.length === 0 && doc.prCount === undefined) ||
     (doc.prUrl === summary.prUrl &&
       doc.prState === summary.prState &&
       doc.prCount === summary.prCount)
@@ -357,6 +366,7 @@ export async function syncOwnerPrSummary(
     await ctx.db.patch(owner.sessionId, summary);
   } else if (owner.kind === "task") {
     await ctx.db.patch(owner.taskId, summary);
+    await reconcileTaskCloseTimes(ctx, owner.taskId);
   } else {
     await ctx.db.patch(owner.projectId, summary);
   }
@@ -744,11 +754,15 @@ export function sessionRepoPullRequest(
 }
 
 /**
- * A task's own PR summary. Every task owns its PR; an old project task's PR
- * on the project branch stays with the project (`projects.prUrl`).
+ * The PR a task links to (`taskPrUrl` in `@eva/shared`): its own, else its
+ * project's. The project is read only when the task has no PR of its own.
  */
-export function taskPrUrl(
-  task: Pick<Doc<"agentTasks">, "prUrl">,
-): string | undefined {
-  return task.prUrl;
+export async function loadTaskPrUrl(
+  db: DatabaseReader,
+  task: Pick<Doc<"agentTasks">, "prUrl" | "projectId">,
+): Promise<string | undefined> {
+  if (task.prUrl !== undefined || task.projectId === undefined) {
+    return task.prUrl;
+  }
+  return taskPrUrl(task, (await db.get(task.projectId))?.prUrl);
 }

@@ -3,23 +3,6 @@ import { Count, Icon, Meter, Prompt, Caret, Stage, States, Window, useReducedMot
 import type { Act, Layout } from '../../kit'
 import './grid.css'
 
-// A ruled bento on dark: the features section of Halite, an invented edge
-// database. One rounded container, 1px rules between the cells, no gaps,
-// mixed spans (2 + 1, then 1 + 2, then a full-width band), the way Linear,
-// Framer and Raycast's developer page set theirs.
-//
-//   Tile      Span   Kind        The one thing                         Moves
-//   Create    2 × 1  Hero UI     `halite create`, the only window      the migration bar fills, Ready prints
-//   Reads     1 × 1  Stat        "4ms" at the median                   counts down from 120
-//   Regions   1 × 1  Diagram     a primary and six replicas            the lines draw out, replicas light
-//   Restore   2 × 1  Component   the restore scrubber                  the handle slides back past the bad drop
-//   Drivers   3 × 1  Collection  ORM names, bleeding off both sides    the rows drift apart
-//
-// Two of five tiles are UI, one window. Across and down, no kind sits next
-// to itself. Each picture is its own Stage at 1:1, pinned to its cell's
-// bottom; the copy is page text. Each cell plays one beat, once, 110ms
-// after the one before it in reading order.
-
 const STEP = 110
 const LEAD = 450
 
@@ -46,7 +29,6 @@ function Tile({ area, title, children, picture }: { area: string; title: ReactNo
   )
 }
 
-// Measure the tile, not the page: a wide page can still contain a narrow tile.
 function usePictureWidth() {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(340)
@@ -62,9 +44,6 @@ function usePictureWidth() {
   return [ref, width] as const
 }
 
-/* ---------------- Create (hero) ---------------- */
-
-// The hero's one beat: the output prints, and the bar fills once its line is in
 const create = async (a: Act<Beat>) => {
   await a.wait(LEAD)
   await a.set({ on: true })
@@ -123,8 +102,6 @@ function Create() {
   )
 }
 
-/* ---------------- Reads (stat) ---------------- */
-
 function useInView<T extends Element>(delay: number) {
   const ref = useRef<T>(null)
   const [seen, setSeen] = useState(false)
@@ -166,10 +143,6 @@ function Reads() {
   )
 }
 
-/* ---------------- Regions (diagram) ---------------- */
-
-// Rough world positions on a 380 × 236 stage, the primary in Virginia
-// Every pill stays inside x 46 to 334, the part the narrowest cell shows
 const PRIMARY = { id: 'iad1', x: 124, y: 96 }
 const REPLICAS = [
   { id: 'sfo1', x: 62, y: 58 },
@@ -181,7 +154,6 @@ const REPLICAS = [
 ]
 
 function arc(a: { x: number; y: number }, b: { x: number; y: number }) {
-  // A gentle bow above the straight line, more for longer runs
   const mx = (a.x + b.x) / 2
   const my = (a.y + b.y) / 2
   const d = Math.hypot(b.x - a.x, b.y - a.y)
@@ -190,7 +162,6 @@ function arc(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 function Regions() {
   const [ref, width] = usePictureWidth()
-  // Keep the region names native-size while moving their points inward.
   const point = (p: typeof PRIMARY) => ({ ...p, x: width < 360 ? 38 + (p.x - 62) / 224 * (width - 106) : p.x + (width - 380) / 2 })
   const primary = point(PRIMARY)
   const replicas = REPLICAS.map(point)
@@ -232,15 +203,11 @@ function Regions() {
   )
 }
 
-/* ---------------- Restore (component) ---------------- */
-
-// Write activity per minute, 13:00 to 14:40: varied, with a quiet lunch dip
 const WRITES = Array.from({ length: 50 }, (_, i) => {
   const base = 0.38 + 0.3 * Math.sin(i * 0.37) * Math.cos(i * 0.11) + 0.18 * Math.sin(i * 1.7)
   const dip = i > 14 && i < 22 ? 0.45 : 1
   return Math.max(0.12, Math.min(1, base * dip + 0.12))
 })
-// Two minutes a bar from 13:00: the handle stops at 14:02, the table went at 14:04
 const DROP = 31
 
 function Restore() {
@@ -293,8 +260,6 @@ function Restore() {
     </Tile>
   )
 }
-
-/* ---------------- Drivers (collection) ---------------- */
 
 const ROWS = [
   ['ecto', 'prisma', 'drizzle', 'kysely', 'sqlalchemy', 'gorm', 'diesel', 'sequelize', 'typeorm', 'exposed'],

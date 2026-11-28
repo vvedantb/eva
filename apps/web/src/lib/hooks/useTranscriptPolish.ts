@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { toast } from "@vvedantb/ui";
+import { undoToast } from "@/lib/utils/undoToast";
 
 const MIN_POLISH_WORDS = 10;
 
@@ -73,11 +73,8 @@ export function useTranscriptPolish({
     if (latestValueRef.current !== raw) return;
 
     setInput(prefix + polished);
-    toast.success("Transcript polished", {
-      action: {
-        label: "Undo",
-        onClick: () => setInput(raw),
-      },
+    undoToast("Transcript polished", () => setInput(raw), {
+      allowInEditable: true,
     });
   };
 

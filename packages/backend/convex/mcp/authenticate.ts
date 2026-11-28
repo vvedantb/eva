@@ -18,7 +18,7 @@ export type McpPrincipal = {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  entityKind?: "session";
   chatId?: string;
 };
 

@@ -31,11 +31,6 @@ import {
 } from "../../kit";
 import "./notion.css";
 
-// Notion's slash command. Beats: click into an empty line, press "/", the
-// block menu opens, pick "To-do list", type a task, tick it off. The finished
-// task stays checked until the host's Replay starts on the empty line.
-// Real words: the page title, the placeholder, the menu, the task.
-
 type S = {
   focus: boolean;
   slash: boolean;
@@ -76,12 +71,10 @@ const TODO = ITEMS.findIndex((i) => i.label === "To-do list");
 async function script(a: Act<S>) {
   await a.wait(500);
 
-  // Click into the empty line under the paragraph
   await a.click({ at: "line", x: 0.72, y: 0.5 });
   await a.set({ focus: true });
   await a.wait(600);
 
-  // "/" opens the block menu, its first row selected
   a.mark("slash");
   await a.key("/");
   await a.set({ slash: true });
@@ -89,7 +82,6 @@ async function script(a: Act<S>) {
   await a.set({ menu: true });
   await a.wait(800);
 
-  // The pointer takes over the selection, then runs down to To-do list
   await a.move({ at: "item-0", x: 0.62, y: 0.55 });
   await a.set({ active: undefined });
   await a.wait(200);
@@ -100,19 +92,16 @@ async function script(a: Act<S>) {
   await a.set({ menu: false, todo: true });
   await a.wait(650);
 
-  // Type the task
   await a.set({ typing: true });
   await a.type("task", TASK, { interval: 65 });
   await a.set({ typing: false });
   await a.wait(500);
 
-  // Tick it off
   await a.click({ at: "check", x: 0.72, y: 0.78 });
   a.mark("tick");
   await a.set({ done: true, focus: false });
   await a.wait(2200);
 
-  // Step away and keep the completed task visible. Replay is the reset.
   await a.move({ at: "rest", x: 0.5, y: 0.5 });
   a.mark("done");
 }
@@ -197,7 +186,6 @@ function Page({ s }: { s: S }) {
         <Bar w="58%" h={7} tone={3} />
       </div>
 
-      {/* The line the story happens on: a text line that becomes a to-do */}
       <div className="nt-line" data-target="line" data-cursor="ibeam">
         <span className="nt-handle" aria-hidden>
           <Plus size={16} strokeWidth={1.75} />
@@ -294,7 +282,6 @@ function Scene({ s, layout }: { s: S; layout: Layout }) {
           {page}
         </Window>
       )}
-      {/* Where the pointer rests between loops, over the page's empty right side */}
       <span className="nt-rest" data-target="rest" />
     </>
   );

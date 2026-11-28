@@ -18,7 +18,6 @@ describe("Needs you rules", () => {
   test("a project task lands in its group; the rest stay on the project", () => {
     expect(needsYouGroupForProjectTask("question")).toBe("question");
     expect(needsYouGroupForProjectTask("review")).toBe("review");
-    expect(needsYouGroupForProjectTask("approve")).toBe("triage");
     expect(needsYouGroupForProjectTask("failed")).toBe("failed");
     expect(needsYouGroupForProjectTask("stopped")).toBeUndefined();
     expect(needsYouGroupForProjectTask(undefined)).toBeUndefined();
@@ -104,14 +103,26 @@ describe("needsYou.list", () => {
         numId: 3,
         createdBy: userId,
       });
-      await ctx.db.insert("agentRuns", {
-        taskId: failedId,
+      const failedSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "task", taskId: failedId },
         repoId,
-        status: "error",
-        logs: [],
-        startedAt: 1,
+        userId,
+        title: "Seed script",
+        status: "closed",
+      });
+      await ctx.db.insert("turns", {
+        entityId: failedSessionId,
+        sessionId: failedSessionId,
+        streamingEntityId: String(failedSessionId),
+        state: "error",
+        open: false,
+        turnStartedAt: 1,
         finishedAt: 2,
-        error: "Tests failed",
+        leaseExpiresAt: 2,
+        leaseGeneration: 1,
+        model: "claude:opus",
+        repoId,
+        taskRun: { mode: "implementation" },
       });
       await ctx.db.insert("agentTasks", {
         ...task,
@@ -129,8 +140,7 @@ describe("needsYou.list", () => {
       .withIdentity({ subject: CLERK_ID })
       .query(api.needsYou.list, {});
     const byTitle = new Map(rows.map((row) => [row.title, row]));
-    expect(byTitle.get("Promo code box")?.group).toBe("triage");
-    expect(byTitle.get("Promo code box")?.projectTitle).toBe("Checkout");
+    expect(byTitle.has("Promo code box")).toBe(false);
     expect(byTitle.get("Fix login test")?.group).toBe("review");
     expect(byTitle.get("Fix login test")?.detail).toBe("PR #1466");
     expect(byTitle.get("Seed script")?.group).toBe("failed");

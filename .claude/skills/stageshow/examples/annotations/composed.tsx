@@ -3,9 +3,6 @@ import { Connector, Icon, Stage, States, type Act } from '../../kit'
 import './composed.css'
 
 
-// The compact output detours around the incoming routes. Keep this one path,
-// rather than drawing separate segments simultaneously. Its arrow follows the
-// real transition completion, including a paused host and reduced motion.
 function UsageDelivery({ path, to, show }: { path: string; to: { x: number; y: number }; show: boolean }) {
   const line = useRef<SVGPathElement>(null), [arrived, setArrived] = useState(false)
   useLayoutEffect(() => {
@@ -30,7 +27,6 @@ async function collectUsage(a: Act<Collection>) {
   a.mark('post'); await a.set({ phase: 2 }); await a.wait(1100)
   a.mark('invoice'); await a.set({ phase: 3 })
   await a.wait(3050); a.mark('done')
-  // The first invoice update is complete; its three live sources stay connected.
 }
 
 /** Three live usage sources feed one invoice; the junction is an aggregation,

@@ -19,6 +19,7 @@
     "build": "pnpm --filter @eva/web build",
     "ci": "bun run --parallel lint typecheck build test",
     "compiler:check": "node scripts/compiler-check.mjs",
+    "preview:parity": "node scripts/preview-parity.mjs",
     "design:check": "node scripts/design-check.mjs",
     "test": "pnpm --parallel --filter @eva/web --filter @eva/backend test && pnpm test:schema-narrowing",
     "test:timings": "pnpm --parallel --filter @eva/web --filter @eva/backend test --update-timings",

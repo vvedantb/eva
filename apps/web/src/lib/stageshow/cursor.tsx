@@ -3,9 +3,6 @@ import { MacCrosshair, MacGrab, MacIbeam, MacOpenHand, MacPointer, MacPointingHa
 import type { Point } from './measure'
 import './cursor.css'
 
-// The cursor a stage draws: the glyph for each kind, where its hotspot sits,
-// the five styles, and the ripple a click can send out.
-
 /** pointer: the arrow. hand: the pointing hand, for links and buttons. open: the
  * open hand over something draggable. grab: the closed hand while it's held.
  * resize-ns, resize-ew: over an edge that drags. resize-nwse, resize-nesw:
@@ -36,7 +33,6 @@ const GLYPHS: Record<CursorKind, () => ReactNode> = {
   'resize-nesw': MacResizeNESW,
 }
 
-// Where each glyph's hotspot sits inside its box, so the point is the click.
 const HOTSPOT: Record<CursorKind, Point> = {
   pointer: { x: 7.5, y: 5.25 },
   ibeam: { x: 5, y: 8 },
@@ -51,7 +47,6 @@ const HOTSPOT: Record<CursorKind, Point> = {
   'resize-nesw': { x: 10.5, y: 10.5 },
 }
 
-// The arrow style's pointer: one solid, rounded arrowhead, tip at the hotspot
 const ARROW_HOTSPOT: Point = { x: 4, y: 3 }
 function SolidArrow() {
   return (
@@ -70,7 +65,6 @@ export function Cursor({ cursorRef, style = 'real', kind }: { cursorRef: Ref<HTM
         {(style === 'circle' || style === 'touch') && <span className="ss-cursor__dot" />}
         {style !== 'circle' && style !== 'touch' && (Object.keys(GLYPHS) as CursorKind[]).map((k) => {
           const arrow = style === 'arrow'
-          // The arrow style has two glyphs: the arrow, and the I-beam over text
           if (arrow && k !== 'pointer' && k !== 'ibeam') return null
           const Glyph = arrow && k === 'pointer' ? SolidArrow : GLYPHS[k]
           const hot = arrow && k === 'pointer' ? ARROW_HOTSPOT : HOTSPOT[k]

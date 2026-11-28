@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { constants } from 'node:os'
@@ -25,13 +24,10 @@ export function devCommand(platform = process.platform, extra = []) {
     try { portless = packageBin('portless') } catch {
       throw new Error('Portless is unavailable. Run npm install --include=optional in this folder on macOS or Linux.')
     }
-    // Portless recognizes the basename "vite" and injects its assigned port.
-    // Use the local POSIX shim rather than an unrelated executable on PATH.
     const shim = resolve(root, 'node_modules', '.bin', 'vite')
     if (!existsSync(shim)) throw new Error('The local Vite launcher is missing; run npm install in this folder.')
     return { command: process.execPath, args: [portless, 'stageshow', shim, ...args], cwd: root, named: true }
   }
-  // Node runs the actual JS bin, so Windows needs neither a .cmd shim nor a shell.
   return { command: process.execPath, args: [vite, ...args], cwd: root, named: false }
 }
 

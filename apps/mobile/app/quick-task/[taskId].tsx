@@ -3,13 +3,14 @@ import {
   getAIModelProvider,
   normalizeAIModel,
   taskScheduledAt,
+  type AIModel,
   type Id,
 } from "@eva/backend";
+import { useTaskChatModel } from "@/quickTasks/useTaskChatModel";
 import {
   PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   formatEntityNumLabel,
-  mentionTokensToEditableText,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
@@ -20,13 +21,11 @@ import {
   canEditTaskText,
   getUserDisplayName,
   taskTextLockReason,
-  type ReactionGroup,
 } from "@eva/shared/taskDetail";
 import {
   IconChecklist,
   IconCalendarClock,
   IconClock,
-  IconFileText,
   IconFolder,
   IconMessage,
   IconPlayerPlay,
@@ -46,15 +45,15 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { Pressable, Text, TextInput, View, type TextStyle } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
 } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ComposerMentionChips, UserMessageText } from "@/chat/MentionChip";
+import { ComposerMentionChips } from "@/chat/MentionChip";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync, type DraftTarget } from "@/chat/useDraftSync";
@@ -72,29 +71,21 @@ import {
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import {
-  ReactionChips,
-  TaskActivity,
-  useTaskReactions,
-} from "@/quickTasks/TaskActivity";
+import { TaskActivity, useTaskReactions } from "@/quickTasks/TaskActivity";
 import {
   CommentModeChip,
-  EmojiPickerSheet,
-  ReactableMenu,
   TaskSubscribers,
-  measureHeld,
-  type HeldRect,
   useCommentMutations,
   type CommentMode,
 } from "@/quickTasks/TaskDiscussion";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { useTaskGitActions } from "@/sandbox/OwnedSandboxActions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
-import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 import { ArchivedBar } from "@/ui/ArchivedBar";
+import { TaskDescription, TaskTitle } from "@/quickTasks/TaskText";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -114,10 +105,9 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * Routes as `/quick-task/<taskId>?repo=<repoId>&numId=<numId>`; the task
  * resolves through the repo's quick tasks (live, then archived), so its id
  * keeps its table type. An archived task opens read-only under its
- * `ArchivedBar`. A project task is never a quick task: it resolves by its number
- * (`getByNumId`), then through its project's list (`listByProject`, the
- * archived one for a task archived on its own). A task of an archived project
- * is read-only too, without the bar.
+ * `ArchivedBar`. A project task is never a quick task: it resolves by its
+ * number (`getByNumId`) and opens as its chat, as on the web (a link to it
+ * lands here).
  */
 export default function QuickTaskScreen() {
   const router = useRouter();
@@ -139,19 +129,16 @@ export default function QuickTaskScreen() {
   const byNumber =
     repo !== undefined && archivedTasks !== undefined && quickTask === undefined && Number.isInteger(numId);
   const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
-  const projectId = numbered?._id === params.taskId ? numbered.projectId : undefined;
-  const projectTasks = useQuery(
-    api.agentTasks.listByProject,
-    projectId ? { projectId, archived: numbered?.archivedAt !== undefined } : "skip",
-  );
-  const task = quickTask ?? projectTasks?.find((candidate) => candidate._id === params.taskId);
+  if (numbered?._id === params.taskId && numbered.projectId !== undefined) {
+    return <Redirect href={{ pathname: "/chat/[target]", params: { target: numbered._id } }} />;
+  }
+  const task = quickTask;
 
   const loading =
     repos === undefined ||
     (repo !== undefined && tasks === undefined) ||
     (liveTask === undefined && tasks !== undefined && archivedTasks === undefined) ||
-    (byNumber && numbered === undefined) ||
-    (projectId !== undefined && projectTasks === undefined);
+    (byNumber && numbered === undefined);
   if (loading || !repo || !task || !tasks) {
     return (
       <View className="flex-1">
@@ -189,12 +176,11 @@ function TaskOverview({
 }) {
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
-  const hasActiveRun =
-    runs?.some((run) => run.status === "queued" || run.status === "running") ??
-    false;
-  const git = useTaskGitActions({ task, runCount: runs?.length ?? 0, hasActiveRun });
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
+  const hasActiveRun = runFacts?.hasActiveRun ?? false;
+  const hasRuns = runFacts?.hasRuns ?? false;
   const project = useQuery(api.projects.get, task.projectId ? { id: task.projectId } : "skip");
+  const git = useTaskGitActions({ task, projectPrUrl: project?.prUrl, hasRuns, hasActiveRun });
   const archived = task.archivedAt !== undefined;
   const readOnly = archived || project?.archivedAt !== undefined;
   const actions = useQuickTaskActions({
@@ -212,8 +198,9 @@ function TaskOverview({
   });
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
+  const taskModel = useTaskChatModel(task._id);
 
-  const editable = !readOnly && runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const editable = !readOnly && runFacts !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -259,7 +246,7 @@ function TaskOverview({
           title={task.title}
           editable={editable}
           lockReason={
-            runs === undefined
+            runFacts === undefined
               ? undefined
               : taskTextLockReason(hasActiveRun, "Title")
           }
@@ -289,7 +276,7 @@ function TaskOverview({
           <TaskDescription
             description={task.description}
             repoId={repo._id}
-            model={task.model}
+            model={taskModel}
             editable={editable}
             reactions={reactionsFor("description", task._id)}
             onSave={(description) =>
@@ -313,7 +300,6 @@ function TaskOverview({
           task={task}
           users={users}
           projects={projects}
-          taskProject={project ?? undefined}
           allTags={allTags}
           update={update}
           readOnly={readOnly}
@@ -328,7 +314,6 @@ function TaskOverview({
               creator={creator}
               users={users}
               reactionsFor={reactionsFor}
-              isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
               readOnly={readOnly}
               onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
@@ -350,7 +335,7 @@ function TaskOverview({
               currentUserId={currentUserId}
               taskId={task._id}
               repoId={repo._id}
-              model={task.model}
+              model={taskModel}
               users={users}
               mode={commentMode}
               onModeChange={changeCommentMode}
@@ -370,7 +355,7 @@ function TaskOverview({
         }
         onRemove={() => writeSchedule(cancelSchedule({ id: task._id }), "Schedule removed", "Couldn't remove schedule")}
       />
-      <TaskDock onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
+      <TaskDock onSchedule={() => setScheduling(true)} task={task} hasRuns={runFacts?.hasRuns} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
       {git.dialogs}
@@ -390,12 +375,10 @@ function TaskProperties({
   allTags,
   update,
   readOnly,
-  taskProject,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
-  taskProject: FunctionReturnType<typeof api.projects.get> | undefined;
   allTags: string[];
   update: UpdateTask;
   readOnly: boolean;
@@ -409,7 +392,7 @@ function TaskProperties({
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
   const project = task.projectId
-    ? (taskProject ?? projects?.find((entry) => entry._id === task.projectId))
+    ? projects?.find((entry) => entry._id === task.projectId)
     : undefined;
   const status =
     task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
@@ -461,7 +444,6 @@ function TaskProperties({
           color={project ? undefined : muted}
           onPress={openField("project")}
         />
-        {task.projectId ? <ProjectSummaryRow projectId={task.projectId} /> : null}
       </FieldGroup>
       <FooterSheet
         open={field === "status"}
@@ -518,201 +500,6 @@ function TaskProperties({
   );
 }
 
-function ProjectSummaryRow({ projectId }: { projectId: Id<"projects"> }) {
-  const router = useRouter();
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
-  if (!summaryDoc) return null;
-  return (
-    <FieldRow
-      label="Project summary"
-      icon={<IconFileText size={16} color={muted} />}
-      value={summaryDoc.title}
-      onPress={() => router.push({ pathname: "/doc/[docId]", params: { docId: summaryDoc._id, repo: summaryDoc.repoId } })}
-    />
-  );
-}
-
-function TaskTitle({
-  title,
-  editable,
-  lockReason,
-  onSave,
-}: {
-  title: string;
-  editable: boolean;
-  lockReason: string | undefined;
-  onSave: (title: string) => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const [editing, setEditing] = useState<string | null>(null);
-  const style: TextStyle = {
-    fontSize: 18,
-    lineHeight: 26,
-    fontWeight: "600",
-    color: theme.foreground,
-  };
-  if (editing !== null) {
-    const save = () => {
-      const trimmed = editing.trim();
-      if (trimmed && trimmed !== title) onSave(trimmed);
-      setEditing(null);
-    };
-    return (
-      <TextInput
-        autoFocus
-        accessibilityLabel="Task title"
-        value={editing}
-        onChangeText={setEditing}
-        onBlur={save}
-        returnKeyType="done"
-        submitBehavior="blurAndSubmit"
-        multiline
-        className="font-instrument-sans-semibold rounded-lg px-2 py-1"
-        style={{
-          ...style,
-          marginHorizontal: -8,
-          backgroundColor: theme.secondary,
-        }}
-      />
-    );
-  }
-  return (
-    <Pressable
-      accessibilityRole={editable ? "button" : "header"}
-      accessibilityLabel={displayTitle(title)}
-      accessibilityHint={editable ? "Edits the title" : lockReason}
-      disabled={!editable}
-      onPress={() => setEditing(title)}
-      className="active:opacity-70"
-    >
-      <Text
-        accessibilityRole="header"
-        className="font-instrument-sans-semibold"
-        style={style}
-      >
-        {displayTitle(title)}
-      </Text>
-    </Pressable>
-  );
-}
-
-function TaskDescription({
-  description,
-  repoId,
-  model,
-  editable,
-  reactions,
-  onSave,
-}: {
-  description: string | undefined;
-  repoId: Id<"githubRepos">;
-  model: QuickTask["model"];
-  editable: boolean;
-  reactions: { groups: ReactionGroup[]; toggle: (emoji: string) => void };
-  onSave: (description: string) => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const composer = useMentionComposer(
-    repoId,
-    getAIModelProvider(normalizeAIModel(model)),
-  );
-  const [editing, setEditing] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState<HeldRect | null>(null);
-  const box = useRef<View>(null);
-  const [pickingEmoji, setPickingEmoji] = useState(false);
-  const text = description?.trim() ?? "";
-  if (editing) {
-    return (
-      <View className="gap-2">
-        <PromptInput
-          value={composer.text}
-          onChangeText={composer.setText}
-          menu={
-            composer.menu ? (
-              <MentionMenu
-                menu={composer.menu}
-                onPick={composer.pick}
-                onDismiss={composer.dismiss}
-              />
-            ) : null
-          }
-          header={
-            composer.picks.length > 0 ? (
-              <ComposerMentionChips
-                picks={composer.picks}
-                onRemove={composer.removePick}
-              />
-            ) : undefined
-          }
-          onSubmit={(next) => {
-            const tokenized = composer.tokenize(next).trim();
-            if (tokenized !== text) onSave(tokenized);
-            setEditing(false);
-          }}
-          placeholder="Add description..."
-          accessibilityLabel="Task description"
-        />
-        <View className="flex-row justify-end">
-          <Button variant="ghost" size="sm" onPress={() => setEditing(false)}>
-            Cancel
-          </Button>
-        </View>
-      </View>
-    );
-  }
-  const body = text ? (
-    <UserMessageText content={text} />
-  ) : (
-    <Text
-      className="font-instrument-sans text-sm"
-      style={{ color: withAlpha(theme.mutedForeground, 0.6) }}
-    >
-      {editable ? "Add description..." : "No description"}
-    </Text>
-  );
-  const startEditing = () => {
-    composer.load(text);
-    setEditing(true);
-  };
-  return (
-    <>
-      <Pressable
-        accessibilityRole={editable ? "button" : undefined}
-        accessibilityLabel={
-          editable ? (text ? "Edit description" : "Add description") : undefined
-        }
-        accessibilityHint="Long press to react"
-        onPress={editable ? startEditing : undefined}
-        ref={box}
-        onLongPress={() => measureHeld(box.current, setMenuAnchor)}
-        className="rounded-lg active:opacity-70"
-      >
-        {body}
-      </Pressable>
-      {reactions.groups.length > 0 ? (
-        <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} />
-      ) : null}
-      <ReactableMenu
-        anchor={menuAnchor}
-        onClose={() => setMenuAnchor(null)}
-        preview={<View style={{ backgroundColor: theme.background }}>{body}</View>}
-        groups={reactions.groups}
-        onToggleReaction={reactions.toggle}
-        onMoreReactions={() => setPickingEmoji(true)}
-        onEdit={editable ? startEditing : undefined}
-        copyText={text ? mentionTokensToEditableText(text) : undefined}
-      />
-      <EmojiPickerSheet
-        open={pickingEmoji}
-        onOpenChange={setPickingEmoji}
-        groups={reactions.groups}
-        onPick={reactions.toggle}
-      />
-    </>
-  );
-}
-
 const COMMENT_PLACEHOLDER: Record<CommentMode["kind"], string> = {
   new: "Add a comment...",
   reply: "Leave a reply...",
@@ -731,7 +518,7 @@ function CommentComposer({
   currentUserId: Id<"users">;
   taskId: Id<"agentTasks">;
   repoId: Id<"githubRepos">;
-  model: QuickTask["model"];
+  model: AIModel | undefined;
   users: User[] | undefined;
   mode: CommentMode;
   onModeChange: (mode: CommentMode) => void;
@@ -845,13 +632,13 @@ function CommentComposer({
 
 function TaskDock({
   task,
-  runs,
+  hasRuns,
   hasActiveRun,
   onSchedule,
 }: {
   onSchedule: () => void;
   task: QuickTask;
-  runs: FunctionReturnType<typeof api.agentRuns.listByTask> | undefined;
+  hasRuns: boolean | undefined;
   hasActiveRun: boolean;
 }) {
   const router = useRouter();
@@ -862,8 +649,8 @@ function TaskDock({
   const canRun =
     task.projectId === undefined &&
     task.archivedAt === undefined &&
-    runs !== undefined &&
-    ((task.status === "todo" && runs.length === 0) ||
+    hasRuns !== undefined &&
+    ((task.status === "todo" && !hasRuns) ||
       (task.status === "in_progress" && !hasActiveRun));
   const unread = task.hasUnread && !task.isExecuting;
   const run = async () => {

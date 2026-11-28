@@ -12,7 +12,7 @@ import {
   listSelectableAccountsFor,
   withProjectAccountFirst,
 } from "./_userProviderAccounts/listing";
-import { sessionProject } from "./_projects/runSettings";
+import { projectAccount, sessionProject } from "./_projects/projectAccount";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
@@ -72,7 +72,7 @@ export const listForTaskOwner = authQuery({
     return await withProjectAccountFirst(
       ctx,
       await listSelectableAccountsFor(ctx, task.createdBy),
-      project,
+      project ? await projectAccount(ctx.db, project) : null,
     );
   },
 });
@@ -97,7 +97,7 @@ export const listForProjectOwner = authQuery({
     return await withProjectAccountFirst(
       ctx,
       await listSelectableAccountsFor(ctx, project.userId),
-      project,
+      await projectAccount(ctx.db, project),
     );
   },
 });
@@ -120,11 +120,32 @@ export const listForSessionOwner = authQuery({
     ) {
       return [];
     }
+    const project = await sessionProject(ctx.db, session);
     return await withProjectAccountFirst(
       ctx,
       await listSelectableAccountsFor(ctx, session.createdBy ?? session.userId),
-      await sessionProject(ctx.db, session),
+      project ? await projectAccount(ctx.db, project) : null,
     );
+  },
+});
+
+/**
+ * Lists the accounts an automation's creator can run on (masked), for its
+ * model picker. Runs use the creator's credentials whoever edits it, so
+ * teammates pick from the creator's accounts, shared ones included.
+ */
+export const listForAutomationOwner = authQuery({
+  args: { automationId: v.id("automations") },
+  returns: v.array(accountListItemValidator),
+  handler: async (ctx, args) => {
+    const automation = await ctx.db.get(args.automationId);
+    if (
+      !automation ||
+      !(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))
+    ) {
+      return [];
+    }
+    return await listSelectableAccountsFor(ctx, automation.createdBy);
   },
 });
 

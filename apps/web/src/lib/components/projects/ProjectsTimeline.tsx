@@ -87,8 +87,6 @@ export function ProjectsTimeline({
         id: _id,
         priority,
         projectLead,
-        model,
-        providerAccountId,
         ...safeFields
       } = args;
       patchLoadedQuery(
@@ -106,10 +104,6 @@ export function ProjectsTimeline({
                     : {}),
                   ...(projectLead !== undefined
                     ? { projectLead: projectLead ?? undefined }
-                    : {}),
-                  ...(model !== undefined ? { model: model ?? undefined } : {}),
-                  ...(providerAccountId !== undefined
-                    ? { providerAccountId: providerAccountId ?? undefined }
                     : {}),
                 }
               : p,

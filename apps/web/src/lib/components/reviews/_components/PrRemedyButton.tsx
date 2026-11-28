@@ -10,14 +10,7 @@ import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { PrRemedy } from "@eva/shared";
-import type { StatusTone } from "./prOverviewMeta";
-
-const TONE_CLASS: Record<StatusTone, string> = {
-  failure: "text-destructive",
-  pending: "text-muted-foreground hover:text-foreground",
-  neutral: "text-muted-foreground hover:text-foreground",
-  success: "text-emerald-700 dark:text-emerald-300",
-};
+import { TONE_TEXT_CLASS, type StatusTone } from "./prOverviewMeta";
 
 /**
  * Turns a merge blocker into work. Conflicts and a stale branch are both ordinary
@@ -43,7 +36,7 @@ export function PrRemedyButton({
 }) {
   const navigate = useNavigate();
   const { repoId, basePath } = useRepo();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const [starting, setStarting] = useState(false);
 
   const start = async () => {
@@ -52,7 +45,7 @@ export function PrRemedyButton({
       const { numId } = await createSession({
         repoId,
         title: remedy.sessionTitle,
-        message: remedy.prompt,
+        prompt: remedy.prompt,
         baseBranch: headRef,
       });
       await navigate({
@@ -73,7 +66,8 @@ export function PrRemedyButton({
       onClick={() => void start()}
       className={cn(
         "max-sm:hit-target motion-press inline-flex shrink-0 items-center gap-1 text-xs font-medium underline-offset-4 hover:underline active:scale-[0.98] disabled:no-underline disabled:opacity-70",
-        TONE_CLASS[tone],
+        TONE_TEXT_CLASS[tone],
+        (tone === "pending" || tone === "neutral") && "hover:text-foreground",
       )}
     >
       {remedy.action}

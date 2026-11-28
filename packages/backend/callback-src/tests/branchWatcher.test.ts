@@ -8,30 +8,18 @@ import {
 } from "../runtime/branchWatcher.js";
 
 describe("resolveBranchTarget", () => {
-  it("maps each launcher entity field onto its mutation target", () => {
-    expect(resolveBranchTarget("sessionId", "s1")).toEqual({
-      kind: "session",
-      sessionId: "s1",
-    });
+  it("maps a chat turn onto its session chat target", () => {
     expect(resolveBranchTarget("chatId", "c1")).toEqual({
       kind: "sessionChat",
       chatId: "c1",
     });
-    expect(resolveBranchTarget("taskId", "t1")).toEqual({
-      kind: "task",
-      taskId: "t1",
-    });
-    expect(resolveBranchTarget("projectId", "p1")).toEqual({
-      kind: "project",
-      projectId: "p1",
-    });
   });
 
-  it("returns null for unknown or missing owners", () => {
-    expect(resolveBranchTarget("arenaId", "a1")).toBe(null);
-    expect(resolveBranchTarget(undefined, "s1")).toBe(null);
-    expect(resolveBranchTarget("sessionId", undefined)).toBe(null);
-    expect(resolveBranchTarget("sessionId", "")).toBe(null);
+  it("returns null for other or missing owners", () => {
+    expect(resolveBranchTarget("docId", "d1")).toBe(null);
+    expect(resolveBranchTarget(undefined, "c1")).toBe(null);
+    expect(resolveBranchTarget("chatId", undefined)).toBe(null);
+    expect(resolveBranchTarget("chatId", "")).toBe(null);
   });
 });
 

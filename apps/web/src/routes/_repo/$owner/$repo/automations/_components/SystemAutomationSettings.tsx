@@ -1,11 +1,11 @@
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { api, normalizeAIModel } from "@eva/backend";
+import { api, triggerHasEvent } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
+import { Button, Switch, toast, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
 import { AutomationCronField } from "./AutomationCronField";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import { AutomationModelSection } from "./AutomationModelSection";
 import { AlertWebhookFields } from "./AlertWebhookFields";
 import { EmailSettingsRows } from "./EmailSettingsRows";
 import { IssueLabelField } from "./TriggerSection";
@@ -31,13 +31,11 @@ export function SystemAutomationSettings({
   repoOwner: string;
   repoName: string;
 }) {
-  const { repo, repoId } = useRepo();
+  const { repoId } = useRepo();
   const navigate = useNavigate();
   const updateAutomation = useMutation(api.automations.update);
   const uninstall = useMutation(api.automations.uninstallSystemAutomation);
   const trigger = automationTriggerOf(automation);
-  const model = normalizeAIModel(automation.model ?? repo.defaultModel);
-  const { options: modelOptions } = useAvailableAiModels(repoId, model);
 
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
@@ -62,21 +60,24 @@ export function SystemAutomationSettings({
           title="Trigger"
           description={describeTrigger(trigger)}
           bodyVariant={
-            trigger.event === "issue_labeled" ||
-            trigger.event === "production_alert"
+            triggerHasEvent(trigger, "issue_labeled") ||
+            triggerHasEvent(trigger, "production_alert")
               ? "form"
               : "compact"
           }
           bodyClassName={
-            trigger.event === "production_alert" ? "grid gap-5" : undefined
+            triggerHasEvent(trigger, "production_alert")
+              ? "grid gap-5"
+              : undefined
           }
         >
-          {trigger.event === "issue_labeled" ? (
+          {trigger.kind === "event" &&
+          triggerHasEvent(trigger, "issue_labeled") ? (
             <IssueLabelField
               trigger={trigger}
               onChange={(next) => commit({ trigger: next })}
             />
-          ) : trigger.event === "production_alert" ? (
+          ) : triggerHasEvent(trigger, "production_alert") ? (
             <AlertWebhookFields automationId={automation._id} />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -92,22 +93,8 @@ export function SystemAutomationSettings({
         </p>
       </SettingsSection>
 
+      {createsTasks(trigger) || trigger.kind === "cron" ? (
       <SettingsSection title="Behaviour" bodyVariant="list">
-        <SettingsToggleRow
-          title="Enabled"
-          description={
-            trigger.kind === "cron"
-              ? "Run this automation on its schedule for this app."
-              : "Run this automation whenever its event happens in this app."
-          }
-          action={
-            <Switch
-              checked={automation.enabled}
-              onCheckedChange={(next) => commit({ enabled: next })}
-              aria-label="Enabled"
-            />
-          }
-        />
         {createsTasks(trigger) ? (
           <SettingsToggleRow
             title="Start tasks automatically"
@@ -121,22 +108,13 @@ export function SystemAutomationSettings({
             }
           />
         ) : null}
-        {/* Event presets post a one-line note per run, so there is no
-            summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (
           <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}
       </SettingsSection>
+      ) : null}
 
-      <SettingsSection title="Model">
-        <SettingsField label="Provider and model">
-          <ModelPicker
-            value={model}
-            options={modelOptions}
-            onValueChange={(m) => commit({ model: m })}
-          />
-        </SettingsField>
-      </SettingsSection>
+      <AutomationModelSection automation={automation} commit={commit} />
 
       <SettingsSection
         title="Uninstall"

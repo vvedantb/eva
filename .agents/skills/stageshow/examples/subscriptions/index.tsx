@@ -1,13 +1,6 @@
 import { Avatar, Bar, Chart, Collapse, Count, Fly, Roll, Spinner, Stage, States, Window, type Act, type Rect } from '../../kit'
 import './subs.css'
 
-// A system story, no cursor. A customer subscribes on a checkout, the price
-// rides into the company's billing dashboard as the new row's amount, and MRR
-// rolls up. It happens twice, then the scene changes to a second company and
-// happens once more: a different business on the same product, which is also
-// how the loop resets without rewinding. The checkout and the window are the
-// two places; the chip is the only thing that travels between them.
-
 type Pulse = { name: string; initial: string; plan: string; price: number }
 type Scene = { org: string; tile: string; mrr: number; history: number[]; pulses: Pulse[] }
 
@@ -34,7 +27,6 @@ const SCENES: Scene[] = [
 type Pay = 'idle' | 'busy' | 'paid' | 'done'
 type S = {
   scene: number
-  // per scene: rows opened, rows landed, which pulse the checkout shows, its button
   open: [number, number]
   landed: [number, number]
   k: [number, number]
@@ -51,24 +43,17 @@ const set2 = <T,>(pair: [T, T], i: number, v: T): [T, T] => (i === 0 ? [v, pair[
 async function pulse(a: Act<S>, sc: number, i: number) {
   await a.set((s) => ({ pay: set2(s.pay, sc, 'busy') }))
   await a.wait(700)
-  // Paid: the chip lifts off the button at once and the new row's space opens
-  // under it while it travels. Where it lands is the top of the list as it is
-  // now (the new row opens there), at the right edge where amounts sit.
   const list = a.rect(`list-${sc}`, { layout: true })
   const row = a.rect(`row-${sc}-${i}`, { layout: true })
   const pill = a.rect(`pill-${sc}-${i}`, { layout: true })
   const b = a.rect(`pay-${sc}`, { layout: true })
   const size = { width: pill.width, height: pill.height }
-  // The row keeps its full layout height inside Collapse. Measure the pill's
-  // actual inset, including the row's border, so the handoff has no half-pixel hop.
   const to = { ...pill, y: list.y + pill.y - row.y }
   const from = { x: b.x + b.width / 2 - pill.width / 2, y: b.y + b.height / 2 - pill.height / 2, ...size }
   await a.set((s) => ({ pay: set2(s.pay, sc, 'paid'), fly: { scene: sc, i, from, to, go: false } }))
-  // The chip buds off the button before it sets off
   await a.wait(200)
   await a.set((s) => ({ open: set2(s.open, sc, i + 1), fly: { ...s.fly!, go: true } }))
   await a.wait(900)
-  // Landed: the real pill takes over in the same frame the chip goes
   await a.set((s) => ({ fly: null, landed: set2(s.landed, sc, i + 1), pay: set2(s.pay, sc, 'done') }))
 }
 
@@ -77,7 +62,6 @@ async function script(a: Act<S>) {
   a.mark('first')
   await pulse(a, 0, 0)
   await a.wait(700)
-  // The checkout moves on to the next customer: only the plan and price change
   await a.set((s) => ({ pay: set2(s.pay, 0, 'idle'), k: set2(s.k, 0, 1) }))
   await a.wait(1000)
   a.mark('second')
@@ -87,7 +71,6 @@ async function script(a: Act<S>) {
   a.mark('scene')
   await a.set({ scene: 1 })
   await a.wait(700)
-  // Northwind resets while it's out of sight
   await a.snap((s) => ({ open: set2(s.open, 0, 0), landed: set2(s.landed, 0, 0), k: set2(s.k, 0, 0), pay: set2(s.pay, 0, 'idle') }))
   await a.wait(500)
   await pulse(a, 1, 0)
@@ -131,8 +114,6 @@ function Checkout({ sc, s }: { sc: number; s: S }) {
           states={{
             idle: 'Subscribe',
             busy: <Spinner size={14} />,
-            // The amount is the feedback while it leaves the button. Showing
-            // the success label underneath would put two messages in one place.
             paid: null,
             done: (
               <span className="sb-done">
@@ -149,7 +130,6 @@ function Checkout({ sc, s }: { sc: number; s: S }) {
   )
 }
 
-// Filler rows that were there before the story: they keep their place below
 const OLD = [
   { name: 62, amount: 34 },
   { name: 78, amount: 40 },
@@ -181,7 +161,6 @@ function Dashboard({ sc, s, compact }: { sc: number; s: S; compact: boolean }) {
       <main className="sb-main">
         <div className="sb-head">
           <span className="sb-title">
-            {/* Compact drops the sidebar, so the company moves up beside the title */}
             <span className="sb-tile sb-head-tile" data-scene={sc}>
               {scene.tile}
             </span>
@@ -197,7 +176,6 @@ function Dashboard({ sc, s, compact }: { sc: number; s: S; compact: boolean }) {
           <Chart data={data} width={compact ? 110 : 190} height={52} className="sb-chart" />
         </div>
         <div className="sb-list" data-target={`list-${sc}`}>
-          {/* Newest first: each new subscriber opens at the top and pushes the rest down */}
           {scene.pulses
             .map((p, i) => ({ p, i }))
             .reverse()

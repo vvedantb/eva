@@ -120,7 +120,7 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   const tasks = useQuery(QUICK_TASK_LIST_QUERIES[mode], { repoId: repo._id });
   const drafts = useQuery(api.agentTasks.listDrafts, archived ? "skip" : { repoId: repo._id });
   const errorTaskIds = useQuery(
-    api.agentRuns.getTaskIdsWithLatestRunError,
+    api.agentTasks.getTaskIdsWithFailedRun,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
   const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });

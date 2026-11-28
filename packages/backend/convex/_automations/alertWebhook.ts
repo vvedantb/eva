@@ -5,6 +5,7 @@ import type { DatabaseReader } from "../_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "../functions";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { automationTrigger } from "./systemAutomations";
+import { triggerHasEvent } from "../_automationEvents/labels";
 
 /** Route prefix in `http.ts`; the automation id follows it. */
 export const AXIOM_ALERT_PATH_PREFIX = "/api/alerts/axiom/";
@@ -16,8 +17,7 @@ async function alertAutomation(
 ): Promise<Doc<"automations"> | null> {
   const automation = await db.get(id);
   if (automation === null || automation.deletedAt !== undefined) return null;
-  const trigger = automationTrigger(automation);
-  if (trigger.kind !== "event" || trigger.event !== "production_alert") {
+  if (!triggerHasEvent(automationTrigger(automation), "production_alert")) {
     return null;
   }
   if (!(await hasRepoAccess(db, automation.repoId, userId))) return null;

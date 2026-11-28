@@ -75,6 +75,35 @@ export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions"
   return entityHref("session", repo, session.numId);
 }
 
+type ResolvedMobileChat = {
+  chat: MobileChat;
+  entity: MobileChatEntity;
+  repoId: Id<"githubRepos">;
+};
+
+function onExactChat(
+  owner: ResolvedMobileChat,
+  context: SessionChatContext,
+): ResolvedMobileChat {
+  const { chat } = context;
+  if (owner.entity.kind === "session" && owner.entity.context.chat._id === chat._id) {
+    return owner;
+  }
+  return {
+    ...owner,
+    entity: { kind: "session", context },
+    chat: {
+      ...owner.chat,
+      parentId: chat._id,
+      target: chat._id,
+      canReply: owner.chat.canReply,
+      model: chat.lastModel ?? owner.chat.model,
+      providerAccountId: chat.providerAccountId,
+      traits: storedComposerTraits(chat),
+    },
+  };
+}
+
 /**
  * Resolves a mobile chat target, or null when the id names nothing the app
  * can open. Access is the caller's job: `repoId` is returned for that check.
@@ -82,11 +111,7 @@ export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions"
 export async function resolveMobileChat(
   db: GenericDatabaseReader<DataModel>,
   target: string,
-): Promise<{
-  chat: MobileChat;
-  entity: MobileChatEntity;
-  repoId: Id<"githubRepos">;
-} | null> {
+): Promise<ResolvedMobileChat | null> {
   const sessionChatId = db.normalizeId("sessionChats", target);
   const sessionId = db.normalizeId("sessions", target);
   if (sessionChatId || sessionId) {
@@ -95,7 +120,10 @@ export async function resolveMobileChat(
     if (!context) return null;
     const { chat, session } = context;
     const ownerId = sessionOwnerEntityId(session);
-    if (ownerId) return await resolveMobileChat(db, ownerId);
+    if (ownerId) {
+      const owner = await resolveMobileChat(db, ownerId);
+      return owner && onExactChat(owner, context);
+    }
     const repo = await db.get(session.repoId);
     if (!repo) return null;
     const base = sessionWebPath(repo, session);
@@ -105,20 +133,20 @@ export async function resolveMobileChat(
       entity: { kind: "session", context },
       chat: {
         kind: "session",
-        title: chat.isMain ? session.title : `${session.title} · ${chat.title}`,
+        title: session.title,
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         parentId: chat._id,
         target: chat._id,
-        canReply: chat.archived !== true && !isSessionArchived(session) && session.deletedAt === undefined,
-        model: chat.lastModel ?? session.lastModel,
+        canReply: !isSessionArchived(session) && session.deletedAt === undefined,
+        model: chat.lastModel,
         providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
         sandboxActive,
         sandboxBranch: sandboxActive ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
-        webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
+        webPath: base,
         session: { id: session._id, chatId: chat._id, title: session.title, archived: isSessionArchived(session) },
       },
     };
@@ -159,7 +187,7 @@ export async function resolveMobileChat(
           repoId: repo._id,
           parentId: chat._id,
           target: chat._id,
-          canReply: archived === undefined && chat.archived !== true,
+          canReply: archived === undefined,
           archived,
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
@@ -222,7 +250,7 @@ export async function resolveMobileChat(
           repoId: repo._id,
           parentId: chat._id,
           target: chat._id,
-          canReply: project.archivedAt === undefined && chat.archived !== true,
+          canReply: project.archivedAt === undefined,
           archived: project.archivedAt === undefined ? undefined : "project",
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,

@@ -9,18 +9,11 @@ import { PrHeaderActions } from "./PrHeaderActions";
 import { PrRemedyButton } from "./PrRemedyButton";
 import { PrStackPopover } from "./PrStackPopover";
 import {
+  TONE_TEXT_CLASS,
   ToneIcon,
   statusMeta,
   type PrOverview,
-  type StatusTone,
 } from "./prOverviewMeta";
-
-const BLOCKER_TONE_CLASS: Record<StatusTone, string> = {
-  failure: "text-destructive",
-  pending: "text-muted-foreground",
-  neutral: "text-muted-foreground",
-  success: "text-emerald-700 dark:text-emerald-300",
-};
 
 /**
  * The chrome above every review tab, as simple as Cursor's: one line with the
@@ -102,7 +95,7 @@ export function ReviewHeader({
             <span
               className={cn(
                 "flex min-w-0 items-center gap-1.5 text-xs font-medium",
-                BLOCKER_TONE_CLASS[blocker.tone],
+                TONE_TEXT_CLASS[blocker.tone],
               )}
             >
               <ToneIcon tone={blocker.tone} size={13} />

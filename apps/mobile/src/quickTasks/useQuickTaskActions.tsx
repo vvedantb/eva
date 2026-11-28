@@ -75,7 +75,7 @@ export function useQuickTaskActions({
   const [moveTarget, setMoveTarget] = useState<{ task: QuickTask; repoId: Id<"githubRepos">; name: string } | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const codebases = useQuery(api.githubRepos.listGroupedByCodebase, {});
-  const runs = useQuery(api.agentRuns.listByTask, target ? { taskId: target._id } : "skip");
+  const runFacts = useQuery(api.agentTasks.getRunFacts, target ? { taskId: target._id } : "skip");
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
@@ -142,7 +142,7 @@ export function useQuickTaskActions({
   );
 
   const body = (task: QuickTask) => {
-    const canRun = (task.status === "todo" && runs !== undefined && runs.length === 0) || task.status === "in_progress";
+    const canRun = (task.status === "todo" && runFacts?.hasRuns === false) || task.status === "in_progress";
     switch (page) {
       case "root":
         if (task.archivedAt !== undefined || readOnly) {

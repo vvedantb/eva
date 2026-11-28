@@ -4,21 +4,24 @@ import {
   tasksToStart,
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
+import { reconcileTaskCloseTimes } from "../_agentTasks/closeTimes";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { filterUnarchived, isEntityArchived } from "../numId";
-import { isFirstTaskOnBranch } from "../functions";
-import { startTaskRun } from "../_taskWorkflow/startRun";
-import { latestTaskRun } from "./runSettings";
-import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
+import {
+  hasActiveTaskRun,
+  lastTaskRunOutcome,
+} from "../_agentTasks/taskRunStatus";
 import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
 import {
   ownedSessionBusy,
   syncOwnedSessionWithTaskStatus,
 } from "../_sessions/ownedSession";
 import { requestCoordinatorWake } from "./coordinatorWake";
-import { findOpenAsk } from "./reports";
-import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
+import { evaChatSettings } from "./projectAccount";
+import { findWorkChat } from "../_sessions/ownerState";
+import { askFiledDuring, findOpenAsk } from "./reports";
 
 /** A project's child tasks that are not deleted. */
 export async function listProjectTasks(
@@ -35,7 +38,7 @@ export async function listProjectTasks(
 
 /** What every task's facts read of its project, loaded once. */
 export interface ProjectFactsContext {
-  project: Pick<Doc<"projects">, "_id" | "providerAccountId">;
+  project: Doc<"projects">;
   now: number;
   coordinatorIdleSince?: number;
 }
@@ -43,7 +46,7 @@ export interface ProjectFactsContext {
 /** Loads the project half of the facts (`ProjectFactsContext`). */
 export async function loadProjectFactsContext(
   db: DatabaseReader,
-  project: Pick<Doc<"projects">, "_id" | "providerAccountId">,
+  project: Doc<"projects">,
   now: number,
 ): Promise<ProjectFactsContext> {
   const owner: OwnedSessionOwner = { kind: "project", projectId: project._id };
@@ -69,42 +72,41 @@ function openAskHolder(
   return passed ? "person" : "coordinator";
 }
 
-/**
- * One child task as the shared rules read it. Only a `todo` task's latest
- * run matters: a failed or cancelled run puts its task back to `todo`. A
- * task with an open ask is waiting, never halted: its run ended on purpose
- * (`RUN_WAITING_FOR_ANSWER`, not an error). A `todo` task whose latest run
- * ended waiting but whose ask is closed was stopped while it waited
- * (`closeTaskReports`): it is halted as stopped, so nothing restarts it.
- */
+async function runsOnEvaAccount(
+  db: DatabaseReader,
+  project: Doc<"projects">,
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  const [eva, own] = await Promise.all([
+    evaChatSettings(db, project),
+    findWorkChat(db, { kind: "task", task }),
+  ]);
+  return own?.chat.providerAccountId === eva?.providerAccountId;
+}
+
 export async function projectTaskFacts(
   db: DatabaseReader,
   context: ProjectFactsContext,
   task: Doc<"agentTasks">,
 ): Promise<ProjectTaskFacts> {
   const { project, now } = context;
-  const [latest, ask] = await Promise.all([
-    task.status === "todo" ? latestTaskRun(db, task._id) : null,
+  const [latest, ask, active] = await Promise.all([
+    task.status === "todo" ? lastTaskRunOutcome(db, task) : null,
     findOpenAsk(db, task._id),
+    hasActiveTaskRun(db, task),
   ]);
-  const runPending =
-    task.run !== undefined ||
-    latest?.status === "queued" ||
-    latest?.status === "running";
+  const runPending = task.run !== undefined || active;
   const usageLimited =
-    latest?.errorType === "rate_limit" &&
+    latest?.usageLimited === true &&
     (latest.limitResetAt === undefined || latest.limitResetAt > now) &&
-    task.providerAccountId === project.providerAccountId;
+    (await runsOnEvaAccount(db, project, task));
   const halted =
-    runPending ||
-    latest === null ||
-    latest.errorType === "rate_limit" ||
-    ask !== null
+    runPending || latest === null || latest.usageLimited || ask !== null
       ? undefined
-      : latest.status === "error"
+      : latest.state === "error"
         ? "failed"
-        : latest.status === "cancelled" ||
-            latest.exitReason === RUN_WAITING_FOR_ANSWER
+        : latest.state === "cancelled" ||
+            (await askFiledDuring(db, task._id, latest.startedAt))
           ? "cancelled"
           : undefined;
   return {
@@ -124,31 +126,17 @@ export async function projectTaskFacts(
 }
 
 /**
- * Starts one child task's run on its own repo (session, branch, GitHub App
- * installation). False when it did not start: a failure here never stops the
- * other tasks. A task whose chat is replying waits for the next event; a
- * workflow that failed to start is marked on its run and shows as failed.
+ * Starts one child task's run: a task-mode turn in its own chat
+ * (`startTaskRunTurn`), which waits behind a turn already running there.
+ * False when it did not start: a failure here never stops the other tasks.
  */
 export async function startProjectTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
   note?: string,
 ): Promise<boolean> {
-  if (task.repoId === undefined) return false;
-  const repo = await ctx.db.get(task.repoId);
-  if (!repo) return false;
   try {
-    await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: task.createdBy,
-      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
-      isFirstTaskOnBranch: await isFirstTaskOnBranch(ctx.db, task._id),
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
-      note,
-    });
+    await startTaskRunTurn(ctx, task, { userId: task.createdBy, note });
     return true;
   } catch (error) {
     console.error(
@@ -198,12 +186,12 @@ async function requestEventWakes(
     ) {
       continue;
     }
-    const run = await latestTaskRun(ctx.db, task._id);
+    const run = await lastTaskRunOutcome(ctx.db, task);
     if (!run) continue;
     await requestCoordinatorWake(ctx, {
       projectId,
       reason: "failed",
-      key: `failed:${run._id}`,
+      key: `failed:${run.id}`,
       text: `Task ${taskLabel(task)} failed: ${(run.error ?? "no error text").slice(0, 300)}. You may retry it once with retry_task and a note on what to change.`,
     });
   }
@@ -252,18 +240,21 @@ export function isBatchFinished(tasks: readonly ProjectTaskFacts[]): boolean {
 }
 
 /**
- * A person approves `taskIds` (todo tasks of this project waiting in Triage)
- * and hands them to the coordinator (decision 4, v2): each is approved and
- * marked `handedToCoordinatorAt`, so the scheduler never starts it; one
- * coordinator wake lists the handed tasks, and the coordinator starts each
- * (`start_task`) or adds it to an open task (`merge_task_into`). Tasks
- * already approved keep their state. Refuses a task of another project.
- * Returns the tasks it handed over.
+ * Hands people's asks to the coordinator (Eva): every `todo` task of
+ * `taskIds` nobody approved yet is approved and marked
+ * `handedToCoordinatorAt`, so the scheduler never starts it, and one
+ * coordinator wake lists them. The coordinator starts each (`start_task`) or
+ * adds it to an open task (`merge_task_into`). Every project task a person,
+ * an agent outside the coordinator or feedback adds comes here at once:
+ * nothing waits for an approval. Tasks already approved keep their state.
+ * Refuses a task of another project. `key` makes the wake idempotent
+ * (default: the handed task ids). Returns the tasks it handed over.
  */
-export async function approveTasks(
+export async function handTasksToCoordinator(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   taskIds: readonly Id<"agentTasks">[],
+  key?: string,
 ): Promise<Doc<"agentTasks">[]> {
   const now = Date.now();
   const tasks = await Promise.all(taskIds.map((taskId) => ctx.db.get(taskId)));
@@ -288,13 +279,13 @@ export async function approveTasks(
   const lines = handed.map((task, index) => {
     const author = authors[index];
     const by = author?.firstName ?? author?.fullName;
-    return `- ${taskLabel(task)}${by ? ` (added by ${by})` : ""}`;
+    return `- ${taskLabel(task)} (${task._id})${by ? ` (added by ${by})` : ""}`;
   });
   await requestCoordinatorWake(ctx, {
     projectId,
     reason: "triage",
-    key: `triage:${now}:${handed.map((task) => task._id).join(",")}`,
-    text: `A person approved ${handed.length === 1 ? "this Triage item" : `these ${handed.length} Triage items`} and handed ${handed.length === 1 ? "it" : "them"} to you. Group them by area: add each to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task (start_task). Then reply with where each one went.\n${lines.join("\n")}`,
+    key: key ?? `handed:${handed.map((task) => task._id).join(",")}`,
+    text: `${handed.length === 1 ? "A new ask was" : `${handed.length} new asks were`} handed to you. Group related asks into one task: add each to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task (start_task). Then reply with where each one went.\n${lines.join("\n")}`,
   });
   return handed;
 }
@@ -310,14 +301,14 @@ async function coordinatorTodoTask(
   }
   if (task.status !== "todo" || task.approvedAt === undefined) {
     throw new Error(
-      "Only an approved task that has not started yet can be started or merged.",
+      "Only a task that has not started yet can be started or merged.",
     );
   }
   return task;
 }
 
 /**
- * The coordinator starts a Triage item a person handed to it (`start_task`):
+ * The coordinator starts a task handed to it (`start_task`):
  * it stops being held, so the scheduler starts it like any approved task.
  */
 export async function startHandedTask(
@@ -336,7 +327,7 @@ export async function startHandedTask(
 }
 
 /**
- * The coordinator adds a handed Triage item to an open task of the same
+ * The coordinator adds a handed task to an open task of the same
  * project (`merge_task_into`): the item is cancelled and remembers the task
  * it went to ("Added to #N"). The coordinator gives the target task the item
  * itself (`send_chat_message`). Refuses a finished, cancelled or merged
@@ -373,6 +364,7 @@ export async function mergeHandedTask(
     updatedAt: Date.now(),
   });
   await syncOwnedSessionWithTaskStatus(ctx, task, task.status, "cancelled");
+  await reconcileTaskCloseTimes(ctx, task._id);
   return into;
 }
 

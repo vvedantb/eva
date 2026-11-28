@@ -175,33 +175,6 @@ export const record = internalMutation({
   },
 });
 
-/**
- * Overwrites a row with what GitHub reports now. Bookkeeping only — the owner
- * does not react (no archive, no notification), so a backfill can correct
- * historic rows without replaying their lifecycle.
- */
-export const applyGitHubSnapshot = internalMutation({
-  args: {
-    prUrl: v.string(),
-    state: prStateValidator,
-    title: v.string(),
-    headBranch: v.string(),
-    baseBranch: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const row = await findPullRequestByUrl(ctx.db, args.prUrl);
-    if (!row) return null;
-    await setPullRequestState(ctx, row, {
-      state: args.state,
-      title: args.title,
-      headBranch: args.headBranch,
-      baseBranch: args.baseBranch,
-    });
-    return null;
-  },
-});
-
 /** Action-side state change for a tracked PR (e.g. Send for Review → open). */
 export const setStateByUrl = internalMutation({
   args: { prUrl: v.string(), state: prStateValidator },

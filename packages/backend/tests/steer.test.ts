@@ -77,9 +77,6 @@ async function createRunningChatFixture() {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
       lastModel: MODEL,
     });
     await ctx.db.insert("turns", {

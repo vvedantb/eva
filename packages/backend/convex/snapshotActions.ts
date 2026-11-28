@@ -222,7 +222,7 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", codexCliVersion)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${claudeCliVersion} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${codexCliVersion} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", codexCliVersion)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${claudeCliVersion} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${codexCliVersion} agent-browser convex @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       `command -v code-server >/dev/null 2>&1 || { if [ "$(eva_pkg_file_ext)" = deb ]; then github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server_${CODE_SERVER_VERSION}_amd64.deb /tmp/code-server.deb; else github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm; fi && eva_pkg_install_file /tmp/code-server.$(eva_pkg_file_ext) && rm -f /tmp/code-server.deb /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
@@ -502,12 +502,12 @@ export const createSeedPrepSandbox = internalAction({
       { ...sandboxEnvVars, REPO_ID: args.repoId },
       seedPrepLifecycle,
       args.imageSnapshot,
-      undefined, // onSandboxAcquired
-      undefined, // onProgress
-      { mode: "all" }, // syncStrategy
+      undefined,
+      undefined,
+      { mode: "all" },
       180,
       true,
-      undefined, // forkFrom
+      undefined,
       DRIVE_CACHE_WRITER,
     );
     return { ok: true, sandboxId: sandbox.id };
@@ -748,21 +748,40 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     )) {
       protectedIds.add(name);
     }
-    const knownSandboxIds = new Set(
-      await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
-    );
-
-    let liveSandboxCount = 0;
-    let evaSandboxCount = 0;
-    const sandboxes = await Sandbox.list(creds);
-    for await (const sandbox of sandboxes) {
-      liveSandboxCount += 1;
-      const ours = knownSandboxIds.has(sandbox.name);
-      if (!ours && foreignSandboxDeployment(sandbox.tags) === null) continue;
-      if (ours) evaSandboxCount += 1;
+    const listedSandboxes: Array<{
+      name: string;
+      foreign: boolean;
+      currentSnapshotId: string | undefined;
+    }> = [];
+    for await (const sandbox of await Sandbox.list(creds)) {
       const currentId = sandbox.currentSnapshotId;
-      if (typeof currentId === "string" && currentId.length > 0) {
-        protectedIds.add(currentId);
+      listedSandboxes.push({
+        name: sandbox.name,
+        foreign: foreignSandboxDeployment(sandbox.tags) !== null,
+        currentSnapshotId:
+          typeof currentId === "string" && currentId.length > 0
+            ? currentId
+            : undefined,
+      });
+    }
+    const knownSandboxIds = new Set<string>();
+    for (let i = 0; i < listedSandboxes.length; i += 500) {
+      const batch = listedSandboxes.slice(i, i + 500).map((s) => s.name);
+      for (const id of await ctx.runQuery(
+        internal.repoSnapshots.listReferencedSandboxIds,
+        { sandboxIds: batch },
+      )) {
+        knownSandboxIds.add(id);
+      }
+    }
+    const liveSandboxCount = listedSandboxes.length;
+    let evaSandboxCount = 0;
+    for (const sandbox of listedSandboxes) {
+      const ours = knownSandboxIds.has(sandbox.name);
+      if (!ours && !sandbox.foreign) continue;
+      if (ours) evaSandboxCount += 1;
+      if (sandbox.currentSnapshotId !== undefined) {
+        protectedIds.add(sandbox.currentSnapshotId);
       }
     }
 

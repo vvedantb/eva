@@ -128,15 +128,17 @@ export function TaskCardMenuItems({
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
+
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: id });
   const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
   const projectPrUrl =
     taskPrs.length === 0
       ? projects?.find((project) => project._id === projectId)?.prUrl
       : undefined;
   const branchName = taskPrs[0]?.headBranch;
+
   const canRun =
-    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    (status === "todo" && runFacts?.hasRuns === false) ||
     status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 
@@ -155,6 +157,7 @@ export function TaskCardMenuItems({
   const MenuLabel =
     variant === "context" ? ContextMenuLabel : DropdownMenuLabel;
   const iconSize = variant === "context" ? 16 : 14;
+
   const moveTargets = groupedCodebases?.filter((codebase) =>
     codebase.apps.some((app) => app._id !== repoId),
   );
@@ -345,6 +348,7 @@ export function TaskCardMenuItems({
                 (app) => app._id !== repoId,
               );
               if (availableApps.length === 0) return null;
+
               if (!codebase.isMonorepo || availableApps.length === 1) {
                 const app = availableApps[0];
                 return (
@@ -360,6 +364,7 @@ export function TaskCardMenuItems({
                   </Item>
                 );
               }
+
               return (
                 <Sub key={codebase.codebase}>
                   <SubTrigger>{codebase.displayName}</SubTrigger>

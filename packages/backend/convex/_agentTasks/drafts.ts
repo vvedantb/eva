@@ -20,13 +20,11 @@ import {
   buildTaskNotificationMessage,
   runTraitFields,
 } from "./helpers";
-import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import {
-  assertProviderAccountUsableBy,
-  resolveDefaultProviderAccountId,
-} from "../_userProviderAccounts/defaults";
+import { resolveNewTaskBaseBranch } from "../_agentTasks/resolveBaseBranch";
 import { createTaskRunSummary } from "./runSummary";
+import { seedNewTaskChat } from "./taskChatSeed";
 import { startTaskExecution } from "./execution";
+import { handTasksToCoordinator } from "../_projects/scheduler";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { titleFromPrompt } from "@eva/shared";
 
@@ -135,7 +133,8 @@ export const saveDraft = authMutation({
 /**
  * Promotes a draft task to "todo" from the form's prompt, as
  * `createQuickTask`: the title comes from the prompt, and `run` ("Save and
- * Run") approves a project task or starts any other task now.
+ * Run") approves a project task or starts any other task now. A saved
+ * project task goes to the project's coordinator.
  */
 export const activateDraft = authMutation({
   args: {
@@ -167,25 +166,10 @@ export const activateDraft = authMutation({
     const approved = task.projectId !== undefined && args.run === true;
     const { title } = initialTitle(undefined, args.description);
 
-    const providerAccountId =
-      args.providerAccountId === undefined
-        ? await resolveDefaultProviderAccountId(ctx.db, ctx.userId, args.model)
-        : await assertProviderAccountUsableBy(
-            ctx.db,
-            args.providerAccountId,
-            ctx.userId,
-          );
-
     await ctx.db.patch(args.id, {
       title,
       description: args.description,
       baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
-      model: args.model,
-      providerAccountId,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
       status: "todo",
       approvedAt: approved ? Date.now() : undefined,
       updatedAt: Date.now(),
@@ -193,6 +177,17 @@ export const activateDraft = authMutation({
       assignedTo: args.assignedTo,
       attachmentStorageIds: args.attachmentStorageIds,
     });
+    if (repo) {
+      await seedNewTaskChat(ctx, args.id, repo, {
+        projectId: task.projectId,
+        model: args.model,
+        providerAccountId: args.providerAccountId,
+        reasoningLevel: args.reasoningLevel,
+        thinkingEnabled: args.thinkingEnabled,
+        use1mContext: args.use1mContext,
+        fastMode: args.fastMode,
+      });
+    }
     await scheduleGeneratedTitle(
       ctx,
       { kind: "task", taskId: args.id },
@@ -228,6 +223,8 @@ export const activateDraft = authMutation({
         internal.buildWorkflow.scheduleReadyTasks,
         { projectId: task.projectId },
       );
+    } else if (task.projectId) {
+      await handTasksToCoordinator(ctx, task.projectId, [task._id]);
     }
     if (task.projectId) {
       await onProjectTasksChanged(ctx, task.projectId);

@@ -79,13 +79,8 @@ async function fixture() {
       title: "Bump the deps",
       status: "active",
     });
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId,
-      status: "success",
-      logs: [],
-    });
     await recordPullRequest(ctx, {
-      owner: { kind: "task", taskId, runId },
+      owner: { kind: "task", taskId },
       repoId,
       prUrl: TASK_PR_URL,
       state: "draft",
@@ -355,8 +350,20 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
   test("a task reports its run; a project only its coordinator chat", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, {
-        run: { state: "running", workflowId: "wf_task_run" },
+      const session = await ctx.db.get(f.taskSessionId);
+      if (!session) throw new Error("task session missing");
+      await ctx.db.insert("turns", {
+        entityId: f.taskSessionId,
+        sessionId: f.taskSessionId,
+        streamingEntityId: String(f.taskSessionId),
+        state: "running",
+        open: true,
+        turnStartedAt: Date.now(),
+        leaseExpiresAt: Date.now() + 120_000,
+        leaseGeneration: 1,
+        model: "claude:sonnet",
+        repoId: session.repoId,
+        taskRun: { mode: "implementation" },
       });
     });
 

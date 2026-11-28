@@ -11,7 +11,7 @@ import {
 } from "../convex/_sandbox_runtime/daemonPaths";
 
 describe("the daemon alive-check proves identity, not just liveness", () => {
-  const cmd = buildDaemonAliveCheckCmd("sessionId", "sess123", "fp1", "opts1");
+  const cmd = buildDaemonAliveCheckCmd("chatId", "chat123", "fp1", "opts1");
 
   test("liveness goes through the shared runner-identity helper", () => {
     expect(cmd).toContain("eva_pid_live");

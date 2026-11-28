@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { api, normalizeAIModel } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { AutomationCronField } from "./_components/AutomationCronField";
@@ -14,7 +14,6 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  ModelPicker,
   toast,
   tokenTransition,
   ConfirmSkipHint,
@@ -31,11 +30,12 @@ import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
+import { AutomationModelSection } from "./_components/AutomationModelSection";
 import { EmailSettingsRows } from "./_components/EmailSettingsRows";
 import { TriggerSection } from "./_components/TriggerSection";
+import { canRunByHand } from "@eva/shared/automations";
 import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
-import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
@@ -98,8 +98,7 @@ export function AutomationClient({
         </div>
       }
       headerRight={
-        automation.systemKey !== undefined &&
-        automationTriggerOf(automation).kind === "event" ? null : (
+        !canRunByHand(automation.trigger) ? null : (
           <Button
             size="sm"
             variant="outline"
@@ -142,7 +141,6 @@ export function AutomationClient({
       }
     >
       <div className="flex flex-col gap-4">
-        {/* Keep panes mounted so Settings form state survives tab switches. */}
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "latest" ? 1 : 0 }}
@@ -220,12 +218,24 @@ function SettingsForm({
   ).withOptimisticUpdate((localStore, args) => {
     if (automation.numId === undefined) return;
     const q = { repoId, numId: automation.numId };
-    const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
+    const {
+      id: _id,
+      contextRepoId: _contextRepoId,
+      providerAccountId,
+      ...fields
+    } = args;
     patchLoadedQuery(
       localStore,
       api.automations.getByNumId,
       q,
-      (current) => current && { ...current, ...fields },
+      (current) =>
+        current && {
+          ...current,
+          ...fields,
+          ...(providerAccountId === undefined
+            ? {}
+            : { providerAccountId: providerAccountId ?? undefined }),
+        },
     );
   });
   const removeAutomation = useMutation(
@@ -240,8 +250,6 @@ function SettingsForm({
   const { request: requestConfirm } = useRequestConfirm();
   const titleFieldId = useId();
   const promptFieldId = useId();
-  const model = normalizeAIModel(automation.model ?? repo.defaultModel);
-  const { options: modelOptions } = useAvailableAiModels(repoId, model);
 
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
@@ -366,15 +374,7 @@ function SettingsForm({
         <EmailSettingsRows automation={automation} commit={commit} />
       </SettingsSection>
 
-      <SettingsSection title="Model">
-        <SettingsField label="Provider and model">
-          <ModelPicker
-            value={model}
-            options={modelOptions}
-            onValueChange={(m) => commit({ model: m })}
-          />
-        </SettingsField>
-      </SettingsSection>
+      <AutomationModelSection automation={automation} commit={commit} />
 
       <SettingsSection
         title="Delete automation"

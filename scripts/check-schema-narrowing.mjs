@@ -1,18 +1,34 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The two files that define every stored field shape. */
+/**
+ * The files that define every stored field shape. `enums.ts` holds the
+ * stored unions (statuses, kinds) that `tableFields.ts` builds fields from.
+ */
 export const WATCHED_FILES = [
   "packages/backend/convex/schema.ts",
   "packages/backend/convex/_validators/tableFields.ts",
+  "packages/backend/convex/_validators/enums.ts",
 ];
 
 const MIGRATIONS_FILE = "packages/backend/convex/dataMigrations.ts";
+const MIGRATION_SOURCES = [
+  MIGRATIONS_FILE,
+  "packages/backend/convex/migrations.ts",
+];
+const MIGRATIONS_DIR = "packages/backend/convex/_migrations";
+const MIGRATIONS_HISTORY_PATH = "packages/backend/convex";
 const MARKER = "schema-narrowing-ok:";
+const MARKER_RE = new RegExp(`${MARKER}\\s*([\\w$]+)`, "g");
+
+/** Every migration name the markers in `text` claim. */
+export function markerNames(text) {
+  return [...text.matchAll(MARKER_RE)].map((match) => match[1]);
+}
 
 const DEFINITION_PATTERNS = [
   {
@@ -28,7 +44,6 @@ const DEFINITION_PATTERNS = [
 const LITERAL_RE = /v\.literal\(\s*["']([^"']+)["']\s*\)/g;
 
 function parseDiff(diff) {
-  /** @type {Map<string, { removed: { line: number, text: string }[], kept: string[] }>} */
   const byFile = new Map();
   let current = null;
   let oldLine = 0;
@@ -85,19 +100,28 @@ function exportsMigration(source, name) {
   ).test(source);
 }
 
+/** The names in `names` that `source` does not export. */
+export function unresolvedMigrations(names, source) {
+  return [...new Set(names)].filter((name) => !exportsMigration(source, name));
+}
+
 /**
  * Pure analysis: given the diff of the watched files, the current content of
- * those files, and the dataMigrations.ts source, decide whether the change
- * narrows the stored schema without cover.
+ * those files, and the migration sources, decide whether the change narrows
+ * the stored schema without cover, or carries a marker naming no migration.
  *
  * A removed name is only reported when it appears nowhere in `newContent` —
  * so moves between the two files, renames of the surrounding const, and
  * reordering never trip the gate.
  *
- * `migrationsSource` is searched as plain text, so the caller may concatenate
- * several revisions of dataMigrations.ts. It does: docs/eva-convex.md has the
- * migration deleted once it has run, which is often the same change that
- * removes the field, so the base revision has to count too.
+ * `migrationsSource` is searched as plain text, so the caller concatenates
+ * every migration file, the base revision and the history search's export
+ * lines: docs/eva-convex.md has the migration deleted once it has run, often
+ * in the change that removes the field or long before.
+ *
+ * Every marker in `newContent` and the diff is checked, with or without a
+ * removal: a marker that names the field it covers hides that removal
+ * (`newContent` still holds the name), so the migration name is the check.
  *
  * @param {{ diff: string, newContent: string, migrationsSource: string }} input
  */
@@ -105,23 +129,17 @@ export function analyzeSchemaNarrowing({ diff, newContent, migrationsSource }) {
   const byFile = parseDiff(diff);
   const watched = new Set(WATCHED_FILES);
 
-  /** @type {{ file: string, line: number, kind: string, name: string }[]} */
   const removals = [];
-  /** @type {string[]} */
-  const markers = [];
+  const markers = markerNames(newContent);
 
   for (const [file, hunks] of byFile) {
     if (!watched.has(file)) continue;
 
-    for (const line of hunks.kept) {
-      const found = new RegExp(`${MARKER}\\s*([\\w$]+)`).exec(line);
-      if (found) markers.push(found[1]);
-    }
+    for (const line of hunks.kept) markers.push(...markerNames(line));
 
     const seen = new Set();
     for (const { line, text } of hunks.removed) {
-      const inline = new RegExp(`${MARKER}\\s*([\\w$]+)`).exec(text);
-      if (inline) markers.push(inline[1]);
+      markers.push(...markerNames(text));
 
       for (const { kind, name } of definedNames(text)) {
         if (newContent.includes(name)) continue;
@@ -134,14 +152,15 @@ export function analyzeSchemaNarrowing({ diff, newContent, migrationsSource }) {
   }
 
   const uniqueMarkers = [...new Set(markers)];
-  const missingMigrations = uniqueMarkers.filter(
-    (name) => !exportsMigration(migrationsSource, name),
+  const missingMigrations = unresolvedMigrations(
+    uniqueMarkers,
+    migrationsSource,
   );
 
-  if (removals.length === 0) {
+  if (removals.length === 0 && missingMigrations.length === 0) {
     return { ok: true, removals, markers: uniqueMarkers, missingMigrations };
   }
-  if (uniqueMarkers.length === 0) {
+  if (removals.length > 0 && uniqueMarkers.length === 0) {
     return {
       ok: false,
       reason: "unmarked",
@@ -188,6 +207,43 @@ function readOrEmpty(rel) {
   }
 }
 
+function currentMigrationSources() {
+  let dir = [];
+  try {
+    dir = readdirSync(path.join(ROOT, MIGRATIONS_DIR))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => `${MIGRATIONS_DIR}/${name}`);
+  } catch {
+    dir = [];
+  }
+  return [...MIGRATION_SOURCES, ...dir].map(readOrEmpty).join("\n");
+}
+
+/**
+ * The export lines git history holds for `names`: one `git log -G` pass over
+ * the backend, so a one-off migration deleted after it ran still resolves.
+ * `exportsMigration` then matches the exact name in these lines.
+ */
+export function historicMigrationExports(names) {
+  if (names.length === 0) return "";
+  const escaped = names.map((name) => name.replace(/[$]/g, "\\$"));
+  const output = git([
+    "log",
+    "--format=",
+    "-p",
+    "--unified=0",
+    "-E",
+    `-G(export .*(${escaped.join("|")}))`,
+    "--",
+    MIGRATIONS_HISTORY_PATH,
+  ]);
+  return output
+    .split("\n")
+    .filter((line) => /^[-+]\s*export\s/.test(line))
+    .map((line) => line.slice(1))
+    .join("\n");
+}
+
 function main() {
   const base = resolveBase();
   let mergeBase;
@@ -217,10 +273,15 @@ function main() {
     baseMigrations = "";
   }
 
+  const newContent = WATCHED_FILES.map(readOrEmpty).join("\n");
+  const present = `${currentMigrationSources()}\n${baseMigrations}`;
+  const historic = historicMigrationExports(
+    unresolvedMigrations(markerNames(`${newContent}\n${diff}`), present),
+  );
   const result = analyzeSchemaNarrowing({
     diff,
-    newContent: WATCHED_FILES.map(readOrEmpty).join("\n"),
-    migrationsSource: `${readOrEmpty(MIGRATIONS_FILE)}\n${baseMigrations}`,
+    newContent,
+    migrationsSource: `${present}\n${historic}`,
   });
 
   if (result.ok) {
@@ -233,19 +294,20 @@ function main() {
     return 0;
   }
 
+  if (result.missingMigrations.length > 0) {
+    console.error(
+      `check-schema-narrowing: a ${MARKER} marker names ${result.missingMigrations.map((n) => `"${n}"`).join(", ")}, ` +
+        "but no migration file exports it now and git history never exported it." +
+        "\nName the migration that drained the rows; check the spelling against its export.\n",
+    );
+  }
+  if (result.removals.length === 0) return 1;
+
   console.error(
     `check-schema-narrowing: this change removes ${result.removals.length} stored schema definition(s):\n`,
   );
   for (const { file, line, kind, name } of result.removals) {
     console.error(`  ${file}:${line}  removed ${kind} "${name}"`);
-  }
-
-  if (result.reason === "missing-migration") {
-    console.error(
-      `\nA ${MARKER} marker names ${result.missingMigrations.map((n) => `"${n}"`).join(", ")}, ` +
-        `but neither this revision nor the base of ${MIGRATIONS_FILE} exports it.` +
-        "\nCheck the spelling against the exported migration name.",
-    );
   }
 
   console.error(

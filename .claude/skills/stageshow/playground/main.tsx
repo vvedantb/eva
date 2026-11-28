@@ -12,8 +12,6 @@ function showFailure(error: unknown) {
 
 async function boot() {
   if (params.has('capture')) {
-    // Film/jump tools control their own pacing and instrumentation. This
-    // direct route keeps the browser's native timers, RAF and CSS clocks.
     const { mount } = await import('./preview')
     await mount(params.get('capture')!, params.get('still') === '1')
     return
@@ -23,8 +21,6 @@ async function boot() {
     mount()
     return
   }
-  // Only the iframe owns virtual time. Capture the native clocks before
-  // installing it so the viewer and this driver remain responsive.
   const nativeRaf = window.requestAnimationFrame.bind(window)
   const nativeCancelRaf = window.cancelAnimationFrame.bind(window)
   const realNow = performance.now.bind(performance)
@@ -88,9 +84,6 @@ async function boot() {
     new ResizeObserver(() => send({ height: example.offsetHeight })).observe(example)
     syncScene = () => {
       const stages = [...example.querySelectorAll('.ss-stage')]
-      // Still/reduced scenes need their initial measurement frames before
-      // sleeping. Active scenes keep all timers and CSS motion advancing;
-      // an empty queue is not evidence that a script has finished.
       const next = stages.length > 0 && stages.every(stage => stage.hasAttribute('data-still'))
       placingScene = stages.some(stage => stage.hasAttribute('data-placing'))
       if (staticScene !== next) { staticScene = next; playback.set({}); send() }

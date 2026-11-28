@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, mock, test, vi } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
@@ -93,28 +93,25 @@ async function fixture() {
   });
   const author = t.withIdentity({ subject: AUTHOR });
   const teammate = t.withIdentity({ subject: TEAMMATE });
-  const { chatId } = await author.mutation(api.sessions.ensureOwned, {
-    owner: { kind: "project", projectId: ids.projectId },
-  });
+  const { sessionId, chatId } = await author.mutation(
+    api.sessions.ensureOwned,
+    { owner: { kind: "project", projectId: ids.projectId } },
+  );
+  await t.run((ctx) =>
+    ctx.db.patch(sessionId, { status: "active", sandboxId: "sbx-test" }),
+  );
   return { t, author, teammate, chatId, ...ids };
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-async function send(
-  f: Fixture,
-  who: Fixture["author"],
-  message: string,
-) {
-  await who.mutation(api.sessions.addMessage, {
-    chatId: f.chatId,
-    role: "user",
-    content: message,
-  });
-  return who.mutation(api.sessionWorkflow.startExecute, {
+function send(f: Fixture, clerkUserId: string, message: string) {
+  return f.t.mutation(internal._sessions.execution.sendFromMcp, {
+    clerkUserId,
     chatId: f.chatId,
     message,
     model: DEFAULT_AI_MODEL,
+    sentViaOrchestrator: false,
   });
 }
 
@@ -149,7 +146,7 @@ describe("coordinator chat routing", () => {
       const f = await fixture();
       const result = await send(
         f,
-        f.author,
+        AUTHOR,
         `${mentionToken("Tom Mate", f.teammateId)} can you check the copy?`,
       );
       expect(result).toBe("posted");
@@ -160,10 +157,9 @@ describe("coordinator chat routing", () => {
         turns: 0,
       });
 
-      await f.author.mutation(api._sessions.execution.enqueueMessage, {
-        chatId: f.chatId,
+      await f.author.mutation(api.chats.send, {
+        target: f.chatId,
         message: `${mentionToken("Tom Mate", f.teammateId)} and the colours`,
-        model: DEFAULT_AI_MODEL,
       });
       expect(await chatState(f)).toEqual({
         users: 2,
@@ -179,12 +175,12 @@ describe("coordinator chat routing", () => {
     "no mention, or @Eva with a teammate, still starts Eva's turn",
     async () => {
       const f = await fixture();
-      expect(await send(f, f.author, "Plan the checkout work")).toBe("started");
+      expect(await send(f, AUTHOR, "Plan the checkout work")).toBe("started");
       const g = await fixture();
       expect(
         await send(
           g,
-          g.author,
+          AUTHOR,
           `@[Eva](${EVA_MENTION_ID}) split this up, ${mentionToken("Tom Mate", g.teammateId)} reviews`,
         ),
       ).toBe("started");
@@ -201,7 +197,7 @@ describe("mentions in Needs you", () => {
       const f = await fixture();
       await send(
         f,
-        f.author,
+        AUTHOR,
         `${mentionToken("Tom Mate", f.teammateId)} can you check the copy?`,
       );
       const before = await f.teammate.query(api.needsYou.list, {});
@@ -217,7 +213,7 @@ describe("mentions in Needs you", () => {
 
       await send(
         f,
-        f.teammate,
+        TEAMMATE,
         `${mentionToken("Ana Author", f.authorId)} looks good`,
       );
       const after = await f.teammate.query(api.needsYou.list, {});

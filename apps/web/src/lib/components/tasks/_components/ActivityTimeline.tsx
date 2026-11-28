@@ -42,13 +42,11 @@ export function ActivityTimeline({
   comments,
   taskActivity,
   users,
-  isProjectTask,
   readOnly,
 }: {
   taskId: Id<"agentTasks">;
   createdAt: number | undefined;
   creatorUser: User | undefined;
-  isProjectTask: boolean;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
@@ -106,7 +104,6 @@ export function ActivityTimeline({
           key="created"
           createdAt={item.timestamp}
           creatorUser={creatorUser}
-          isProjectTask={isProjectTask}
         />
       );
     }

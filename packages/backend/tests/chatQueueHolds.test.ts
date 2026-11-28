@@ -7,7 +7,7 @@ import {
   findUsageLimitHold,
   isHeldByUsageLimit,
   USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
-} from "../convex/_taskWorkflow/usageLimitReset";
+} from "../convex/_queues/usageLimitReset";
 import { modules } from "./_helpers/convexModules";
 
 
@@ -179,9 +179,6 @@ async function fixture(options: {
       sessionId,
       repoId,
       userId,
-      title: "Main",
-      number: 1,
-      isMain: true,
     });
     if (options.hitLimit) {
       await ctx.db.insert("messages", {

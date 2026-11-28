@@ -14,9 +14,13 @@ const REPORT_MUTATION = "usageLimits:report";
 const NOTE_REFRESH_MUTATION = "usageLimits:noteRefreshAttempt";
 
 const REPORT_MAX_RETRIES = 1;
+
 const USAGE_LOOKUP_TIMEOUT_MS = 5_000;
+
 const FORCE_USAGE_LOOKUP_TIMEOUT_MS = 20_000;
+
 const USAGE_REPORT_EXIT_GRACE_MS = 7_000;
+
 const USAGE_REPORT_REFRESH_MS = 6 * 60 * 60 * 1000;
 
 let pendingClaudeUsageReport: Promise<void> | null = null;

@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { automationRunTone, automationWhenText, isAutomationRunActive } from "@eva/shared/automations";
+import { automationRunTone, automationWhenText, canRunByHand, isAutomationRunActive } from "@eva/shared/automations";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { formatDuration } from "@eva/shared/duration";
 import { IconChevronDown, IconChevronRight, IconGitPullRequest, IconPlayerPlay, IconPlayerStop, IconRobot } from "@tabler/icons-react-native";
@@ -23,7 +23,7 @@ type Run = FunctionReturnType<typeof api.automations.listRuns>[number];
 
 /**
  * One automation (the web automation page): when it runs, an On switch
- * (`automations.update`), Run now (`automations.runNow`), its prompt, and its
+ * (`automations.update`), Run now for a scheduled one (`automations.runNow`), its prompt, and its
  * last 50 runs, newest first. A run row is its status, when it started and
  * how long it took; a tap opens its result (the report, the error, the pull
  * request it opened) and marks it read, as the web; a run in progress can be
@@ -99,15 +99,17 @@ export default function AutomationScreen() {
             }
           />
         </View>
-        <Button
-          fullWidth={false}
-          loading={starting}
-          disabled={starting || active}
-          leftIcon={<IconPlayerPlay size={16} color={theme.primaryForeground} />}
-          onPress={start}
-        >
-          Run now
-        </Button>
+        {canRunByHand(automation.trigger) ? (
+          <Button
+            fullWidth={false}
+            loading={starting}
+            disabled={starting || active}
+            leftIcon={<IconPlayerPlay size={16} color={theme.primaryForeground} />}
+            onPress={start}
+          >
+            Run now
+          </Button>
+        ) : null}
         <View className="gap-2">
           <Text accessibilityRole="header" className="font-instrument-sans-medium text-sm" style={{ color: theme.foreground, fontWeight: "500" }}>
             Prompt

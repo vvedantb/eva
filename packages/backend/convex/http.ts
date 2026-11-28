@@ -7,6 +7,7 @@ import {
 } from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
+import { registerPreviewCommentRoutes } from "./previewCommentsHttp";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
@@ -38,6 +39,7 @@ import {
 } from "./mcp/native";
 
 const http = httpRouter();
+registerPreviewCommentRoutes(http);
 
 function verifyDeployKey(request: Request): boolean {
   const auth = request.headers.get("Authorization");
@@ -104,7 +106,7 @@ http.route({
     const memAvailableMb = params.get("memAvailableMb");
     if (memAvailableMb !== null) {
       console.log(
-        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"}`,
+        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"} oomKills=${params.get("oomKills") ?? "?"}`,
       );
     }
     const lease = await ctx.runMutation(internal.turns.heartbeat, {

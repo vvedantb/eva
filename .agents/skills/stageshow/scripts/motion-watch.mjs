@@ -1,5 +1,3 @@
-// Runs inside the page. Kept self-contained for init-script injection and
-// deterministic fixture tests; heuristics report candidates for visual review.
 export function watchMotion(selector) {
   const watched = new WeakSet()
   const watch = (root) => {
@@ -19,7 +17,6 @@ export function watchMotion(selector) {
   }
   const label = (el) => `${el.tagName.toLowerCase()}${el.classList.length ? '.' + [...el.classList].join('.') : ''}`
   let lastInk = 0
-  // Hard edges: the visible fraction of each cut leaf, last frame
   const cut = new WeakMap()
   const masked = (cs) => (cs.maskImage && cs.maskImage !== 'none') || (cs.webkitMaskImage && cs.webkitMaskImage !== 'none')
   const hardEdges = (root) => {
@@ -40,10 +37,7 @@ export function watchMotion(selector) {
         if (visH <= 0 || visW <= 0) break
         const fy = visH / r.height
         const fx = visW / r.width
-        // The cutting edge must be inside the stage; the stage's own edge is a deliberate crop
         const edgeIn = (fy < 0.999 && ((r.top < c.top && c.top > S.top + 2) || (r.bottom > c.bottom && c.bottom < S.bottom - 2))) || (fx < 0.999 && ((r.left < c.left && c.left > S.left + 2) || (r.right > c.right && c.right < S.right - 2)))
-        // An edge that lines up with an outer clipping surface's edge (a panel
-        // sliding out from under a window's side) is a surface boundary, not a slice
         const flush = (b) => {
           const d = b.getBoundingClientRect()
           const near = (x, y) => Math.abs(x - y) < 1.5
@@ -66,15 +60,12 @@ export function watchMotion(selector) {
         continue
       }
       cut.set(el, found.f)
-      // Sliced between 10% and 90%, the cut moved since last frame, and still readable
       if (prev === undefined || Math.abs(prev - found.f) < 0.02 || found.f < 0.1 || found.f > 0.9) continue
       if (opacityOf(el, root) < 0.35) continue
-      // A single row unfolding from its middle (Collapse reveal="clip") is cut on purpose
       if (found.a.matches?.(".ss-collapse[data-reveal='clip']:not([data-tall]) > .ss-collapse__inner")) continue
       flagged.push(`hard edge: ${label(el)}${(el.textContent || '').trim() ? ` "${el.textContent.trim().slice(0, 20)}"` : ''} is cut by ${label(found.a)}'s edge while it moves; keep it faint until the edge has passed (Collapse does), or keep it whole`)
     }
   }
-  // Boxes with text in them, and where each was last frame
   const painted = (c) => c && c !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(c)
   const isBox = (cs) => painted(cs.backgroundColor) || cs.backgroundImage !== 'none' || (parseFloat(cs.borderTopWidth) > 0 && painted(cs.borderTopColor))
   const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
@@ -96,7 +87,6 @@ export function watchMotion(selector) {
         const r = el.getBoundingClientRect()
         if (r.height < 8 || r.height > 64 || r.width > 320) continue
         if (!isBox(getComputedStyle(el))) continue
-        // Text in the box itself or in anything inside it
         if (ownText(el) || [...el.querySelectorAll('*')].some(ownText)) boxes.push(el)
       }
     }
@@ -108,7 +98,6 @@ export function watchMotion(selector) {
       if (!p) continue
       const d = Math.max(Math.abs(r.left - p.x), Math.abs(r.top - p.y))
       if (d < 0.05 || d > 40) continue
-      // Moved by a transform, box and text are one layer while it runs
       let t = false
       for (const a of transforming) if (a.contains(el)) t = true
       if (t || layered(el, root) || opacityOf(el, root) < 0.5) continue
@@ -118,9 +107,6 @@ export function watchMotion(selector) {
       flagged.push(`steps in its box: ${name} "${(el.textContent || '').trim().slice(0, 20)}" moves by layout, so its text snaps to whole pixels while the box glides, and hops inside it as it lands; give it or a parent a lasting layer (will-change: transform), and glide it by a transform`)
     }
   }
-  // Fly sizes: a handoff is one object. The flyer takes off at the size of
-  // what it leaves and lands at the size of what replaces it; a mismatch
-  // grows or shrinks in flight and snaps when the real element appears.
   const flights = new Map()
   const flyNoted = new Set()
   const twin = (r, fly) => {
@@ -129,7 +115,6 @@ export function watchMotion(selector) {
     for (const el of document.elementsFromPoint(cx, cy)) {
       if (fly.contains(el) || el.closest('.ss-cursor')) continue
       const b = el.getBoundingClientRect()
-      // The same object: centered together and within about a third in each size
       const kw = b.width / Math.max(1, r.width)
       const kh = b.height / Math.max(1, r.height)
       if (Math.abs(b.left + b.width / 2 - cx) <= 3 && Math.abs(b.top + b.height / 2 - cy) <= 3 && kw > 0.7 && kw < 1.45 && kh > 0.7 && kh < 1.45) return el
@@ -151,7 +136,6 @@ export function watchMotion(selector) {
     } else if (--rec.wait <= 0) rec.last = null
   }
   const flySizes = (root) => {
-    // A flyer unmounted on the landing frame
     for (const [fly, rec] of flights) {
       if (fly.isConnected) continue
       if (rec.last) landing(fly, rec)
@@ -175,23 +159,15 @@ export function watchMotion(selector) {
         rec.last = r
         rec.wait = 6
       } else if (rec.last) {
-        // Just landed: look for what replaces it, for a few frames
         landing(fly, rec)
         rec.up = false
       } else rec.up = false
     }
   }
-  // After motion, nothing moves. Two checks on every element, every frame:
-  // a handoff (one element hides as a near-identical one shows in its place:
-  // a flyer and the real one, a ghost, a crossover) must swap on a frame
-  // where both are identical; and an element at rest after motion must not
-  // then shift with nothing animating.
   const restAt = new Map()
   let flowBoxes = new Map()
   const gone = []
   const shiftNoted = new Set()
-  // What it is: its kind, its own words, and for a wordless mark (an icon)
-  // its drawing, so two different icons crossfading are never paired
   const sig = (el) => {
     const words = [...el.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent.trim()).join('').slice(0, 30)
     return `${label(el)}|${words}|${words ? '' : el.innerHTML.replace(/\s+/g, '').slice(0, 200)}`
@@ -211,12 +187,9 @@ export function watchMotion(selector) {
     for (const el of root.querySelectorAll('*')) {
       if (el.closest('.ss-cursor, .ss-keys') || (el.parentElement && el.parentElement.closest('svg'))) continue
       const cs = getComputedStyle(el)
-      // Include zero-height/transparent flow items before their entrance: a
-      // receipt can move its siblings on the first frame it starts opening.
       const r = el.getBoundingClientRect()
       boxes.set(el, r)
       const o = (op.get(el.parentElement) ?? 1) * Number(cs.opacity)
-      // Meant to step (a terminal adding a line, a caret): not a settle snap
       if (el.closest('[data-snap]')) { op.set(el, o); continue }
       op.set(el, cs.visibility === 'hidden' || cs.display === 'none' ? 0 : o)
       if (op.get(el) < 0.5) continue
@@ -229,8 +202,6 @@ export function watchMotion(selector) {
     }
     const carriedByFlow = (el, rect, previous) => {
       if (!previous) return false
-      // A sibling must explain the displacement, not a simultaneous resize
-      // of this element. Transforms/opacity (including spinners) do not qualify.
       if (Math.abs(rect.width - previous.width) > 0.1 || Math.abs(rect.height - previous.height) > 0.1) return false
       for (const target of layoutTargets) {
         for (let branch = target; branch && branch !== root; branch = branch.parentElement) {
@@ -242,8 +213,6 @@ export function watchMotion(selector) {
           if (!inFlow(subject)) break
           const style = getComputedStyle(parent)
           const flex = /^(inline-)?flex$/.test(style.display)
-          // Keep this exemption to simple one-axis flow. Grid placements,
-          // wrapping flex rows and distributed gaps need separate evidence.
           if (flex ? style.flexWrap && style.flexWrap !== 'nowrap' : !/^(block|flow-root)$/.test(style.display)) break
           if (style.writingMode && style.writingMode !== 'horizontal-tb') break
           const horizontal = flex && !style.flexDirection.startsWith('column')
@@ -261,15 +230,12 @@ export function watchMotion(selector) {
           else if (justify && !['normal', 'start', 'flex-start', 'stretch'].includes(justify)) break
           const expected = (reverse ? -1 : 1) * ((ahead ? 1 : 0) + alignment) * growth
           const moved = rect[axis] - previous[axis]
-          // Compare actual pixels: an active height transition in a fixed-size
-          // or unrelated sibling does not waive an independent settle snap.
           if (Math.abs(expected) >= 0.05 && Math.abs(moved - expected) <= Math.max(0.1, Math.abs(expected) * 0.05)) return true
           break
         }
       }
       return false
     }
-    // What left this frame first, so a swap within one frame is paired
     for (const [el, rec] of restAt) {
       if (seen.has(el)) continue
       gone.push({ sig: sig(el), r: rec.r, at: now })
@@ -279,7 +245,6 @@ export function watchMotion(selector) {
       const prev = restAt.get(el)
       const running = runningTargets.some((target) => target === el || target.contains(el)) || carriedByFlow(el, r, prev?.r)
       if (!prev) {
-        // It just appeared: is it taking over from something that just left?
         const k = sig(el)
         for (const g of gone) {
           if (g.sig !== k || now - g.at > 60) continue
@@ -303,7 +268,6 @@ export function watchMotion(selector) {
       if (running) prev.lastAnim = now
       if (moved < 0.01) prev.still++
       else {
-        // Moved with nothing animating, soon after motion, from rest
         if (moved >= 0.5 && !running && now - prev.lastAnim > 20 && prev.still >= 2 && now - prev.moved < 1000) {
           const k = sig(el)
           if (!shiftNoted.has('s' + k)) {
@@ -319,16 +283,6 @@ export function watchMotion(selector) {
     flowBoxes = boxes
     while (gone.length && (now - gone[0].at > 60 || gone.length > 400)) gone.shift()
   }
-  // Pops: an element that shows between two frames already at full opacity
-  // and size, with nothing animating it or its ancestors (a chip appearing
-  // whole over the value it buds from), or vanishes the same way. Exempt:
-  // the cursor and keycaps, what steps on purpose (data-snap, carets),
-  // something that shows under a covering surface, and a swap where an
-  // identical element leaves as it shows (a flyer taking over from its
-  // source), typing (placeholders, typed letters, selections, highlights),
-  // anything crossing a clip's edge (a move, not a pop) and a Roll's parts.
-  // Also: a dashed or dotted edge whose box changes size, which
-  // Chrome re-lays every frame, so the dashes crawl and flicker.
   let vis = new Map()
   let tiny = new Set()
   let popFrom = -1
@@ -337,8 +291,6 @@ export function watchMotion(selector) {
   const pops = (root) => {
     const now = performance.now()
     if (popFrom < 0) popFrom = now
-    // Only an entrance or exit counts: a fade, a clip, a size opening. A
-    // move alone (a flyer setting off at full size) still pops in
     const entering = (a) => {
       if (a.transitionProperty) return /opacity|clip|height|width|grid-template|filter/.test(a.transitionProperty) && !(a.transitionProperty === 'filter')
       const kf = a.effect?.getKeyframes?.() ?? []
@@ -349,11 +301,7 @@ export function watchMotion(selector) {
     const k = root.getBoundingClientRect().width / (root.offsetWidth || 1) || 1
     const cur = new Map()
     const op = new Map()
-    // Shown but too small to judge: a fill that eases to nothing (or grows
-    // out of it) crosses the size floor without popping
     const tinyNow = new Set()
-    // The box each element is clipped to by its ancestors: a roll's old
-    // line slid out of its window has left view before it is removed
     const clipOf = new Map()
     const R = root.getBoundingClientRect()
     clipOf.set(root, { l: R.left, t: R.top, r: R.right, b: R.bottom })
@@ -368,18 +316,14 @@ export function watchMotion(selector) {
         clipOf.set(el, { l: Math.max(pc.l, b.left), t: Math.max(pc.t, b.top), r: Math.min(pc.r, b.right), b: Math.min(pc.b, b.bottom) })
       } else clipOf.set(el, pc)
       if (o < 0.5) continue
-      // A flyer is drawn by its scaled inner box, not its take-off box
       const r = (el.matches('.ss-fly') && el.querySelector('.ss-fly__lift')?.getBoundingClientRect()) || el.getBoundingClientRect()
       if (r.width * r.height < 36 * k * k) {
         tinyNow.add(el)
         continue
       }
-      // Mostly outside its clip: present but out of view, so crossing the
-      // clip's edge is a move, not an entrance or an exit
       const out = Math.max(0, Math.min(r.right, pc.r) - Math.max(r.left, pc.l)) * Math.max(0, Math.min(r.bottom, pc.b) - Math.max(r.top, pc.t)) < r.width * r.height * 0.5
       const sc = el.matches('.ss-fly') ? 1 : el instanceof HTMLElement && el.offsetWidth ? r.width / el.offsetWidth / k : 1
       const dashed = (/dashed|dotted/.test(cs.borderTopStyle) && parseFloat(cs.borderTopWidth) > 0) || (/dashed|dotted/.test(cs.outlineStyle) && parseFloat(cs.outlineWidth) > 0)
-      // A flyer shows through its inner box (where it buds and lifts)
       const lift = el.matches('.ss-fly') ? el.querySelector('.ss-fly__lift') : null
       const ov = lift ? o * Number(getComputedStyle(lift).opacity) : o
       cur.set(el, { o: ov, r, sc, busy: busyUp(lift ?? el), parent: el.parentElement, dashed, out, roll: !!el.closest('.ss-roll, .ss-count'), signature: sig(el), typed: !!el.closest('[data-typing], .ss-field__chars, .ss-field__placeholder, .ss-kb__callout, .ss-kb__suggest') })
@@ -387,14 +331,10 @@ export function watchMotion(selector) {
     const near = (a, b) => Math.abs(a.left + a.width / 2 - b.left - b.width / 2) < 40 * k && Math.abs(a.top + a.height / 2 - b.top - b.height / 2) < 40 * k && Math.abs(a.width - b.width) < Math.max(a.width, b.width) * 0.35
     const left = [...vis].filter(([el]) => !cur.has(el))
     const came = [...cur].filter(([el]) => !vis.has(el))
-    // A late frame (the page busy, as while a screenshot is taken) can hide a
-    // whole short fade between two samples: not judged
     const late = popLast > 0 && now - popLast > 40
     popLast = now
     if (now > popFrom && !late) {
       const name = (el) => `${label(el)}${(el.textContent || '').trim() ? ` "${el.textContent.trim().slice(0, 20)}"` : ''}`
-      // What it paints: its contents at their own opacity (a held flyer
-      // whose chip fades in by a keyframe paints nothing yet)
       const paints = (el) => {
         if (!el.children.length) return 1
         let most = 0
@@ -408,11 +348,6 @@ export function watchMotion(selector) {
         walk(el, 1)
         return most
       }
-      // Typing is instant in the real thing: a field's placeholder goes on
-      // the first key, letters and the clear button land whole, a key's
-      // callout flashes, a text selection or match highlight paints at once.
-      // A Roll splits its line into parts on the first change (the part that
-      // stays is still painted), so its own pieces aren't judged
       const typed = (el) => el.closest('[data-typing], .ss-field__chars, .ss-field__placeholder, .ss-kb__callout, .ss-kb__suggest')
       for (const [el, c] of came) {
         if (cur.has(c.parent) && !vis.has(c.parent)) continue
@@ -420,8 +355,6 @@ export function watchMotion(selector) {
         if (c.o < 0.9 || c.sc < 0.95 || c.busy) continue
         if (el.getAnimations({ subtree: true }).some((a) => a.playState === 'running' && entering(a)) || paints(el) < 0.9) continue
         if (left.some(([, g]) => g.signature === c.signature && near(g.r, c.r))) continue
-        // Shown under a surface that covers it (a card sliding over it)
-        // (hit-testing skips pointer-events: none, a flyer's, so that one can't be judged covered)
         const top = getComputedStyle(el).pointerEvents === 'none' ? null : document.elementFromPoint(c.r.left + c.r.width / 2, c.r.top + c.r.height / 2)
         if (top && !el.contains(top) && !top.contains(el) && !top.closest('.ss-cursor')) continue
         const key = 'in' + name(el)
@@ -458,14 +391,11 @@ export function watchMotion(selector) {
     if (window.__ssVerification?.stopped || !root.isConnected) return
     try {
     if (root) {
-      // Text riding a transform to rest: watch transform transitions finish
       const now0 = new Set()
       for (const a of document.getAnimations()) {
         const el = a.effect && a.effect.target
         if (!el || !root.contains(el) || !/^(transform|translate|scale)$/.test(a.transitionProperty || '')) continue
-        // A surface scaling on ::before carries no text: that is the fix, not the fault
         if (a.effect.pseudoElement) continue
-        // A camera push-in has to be a transform: it scales the whole scene
         if (el.closest('.ss-cursor, .ss-fly, .ss-keys, .ss-key') || el.matches('.ss-camera, .ss-camera-view')) continue
         now0.add(el)
       }
@@ -475,8 +405,6 @@ export function watchMotion(selector) {
         if (!el.isConnected) continue
         const cs = getComputedStyle(el)
         const t = cs.transform
-        // Kept on its own layer for good (will-change: transform), it rests
-        // exactly as it would untransformed: nothing re-snaps (Expand's launch)
         if (/transform/.test(cs.willChange)) continue
         const rest = t === 'none' || /^matrix\(1, 0, 0, 1, 0, 0\)$/.test(t)
         if (!rest || opacityOf(el, root) < 0.5 || !(el.textContent || '').trim()) continue
@@ -490,7 +418,6 @@ export function watchMotion(selector) {
       for (const a of document.getAnimations()) {
         const el = a.effect && a.effect.target
         const prop = a.transitionProperty || ''
-        // A pen tip (data-lead) shows first on purpose: the draw follows it
         if (!el || !root.contains(el) || !/^(transform|translate|top|left)$/.test(prop) || el.closest('.ss-cursor, [data-lead]')) continue
         live.add(el)
         if (!seen.has(el)) seen.set(el, { from: center(el), o0: opacityOf(el, root), opaqueAt: null })
@@ -510,7 +437,6 @@ export function watchMotion(selector) {
       if (now - lastInk > 40) {
         lastInk = now
         const S = root.getBoundingClientRect()
-        // A camera push-in shows less on purpose: not an empty frame
         const zoomed = !!root.querySelector('.ss-camera-view[data-zoomed]')
         let n = 0
         for (const el of root.querySelectorAll('*')) {

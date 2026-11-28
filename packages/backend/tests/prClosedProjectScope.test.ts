@@ -6,7 +6,6 @@ import schema from "../convex/schema";
 import { isSessionArchived } from "../convex/_sessions/archive";
 import { modules } from "./_helpers/convexModules";
 
-
 const TIMEOUT_MS = 30_000;
 
 const PROJECT_PR = "https://github.com/vvedantb/eva/pull/900";
@@ -78,14 +77,6 @@ async function fixture() {
     });
     await subscribe(quick, ada);
 
-    const run = (taskId: Id<"agentTasks">) =>
-      ctx.db.insert("agentRuns", {
-        taskId,
-        status: "success" as const,
-        logs: [],
-      });
-    const shippedRun = await run(shipped);
-    const quickRun = await run(quick);
     await ctx.db.insert("pullRequests", {
       repoId,
       prUrl: PROJECT_PR,
@@ -98,7 +89,6 @@ async function fixture() {
         kind: "project",
         projectId,
         taskId: shipped,
-        runId: shippedRun,
       },
       createdAt: now,
       updatedAt: now,
@@ -111,7 +101,7 @@ async function fixture() {
       state: "open",
       primary: true,
       origin: "eva",
-      owner: { kind: "task", taskId: quick, runId: quickRun },
+      owner: { kind: "task", taskId: quick },
       createdAt: now,
       updatedAt: now,
     });

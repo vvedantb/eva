@@ -70,9 +70,7 @@ export const mintSandboxSessionTokens = internalAction({
     repoId: v.id("githubRepos"),
     enableMcp: v.boolean(),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    entityKind: v.optional(v.literal("session")),
     chatId: v.optional(v.string()),
     readOnlyGit: v.optional(v.boolean()),
   },

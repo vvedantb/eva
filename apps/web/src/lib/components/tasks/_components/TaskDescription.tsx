@@ -18,6 +18,7 @@ import { ReactionBar } from "./ReactionBar";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { useReactions } from "./TaskReactionsProvider";
 import { taskTextLockReason } from "@eva/shared/taskDetail";
+import { useAddTaskFiles } from "./useAddTaskFiles";
 
 function stripHtml(raw: string): string {
   return raw
@@ -45,6 +46,7 @@ export function TaskDescription({
   const { groups, toggle } = useReactions("description", taskId);
   const [isEditing, setIsEditing] = useState(false);
   const mentionRef = useRef<DescriptionMentionEditorHandle>(null);
+  const addFiles = useAddTaskFiles(taskId);
 
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
@@ -53,7 +55,6 @@ export function TaskDescription({
         priority,
         projectId,
         assignedTo,
-        providerAccountId,
         ...safeFields
       } = args;
       patchLoadedQuery(
@@ -72,9 +73,6 @@ export function TaskDescription({
               : {}),
             ...(assignedTo !== undefined
               ? { assignedTo: assignedTo ?? undefined }
-              : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
               : {}),
           },
       );
@@ -130,6 +128,7 @@ export function TaskDescription({
               value={editValue}
               onValueChange={setEditValue}
               onBlur={handleSave}
+              onImageFiles={(files) => void addFiles.add(files)}
               placeholder="Add description..."
               minHeight="min-h-[160px]"
               className="rounded-none border-0 px-0 py-0 shadow-none focus-visible:ring-0"

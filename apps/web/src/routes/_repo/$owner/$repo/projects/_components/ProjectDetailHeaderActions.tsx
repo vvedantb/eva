@@ -8,6 +8,7 @@ import {
 import type { Id } from "@eva/backend";
 import { IconDots } from "@tabler/icons-react";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
+import { ProjectChatUsageLimits } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 import { useNavigate } from "@tanstack/react-router";
@@ -19,12 +20,21 @@ import { useProjectMenu } from "@/lib/components/projects/_components/useProject
 import { useRecapChat } from "@/lib/components/chat/useRecapChat";
 import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { ArchivedLabel } from "@/lib/components/ArchivedLabel";
+import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import { useTaskDetail } from "@/lib/components/tasks/useTaskDetail";
+import { PROJECT_TASK_ROUTING } from "@/lib/components/tasks/useTaskDetailControls";
 import { ProjectArchiveDialog } from "./ProjectArchiveDialog";
 import { useProjectArchive } from "./useProjectArchive";
 import type {
   ProjectDetailProject,
   ProjectSandboxState,
 } from "./projectDetailHelpers";
+
+/** The chat the coordinator view shows: Eva's, an open task tab's, or a task tab still loading. */
+export type ProjectShownChat =
+  | { kind: "eva" }
+  | { kind: "task"; taskId: Id<"agentTasks"> }
+  | { kind: "loading" };
 
 interface ProjectDetailHeaderActionsProps {
   projectId: Id<"projects">;
@@ -33,6 +43,7 @@ interface ProjectDetailHeaderActionsProps {
   sandbox: ProjectSandboxState;
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
+  shownChat: ProjectShownChat;
 }
 
 export function ProjectDetailHeaderActions({
@@ -42,6 +53,7 @@ export function ProjectDetailHeaderActions({
   sandbox,
   chatId,
   chatTurnOpen,
+  shownChat,
 }: ProjectDetailHeaderActionsProps) {
   const {
     isSandboxActive,
@@ -75,10 +87,12 @@ export function ProjectDetailHeaderActions({
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         {isArchived ? <ArchivedLabel /> : null}
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
-        {/* The controls share the chat header track. Tasks start through
-            Approve and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
+          <ProjectChatUsageLimits
+            projectId={projectId}
+            projectSession={sandbox.projectSession}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon-sm" aria-label="More">
@@ -97,7 +111,6 @@ export function ProjectDetailHeaderActions({
               />
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Siblings of the menu: Radix unmounts menu content on close. */}
           {projectMenu.dialogs}
           <ProjectArchiveDialog
             target={projectArchive.target}
@@ -105,11 +118,12 @@ export function ProjectDetailHeaderActions({
             onConfirm={projectArchive.confirm}
             isArchiving={projectArchive.isArchiving}
           />
-          {/* One control for both directions — see `SandboxStartStopButton`.
-            Inert while a chat turn is in flight. This is the
-            only wake/sleep control now, the sandbox chat header carries
-            usage alone. The coordinator is read-only: no Commit & push. */}
-          {isArchived ? null : (
+          {isArchived || shownChat.kind === "loading" ? null : shownChat.kind === "task" ? (
+            <ProjectTaskSandboxButton
+              key={shownChat.taskId}
+              taskId={shownChat.taskId}
+            />
+          ) : (
             <SandboxStartStopButton
               isActive={isSandboxActive}
               isToggling={isSandboxStarting || isSandboxStopping}
@@ -123,5 +137,31 @@ export function ProjectDetailHeaderActions({
         </div>
       </div>
     </div>
+  );
+}
+
+function ProjectTaskSandboxButton({ taskId }: { taskId: Id<"agentTasks"> }) {
+  const {
+    isLoading,
+    canStartSandbox,
+    isSandboxActive,
+    isSandboxStarting,
+    isSandboxStopping,
+    taskSession,
+    handleStartSandbox,
+    handleStopSandbox,
+  } = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
+  const turnOpen = useChatTurnOpen(taskSession.owned?.chatId);
+  if (isLoading || !(canStartSandbox || isSandboxActive)) return null;
+  return (
+    <SandboxStartStopButton
+      isActive={isSandboxActive}
+      isToggling={isSandboxStarting || isSandboxStopping}
+      onToggle={(action) => {
+        if (action === "start") void handleStartSandbox();
+        else void handleStopSandbox();
+      }}
+      isAssistantResponding={turnOpen === true}
+    />
   );
 }

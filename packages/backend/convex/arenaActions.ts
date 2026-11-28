@@ -8,7 +8,7 @@ import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 import { getActionRepoWithAccess } from "./functions";
 import { getInstallationOctokit } from "./githubAuth";
-import { llmJson } from "./_taskWorkflow/helpers";
+import { llmJson } from "./_shared/llmJson";
 import { execHandle, getSandboxHandle } from "./_sandbox_runtime/helpers";
 import {
   launchDevServerInBackground,

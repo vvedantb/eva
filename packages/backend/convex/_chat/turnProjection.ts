@@ -1,7 +1,5 @@
 import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
-import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
   sessionOwnerEntityId,
@@ -80,11 +78,10 @@ async function openChatTurnsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<Doc<"turns">[]> {
-  const turns = await db
+  return await db
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  return turns.filter((turn) => turn.lane === undefined);
 }
 
 async function idsOfTurns(
@@ -145,7 +142,7 @@ export async function hasOpenChatTurn(
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", turnEntityId).eq("lane", undefined).eq("open", true),
+      q.eq("entityId", turnEntityId).eq("open", true),
     )
     .first();
   return turn !== null;
@@ -158,7 +155,6 @@ function turnOwnerId(
   return (
     db.normalizeId("sessionChats", id) ??
     db.normalizeId("sessions", id) ??
-    db.normalizeId("agentRuns", id) ??
     db.normalizeId("automationRuns", id) ??
     db.normalizeId("docs", id) ??
     db.normalizeId("evaluationReports", id)
@@ -187,28 +183,24 @@ export function sessionIsExecuting(
 }
 
 /**
- * The workflow that runs an entity's open turn in one lane. Undefined when
- * the entity is idle or its open turn is synthetic (daemon-minted, no
- * workflow). Session chats and the session summary keep no workflow slot of
- * their own: cancel, completion and the stall backstop read it here.
+ * The workflow that runs an entity's open turn. Undefined when the entity is
+ * idle or its open turn is synthetic (daemon-minted, no workflow). Session
+ * chats keep no workflow slot of their own: cancel, completion and the stall
+ * backstop read it here.
  */
 export async function openTurnWorkflowId(
   ctx: QueryCtx,
   entityId: TurnEntityId,
-  lane?: TurnLane,
 ): Promise<string | undefined> {
-  return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
+  return (await findOpenTurn(ctx, entityId))?.workflowId;
 }
 
-/**
- * One "sandbox busy" status for a quick task: its main run and its chat turn
- * share one sandbox, and the queue already treats them as exclusive.
- */
+/** A task is busy while its chat has a turn open: a run is a chat turn. */
 export function taskIsExecuting(
-  task: Pick<Doc<"agentTasks">, "_id"> & TaskRunSource,
+  task: Pick<Doc<"agentTasks">, "_id">,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return isTaskRunning(task) || openChatEntityIds.has(String(task._id));
+  return openChatEntityIds.has(String(task._id));
 }
 
 /** A project is busy while its coordinator chat has a turn open. */

@@ -7,6 +7,7 @@ import {
   type SandboxChatPanelProps,
 } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
+import { SandboxChatUsageLimits } from "@/lib/components/chat/SandboxChatUsageLimits";
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
@@ -33,6 +34,21 @@ export function ProjectSandboxChatPanel({
   );
 }
 
+/** Eva's project chat plan usage, for the project page header. */
+export function ProjectChatUsageLimits({
+  projectId,
+  projectSession,
+}: {
+  projectId: Id<"projects">;
+  projectSession: OwnedSession;
+}) {
+  return (
+    <SandboxChatUsageLimits
+      binding={useProjectChatBinding(projectId, projectSession)}
+    />
+  );
+}
+
 /**
  * The project side of the sandbox chat: the Main chat of the project's
  * session (`useOwnedSession`), whose own sticky model, traits and account
@@ -50,6 +66,7 @@ export function useProjectChatBinding(
   return useOwnedChatBinding({
     ownedSession: projectSession,
     ownerLabel: "project",
+    prOwner: { kind: "project", projectId },
     title: project?.title,
     common: { accounts, resolveAccountId },
   });

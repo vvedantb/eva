@@ -1,11 +1,8 @@
 import { v } from "convex/values";
-import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
-import { aiModelValidator } from "./validators";
-import { taskCompleteEvent } from "./_taskWorkflow/events";
+import { aiModelValidator, reasoningLevelValidator } from "./validators";
 import { buildPrBody } from "./prBody";
-import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import {
   buildAutomationPrompt,
   buildReadOnlyPrompt,
@@ -15,6 +12,7 @@ import { parseFindingsFromResult } from "./_automationWorkflow/findings";
 import { extractReadOnlyDeliverable } from "./_automationWorkflow/deliverable";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { automationRunStreamingEntityId } from "./_chat/agentStreamIds";
+import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 
 /** Runs an automation: prepares sandbox, executes the prompt, optionally creates a PR, and cleans up. */
 export const automationExecutionWorkflow = workflow.define({
@@ -27,32 +25,41 @@ export const automationExecutionWorkflow = workflow.define({
     description: v.string(),
     title: v.string(),
     model: aiModelValidator,
+    providerAccountId: v.optional(v.id("userProviderAccounts")),
+    reasoningLevel: v.optional(reasoningLevelValidator),
+    thinkingEnabled: v.optional(v.boolean()),
+    use1mContext: v.optional(v.boolean()),
+    fastMode: v.optional(v.boolean()),
     rootDirectory: v.string(),
     userId: v.id("users"),
     readOnly: v.optional(v.boolean()),
     actionsEnabled: v.optional(v.boolean()),
+    prBranch: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
-    let sandboxId: string | undefined;
-
-    let completionPrUrl: string | null = null;
-    let sandboxRepoId = args.repoId;
     const isReadOnly = args.readOnly === true;
+    const workBranch = args.prBranch ?? args.branchName;
     const isActionable = isReadOnly && args.actionsEnabled === true;
-
-    try {
+    const saveError = async (error: string) => {
       await step.runMutation(internal.automations.updateRunStatus, {
         runId: args.runId,
-        status: "running",
+        status: "error",
+        error,
       });
+    };
 
-      const data = await step.runQuery(internal.automations.getAutomationData, {
-        automationId: args.automationId,
-        repoId: args.repoId,
-      });
-      if (!data) throw new Error("Automation data not found");
-      sandboxRepoId = data.sandboxRepoId;
+    await step.runMutation(internal.automations.updateRunStatus, {
+      runId: args.runId,
+      status: "running",
+    });
 
+    const data = await step.runQuery(internal.automations.getAutomationData, {
+      automationId: args.automationId,
+      repoId: args.repoId,
+    });
+    if (!data) {
+      await saveError("Automation data not found");
+    } else {
       const prompt = isActionable
         ? buildActionableReportPrompt(
             args.title,
@@ -68,146 +75,145 @@ export const automationExecutionWorkflow = workflow.define({
           : buildAutomationPrompt(
               args.title,
               args.description,
-              args.branchName,
+              workBranch,
               args.rootDirectory,
             );
 
-      const streamingEntityId = automationRunStreamingEntityId(args.runId);
-
-      ({ sandboxId } = await prepareSandboxSteps(step, {
+      await runOneShotAgent(step, {
+        ownerId: args.runId,
+        userId: args.userId,
         installationId: args.installationId,
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        ephemeral: true,
-        repoId: sandboxRepoId,
-        streamingEntityId,
-        baseBranch: data.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-        branchName: isReadOnly ? undefined : args.branchName,
-        createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
-        skipStartupCommands: true,
-      }));
-
-      await step.runMutation(internal.automations.updateRunStatus, {
-        runId: args.runId,
-        status: "running",
-        sandboxId,
-      });
-
-      await launchAgentStep(
-        step,
-        {
-          sandboxId,
-          entityId: String(args.runId),
-          prompt,
-          userId: args.userId,
-          completionMutation: "automations:handleCompletion",
-          entityIdField: "automationRunId",
+        repo: {
+          id: data.sandboxRepoId,
+          owner: data.repoOwner,
+          name: data.repoName,
+        },
+        sandbox: {
+          kind: "ephemeral",
+          baseBranch: data.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
+          branchName:
+            args.prBranch ?? (isReadOnly ? undefined : args.branchName),
+          createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
+          skipStartupCommands: true,
+        },
+        streamingEntityId: automationRunStreamingEntityId(args.runId),
+        agent: {
           model: args.model,
           allowedTools: isReadOnly
             ? "Read,Bash,Glob,Grep"
             : "Read,Write,Edit,Bash,Glob,Grep",
-          repoId: sandboxRepoId,
-          streamingEntityId,
           runId: String(args.runId),
           requireTaskCommit: !isReadOnly,
+          providerAccountId: args.providerAccountId,
+          reasoningLevel: args.reasoningLevel,
+          thinkingEnabled: args.thinkingEnabled,
+          use1mContext: args.use1mContext,
+          fastMode: args.fastMode,
         },
-        {
-          entityId: args.runId,
-        },
-      );
-
-      const result = await step.awaitEvent(taskCompleteEvent);
-
-      if (result.success && !isReadOnly) {
-        const pushResult = await step.runAction(
-          internal.sandbox.pushSandboxBranch,
-          {
+        prompt,
+        onSandboxReady: async (sandboxId) => {
+          await step.runMutation(internal.automations.updateRunStatus, {
+            runId: args.runId,
+            status: "running",
             sandboxId,
-            installationId: args.installationId,
-            repoOwner: data.repoOwner,
-            repoName: data.repoName,
-            repoId: sandboxRepoId,
-            branchName: args.branchName,
-          },
-        );
-
-        if (pushResult.pushed) {
-          completionPrUrl = await step.runAction(
-            internal.taskWorkflowActions.createPullRequest,
-            {
-              installationId: args.installationId,
-              repoOwner: data.repoOwner,
-              repoName: data.repoName,
-              branchName: args.branchName,
-              baseBranch: data.defaultBaseBranch,
-              title: args.title,
-              body: buildPrBody([
-                {
-                  heading: "Automation",
-                  content: args.description || "No description",
-                },
-                {
-                  heading: "Summary",
-                  content: result.result ?? "No summary provided",
-                },
-              ]),
-              labels: [
-                "eva",
-                "automation",
-                ...(args.rootDirectory
-                  ? [args.rootDirectory.split("/").pop()].filter(
-                      (l): l is string => l !== undefined && l !== "",
-                    )
-                  : []),
-              ],
-            },
-          );
-        }
-      }
-
-      const rawResult = result.result ?? "";
-      const findings =
-        isActionable && result.success
-          ? parseFindingsFromResult(rawResult)
-          : null;
-      const resultSummary =
-        result.success && rawResult
-          ? isReadOnly && !isActionable
-            ? extractReadOnlyDeliverable(rawResult)
-            : rawResult
-          : undefined;
-
-      await step.runMutation(internal.automations.updateRunStatus, {
-        runId: args.runId,
-        status: result.success ? "success" : "error",
-        error: result.success ? undefined : (result.error ?? "Unknown error"),
-        resultSummary,
-        prUrl: completionPrUrl ?? undefined,
-        activityLog: result.activityLog ?? undefined,
-        findings: findings ?? undefined,
-      });
-    } catch (error) {
-      const msg =
-        error instanceof Error ? error.message : "Automation workflow failed";
-      await step.runMutation(internal.automations.updateRunStatus, {
-        runId: args.runId,
-        status: "error",
-        error: msg,
-      });
-    } finally {
-      if (sandboxId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
-            sandboxId,
-            repoId: sandboxRepoId,
           });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup sandbox:", cleanupError);
-        }
-      }
-      await step.runMutation(internal.automations.clearRunWorkflow, {
-        runId: args.runId,
+        },
+        onResult: async (result, sandboxId) => {
+          let prUrl: string | null = null;
+          if (result.success && !isReadOnly) {
+            const pushResult = await step.runAction(
+              internal.sandbox.pushSandboxBranch,
+              {
+                sandboxId,
+                installationId: args.installationId,
+                repoOwner: data.repoOwner,
+                repoName: data.repoName,
+                repoId: data.sandboxRepoId,
+                branchName: workBranch,
+              },
+            );
+
+            if (pushResult.pushed && args.prBranch !== undefined) {
+              try {
+                const pushedSha = await step.runAction(
+                  internal.sandbox.readSandboxHead,
+                  { sandboxId, repoId: data.sandboxRepoId },
+                );
+                await step.runMutation(
+                  internal._automations.triggers.recordPushedSha,
+                  { runId: args.runId, pushedSha },
+                );
+              } catch (error) {
+                console.error(
+                  `[automations] could not record pushed head runId=${args.runId}`,
+                  error,
+                );
+              }
+            }
+            if (pushResult.pushed && args.prBranch === undefined) {
+              prUrl = await step.runAction(
+                internal.taskWorkflowActions.createPullRequest,
+                {
+                  installationId: args.installationId,
+                  repoOwner: data.repoOwner,
+                  repoName: data.repoName,
+                  branchName: args.branchName,
+                  baseBranch: data.defaultBaseBranch,
+                  title: args.title,
+                  body: buildPrBody([
+                    {
+                      heading: "Automation",
+                      content: args.description || "No description",
+                    },
+                    {
+                      heading: "Summary",
+                      content: result.result ?? "No summary provided",
+                    },
+                  ]),
+                  labels: [
+                    "eva",
+                    "automation",
+                    ...(args.rootDirectory
+                      ? [args.rootDirectory.split("/").pop()].filter(
+                          (l): l is string => l !== undefined && l !== "",
+                        )
+                      : []),
+                  ],
+                },
+              );
+            }
+          }
+
+          const rawResult = result.result ?? "";
+          const findings =
+            isActionable && result.success
+              ? parseFindingsFromResult(rawResult)
+              : null;
+          const resultSummary =
+            result.success && rawResult
+              ? isReadOnly && !isActionable
+                ? extractReadOnlyDeliverable(rawResult)
+                : rawResult
+              : undefined;
+
+          await step.runMutation(internal.automations.updateRunStatus, {
+            runId: args.runId,
+            status: result.success ? "success" : "error",
+            error: result.success
+              ? undefined
+              : (result.error ?? "Unknown error"),
+            resultSummary,
+            prUrl: prUrl ?? undefined,
+            activityLog: result.activityLog ?? undefined,
+            findings: findings ?? undefined,
+          });
+        },
+        onError: saveError,
       });
     }
+
+    await step.runMutation(internal.automations.clearRunWorkflow, {
+      runId: args.runId,
+    });
   },
 });

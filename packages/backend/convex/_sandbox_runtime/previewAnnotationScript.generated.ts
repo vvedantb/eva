@@ -6,6 +6,1028 @@
  */
 export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
 (() => {
+  // preview-annotation-src/themeFallback.generated.ts
+  var LIGHT_THEME = {
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+    surface: "oklab(1 0 0 / 0.95)",
+    surfaceText: "oklch(0.2103 0 0)",
+    barShadow: "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px",
+    tipShadow: "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.00999999) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.00999999) 0px 1.16px 1.5px 0px, rgba(0, 0, 0, 0.05) 0px 0px 0px 1px",
+    tipRadius: "16px",
+    idleText: "oklch(0.5517 0 0)",
+    hoverBg: "oklab(0.9524 0 0 / 0.6)",
+    hoverText: "oklch(0.2103 0 0)",
+    activeBg: "oklch(0.94 0 0)",
+    activeText: "oklch(0.2103 0 0)",
+    badgeBg: "oklch(0.2103 0 0)",
+    badgeText: "oklch(0.9702 0 0)",
+    disc: "oklch(0.98 0 0)",
+    destructive: "oklch(0.6532 0.2335 25.74)",
+    border: "oklch(0.9 0 0)",
+    primary: "oklch(0.2103 0 0)",
+    primaryText: "oklch(0.9911 0 0)",
+    field: "oklch(0.9702 0 0)",
+    popover: "oklch(1 0 0)",
+    muted: "oklch(0.9524 0 0)",
+    warning: "oklch(0.7819 0.159 72.33)",
+    inputBorder: "oklch(0.9 0 0)",
+    focusBorder: "oklab(0.2103 0 0 / 0.5)",
+    secondaryText: "oklch(0.2103 0 0)",
+    tabTrack: "oklch(0.94 0 0)",
+    tabPill: "oklch(1 0 0)"
+  };
+  var DARK_THEME = {
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+    surface: "oklab(0.313316 0.000133276 -0.0054974 / 0.95)",
+    surfaceText: "rgb(250, 250, 250)",
+    barShadow: "color(srgb 0 0 0 / 0.05) 0px 25px 50px 0px, color(srgb 0 0 0 / 0.04) 0px 12px 24px 0px, color(srgb 0 0 0 / 0.03) 0px 6px 12px 0px, color(srgb 0 0 0 / 0.02) 0px 3px 6px 0px, color(srgb 0 0 0 / 0.02) 0px 1.5px 3px 0px, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px",
+    tipShadow: "color(srgb 0 0 0 / 0.04) 0px 17.54px 23.39px 0px, color(srgb 0 0 0 / 0.03) 0px 9.4px 12.5px 0px, color(srgb 0 0 0 / 0.02) 0px 5.25px 7px 0px, color(srgb 0 0 0 / 0.00999999) 0px 2.79px 3.72px -2px, color(srgb 0 0 0 / 0.00999999) 0px 1.16px 1.5px 0px, rgba(255, 255, 255, 0.18) 0px 0px 0px 1px",
+    tipRadius: "16px",
+    idleText: "rgb(159, 160, 162)",
+    hoverBg: "oklab(0.352463 0.000133812 -0.00533339 / 0.6)",
+    hoverText: "rgb(250, 250, 250)",
+    activeBg: "rgb(68, 69, 72)",
+    activeText: "oklch(0.9911 0 0)",
+    badgeBg: "rgb(250, 250, 250)",
+    badgeText: "rgb(34, 35, 37)",
+    disc: "rgb(48, 49, 52)",
+    destructive: "oklch(0.594 0.1973 24.63)",
+    border: "rgb(78, 79, 82)",
+    primary: "oklch(0.9911 0 0)",
+    primaryText: "oklch(0.2103 0 0)",
+    field: "rgb(34, 35, 37)",
+    popover: "rgb(48, 49, 52)",
+    muted: "rgb(58, 59, 62)",
+    warning: "oklch(0.8203 0.1392 76.34)",
+    inputBorder: "rgb(78, 79, 82)",
+    focusBorder: "oklab(0.9911 0 0 / 0.5)",
+    secondaryText: "oklch(0.9911 0 0)",
+    tabTrack: "rgb(48, 49, 52)",
+    tabPill: "rgb(68, 69, 72)"
+  };
+
+  // preview-annotation-src/theme.ts
+  var current = null;
+  function getTheme() {
+    if (current) return current;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? DARK_THEME : LIGHT_THEME;
+  }
+  function setTheme(theme) {
+    current = theme;
+  }
+  function applyTheme(host, theme) {
+    const vars = {
+      "--font": theme.fontFamily,
+      "--surface": theme.surface,
+      "--surface-text": theme.surfaceText,
+      "--bar-shadow": theme.barShadow,
+      "--tip-shadow": theme.tipShadow,
+      "--tip-radius": theme.tipRadius,
+      "--idle-text": theme.idleText,
+      "--hover-bg": theme.hoverBg,
+      "--hover-text": theme.hoverText,
+      "--active-bg": theme.activeBg,
+      "--active-text": theme.activeText,
+      "--badge-bg": theme.badgeBg,
+      "--badge-text": theme.badgeText,
+      "--disc": theme.disc,
+      "--destructive": theme.destructive,
+      "--border": theme.border,
+      "--primary": theme.primary,
+      "--primary-text": theme.primaryText,
+      "--field": theme.field,
+      "--popover": theme.popover,
+      "--muted": theme.muted,
+      "--warning": theme.warning,
+      "--input-border": theme.inputBorder,
+      "--focus-border": theme.focusBorder,
+      "--secondary-text": theme.secondaryText,
+      "--tab-track": theme.tabTrack,
+      "--tab-pill": theme.tabPill
+    };
+    for (const [name, value] of Object.entries(vars)) {
+      host.style.setProperty(name, value);
+    }
+  }
+
+  // preview-annotation-src/commentCard.ts
+  var CARD_WIDTH_PX = 320;
+  var GUTTER_PX = 16;
+  var GAP_PX = 8;
+  var STYLES = \`
+:host { all: initial; position: fixed; z-index: 2147483647; font: 16px/24px var(--font); letter-spacing: -0.02em; }
+.card { box-sizing: border-box; width: min(\${CARD_WIDTH_PX}px, calc(100vw - \${GUTTER_PX * 2}px)); padding: 12px; border-radius: var(--tip-radius); background: var(--popover); color: var(--surface-text); box-shadow: var(--bar-shadow); opacity: 0; transform: scale(0.96); transition: opacity 160ms ease-out, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+.card.in { opacity: 1; transform: none; }
+.chips { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; line-height: 16px; letter-spacing: 0.005em; color: var(--idle-text); min-width: 0; }
+.toggle { all: unset; box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 6px; cursor: pointer; transition: transform 120ms ease; }
+.toggle:active { transform: scale(0.98); }
+.toggle:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
+.toggle svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
+.toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.chip { flex: none; padding: 2px 6px; border: 1px solid var(--border); border-radius: 14px; background: var(--disc); }
+.chip.mono { font-family: Menlo, ui-monospace, SFMono-Regular, monospace; color: var(--surface-text); }
+.text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+.a11y { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; letter-spacing: 0.01em; color: var(--idle-text); }
+.details { margin-bottom: 8px; }
+.details[hidden] { display: none; }
+.code { position: relative; margin-bottom: 8px; border-radius: var(--tip-radius); background: var(--active-bg); }
+.code pre { margin: 0; max-height: 160px; overflow: auto; padding: 12px; font: 12px/16px Menlo, ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.005em; white-space: pre; }
+.code .copy { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; padding: 0; }
+.css { max-height: 128px; overflow: auto; font: 12px/16px Menlo, ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.005em; }
+.css div { display: flex; gap: 6px; margin-bottom: 2px; }
+.css .prop { flex: none; color: var(--idle-text); }
+.css .val { min-width: 0; overflow-wrap: anywhere; }
+textarea { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 80px; padding: 10px 14px; border: 1px solid var(--input-border); border-radius: 10px; background: var(--disc); color: var(--surface-text); font: 14px/20px var(--font); letter-spacing: 0; white-space: pre-wrap; resize: none; }
+textarea::placeholder { color: var(--idle-text); }
+textarea:focus-visible { border-color: var(--focus-border); outline: none; }
+.error { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--destructive); }
+.error[hidden] { display: none; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+button { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; color: var(--idle-text); transition: transform 120ms ease; }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:active { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
+button.primary { background: var(--primary); color: var(--primary-text); }
+button.primary:hover { background: var(--primary); opacity: 0.9; color: var(--primary-text); }
+button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+\`;
+  var CHEVRON = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg>';
+  var COPY_ICON = '<svg viewBox="0 0 24 24"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg>';
+  function span(className, text) {
+    const element = document.createElement("span");
+    element.className = className;
+    element.textContent = text;
+    return element;
+  }
+  function div(className) {
+    const element = document.createElement("div");
+    element.className = className;
+    return element;
+  }
+  function openSelectionCard({
+    info,
+    rect,
+    submitLabel,
+    requireNote,
+    onSubmit,
+    onCancel
+  }) {
+    const host = document.createElement("div");
+    host.setAttribute("data-eva-annotate-overlay", "1");
+    applyTheme(host, getTheme());
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = STYLES;
+    const card = div("card");
+    const chips = div("chips");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Element details");
+    toggle.innerHTML = CHEVRON;
+    toggle.append(span("chip mono", info.chip));
+    if (info.reactName) toggle.append(span("chip", info.reactName));
+    chips.appendChild(toggle);
+    if (info.text) {
+      chips.appendChild(
+        span("text", info.text.length > 60 ? \`\${info.text.slice(0, 57)}...\` : info.text)
+      );
+    }
+    card.appendChild(chips);
+    if (info.accessibility) {
+      const a11y = document.createElement("p");
+      a11y.className = "a11y";
+      a11y.textContent = info.accessibility;
+      card.appendChild(a11y);
+    }
+    const details = div("details");
+    details.hidden = true;
+    const code = div("code");
+    const pre = document.createElement("pre");
+    pre.textContent = info.html.replace(/></g, ">\\n<");
+    const copyHtml = document.createElement("button");
+    copyHtml.type = "button";
+    copyHtml.className = "copy";
+    copyHtml.setAttribute("aria-label", "Copy HTML");
+    copyHtml.innerHTML = COPY_ICON;
+    copyHtml.addEventListener("click", () => {
+      void navigator.clipboard.writeText(info.html).catch(() => {
+      });
+    });
+    code.append(pre, copyHtml);
+    details.appendChild(code);
+    if (info.styles.length > 0) {
+      const css = div("css");
+      for (const line of info.styles) {
+        const row = document.createElement("div");
+        row.append(span("prop", \`\${line.prop}:\`), span("val", line.value));
+        css.appendChild(row);
+      }
+      details.appendChild(css);
+    }
+    card.appendChild(details);
+    toggle.addEventListener("click", () => {
+      const open = details.hidden;
+      details.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      reposition(lastRect);
+    });
+    const field = document.createElement("textarea");
+    field.placeholder = "What should Eva change?";
+    field.setAttribute("aria-label", "Note for Eva");
+    card.appendChild(field);
+    const error = document.createElement("p");
+    error.className = "error";
+    error.hidden = true;
+    const actions = div("actions");
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    const submitButton = document.createElement("button");
+    submitButton.type = "button";
+    submitButton.className = "primary";
+    submitButton.textContent = submitLabel;
+    actions.append(cancel, submitButton);
+    card.append(error, actions);
+    shadow.append(style, card);
+    const syncEnabled = () => {
+      submitButton.disabled = requireNote && field.value.trim() === "";
+    };
+    syncEnabled();
+    field.addEventListener("input", syncEnabled);
+    let lastRect = rect;
+    function reposition(next) {
+      lastRect = next;
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+      const maxLeft = window.innerWidth - width - GUTTER_PX;
+      const left = Math.min(Math.max(GUTTER_PX, next.left), Math.max(GUTTER_PX, maxLeft));
+      const below = next.top + next.height + GAP_PX;
+      const above = next.top - height - GAP_PX;
+      const fitsBelow = below + height <= window.innerHeight - GAP_PX;
+      const top = fitsBelow ? below : above >= GAP_PX ? above : Math.max(GAP_PX, window.innerHeight - height - GAP_PX);
+      host.style.left = \`\${left}px\`;
+      host.style.top = \`\${top}px\`;
+    }
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      host.remove();
+    }
+    function submit() {
+      if (done || submitButton.disabled) return;
+      submitButton.disabled = true;
+      error.hidden = true;
+      void onSubmit(field.value.trim()).then((message) => {
+        if (message === null) {
+          finish();
+          return;
+        }
+        error.textContent = message;
+        error.hidden = false;
+        syncEnabled();
+      });
+    }
+    cancel.addEventListener("click", () => {
+      finish();
+      onCancel();
+    });
+    submitButton.addEventListener("click", submit);
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      shadow.addEventListener(type, (event) => event.stopPropagation());
+    }
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finish();
+        onCancel();
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        submit();
+      }
+    });
+    document.documentElement.appendChild(host);
+    reposition(rect);
+    field.focus();
+    window.requestAnimationFrame(() => card.classList.add("in"));
+    return {
+      reposition,
+      setHiddenForCapture(hidden) {
+        host.style.visibility = hidden ? "hidden" : "";
+      },
+      close: finish
+    };
+  }
+
+  // preview-annotation-src/evaApi.ts
+  var SESSION_PATH = "/__eva_preview_proxy/eva-comments";
+  function str(value, key) {
+    if (typeof value !== "object" || value === null) return "";
+    const field = Reflect.get(value, key);
+    return typeof field === "string" ? field : "";
+  }
+  function num(value, key) {
+    if (typeof value !== "object" || value === null) return 0;
+    const field = Reflect.get(value, key);
+    return typeof field === "number" ? field : 0;
+  }
+  async function loadEvaSession() {
+    try {
+      const response = await fetch(SESSION_PATH, { credentials: "same-origin" });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const token = str(data, "token");
+      const site = str(data, "site");
+      return token && site ? { token, site, view: str(data, "view") } : null;
+    } catch {
+      return null;
+    }
+  }
+  async function call(session, op, body) {
+    const response = await fetch(\`\${session.site}/preview-comments/\${op}\`, {
+      method: "POST",
+      headers: {
+        authorization: \`Bearer \${session.token}\`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(str(data, "error") || "Eva could not be reached");
+    }
+    return data;
+  }
+  function parseComment(raw) {
+    const kind = str(raw, "kind");
+    if (kind !== "message" && kind !== "queued") return null;
+    const reply = typeof raw === "object" && raw ? Reflect.get(raw, "reply") : null;
+    const resolved = typeof raw === "object" && raw ? Reflect.get(raw, "resolved") : null;
+    return {
+      kind,
+      id: str(raw, "id"),
+      feedback: str(raw, "feedback"),
+      element: str(raw, "element"),
+      pagePath: str(raw, "pagePath"),
+      timestamp: num(raw, "timestamp"),
+      reply: reply ? { status: str(reply, "status"), excerpt: str(reply, "excerpt") } : null,
+      resolved: resolved ? { at: num(resolved, "at"), byName: str(resolved, "byName") } : null
+    };
+  }
+  async function listComments(session) {
+    const data = await call(session, "list", {});
+    const raw = typeof data === "object" && data ? Reflect.get(data, "comments") : null;
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+      const comment = parseComment(item);
+      if (comment) out.push(comment);
+    }
+    return out;
+  }
+  async function sendComment(session, input) {
+    await call(session, "send", input);
+  }
+  async function setCommentResolved(session, id, resolved) {
+    await call(session, "resolve", { id, resolved });
+  }
+
+  // ../shared/src/messageLink.ts
+  var MESSAGE_LINK_PARAM = "message";
+  var PATH_BASE = "http://eva.invalid";
+  function messageLinkHref(href, messageId) {
+    const url = new URL(href, PATH_BASE);
+    url.searchParams.set(MESSAGE_LINK_PARAM, messageId);
+    return url.origin === PATH_BASE ? \`\${url.pathname}\${url.search}\${url.hash}\` : url.href;
+  }
+
+  // preview-annotation-src/commentsDrawer.ts
+  var POLL_MS = 3e3;
+  var MAX_WIDTH_PX = 320;
+  var MAX_SHARE = 0.62;
+  var INSET_PX = 8;
+  var STYLES2 = \`
+:host { all: initial; position: fixed; z-index: 2147483647; top: \${INSET_PX}px; right: \${INSET_PX}px; bottom: \${INSET_PX}px; font: 16px/24px var(--font); letter-spacing: -0.02em; }
+.drawer { box-sizing: border-box; display: flex; flex-direction: column; width: var(--drawer-width); height: 100%; overflow: hidden; border-radius: var(--tip-radius); background: var(--field); color: var(--surface-text); box-shadow: var(--bar-shadow); opacity: 0; transform: scale(0.98); transition: opacity 160ms ease-out, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+.drawer.in { opacity: 1; transform: none; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
+.filters { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 12px 6px; }
+.seg { box-sizing: border-box; display: inline-flex; align-items: center; height: 32px; padding: 4px; border-radius: var(--tip-radius); background: var(--tab-track); color: var(--idle-text); }
+.seg button { gap: 0; height: 24px; padding: 0 10px; border-radius: 16px; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.005em; color: var(--idle-text); }
+.seg button[aria-pressed="true"] { background: var(--tab-pill); color: var(--surface-text); }
+.list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.group h3 { margin: 0; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11px/16px Menlo, ui-monospace, SFMono-Regular, monospace; letter-spacing: 0.01em; color: var(--idle-text); }
+.empty { margin: 0; padding: 24px 12px; text-align: center; font-size: 14px; line-height: 20px; color: var(--idle-text); }
+.item { padding: 10px; border-radius: var(--tip-radius); background: var(--disc); box-shadow: var(--tip-shadow); opacity: 1; animation: enter 200ms ease-out both; }
+.item.done { opacity: 0.7; }
+@keyframes enter { from { opacity: 0; transform: translateY(4px); } }
+.meta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; line-height: 16px; letter-spacing: 0.01em; color: var(--idle-text); }
+.chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--field); color: var(--surface-text); font-family: Menlo, ui-monospace, SFMono-Regular, monospace; }
+.time { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+.feedback { margin: 0; font-size: 14px; line-height: 20px; letter-spacing: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply { margin-top: 8px; padding: 6px 8px; border-radius: 10px; background: var(--muted); font-size: 12px; line-height: 16px; letter-spacing: 0.005em; color: var(--idle-text); }
+.reply b { display: block; margin-bottom: 2px; font-weight: 500; color: var(--surface-text); }
+.reply p { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.working { display: flex; align-items: center; gap: 6px; }
+.working i { width: 6px; height: 6px; border-radius: 999px; background: var(--primary); animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.queued { margin: 8px 0 0; padding: 6px 8px; border-radius: 10px; background: var(--muted); font-size: 12px; line-height: 16px; letter-spacing: 0.005em; color: var(--warning); }
+.note { margin: 8px 0 0; font-size: 11px; line-height: 16px; letter-spacing: 0.01em; color: var(--idle-text); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+button { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; color: var(--idle-text); transition: transform 120ms ease; }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:active { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 1px; }
+button.secondary { background: var(--active-bg); color: var(--secondary-text); }
+button.secondary:hover { opacity: 0.9; }
+button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+button.icon { width: 24px; height: 24px; padding: 0; }
+svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+\`;
+  var CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5l10 -10"/></svg>';
+  var UNDO = '<svg viewBox="0 0 24 24"><path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>';
+  var ARROW_UP_RIGHT = '<svg viewBox="0 0 24 24"><path d="M17 7l-10 10"/><path d="M8 7l9 0l0 9"/></svg>';
+  function ago(timestamp) {
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1e3));
+    if (seconds < 60) return "now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return \`\${minutes}m\`;
+    const hours = Math.floor(minutes / 60);
+    return hours < 24 ? \`\${hours}h\` : \`\${Math.floor(hours / 24)}d\`;
+  }
+  function pathOnly(path) {
+    const pathname = path.split(/[?#]/)[0] ?? "/";
+    return pathname.length > 1 ? pathname.replace(/\\/+$/, "") : pathname;
+  }
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== void 0) node.textContent = text;
+    return node;
+  }
+  function openCommentsDrawer({
+    session,
+    onClose,
+    onCount
+  }) {
+    const host = document.createElement("div");
+    host.setAttribute("data-eva-annotate-overlay", "1");
+    applyTheme(host, getTheme());
+    const resize = () => {
+      const width = Math.min(MAX_WIDTH_PX, Math.round(window.innerWidth * MAX_SHARE));
+      host.style.setProperty("--drawer-width", \`\${width}px\`);
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = el("style", "");
+    style.textContent = STYLES2;
+    let comments = [];
+    let loaded = false;
+    let scope = "page";
+    let status = "open";
+    const drawer = el("div", "drawer");
+    const head = el("div", "head");
+    head.appendChild(el("span", "", "Comments"));
+    const closeButton = el("button", "icon");
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close comments");
+    closeButton.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
+    head.appendChild(closeButton);
+    const filters = el("div", "filters");
+    const list = el("div", "list");
+    drawer.append(head, filters, list);
+    shadow.append(style, drawer);
+    function segment(label, options, current2, pick) {
+      const group = el("div", "seg");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", label);
+      for (const option of options) {
+        const button = el("button", "", option.text);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(option.value === current2));
+        button.addEventListener("click", () => pick(option.value));
+        group.appendChild(button);
+      }
+      return group;
+    }
+    function card(comment) {
+      const item = el("div", comment.resolved ? "item done" : "item");
+      const meta = el("div", "meta");
+      meta.append(el("span", "chip", comment.element), el("span", "time", ago(comment.timestamp)));
+      item.append(meta, el("p", "feedback", comment.feedback));
+      if (comment.kind === "queued") {
+        item.appendChild(el("p", "queued", "Queued, sends when Eva finishes"));
+        return item;
+      }
+      const reply = comment.reply;
+      if (reply && (reply.status === "working" || reply.status === "done")) {
+        const box = el("div", "reply");
+        box.appendChild(el("b", "", "Eva"));
+        if (reply.status === "working") {
+          const working = el("p", "working");
+          working.append(el("i", ""), document.createTextNode("Working\\u2026"));
+          box.appendChild(working);
+        } else {
+          box.appendChild(el("p", "", reply.excerpt));
+        }
+        item.appendChild(box);
+      }
+      if (comment.resolved) {
+        item.appendChild(
+          el(
+            "p",
+            "note",
+            \`Resolved by \${comment.resolved.byName} \\xB7 \${ago(comment.resolved.at)}\`
+          )
+        );
+      }
+      const row = el("div", "row");
+      const toggle = el("button", "");
+      toggle.type = "button";
+      toggle.innerHTML = comment.resolved ? UNDO : CHECK;
+      toggle.append(document.createTextNode(comment.resolved ? "Reopen" : "Resolve"));
+      toggle.addEventListener("click", () => {
+        toggle.disabled = true;
+        void setCommentResolved(session, comment.id, !comment.resolved).then(refresh).catch(() => {
+        });
+      });
+      row.appendChild(toggle);
+      const view = session.view;
+      if (view) {
+        const open = el("button", "secondary");
+        open.type = "button";
+        open.append(document.createTextNode("View in chat"));
+        open.insertAdjacentHTML("beforeend", ARROW_UP_RIGHT);
+        open.addEventListener("click", () => {
+          window.open(messageLinkHref(view, comment.id), "_blank", "noopener");
+        });
+        row.appendChild(open);
+      }
+      item.appendChild(row);
+      return item;
+    }
+    function render() {
+      const here = pathOnly(window.location.pathname + window.location.search);
+      const isDone = (c) => c.resolved !== null;
+      const inScope = (c) => scope === "all" || pathOnly(c.pagePath) === here;
+      const inStatus = (c) => isDone(c) === (status === "resolved");
+      const withStatus = comments.filter(inStatus);
+      const withScope = comments.filter(inScope);
+      const resolvedCount = withScope.filter(isDone).length;
+      const onPage = withStatus.filter((c) => pathOnly(c.pagePath) === here).length;
+      filters.replaceChildren(
+        segment(
+          "Which pages",
+          [
+            { value: "page", text: \`On this page (\${onPage})\` },
+            { value: "all", text: \`All comments (\${withStatus.length})\` }
+          ],
+          scope,
+          (value) => {
+            scope = value;
+            render();
+          }
+        ),
+        segment(
+          "Open or resolved",
+          [
+            { value: "open", text: \`Open (\${withScope.length - resolvedCount})\` },
+            { value: "resolved", text: \`Resolved (\${resolvedCount})\` }
+          ],
+          status,
+          (value) => {
+            status = value;
+            render();
+          }
+        )
+      );
+      const shown = withStatus.filter(inScope);
+      if (!loaded) {
+        list.replaceChildren(el("p", "empty", "Loading\\u2026"));
+      } else if (shown.length === 0) {
+        list.replaceChildren(
+          el(
+            "p",
+            "empty",
+            status === "resolved" ? "No resolved comments." : scope === "page" ? "No open comments on this page. Use Select element to add one." : "No open comments. Use Select element to add one."
+          )
+        );
+      } else {
+        if (scope === "all") {
+          const groups = /* @__PURE__ */ new Map();
+          for (const comment of shown) {
+            const key = pathOnly(comment.pagePath);
+            groups.set(key, [...groups.get(key) ?? [], comment]);
+          }
+          list.replaceChildren(
+            ...[...groups].map(([path, group]) => {
+              const section = el("section", "group");
+              section.append(el("h3", "", path), ...group.map(card));
+              return section;
+            })
+          );
+        } else {
+          const section = el("section", "group");
+          section.append(...shown.map(card));
+          list.replaceChildren(section);
+        }
+      }
+      onCount(comments.filter((c) => !isDone(c)).length);
+    }
+    function refresh() {
+      return listComments(session).then(
+        (next) => {
+          comments = next;
+          loaded = true;
+          render();
+        },
+        () => {
+          loaded = true;
+          render();
+        }
+      );
+    }
+    let closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      window.clearInterval(timer);
+      window.removeEventListener("resize", resize);
+      host.remove();
+    }
+    closeButton.addEventListener("click", () => {
+      close();
+      onClose();
+    });
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      shadow.addEventListener(type, (event) => event.stopPropagation());
+    }
+    shadow.addEventListener("keydown", (event) => {
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
+        close();
+        onClose();
+      }
+    });
+    document.documentElement.appendChild(host);
+    render();
+    void refresh();
+    window.requestAnimationFrame(() => drawer.classList.add("in"));
+    const timer = window.setInterval(() => void refresh(), POLL_MS);
+    return {
+      setHiddenForCapture(hidden) {
+        host.style.visibility = hidden ? "hidden" : "";
+      },
+      close
+    };
+  }
+
+  // ../shared/src/evaMark.ts
+  var EVA_MARK_TOP_POINTS = "0,256 217,237 256,64 295,237 512,256";
+  var EVA_MARK_BOTTOM_POINTS = "0,256 217,275 256,449 295,275 512,256";
+  var EVA_MARK_PURPLE = "#8B3FB8";
+  var EVA_MARK_BLUE = "#3B7DD8";
+
+  // preview-annotation-src/toolbar.ts
+  var STORAGE_KEY = "eva-preview-toolbar";
+  var DRAG_THRESHOLD_PX = 4;
+  var TIP_DELAY_MS = 300;
+  var EDGE_PX = 8;
+  var NOTICE_MS = 2500;
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var TOOL_ICONS = {
+    select: [
+      "M3 12l3 0",
+      "M12 3l0 3",
+      "M7.8 7.8l-2.2 -2.2",
+      "M16.2 7.8l2.2 -2.2",
+      "M7.8 16.2l-2.2 2.2",
+      "M12 12l9 3l-4 2l-2 4l-3 -9"
+    ],
+    comments: [
+      "M21 14l-3 -3h-7a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v10",
+      "M14 15v2a1 1 0 0 1 -1 1h-7l-3 3v-10a1 1 0 0 1 1 -1h2"
+    ],
+    freeze: [
+      "M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12",
+      "M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12"
+    ],
+    sketch: [
+      "M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4",
+      "M13.5 6.5l4 4"
+    ],
+    screenshot: [
+      "M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2",
+      "M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"
+    ]
+  };
+  var CLOSE_ICON = ["M18 6l-12 12", "M6 6l12 12"];
+  var TOOL_LABELS = {
+    select: "Select element",
+    comments: "Comments",
+    freeze: "Freeze animations",
+    sketch: "Sketch",
+    screenshot: "Screenshot"
+  };
+  var TOOL_ORDER = [
+    "select",
+    "comments",
+    "freeze",
+    "sketch",
+    "screenshot"
+  ];
+  var STYLES3 = \`
+:host { all: initial; position: fixed; z-index: 2147483647; font: 14px/1.3 var(--font); }
+.bar { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: var(--surface); color: var(--surface-text); box-shadow: var(--bar-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+button { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; cursor: pointer; color: var(--idle-text); transition: transform 120ms ease; }
+button:hover { background: var(--hover-bg); color: var(--hover-text); }
+button:active { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--active-bg); color: var(--active-text); }
+button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+button[hidden], .tools[hidden], .notice[hidden], .badge[hidden], .tip[hidden] { display: none; }
+.handle, .handle:hover { cursor: grab; touch-action: none; background: none; }
+.handle:active { cursor: grabbing; }
+.handle svg.icon { color: var(--destructive); }
+.tools { display: flex; align-items: center; gap: 4px; }
+svg.icon { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.mark { width: 44px; height: 44px; }
+.badge { position: absolute; top: -2px; right: -2px; display: flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 999px; background: var(--badge-bg); color: var(--badge-text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.notice { padding: 0 12px 0 8px; font-size: 14px; white-space: nowrap; color: var(--idle-text); }
+.tip { position: absolute; bottom: calc(100% + 8px); left: 0; padding: 8px 14px; border-radius: var(--tip-radius); background: var(--surface); color: var(--surface-text); box-shadow: var(--tip-shadow); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 14px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); }
+\`;
+  function readStored() {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null) return null;
+      const left = Reflect.get(parsed, "left");
+      const top = Reflect.get(parsed, "top");
+      const expanded = Reflect.get(parsed, "expanded");
+      if (typeof left !== "number" || typeof top !== "number") return null;
+      return { left, top, expanded: expanded === true };
+    } catch {
+      return null;
+    }
+  }
+  function writeStored(value) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    } catch {
+    }
+  }
+  function svgElement(tag, attrs) {
+    const element = document.createElementNS(SVG_NS, tag);
+    for (const [name, value] of Object.entries(attrs)) {
+      element.setAttribute(name, value);
+    }
+    return element;
+  }
+  function toolIcon(tool) {
+    const svg = svgElement("svg", { viewBox: "0 0 24 24", class: "icon" });
+    for (const d of TOOL_ICONS[tool]) svg.appendChild(svgElement("path", { d }));
+    return svg;
+  }
+  function evaMark() {
+    const svg = svgElement("svg", { viewBox: "0 0 512 512", class: "mark" });
+    svg.appendChild(
+      svgElement("circle", { cx: "256", cy: "256", r: "256", fill: "var(--disc)" })
+    );
+    svg.appendChild(
+      svgElement("polygon", {
+        points: EVA_MARK_TOP_POINTS,
+        fill: EVA_MARK_PURPLE
+      })
+    );
+    svg.appendChild(
+      svgElement("polygon", {
+        points: EVA_MARK_BOTTOM_POINTS,
+        fill: EVA_MARK_BLUE
+      })
+    );
+    return svg;
+  }
+  function mountToolbar(actions, initial) {
+    const view = {
+      selecting: false,
+      frozen: false,
+      selectEnabled: true,
+      commentsEnabled: false,
+      commentsActive: false,
+      commentCount: 0,
+      sketchEnabled: false,
+      sketchActive: false,
+      capturing: false,
+      notice: "",
+      ...initial
+    };
+    const stored = readStored();
+    let expanded = stored?.expanded ?? false;
+    let noticeTimer = 0;
+    const host = document.createElement("div");
+    host.setAttribute("data-eva-annotate-overlay", "1");
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = STYLES3;
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.position = "relative";
+    const tip = document.createElement("div");
+    tip.className = "tip";
+    tip.hidden = true;
+    let tipTimer = 0;
+    function showTip(button, label) {
+      window.clearTimeout(tipTimer);
+      tipTimer = window.setTimeout(() => {
+        tip.textContent = label;
+        tip.style.left = \`\${button.offsetLeft + button.offsetWidth / 2}px\`;
+        const above = host.getBoundingClientRect().top > 48;
+        tip.style.bottom = above ? "calc(100% + 8px)" : "auto";
+        tip.style.top = above ? "auto" : "calc(100% + 8px)";
+        tip.hidden = false;
+      }, TIP_DELAY_MS);
+    }
+    function hideTip() {
+      window.clearTimeout(tipTimer);
+      tip.hidden = true;
+    }
+    function withTip(button, label) {
+      button.addEventListener("pointerenter", () => showTip(button, label()));
+      button.addEventListener("pointerleave", hideTip);
+      button.addEventListener("pointerdown", hideTip);
+    }
+    const handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "handle";
+    const mark = evaMark();
+    const closeIcon = svgElement("svg", { viewBox: "0 0 24 24", class: "icon" });
+    for (const d of CLOSE_ICON) closeIcon.appendChild(svgElement("path", { d }));
+    handle.append(mark, closeIcon);
+    const tools = document.createElement("div");
+    tools.className = "tools";
+    const buttons = /* @__PURE__ */ new Map();
+    let badge = null;
+    for (const tool of TOOL_ORDER) {
+      const button = document.createElement("button");
+      button.type = "button";
+      withTip(button, () => TOOL_LABELS[tool]);
+      button.setAttribute("aria-label", TOOL_LABELS[tool]);
+      button.appendChild(toolIcon(tool));
+      if (tool === "comments") {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        button.appendChild(badge);
+      }
+      button.addEventListener("click", () => actions[tool]());
+      buttons.set(tool, button);
+      tools.appendChild(button);
+    }
+    const notice = document.createElement("span");
+    notice.className = "notice";
+    tools.appendChild(notice);
+    withTip(handle, () => expanded ? "Collapse" : "Eva tools");
+    bar.append(tools, handle, tip);
+    shadow.append(style, bar);
+    function render() {
+      handle.setAttribute(
+        "aria-label",
+        expanded ? "Collapse Eva toolbar" : "Open Eva toolbar"
+      );
+      handle.setAttribute("aria-expanded", String(expanded));
+      tools.hidden = !expanded;
+      mark.style.display = expanded ? "none" : "";
+      closeIcon.style.display = expanded ? "" : "none";
+      bar.style.padding = expanded ? "6px" : "0";
+      const pressed = {
+        select: view.selecting,
+        comments: view.commentsActive,
+        freeze: view.frozen,
+        sketch: view.sketchActive,
+        screenshot: false
+      };
+      const visible = {
+        select: view.selectEnabled,
+        comments: view.commentsEnabled,
+        freeze: true,
+        sketch: view.sketchEnabled,
+        screenshot: true
+      };
+      for (const tool of TOOL_ORDER) {
+        const button = buttons.get(tool);
+        if (!button) continue;
+        button.hidden = !visible[tool];
+        button.setAttribute("aria-pressed", String(pressed[tool]));
+      }
+      const screenshotButton = buttons.get("screenshot");
+      if (screenshotButton) screenshotButton.disabled = view.capturing;
+      if (badge) {
+        badge.hidden = view.commentCount === 0;
+        badge.textContent = view.commentCount > 99 ? "99+" : String(view.commentCount);
+      }
+      notice.hidden = view.notice === "";
+      notice.textContent = view.notice;
+    }
+    function place(left, top) {
+      host.style.left = \`\${left}px\`;
+      host.style.top = \`\${top}px\`;
+    }
+    function clampIntoView() {
+      const rect = host.getBoundingClientRect();
+      const maxLeft = Math.max(EDGE_PX, window.innerWidth - rect.width - EDGE_PX);
+      const maxTop = Math.max(EDGE_PX, window.innerHeight - rect.height - EDGE_PX);
+      place(
+        Math.min(Math.max(EDGE_PX, rect.left), maxLeft),
+        Math.min(Math.max(EDGE_PX, rect.top), maxTop)
+      );
+    }
+    function save() {
+      const rect = host.getBoundingClientRect();
+      writeStored({ left: rect.left, top: rect.top, expanded });
+    }
+    let dragStart = null;
+    let dragged = false;
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const rect = host.getBoundingClientRect();
+      dragStart = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        left: rect.left,
+        top: rect.top
+      };
+      dragged = false;
+      handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+      const dx = event.clientX - dragStart.x;
+      const dy = event.clientY - dragStart.y;
+      if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      dragged = true;
+      place(dragStart.left + dx, dragStart.top + dy);
+      clampIntoView();
+    });
+    function endDrag(event) {
+      if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+      dragStart = null;
+      if (dragged) save();
+    }
+    handle.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
+    handle.addEventListener("click", () => {
+      if (dragged) {
+        dragged = false;
+        return;
+      }
+      const markLeft = handle.getBoundingClientRect().left;
+      expanded = !expanded;
+      render();
+      const rect = host.getBoundingClientRect();
+      place(rect.left + markLeft - handle.getBoundingClientRect().left, rect.top);
+      clampIntoView();
+      save();
+    });
+    window.addEventListener("resize", clampIntoView);
+    applyTheme(host, getTheme());
+    render();
+    const size = 44;
+    place(
+      stored?.left ?? window.innerWidth - size - 16,
+      stored?.top ?? window.innerHeight - size - 16
+    );
+    document.documentElement.appendChild(host);
+    clampIntoView();
+    return {
+      update(patch) {
+        Object.assign(view, patch);
+        render();
+        if (patch.notice) {
+          window.clearTimeout(noticeTimer);
+          noticeTimer = window.setTimeout(() => {
+            view.notice = "";
+            render();
+          }, NOTICE_MS);
+        }
+        clampIntoView();
+      },
+      setTheme(theme) {
+        setTheme(theme);
+        applyTheme(host, theme);
+      },
+      setHiddenForCapture(hidden) {
+        host.style.visibility = hidden ? "hidden" : "";
+      }
+    };
+  }
+
   // preview-annotation-src/index.ts
   function evaPreviewAnnotationScript() {
     const ATTR = "data-eva-annotate";
@@ -63,7 +1085,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     function normalizeToolName(value) {
       if (typeof value !== "string") return null;
       const name = value.trim();
-      return /^[A-Za-z0-9_.-]{1,128}\$/.test(name) ? name : null;
+      return /^[A-Za-z0-9_.-]{1,128}$/.test(name) ? name : null;
     }
     function modelContextOn(host) {
       const value = Reflect.get(host, "modelContext");
@@ -194,6 +1216,10 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     let overlay = null;
     let labelEl = null;
     let rectRaf = 0;
+    let toolbar = null;
+    let selectionCard = null;
+    let evaSession = null;
+    let commentsDrawer = null;
     function post(payload) {
       if (!parentOrigin) return;
       window.parent.postMessage(payload, parentOrigin);
@@ -212,27 +1238,27 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
         return CSS.escape(value);
       }
-      return value.replace(/[^a-zA-Z0-9_-]/g, "\\\\\$&");
+      return value.replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
     }
     function generateSelector(element) {
       const parts = [];
-      let current = element;
-      while (current && current !== document.body) {
-        let selector = current.tagName.toLowerCase();
-        if (current.id) {
-          selector += "#" + escapeCssIdent(current.id);
+      let current2 = element;
+      while (current2 && current2 !== document.body) {
+        let selector = current2.tagName.toLowerCase();
+        if (current2.id) {
+          selector += "#" + escapeCssIdent(current2.id);
           parts.unshift(selector);
           break;
         }
-        if (current.className && typeof current.className === "string") {
-          const classes = current.className.trim().split(/\\s+/).slice(0, 2);
+        if (current2.className && typeof current2.className === "string") {
+          const classes = current2.className.trim().split(/\\s+/).slice(0, 2);
           if (classes.length > 0 && classes[0]) {
             selector += "." + classes.map((c) => escapeCssIdent(c)).join(".");
           }
         }
-        const parentEl = current.parentElement;
+        const parentEl = current2.parentElement;
         if (parentEl) {
-          const currentElement = current;
+          const currentElement = current2;
           const siblings = [];
           for (let i = 0; i < parentEl.children.length; i++) {
             const child = parentEl.children.item(i);
@@ -246,7 +1272,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
           }
         }
         parts.unshift(selector);
-        current = parentEl;
+        current2 = parentEl;
       }
       return parts.join(" > ");
     }
@@ -257,7 +1283,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       for (let i = 0; i < keys.length; i++) {
         const key = keys[i];
         if (!key) continue;
-        if (!key.startsWith("__reactFiber\$") && !key.startsWith("__reactInternalInstance\$")) {
+        if (!key.startsWith("__reactFiber$") && !key.startsWith("__reactInternalInstance$")) {
           continue;
         }
         const value = Reflect.get(element, key);
@@ -266,9 +1292,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
           break;
         }
       }
-      let current = fiber;
-      while (current && names.length < 3) {
-        const typeVal = Reflect.get(current, "type");
+      let current2 = fiber;
+      while (current2 && names.length < 3) {
+        const typeVal = Reflect.get(current2, "type");
         if (typeof typeVal === "function") {
           const displayName = Reflect.get(typeVal, "displayName");
           const name = typeof displayName === "string" && displayName ? displayName : typeVal.name;
@@ -276,13 +1302,13 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
             names.push(name);
           }
         }
-        const next = Reflect.get(current, "return");
-        current = next && typeof next === "object" ? next : null;
+        const next = Reflect.get(current2, "return");
+        current2 = next && typeof next === "object" ? next : null;
       }
       return names;
     }
     function stripClassHash(className) {
-      return className.replace(/_[a-zA-Z0-9]{5,}\$/, "");
+      return className.replace(/_[a-zA-Z0-9]{5,}$/, "");
     }
     function firstMeaningfulClass(element) {
       for (let i = 0; i < element.classList.length; i++) {
@@ -356,23 +1382,23 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     }
     function buildFullPath(element) {
       const parts = [];
-      let current = element;
+      let current2 = element;
       let crossedShadow = false;
-      while (current && current.tagName.toLowerCase() !== "html") {
-        parts.unshift((crossedShadow ? "\\u27E8shadow\\u27E9 " : "") + pathSegment(current));
+      while (current2 && current2.tagName.toLowerCase() !== "html") {
+        parts.unshift((crossedShadow ? "\\u27E8shadow\\u27E9 " : "") + pathSegment(current2));
         crossedShadow = false;
-        const parent = current.parentElement;
+        const parent = current2.parentElement;
         if (parent) {
-          current = parent;
+          current2 = parent;
           continue;
         }
-        const root2 = current.getRootNode();
+        const root2 = current2.getRootNode();
         if (root2 instanceof ShadowRoot) {
-          current = root2.host;
+          current2 = root2.host;
           crossedShadow = true;
           continue;
         }
-        current = null;
+        current2 = null;
       }
       return parts.join(" > ");
     }
@@ -503,21 +1529,27 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       labelEl.style.top = labelTop + "px";
       labelEl.style.left = Math.max(0, rect.left) + "px";
     }
-    function chipLabel(el) {
-      const tag = el.tagName.toLowerCase();
-      const rawClass = el.classList.item(0);
+    function elementChip(el2) {
+      const tag = el2.tagName.toLowerCase();
+      const rawClass = el2.classList.item(0);
       const stripped = rawClass ? stripClassHash(rawClass) : "";
-      const cls = el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
-      const react = collectReactNames(el);
+      const cls = el2 instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
+      return "<" + tag + cls + ">";
+    }
+    function chipLabel(el2) {
+      const react = collectReactNames(el2);
       const reactPrefix = react[0] ? react[0] + " " : "";
-      return reactPrefix + "<" + tag + cls + ">";
+      return reactPrefix + elementChip(el2);
     }
     function clearAll() {
+      selectionCard?.close();
+      selectionCard = null;
       selectedEl = null;
       paintBox(null, "", false);
     }
     function setMode(active) {
       modeActive = active;
+      toolbar?.update({ selecting: active });
       document.documentElement.style.cursor = active ? "crosshair" : "";
       if (!active) {
         clearAll();
@@ -529,9 +1561,16 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         rectRaf = 0;
         if (!selectedEl || !document.contains(selectedEl)) {
           post({ type: "eva-preview-annotate-rect", rect: null });
+          selectionCard?.close();
           return;
         }
         const rect = selectedEl.getBoundingClientRect();
+        selectionCard?.reposition({
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height
+        });
         post({
           type: "eva-preview-annotate-rect",
           rect: {
@@ -554,6 +1593,25 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       if (selectedEl) return;
       paintBox(target, chipLabel(target), false);
     }
+    function styleLines(summary) {
+      const out = [];
+      for (const entry of summary.split("; ")) {
+        const separator = entry.indexOf(": ");
+        const prop = separator === -1 ? entry : entry.slice(0, separator);
+        if (prop) {
+          out.push({
+            prop,
+            value: separator === -1 ? "" : entry.slice(separator + 2)
+          });
+        }
+      }
+      return out;
+    }
+    function finishSelection(notice) {
+      clearAll();
+      setMode(false);
+      toolbar?.update({ notice });
+    }
     function onClick(event) {
       if (!modeActive) return;
       const target = event.target;
@@ -567,6 +1625,42 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       const context = captureContext(target);
       const rect = target.getBoundingClientRect();
       paintBox(target, chipLabel(target), true);
+      if (!embedded) {
+        selectionCard?.close();
+        const session = evaSession;
+        selectionCard = openSelectionCard({
+          info: {
+            chip: elementChip(target),
+            reactName: context.reactComponents[0] ?? "",
+            text: context.textContent,
+            accessibility: context.accessibility,
+            html: context.outerHTML,
+            styles: styleLines(context.stylesSummary)
+          },
+          rect,
+          submitLabel: session ? "Send to Eva" : "Copy for Eva",
+          requireNote: session !== null,
+          onSubmit: async (note) => {
+            if (session) {
+              try {
+                await sendComment(session, { feedback: note, context });
+              } catch (error) {
+                return error instanceof Error ? error.message : "Couldn't send";
+              }
+              finishSelection("Sent to Eva");
+              return null;
+            }
+            const ok = await copyToClipboard(
+              formatContextForClipboard(context, note)
+            );
+            if (!ok) return "Couldn't copy";
+            finishSelection("Copied for Eva");
+            return null;
+          },
+          onCancel: clearAll
+        });
+        return;
+      }
       post({
         type: "eva-preview-annotate-selected",
         context,
@@ -624,7 +1718,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         frozenAnimations = [];
         frozenMedia = [];
       }
-      post({ type: "eva-preview-annotate-frozen", frozen });
+      toolbar?.update({ frozen });
     }
     function onScrollOrResize() {
       if (!modeActive || !selectedEl) return;
@@ -1012,6 +2106,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     function restoreCaptureChrome() {
       if (overlay) overlay.style.display = overlayDisplayForCapture;
       if (labelEl) labelEl.style.display = labelDisplayForCapture;
+      toolbar?.setHiddenForCapture(false);
+      selectionCard?.setHiddenForCapture(false);
+      commentsDrawer?.setHiddenForCapture(false);
     }
     let overlayDisplayForCapture = "";
     let labelDisplayForCapture = "";
@@ -1068,7 +2165,91 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       labelDisplayForCapture = labelEl?.style.display ?? "";
       if (overlay) overlay.style.display = "none";
       if (labelEl) labelEl.style.display = "none";
+      toolbar?.setHiddenForCapture(true);
+      selectionCard?.setHiddenForCapture(true);
+      commentsDrawer?.setHiddenForCapture(true);
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
+    }
+    function parseToolbarTheme(value) {
+      if (typeof value !== "object" || value === null) return null;
+      const read = (key) => {
+        const field = Reflect.get(value, key);
+        return typeof field === "string" ? field : "";
+      };
+      const theme = {
+        fontFamily: read("fontFamily"),
+        surface: read("surface"),
+        surfaceText: read("surfaceText"),
+        barShadow: read("barShadow"),
+        tipShadow: read("tipShadow"),
+        tipRadius: read("tipRadius"),
+        idleText: read("idleText"),
+        hoverBg: read("hoverBg"),
+        hoverText: read("hoverText"),
+        activeBg: read("activeBg"),
+        activeText: read("activeText"),
+        badgeBg: read("badgeBg"),
+        badgeText: read("badgeText"),
+        disc: read("disc"),
+        destructive: read("destructive"),
+        border: read("border"),
+        primary: read("primary"),
+        primaryText: read("primaryText"),
+        field: read("field"),
+        popover: read("popover"),
+        muted: read("muted"),
+        warning: read("warning"),
+        inputBorder: read("inputBorder"),
+        focusBorder: read("focusBorder"),
+        secondaryText: read("secondaryText"),
+        tabTrack: read("tabTrack"),
+        tabPill: read("tabPill")
+      };
+      return Object.values(theme).some((entry) => entry === "") ? null : theme;
+    }
+    const embedded = window !== window.top;
+    function copyToClipboard(text) {
+      return navigator.clipboard.writeText(text).then(
+        () => true,
+        () => false
+      );
+    }
+    function formatContextForClipboard(context, note) {
+      const lines = note ? [\`Feedback: \${note}\`, ""] : [];
+      lines.push(
+        \`Element: \${context.selector}\`,
+        \`Page: \${context.pageUrl}\`,
+        \`Path: \${context.fullPath}\`
+      );
+      if (context.reactComponents.length > 0) {
+        lines.push(\`React: \${context.reactComponents.join(" > ")}\`);
+      }
+      if (context.textContent) lines.push(\`Text: \${context.textContent}\`);
+      if (context.stylesSummary) lines.push(\`Styles: \${context.stylesSummary}\`);
+      lines.push(\`HTML: \${context.outerHTML}\`);
+      return lines.join("\\n");
+    }
+    function saveScreenshotLocally() {
+      toolbar?.update({ capturing: true });
+      captureViewport().then((dataUrl) => fetch(dataUrl)).then((response) => response.blob()).then(async (blob) => {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type || "image/png"]: blob })
+          ]);
+          toolbar?.update({ notice: "Screenshot copied" });
+        } catch {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "preview-screenshot.png";
+          link.click();
+          URL.revokeObjectURL(link.href);
+          toolbar?.update({ notice: "Screenshot downloaded" });
+        }
+      }).catch((error) => {
+        toolbar?.update({
+          notice: error instanceof Error ? error.message : "Couldn't render this page as an image"
+        });
+      }).finally(() => toolbar?.update({ capturing: false }));
     }
     window.addEventListener("message", (event) => {
       if (!parentOrigin || event.origin !== parentOrigin) return;
@@ -1080,12 +2261,22 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         setMode(active);
         return;
       }
-      if (type === "eva-preview-annotate-freeze") {
-        setFrozen(Reflect.get(data, "active") === true);
-        return;
-      }
       if (type === "eva-preview-annotate-clear") {
         clearAll();
+        return;
+      }
+      if (type === "eva-preview-toolbar-state") {
+        const theme = parseToolbarTheme(Reflect.get(data, "theme"));
+        if (theme) toolbar?.setTheme(theme);
+        const count = Reflect.get(data, "commentCount");
+        toolbar?.update({
+          selectEnabled: Reflect.get(data, "selectEnabled") === true,
+          commentsEnabled: Reflect.get(data, "commentsEnabled") === true,
+          commentsActive: Reflect.get(data, "commentsActive") === true,
+          commentCount: typeof count === "number" ? count : 0,
+          sketchEnabled: Reflect.get(data, "sketchEnabled") === true,
+          sketchActive: Reflect.get(data, "sketchActive") === true
+        });
         return;
       }
       if (type === "eva-preview-screenshot-capture") {
@@ -1174,6 +2365,68 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("scroll", onScrollOrResize, true);
     window.addEventListener("resize", onScrollOrResize);
+    const ownsToolbar = window === window.top || window.parent === window.top && parentOrigin !== window.location.origin;
+    if (ownsToolbar) {
+      toolbar = mountToolbar(
+        {
+          select: () => {
+            if (embedded) {
+              post({ type: "eva-preview-toolbar-action", action: "select" });
+            } else {
+              setMode(!modeActive);
+            }
+          },
+          comments: () => {
+            if (embedded) {
+              post({ type: "eva-preview-toolbar-action", action: "comments" });
+              return;
+            }
+            if (commentsDrawer) {
+              commentsDrawer.close();
+              commentsDrawer = null;
+              toolbar?.update({ commentsActive: false });
+              return;
+            }
+            if (!evaSession) return;
+            commentsDrawer = openCommentsDrawer({
+              session: evaSession,
+              onClose: () => {
+                commentsDrawer = null;
+                toolbar?.update({ commentsActive: false });
+              },
+              onCount: (commentCount) => toolbar?.update({ commentCount })
+            });
+            toolbar?.update({ commentsActive: true });
+          },
+          freeze: () => setFrozen(!frozen),
+          sketch: () => post({ type: "eva-preview-toolbar-action", action: "sketch" }),
+          screenshot: () => {
+            if (embedded) {
+              post({ type: "eva-preview-toolbar-action", action: "screenshot" });
+            } else {
+              saveScreenshotLocally();
+            }
+          }
+        },
+        // Embedded, Eva's state message turns the tools on; until it arrives
+        // only the ones that need no parent are shown.
+        { selectEnabled: !embedded }
+      );
+    }
+    if (ownsToolbar && !embedded) {
+      void loadEvaSession().then(async (session) => {
+        if (!session) return;
+        evaSession = session;
+        toolbar?.update({ commentsEnabled: true });
+        try {
+          const existing = await listComments(session);
+          toolbar?.update({
+            commentCount: existing.filter((c) => c.resolved === null).length
+          });
+        } catch {
+        }
+      });
+    }
     post({ type: "eva-preview-annotate-ready" });
   }
   try {

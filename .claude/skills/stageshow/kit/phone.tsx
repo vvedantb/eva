@@ -2,24 +2,9 @@ import { type CSSProperties, type HTMLAttributes, type ReactNode, useEffect, use
 import { useLook } from './looks'
 import './phone.css'
 
-// An iPhone drawn from the real geometry, the iPhone 18 Pro in points, as
-// Apple's iOS 27 UI kit lays it out: screen 402 × 874, status bar 62 tall,
-// Dynamic Island 95 × 37 sitting 14 from the top, home indicator 144 × 5
-// sitting 8 from the bottom. The screen's corner is traced from the cut-out
-// in Apple's own product bezel (the kit's screens are square and the bezel
-// rounds them): a superellipse 71pt across, exponent 2.31, within 0.7pt of
-// Apple's curve all the way round.
-//
-// The screen is laid out at true points and scaled down as a whole, so type
-// inside it renders at the size iOS uses (15pt, not 8px) and keeps the right
-// letter shapes and spacing. Inside the screen, 1pt is 1px; `--pt` is kept
-// at 1px there so calc(var(--pt) * n) still works.
 const IPHONE = { w: 402, h: 874, r: 64 }
 const CORNER = { a: 71, n: 2.31 }
-// soft: the illustrative phone marketing pages draw, measured from one (a
-// 250 × 527 screen, 28 corners): a little squatter, tighter corners
 const SOFT = { w: 393, h: 829, r: 42 }
-// Pixel 8: 412 × 915dp, corners about 38, a 24dp punch-hole camera 14 from the top.
 const PIXEL = { w: 412, h: 915, r: 38 }
 
 /**
@@ -37,8 +22,6 @@ export type PhoneFrame = 'pro' | 'photo' | 'bezel' | 'soft' | 'bare' | 'silver' 
 
 const FRAMES: Record<PhoneFrame, { band: number; glass: number }> = {
   pro: { band: 3, glass: 10 },
-  // Apple's photograph of the iPhone 18 Pro (its product bezel): the body runs
-  // 16pt past the screen on every side; the image itself is drawn over it
   photo: { band: 0, glass: 16 },
   bezel: { band: 0, glass: 12 },
   soft: { band: 0, glass: 12.5 },
@@ -49,11 +32,6 @@ const FRAMES: Record<PhoneFrame, { band: number; glass: number }> = {
   android: { band: 2, glass: 9 },
 }
 
-// The iOS frames draw their bands as strokes of the screen's own outline,
-// each centered on the screen's edge, widest first: every band then stays
-// exactly parallel to the screen, corners included. Each is [reach from the
-// screen's edge in points, paint]; a paint is a color or one of the
-// gradients Phone defines (url(#…-band), url(#…-clay))
 const BANDS: Partial<Record<PhoneFrame, [number, string][]>> = {
   pro: [[13, 'band'], [10, 'var(--ss-phone-rim)'], [9.25, 'var(--ss-phone-glass)']],
   silver: [[13, 'band'], [9, 'var(--ss-phone-glass)']],
@@ -61,8 +39,6 @@ const BANDS: Partial<Record<PhoneFrame, [number, string][]>> = {
   clay: [[16, 'clay'], [1, 'var(--ss-phone-seam)']],
 }
 
-/** A rounded rectangle with continuous (superellipse) corners, as an SVG
- * path: corners `a` across with exponent `n` (2 is a circle). */
 function superellipsePath(w: number, h: number, a: number, n: number) {
   const steps = 32
   const e = 2 / n
@@ -76,7 +52,6 @@ function superellipsePath(w: number, h: number, a: number, n: number) {
   corners.forEach(([cx, cy, sx, sy], c) => {
     for (let i = 0; i <= steps; i++) {
       const t = (i / steps) * (Math.PI / 2)
-      // Clockwise: top-right runs top to right, bottom-right right to bottom, and so on
       const u = c % 2 === 0 ? Math.sin(t) : Math.cos(t)
       const v = c % 2 === 0 ? Math.cos(t) : Math.sin(t)
       pts.push(`${(cx + sx * a * Math.pow(u, e)).toFixed(2)} ${(cy + sy * a * Math.pow(v, e)).toFixed(2)}`)
@@ -86,26 +61,17 @@ function superellipsePath(w: number, h: number, a: number, n: number) {
 }
 
 export interface PhoneProps extends HTMLAttributes<HTMLDivElement> {
-  /** Outer width in px. Height follows the real proportions. */
   width: number
   frame?: PhoneFrame
-  /** Status bar time. */
   time?: string
-  /** The Dynamic Island. On by default for pro, silver, bezel and android. */
   island?: boolean
-  /** The status bar (time, signal, battery). On by default for pro, silver, bezel and android. With it off, content still starts below a 44pt safe area. */
   status?: boolean
-  /** Light content (white status bar, home indicator) for dark screens and wallpapers. */
   dark?: boolean
-  /** Any CSS background for the screen: a color, gradient or image. The screen is white by default, black with `dark`. */
   wallpaper?: string
   children?: ReactNode
 }
 
 export function Phone({ width, frame: asked = 'pro', time = '9:41', island, status, dark, wallpaper, className, style, children, ...rest }: PhoneProps) {
-  // The photo frame uses a caller-provided bezel. Without a configured image,
-  // or if it fails to load, the phone draws the pro frame
-  // instead of standing as an empty shell
   const photoRef = useRef<HTMLSpanElement>(null)
   const [photoOk, setPhotoOk] = useState(true)
   useEffect(() => {
@@ -133,7 +99,6 @@ export function Phone({ width, frame: asked = 'pro', time = '9:41', island, stat
   const outline = ios ? superellipsePath(pt(SCREEN.w), pt(SCREEN.h), pt(CORNER.a), CORNER.n) : null
   const bands = BANDS[frame]
   const chrome = frame === 'pro' || frame === 'photo' || frame === 'bezel' || frame === 'silver' || frame === 'android'
-  // The photo has its own island, lens and all
   const showIsland = island ?? (chrome && frame !== 'photo')
   const showStatus = status ?? chrome
   return (
@@ -164,7 +129,6 @@ export function Phone({ width, frame: asked = 'pro', time = '9:41', island, stat
               <stop offset="1" style={{ stopColor: 'var(--ss-phone-clay-bottom)' }} />
             </linearGradient>
             {frame === 'outline' && (
-              // Line art: a ring between 7 and 8pt out, cut from a mask so it is one hairline
               <mask id={`${id}-ring`} maskUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
                 <path d={outline} fill="none" stroke="#fff" strokeWidth={pt(16)} />
                 <path d={outline} fill="none" stroke="#000" strokeWidth={pt(16) - 2} />
@@ -225,8 +189,6 @@ export function Phone({ width, frame: asked = 'pro', time = '9:41', island, stat
         </div>
       </div>
       {frame === 'photo' && (
-        // The bezel image is 450 × 920pt with the screen at (24, 23): laid over
-        // the body so its cut-out frames the screen exactly
         <span ref={photoRef} className="ss-phone__photo" style={{ left: pt(-8), top: pt(-7), width: pt(450), height: pt(920) }} />
       )}
     </div>
@@ -236,21 +198,10 @@ export function Phone({ width, frame: asked = 'pro', time = '9:41', island, stat
 export interface LockScreenProps extends HTMLAttributes<HTMLDivElement> {
   date?: string
   time?: string
-  /** The flashlight and camera buttons at the bottom. */
   controls?: boolean
-  /** Where notifications stack. 'bottom' is how iOS does it; 'top' puts them
-   * under the clock, for a phone cropped by the stage's bottom edge. */
   stack?: 'bottom' | 'top'
-  /**
-   * satellite: a phone beside a window. The controls go and notifications
-   * stack under the clock. Nothing is scaled: notifications stay true iOS
-   * size, so if one wouldn't read, make the phone bigger (and crop it), never
-   * the notification.
-   */
   size?: 'full' | 'satellite'
-  /** The date and clock. Off for a crop that shows only the notifications. */
   clock?: boolean
-  /** Notifications. They stack at the bottom of the screen, as iOS does. */
   children?: ReactNode
 }
 
@@ -269,8 +220,6 @@ export function LockScreen({ date = 'Tuesday, October 21', time = '9:41', contro
       <div className="ss-lock__stack" data-at={stack}>{children}</div>
       {controls && size === 'full' && (
         <div className="ss-lock__controls">
-          {/* Drawn after SF Symbols flashlight.off.fill and camera.fill: solid
-              glyphs with cut-outs, not outlines */}
           <span className="ss-lock__control">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
               <path
@@ -300,10 +249,6 @@ export interface NotificationProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   title: ReactNode
   body?: ReactNode
   time?: string
-  /** Where it shows. Leave it out on a LockScreen, which stacks notifications
-   * at the bottom as iOS does. banner: the phone is unlocked (in an app or on
-   * the home screen), so it drops in at the top of the screen, under the
-   * island, over whatever is there. */
   banner?: boolean
 }
 
@@ -329,11 +274,7 @@ export function Notification({ icon, title, body, time = 'now', banner, classNam
   )
 }
 
-// The status bar glyphs, taken from Apple's iOS 27 UI kit for Figma
-// (Status bar, iPhone): exact paths and sizes in points
-
 function Signal() {
-  // Four bars 3.33 wide on a 5.67 pitch, fully rounded, 6.33 to 13.67 tall
   return (
     <svg viewBox="0 0 20.33 13.67" width="20.33" height="13.67" className="ss-phone__glyph ss-phone__signal">
       {[6.33, 8.67, 11, 13.67].map((h, i) => (
@@ -352,7 +293,6 @@ function Wifi() {
 }
 
 function Battery() {
-  // iOS 27 draws a full battery as one solid body, with a small contact
   return (
     <svg viewBox="0 0 29.33 13.67" width="29.33" height="13.67" className="ss-phone__glyph ss-phone__battery">
       <path fill="currentColor" d="M0 6.4C0 4.15979 0 3.03969 0.435974 2.18404C0.819467 1.43139 1.43139 0.819467 2.18404 0.435974C3.03969 0 4.15979 0 6.4 0L19.933 0C22.1732 0 23.2933 0 24.149 0.435974C24.9016 0.819467 25.5135 1.43139 25.897 2.18404C26.333 3.03969 26.333 4.15979 26.333 6.4L26.333 7.26666C26.333 9.50687 26.333 10.627 25.897 11.4826C25.5135 12.2353 24.9016 12.8472 24.149 13.2307C23.2933 13.6667 22.1732 13.6667 19.933 13.6667L6.4 13.6667C4.15979 13.6667 3.03969 13.6667 2.18404 13.2307C1.43139 12.8472 0.819467 12.2353 0.435974 11.4826C0 10.627 0 9.50687 0 7.26666L0 6.4Z" />

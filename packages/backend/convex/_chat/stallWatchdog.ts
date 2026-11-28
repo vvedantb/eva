@@ -2,8 +2,10 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
 import { insertTurnFollowUp } from "../_messages/replies";
@@ -38,7 +40,7 @@ type ChatId = Id<"sessionChats">;
  * cancelExecution does, and schedules the next queued message. The caller must
  * have verified `adapter.activeWorkflowId(entity) === workflowId`; mutation
  * atomicity makes that guard plus these writes race-free against a
- * concurrent startExecute.
+ * concurrent send staging a turn.
  *
  * Single implementation for all three chat surfaces — everything
  * surface-specific (field names, alert wording, interrupt mechanics, the

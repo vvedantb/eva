@@ -1,3 +1,5 @@
+import { hasActiveTaskRun } from "./_agentTasks/taskRunStatus";
+import { reconcileTaskCloseTimes } from "./_agentTasks/closeTimes";
 import {
   customCtx,
   customMutation,
@@ -28,9 +30,7 @@ import type {
   TableNames,
 } from "./_generated/dataModel";
 import { isEntityArchived } from "./numId";
-import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
-import { findLivePullRequestOnBranch } from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
 export async function userCanAccessRepo(
@@ -327,91 +327,19 @@ export async function getProjectWithAccess(
 }
 
 /**
- * The task's queued or running agent run, or null. Prefers a queued run over a
- * running one; every agentRuns insert is guarded by an active-run check, so a
- * task has at most one active run and the order does not matter.
- */
-export async function getActiveTaskRun(
-  db: GenericDatabaseReader<DataModel>,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"agentRuns"> | null> {
-  const queued = await db
-    .query("agentRuns")
-    .withIndex("by_task_and_status", (q) =>
-      q.eq("taskId", taskId).eq("status", "queued"),
-    )
-    .first();
-  if (queued) return queued;
-  return await db
-    .query("agentRuns")
-    .withIndex("by_task_and_status", (q) =>
-      q.eq("taskId", taskId).eq("status", "running"),
-    )
-    .first();
-}
-
-/** Returns true if the given task has any queued or running agent runs. */
-export async function hasActiveRun(
-  db: GenericDatabaseReader<DataModel>,
-  taskId: Id<"agentTasks">,
-): Promise<boolean> {
-  return (await getActiveTaskRun(db, taskId)) !== null;
-}
-
-/**
- * A run of the task is queued, running, scheduled or waiting to retry: its
- * run lifecycle is set (`agentTasks.run`) or an agent run is active.
+ * A run of the task is scheduled, going or queued: its schedule is set
+ * (`agentTasks.run`) or a task-mode turn is open or queued in its chat.
  */
 export async function taskRunPending(
   db: GenericDatabaseReader<DataModel>,
-  task: Pick<Doc<"agentTasks">, "_id" | "run">,
+  task: Doc<"agentTasks">,
 ): Promise<boolean> {
-  return task.run !== undefined || (await hasActiveRun(db, task._id));
-}
-
-/** True when a later-started run exists on the same task (stale workflow completion). */
-export async function isSupersededTaskRun(
-  db: GenericDatabaseReader<DataModel>,
-  taskId: Id<"agentTasks">,
-  runId: Id<"agentRuns">,
-): Promise<boolean> {
-  const run = await db.get(runId);
-  if (!run || run.taskId !== taskId) return true;
-  const runStartedAt = run.startedAt ?? run._creationTime;
-  const runs = await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  return runs.some((other) => {
-    if (other._id === runId) return false;
-    const otherStartedAt = other.startedAt ?? other._creationTime;
-    return otherStartedAt > runStartedAt;
-  });
-}
-
-/**
- * True when the run should open a PR rather than refresh one: there is no live
- * PR on the branch it pushes to. A merged or closed PR on that branch means the
- * next run opens a fresh one, which the owner then holds beside the old one.
- */
-export async function isFirstTaskOnBranch(
-  db: GenericDatabaseReader<DataModel>,
-  taskId: Id<"agentTasks">,
-): Promise<boolean> {
-  const task = await db.get(taskId);
-  if (!task?.repoId) return true;
-  return (
-    (await findLivePullRequestOnBranch(
-      db,
-      task.repoId,
-      taskBranchName(task),
-    )) === null
-  );
+  return task.run !== undefined || (await hasActiveTaskRun(db, task));
 }
 
 /**
  * Archives a task: cancels its scheduled run and hides it from lists. The row
- * and its runs stay; `unarchive` brings it back. The caller retires its session.
+ * and its chat stay; `unarchive` brings it back. The caller retires its session.
  */
 export async function archiveAgentTask(
   ctx: MutationCtx,
@@ -421,6 +349,7 @@ export async function archiveAgentTask(
   if (!task || isEntityArchived(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
   await ctx.db.patch(taskId, { archivedAt: Date.now() });
+  await reconcileTaskCloseTimes(ctx, taskId);
 }
 
 const getUserIdFromIdentityRef = makeFunctionReference<

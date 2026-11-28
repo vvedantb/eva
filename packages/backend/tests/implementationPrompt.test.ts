@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
+import { buildImplementationPrompt } from "../convex/_agentTasks/prompts";
 
 test("buildImplementationPrompt uses commitText for edit commits, not reviewer annotations", () => {
   const prompt = buildImplementationPrompt(

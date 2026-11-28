@@ -19,6 +19,7 @@ type SandboxGitTarget = FunctionArgs<
 export interface OwnedSandboxFields {
   sandboxId: string | undefined;
   status: Doc<"sessions">["status"] | undefined;
+  sandboxError: string | undefined;
   devPort: number | undefined;
   devCommand: string | undefined;
   terminalPanes: Doc<"sessions">["terminalPanes"];
@@ -59,6 +60,7 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   const sandbox: OwnedSandboxFields = {
     sandboxId: session?.sandboxId,
     status: session?.status,
+    sandboxError: session?.sandboxError,
     devPort: session?.devPort,
     devCommand: session?.devCommand,
     terminalPanes: session?.terminalPanes,

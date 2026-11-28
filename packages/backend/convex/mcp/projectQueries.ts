@@ -8,7 +8,6 @@ import {
   normalizeIdOrThrow,
   taskRunPending,
 } from "../functions";
-import { chatEntityKindValidator } from "../validators";
 import { sessionOwner } from "../_sessions/owner";
 import { loadSessionChat } from "../_sessionChats/helpers";
 import { isEntityArchived } from "../numId";
@@ -44,14 +43,13 @@ async function taskOwner(
 }
 
 /**
- * Who a sandbox token speaks for (`sessionOwner`): a session chat names its
- * session's owner, a task or project token names itself. Null for a
- * standalone session or an unknown id. This is what makes "this project" and
- * "my task" resolve without an id.
+ * Who a sandbox token speaks for (`sessionOwner`): its chat's or session's
+ * owner. Null for a standalone session or an unknown id (a one-shot agent's
+ * owner). This is what makes "this project" and "my task" resolve without an
+ * id.
  */
 export const resolveCallerOwner = internalQuery({
   args: {
-    entityKind: v.optional(chatEntityKindValidator),
     entityId: v.optional(v.string()),
     chatId: v.optional(v.string()),
   },
@@ -70,16 +68,6 @@ export const resolveCallerOwner = internalQuery({
       return owner.kind === "task" ? await taskOwner(ctx.db, owner.taskId) : null;
     }
     if (args.entityId === undefined) return null;
-    if (args.entityKind === "task") {
-      const taskId = ctx.db.normalizeId("agentTasks", args.entityId);
-      return taskId ? await taskOwner(ctx.db, taskId) : null;
-    }
-    if (args.entityKind === "project") {
-      const projectId = ctx.db.normalizeId("projects", args.entityId);
-      return projectId
-        ? { kind: "project", projectId: String(projectId) }
-        : null;
-    }
     const sessionId = ctx.db.normalizeId("sessions", args.entityId);
     const session = sessionId ? await ctx.db.get(sessionId) : null;
     if (!session) return null;

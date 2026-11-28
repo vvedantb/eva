@@ -1,11 +1,13 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import {
   isUsageLimitError,
   parseUsageLimitResetTime,
-} from "../_taskWorkflow/recovery";
+} from "../_queues/usageLimitReset";
 import {
   assistantReplyContent,
   delayedPublishFailureError,

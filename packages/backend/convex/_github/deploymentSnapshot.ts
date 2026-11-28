@@ -3,7 +3,7 @@
 import {
   mapGitHubDeploymentState,
   type DeploymentStatus,
-} from "../_taskWorkflow/deploymentHelpers";
+} from "../_deployment/deploymentHelpers";
 
 export type DeploymentListItem = {
   id: number;

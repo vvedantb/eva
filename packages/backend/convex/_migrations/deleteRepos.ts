@@ -83,23 +83,6 @@ export const deleteRepoStep = internalMutation({
           .withIndex("by_repo", (q) => q.eq("repoId", repoId))
           .collect();
         for (const task of tasks) {
-          const runs = await ctx.db
-            .query("agentRuns")
-            .withIndex("by_task", (q) => q.eq("taskId", task._id))
-            .collect();
-          for (const run of runs) {
-            const logs = await ctx.db
-              .query("agentRunActivityLogs")
-              .withIndex("by_run", (q) => q.eq("runId", run._id))
-              .collect();
-            for (const log of logs) {
-              await ctx.db.delete(log._id);
-              deleted++;
-            }
-            await ctx.db.delete(run._id);
-            deleted++;
-          }
-
           const comments = await ctx.db
             .query("taskComments")
             .withIndex("by_task", (q) => q.eq("taskId", task._id))
@@ -152,14 +135,6 @@ export const deleteRepoStep = internalMutation({
           .withIndex("by_repo", (q) => q.eq("repoId", repoId))
           .collect();
         for (const session of sessions) {
-          const daemonState = await ctx.db
-            .query("sessionDaemonStates")
-            .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-            .unique();
-          if (daemonState) {
-            await ctx.db.delete(daemonState._id);
-            deleted++;
-          }
           const chats = await listSessionChats(ctx.db, session._id);
           for (const parentId of [session._id, ...chats.map((c) => c._id)]) {
             deleted += (await deleteChatRows(ctx, parentId)).deleted;

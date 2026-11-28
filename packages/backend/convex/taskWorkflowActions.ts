@@ -26,22 +26,21 @@ import {
   buildPrBody,
   buildTaskPrSections,
   buildProjectPrSections,
-  siblingPrValidator,
   upsertRelatedPrsBlock,
   type SiblingPr,
 } from "./prBody";
-import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
+import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_env/webAppUrl";
 import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
   isTerminalDeploymentStatus,
   resolveStableDeploymentUrl,
   type DeploymentStatus,
-} from "./_taskWorkflow/deploymentHelpers";
+} from "./_deployment/deploymentHelpers";
 import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 import { errorMessage } from "@vvedantb/server";
 
-export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
+export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_env/webAppUrl";
 
 function buildTaskPullRequestBody(params: {
   repoOwner: string;
@@ -145,7 +144,6 @@ async function openTaskPr(
 
   await ctx.runMutation(internal.taskWorkflow.recordManualTaskPr, {
     taskId,
-    runId: data.latestRunId ?? undefined,
     prUrl,
     draft,
   });
@@ -279,85 +277,6 @@ export const createPullRequest = internalAction({
   },
 });
 
-export const createTaskPullRequest = internalAction({
-  args: {
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.string(),
-    baseBranch: v.optional(v.string()),
-    title: v.string(),
-    taskId: v.id("agentTasks"),
-    projectId: v.optional(v.id("projects")),
-    taskDescription: v.optional(v.string()),
-    rootDirectory: v.string(),
-    changeRequests: v.array(v.string()),
-    relatedPrs: v.optional(v.array(siblingPrValidator)),
-    draft: v.optional(v.boolean()),
-  },
-  returns: v.string(),
-  handler: async (_ctx, args): Promise<string> => {
-    const isQuickTask = !args.projectId;
-    return await createPullRequestWithGitHub({
-      installationId: args.installationId,
-      repoOwner: args.repoOwner,
-      repoName: args.repoName,
-      branchName: args.branchName,
-      baseBranch: args.baseBranch,
-      title: args.title,
-      body: buildTaskPullRequestBody({
-        repoOwner: args.repoOwner,
-        repoName: args.repoName,
-        taskId: args.taskId,
-        projectId: args.projectId,
-        taskDescription: args.taskDescription,
-        rootDirectory: args.rootDirectory,
-        changeRequests: args.changeRequests,
-        relatedPrs: args.relatedPrs ?? [],
-      }),
-      labels: taskPullRequestLabels({
-        rootDirectory: args.rootDirectory,
-        isQuickTask,
-      }),
-      draft: args.draft,
-    });
-  },
-});
-
-export const refreshTaskPullRequestBody = internalAction({
-  args: {
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.string(),
-    taskId: v.id("agentTasks"),
-    projectId: v.optional(v.id("projects")),
-    taskDescription: v.optional(v.string()),
-    rootDirectory: v.string(),
-    changeRequests: v.array(v.string()),
-    relatedPrs: v.optional(v.array(siblingPrValidator)),
-  },
-  returns: v.string(),
-  handler: async (_ctx, args): Promise<string> => {
-    return await refreshPullRequestBodyWithGitHub({
-      installationId: args.installationId,
-      repoOwner: args.repoOwner,
-      repoName: args.repoName,
-      branchName: args.branchName,
-      body: buildTaskPullRequestBody({
-        repoOwner: args.repoOwner,
-        repoName: args.repoName,
-        taskId: args.taskId,
-        projectId: args.projectId,
-        taskDescription: args.taskDescription,
-        rootDirectory: args.rootDirectory,
-        changeRequests: args.changeRequests,
-        relatedPrs: args.relatedPrs ?? [],
-      }),
-    });
-  },
-});
-
 /**
  * Updates a linked GitHub PR title to `Eva: <title>` after a rename in Eva.
  * Skips merged PRs. Best-effort — failures are logged and never thrown.
@@ -411,7 +330,7 @@ export const convertPrToDraft = internalAction({
         repo: args.repoName,
         pull_number: args.prNumber,
       });
-      if (pr.draft) return true; // already draft
+      if (pr.draft) return true;
       await convertPullRequestToDraft(octokit, pr.node_id);
       console.log(
         `[github] Converted PR #${args.prNumber} back to draft (${args.repoOwner}/${args.repoName})`,
@@ -525,7 +444,7 @@ export const markPrReadyForReview = internalAction({
       };
       const pr = await getPullRequest(octokit, target);
       await removeLegacyDraftLabel(octokit, target, pr);
-      if (!pr.draft) return true; // already ready
+      if (!pr.draft) return true;
       await markPullRequestReadyForReview(octokit, pr.node_id);
       console.log(
         `[github] Marked PR #${args.prNumber} as ready for review (${args.repoOwner}/${args.repoName})`,
@@ -643,47 +562,6 @@ async function runDeploymentPollAttempt(
     await maybeReschedule();
   }
 }
-
-/** Polls GitHub deployment status for a task run branch, scheduling retries until terminal or max attempts. */
-export const pollDeploymentStatus = internalAction({
-  args: {
-    runId: v.id("agentRuns"),
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    repoId: v.id("githubRepos"),
-    branchName: v.string(),
-    deploymentProjectName: v.optional(v.string()),
-    attempt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await runDeploymentPollAttempt(ctx, args, {
-      logPrefix: "[deployment-poll]",
-      persistQueued: async () => {
-        await ctx.runMutation(internal.agentRuns.updateDeploymentStatus, {
-          runId: args.runId,
-          deploymentStatus: "queued",
-        });
-      },
-      persistStatus: async (deploymentStatus, deploymentUrl) => {
-        await ctx.runMutation(internal.agentRuns.updateDeploymentStatus, {
-          runId: args.runId,
-          deploymentStatus,
-          deploymentUrl,
-        });
-      },
-      reschedule: async () => {
-        await ctx.scheduler.runAfter(
-          POLL_INTERVAL_MS,
-          internal.taskWorkflowActions.pollDeploymentStatus,
-          { ...args, attempt: args.attempt + 1 },
-        );
-      },
-    });
-    return null;
-  },
-});
 
 /** Polls GitHub deployment status for a session branch, scheduling retries until terminal or max attempts. */
 export const pollSessionDeploymentStatus = internalAction({

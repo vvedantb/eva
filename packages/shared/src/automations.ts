@@ -1,5 +1,11 @@
-import { DEFAULT_ISSUE_LABEL, REPO_EVENT_LABELS, type AutomationTrigger } from "@eva/backend";
+import {
+  DEFAULT_ISSUE_LABEL,
+  REPO_EVENT_LABELS,
+  type AutomationTrigger,
+} from "@eva/backend";
 import cronstrue from "cronstrue";
+
+export { canRunByHand } from "@eva/backend";
 
 export const CRON_TRIGGER: AutomationTrigger = { kind: "cron" };
 
@@ -8,12 +14,16 @@ export function automationTriggerOf(automation: { trigger?: AutomationTrigger })
   return automation.trigger ?? CRON_TRIGGER;
 }
 
-/** "Runs when …" for an event trigger, or null for a schedule. */
+/** "Runs when a PR is opened or a commit is pushed to a PR", or null for a schedule. */
 export function describeTrigger(trigger: AutomationTrigger): string | null {
-  if (trigger.kind === "cron") return null;
-  const when = REPO_EVENT_LABELS[trigger.event];
-  if (trigger.event !== "issue_labeled") return `Runs when ${when}`;
-  return `Runs when an issue is labelled "${trigger.label ?? DEFAULT_ISSUE_LABEL}"`;
+  if (trigger.kind === "cron" || trigger.events.length === 0) return null;
+  const phrases = trigger.events.map((event) =>
+    event === "issue_labeled"
+      ? `an issue is labelled "${trigger.label ?? DEFAULT_ISSUE_LABEL}"`
+      : REPO_EVENT_LABELS[event],
+  );
+  const last = phrases.pop();
+  return phrases.length === 0 ? `Runs when ${last}` : `Runs when ${phrases.join(", ")} or ${last}`;
 }
 
 function getOffsetMinutes(): number {

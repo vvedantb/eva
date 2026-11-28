@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
+import {
+  DEFAULT_AI_MODEL,
+  launchTraitsFromStored,
+  normalizeAIModel,
+} from "../validators";
 import { authMutation } from "../functions";
 import { workflow } from "../workflowManager";
 import {
@@ -10,10 +14,18 @@ import {
   getAutomationWithAccess,
 } from "./helpers";
 import {
+  describeRepoEvent,
   EVENT_RUN_MAX_WAIT_MS,
   EVENT_RUN_RETRY_MS,
+  prEventHeadBranch,
+  repoEventValidator,
+  withLatestHead,
 } from "../_automationEvents/events";
+import { syncCheckRunLater } from "./checkRun";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
+import { startAgentJob } from "../_agentJobs/slot";
+import { reconcileProviderAccountForModel } from "../_userProviderAccounts/defaults";
+import { canRunByHand } from "../_automationEvents/labels";
 
 async function hasRunInFlight(
   ctx: MutationCtx,
@@ -35,11 +47,40 @@ async function hasRunInFlight(
   return queued.some((run) => run.activeWorkflowId !== undefined);
 }
 
+export const recordPushedSha = internalMutation({
+  args: { runId: v.id("automationRuns"), pushedSha: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { runId, pushedSha }) => {
+    await ctx.db.patch(runId, { pushedSha });
+    return null;
+  },
+});
+
+async function onlyAutomationPushes(
+  ctx: MutationCtx,
+  headShas: ReadonlyArray<string> | undefined,
+): Promise<boolean> {
+  if (headShas === undefined || headShas.length === 0) return false;
+  const pushers = await Promise.all(
+    headShas.map((headSha) =>
+      ctx.db
+        .query("automationRuns")
+        .withIndex("by_pushedSha", (q) => q.eq("pushedSha", headSha))
+        .first(),
+    ),
+  );
+  return pushers.every((pusher) => pusher !== null);
+}
+
 async function startAutomationRun(
   ctx: MutationCtx,
   storedAutomation: Doc<"automations">,
   repo: Doc<"githubRepos">,
-  event?: { runId: Id<"automationRuns">; context: string },
+  event?: {
+    runId: Id<"automationRuns">;
+    context: string;
+    prBranch: string | undefined;
+  },
 ): Promise<void> {
   const automation = resolveAutomationDoc(storedAutomation);
   const runId =
@@ -57,31 +98,48 @@ async function startAutomationRun(
       : `${automation.description}\n\n## Trigger event\n${event.context}`;
 
   const branchName = buildAutomationRunBranchName(automation._id, runId);
-
-  const workflowId = await workflow.start(
-    ctx,
-    internal.automationWorkflow.automationExecutionWorkflow,
-    {
-      runId,
-      automationId: automation._id,
-      repoId: automation.repoId,
-      installationId: repo.installationId,
-      branchName,
-      description,
-      title: automation.title,
-      model: normalizeAIModel(
-        automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-      ),
-      rootDirectory: repo.rootDirectory ?? "",
-      userId: automation.createdBy,
-      readOnly: automation.readOnly === true,
-      actionsEnabled: automation.actionsEnabled === true,
-    },
+  const model = normalizeAIModel(
+    automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
   );
+  const providerAccountId =
+    automation.providerAccountId === undefined
+      ? undefined
+      : await reconcileProviderAccountForModel(
+          ctx.db,
+          automation.createdBy,
+          model,
+          automation.providerAccountId,
+        );
 
-  await ctx.db.patch(runId, {
-    activeWorkflowId: String(workflowId),
-  });
+  await startAgentJob(ctx, runId, () =>
+    workflow.start(
+      ctx,
+      internal.automationWorkflow.automationExecutionWorkflow,
+      {
+        runId,
+        automationId: automation._id,
+        repoId: automation.repoId,
+        installationId: repo.installationId,
+        branchName,
+        description,
+        title: automation.title,
+        model,
+        providerAccountId,
+        ...launchTraitsFromStored(model, {
+          reasoningLevel: automation.reasoningLevel ?? repo.defaultReasoningLevel,
+          thinkingEnabled:
+            automation.thinkingEnabled ?? repo.defaultThinkingEnabled,
+          use1mContext: automation.use1mContext ?? repo.defaultUse1mContext,
+          fastMode: automation.fastMode ?? repo.defaultFastMode,
+        }),
+        rootDirectory: repo.rootDirectory ?? "",
+        userId: automation.createdBy,
+        readOnly: automation.readOnly === true,
+        actionsEnabled: automation.actionsEnabled === true,
+        prBranch: event?.prBranch,
+      },
+    ),
+  );
 }
 
 /** Called by the cron scheduler to trigger an automation run if eligible. */
@@ -118,7 +176,7 @@ export const runNow = authMutation({
     if (!automation.description) {
       throw new Error("Automation has no description/prompt configured");
     }
-    if (automationAction(automation) !== "run") {
+    if (!canRunByHand(automation.trigger)) {
       throw new Error("This automation only runs when its event happens");
     }
 
@@ -141,11 +199,15 @@ export const runNow = authMutation({
  * busy it retries every few minutes, never stacking a second sandbox.
  */
 export const startEventRun = internalMutation({
-  args: { runId: v.id("automationRuns"), context: v.string() },
+  args: { runId: v.id("automationRuns"), event: repoEventValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run || run.status !== "queued") return null;
+    if (await onlyAutomationPushes(ctx, run.headShas)) {
+      await ctx.db.delete(args.runId);
+      return null;
+    }
     const automation = await ctx.db.get(run.automationId);
     const repo = automation ? await ctx.db.get(automation.repoId) : null;
     if (!automation || !automation.enabled || !repo) {
@@ -154,6 +216,7 @@ export const startEventRun = internalMutation({
         error: "Automation is disabled or its repo is gone",
         finishedAt: Date.now(),
       });
+      await syncCheckRunLater(ctx, run);
       return null;
     }
     if (await hasRunInFlight(ctx, automation._id)) {
@@ -163,6 +226,7 @@ export const startEventRun = internalMutation({
           error: "Skipped: the automation stayed busy for a day",
           finishedAt: Date.now(),
         });
+        await syncCheckRunLater(ctx, run);
         return null;
       }
       await ctx.scheduler.runAfter(
@@ -172,9 +236,15 @@ export const startEventRun = internalMutation({
       );
       return null;
     }
+    const prBranch = prEventHeadBranch(args.event);
+    const context = describeRepoEvent(withLatestHead(args.event, run.headSha));
     await startAutomationRun(ctx, automation, repo, {
       runId: args.runId,
-      context: args.context,
+      context:
+        prBranch === undefined
+          ? context
+          : `${context}\nYou are on the PR's branch \`${prBranch}\`.${automation.readOnly === true ? "" : " Edits you commit are pushed to this PR."}`,
+      prBranch,
     });
     return null;
   },

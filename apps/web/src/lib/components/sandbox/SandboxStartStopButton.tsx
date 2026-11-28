@@ -3,10 +3,8 @@
 import { cn } from "@eva/ui";
 import { Button, CrossfadeIconSlot, Spinner } from "@vvedantb/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { useQuery } from "convex/react";
-import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   SleepControlTooltip,
@@ -84,36 +82,5 @@ export function SandboxStartStopButton({
         </CrossfadeIconSlot>
       </Button>
     </SleepControlTooltip>
-  );
-}
-
-/**
- * Plan usage for project and task sandbox chat headers. Start/stop lives in the
- * task and project page headers only — one control per action, so the chat
- * header carries usage alone. Sessions keep their own start/stop in the session
- * chat header. Collapse lives on the sandbox rail.
- */
-export function SandboxChatHeaderActions({
-  repoId,
-  model,
-  providerAccountId,
-  usageAccountLabel,
-}: {
-  repoId: Id<"githubRepos">;
-  model: string | null | undefined;
-  providerAccountId: Id<"userProviderAccounts"> | null | undefined;
-  usageAccountLabel: string;
-}) {
-  return (
-    <div className="flex shrink-0 justify-end px-2 py-1">
-      <div className={CHAT_HEADER_ACTIONS_CLASS}>
-        <UsageLimitsIndicator
-          repoId={repoId}
-          model={model}
-          providerAccountId={providerAccountId}
-          accountLabel={usageAccountLabel}
-        />
-      </div>
-    </div>
   );
 }

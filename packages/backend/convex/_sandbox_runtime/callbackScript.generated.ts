@@ -142,13 +142,7 @@ var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
-var QUESTION_ANSWERING_ENTITY_FIELDS = /* @__PURE__ */ new Set([
-  "sessionId",
-  "chatId",
-  "taskId",
-  "projectId"
-]);
-var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD !== void 0 && QUESTION_ANSWERING_ENTITY_FIELDS.has(ENTITY_ID_FIELD);
+var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD === "chatId";
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
@@ -412,7 +406,7 @@ var SECRET_PATTERNS = [
   [/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+/g, "***"],
   // URL userinfo: \`https://user:secret@host\` keeps the user, drops the secret.
   // The secret stops at \`/\`, so \`//localhost:5173/@fs/x\` is not userinfo.
-  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//\$1:***@"]
+  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//$1:***@"]
 ];
 function redactSecrets(text) {
   let out = text;
@@ -853,7 +847,7 @@ function copyBaseClaudeConfig() {
   );
 }
 function isSafeClaudeSessionId(sessionId) {
-  return /^[A-Za-z0-9._-]+\$/.test(sessionId) && !/^\\.+\$/.test(sessionId);
+  return /^[A-Za-z0-9._-]+$/.test(sessionId) && !/^\\.+$/.test(sessionId);
 }
 function logTranscriptStats(sessionId, label) {
   if (!isSafeClaudeSessionId(sessionId)) {
@@ -967,7 +961,7 @@ function isJsonObject2(value) {
 var SkipServer = class extends Error {
 };
 function substituteVars(value, env) {
-  return value.replace(/\\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
+  return value.replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
     const resolved = env[name];
     if (!resolved) throw new SkipServer("missing env var " + name);
     return resolved;
@@ -1076,9 +1070,6 @@ import { readdirSync as readdirSync3 } from "fs";
 import { homedir } from "os";
 
 // callback-src/providers/daemonPaths.ts
-var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
-var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
-var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
 function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
   const field = entityIdField ?? "sessionId";
   const id = entityId ?? "";
@@ -1087,13 +1078,6 @@ function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_I
     pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
     entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
     opts: \`/tmp/eva-daemon.\${suffix}.opts\`
-  };
-}
-function resolveLegacySessionDaemonPaths() {
-  return {
-    pid: LEGACY_DAEMON_PID,
-    entity: LEGACY_DAEMON_ENTITY,
-    opts: LEGACY_DAEMON_OPTS
   };
 }
 
@@ -1189,7 +1173,7 @@ var VM_MEMORY_SAMPLE_INTERVAL_MS = 3e4;
 var lastSampleAt = 0;
 function parseMeminfo(text) {
   const kb = (key) => {
-    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB\$\`, "m").exec(text);
+    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB$\`, "m").exec(text);
     return match ? Number(match[1]) : null;
   };
   const total = kb("MemTotal");
@@ -1202,22 +1186,51 @@ function parseMeminfo(text) {
   return {
     memTotalMb: Math.round(total / 1024),
     memAvailableMb: Math.round(available / 1024),
+    swapTotalMb: Math.round(swapTotal / 1024),
     swapUsedMb: Math.round((swapTotal - swapFree) / 1024)
   };
 }
+function parseOomKills(vmstat) {
+  const match = /^oom_kill (\\d+)$/m.exec(vmstat);
+  return match ? Number(match[1]) : null;
+}
+function readVmMemory() {
+  try {
+    return parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
+  } catch {
+    return null;
+  }
+}
+function readOomKills() {
+  try {
+    return parseOomKills(readFileSync3("/proc/vmstat", "utf8"));
+  } catch {
+    return null;
+  }
+}
 function appendVmMemory(body, now = Date.now()) {
   if (now - lastSampleAt < VM_MEMORY_SAMPLE_INTERVAL_MS) return;
-  let sample = null;
-  try {
-    sample = parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
-  } catch {
-    return;
-  }
+  const sample = readVmMemory();
   if (sample === null) return;
   lastSampleAt = now;
   body.set("memTotalMb", String(sample.memTotalMb));
   body.set("memAvailableMb", String(sample.memAvailableMb));
   body.set("swapUsedMb", String(sample.swapUsedMb));
+  const oomKills = readOomKills();
+  if (oomKills !== null) body.set("oomKills", String(oomKills));
+}
+var LOW_MEMORY_AVAILABLE_MB = 1024;
+function isLowMemory(sample) {
+  return sample.memAvailableMb < LOW_MEMORY_AVAILABLE_MB || sample.swapTotalMb > 0 && sample.swapUsedMb * 2 > sample.swapTotalMb;
+}
+function lowMemoryNotice(sample = readVmMemory()) {
+  if (sample === null || !isLowMemory(sample)) return null;
+  return [
+    \`Eva: this sandbox is low on memory (\${sample.memAvailableMb} MB RAM free, \${sample.swapUsedMb} of \${sample.swapTotalMb} MB swap used).\`,
+    "A memory-heavy command now can freeze the VM and end this turn.",
+    "Avoid full-repo type checks, builds and test suites; check one package or file instead.",
+    "Never start a second dev server."
+  ].join(" ");
 }
 
 // callback-src/http/convexClient.ts
@@ -2136,7 +2149,7 @@ function mediaCandidateRoots(workDir, rootDirectory) {
   const roots = [workDir];
   const trimmed = rootDirectory?.trim() ?? "";
   if (trimmed.length > 0 && trimmed !== "." && !trimmed.startsWith("/") && !trimmed.includes("..")) {
-    const appRoot = \`\${workDir}/\${trimmed.replace(/\\/+\$/, "")}\`;
+    const appRoot = \`\${workDir}/\${trimmed.replace(/\\/+$/, "")}\`;
     if (appRoot !== workDir) {
       roots.push(appRoot);
     }
@@ -2204,16 +2217,8 @@ function resetTurnCheckpoint() {
   turnStartSha = "";
   turnStartShas = [];
 }
-var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
-  "sessionId",
-  "chatId",
-  "taskId",
-  "projectId"
-]);
 function appendTurnCheckpoint(args) {
-  if (ENTITY_ID_FIELD === void 0 || !CHECKPOINTED_ENTITY_ID_FIELDS.has(ENTITY_ID_FIELD)) {
-    return;
-  }
+  if (ENTITY_ID_FIELD !== "chatId") return;
   if (RUN_ID || turnStartSha === "") return;
   if (!readCurrentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();
@@ -2618,7 +2623,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && ENTITY_ID_FIELD === "chatId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -4485,10 +4490,7 @@ var POLL_INTERVAL_MS = 15e3;
 var DEBOUNCE_MS = 300;
 function resolveBranchTarget(field, id) {
   if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
   if (field === "chatId") return { kind: "sessionChat", chatId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
   return null;
 }
 function formatBranch(abbrevRef, shortSha) {
@@ -4687,10 +4689,10 @@ function synchronizeForPush(branch) {
     );
     return { status: "failed" };
   }
-  if (/^0\\s+\\d+\$/.test(divergence.stdout)) {
+  if (/^0\\s+\\d+$/.test(divergence.stdout)) {
     return { status: "ready", remoteExists: true };
   }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.stdout)) {
+  if (/^[1-9]\\d*\\s+0$/.test(divergence.stdout)) {
     const fastForward = git(["merge", "--ff-only", remoteRef]);
     if (fastForward.ok) {
       return { status: "ready", remoteExists: true };
@@ -4700,7 +4702,7 @@ function synchronizeForPush(branch) {
     );
     return { status: "failed" };
   }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.stdout)) {
+  if (/^[1-9]\\d*\\s+[1-9]\\d*$/.test(divergence.stdout)) {
     if (localBranchRewroteOwnHistory(branch, remoteRef)) {
       log(
         \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
@@ -5157,13 +5159,7 @@ function claimDaemonPidfileBoot(params) {
 function cleanOwnedDaemonMarkers(params) {
   const currentPid = params.currentPid ?? process.pid;
   if (readPidFromFile(params.paths.pid) !== currentPid) return;
-  const legacy = params.includeLegacySessionPaths ? resolveLegacySessionDaemonPaths() : null;
-  const targets = [
-    params.paths.pid,
-    params.paths.entity,
-    params.paths.opts,
-    ...legacy ? [legacy.pid, legacy.entity, legacy.opts] : []
-  ];
+  const targets = [params.paths.pid, params.paths.entity, params.paths.opts];
   for (const path3 of targets) {
     try {
       unlinkSync(path3);
@@ -5172,10 +5168,7 @@ function cleanOwnedDaemonMarkers(params) {
   }
 }
 function cleanOwnedMarkers(paths2) {
-  cleanOwnedDaemonMarkers({
-    paths: paths2,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
+  cleanOwnedDaemonMarkers({ paths: paths2 });
 }
 function startDaemonDepositionFence(params) {
   let deposedLogged = false;
@@ -5614,23 +5607,15 @@ async function attachChatMediaIfAny(uploaded, target2) {
   if (uploaded.length === 0) return;
   const mediaArgs = {
     parentId: ENTITY_ID ?? "",
-    mediaStorageIds: uploaded.map((item) => item.storageId)
+    mediaStorageIds: uploaded.map((item) => item.storageId),
+    // Chat captions each capture with its file name.
+    mediaNames: Object.fromEntries(
+      uploaded.map((item) => [item.storageId, item.fileName])
+    )
   };
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
   if (target2.turnId) mediaArgs.turnId = target2.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
-}
-async function attachRunMediaIfAny(uploaded) {
-  if (uploaded.length === 0) return;
-  await callConvexWithRetry(
-    "mutation",
-    "agentRuns:attachMedia",
-    {
-      id: RUN_ID ?? "",
-      mediaStorageIds: uploaded.map((item) => item.storageId)
-    },
-    3
-  );
 }
 var REDACTED_COMPLETION_FIELDS = [
   "result",
@@ -5647,7 +5632,6 @@ async function sendTurnCompletion(mutation, args) {
   await callConvexWithRetry("mutation", mutation, args);
 }
 async function deliverCompletionWithMedia(completionArgs) {
-  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) {
@@ -5685,7 +5669,7 @@ async function uploadAndAttachSandboxMedia(target2) {
   for (const recDir of recordings) {
     if (!existsSync6(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
-      if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
+      if (!/\\.(webm|mp4|mov|avi)$/i.test(file)) continue;
       const fp = harvestableFile(recDir, file);
       if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
@@ -5709,7 +5693,7 @@ async function uploadAndAttachSandboxMedia(target2) {
   for (const ssDir of screenshots) {
     if (!existsSync6(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
-      if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
+      if (!/\\.(png|jpg|jpeg|gif|webp)$/i.test(file)) continue;
       const fp = harvestableFile(ssDir, file);
       if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
@@ -5725,11 +5709,7 @@ async function uploadAndAttachSandboxMedia(target2) {
     }
   }
   try {
-    if (RUN_ID) {
-      await attachRunMediaIfAny(uploaded);
-    } else {
-      await attachChatMediaIfAny(uploaded, target2);
-    }
+    await attachChatMediaIfAny(uploaded, target2);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }
@@ -6127,7 +6107,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // connecting" instead of reporting its tools missing.
     CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
@@ -6169,9 +6149,19 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...hasRepoMcpFile ? { strictMcpConfig: true } : {},
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...effortOption,
-    ...thinkingOption
+    ...thinkingOption,
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [warnOnLowMemory] }] }
   };
 }
+var warnOnLowMemory = async () => {
+  const notice = lowMemoryNotice();
+  return notice === null ? {} : {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: notice
+    }
+  };
+};
 async function runClaudeSdkAttempt(sessionMode) {
   beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
   let attemptOutput = "";
@@ -7995,7 +7985,7 @@ function toTomlValue(value, path3) {
     throw new Error(\`Unsupported Codex config override value at \${path3}: \${typeName}\`);
   }
 }
-var TOML_BARE_KEY = /^[A-Za-z0-9_-]+\$/;
+var TOML_BARE_KEY = /^[A-Za-z0-9_-]+$/;
 function formatTomlKey(key) {
   return TOML_BARE_KEY.test(key) ? key : JSON.stringify(key);
 }
@@ -9880,7 +9870,7 @@ var SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
 var EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 var EXCLUDE_END = "# <<< eva-system-skills <<<";
-var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}\$/;
+var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 var SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 function parseSystemSkillsFile(raw) {
   const parsed = tryParseJsonObject(raw);

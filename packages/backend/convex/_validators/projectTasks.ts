@@ -25,7 +25,6 @@ const needsYouValidator = v.union(
   v.literal("failed"),
   v.literal("stopped"),
   v.literal("pr_closed"),
-  v.literal("approve"),
   v.literal("review"),
   v.literal("question"),
 );
@@ -49,7 +48,7 @@ export const projectTaskRowValidator = v.union(
       v.literal("todo"),
       v.literal("cancelled"),
     ),
-    approved: v.boolean(),
+    withCoordinator: v.boolean(),
     phaseLabel: v.optional(v.string()),
     repoId: v.optional(v.id("githubRepos")),
     repo: v.optional(v.string()),

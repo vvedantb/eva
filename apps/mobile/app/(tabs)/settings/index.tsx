@@ -8,31 +8,38 @@ import { tokens } from "@vvedantb/native-ui/theme";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { View } from "react-native";
-import { getPushToken } from "@/push/push";
+import { clearAppBadge, getPushToken } from "@/push/push";
 import { AppearanceTiles } from "@/settings/AppearanceTiles";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
 /**
  * The web settings a phone needs, with the web section names and copy:
- * Appearance (Theme), Email notifications (Notifications), phone pushes in
- * place of the web's desktop pop-ups, and the account.
+ * Appearance (Theme), Email (Notifications), the Push switch in place of the
+ * web's desktop pop-ups, and the account.
  */
 export default function SettingsScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const unregister = useMutation(api.push.unregister);
-  const emailEnabled = useQuery(api.auth.getEmailNotificationsEnabled, {});
-  const setEmailEnabled = useMutation(api.auth.setEmailNotificationsEnabled).withOptimisticUpdate((store, args) => {
-    store.setQuery(api.auth.getEmailNotificationsEnabled, {}, args.enabled);
+  const prefs = useQuery(api.auth.getNotificationPrefs, {});
+  const setPrefs = useMutation(api.auth.setNotificationPrefs).withOptimisticUpdate((store, args) => {
+    const current = store.getQuery(api.auth.getNotificationPrefs, {});
+    if (current) store.setQuery(api.auth.getNotificationPrefs, {}, { ...current, ...args });
   });
-  const toggleEmail = (enabled: boolean) => void setEmailEnabled({ enabled });
+  const pushOn = prefs?.push ?? true;
+  const togglePush = (push: boolean) => void setPrefs({ push });
+  const emailOn = prefs?.email ?? true;
+  const toggleEmail = (email: boolean) => void setPrefs({ email });
+  const productUpdatesOn = prefs?.productUpdates ?? false;
+  const toggleProductUpdates = (productUpdates: boolean) => void setPrefs({ productUpdates });
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const scheme = useScheme();
 
   const handleSignOut = async () => {
     const token = await getPushToken({ ask: false });
     if (token) await unregister({ token });
+    await clearAppBadge();
     await signOut();
   };
 
@@ -44,33 +51,61 @@ export default function SettingsScreen() {
           <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
           </SettingsSection>
-          <SettingsSection
-            title="Email notifications"
-            description="How Eva reaches you outside the app."
-            bodyVariant="list"
-          >
+          <SettingsSection title="Email" bodyVariant="list">
             <SettingsToggleRow
-              title="Send summary and changelog"
-              description="Receive a daily summary of unread notifications and the weekly changelog by email."
-              checked={emailEnabled ?? false}
-              disabled={emailEnabled === undefined}
+              title="Notifications"
+              checked={emailOn}
+              disabled={prefs === undefined}
               onCheckedChange={toggleEmail}
               action={
                 <Switch
                   size="md"
-                  checked={emailEnabled ?? false}
-                  disabled={emailEnabled === undefined}
+                  checked={emailOn}
+                  disabled={prefs === undefined}
                   onCheckedChange={toggleEmail}
                   offColor={EVA_THEME[scheme].muted}
-                  thumbStyle={{ backgroundColor: emailEnabled ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
+                  thumbStyle={{ backgroundColor: emailOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
+                />
+              }
+            />
+            <SettingsToggleRow
+              title="Product updates"
+              checked={productUpdatesOn}
+              disabled={prefs === undefined}
+              onCheckedChange={toggleProductUpdates}
+              action={
+                <Switch
+                  size="md"
+                  checked={productUpdatesOn}
+                  disabled={prefs === undefined}
+                  onCheckedChange={toggleProductUpdates}
+                  offColor={EVA_THEME[scheme].muted}
+                  thumbStyle={{ backgroundColor: productUpdatesOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
                 />
               }
             />
           </SettingsSection>
           <SettingsSection
             title="Phone notifications"
-            description="Eva notifies this phone when an agent needs your input or someone mentions you. Turn them off in Android settings."
-          />
+            bodyVariant="list"
+          >
+            <SettingsToggleRow
+              title="Push"
+              checked={pushOn}
+              disabled={prefs === undefined}
+              onCheckedChange={togglePush}
+              action={
+                <Switch
+                  size="md"
+                  checked={pushOn}
+                  disabled={prefs === undefined}
+                  onCheckedChange={togglePush}
+                  offColor={EVA_THEME[scheme].muted}
+                  thumbStyle={{ backgroundColor: pushOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
+                />
+              }
+            />
+          </SettingsSection>
           <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>
             <Button variant="outline" size="lg" onPress={() => setConfirmSignOut(true)}>
               Sign out

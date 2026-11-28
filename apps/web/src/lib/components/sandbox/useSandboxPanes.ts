@@ -153,7 +153,6 @@ export function useSandboxPanes({
       );
       setTermActive(pane.id);
     } catch {
-      // toast shown
     }
   };
 
@@ -165,7 +164,6 @@ export function useSandboxPanes({
     try {
       await disconnectPtyAction({ owner, ptyInstanceId: ptyId });
     } catch {
-      // still remove from UI
     }
     try {
       await catchMutationError(

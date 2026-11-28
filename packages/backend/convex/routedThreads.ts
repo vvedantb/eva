@@ -12,14 +12,19 @@ import { entityHref } from "@eva/shared";
 import { isEntityArchived, isEntityDeleted } from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import {
-  drainSessionChatQueues,
-} from "./_queues/helpers";
-import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
+  ensureMainChat,
+  findMainChat,
+  type SessionChatContext,
+} from "./_sessionChats/helpers";
+import {
+  queueSystemChatMessage,
+  stickyTurnSettings,
+} from "./_sessions/execution";
 import { ensureOwnerChat, loadOwnerEntity } from "./_sessions/ownedSession";
 import { findWorkChat } from "./_sessions/ownerState";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
-  DEFAULT_AI_MODEL,
+  normalizeAIModel,
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
@@ -191,7 +196,6 @@ type SourceRecord = {
   numId: number | undefined;
   title: string;
   ownerUserId: Id<"users">;
-  lastModel: Doc<"sessions">["lastModel"];
   deleted: boolean;
   archived: boolean;
 };
@@ -214,7 +218,6 @@ async function loadSource(
       numId: session.numId,
       title: session.title,
       ownerUserId: session.userId,
-      lastModel: session.lastModel,
       deleted: isEntityDeleted(session),
       archived: isSessionArchived(session),
     };
@@ -238,7 +241,6 @@ async function loadSource(
       numId: task.numId,
       title: task.title,
       ownerUserId: task.createdBy,
-      lastModel: undefined,
       deleted: false,
       archived: isEntityArchived(task),
     };
@@ -255,7 +257,6 @@ async function loadSource(
     numId: project.numId,
     title: project.title,
     ownerUserId: project.userId,
-    lastModel: undefined,
     deleted: false,
     archived: isEntityArchived(project),
   };
@@ -367,11 +368,7 @@ async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
-  | {
-      sessionId: Id<"sessions">;
-      parentId: Id<"sessionChats">;
-      model: Doc<"sessions">["lastModel"];
-    }
+  | { context: SessionChatContext; model: Doc<"sessionChats">["lastModel"] }
   | undefined
 > {
   if (source.ref.kind === "session") {
@@ -379,9 +376,8 @@ async function transcriptParent(
     if (!session) return undefined;
     const chat = await ensureMainChat(ctx, session);
     return {
-      sessionId: session._id,
-      parentId: chat._id,
-      model: chat.lastModel ?? source.lastModel,
+      context: { session, chat },
+      model: chat.lastModel,
     };
   }
   const entity = await loadOwnerEntity(
@@ -391,12 +387,8 @@ async function transcriptParent(
       : { kind: "project", projectId: source.ref.id },
   );
   if (!entity) return undefined;
-  const { session, chat } = await ensureOwnerChat(ctx, entity);
-  return {
-    sessionId: session._id,
-    parentId: chat._id,
-    model: chat.lastModel ?? source.lastModel,
-  };
+  const context = await ensureOwnerChat(ctx, entity);
+  return { context, model: context.chat.lastModel };
 }
 
 async function insertSystemAlert(
@@ -407,7 +399,7 @@ async function insertSystemAlert(
   const parent = await transcriptParent(ctx, source);
   if (!parent) return undefined;
   return await ctx.db.insert("messages", {
-    parentId: parent.parentId,
+    parentId: parent.context.chat._id,
     role: "assistant",
     content,
     timestamp: Date.now(),
@@ -425,17 +417,17 @@ async function enqueueSourceWake(
   if (source.deleted || source.archived) return;
   const parent = await transcriptParent(ctx, source);
   if (!parent) return;
-  const now = Date.now();
-  await ctx.db.insert("queuedMessages", {
-    parentId: parent.parentId,
+  await queueSystemChatMessage(ctx, {
+    context: parent.context,
+    userId,
     content,
     displayContent,
-    createdAt: now,
-    order: now,
-    userId,
-    model: parent.model ?? DEFAULT_AI_MODEL,
+    settings: stickyTurnSettings(
+      parent.context.chat,
+      normalizeAIModel(parent.model),
+    ),
+    sentViaOrchestrator: false,
   });
-  await drainSessionChatQueues(ctx, parent.sessionId);
 }
 
 type DirectoryMember = {

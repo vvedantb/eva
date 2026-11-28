@@ -1,14 +1,8 @@
 import type { ExtractedContext } from "./types";
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
 
-export type TaskStatus =
-  | "draft"
-  | "todo"
-  | "in_progress"
-  | "code_review"
-  | "business_review"
-  | "done"
-  | "cancelled";
+/** A task's status, from the backend table, so a new status cannot drift. */
+export type TaskStatus = Doc<"agentTasks">["status"];
 
 /** A persisted annotation pin. Stored as JSON keyed by pin id on the backend. */
 export interface StoredPin {

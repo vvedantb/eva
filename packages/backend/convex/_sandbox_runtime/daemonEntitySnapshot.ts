@@ -147,7 +147,7 @@ export const isEntitySandboxStopRequested = internalQuery({
     if (args.entityTable === "sessionChats") {
       const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
       const chat = chatId ? await ctx.db.get(chatId) : null;
-      if (!chat || chat.archived === true) return true;
+      if (!chat) return true;
       const session = await ctx.db.get(chat.sessionId);
       return !session || isStopped(session.status);
     }

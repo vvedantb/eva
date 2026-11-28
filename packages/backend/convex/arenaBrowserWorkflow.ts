@@ -1,23 +1,24 @@
 import { v } from "convex/values";
+import type { FunctionReturnType } from "convex/server";
+import { errorMessage } from "@vvedantb/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { trackEvaluationWorkflow } from "./workflowWatchdog";
-import { clearStreamingActivity, llmJson } from "./_taskWorkflow/helpers";
-import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { llmJson } from "./_shared/llmJson";
 import { buildRootDirectoryInstruction } from "./prompts";
-import { buildEvaArenaUrl } from "./_taskWorkflow/urls";
+import { buildEvaArenaUrl } from "./_env/webAppUrl";
 import { evaluationStatusValidator } from "./validators";
-import { evalCompleteEvent } from "./evaluationWorkflow";
 import {
   browserRunJsonSchema,
   buildBrowserRunPrompt,
   scheduleArenaCheckCompletion,
 } from "./_arena/browserRun";
 import { findReposByOwnerAndName } from "./_githubRepos/helpers";
+import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
+import { startAgentJob } from "./_agentJobs/slot";
 
 const scenarioSnapshotValidator = v.object({
   id: v.id("arenaScenarios"),
@@ -40,97 +41,70 @@ export const arenaBrowserWorkflow = workflow.define({
     branchName: v.optional(v.string()),
   },
   handler: async (step, args): Promise<void> => {
-    let sandboxId: string | undefined;
-    let sandboxRepoId: Id<"githubRepos"> | undefined;
+    const saveFailure = async (error: string) => {
+      await step.runMutation(internal.evaluationWorkflow.saveWorkflowFailure, {
+        reportId: args.reportId,
+        error,
+      });
+    };
+    await step.runMutation(internal.evaluationWorkflow.setRunning, {
+      reportId: args.reportId,
+    });
+    let data: FunctionReturnType<typeof internal.arenaBrowserWorkflow.getRunData>;
     try {
-      await step.runMutation(internal.evaluationWorkflow.setRunning, {
+      data = await step.runQuery(internal.arenaBrowserWorkflow.getRunData, {
         reportId: args.reportId,
       });
+    } catch (error) {
+      await saveFailure(errorMessage(error));
+      return;
+    }
+    if (data.prNumber !== undefined && data.headSha !== undefined) {
+      await step.runAction(internal.arenaActions.createCheckRun, {
+        reportId: args.reportId,
+      });
+    }
 
-      const data = await step.runQuery(
-        internal.arenaBrowserWorkflow.getRunData,
-        { reportId: args.reportId },
-      );
-      sandboxRepoId = data.repoId;
-
-      if (data.prNumber !== undefined && data.headSha !== undefined) {
-        await step.runAction(internal.arenaActions.createCheckRun, {
-          reportId: args.reportId,
-        });
-      }
-
-      ({ sandboxId } = await prepareSandboxSteps(step, {
-        installationId: args.installationId,
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        ephemeral: true,
-        repoId: data.repoId,
-        streamingEntityId: String(args.reportId),
-        baseBranch: args.branchName,
-      }));
-
-      const { port } = await step.runAction(
-        internal.arenaActions.startAppForRun,
-        { sandboxId, repoId: data.repoId },
-      );
-
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: String(args.reportId),
-        prompt: buildBrowserRunPrompt({
+    await runOneShotAgent(step, {
+      ownerId: args.reportId,
+      userId: args.userId,
+      installationId: args.installationId,
+      repo: { id: data.repoId, owner: data.repoOwner, name: data.repoName },
+      sandbox: { kind: "ephemeral", baseBranch: args.branchName },
+      agent: { model: "sonnet", allowedTools: "Bash,Read,Glob,Grep" },
+      prompt: async (sandboxId) => {
+        const { port } = await step.runAction(
+          internal.arenaActions.startAppForRun,
+          { sandboxId, repoId: data.repoId },
+        );
+        return buildBrowserRunPrompt({
           docTitle: data.docTitle,
           docContent: data.docContent,
           scenarios: data.scenarios,
           port,
           rootDirInstruction: data.rootDirInstruction,
-        }),
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Bash,Read,Glob,Grep",
-        repoId: data.repoId,
-      });
-
-      const result = await step.awaitEvent(evalCompleteEvent);
-
-      const screenshots = await step.runAction(
-        internal.arenaActions.collectScreenshots,
-        {
-          sandboxId,
-          repoId: data.repoId,
-          scenarioIds: data.scenarios.map((s) => s.id),
-        },
-      );
-
-      await step.runMutation(internal.arenaBrowserWorkflow.saveResult, {
-        reportId: args.reportId,
-        success: result.success,
-        result: result.result,
-        error: result.error,
-        scenarios: data.scenarios,
-        screenshots,
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Browser run failed";
-      await step.runMutation(internal.evaluationWorkflow.saveWorkflowFailure, {
-        reportId: args.reportId,
-        error: errorMessage,
-      });
-      throw error;
-    } finally {
-      if (sandboxId && sandboxRepoId) {
-        try {
-          await step.runAction(internal.sandbox.deleteSandbox, {
+        });
+      },
+      onResult: async (result, sandboxId) => {
+        const screenshots = await step.runAction(
+          internal.arenaActions.collectScreenshots,
+          {
             sandboxId,
-            repoId: sandboxRepoId,
-          });
-        } catch (cleanupError) {
-          console.error("Failed to cleanup browser-run sandbox:", cleanupError);
-        }
-      }
-    }
+            repoId: data.repoId,
+            scenarioIds: data.scenarios.map((s) => s.id),
+          },
+        );
+        await step.runMutation(internal.arenaBrowserWorkflow.saveResult, {
+          reportId: args.reportId,
+          success: result.success,
+          result: result.result,
+          error: result.error,
+          scenarios: data.scenarios,
+          screenshots,
+        });
+      },
+      onError: saveFailure,
+    });
   },
 });
 
@@ -274,7 +248,6 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, String(args.reportId));
     const report = await ctx.db.get(args.reportId);
     if (!report) return null;
 
@@ -350,18 +323,15 @@ async function startBrowserRun(
     updatedAt: now,
   });
 
-  const workflowId = await workflow.start(
-    ctx,
-    internal.arenaBrowserWorkflow.arenaBrowserWorkflow,
-    {
+  await startAgentJob(ctx, reportId, () =>
+    workflow.start(ctx, internal.arenaBrowserWorkflow.arenaBrowserWorkflow, {
       reportId,
       docId: params.doc._id,
       userId: params.userId,
       installationId: params.repo.installationId,
       branchName: params.branchName,
-    },
+    }),
   );
-  await trackEvaluationWorkflow(ctx, reportId, workflowId);
   return reportId;
 }
 

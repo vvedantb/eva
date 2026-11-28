@@ -7,9 +7,7 @@ import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { requestCoordinatorWake } from "../convex/_projects/coordinatorWake";
 import { fileTaskReport } from "../convex/_projects/reports";
-import { RUN_WAITING_FOR_ANSWER } from "../convex/_taskWorkflow/helpers";
-import { acquireTurnLease, openTurn } from "../convex/_chat/turnStore";
-import { workflow as workflowManager } from "../convex/workflowManager";
+import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
 import { projectTaskNeedsYou } from "@eva/shared/projectStatus";
 import { ensureTaskChat } from "../convex/_sessions/ownedSession";
 import {
@@ -144,21 +142,30 @@ describe("a child task's ask", () => {
         if (!task) throw new Error("task missing");
         return (await ensureTaskChat(ctx, task)).chat._id;
       });
-      await f.asUser.mutation(api._sessions.execution.enqueueMessage, {
-        chatId,
+      await f.asUser.mutation(api.chats.send, {
+        target: chatId,
         message: "Use v2.",
-        model: DEFAULT_AI_MODEL,
       });
       const [answered] = await reports(f);
       expect(answered?.state).toBe("answered");
       expect(answered?.answeredBy).toBe(f.userId);
-      const run = await f.t.run((ctx) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", f.a))
-          .first(),
-      );
-      expect(run?.note).toContain("Use v2.");
+      const { queued, userRows } = await f.t.run(async (ctx) => ({
+        queued: await ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
+          .collect(),
+        userRows: (
+          await ctx.db
+            .query("messages")
+            .withIndex("by_parent", (q) => q.eq("parentId", chatId))
+            .collect()
+        ).filter((row) => row.role === "user"),
+      }));
+      expect(queued.map((row) => [row.displayContent, row.taskRun])).toEqual([
+        ["Use v2.", { mode: "implementation" }],
+      ]);
+      expect(queued[0]?.content).toContain("The answer from a person:\nUse v2.");
+      expect(userRows).toEqual([]);
 
       const outcome = await f.t.mutation(
         internal._projects.reports.answerAskAsCoordinator,
@@ -236,69 +243,30 @@ describe("a child task's ask", () => {
 
 describe("a run that ended on its ask", () => {
   test(
-    "finishes as a clean waiting outcome: no error, not failed, no failure wake-up; a stop then halts it as stopped",
+    "waits, not failed, with no failure wake-up; a stop then halts it as stopped",
     async () => {
       const f = await fixture();
-      const { runId, turnId, leaseGeneration } = await f.t.run(async (ctx) => {
-        const runId = await ctx.db.insert("agentRuns", {
-          taskId: f.a,
-          repoId: f.repoId,
-          status: "running",
-          logs: [],
-          startedAt: Date.now() - 1_000,
-        });
-        await ctx.db.patch(f.a, {
-          run: { state: "running", workflowId: "wf-ask", runId },
-        });
-        const turnId = await openTurn(ctx, {
-          entityId: runId,
-          streamingEntityId: `task-run-${runId}`,
+      await f.t.run(async (ctx) => {
+        await ctx.db.patch(f.a, { status: "in_progress" });
+      });
+      const turn = await f.t.run(async (ctx) => {
+        const task = await ctx.db.get(f.a);
+        if (!task) throw new Error("task missing");
+        const { session, chat } = await ensureTaskChat(ctx, task);
+        const turnId = await openSessionChatTurn(ctx, {
+          chatId: chat._id,
+          sessionId: session._id,
+          streamingEntityId: String(chat._id),
           model: DEFAULT_AI_MODEL,
           repoId: f.repoId,
+          taskRun: { mode: "implementation" },
         });
-        const turn = await ctx.db.get(turnId);
-        if (!turn) throw new Error("turn missing");
-        await acquireTurnLease(ctx, turn, "running");
-        const leased = await ctx.db.get(turnId);
-        return { runId, turnId, leaseGeneration: leased?.leaseGeneration ?? 0 };
+        return await ctx.db.get(turnId);
       });
+      if (!turn) throw new Error("turn missing");
       await ask(f, f.a, "Which API version?");
-      const sent = vi
-        .spyOn(workflowManager, "sendEvent")
-        .mockImplementation(async () => "event-1");
-      try {
-        await f.asUser.mutation(api.taskWorkflow.handleCompletion, {
-          taskId: f.a,
-          runId,
-          success: false,
-          result: "I asked the coordinator.",
-          error:
-            "Agent finished without creating a new git commit. Edit the required files, run git add and git commit locally, then try again.",
-          activityLog: null,
-          turnId,
-          leaseGeneration,
-        });
-        expect(sent).toHaveBeenCalledTimes(1);
-        expect(sent.mock.calls[0]?.[1]).toMatchObject({
-          value: { success: true, error: null },
-        });
-      } finally {
-        sent.mockRestore();
-      }
-      await f.t.mutation(internal.taskWorkflow.completeRun, {
-        runId,
-        taskId: f.a,
-        projectId: f.projectId,
-        success: true,
-        error: null,
-        prError: null,
-        prUrl: null,
-        activityLog: null,
-      });
-      const run = await f.t.run((ctx) => ctx.db.get(runId));
-      expect(run?.status).toBe("success");
-      expect(run?.error).toBeUndefined();
-      expect(run?.exitReason).toBe(RUN_WAITING_FOR_ANSWER);
+      await f.t.run((ctx) => closeTurn(ctx, turn, "done"));
+
       const waiting = await factsOf(f, f.a);
       if (!waiting) throw new Error("facts missing");
       expect(waiting.status).toBe("in_progress");
@@ -307,9 +275,7 @@ describe("a run that ended on its ask", () => {
       expect(projectTaskNeedsYou(waiting)).toBeUndefined();
       expect((await wakes(f)).map((wake) => wake.reason)).toEqual(["ask"]);
 
-      await f.asUser.mutation(api.sessions.stopChatTurn, {
-        target: { taskId: f.a },
-      });
+      await f.asUser.mutation(api.chats.stop, { target: f.a });
       const stopped = await factsOf(f, f.a);
       expect(stopped?.status).toBe("todo");
       expect(stopped?.halted).toBe("cancelled");
@@ -317,13 +283,10 @@ describe("a run that ended on its ask", () => {
       await f.t.mutation(internal.buildWorkflow.scheduleReadyTasks, {
         projectId: f.projectId,
       });
-      const runs = await f.t.run((ctx) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", f.a))
-          .collect(),
+      const restarted = await f.t.run((ctx) =>
+        ctx.db.query("queuedMessages").collect(),
       );
-      expect(runs).toHaveLength(1);
+      expect(restarted.filter((row) => row.taskRun !== undefined)).toEqual([]);
     },
     TIMEOUT_MS,
   );
@@ -508,12 +471,10 @@ describe("project tool rules", () => {
         owner: { kind: "task", taskId: f.a },
       });
       const resolve = (args: {
-        entityKind?: "session" | "task" | "project";
         entityId?: string;
         chatId?: string;
       }) => f.t.query(internal.mcp.projectQueries.resolveCallerOwner, args);
       const coordinatorOwner = await resolve({
-        entityKind: "session",
         entityId: projectChat.sessionId,
         chatId: projectChat.chatId,
       });
@@ -522,7 +483,6 @@ describe("project tool rules", () => {
         projectId: f.projectId,
       });
       const childOwner = await resolve({
-        entityKind: "session",
         entityId: taskChat.sessionId,
         chatId: taskChat.chatId,
       });
@@ -531,11 +491,11 @@ describe("project tool rules", () => {
         projectId: f.projectId,
         taskId: f.a,
       });
-      const runOwner = await resolve({ entityKind: "task", entityId: f.b });
-      expect(projectCallerOf(runOwner ?? undefined)).toEqual({
+      const sessionOwner = await resolve({ entityId: taskChat.sessionId });
+      expect(projectCallerOf(sessionOwner ?? undefined)).toEqual({
         role: "child",
         projectId: f.projectId,
-        taskId: f.b,
+        taskId: f.a,
       });
     },
     TIMEOUT_MS,

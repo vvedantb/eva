@@ -22,8 +22,6 @@ export function Camera({ focus, pad = 32, max = 2, duration = 1100, feather = 28
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const reduced = useReducedMotion()
-  // Followed, not read once: a Stage switching to its compact design (or any
-  // resize) changes the frame the zoom is worked out in
   useLayoutEffect(() => {
     const p = ref.current?.parentElement?.parentElement
     if (!p) return

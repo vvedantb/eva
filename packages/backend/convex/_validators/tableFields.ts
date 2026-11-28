@@ -19,6 +19,7 @@ import {
   evalFixStatusValidator,
   notificationTypeValidator,
   notificationUrgencyValidator,
+  notificationPrefsValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
   prRecapOriginValidator,
@@ -40,7 +41,6 @@ import {
   snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskOriginValidator,
-  taskSandboxEventValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
   themeValidator,
@@ -56,7 +56,6 @@ import {
   evalIssueValidator,
   arenaScenarioResultValidator,
   experimentalFlagsValidator,
-  logEntryValidator,
   repoShaValidator,
   sandboxGitSyncValidator,
   scopeCheckValidator,
@@ -69,6 +68,32 @@ import {
 import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 import { sessionOwnerValidator } from "../_sessions/owner";
+
+const avePageContextArgFields = {
+  path: v.string(),
+  title: v.string(),
+  timeZone: v.string(),
+  selection: v.optional(v.string()),
+};
+export const avePageContextArgValidator = v.object(avePageContextArgFields);
+
+/** The session, quick task, project or doc the page shows (`_ave/pageEntity.ts`). */
+export const avePageEntityValidator = v.object({
+  kind: v.union(
+    v.literal("session"),
+    v.literal("quick task"),
+    v.literal("project"),
+    v.literal("doc"),
+  ),
+  title: v.string(),
+  status: v.optional(v.string()),
+});
+
+/** Stored on the user's Ave row: what the client sent plus what the server found at that path. */
+export const avePageContextValidator = v.object({
+  ...avePageContextArgFields,
+  entity: v.optional(avePageEntityValidator),
+});
 
 export const userFields = {
   clerkId: v.optional(v.string()),
@@ -86,10 +111,9 @@ export const userFields = {
   lastSeenPath: v.optional(v.string()),
   lastChangelogDismissedAt: v.optional(v.number()),
   onboardingCompletedAt: v.optional(v.number()),
-  emailNotificationsEnabled: v.optional(v.boolean()),
+  notificationPrefs: v.optional(notificationPrefsValidator),
   experimentalFlags: v.optional(experimentalFlagsValidator),
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  orchestratorSessionId: v.optional(v.id("sessions")),
   grokBotWebhookUrl: v.optional(v.string()),
   grokBotWebhookKey: v.optional(v.string()),
 };
@@ -267,27 +291,23 @@ export const chatReadParentIdValidator = v.union(
   v.id("projects"),
 );
 
-// schema-narrowing-ok: clearLegacyOwnerChatFields
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
-  // schema-narrowing-ok: migrateProjectInterviewState
-  v.id("agentRuns"),
   v.id("automationRuns"),
   v.id("docs"),
   v.id("evaluationReports"),
 );
 
-// schema-narrowing-ok: retireSessionSummaries
-export const turnLaneValidator = v.literal("interview");
+/**
+ * A chat turn that runs its task (Run, Resolve Conflicts, a scheduled or
+ * auto-started run) rather than answering a message: it moves the task's
+ * status when it opens and closes (`_agentTasks/taskRunTurn.ts`).
+ */
+export const taskRunMarkerValidator = v.object({ mode: runModeValidator });
 
-export type TurnLane = Infer<typeof turnLaneValidator>;
-
-/** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
 export const turnFields = {
-  // schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
-  lane: v.optional(turnLaneValidator),
   sessionId: v.optional(v.id("sessions")),
   streamingEntityId: v.string(),
   state: turnStateValidator,
@@ -300,11 +320,13 @@ export const turnFields = {
   workflowId: v.optional(v.string()),
   placeholderMessageId: v.optional(v.id("messages")),
   replyTo: v.optional(v.id("messages")),
+  askedBy: v.optional(v.id("users")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  taskRun: v.optional(taskRunMarkerValidator),
   silentSince: v.optional(v.number()),
 };
 
@@ -319,21 +341,6 @@ export const pendingTurnFields = {
 
 export const pendingTurnValidator = v.optional(v.object(pendingTurnFields));
 
-/** Small daemon-poll row kept separate from heavyweight session documents. */
-export const sessionDaemonStateFields = {
-  sessionId: v.id("sessions"),
-  repoId: v.id("githubRepos"),
-  userId: v.id("users"),
-  pendingTurn: pendingTurnValidator,
-  pendingTaskStops: v.optional(v.array(v.string())),
-  cancelRequestedAt: v.optional(v.number()),
-  sandboxSetupPending: v.optional(v.boolean()),
-  usageRefreshRequestedAt: v.optional(v.number()),
-  claimPausedUntil: v.optional(v.number()),
-};
-
-// schema-narrowing-ok: clearLegacyOwnerChatFields
-
 export const chatDaemonEntityFields = {
   pendingTurn: pendingTurnValidator,
   syntheticTurnMessageId: v.optional(v.id("messages")),
@@ -345,9 +352,6 @@ export const chatDaemonEntityFields = {
   queueHeldAt: v.optional(v.number()),
   usageRefreshRequestedAt: v.optional(v.number()),
   claimPausedUntil: v.optional(v.number()),
-  // schema-narrowing-ok: clearSessionPendingTurnClaimedAt
-  // schema-narrowing-ok: clearTaskPendingTurnClaimedAt
-  // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
 };
 
 /** Lifecycle of a pull request Eva tracks, shared by every surface that owns one. */
@@ -372,13 +376,11 @@ export const prOwnerValidator = v.union(
   v.object({
     kind: v.literal("task"),
     taskId: v.id("agentTasks"),
-    runId: v.optional(v.id("agentRuns")),
   }),
   v.object({
     kind: v.literal("project"),
     projectId: v.id("projects"),
     taskId: v.optional(v.id("agentTasks")),
-    runId: v.optional(v.id("agentRuns")),
   }),
 );
 
@@ -402,7 +404,6 @@ export const prOriginValidator = v.union(
  */
 export const prWatchValidator = v.object({
   startedAt: v.number(),
-  sessionChatId: v.optional(v.id("sessionChats")),
   headSha: v.optional(v.string()),
   failedChecks: v.array(v.string()),
   passed: v.boolean(),
@@ -443,24 +444,19 @@ const prSummaryFields = {
 };
 
 /**
- * One chat thread inside a session. The session owns the sandbox, branch,
- * PR and preview; the chat owns the transcript, the warm daemon, the open
- * turn and the model settings. Every session has a Main chat (number 1);
- * further chats run in parallel on the same checkout, each with its own
- * daemon and provider transcript (`sessionClaudeUuid(chat._id)`).
+ * A session's one chat (its Main chat). The session owns the sandbox,
+ * branch, PR and preview; the chat owns the transcript, the warm daemon, the
+ * open turn and the model settings (`sessionClaudeUuid` keys its provider
+ * transcript).
  */
 export const sessionChatFields = {
   sessionId: v.id("sessions"),
   repoId: v.id("githubRepos"),
   userId: v.id("users"),
-  title: v.string(),
-  number: v.number(),
-  isMain: v.boolean(),
-  archived: v.optional(v.boolean()),
   createdBy: v.optional(v.id("users")),
   updatedAt: v.optional(v.number()),
-  // schema-narrowing-ok: clearSessionWorkflowSlots
   lastTurnFinishedAt: v.optional(v.number()),
+  lastPersonMessageAt: v.optional(v.number()),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   provider: v.optional(aiProviderValidator),
   lastModel: v.optional(aiModelValidator),
@@ -471,36 +467,20 @@ export const sessionChatFields = {
   claudePersistenceSeed: v.optional(
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
-  // schema-narrowing-ok: clearSessionChatTaskIds
   ...chatDaemonEntityFields,
 };
 
-/**
- * A task's own run: waiting on a scheduled job, or running a workflow.
- * Transitions live in `_agentTasks/runState.ts`.
- */
-export const taskRunValidator = v.union(
-  v.object({
-    state: v.literal("scheduled"),
-    at: v.number(),
-    jobId: v.id("_scheduled_functions"),
-  }),
-  v.object({
-    state: v.literal("retry_pending"),
-    at: v.number(),
-    jobId: v.id("_scheduled_functions"),
-  }),
-  v.object({
-    state: v.literal("running"),
-    workflowId: v.string(),
-    runId: v.optional(v.id("agentRuns")),
-  }),
-);
+export const taskRunValidator = v.object({
+  state: v.literal("scheduled"),
+  at: v.number(),
+  jobId: v.id("_scheduled_functions"),
+});
 
 export const agentTaskFields = {
   ...entityNumIdFields,
-  // schema-narrowing-ok: archiveDeletedEntities
   archivedAt: v.optional(v.number()),
+  shippedAt: v.optional(v.number()),
+  closedAt: v.optional(v.number()),
   title: v.string(),
   description: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
@@ -516,19 +496,12 @@ export const agentTaskFields = {
   updatedAt: v.number(),
   createdBy: v.id("users"),
   assignedTo: v.optional(v.id("users")),
-  model: v.optional(aiModelValidator),
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
-  reasoningLevel: v.optional(reasoningLevelValidator),
-  thinkingEnabled: v.optional(v.boolean()),
-  use1mContext: v.optional(v.boolean()),
-  fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
   branchName: v.optional(v.string()),
   run: v.optional(taskRunValidator),
-  // schema-narrowing-ok: migrateTaskRunState
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   lastTurnFinishedAt: v.optional(v.number()),
-  watchedByOrchestrator: v.optional(v.id("sessions")),
+  lastPersonMessageAt: v.optional(v.number()),
   watchedByAve: v.optional(v.id("aveThreads")),
   approvedAt: v.optional(v.number()),
   handedToCoordinatorAt: v.optional(v.number()),
@@ -536,34 +509,6 @@ export const agentTaskFields = {
   coordinatorRetries: v.optional(v.number()),
   phaseLabel: v.optional(v.string()),
   ...prSummaryFields,
-};
-
-export const agentRunFields = {
-  taskId: v.id("agentTasks"),
-  status: runStatusValidator,
-  logs: v.array(logEntryValidator),
-  startedAt: v.optional(v.number()),
-  finishedAt: v.optional(v.number()),
-  finalizingAt: v.optional(v.number()),
-  resultSummary: v.optional(v.string()),
-  note: v.optional(v.string()),
-  prUrl: v.optional(v.string()),
-  error: v.optional(v.string()),
-  prError: v.optional(v.string()),
-  errorType: v.optional(errorTypeValidator),
-  limitResetAt: v.optional(v.number()),
-  exitReason: v.optional(v.string()),
-  sandboxId: v.optional(v.string()),
-  repoId: v.optional(v.id("githubRepos")),
-  deploymentStatus: v.optional(deploymentStatusValidator),
-  deploymentUrl: v.optional(v.string()),
-  mode: v.optional(runModeValidator),
-  triggeredBy: v.optional(v.id("users")),
-  triggeringCommentId: v.optional(v.id("taskComments")),
-  credentialSourceLabel: v.optional(v.string()),
-  model: v.optional(aiModelValidator),
-  mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  sessionStartAttempt: v.optional(v.number()),
 };
 
 export const sessionFields = {
@@ -579,14 +524,12 @@ export const sessionFields = {
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   prCount: v.optional(v.number()),
-  prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
   sandboxError: v.optional(v.string()),
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
   sandboxStartAttempt: v.optional(v.number()),
-  // schema-narrowing-ok: backfillSessionArchive
   archive: v.optional(
     v.object({
       archivedAt: v.number(),
@@ -594,18 +537,9 @@ export const sessionFields = {
     }),
   ),
   owner: sessionOwnerValidator,
-  // schema-narrowing-ok: retireSessionSummaries
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
   lastInteractionMode: v.optional(interactionModeValidator),
-  // schema-narrowing-ok: clearSessionWorkflowSlots
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
-  provider: v.optional(aiProviderValidator),
-  lastModel: v.optional(aiModelValidator),
-  lastReasoningLevel: v.optional(reasoningLevelValidator),
-  lastThinkingEnabled: v.optional(v.boolean()),
-  lastUse1mContext: v.optional(v.boolean()),
-  lastFastMode: v.optional(v.boolean()),
   previewPath: v.optional(v.string()),
   previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   terminalHistoryTail: v.optional(v.string()),
@@ -616,11 +550,10 @@ export const sessionFields = {
   deploymentUrl: v.optional(v.string()),
   ...chatDaemonEntityFields,
   lastTurnFinishedAt: v.optional(v.number()),
+  lastPersonMessageAt: v.optional(v.number()),
   agentBrowsingAt: v.optional(v.number()),
   sandboxSetupPending: v.optional(v.boolean()),
   sandboxServicesPending: v.optional(v.boolean()),
-  isOrchestrator: v.optional(v.boolean()),
-  watchedByOrchestrator: v.optional(v.id("sessions")),
   watchedByAve: v.optional(v.id("aveThreads")),
   sandboxBranch: v.optional(v.string()),
   sandboxGitSync: v.optional(sandboxGitSyncValidator),
@@ -660,8 +593,6 @@ export const sessionRepoFields = {
   path: v.string(),
   branchName: v.string(),
   baseBranch: v.string(),
-  prUrl: v.optional(v.string()),
-  prState: v.optional(prStateValidator),
   installDependencies: v.boolean(),
   clonedAt: v.optional(v.number()),
   devPort: v.optional(v.number()),
@@ -848,7 +779,6 @@ export const teamFields = {
 
 export const projectFields = {
   ...entityNumIdFields,
-  // schema-narrowing-ok: archiveDeletedEntities
   archivedAt: v.optional(v.number()),
   repoId: v.id("githubRepos"),
   summaryDocId: v.optional(v.id("docs")),
@@ -859,23 +789,17 @@ export const projectFields = {
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  // schema-narrowing-ok: clearLegacyProjectFields
   priority: v.optional(priorityValidator),
   rawInput: v.string(),
   projectLead: v.optional(v.id("users")),
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  // schema-narrowing-ok: migrateProjectBuildState
-  // schema-narrowing-ok: migrateProjectInterviewState
   branchVersion: v.optional(v.number()),
   updatedAt: v.optional(v.number()),
-  // schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
-  model: v.optional(aiModelValidator),
-  providerAccountId: v.optional(v.id("userProviderAccounts")),
   lastTurnFinishedAt: v.optional(v.number()),
-  watchedByOrchestrator: v.optional(v.id("sessions")),
+  lastPersonMessageAt: v.optional(v.number()),
   watchedByAve: v.optional(v.id("aveThreads")),
 };
 
@@ -889,18 +813,23 @@ export const repoEventKindValidator = v.union(
   v.literal("issue_labeled"),
   v.literal("pr_opened"),
   v.literal("pr_merged"),
+  v.literal("pr_updated"),
   v.literal("production_alert"),
 );
 
-/** What starts an automation: its cron schedule, or a repo event. */
+/**
+ * What starts an automation: its cron schedule, or repo events. Any one of
+ * `events` starts a run (OR).
+ */
 export const automationTriggerValidator = v.union(
   v.object({ kind: v.literal("cron") }),
   v.object({
     kind: v.literal("event"),
-    event: repoEventKindValidator,
+    events: v.array(repoEventKindValidator),
     label: v.optional(v.string()),
   }),
 );
+
 
 export const automationFields = {
   ...entityNumIdFields,
@@ -911,6 +840,11 @@ export const automationFields = {
   cronSchedule: v.string(),
   trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  reasoningLevel: v.optional(reasoningLevelValidator),
+  thinkingEnabled: v.optional(v.boolean()),
+  use1mContext: v.optional(v.boolean()),
+  fastMode: v.optional(v.boolean()),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),
@@ -961,6 +895,11 @@ export const automationRunFields = {
   eventCursor: v.optional(v.number()),
   createdTaskId: v.optional(v.id("agentTasks")),
   superseded: v.optional(v.boolean()),
+  headSha: v.optional(v.string()),
+  headShas: v.optional(v.array(v.string())),
+  checkRunId: v.optional(v.number()),
+  pushedSha: v.optional(v.string()),
+  commentNodeId: v.optional(v.string()),
 };
 
 export const changelogVoteFields = {
@@ -1006,6 +945,25 @@ export const logFields = {
   ...logUsageFields,
 };
 
+const previewAnnotationFields = {
+  pagePath: v.string(),
+  element: v.string(),
+  selector: v.optional(v.string()),
+};
+
+/** What a send carries (and its queued row): no resolve state yet. */
+export const previewAnnotationValidator = v.object(previewAnnotationFields);
+
+/**
+ * The user row's annotation: the send's fields plus resolve state, written
+ * only by `previewComments.setResolved`. Both unset while the comment is open.
+ */
+export const storedPreviewAnnotationValidator = v.object({
+  ...previewAnnotationFields,
+  resolvedAt: v.optional(v.number()),
+  resolvedBy: v.optional(v.id("users")),
+});
+
 export const messageFields = {
   role: roleValidator,
   content: v.string(),
@@ -1015,6 +973,7 @@ export const messageFields = {
   userId: v.optional(v.id("users")),
   parentId: chatParentIdValidator,
   clientId: v.optional(v.string()),
+  annotation: v.optional(storedPreviewAnnotationValidator),
   isSystemAlert: v.optional(v.boolean()),
   alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
@@ -1025,9 +984,11 @@ export const messageFields = {
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  mediaNames: v.optional(v.record(v.id("_storage"), v.string())),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   pendingQuestion: v.optional(v.string()),
   isSyntheticTurn: v.optional(v.boolean()),
+  taskRun: v.optional(taskRunMarkerValidator),
   credentialSourceLabel: v.optional(v.string()),
   credentialAccountId: v.optional(v.id("userProviderAccounts")),
   model: v.optional(aiModelValidator),
@@ -1081,12 +1042,14 @@ export const aveMessageFields = {
   errorDetail: v.optional(v.string()),
   orchestratorNotification: v.optional(v.boolean()),
   modelMessages: v.optional(v.string()),
+  pageContext: v.optional(avePageContextValidator),
 };
 
 export const queuedMessageFields = {
   parentId: chatParentIdValidator,
   content: v.string(),
   displayContent: v.optional(v.string()),
+  annotation: v.optional(previewAnnotationValidator),
   createdAt: v.number(),
   order: v.optional(v.number()),
   userId: v.id("users"),
@@ -1099,17 +1062,10 @@ export const queuedMessageFields = {
   responseLength: v.optional(v.string()),
   interactionMode: v.optional(interactionModeValidator),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  orchestratorNotification: v.optional(v.boolean()),
   sentViaOrchestrator: v.optional(v.boolean()),
   steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
   replyTo: v.optional(v.id("messages")),
-};
-
-export const taskSandboxEventFields = {
-  taskId: v.id("agentTasks"),
-  event: taskSandboxEventValidator,
-  errorDetail: v.optional(v.string()),
-  createdAt: v.number(),
+  taskRun: v.optional(taskRunMarkerValidator),
 };
 
 export const taskActivityFields = {
@@ -1147,12 +1103,22 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
+export const threadParticipantFields = {
+  rootId: v.id("messages"),
+  userId: v.id("users"),
+  following: v.boolean(),
+  lastReadAt: v.optional(v.number()),
+};
+
 export const chatReadFields = {
   userId: v.id("users"),
   parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
   lastVisitedAt: v.optional(v.number()),
+  doneAt: v.optional(v.number()),
+  seenNewAt: v.optional(v.number()),
+  joinedAt: v.optional(v.number()),
 };
 
 export const standupReadFields = {
@@ -1187,8 +1153,6 @@ export const appSettingsFields = {
   sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
-  sandboxIdleStopEnabled: v.optional(v.boolean()),
-  sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
 /** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
@@ -1207,7 +1171,6 @@ export type SandboxActivitySource = Infer<
 >;
 
 export const sandboxActivityFields = {
-  // schema-narrowing-ok: deleteLegacyOwnerSandboxActivity
   kind: v.literal("session"),
   entityId: v.string(),
   lastUserActivityAt: v.optional(v.number()),
@@ -1266,6 +1229,7 @@ export const feedbackFields = {
   parentId: messageFields.parentId,
   repoId: v.optional(v.id("githubRepos")),
   messageId: v.optional(v.id("messages")),
+  recapId: v.optional(v.id("chatRecaps")),
   userId: v.id("users"),
   author: feedbackAuthorValidator,
   sentiment: feedbackSentimentValidator,
@@ -1280,6 +1244,8 @@ export const docFields = {
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
   ...chatSourceFields,
+  chatParentId: v.optional(chatParentIdValidator),
+  messageId: v.optional(v.id("messages")),
   title: v.string(),
   content: v.string(),
   html: v.optional(v.string()),
@@ -1360,7 +1326,6 @@ export const docVersionDraftFields = {
 export const draftFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),
-  // schema-narrowing-ok: deleteLegacyOwnerChatDrafts
   kind: v.union(v.literal("taskComment"), v.literal("sessionChat")),
   taskId: v.optional(v.id("agentTasks")),
   parentCommentId: v.optional(v.id("taskComments")),
@@ -1488,7 +1453,6 @@ export const backgroundProcessFields = {
  * belong here — its spend is the per-turn cost gauge's business.
  */
 export const agentUsageLimitFields = {
-  repoId: v.optional(v.id("githubRepos")),
   provider: usageLimitProviderValidator,
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   teamId: v.optional(v.id("teams")),
@@ -1661,6 +1625,18 @@ export const projectTaskBatchFields = {
 };
 
 /**
+ * An open task the coordinator acted on in one turn (started, gave work to,
+ * retried), for the task card under that reply. Tasks it created come from
+ * `projectTaskBatches`. `messageId` is the coordinator turn.
+ */
+export const projectChatTaskLinkFields = {
+  projectId: v.id("projects"),
+  messageId: v.id("messages"),
+  taskId: v.id("agentTasks"),
+  createdAt: v.number(),
+};
+
+/**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
  * request idempotent; `sentAt` marks it delivered in a turn.
  */
@@ -1676,7 +1652,6 @@ export const projectCoordinatorWakeFields = {
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
-  // schema-narrowing-ok: clearCoordinatorWakeHeldAt
 };
 
 export const notificationFields = {
@@ -1694,6 +1669,7 @@ export const notificationFields = {
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   urgency: v.optional(notificationUrgencyValidator),
   chatTarget: v.optional(v.string()),
+  threadRootId: v.optional(v.id("messages")),
 };
 
 export const repoEnvVarFields = {
@@ -1704,7 +1680,6 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  // schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
@@ -1776,5 +1751,4 @@ export const routedMessageFields = {
   context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  mirroredMessageId: v.optional(v.id("messages")),
 };

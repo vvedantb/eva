@@ -44,10 +44,8 @@ export async function deliverPendingCoordinatorWakes(
     userId: project.userId,
     content: coordinatorWakeMessage(pending),
     settings: {
-      model: normalizeAIModel(
-        project.model ?? context.chat.lastModel ?? repo?.defaultModel,
-      ),
-      providerAccountId: project.providerAccountId,
+      model: normalizeAIModel(context.chat.lastModel ?? repo?.defaultModel),
+      providerAccountId: context.chat.providerAccountId,
     },
   });
   for (const row of pending) await ctx.db.patch(row._id, { sentAt: now });

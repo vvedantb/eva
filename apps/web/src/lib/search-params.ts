@@ -14,6 +14,7 @@ import {
 import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import {
+  parseAsBoolean,
   parseAsString,
   parseAsStringLiteral,
   parseAsArrayOf,
@@ -344,37 +345,11 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-export const inboxViews = ["needs", "updates"] as const;
-export type InboxView = (typeof inboxViews)[number];
-export const inboxViewParser = parseAsStringLiteral(inboxViews)
-  .withDefault("needs")
-  .withOptions(searchOptions);
-
-export function isInboxView(s: string): s is InboxView {
-  return inboxViews.some((view) => view === s);
-}
-
-export const inboxFilters = ["all", "unread", "archived"] as const;
-export type InboxFilter = (typeof inboxFilters)[number];
-export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
-  .withDefault("all")
-  .withOptions(searchOptions);
-
-export function isInboxFilter(s: string): s is InboxFilter {
-  return inboxFilters.some((filter) => filter === s);
-}
-
-export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
-export type InboxGroup = (typeof inboxGroups)[number];
-export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
-  .withDefault("day")
-  .withOptions(searchOptions);
-
-export function isInboxGroup(s: string): s is InboxGroup {
-  return inboxGroups.some((group) => group === s);
-}
-
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
+
+export const inboxHistoryParser = parseAsBoolean
+  .withDefault(false)
+  .withOptions(searchOptions);
 
 export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 
@@ -386,15 +361,6 @@ export const pullRequestListStateParser = parseAsStringLiteral(PR_LIST_STATES)
   .withOptions(searchOptions);
 
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
-
-/**
- * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
- * Absent means Main, so every pre-existing session link still opens Main. A
- * query param rather than a path segment because the chat axis is orthogonal
- * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
- * `$numId`, and nesting one inside the other would break every existing link.
- */
-export const chatParser = parseAsInteger.withOptions(tabOptions);
 
 /**
  * Subagent child thread open over a sandbox chat (`?subagent=<toolUseId>`).

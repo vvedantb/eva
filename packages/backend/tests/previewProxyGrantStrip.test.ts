@@ -28,7 +28,7 @@ ${authorizeSource}
 return authorize;`,
 );
 
-type Res = { status: number; headers: Record<string, string> };
+type Res = { status: number; headers: Record<string, string | string[]> };
 
 function run(opts: {
   url: string;
@@ -52,7 +52,7 @@ function run(opts: {
       },
     },
     {
-      writeHead(status: number, headers: Record<string, string>) {
+      writeHead(status: number, headers: Record<string, string | string[]>) {
         res.status = status;
         res.headers = headers;
       },
@@ -82,7 +82,9 @@ describe("previewProxy authorize strips the grant from the browser URL", () => {
     expect(allowed).toBe(false);
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("/");
-    expect(res.headers["set-cookie"]).toContain("__eva_preview_session=minted");
+    expect(res.headers["set-cookie"]).toEqual(
+      expect.arrayContaining([expect.stringContaining("__eva_preview_session=minted")]),
+    );
   });
 
   test("valid session without a grant passes through", () => {

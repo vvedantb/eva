@@ -30,7 +30,7 @@ Monorepo "apps" (`rootDirectory`, `parentRepoId`) are not multi-repo — sibling
 
 | Table / field | Purpose |
 |---|---|
-| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`. Its PR is a `pullRequests` row with `owner.sessionRepoId`; the old `prUrl`/`prState` fields are deprecated and cleared by `backfillPullRequests`. |
+| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`. Its PR is a `pullRequests` row with `owner.sessionRepoId`. |
 | `repoGroups` (new) | Saved selection: `name`, `createdBy`, `teamId`, `primaryRepoId`, `linkedRepoIds`, `installDependencies`, `seededSnapshotName`, `seededFingerprint`, `createdAt`, `updatedAt`. Indexes `by_created_by`, `by_team`. |
 | `sessions.repoGroupId` | Provenance only. `sessionRepos` rows are the source of truth, so editing a group later never rewrites an existing session. |
 | `sessions.linkedRepoCount` | Denormalised count, so sidebar rows and resume paths detect a multi-repo session without a join. |
@@ -43,7 +43,7 @@ Group visibility: `teamId` is copied from the primary repo at create time, so te
 
 ## Startup sequence and the `sandboxSetupPending` gate
 
-`sessions.create` validates the selection (same pure rules as a saved group), inserts one `sessionRepos` row per linked repo — branch `eva/session-<id>` in every repo, base = each repo's `defaultBaseBranch` — sets `linkedRepoCount`, and starts `sessionSandboxStartupWorkflow` with `hasLinkedRepos`.
+`chats.start` validates the selection (same pure rules as a saved group), inserts one `sessionRepos` row per linked repo — branch `eva/session-<id>` in every repo, base = each repo's `defaultBaseBranch` — sets `linkedRepoCount`, and starts `sessionSandboxStartupWorkflow` with `hasLinkedRepos`.
 
 The workflow (`_sessions/workflow.ts`):
 
@@ -167,7 +167,7 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 - `create_session` gains `linkedRepos?: string[]` (same `name` / `owner/name` grammar as `repoName`) and `group?: string` (saved group name). They are mutually exclusive, and a named group's saved primary must match `repoName` — the error names the primary to pass instead. Unknown or ambiguous group names are rejected with the caller's group list. The result includes the resolved `linkedRepos` (`repo`, `path`).
 - `list_repos` returns saved groups alongside repos, so a caller can discover a `group` name. Groups whose primary repo has been deleted are dropped.
 - `get_agent_state` and `list_entities` include a session's `linkedRepos` with `repo`, `path`, `branch`, `prUrl` and `prState`. Every PR a chat holds is also listed on its own (`pullRequests` / `prUrls`).
-- A project coordinator's `create_task` / `create_tasks_batch` take `linkedRepoNames` (stored as `agentTasks.linkedRepoIds`): the task's own session gets the `sessionRepos` rows, and its runs and chat turns clone, push and open PRs as below. The task's `prState` combines every repo's PR (`@eva/shared` `combineRepoPrStates`). Plan: `internal/plans/todo/project-multi-repo-tasks.md`. Quick tasks, `create_session` callers outside projects, and automations stay as they are.
+- A project coordinator's `create_task` / `create_tasks_batch` take `linkedRepoNames` (stored as `agentTasks.linkedRepoIds`): the task's own session gets the `sessionRepos` rows, and its runs and chat turns clone, push and open PRs as below. The task's `prState` combines every repo's PR (`@eva/shared` `combineRepoPrStates`). Plan: `internal/plans/implemented/project-multi-repo-tasks.md`. Quick tasks, `create_session` callers outside projects, and automations stay as they are.
 
 ## Key files
 

@@ -5,8 +5,10 @@ import {
   buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
+  CHAT_LINKS_INSTRUCTION,
   CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
+  MANAGER_AVE_INSTRUCTION,
   COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
   VISUAL_CHANGE_INSTRUCTION,
@@ -125,14 +127,14 @@ If \`browser_start\` fails or is unavailable, fall back to plain headless agent-
 
 ## Recordings / screenshots in chat (required):
 When the user asks for a recording, walkthrough video, or screenshot:
-1. Write the file under \`/tmp/repo/recordings/\` (video: \`agent-browser record start /tmp/repo/recordings/<name>.webm\` … \`record stop\`) or \`/tmp/repo/screenshots/\` (stills). ALWAYS pass absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's. A few seconds after \`record start\`, verify the .webm exists and is growing (\`ls -la /tmp/repo/recordings/\`); a missing/0-byte file means recording is broken (usually no ffmpeg) — do not retry-loop, capture screenshots instead and tell the user.
+1. Write the file under \`/tmp/repo/recordings/\` (video: \`agent-browser record start /tmp/repo/recordings/<name>.webm\` … \`record stop\`) or \`/tmp/repo/screenshots/\` (stills). Chat captions each file with its name, so name it for what it shows (e.g. \`empty-box-page.png\`). ALWAYS pass absolute paths — relative paths resolve against the agent-browser daemon's cwd, not your shell's. A few seconds after \`record start\`, verify the .webm exists and is growing (\`ls -la /tmp/repo/recordings/\`); a missing/0-byte file means recording is broken (usually no ffmpeg) — do not retry-loop, capture screenshots instead and tell the user.
 2. Those two folders are DELIVERABLE-ONLY: every file still in them when the turn ends is uploaded and posted into the chat. Save working captures — page-state checks, login verification, "did my change render" screenshots — to \`/tmp/checks/\` instead, never to the deliverable folders. When you finish, the deliverable folders must contain exactly what the user asked for and nothing else.
 3. Leave the deliverable files on disk when you finish the turn. Eva uploads them to Convex storage and renders them in chat with the video player (speed controls). Do not paste a URL instead. After posting, Eva moves each file into \`.posted/\` inside the same folder (e.g. \`/tmp/repo/screenshots/.posted/\`) — reuse those copies in later turns instead of recapturing. Never delete \`.posted/\`; copying a file from it back into the deliverable folder posts it to chat again.
 4. Never use \`create_artifact\` (or any /artifacts/… link) for these captures — artifacts are for HTML docs, not session walkthrough media.
 5. Never use \`pkill -f\`, \`pgrep -f\`, \`killall\`, or another broad command-line match to clean up ffmpeg, Chrome, or recording processes. The recording instructions are present in the parent agent's command line, so a broad match can terminate this turn. Stop recordings with \`agent-browser record stop\`. If you manually start a process, capture its exact PID when launching it and only stop that PID.
 6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
 7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
-8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}`;
+8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${CHAT_LINKS_INSTRUCTION}${MANAGER_AVE_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}`;
 
 /**
  * The launch-time system prompt for a session chat's agent. Only Claude takes

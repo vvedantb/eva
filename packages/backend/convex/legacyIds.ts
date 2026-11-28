@@ -8,7 +8,7 @@ import { repoEntityTypeValidator } from "./validators";
  *
  * Detail routes moved to numId segments in July 2026, but links minted before
  * that still carry raw ids — notification `href`s written at insert time and
- * never rewritten, plus the "view in Eva" links `_taskWorkflow/urls.ts` puts in
+ * never rewritten, plus the "view in Eva" links `_env/webAppUrl.ts` puts in
  * PR bodies. Those all render "not found" today.
  *
  * The document must live on the repo in the URL: a sibling-repo hit would

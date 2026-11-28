@@ -82,7 +82,6 @@ export function ChatMessage({
                       icon={evaIcon}
                       startedAt={startedAt}
                       finishedAt={finishedAt}
-                      finalText={content}
                     />
                   )}
                   <Markdown className="text-sm">{content}</Markdown>

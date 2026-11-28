@@ -17,7 +17,9 @@ import { authQuery, authMutation } from "./functions";
 import { schedulePush } from "./push";
 import {
   notificationEmail,
+  notificationEmailFor,
   notificationPushes,
+  resolveNotificationPrefs,
   type RoutableNotification,
 } from "@eva/shared/notificationRouting";
 
@@ -27,6 +29,8 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
   "routed_question",
+  "thread_reply",
+  "thread_answer",
 ]);
 
 /**
@@ -69,6 +73,7 @@ export async function createNotification(
     commentId?: Id<"taskComments"> | Id<"docComments">;
     routesUrgency?: boolean;
     urgency?: Infer<typeof notificationUrgencyValidator>;
+    threadRootId?: Id<"messages">;
   },
 ): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
@@ -94,6 +99,9 @@ export async function createNotification(
         href = entityHref("task", repo, task.numId);
       } else if (project?.numId !== undefined) {
         href = entityHref("project", repo, project.numId);
+        if (params.threadRootId !== undefined) {
+          href = `${href}/sandbox/replies?thread=${params.threadRootId}`;
+        }
       } else if (session?.numId !== undefined) {
         href = entityHref("session", repo, session.numId);
       } else {
@@ -129,6 +137,7 @@ export async function createNotification(
     contextLabel,
     commentId: params.commentId,
     chatTarget,
+    threadRootId: params.threadRootId,
     urgency: params.urgency,
     read: false,
     createdAt: Date.now(),
@@ -145,15 +154,31 @@ export async function createNotification(
     await pushNotification(ctx, notificationId);
   }
   if (notificationEmail(routable) === "instant") {
-    await ctx.scheduler.runAfter(
+    await scheduleInstantEmail(
+      ctx,
+      params.userId,
       params.urgency === "high"
         ? HIGH_URGENCY_EMAIL_DELAY_MS
         : EMAIL_SEND_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: params.userId },
     );
   }
   return notificationId;
+}
+
+async function scheduleInstantEmail(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  delayMs: number,
+): Promise<void> {
+  const user = await ctx.db.get(userId);
+  if (!resolveNotificationPrefs(user?.notificationPrefs).email) {
+    return;
+  }
+  await ctx.scheduler.runAfter(
+    delayMs,
+    internal.notificationEmail.sendUnreadForUser,
+    { userId },
+  );
 }
 
 async function pushNotification(
@@ -167,7 +192,12 @@ async function pushNotification(
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
     data: notification.chatTarget
-      ? { target: notification.chatTarget }
+      ? {
+          target: notification.chatTarget,
+          ...(notification.threadRootId
+            ? { thread: notification.threadRootId }
+            : {}),
+        }
       : notification.href
         ? { href: notification.href, repoId: notification.repoId }
         : undefined,
@@ -218,6 +248,7 @@ const notificationValidator = v.object({
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
   chatTarget: v.optional(v.string()),
+  threadRootId: v.optional(v.id("messages")),
   urgency: v.optional(notificationUrgencyValidator),
 });
 
@@ -274,10 +305,10 @@ async function deliverRoutedMention(
     await pushNotification(ctx, notification._id);
   }
   if (notificationEmail(routed) === "instant") {
-    await ctx.scheduler.runAfter(
+    await scheduleInstantEmail(
+      ctx,
+      notification.userId,
       HIGH_URGENCY_EMAIL_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: notification.userId },
     );
   }
 }
@@ -304,14 +335,14 @@ async function ownedNotifications(
 }
 
 /**
- * Lists the current user's inbox: the 100 most recent notifications, then
- * split by archive state (`archived: true` returns only archived rows, the
- * default only unarchived ones). The window is taken before the split, so a
- * large run of archived rows shortens the list rather than paging past them —
- * acceptable while archiving is an inbox-sized action.
+ * The current user's 100 most recent notifications that are not archived
+ * (the web's new-notification toasts). The window is taken before the archive
+ * filter, so a run of archived rows shortens it rather than paging past them.
  */
 export const list = authQuery({
-  args: { archived: v.optional(v.boolean()) },
+  args: {
+    history: v.optional(v.boolean()),
+  },
   returns: v.array(notificationValidator),
   handler: async (ctx, args) => {
     const recent = await ctx.db
@@ -319,19 +350,9 @@ export const list = authQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
-    const wantArchived = args.archived === true;
-    return recent.filter((n) => (n.archivedAt !== undefined) === wantArchived);
-  },
-});
-
-/** Fetches a single notification by ID, only if it belongs to the current user. */
-export const get = authQuery({
-  args: { id: v.id("notifications") },
-  returns: v.union(notificationValidator, v.null()),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId) return null;
-    return notification;
+    return args.history === true
+      ? recent
+      : recent.filter((n) => n.archivedAt === undefined);
   },
 });
 
@@ -364,73 +385,6 @@ export const markAsRead = authMutation({
       throw new Error("Not found");
     if (!notification.read) {
       await ctx.db.patch(args.id, { read: true });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks a single notification as unread again (inbox right-click menu). Read
- * state is the `read` boolean alone — there is no timestamp to clear.
- */
-export const markAsUnread = authMutation({
-  args: { id: v.id("notifications") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const notification = await ctx.db.get(args.id);
-    if (!notification || notification.userId !== ctx.userId)
-      throw new Error("Not found");
-    if (notification.read) {
-      await ctx.db.patch(args.id, { read: false });
-    }
-    return null;
-  },
-});
-
-/**
- * Marks all unread notifications as read for the current user. Archived rows
- * are left alone: they are out of the inbox, and touching them here would
- * quietly change what the archived view shows.
- */
-export const markAllAsRead = authMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const unread = await ctx.db
-      .query("notifications")
-      .withIndex("by_user_and_read", (q) =>
-        q.eq("userId", ctx.userId).eq("read", false),
-      )
-      .collect();
-    for (const n of unread) {
-      if (n.archivedAt !== undefined) continue;
-      await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as read (inbox bulk bar). */
-export const markManyAsRead = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (!n.read) await ctx.db.patch(n._id, { read: true });
-    }
-    return null;
-  },
-});
-
-/** Marks every given notification the caller owns as unread. */
-export const markManyAsUnread = authMutation({
-  args: { ids: v.array(v.id("notifications")) },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
-    for (const n of owned) {
-      if (n.read) await ctx.db.patch(n._id, { read: false });
     }
     return null;
   },
@@ -474,10 +428,10 @@ export const unarchiveMany = authMutation({
 });
 
 /**
- * Gathers digest recipients for the daily email: every user with an email address
- * and at least one unread, not yet emailed notification created since `since`
- * (`digestWindowStart`), along with up to DIGEST_NOTIFICATION_LIMIT of those
- * notifications. Internal use only (daily cron).
+ * Gathers digest recipients for the daily email: every user with an email
+ * address, email not turned off, and at least one unread, not yet emailed
+ * notification created since `since` (`digestWindowStart`), along with up to
+ * DIGEST_NOTIFICATION_LIMIT of those notifications. Internal use only (daily cron).
  */
 export const getDigestRecipients = internalQuery({
   args: { since: v.number() },
@@ -503,7 +457,8 @@ export const getDigestRecipients = internalQuery({
     const recipients = [];
     for (const user of users) {
       if (!user.email) continue;
-      if (user.emailNotificationsEnabled !== true) continue;
+      const { email } = resolveNotificationPrefs(user.notificationPrefs);
+      if (!email) continue;
       const unread = await ctx.db
         .query("notifications")
         .withIndex("by_user_and_read", (q) =>
@@ -516,7 +471,7 @@ export const getDigestRecipients = internalQuery({
           (n) =>
             n.createdAt >= args.since &&
             n.emailedAt === undefined &&
-            notificationEmail(n) !== "none",
+            notificationEmailFor(n, email) !== "none",
         )
         .slice(0, DIGEST_NOTIFICATION_LIMIT);
       if (relevant.length === 0) continue;
@@ -540,9 +495,9 @@ export const getDigestRecipients = internalQuery({
 
 /**
  * For an instant notification email: returns the user's unread, not-yet-emailed,
- * high-signal notifications (or null if there is nothing to send — user opted
- * out, has no email, or has already read/been emailed everything). Sweeping all
- * pending items lets a burst within the debounce window collapse into one email.
+ * high-signal notifications (or null if there is nothing to send — the user
+ * chose the digest or no email, has no address, or has read or been emailed
+ * everything). Sweeping all pending items lets a burst within the debounce window collapse into one email.
  * Internal use only (notificationEmail.sendUnreadForUser).
  */
 export const getUnreadEmailableForUser = internalQuery({
@@ -568,7 +523,7 @@ export const getUnreadEmailableForUser = internalQuery({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || !user.email) return null;
-    if (user.emailNotificationsEnabled !== true) return null;
+    const { email } = resolveNotificationPrefs(user.notificationPrefs);
 
     const unread = await ctx.db
       .query("notifications")
@@ -579,7 +534,8 @@ export const getUnreadEmailableForUser = internalQuery({
       .take(DIGEST_SCAN_LIMIT);
     const relevant = unread.filter(
       (n) =>
-        n.emailedAt === undefined && notificationEmail(n) === "instant",
+        n.emailedAt === undefined &&
+        notificationEmailFor(n, email) === "instant",
     );
     if (relevant.length === 0) return null;
 

@@ -2,10 +2,6 @@ import { Badge, Bar, Camera, Chart, Code, Field, Segmented, Scroll, Slot, Stage,
 import type { ReactNode } from 'react'
 import './controls.css'
 
-// A specimen sheet for the controls, Code, Chart, Slot, scrolling and the
-// camera, one tile each. A catalog, not a composition: for framing, copy the
-// gold examples (hero-demo, static-card, story, payout-flow).
-
 const DATA = [12, 18, 15, 24, 22, 31, 28, 36]
 const MORE = [12, 18, 15, 24, 22, 31, 34, 44]
 const DIFF = [
@@ -43,7 +39,6 @@ async function script(a: Act<S>) {
   await a.wait(300)
 
   a.mark('controls')
-  // Pressed beside the word, never on it
   await a.click({ at: 'seg-1', x: 0.84, y: 0.7 })
   await a.set({ seg: 1, focus: false })
   await a.click('toggle')
@@ -61,20 +56,15 @@ async function script(a: Act<S>) {
   await a.wait(600)
 
   a.mark('slot')
-  // Picked up off center, as a hand does; the grab offset comes from the
-  // same fractions, so the card never jumps under the hand
   const GRAB = { x: 0.72, y: 0.24 }
   await a.move({ at: 'card', ...GRAB })
   const card = a.rect('card')
-  // Aim at where the card will sit once the slot has opened (the column's
-  // first place), not at the slot itself, which is still opening mid-drag
   const col = a.rect('col-b')
   const end = { x: col.x + 6, y: col.y + 6 }
   const grab = { x: card.width * GRAB.x, y: card.height * GRAB.y }
   await a.drag({ x: end.x + grab.x, y: end.y + grab.y }, (at) => {
     a.put({ carry: { x: at.x - grab.x, y: at.y - grab.y, w: card.width } })
   })
-  // Settle the tilt and lift in place, then swap in the real card, unmoved
   await a.set({ carry: { ...end, w: card.width, settle: true } })
   await a.wait(220)
   await a.set({ carry: null, moved: true })
@@ -92,8 +82,6 @@ async function script(a: Act<S>) {
   await a.wait(1400)
 
   a.mark('exit')
-  // Undo on screen, never at the seam: the list scrolls back, the card fades
-  // out of B as its slot closes and back into A as that one opens
   await a.scroll('list', 0)
   await a.set({ leaving: true })
   await a.wait(220)

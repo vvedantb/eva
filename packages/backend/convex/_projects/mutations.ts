@@ -1,13 +1,9 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
 import { tokenizedToDisplayText } from "@eva/shared";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { sendOwnerChatMessage } from "../_sessions/execution";
-import {
-  priorityValidator,
-  aiModelValidator,
-} from "../validators";
+import { priorityValidator } from "../validators";
 import {
   assertProjectNotArchived,
   authMutation,
@@ -24,11 +20,6 @@ import {
   syncProjectSessionBranch,
 } from "../_sessions/ownedSession";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
-import {
-  assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
-  resolveDefaultProviderAccountId,
-} from "../_userProviderAccounts/defaults";
 
 /**
  * Creates a new project from one prompt. It plans in its coordinator chat
@@ -46,10 +37,6 @@ export const create = authMutation({
     rawInput: v.string(),
     baseBranch: v.optional(v.string()),
     priority: v.optional(priorityValidator),
-    model: v.optional(aiModelValidator),
-    providerAccountId: v.optional(
-      v.union(v.id("userProviderAccounts"), v.null()),
-    ),
     run: v.optional(v.boolean()),
   },
   returns: v.id("projects"),
@@ -60,16 +47,6 @@ export const create = authMutation({
     const prompt = args.rawInput.trim();
     const { title } = initialTitle(undefined, prompt);
     const numId = await allocateNumId(ctx.db, args.repoId, "projects");
-    const repo = await ctx.db.get(args.repoId);
-    const model = args.model ?? repo?.defaultModel;
-    const providerAccountId =
-      args.providerAccountId === undefined
-        ? await resolveDefaultProviderAccountId(ctx.db, ctx.userId, model)
-        : await assertProviderAccountUsableBy(
-            ctx.db,
-            args.providerAccountId,
-            ctx.userId,
-          );
     const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
       userId: ctx.userId,
@@ -80,8 +57,6 @@ export const create = authMutation({
       projectStartDate: Date.now(),
       priority: args.priority,
       numId,
-      model,
-      providerAccountId,
     });
     await scheduleGeneratedTitle(ctx, { kind: "project", projectId }, prompt, title);
     if (args.run) {
@@ -110,10 +85,6 @@ export const update = authMutation({
     projectStartDate: v.optional(v.number()),
     projectEndDate: v.optional(v.number()),
     tags: v.optional(v.array(v.string())),
-    model: v.optional(v.union(aiModelValidator, v.null())),
-    providerAccountId: v.optional(
-      v.union(v.id("userProviderAccounts"), v.null()),
-    ),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -127,8 +98,6 @@ export const update = authMutation({
       id: _projectId,
       projectLead,
       priority,
-      model,
-      providerAccountId,
       ...fields
     } = args;
     void _projectId;
@@ -142,43 +111,8 @@ export const update = authMutation({
     if (projectLead !== undefined)
       updates.projectLead = projectLead ?? undefined;
     if (priority !== undefined) updates.priority = priority ?? undefined;
-    if (model !== undefined) updates.model = model ?? undefined;
-    let nextProviderAccountId = project.providerAccountId;
-    if (providerAccountId !== undefined) {
-      if (ctx.userId !== project.userId) {
-        throw new Error(
-          "Only the project owner can change the provider account",
-        );
-      }
-      nextProviderAccountId = await assertProviderAccountUsableBy(
-        ctx.db,
-        providerAccountId,
-        project.userId,
-      );
-      updates.providerAccountId = nextProviderAccountId;
-    }
-    if (
-      model !== undefined &&
-      providerAccountId === undefined &&
-      ctx.userId === project.userId
-    ) {
-      nextProviderAccountId = await reconcileProviderAccountForModel(
-        ctx.db,
-        project.userId,
-        model ?? undefined,
-        nextProviderAccountId,
-      );
-      updates.providerAccountId = nextProviderAccountId;
-    }
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
-    }
-    if (nextProviderAccountId !== project.providerAccountId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.buildWorkflow.scheduleReadyTasks,
-        { projectId: args.id },
-      );
     }
     const edited = await ctx.db.get(args.id);
     if (edited) {

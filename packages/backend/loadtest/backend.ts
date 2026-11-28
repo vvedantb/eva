@@ -109,7 +109,7 @@ export async function pushFunctions(adminKey: string, projectDir = BACKEND_ROOT)
 
 const planSchema = z.array(
   z.object({
-    kind: z.enum(["teammates", "shellRepos", "sessions", "projects", "quickTasks", "docs", "automations", "focalMessages", "focalRuns", "focalTaskTimeline", "focalDocComments", "focalSessionPrs", "focalAutomationRuns", "routedThreads"]),
+    kind: z.enum(["teammates", "shellRepos", "sessions", "projects", "quickTasks", "docs", "automations", "focalMessages", "focalTaskTimeline", "focalDocComments", "focalSessionPrs", "focalAutomationRuns", "routedThreads"]),
     unitsPerScale: z.number(),
     unitsPerChunk: z.number(),
   }),

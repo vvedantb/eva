@@ -1,11 +1,7 @@
-import { v } from "convex/values";
-import { internal } from "../_generated/api";
-import { internalMutation, type MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
 type ChatRowsParentId = Id<"sessions"> | Id<"sessionChats">;
-
-const PURGE_MESSAGE_PAGE = 100;
 
 /** Deletes the chat's queued sends, so none can start a turn on it. */
 export async function deleteQueuedMessages(
@@ -83,24 +79,3 @@ export async function deleteChatRows(
   deleted += turns.length;
   return { deleted, done: true };
 }
-
-/**
- * Continuation of `sessionChats.remove`: deletes the hidden chat's rows one
- * page at a time. The archived chat row stays as a tombstone: it holds its
- * `number`, so an old `?chat=N` link never opens a newer tab.
- */
-export const purgeDeletedChat = internalMutation({
-  args: { chatId: v.id("sessionChats") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { done } = await deleteChatRows(ctx, args.chatId, PURGE_MESSAGE_PAGE);
-    if (!done) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal._sessionChats.purge.purgeDeletedChat,
-        args,
-      );
-    }
-    return null;
-  },
-});

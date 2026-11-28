@@ -51,8 +51,6 @@ function ChartStudy({ width }: { width: number }) {
           <div className="an-chart-axis"><span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span></div>
           <span className="an-chart-rest" data-target="chart-rest" />
         </section>
-        {/* Meet the bottom edge vertically. A vertical-first elbow would
-            finish horizontally along the note's border. */}
         <Connector className="an-chart-leader" from={point(p)} to={{ x: note.x + note.width / 2, y: note.y + note.height }} route="h" dots="none" show={s.selected && p.width > 0 && note.width > 0} />
       </>
     }}
@@ -146,9 +144,6 @@ function FollowStudy({ width }: { width: number }) {
   return <Stage width={width} height={compact ? 420 : 380} initial={{ selected: false, arranged: false }} poster={{ selected: true, arranged: true }} script={followScript} cursor={{ at: { x: width - 25, y: 362 } }} greys="cool" accent="#6c7bb7" className="an-study an-follow">
     {s => <>
       <div className="an-canvas-panel"><header className="an-product-head"><strong>Travel board</strong><div className="an-canvas-actions"><span data-target="arrange" data-cursor="hand">Arrange</span><span data-target="restore" data-cursor="hand">Reset</span></div></header><span className="an-canvas-rest" data-target="follow-rest" /></div>
-      {/* Object, leader and note share Follow's changing coordinate space.
-          Reading the destination rect for an independent line would detach it
-          while Follow is still traveling toward that destination. */}
       <Follow to={s.arranged ? end : start} stiffness={.16} className="an-moving-layer">
         <div className="an-layer-art" data-target="layer" data-cursor="hand"><img src={lakePhoto} alt="Mount Fuji reflected in Lake Kawaguchi" draggable={false} /></div>
         <div className="an-follow-outline" data-visible={s.selected || undefined} />
@@ -192,9 +187,6 @@ function BranchStudy({ width }: { width: number }) {
         {names.map((name, i) => <section className="an-asset-output" key={name} data-compact={compact || undefined} data-ready={s.phase >= (i === 1 ? 3 : 4) || undefined} aria-label={`${name}: ${s.phase >= (i === 1 ? 3 : 4) ? 'ready' : 'waiting'}`} style={compact ? { left: 16 + i * (width - 104) / 2, top: 254, width: 72, height: 48 } : { left: width - 214, top: 64 + i * 80, width: 180, height: 48 }}>
           <strong className="an-job-pill" data-target={`asset-output-${i}`}><span>{name}</span><span className="an-job-mark"><Icon name="check" size={12} className="an-job-check" /></span></strong>
         </section>)}
-        {/* Travel reaches the center first. Two non-overlapping spine halves
-            grow out from there; outer branches wait for those arrivals.
-            Connector owns each endpoint marker's actual arrival timing. */}
         <Connector className="an-asset-trunk" from={start} to={junction} route="straight" show={measured && s.phase >= 1} />
         {[0, 2].map(i => <Connector key={i} className={`an-asset-spine an-asset-spine--${i}`} from={junction} to={ends[i]} route="straight" show={measured && s.phase >= 2} />)}
         {ports.map((port, i) => <Connector key={i} className={`an-asset-branch an-asset-branch--${i}`} from={ends[i]} to={port} route="straight" arrow show={measured && s.phase >= (i === 1 ? 2 : 3)} />)}
@@ -212,8 +204,6 @@ async function streamScript(a: Act<StreamState>) {
   await a.move('stream-rest', { duration: 350 }); await a.wait(STREAM_REVEAL_MS + 100 - 350)
   a.mark('live'); await a.set({ receiving: true }); await a.wait(800)
   await a.wait(2250)
-  // The connection stays open. Only the line's phase continues; there is no
-  // polling script or invisible reset of the successful connection.
   await a.wait(800); a.mark('done')
 }
 function StreamStudy({ width }: { width: number }) {

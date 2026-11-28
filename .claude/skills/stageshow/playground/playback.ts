@@ -54,23 +54,16 @@ export function createPlayback(clock: Clock, {
       return advance('step')
     },
     place() {
-      // Measurement work shares the motion queue, but changes neither the
-      // user's play preference nor the scene's virtual clock.
       resetTime()
       return advance('layout')
     },
     async tick(timestamp = now()) {
       if (ticking || failed) return
       ticking = true
-      // Native RAF timestamps share one paint clock. Callback-entry times
-      // include task jitter and can turn steady paints into repeated/skipped
-      // fixed frames. Live playback advances once by the actual elapsed time.
       const elapsed = Math.max(0, timestamp - previous)
       previous = timestamp
       try {
         if (!canPlay() || elapsed === 0) return
-        // Bound a stalled tab's work; pause never waits behind a catch-up
-        // batch. Recording and manual Step retain their fixed frame size.
         await advance('play', Math.min(100, elapsed * speed))
       } finally {
         ticking = false

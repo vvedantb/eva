@@ -139,7 +139,6 @@ export function PreviewNavBar({
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
   const simpleView = useSimpleView();
-  // Host-managed iframes only: a legacy ref can't be read during render.
   const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
   const [pathDraft, setPathDraft] = useState<string | null>(null);

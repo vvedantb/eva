@@ -1,4 +1,3 @@
-import { lazy, Suspense } from "react";
 import {
   createRootRouteWithContext,
   Outlet,
@@ -27,22 +26,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
-const DevAgentation = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevAgentation").then((m) => ({
-        default: m.DevAgentation,
-      })),
-    )
-  : null;
-
-const DevRedline = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevRedline").then((m) => ({
-        default: m.DevRedline,
-      })),
-    )
-  : null;
-
 function RootComponent() {
   useDocumentTitle();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -62,16 +45,6 @@ function RootComponent() {
       {IS_EMBEDDED ? <EmbedNavigationBridge /> : null}
       <AppToaster />
       {IS_EMBEDDED ? null : <Analytics />}
-      {DevAgentation ? (
-        <Suspense fallback={null}>
-          <DevAgentation />
-        </Suspense>
-      ) : null}
-      {DevRedline ? (
-        <Suspense fallback={null}>
-          <DevRedline />
-        </Suspense>
-      ) : null}
     </>
   );
 

@@ -26,10 +26,10 @@ import {
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 import { trackSessionChatWorkflow } from "../_chat/surfaceAdapters";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { clearStreamingActivity } from "../streaming";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
   activityRefForParentId,
@@ -40,7 +40,7 @@ import {
   findUsageLimitHold,
   isHeldByUsageLimit,
   type UsageLimitHold,
-} from "../_taskWorkflow/usageLimitReset";
+} from "../_queues/usageLimitReset";
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
@@ -57,9 +57,8 @@ import {
   type ChatTurnEntityId,
 } from "../_chat/turnStore";
 import {
-  listLiveSessionChats,
+  findMainChat,
   loadSessionChat,
-  sessionChatHasFreeSlot,
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
@@ -88,7 +87,6 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
     entity: TEntity,
     ctx: MutationCtx,
   ) => boolean | Promise<boolean>;
-  hasCapacity: (ctx: MutationCtx, entity: TEntity) => Promise<boolean>;
   activityParentId: (entity: TEntity, id: TId) => string;
   sandboxState: (entity: TEntity) => QueueSandboxState;
   wakeSandbox: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
@@ -152,9 +150,6 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   if (await config.hasActiveWorkflow(entity, ctx)) {
     return true;
   }
-  if (!(await config.hasCapacity(ctx, entity))) {
-    return true;
-  }
   if (
     config.sandboxState(entity) === "awake" &&
     runningBackgroundAgents(config.backgroundAgents(entity), Date.now())
@@ -201,28 +196,12 @@ async function scheduleDrainAtBackgroundAgentExpiry<
   );
 }
 
-export async function dropComposerUserRow(
-  ctx: MutationCtx,
-  parentId: ChatQueueId,
-  content: string,
-): Promise<Id<"_storage">[] | undefined> {
-  const recent = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
-    .order("desc")
-    .take(20);
-  for (const message of recent) {
-    if (message.role === "assistant" && message.finishedAt !== undefined) {
-      return undefined;
-    }
-    if (message.role === "user" && message.content === content) {
-      await ctx.db.delete(message._id);
-      return message.attachmentStorageIds;
-    }
-  }
-  return undefined;
-}
-
+/**
+ * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
+ * usage on the credential `next` would run on. A message moved to another
+ * provider or another account is not held — that is how switching either one
+ * sends the queue now.
+ */
 export async function usageLimitHoldFor(
   ctx: QueryCtx,
   parentId: ChatQueueId,
@@ -444,7 +423,6 @@ const sessionChatQueueConfig: ChatQueueConfig<
 > = {
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
   hasActiveWorkflow: ({ chat }, ctx) => hasOpenChatTurn(ctx.db, chat._id),
-  hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),
   activityParentId: ({ session }) => String(session._id),
   sandboxState: ({ session }) => sandboxStateFromStatus(session.status),
   wakeSandbox: (ctx, { session }) => requestSessionSandboxStart(ctx, session),
@@ -465,12 +443,9 @@ const sessionChatQueueConfig: ChatQueueConfig<
       model: next.model,
       changePolicy: "owner-pool",
     }),
-  prepareGuard: async (ctx, { session, chat }, next, providerAccountId) => {
+  prepareGuard: async (ctx, { session }, next, providerAccountId) => {
     if (!next.model) {
       return { ok: false, error: "Error: Failed to start queued message." };
-    }
-    if (chat.archived === true) {
-      return { ok: false, error: "Error: This chat is closed." };
     }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) {
@@ -489,6 +464,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
+      annotation: next.annotation,
       attachmentStorageIds: next.attachmentStorageIds,
       ...(await resolveMessageCredential(
         ctx.db,
@@ -497,8 +473,8 @@ const sessionChatQueueConfig: ChatQueueConfig<
       )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
-      orchestratorNotification: next.orchestratorNotification,
       sentViaOrchestrator: next.sentViaOrchestrator,
+      taskRun: next.taskRun,
     });
   },
   startWorkflow: async (ctx, id, { session, chat }, next, prepared) => {
@@ -524,6 +500,8 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       replyTo: next.replyTo,
+      askedBy: next.userId,
+      taskRun: next.taskRun,
     });
     const model = normalizeAIModel(prepared.model);
     const launchTraits = launchTraitsFromStored(model, {
@@ -625,11 +603,9 @@ const sessionChatQueueConfig: ChatQueueConfig<
 };
 
 /**
- * The drain every session-chat turn ending calls. Drains the chat that just
- * finished first (its own queue has priority on the slot it just freed), then
- * offers the remaining slots to sibling chats with queued messages — the only
- * place a message parked by the parallel-chat cap is released. Returns whether
- * the finished chat started a turn.
+ * The drain every session-chat turn ending calls: the chat that just finished
+ * (its trigger as given), or the session's chat when no chat finished (a
+ * quiet drain, e.g. the sandbox came up). Returns whether a turn started.
  */
 export async function drainSessionChatQueues(
   ctx: MutationCtx,
@@ -637,26 +613,22 @@ export async function drainSessionChatQueues(
   finishedChatId?: Id<"sessionChats">,
   trigger: "turn-ended" | "quiet" = "turn-ended",
 ): Promise<boolean> {
-  let started = false;
   if (finishedChatId !== undefined) {
-    started = await startNextQueuedChatMessage(
+    return await startNextQueuedChatMessage(
       ctx,
       finishedChatId,
       sessionChatQueueConfig,
       trigger,
     );
   }
-  const siblings = await listLiveSessionChats(ctx.db, sessionId);
-  for (const chat of siblings) {
-    if (chat._id === finishedChatId) continue;
-    await startNextQueuedChatMessage(
-      ctx,
-      chat._id,
-      sessionChatQueueConfig,
-      "quiet",
-    );
-  }
-  return started;
+  const chat = await findMainChat(ctx.db, sessionId);
+  if (!chat) return false;
+  return await startNextQueuedChatMessage(
+    ctx,
+    chat._id,
+    sessionChatQueueConfig,
+    "quiet",
+  );
 }
 
 /**

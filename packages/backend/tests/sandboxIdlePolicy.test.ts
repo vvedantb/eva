@@ -135,30 +135,6 @@ describe("resolveIdleThresholds", () => {
     });
   });
 
-  test("the earlier idle-stop fields are honoured when the new ones are unset", () => {
-    expect(
-      resolveIdleThresholds({
-        sandboxIdleStopEnabled: false,
-        sandboxIdleStopMinutes: 120,
-      }),
-    ).toEqual({ mode: "off", afterAgentMs: 5 * MIN, afterInteractionMs: 120 * MIN });
-    expect(
-      resolveIdleThresholds({ sandboxIdleStopEnabled: true, sandboxIdleStopMinutes: 30 })
-        .afterInteractionMs,
-    ).toBe(30 * MIN);
-  });
-
-  test("the new fields win over the earlier ones", () => {
-    expect(
-      resolveIdleThresholds({
-        sandboxIdlePauseMode: "on",
-        sandboxIdleAfterInteractionMinutes: 20,
-        sandboxIdleStopEnabled: false,
-        sandboxIdleStopMinutes: 120,
-      }),
-    ).toEqual({ mode: "on", afterAgentMs: 5 * MIN, afterInteractionMs: 20 * MIN });
-  });
-
   test("configured minutes are used; sub-minute and NaN values clamp to defaults or 1", () => {
     const resolved = resolveIdleThresholds({
       sandboxIdlePauseMode: "on",

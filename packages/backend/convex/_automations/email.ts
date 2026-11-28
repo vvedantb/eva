@@ -22,8 +22,8 @@ import { createNotification } from "../notifications";
 import { repoBasePath } from "@eva/shared";
 import { findChangelogAutomation } from "../changelog";
 import {
-  collectEmailRecipients,
   collectEmailRecipientsAmong,
+  collectProductUpdateRecipients,
 } from "../users";
 import { loadRunWithAccess } from "./helpers";
 import { resolveAutomationDoc } from "./systemAutomations";
@@ -74,7 +74,7 @@ async function collectRunEmailRecipients(
     automation.title === CHANGELOG_AUTOMATION_TITLE &&
     (await findChangelogAutomation(db))?._id === automation._id
   ) {
-    return await collectEmailRecipients(db);
+    return await collectProductUpdateRecipients(db);
   }
   const repo = await db.get(automation.repoId);
   if (!repo) return [];

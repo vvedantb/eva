@@ -1,5 +1,3 @@
-// Runs in the browser. Deliberately checks CSS box constraints, not glyph ink
-// centering or the visual balance of arbitrary shapes. Shared by film and layout.
 export function auditLayout(root) {
   const findings = [], deferred = [], manual = []
   const checked = { controls: 0, paddedContainers: 0, compositionCrops: 0 }
@@ -11,8 +9,6 @@ export function auditLayout(root) {
   const geometry = /^(?:transform|translate|rotate|scale|width|height|minWidth|maxWidth|minHeight|maxHeight|blockSize|inlineSize|gridTemplateRows|gridTemplateColumns|flexBasis|gap|rowGap|columnGap|padding.*|margin.*|top|left|right|bottom)$/
   const moving = (el) => animations.some((a) => {
     const target = a.effect?.target
-    // Only motion of this box or an ancestor. A spinning descendant cannot
-    // excuse a broken outer control or a compressed window's bottom gutter.
     return target instanceof Element && (target === el || target.contains(el)) &&
       a.effect.getKeyframes().some((frame) => Object.keys(frame).some((property) => geometry.test(property)))
   })
@@ -35,8 +31,6 @@ export function auditLayout(root) {
     typeof el.className === 'string' && el.className.split(/\s+/).some((cls) => /(?:^|[-_])(?:button|btn)(?:$|[-_])/.test(cls))
   const metrics = (el) => {
     const cs = getComputedStyle(el), r = el.getBoundingClientRect()
-    // Computed sizes retain fractions; offsetHeight rounds them. Remove an
-    // axis-aligned stage scale without inventing an error from that rounding.
     const w = px(cs.width) + (cs.boxSizing === 'border-box' ? 0 : px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth))
     const h = px(cs.height) + (cs.boxSizing === 'border-box' ? 0 : px(cs.paddingTop) + px(cs.paddingBottom) + px(cs.borderTopWidth) + px(cs.borderBottomWidth))
     return { cs, r, sx: w > 0 ? r.width / w : 1, sy: h > 0 ? r.height / h : 1, h: h || r.height }
@@ -64,27 +58,18 @@ export function auditLayout(root) {
     for (const child of el.querySelectorAll('svg, img, canvas')) {
       if (visible(child) && inFlow(child, el)) {
         const box = child.getBoundingClientRect(), style = getComputedStyle(child)
-        // A rotated plus still occupies its authored 24px layout box. Its
-        // 34px axis-aligned drawing envelope is a contour, not extra layout
-        // height. Treat contours as visual review, never as a padding defect.
         const height = px(style.height) + (style.boxSizing === 'border-box' ? 0 : px(style.paddingTop) + px(style.paddingBottom) + px(style.borderTopWidth) + px(style.borderBottomWidth))
         atoms.push({ left: box.left, right: box.right, top: (box.top + box.bottom - height * sy) / 2, bottom: (box.top + box.bottom + height * sy) / 2 })
       }
     }
     if (!atoms.length) continue
     checked.controls++
-    // A label's outgoing/incoming copies may overlap inside one clipped line.
-    // Their moving paint bounds are not extra layout rows. Still enforce the
-    // tallest authored line (so motion cannot hide height+padding overflow),
-    // but defer the full union and edge judgment until the text has settled.
     const contentHeight = movingText
       ? Math.max(...atoms.map(a => (a.bottom - a.top) / sy))
       : (Math.max(...atoms.map((a) => a.bottom)) - Math.min(...atoms.map((a) => a.top))) / sy
     const top = px(cs.paddingTop), bottom = px(cs.paddingBottom)
     const borders = px(cs.borderTopWidth) + px(cs.borderBottomWidth)
     const needed = contentHeight + top + bottom + borders
-    // A full line box must fit even when its ink looks optically centered.
-    // One CSS pixel of tolerance covers font metrics and fractional rounding.
     if (needed > h + 1) add('control-block-fit', el,
       `is ${round(h)}px high but its content, padding and borders need ${round(needed)}px`,
       { height: round(h), contentHeight: round(contentHeight), paddingTop: top, paddingBottom: bottom, borders, requiredHeight: round(needed) })
@@ -92,9 +77,6 @@ export function auditLayout(root) {
     const left = px(cs.paddingLeft), right = px(cs.paddingRight)
     const leftGap = (Math.min(...atoms.map((a) => a.left)) - r.left) / sx - px(cs.borderLeftWidth)
     const rightGap = (r.right - Math.max(...atoms.map((a) => a.right))) / sx - px(cs.borderRightWidth)
-    // Narrow evidence: near-zero CSS padding AND visible content against that
-    // edge, with a real inset at the opposite edge. Ordinary optical 1–2px
-    // adjustments, icon-only buttons and asymmetric dropdown affordances pass.
     if ((left <= 1 && right >= 6 && leftGap <= 2 && rightGap >= 5) ||
         (right <= 1 && left >= 6 && rightGap <= 2 && leftGap >= 5)) {
       add('control-edge-inset', el, `puts content ${round(leftGap)}px from the left and ${round(rightGap)}px from the right (CSS padding ${left}px / ${right}px)`,
@@ -111,8 +93,6 @@ export function auditLayout(root) {
     const last = children.reduce((a, b) => a.getBoundingClientRect().bottom > b.getBoundingClientRect().bottom ? a : b)
     if (moving(el) || moving(last)) { deferred.push(`${name(el)}: bottom content geometry is moving`); continue }
     let edge = r.bottom - px(cs.borderBottomWidth) * sy, boundary = el
-    // Respect the closest real frame, including .ss-window. Stage/viewport
-    // crops are composition choices and do not redefine a body's padding.
     for (let a = el.parentElement; a && a !== root.parentElement; a = a.parentElement) {
       if (a.matches('.ss-stage, .ss-fit') || a.hasAttribute('data-crop')) break
       const ac = getComputedStyle(a)
@@ -130,9 +110,6 @@ export function auditLayout(root) {
       `leaves ${round(available)}px below its last child inside ${name(boundary)}, short of its ${padding}px bottom padding`,
       { paddingBottom: padding, availableBottom: round(available), boundary: name(boundary), lastChild: name(last) })
   }
-  // A deliberate outer crop does not excuse a second, unexplained cut inside
-  // it. A complete small window is fine; only a window actually crossing the
-  // inner Stage's clip is a candidate. Transparent object margins are ignored.
   for (const window of all.filter(el => el.matches('.ss-window') && visible(el))) {
     const stage = window.closest('.ss-stage')
     const tile = stage?.parentElement?.closest('[data-crop]')

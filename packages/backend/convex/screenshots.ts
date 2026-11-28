@@ -24,6 +24,7 @@ export const attachMedia = authAction({
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+    mediaNames: messageFields.mediaNames,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -35,6 +36,7 @@ export const attachMedia = authAction({
       imageStorageId: args.imageStorageId,
       videoStorageId: args.videoStorageId,
       mediaStorageIds: args.mediaStorageIds,
+      mediaNames: args.mediaNames,
     });
     return null;
   },

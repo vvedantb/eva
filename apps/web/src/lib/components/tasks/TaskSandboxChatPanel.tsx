@@ -1,121 +1,68 @@
 "use client";
 
-import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
 } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
+import { SandboxChatUsageLimits } from "@/lib/components/chat/SandboxChatUsageLimits";
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
-import {
-  buildFirstRunChatTurn,
-  findFirstRunChatTurnRun,
-  isRunInProgress,
-  taskRunStreamingEntityId,
-} from "@/lib/components/tasks/firstRunChatTurn";
 import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { ProjectTaskPromptCard } from "@/lib/components/projects/ProjectTaskPromptCard";
 import { useTaskSession } from "./useTaskSession";
 
-type TaskChatTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
-type TaskChatRun =
-  | FunctionReturnType<typeof api.agentRuns.listByTask>[number]
-  | undefined;
-
+/**
+ * A task's sandbox chat. A project task in To Do with an empty chat shows its
+ * prompt card there (`ProjectTaskPromptCard`).
+ */
 export function TaskSandboxChatPanel({
   taskId,
   ...panel
 }: SandboxChatPanelProps & { taskId: Id<"agentTasks"> }) {
   const binding = useTaskChatBinding(taskId);
-  return <SandboxChatPanel binding={binding} {...panel} />;
+  const task = useQuery(api.agentTasks.get, { id: taskId });
+  return (
+    <SandboxChatPanel
+      binding={binding}
+      emptyState={
+        task && showsProjectTaskPrompt(task) ? (
+          <ProjectTaskPromptCard taskId={taskId} />
+        ) : undefined
+      }
+      {...panel}
+    />
+  );
+}
+
+/** The task chat's plan usage, for the quick task page header. */
+export function TaskChatUsageLimits({ taskId }: { taskId: Id<"agentTasks"> }) {
+  return <SandboxChatUsageLimits binding={useTaskChatBinding(taskId)} />;
 }
 
 /**
- * The task side of the sandbox chat. A task chats in a session chat (a quick
- * task's own session's Main chat, a project task's own chat in its project's
- * session), whose sticky model, traits and account drive the composer; a
- * quick task's first run shows as the opening turn.
+ * The task side of the sandbox chat: the Main chat of the task's own
+ * session, whose sticky model, traits and account drive the composer. Every
+ * run of the task is a task-mode turn in this chat
+ * (`_agentTasks/taskRunTurn.ts`).
  */
 export function useTaskChatBinding(
   taskId: Id<"agentTasks">,
 ): SandboxChatBinding {
   const task = useQuery(api.agentTasks.get, { id: taskId });
   const taskSession = useTaskSession(taskId, task);
-  const firstRun = useTaskFirstRunChatTurn(taskId, task);
   const accounts = useTaskOwnerProviderAccounts(taskId);
-  const common = {
-    firstRun,
-    accounts: accounts.options,
-    resolveAccountId: accounts.resolveId,
-  };
   return useOwnedChatBinding({
     ownedSession: taskSession,
     ownerLabel: "task",
+    prOwner: { kind: "task", taskId },
     title: task?.title,
-    common,
+    common: {
+      accounts: accounts.options,
+      resolveAccountId: accounts.resolveId,
+    },
     stopTarget: { taskId },
   });
-}
-
-function useTaskFirstRunChatTurn(
-  taskId: Id<"agentTasks">,
-  task: TaskChatTask,
-): NonNullable<SandboxChatBinding["firstRun"]> {
-  const isQuickTask = task != null && task.projectId === undefined;
-  const runs = useQuery(
-    api.agentRuns.listByTask,
-    isQuickTask ? { taskId } : "skip",
-  );
-  const firstRun = findFirstRunChatTurnRun(runs);
-  const isInProgress =
-    firstRun !== undefined && isRunInProgress(firstRun.status);
-  const activityLog = useQuery(
-    api.agentRuns.getActivityLog,
-    firstRun && !isInProgress ? { id: firstRun._id } : "skip",
-  );
-  const streaming = useQuery(
-    api.streaming.get,
-    firstRun && isInProgress
-      ? { entityId: taskRunStreamingEntityId(firstRun._id) }
-      : "skip",
-  );
-  const { taskAttachments, firstRunMedia } = useFirstRunMediaQueries(
-    taskId,
-    task,
-    firstRun,
-  );
-  const turn =
-    task && firstRun && (isInProgress || activityLog !== undefined)
-      ? buildFirstRunChatTurn({
-          task,
-          run: firstRun,
-          activityLog: activityLog ?? null,
-          ...(taskAttachments !== undefined
-            ? { attachments: taskAttachments }
-            : {}),
-          ...(firstRunMedia !== undefined ? { media: firstRunMedia } : {}),
-        })
-      : [];
-  return { isInProgress, streaming, turn };
-}
-
-function useFirstRunMediaQueries(
-  taskId: Id<"agentTasks">,
-  task: TaskChatTask,
-  firstRun: TaskChatRun,
-) {
-  const taskAttachments = useQuery(
-    api.agentTasks.listAttachments,
-    firstRun && (task?.attachmentStorageIds?.length ?? 0) > 0
-      ? { taskId }
-      : "skip",
-  );
-  const firstRunMedia = useQuery(
-    api.agentRuns.getMedia,
-    firstRun && (firstRun.mediaStorageIds?.length ?? 0) > 0
-      ? { id: firstRun._id }
-      : "skip",
-  );
-  return { taskAttachments, firstRunMedia };
 }

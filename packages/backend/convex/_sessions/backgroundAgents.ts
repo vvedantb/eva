@@ -1,4 +1,4 @@
-import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 
 /**
@@ -8,7 +8,7 @@ import type { BackgroundAgentEntry } from "../_validators/tableFields";
  * status — without the cap that session's queue would stay blocked forever.
  * Matches the workflow timeout used elsewhere for the same reason.
  */
-export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = RUN_TIMEOUT_MS;
+export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = TURN_BACKSTOP_MS;
 
 /**
  * Settled entries kept per surface. The array lives on a doc that the cancel,

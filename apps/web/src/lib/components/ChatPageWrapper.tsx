@@ -11,7 +11,6 @@ interface ChatPageWrapperProps {
   headerRight?: React.ReactNode;
   readOnlyMessage?: string;
   isArchived?: boolean;
-  tabs?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -32,7 +31,6 @@ export function ChatPageWrapper({
   headerRight,
   readOnlyMessage,
   isArchived,
-  tabs,
   children,
 }: ChatPageWrapperProps) {
   const bannerMessage =
@@ -58,7 +56,7 @@ export function ChatPageWrapper({
         ) : (
           <m.div
             key="session-header"
-            className="w-full flex items-center justify-between gap-1 p-2 sm:gap-2 sm:p-3"
+            className="w-full flex items-center justify-between gap-1 p-2 sm:gap-2 sm:px-3 sm:py-2"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -77,7 +75,6 @@ export function ChatPageWrapper({
           </m.div>
         )}
       </AnimatePresence>
-      {tabs}
       {children}
     </div>
   );

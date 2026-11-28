@@ -131,6 +131,7 @@ export function labelForAttachment(
 export type ResolvedMediaEntry = {
   url: string | null;
   contentType: string | null;
+  name?: string | null;
 };
 
 /**
@@ -154,21 +155,40 @@ export function messageAttachments(message: {
   );
 }
 
+/** An agent capture ready to draw: its URL and caption. */
+export type AgentMediaItem = { url: string; caption: string | null };
+
+/**
+ * A capture's caption from its sandbox file name: `empty-box-page.png` →
+ * "Empty box page". Null when there is no name or nothing readable remains.
+ */
+export function mediaCaption(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const words = name
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!words) return null;
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 /**
  * An agent's captures split the one way Eva draws them: videos as players,
- * everything else as images in one gallery. Captures whose blob is gone are
+ * everything else as images in one carousel. Captures whose blob is gone are
  * left out.
  */
 export function splitAgentMedia(entries: readonly ResolvedMediaEntry[]): {
-  videos: string[];
-  images: string[];
+  videos: AgentMediaItem[];
+  images: AgentMediaItem[];
 } {
-  const videos: string[] = [];
-  const images: string[] = [];
+  const videos: AgentMediaItem[] = [];
+  const images: AgentMediaItem[] = [];
   for (const entry of entries) {
     if (!entry.url) continue;
-    if (entry.contentType?.startsWith("video/")) videos.push(entry.url);
-    else images.push(entry.url);
+    const item = { url: entry.url, caption: mediaCaption(entry.name) };
+    if (entry.contentType?.startsWith("video/")) videos.push(item);
+    else images.push(item);
   }
   return { videos, images };
 }

@@ -11,6 +11,7 @@ import {
 import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits, toRunTraitArgs } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import {
   withSessionChat,
   type SessionChatSource,
@@ -47,10 +48,6 @@ export function useChatModel(
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<void>;
   isSwitchingAccount: boolean;
-  persistProviderAccountId: (
-    providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => Promise<null>;
-  prewarm: () => Promise<null>;
 } {
   const chat = useHeldQuery(
     api.sessionChats.get,
@@ -59,16 +56,26 @@ export function useChatModel(
       : "skip",
   );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
-  const setModelMutation = useMutation(
-    api.sessionChats.setModel,
-  ).withOptimisticUpdate((localStore, args) => {
-    patchLoadedQuery(
-      localStore,
-      api.sessionChats.get,
-      { chatId: args.chatId },
-      (cur) => cur && { ...cur, lastModel: args.model },
-    );
-  });
+  const setChatModel = useMutation(api.chats.setModel);
+  const pick = (
+    chatId: Id<"sessionChats">,
+    pickArgs: Omit<FunctionArgs<typeof api.chats.setModel>, "target">,
+  ) =>
+    setChatModel.withOptimisticUpdate((localStore) => {
+      patchLoadedQuery(
+        localStore,
+        api.sessionChats.get,
+        { chatId },
+        (cur) =>
+          cur && {
+            ...cur,
+            ...(pickArgs.model === undefined
+              ? {}
+              : { lastModel: pickArgs.model }),
+            ...composerTraitFields(pickArgs),
+          },
+      );
+    })({ target: chatId, ...pickArgs });
   const setProviderAccountIdMutation = useMutation(
     api.sessionChats.setProviderAccountId,
   ).withOptimisticUpdate((localStore, args) => {
@@ -97,28 +104,17 @@ export function useChatModel(
       persist: persistProviderAccountId,
       prewarm,
     });
-  const setTraitsMutation = useMutation(
-    api.sessionChats.setTraits,
-  ).withOptimisticUpdate((localStore, args) => {
-    patchLoadedQuery(
-      localStore,
-      api.sessionChats.get,
-      { chatId: args.chatId },
-      (cur) => cur && { ...cur, ...composerTraitFields(args) },
-    );
-  });
-
   const model = normalizeAIModel(chat?.lastModel ?? defaultModel);
 
   const setModel = (nextModel: AIModel) => {
     void withSessionChat(chatSource, (chatId) =>
-      setModelMutation({ chatId, model: normalizeAIModel(nextModel) }),
+      pick(chatId, { model: normalizeAIModel(nextModel) }),
     );
   };
 
   const setTraits = (partial: Partial<StoredModelTraits>) => {
     void withSessionChat(chatSource, (chatId) =>
-      setTraitsMutation({ chatId, ...toRunTraitArgs(partial) }),
+      pick(chatId, toRunTraitArgs(partial)),
     );
   };
 
@@ -132,7 +128,5 @@ export function useChatModel(
       chat === undefined ? undefined : (chat?.providerAccountId ?? null),
     setProviderAccountId: switchProviderAccount,
     isSwitchingAccount,
-    persistProviderAccountId,
-    prewarm,
   };
 }

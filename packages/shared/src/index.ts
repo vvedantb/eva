@@ -33,7 +33,6 @@ export {
 export {
   carriedAccountForProvider,
   defaultAccountForProvider,
-  projectPickerAccounts,
   toPickerAccounts,
   type PickerAccount,
 } from "./providerAccounts";
@@ -91,7 +90,6 @@ export {
   EDITOR_PORT,
   previewProxyPort,
 } from "./sandboxPorts";
-export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
 export { isAgentBrowsingActive } from "./agentBrowsing";
 export {
@@ -146,6 +144,7 @@ export {
   chatStreamingEntityId,
   findStreamingTargetMessage,
 } from "./chatStreaming";
+export { isChatTurnExecuting } from "./chatTurnExecuting";
 export {
   threadAnswerContent,
   threadPendingQuestion,
@@ -153,7 +152,6 @@ export {
   threadTurnStatusText,
 } from "./replyThreads";
 export {
-  EVA_SENDER_NAME,
   findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
@@ -198,8 +196,10 @@ export {
   chatSourceKindLabel,
   chatSourceLabel,
   chatSourceShortLabel,
+  ownerLabel,
   type ChatSourceKind,
   type ChatSourceLabelFields,
+  type OwnerLabelKind,
 } from "./chatSourceLabel";
 export { standupEntryHeading, standupEntryTime } from "./standup";
 export {
@@ -293,7 +293,7 @@ export {
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
-  parseGithubPrLink,
+  parseGithubItemLink,
   prNumberFromGithubUrl,
   prReviewers,
   revertSessionRequest,
@@ -304,7 +304,7 @@ export {
   stackVerdict,
   verdictSuccessTitle,
   type CheckCounts,
-  type GithubPrLink,
+  type GithubItemLink,
   type MergeMethod,
   type PrBlocker,
   type PrCheck,
@@ -333,7 +333,11 @@ export {
   type TimelineEvent,
   type TimelineRow,
 } from "./prTimeline";
-export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  SANDBOX_CHAT_COPY,
+  sandboxChatEmptyState,
+  sandboxComposerState,
+} from "./sandboxComposer";
 export {
   QUEUE_PANEL_LABEL,
   moveQueuedId,
@@ -421,6 +425,7 @@ export {
   messageAttachments,
   normalizeContentType,
   splitAgentMedia,
+  type AgentMediaItem,
   type AttachmentFileKind,
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
@@ -442,13 +447,17 @@ export {
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
 export {
   PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  sandboxAutoWakeEligible,
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,
+  taskPrUrl,
 } from "./ownedSandboxRules";
 export {
   collectQuestionSteps,
   getSessionReadOnlyMessage,
   isSandboxLifecycleAlert,
+  splitStepsAtQuestions,
   visibleChatMessages,
 } from "./chatRows";
+export type { QuestionSplitChunk } from "./chatRows";

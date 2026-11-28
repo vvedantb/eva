@@ -356,27 +356,31 @@ export function prNumberFromGithubUrl(prUrl: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** A link to a GitHub pull request, split into what its URL names. */
-export interface GithubPrLink {
+/** A link to a GitHub pull request or issue, split into what its URL names. */
+export interface GithubItemLink {
+  kind: "pull" | "issue";
   owner: string;
   name: string;
-  prNumber: number;
+  number: number;
 }
 
 /**
- * Reads `https://github.com/owner/name/pull/123` (with any sub-page, query or
- * hash, e.g. `/files` or `#discussion_r1`). Null for every other URL.
+ * Reads `https://github.com/owner/name/pull/123` or `.../issues/123` (with any
+ * sub-page, query or hash, e.g. `/files` or `#issuecomment-1`). Null for every
+ * other URL.
  */
-export function parseGithubPrLink(href: string): GithubPrLink | null {
+export function parseGithubItemLink(href: string): GithubItemLink | null {
   if (!URL.canParse(href)) return null;
   const url = new URL(href);
   if (url.protocol !== "https:" || url.host !== "github.com") return null;
-  const [owner, name, kind, number] = url.pathname.split("/").slice(1);
-  if (!owner || !name || kind !== "pull" || !number || !/^\d+$/.test(number)) {
+  const [owner, name, segment, digits] = url.pathname.split("/").slice(1);
+  const kind =
+    segment === "pull" ? "pull" : segment === "issues" ? "issue" : null;
+  if (!owner || !name || kind === null || !digits || !/^\d+$/.test(digits)) {
     return null;
   }
-  const prNumber = Number(number);
-  return prNumber > 0 ? { owner, name, prNumber } : null;
+  const number = Number(digits);
+  return number > 0 ? { kind, owner, name, number } : null;
 }
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";

@@ -4,7 +4,7 @@ import {
   resolveNewTaskBaseBranch,
   resolveProjectBaseBranch,
   resolveTaskWorkflowBaseBranch,
-} from "../convex/_taskWorkflow/resolveBaseBranch";
+} from "../convex/_agentTasks/resolveBaseBranch";
 import { resolveSessionBaseBranch } from "../convex/_sessions/baseBranch";
 
 test("resolveTaskWorkflowBaseBranch uses the task's base, then the repo default", () => {

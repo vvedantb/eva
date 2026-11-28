@@ -88,8 +88,6 @@ export function RepoCard({
               className="block rounded-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35"
             >
               <Card className="motion-emphasized ui-surface-interactive cursor-pointer">
-                {/* `max-sm:pr-10` reserves the lane the touch kebab sits in, so
-                    the label and the disconnected pill never run under it. */}
                 <CardContent className="flex items-center gap-3 p-4 max-sm:pr-10">
                   <RepoLogo
                     logoUrl={repo.logoUrl}
@@ -122,9 +120,6 @@ export function RepoCard({
                 </CardContent>
               </Card>
             </Link>
-            {/* Touch has no right-click, so below `sm` the same items get a
-                visible kebab. It is a sibling of the <Link> rather than a child
-                (a button may not nest in an anchor) and sits above it at z-2. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

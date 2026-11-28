@@ -26,8 +26,6 @@ export function SandboxTabBarTools({
 }) {
   return (
     <ButtonTrack direction="column" className="md:mt-auto">
-      {/* Editor and Computer are first-class tabs on the rail, so `+` is now a
-          direct New Preview action rather than a one-item menu. */}
       {onNewPreview ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -62,7 +60,6 @@ export function SandboxTabBarTools({
           Toggle terminal panel
         </TooltipContent>
       </Tooltip>
-      {/* Desktop only: the phone strip already spells its tabs out. */}
       <Tooltip>
         <TooltipTrigger asChild>
           <button

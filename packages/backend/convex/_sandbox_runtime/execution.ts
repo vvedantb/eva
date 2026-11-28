@@ -14,7 +14,6 @@ import {
   normalizeAIModel,
   reasoningLevelValidator,
   turnEntityIdValidator,
-  turnLaneValidator,
   usesChatDaemon,
 } from "../validators";
 import {
@@ -27,6 +26,7 @@ import {
   errorMessage,
   signAndLaunchScript,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
+  PREFER_OOM_KILL_LINE,
   sessionClaudeUuid,
   restartUnresponsiveSandbox,
 } from "./helpers";
@@ -59,7 +59,7 @@ import {
 } from "./convexLocalBackend";
 import { ensureSwapFile } from "./swap";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
-import { isSandboxNetworkIssue } from "../_taskWorkflow/recovery";
+import { isSandboxNetworkIssue } from "../_sandbox/networkIssue";
 import { assertActionSandboxAccess } from "../functions";
 import { sandboxGitTargetValidator } from "../sandboxGit";
 import {
@@ -446,9 +446,9 @@ export const runBackgroundCommands = internalAction({
         await execHandle(sandbox, cleanup.join("; "), 15);
         const logPath = `/tmp/bg-${i}.log`;
         const scriptPath = `/tmp/bg-cmd-${i}.sh`;
-        const scriptBody = isConvexCommand
-          ? buildConvexBackgroundScriptBody(command)
-          : command;
+        const scriptBody = `${PREFER_OOM_KILL_LINE}\n${
+          isConvexCommand ? buildConvexBackgroundScriptBody(command) : command
+        }`;
         console.log(
           `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
@@ -858,13 +858,6 @@ export const getPreviewUrl = action({
       throw new Error("Not authenticated");
     }
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    if (args.checkReady || args.navigationSync) {
-      await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-        sandboxId: args.sandboxId,
-        source: "preview-tab",
-        clerkUserId: identity.subject,
-      });
-    }
     return await buildPreviewUrl(ctx, args, identity.subject);
   },
 });
@@ -901,7 +894,6 @@ export const createOrResumeSandbox = internalAction({
     repoName: v.string(),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
   returns: v.object({
@@ -939,18 +931,6 @@ export const createOrResumeSandbox = internalAction({
     let deleteSandboxOnFailure = false;
     let attempt = 1;
     const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
     while (true) {
       try {
         if (args.ephemeral) {
@@ -963,7 +943,7 @@ export const createOrResumeSandbox = internalAction({
             sandboxEnvVars,
             EPHEMERAL_LIFECYCLE,
             snapshotName,
-            attachRunSandbox,
+            undefined,
             emitProgress,
             { mode: "none" },
           );
@@ -987,13 +967,6 @@ export const createOrResumeSandbox = internalAction({
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = prepared.isNew;
           resumeFellBack = prepared.resumeFellBack;
-        }
-
-        if (!args.ephemeral && args.attachRunId && sandbox) {
-          await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-            runId: args.attachRunId,
-            sandboxId: sandbox.id,
-          });
         }
 
         break;
@@ -1145,6 +1118,16 @@ export const pushSandboxBranch = internalAction({
       );
       throw error;
     }
+  },
+});
+
+/** The sandbox's checked-out commit, e.g. the tip a push just published. */
+export const readSandboxHead = internalAction({
+  args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    return (await execHandle(sandbox, "git rev-parse HEAD", 15)).trim();
   },
 });
 
@@ -1833,7 +1816,6 @@ export const prewarmSessionDaemon = internalAction({
     });
     const skipPrewarm =
       context === null ||
-      context.chat.archived === true ||
       isSandboxClosingStatus(context.session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
@@ -1987,8 +1969,8 @@ export const launchOnExistingSandbox = internalAction({
 });
 
 /**
- * Launches a one-shot agent (automation, PR recap, summary, doc or project
- * interview, evaluation, test generation) under its own durable turn: opens
+ * Launches a one-shot agent (automation, PR recap, doc interview, evaluation,
+ * test generation) under its own durable turn: opens
  * the turn already leased, then launches with the lease so the callback
  * heartbeats and completes fenced. A launch that throws closes the turn, so
  * the reconciler never tears down a workflow that handled the failure itself.
@@ -1997,18 +1979,16 @@ export const launchAgentTurn = internalAction({
   args: {
     ...launchArgs,
     turnEntityId: turnEntityIdValidator,
-    turnLane: v.optional(turnLaneValidator),
     turnSessionId: v.optional(v.id("sessions")),
     workflowId: v.string(),
   },
   returns: v.null(),
   handler: async (
     ctx,
-    { turnEntityId, turnLane, turnSessionId, workflowId, ...launch },
+    { turnEntityId, turnSessionId, workflowId, ...launch },
   ) => {
     const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
       entityId: turnEntityId,
-      lane: turnLane,
       sessionId: turnSessionId,
       streamingEntityId: launch.streamingEntityId ?? launch.entityId,
       model: launch.model,

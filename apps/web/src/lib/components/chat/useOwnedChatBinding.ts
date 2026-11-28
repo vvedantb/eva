@@ -18,7 +18,7 @@ import type { SandboxChatBinding } from "./sandboxChatBinding";
 /** The owner-specific parts of an owned session's chat binding. */
 export type OwnedChatBindingCommon = Pick<
   SandboxChatBinding,
-  "accounts" | "resolveAccountId" | "firstRun"
+  "accounts" | "resolveAccountId"
 >;
 
 /**
@@ -27,18 +27,20 @@ export type OwnedChatBindingCommon = Pick<
  * account drive the composer, and sends go through the session chat ports.
  * Before the chat exists there is no chat to read (`entity` is undefined)
  * and the backend's `chatSeed` (what `ensureOwned` gives the chat) shows in
- * the picker. Stop is `sessions.stopChatTurn` on the chat, or on
- * `stopTarget` (a task, whose run the chat does not own).
+ * the picker. Stop is `chats.stop` on the chat (which also stops a
+ * task run streaming into it), or on `stopTarget` before the chat exists.
  */
 export function useOwnedChatBinding({
   ownedSession,
   ownerLabel,
+  prOwner,
   title,
   common,
   stopTarget,
 }: {
   ownedSession: OwnedSession;
   ownerLabel: SandboxChatBinding["ownerLabel"];
+  prOwner: SandboxChatBinding["prOwner"];
   title: string | undefined;
   common: OwnedChatBindingCommon;
   stopTarget?: { taskId: Id<"agentTasks"> };
@@ -47,12 +49,15 @@ export function useOwnedChatBinding({
   const { owned, session, chatSource, chatSeed } = ownedSession;
   const chatModel = useChatModel(chatSource, normalizeAIModel(chatSeed?.model));
   const ports = useSessionTurnPorts(chatSource, common.accounts);
-  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
+  const stopChat = useMutation(api.chats.stop);
   const { model, chat } = chatModel;
   const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
-  const providerAccountId = chat
-    ? (chat.providerAccountId ?? null)
-    : (chatSeed?.providerAccountId ?? null);
+  const providerAccountId =
+    chat === undefined && typeof chatSource === "string"
+      ? undefined
+      : chat
+        ? (chat.providerAccountId ?? null)
+        : (chatSeed?.providerAccountId ?? null);
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
   return {
@@ -62,6 +67,8 @@ export function useOwnedChatBinding({
         ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
         : undefined,
     ownerLabel,
+    prOwner,
+    active: true,
     doc: title === undefined
       ? undefined
       : {
@@ -79,14 +86,14 @@ export function useOwnedChatBinding({
     executionTraits: buildTraitsExecutionPayload(model, traits),
     onTraitsChange: chatModel.setTraits,
     providerAccountId,
-    persistAccount: chatModel.persistProviderAccountId,
-    prewarm: chatModel.prewarm,
+    switchProviderAccount: chatModel.setProviderAccountId,
+    isSwitchingAccount: chatModel.isSwitchingAccount,
     ports,
     cancel: () =>
-      stopTarget !== undefined
-        ? stopChatTurn({ target: stopTarget })
-        : owned?.chatId !== undefined
-          ? stopChatTurn({ target: { chatId: owned.chatId } })
+      owned?.chatId !== undefined
+        ? stopChat({ target: owned.chatId })
+        : stopTarget !== undefined
+          ? stopChat({ target: stopTarget.taskId })
           : Promise.resolve(null),
   };
 }

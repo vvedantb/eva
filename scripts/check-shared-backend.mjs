@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -7,10 +6,6 @@ const ALLOWED = {
   "push.unregister": "Device push tokens: the web has no phone push.",
   "crashReports.report": "Phone crash reports: a native or JS crash closes the phone app; the web has no such crash to report.",
   "chats.get": "The web moves onto chats.* one action at a time (#1302).",
-  "chats.send": "The web moves onto chats.* one action at a time (#1302).",
-  "chats.setModel": "The web moves onto chats.* one action at a time (#1302).",
-  "chats.stop": "The web moves onto chats.* one action at a time (#1302).",
-  "chats.start": "The web moves onto chats.* one action at a time (#1302).",
 };
 
 /** `api.module.fn` references (not URLs such as https://api.github.com). */

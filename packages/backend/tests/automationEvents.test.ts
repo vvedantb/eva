@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { checkRunBody } from "../convex/_automations/checkRun";
 import { parseAxiomAlert } from "../convex/_automationEvents/axiomAlert";
 import {
   describeAlert,
@@ -23,6 +24,34 @@ const repository = { name: "eva", owner: { login: "acme" } };
 const human = { type: "User" };
 
 describe("parseRepoEvents", () => {
+  test("a PR push carries its branch only when the branch is in this repo", () => {
+    const pushed = (headRepo: string | null) =>
+      parseRepoEvents(
+        "pull_request",
+        JSON.stringify({
+          action: "synchronize",
+          pull_request: {
+            number: 9,
+            html_url: "https://github.com/acme/eva/pull/9",
+            title: "Add retry",
+            merged: false,
+            head: {
+              sha: "abc",
+              ref: "feature/retry",
+              repo: headRepo === null ? null : { full_name: headRepo },
+            },
+          },
+          repository,
+          sender: human,
+        }),
+      );
+    expect(pushed("Acme/Eva")).toEqual([
+      expect.objectContaining({ kind: "pr_updated", headBranch: "feature/retry" }),
+    ]);
+    expect(pushed("someone/eva")[0]).toMatchObject({ headBranch: undefined });
+    expect(pushed(null)[0]).toMatchObject({ headBranch: undefined });
+  });
+
   test("a failed check suite fans out to one ci_failed event per PR", () => {
     const events = parseRepoEvents(
       "check_suite",
@@ -185,16 +214,40 @@ describe("triggers", () => {
 
   test("issue triggers match the default label case-insensitively", () => {
     expect(
-      triggerMatchesEvent({ kind: "event", event: "issue_labeled" }, labelled),
+      triggerMatchesEvent({ kind: "event", events: ["issue_labeled"] }, labelled),
     ).toBe(true);
     expect(
       triggerMatchesEvent(
-        { kind: "event", event: "issue_labeled", label: "eva:web" },
+        { kind: "event", events: ["issue_labeled"], label: "eva:web" },
         labelled,
       ),
     ).toBe(false);
     expect(triggerMatchesEvent({ kind: "cron" }, labelled)).toBe(false);
     expect(triggerMatchesEvent(undefined, labelled)).toBe(false);
+  });
+
+  test("a trigger fires on any of its switched-on events", () => {
+    const pr = {
+      owner: "acme",
+      name: "eva",
+      prUrl: "https://github.com/acme/eva/pull/1",
+      prNumber: 1,
+      title: "t",
+      headSha: "abc",
+    };
+    const updated = { kind: "pr_updated", ...pr } as const;
+    const opened = { kind: "pr_opened", ...pr } as const;
+    const onUpdated: AutomationTrigger = { kind: "event", events: ["pr_updated"] };
+    const onOpened: AutomationTrigger = { kind: "event", events: ["pr_opened"] };
+    const onBoth: AutomationTrigger = {
+      kind: "event",
+      events: ["pr_opened", "pr_updated"],
+    };
+    expect(triggerMatchesEvent(onBoth, opened)).toBe(true);
+    expect(triggerMatchesEvent(onBoth, updated)).toBe(true);
+    expect(triggerMatchesEvent(onUpdated, opened)).toBe(false);
+    expect(triggerMatchesEvent(onUpdated, updated)).toBe(true);
+    expect(triggerMatchesEvent(onOpened, updated)).toBe(false);
   });
 
   test("CI keys are per commit so a new push is a new attempt", () => {
@@ -228,7 +281,7 @@ describe("cron registration", () => {
     expect(automationCronspec(row({ enabled: false }))).toBeNull();
     expect(
       automationCronspec(
-        row({ trigger: { kind: "event", event: "pr_merged" } }),
+        row({ trigger: { kind: "event", events: ["pr_merged"] } }),
       ),
     ).toBeNull();
   });
@@ -236,11 +289,11 @@ describe("cron registration", () => {
   test("event presets keep the install's label but not its event", () => {
     const install = row({
       systemKey: "issue-to-task",
-      trigger: { kind: "event", event: "pr_merged", label: "eva:web" },
+      trigger: { kind: "event", events: ["pr_merged"], label: "eva:web" },
     });
     expect(automationTrigger(install)).toEqual({
       kind: "event",
-      event: "issue_labeled",
+      events: ["issue_labeled"],
       label: "eva:web",
     });
     expect(automationCronspec(install)).toBeNull();
@@ -363,5 +416,30 @@ describe("axiom alerts", () => {
     expect(repoEventKey({ ...result.alert, owner: "acme", name: "eva" })).toBe(
       "axiom:CabI3w142069etTgd0",
     );
+  });
+});
+
+describe("Eva check run", () => {
+  const run = { title: "PR review", prUrl: undefined, resultSummary: undefined };
+
+  test("a failed run is neutral, so it never turns the PR red", () => {
+    const body = checkRunBody(
+      { ...run, status: "error", error: "Sandbox did not start" },
+      undefined,
+    );
+    expect(body).toEqual({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Run failed", summary: "Sandbox did not start" },
+    });
+  });
+
+  test("a running run is in progress and links to Eva", () => {
+    const body = checkRunBody(
+      { ...run, status: "running", error: undefined },
+      "https://eva.test/a",
+    );
+    expect(body.status).toBe("in_progress");
+    expect(body.output.summary).toContain("[Open in Eva](https://eva.test/a)");
   });
 });

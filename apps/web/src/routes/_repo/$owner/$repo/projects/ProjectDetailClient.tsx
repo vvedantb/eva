@@ -24,8 +24,14 @@ import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
-import { useProjectTaskTabs } from "@/lib/components/projects/useProjectTaskTabs";
-import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
+import {
+  useProjectTaskTabRows,
+  useProjectTaskTabs,
+} from "@/lib/components/projects/useProjectTaskTabs";
+import {
+  ProjectDetailHeaderActions,
+  type ProjectShownChat,
+} from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
 
@@ -73,12 +79,9 @@ export function ProjectDetailClient({
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
-  const [threadReturnTab, setThreadReturnTab] =
-    useState<ProjectSandboxTab>("tasks");
 
   const openThread = (messageId: string) => {
     if (!projectPathSegment) return;
-    if (sandboxTab !== "replies") setThreadReturnTab(sandboxTab);
     void navigate({
       to: toInternalRepoHref(
         `${basePath}/projects/${projectPathSegment}/sandbox/replies`,
@@ -92,7 +95,7 @@ export function ProjectDetailClient({
     if (!projectPathSegment) return;
     void navigate({
       to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/sandbox/${threadReturnTab}`,
+        `${basePath}/projects/${projectPathSegment}/sandbox/replies`,
       ),
       search: (prev) => ({ ...prev, thread: undefined }),
       replace: true,
@@ -105,6 +108,18 @@ export function ProjectDetailClient({
     sandboxTab,
     onShowPanel: () => setExpandRightSignal((n) => n + 1),
   });
+  const taskTabRows = useProjectTaskTabRows(projectId, repo._id, taskTabs);
+  const onCoordinatorChat =
+    mainTab === "work" &&
+    selectedTaskStatus === undefined &&
+    sandbox.sandbox.owner !== undefined;
+  const shownChat: ProjectShownChat = !onCoordinatorChat
+    ? { kind: "eva" }
+    : taskTabRows.selectedRow
+      ? { kind: "task", taskId: taskTabRows.selectedRow._id }
+      : taskTabRows.selectedLoading
+        ? { kind: "loading" }
+        : { kind: "eva" };
 
   const openFile = (path: string) => {
     if (simpleView) return;
@@ -191,6 +206,7 @@ export function ProjectDetailClient({
           sandbox={sandbox}
           chatId={chatId}
           chatTurnOpen={chatTurnOpen}
+          shownChat={shownChat}
         />
       }
     >
@@ -213,6 +229,7 @@ export function ProjectDetailClient({
             onThreadOpen={openThread}
             onCloseThread={closeThread}
             taskTabs={taskTabs}
+            taskTabRows={taskTabRows}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}

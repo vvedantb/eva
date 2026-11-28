@@ -161,18 +161,10 @@ test("cleanOwnedDaemonMarkers only unlinks when this pid owns the file", () => {
   writeFileSync(paths.pid, "1");
   writeFileSync(paths.entity, "e");
   writeFileSync(paths.opts, "sig");
-  cleanOwnedDaemonMarkers({
-    paths,
-    currentPid: process.pid,
-    includeLegacySessionPaths: false,
-  });
+  cleanOwnedDaemonMarkers({ paths, currentPid: process.pid });
   expect(existsSync(paths.pid)).toBe(true);
   writeFileSync(paths.pid, String(process.pid));
-  cleanOwnedDaemonMarkers({
-    paths,
-    currentPid: process.pid,
-    includeLegacySessionPaths: false,
-  });
+  cleanOwnedDaemonMarkers({ paths, currentPid: process.pid });
   expect(existsSync(paths.pid)).toBe(false);
   rmSync(dir, { recursive: true, force: true });
 });

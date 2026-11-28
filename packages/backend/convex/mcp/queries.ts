@@ -33,7 +33,7 @@ import {
   findPullRequestByUrl,
   listOwnerPullRequests,
   sessionRepoPullRequest,
-  taskPrUrl,
+  loadTaskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
 import {
@@ -788,7 +788,7 @@ async function taskPrUrlById(
   taskId: Id<"agentTasks">,
 ): Promise<string | undefined> {
   const task = await ctx.db.get(taskId);
-  return task ? taskPrUrl(task) : undefined;
+  return task ? await loadTaskPrUrl(ctx.db, task) : undefined;
 }
 
 /** One pull request linked to a chat, as reported over MCP. */

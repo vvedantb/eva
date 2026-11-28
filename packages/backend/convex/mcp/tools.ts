@@ -728,6 +728,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   async function createTaskForRepo(
     input: TaskInput,
     userId: string,
+    run: boolean,
   ): Promise<
     | { taskId: string; repoFullName: string }
     | ReturnType<typeof toolErrorResult>
@@ -743,6 +744,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       internal._agentTasks.mutations.createAgentTask,
       {
         userId,
+        run,
         repoId: repo.id,
         title: input.title,
         description: input.description,
@@ -773,19 +775,21 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
             "linkedRepoNames works only with create_task or create_tasks_batch in a project coordinator chat.",
           );
         }
-        const result = await createTaskForRepo(input, userId);
+        const result = await createTaskForRepo(input, userId, true);
         if ("content" in result) return result;
 
-        await mcpCallAsUser(
-          ctx,
-          clerkUserId,
-          {
-            type: "mutation",
-            path: "_agentTasks/execution:startExecution",
-            args: { id: result.taskId },
-          },
-          jsonValue,
-        );
+        if (input.projectId === undefined) {
+          await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "mutation",
+              path: "_agentTasks/execution:startExecution",
+              args: { id: result.taskId },
+            },
+            jsonValue,
+          );
+        }
 
         return toolJsonResult({
           taskId: result.taskId,
@@ -826,7 +830,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
             },
           ]);
         }
-        const result = await createTaskForRepo(input, userId);
+        const result = await createTaskForRepo(input, userId, false);
         if ("content" in result) return result;
 
         return toolJsonResult({
@@ -992,19 +996,11 @@ In a project coordinator chat the batch joins this project (do not pass projectT
 
 Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.
 
-A session holds parallel chats that share one checkout. The message lands in its "Main" chat unless "chat" names another one by number or title.
-
 Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done with it so the VM does not keep running.`,
       mutating: true,
       input: {
         message: z.string().describe("The message to post into the chat."),
         ...entityRefArgs,
-        chat: z
-          .string()
-          .optional()
-          .describe(
-            'Sessions only: which chat inside the session, by number ("2") or exact title. Omit for the Main chat.',
-          ),
         model: z
           .enum(MCP_CLAUDE_MODELS)
           .optional()
@@ -1015,16 +1011,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           "Omit to keep the account that chat runs on now.",
         ),
       },
-      handler: async ({ message, model, chat, account, ...ref }) => {
+      handler: async ({ message, model, account, ...ref }) => {
         if (message.trim().length === 0) {
           return toolErrorResult("message cannot be empty.");
-        }
-        if (
-          chat !== undefined &&
-          ref.kind !== undefined &&
-          ref.kind !== "session"
-        ) {
-          return toolErrorResult('"chat" only applies to sessions.');
         }
 
         const { userId } = await getContext();
@@ -1054,6 +1043,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
                 "A person already answered this task's question, and the task went on with that answer. Your message was not sent. Send it again only if it adds something.",
               );
             }
+            await ctx.runMutation(
+              internal._projects.chatTaskCards.linkTaskToTurn,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
             return toolJsonResult({
               ...entitySummary(target),
               delivered: "started",
@@ -1064,11 +1057,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         }
 
         if (entityId !== undefined && target.targetId === entityId) {
-          if (target.kind !== "session" || chat === undefined) {
-            return toolErrorResult(
-              "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-            );
-          }
+          return toolErrorResult(
+            "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+          );
         }
 
         const result = await ctx.runAction(
@@ -1080,9 +1071,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             message,
             model,
             account,
-            ...(target.kind === "session" && chat !== undefined
-              ? { chat }
-              : {}),
             ...(credentials.chatId !== undefined
               ? { excludeChatId: credentials.chatId }
               : {}),
@@ -1091,9 +1079,15 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
         );
 
+        if (caller?.role === "coordinator") {
+          await ctx.runMutation(
+            internal._projects.chatTaskCards.linkTaskToTurn,
+            { projectId: caller.projectId, taskId: target.targetId },
+          );
+        }
+
         return toolJsonResult({
           ...entitySummary(target),
-          ...(result.chat !== undefined ? { chat: result.chat } : {}),
           delivered: result.delivered,
           model: result.model,
         });
@@ -1145,6 +1139,13 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
           z.string(),
         );
+        if (entityKind !== undefined && chatContentId !== undefined) {
+          await ctx.runMutation(internal.docs.anchorToChat, {
+            docId,
+            entityKind,
+            entityId: chatContentId,
+          });
+        }
 
         return toolJsonResult({
           docId,
@@ -1629,15 +1630,15 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
     }),
   );
 
-  function requireBrowserEntity():
-    | { entityKind: "session" | "task" | "project"; entityId: string }
+  function requireBrowserSession():
+    | { sessionId: string }
     | ReturnType<typeof toolErrorResult> {
-    if (entityKind === undefined || entityId === undefined) {
+    if (entityKind !== "session" || entityId === undefined) {
       return toolErrorResult(
-        "browser_* tools require a session, task, or project sandbox (token has no entity).",
+        "browser_* tools require a session sandbox (token has no session).",
       );
     }
-    return { entityKind, entityId };
+    return { sessionId: entityId };
   }
 
   tools.push(
@@ -1648,16 +1649,12 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         const result = await ctx.runAction(
           internal.sandbox.startDesktopForBrowserEntity,
-          {
-            entityKind: entity.entityKind,
-            entityId: entity.entityId,
-            clerkUserId,
-          },
+          { sessionId: browser.sessionId, clerkUserId },
         );
         if (!result.ok) return toolErrorResult(result.message);
         return {
@@ -1675,12 +1672,11 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
-          entityKind: entity.entityKind,
-          entityId: entity.entityId,
+          sessionId: browser.sessionId,
           locked: true,
         });
         return toolJsonResult({ locked: true });
@@ -1696,12 +1692,11 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
-          entityKind: entity.entityKind,
-          entityId: entity.entityId,
+          sessionId: browser.sessionId,
           locked: false,
         });
         return toolJsonResult({ locked: false });

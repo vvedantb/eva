@@ -4,6 +4,7 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
 
+const PAGE = { path: "/acme/web/sessions/abc", title: "Eva", timeZone: "UTC" };
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout"] });
@@ -32,6 +33,7 @@ async function fixture() {
       userId: ownerUserId,
       title: "Fix the login bug",
       status: "active",
+      numId: 7,
     });
     return { ownerUserId, strangerUserId, repoId, sessionId };
   });
@@ -65,12 +67,59 @@ async function rows(f: Awaited<ReturnType<typeof fixture>>) {
   );
 }
 
+describe("Manager Ave page context", () => {
+  test(
+    "a send names the entity on the page and keeps the selection",
+    async () => {
+      const f = await fixture();
+      await f.owner.mutation(api.ave.send, {
+        content: "why does this fail?",
+        clientId: "c1",
+        pageContext: {
+          ...PAGE,
+          path: "/vvedantb/eva/sessions/7?tab=diff",
+          selection: "  TypeError: x is undefined  ",
+        },
+      });
+      const [row] = await rows(f);
+      expect(row?.pageContext?.entity).toEqual({
+        kind: "session",
+        title: "Fix the login bug",
+        status: "active",
+      });
+      expect(row?.pageContext?.selection).toBe("TypeError: x is undefined");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a user without repo access gets no entity for the path",
+    async () => {
+      const f = await fixture();
+      await f.stranger.mutation(api.ave.send, {
+        content: "what is this?",
+        clientId: "c1",
+        pageContext: { ...PAGE, path: "/vvedantb/eva/sessions/7" },
+      });
+      const message = await f.t.run(async (ctx) =>
+        ctx.db
+          .query("aveMessages")
+          .filter((q) => q.eq(q.field("userId"), f.strangerUserId))
+          .first(),
+      );
+      expect(message?.pageContext?.path).toBe("/vvedantb/eva/sessions/7");
+      expect(message?.pageContext?.entity).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+});
+
 describe("Manager Ave run state", () => {
   test(
     "a send while idle opens a thread and starts one run",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       expect(thread?.status).toBe("running");
       expect(thread?.runId).toBeDefined();
@@ -85,9 +134,9 @@ describe("Manager Ave run state", () => {
     "a send while running asks for a rerun instead of a second run",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1", pageContext: PAGE });
       const first = await liveThread(f);
-      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2" });
+      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2", pageContext: PAGE });
       const second = await liveThread(f);
       expect(second?.runId).toBe(first?.runId);
       expect(second?.rerunRequested).toBe(true);
@@ -99,7 +148,7 @@ describe("Manager Ave run state", () => {
     "a stale run's writes land nowhere",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       await f.t.mutation(internal._ave.run.finishRun, {
@@ -118,7 +167,7 @@ describe("Manager Ave run state", () => {
     "finishing writes the reply, then starts the requested rerun",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread?.runId) throw new Error("no run");
       const claim = await f.t.mutation(internal._ave.run.claimRun, {
@@ -126,7 +175,7 @@ describe("Manager Ave run state", () => {
         runId: thread.runId,
       });
       expect(claim?.clerkUserId).toBe(OWNER);
-      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2" });
+      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2", pageContext: PAGE });
       await f.t.mutation(internal._ave.run.finishRun, {
         threadId: thread._id,
         runId: thread.runId,
@@ -147,8 +196,8 @@ describe("Manager Ave run state", () => {
     "a stop drops the pending rerun and idles the thread",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1" });
-      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2" });
+      await f.owner.mutation(api.ave.send, { content: "one", clientId: "c1", pageContext: PAGE });
+      await f.owner.mutation(api.ave.send, { content: "two", clientId: "c2", pageContext: PAGE });
       await f.owner.mutation(api.ave.cancel, {});
       const thread = await liveThread(f);
       if (!thread?.runId) throw new Error("no run");
@@ -169,7 +218,7 @@ describe("Manager Ave run state", () => {
     "the watchdog reclaims a run that never finished",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread?.runId) throw new Error("no run");
       await f.t.mutation(internal._ave.run.watchdog, {
@@ -186,7 +235,7 @@ describe("Manager Ave run state", () => {
     "reset archives the thread and fences its run out",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       await f.owner.mutation(api.ave.reset, {});
       expect(await liveThread(f)).toBeNull();
       expect(await f.owner.query(api.ave.listMessages, {})).toEqual([]);
@@ -200,7 +249,7 @@ describe("wake-ups and watches", () => {
     "a watched child finishing wakes Ave with a notification row",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread?.runId) throw new Error("no run");
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
@@ -225,31 +274,23 @@ describe("wake-ups and watches", () => {
   );
 
   test(
-    "a session wake-up quotes the reply of the chat whose turn ended",
+    "a session wake-up quotes its chat's reply",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
         sessionId: f.sessionId,
         aveThreadId: thread._id,
       });
-      const { mainChatId, sideChatId } = await f.t.run(async (ctx) => {
-        const chat = (title: string, number: number) =>
-          ctx.db.insert("sessionChats", {
-            sessionId: f.sessionId,
-            repoId: f.repoId,
-            userId: f.ownerUserId,
-            title,
-            number,
-            isMain: number === 1,
-          });
-        return {
-          mainChatId: await chat("Main", 1),
-          sideChatId: await chat("Side", 2),
-        };
-      });
+      const mainChatId = await f.t.run(async (ctx) =>
+        ctx.db.insert("sessionChats", {
+          sessionId: f.sessionId,
+          repoId: f.repoId,
+          userId: f.ownerUserId,
+        }),
+      );
       await f.t.run(async (ctx) => {
         await ctx.db.insert("messages", {
           parentId: mainChatId,
@@ -257,15 +298,9 @@ describe("wake-ups and watches", () => {
           content: "Main reply.",
           timestamp: Date.now(),
         });
-        await ctx.db.insert("messages", {
-          parentId: sideChatId,
-          role: "assistant",
-          content: "Side chat fixed the bug.",
-          timestamp: Date.now(),
-        });
       });
       await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
-        child: { kind: "session", sessionId: f.sessionId, chatId: sideChatId },
+        child: { kind: "session", sessionId: f.sessionId, chatId: mainChatId },
         status: "completed",
       });
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
@@ -279,7 +314,7 @@ describe("wake-ups and watches", () => {
       const notifications = (await rows(f))
         .filter((r) => r.orchestratorNotification === true)
         .map((r) => r.content.split("\n\n")[1]);
-      expect(notifications).toEqual(["Side chat fixed the bug.", "Main reply."]);
+      expect(notifications).toEqual(["Main reply.", "Main reply."]);
     },
     TIMEOUT_MS,
   );
@@ -288,7 +323,7 @@ describe("wake-ups and watches", () => {
     "a watched project's chat finishing wakes Ave too",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       const projectId = await f.t.run(async (ctx) =>
@@ -324,7 +359,7 @@ describe("wake-ups and watches", () => {
     "a watch wakes Ave once: later turns in that chat stay silent until re-armed",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
@@ -357,7 +392,7 @@ describe("wake-ups and watches", () => {
     "a watch on a reset thread is cleared instead of waking anyone",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
@@ -379,7 +414,7 @@ describe("wake-ups and watches", () => {
     "nobody can point a watch at someone else's thread",
     async () => {
       const f = await fixture();
-      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1", pageContext: PAGE });
       const thread = await liveThread(f);
       if (!thread) throw new Error("no thread");
       const strangerSession = await f.t.run(async (ctx) => {

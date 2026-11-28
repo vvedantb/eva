@@ -1,15 +1,25 @@
 import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+import { openSelectionCard, type SelectionCard } from "./commentCard";
+import { openCommentsDrawer, type CommentsDrawer } from "./commentsDrawer";
+import {
+  listComments,
+  loadEvaSession,
+  sendComment,
+  type EvaSession,
+} from "./evaApi";
+import type { ToolbarTheme } from "./theme";
+import { mountToolbar, type Toolbar } from "./toolbar";
 
 type Msg = typeof PREVIEW_FRAME_MESSAGE;
 
 type InboundType = Msg[
   | "annotateMode"
-  | "annotateFreeze"
   | "annotateClear"
   | "screenshotCapture"
   | "snapshotCapture"
   | "webMcpList"
-  | "webMcpInvoke"];
+  | "webMcpInvoke"
+  | "toolbarState"];
 
 interface EvaAnnotationContext {
   tagName: string;
@@ -312,6 +322,10 @@ function evaPreviewAnnotationScript(): void {
   let overlay: HTMLDivElement | null = null;
   let labelEl: HTMLDivElement | null = null;
   let rectRaf = 0;
+  let toolbar: Toolbar | null = null;
+  let selectionCard: SelectionCard | null = null;
+  let evaSession: EvaSession | null = null;
+  let commentsDrawer: CommentsDrawer | null = null;
 
   function post(
     payload:
@@ -336,7 +350,10 @@ function evaPreviewAnnotationScript(): void {
           } | null;
         }
       | { type: Msg["annotateDismissed"] }
-      | { type: Msg["annotateFrozen"]; frozen: boolean }
+      | {
+          type: Msg["toolbarAction"];
+          action: "select" | "comments" | "sketch" | "screenshot";
+        }
       | {
           type: Msg["screenshot"];
           requestId: string;
@@ -722,24 +739,31 @@ function evaPreviewAnnotationScript(): void {
     labelEl.style.left = Math.max(0, rect.left) + "px";
   }
 
-  function chipLabel(el: Element): string {
+  function elementChip(el: Element): string {
     const tag = el.tagName.toLowerCase();
     const rawClass = el.classList.item(0);
     const stripped = rawClass ? stripClassHash(rawClass) : "";
     const cls =
       el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
+    return "<" + tag + cls + ">";
+  }
+
+  function chipLabel(el: Element): string {
     const react = collectReactNames(el);
     const reactPrefix = react[0] ? react[0] + " " : "";
-    return reactPrefix + "<" + tag + cls + ">";
+    return reactPrefix + elementChip(el);
   }
 
   function clearAll(): void {
+    selectionCard?.close();
+    selectionCard = null;
     selectedEl = null;
     paintBox(null, "", false);
   }
 
   function setMode(active: boolean): void {
     modeActive = active;
+    toolbar?.update({ selecting: active });
     document.documentElement.style.cursor = active ? "crosshair" : "";
     if (!active) {
       clearAll();
@@ -752,9 +776,16 @@ function evaPreviewAnnotationScript(): void {
       rectRaf = 0;
       if (!selectedEl || !document.contains(selectedEl)) {
         post({ type: "eva-preview-annotate-rect", rect: null });
+        selectionCard?.close();
         return;
       }
       const rect = selectedEl.getBoundingClientRect();
+      selectionCard?.reposition({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
       post({
         type: "eva-preview-annotate-rect",
         rect: {
@@ -784,6 +815,27 @@ function evaPreviewAnnotationScript(): void {
     paintBox(target, chipLabel(target), false);
   }
 
+  function styleLines(summary: string): { prop: string; value: string }[] {
+    const out: { prop: string; value: string }[] = [];
+    for (const entry of summary.split("; ")) {
+      const separator = entry.indexOf(": ");
+      const prop = separator === -1 ? entry : entry.slice(0, separator);
+      if (prop) {
+        out.push({
+          prop,
+          value: separator === -1 ? "" : entry.slice(separator + 2),
+        });
+      }
+    }
+    return out;
+  }
+
+  function finishSelection(notice: string): void {
+    clearAll();
+    setMode(false);
+    toolbar?.update({ notice });
+  }
+
   function onClick(event: MouseEvent): void {
     if (!modeActive) return;
     const target = event.target;
@@ -801,6 +853,42 @@ function evaPreviewAnnotationScript(): void {
     const context = captureContext(target);
     const rect = target.getBoundingClientRect();
     paintBox(target, chipLabel(target), true);
+    if (!embedded) {
+      selectionCard?.close();
+      const session = evaSession;
+      selectionCard = openSelectionCard({
+        info: {
+          chip: elementChip(target),
+          reactName: context.reactComponents[0] ?? "",
+          text: context.textContent,
+          accessibility: context.accessibility,
+          html: context.outerHTML,
+          styles: styleLines(context.stylesSummary),
+        },
+        rect,
+        submitLabel: session ? "Send to Eva" : "Copy for Eva",
+        requireNote: session !== null,
+        onSubmit: async (note) => {
+          if (session) {
+            try {
+              await sendComment(session, { feedback: note, context });
+            } catch (error) {
+              return error instanceof Error ? error.message : "Couldn't send";
+            }
+            finishSelection("Sent to Eva");
+            return null;
+          }
+          const ok = await copyToClipboard(
+            formatContextForClipboard(context, note),
+          );
+          if (!ok) return "Couldn't copy";
+          finishSelection("Copied for Eva");
+          return null;
+        },
+        onCancel: clearAll,
+      });
+      return;
+    }
     post({
       type: "eva-preview-annotate-selected",
       context,
@@ -873,7 +961,7 @@ function evaPreviewAnnotationScript(): void {
       frozenAnimations = [];
       frozenMedia = [];
     }
-    post({ type: "eva-preview-annotate-frozen", frozen });
+    toolbar?.update({ frozen });
   }
 
   function onScrollOrResize(): void {
@@ -1383,6 +1471,9 @@ function evaPreviewAnnotationScript(): void {
   function restoreCaptureChrome(): void {
     if (overlay) overlay.style.display = overlayDisplayForCapture;
     if (labelEl) labelEl.style.display = labelDisplayForCapture;
+    toolbar?.setHiddenForCapture(false);
+    selectionCard?.setHiddenForCapture(false);
+    commentsDrawer?.setHiddenForCapture(false);
   }
 
   let overlayDisplayForCapture = "";
@@ -1443,10 +1534,110 @@ function evaPreviewAnnotationScript(): void {
     labelDisplayForCapture = labelEl?.style.display ?? "";
     if (overlay) overlay.style.display = "none";
     if (labelEl) labelEl.style.display = "none";
+    toolbar?.setHiddenForCapture(true);
+    selectionCard?.setHiddenForCapture(true);
+    commentsDrawer?.setHiddenForCapture(true);
     return loadHtml2Canvas()
       .then(renderViewportCanvas)
       .then((canvas) => canvas.toDataURL("image/png"))
       .finally(restoreCaptureChrome);
+  }
+
+  function parseToolbarTheme(value: unknown): ToolbarTheme | null {
+    if (typeof value !== "object" || value === null) return null;
+    const read = (key: string): string => {
+      const field = Reflect.get(value, key);
+      return typeof field === "string" ? field : "";
+    };
+    const theme: ToolbarTheme = {
+      fontFamily: read("fontFamily"),
+      surface: read("surface"),
+      surfaceText: read("surfaceText"),
+      barShadow: read("barShadow"),
+      tipShadow: read("tipShadow"),
+      tipRadius: read("tipRadius"),
+      idleText: read("idleText"),
+      hoverBg: read("hoverBg"),
+      hoverText: read("hoverText"),
+      activeBg: read("activeBg"),
+      activeText: read("activeText"),
+      badgeBg: read("badgeBg"),
+      badgeText: read("badgeText"),
+      disc: read("disc"),
+      destructive: read("destructive"),
+      border: read("border"),
+      primary: read("primary"),
+      primaryText: read("primaryText"),
+      field: read("field"),
+      popover: read("popover"),
+      muted: read("muted"),
+      warning: read("warning"),
+      inputBorder: read("inputBorder"),
+      focusBorder: read("focusBorder"),
+      secondaryText: read("secondaryText"),
+      tabTrack: read("tabTrack"),
+      tabPill: read("tabPill"),
+    };
+    return Object.values(theme).some((entry) => entry === "") ? null : theme;
+  }
+
+  const embedded = window !== window.top;
+
+  function copyToClipboard(text: string): Promise<boolean> {
+    return navigator.clipboard.writeText(text).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  function formatContextForClipboard(
+    context: EvaAnnotationContext,
+    note: string,
+  ): string {
+    const lines = note ? [`Feedback: ${note}`, ""] : [];
+    lines.push(
+      `Element: ${context.selector}`,
+      `Page: ${context.pageUrl}`,
+      `Path: ${context.fullPath}`,
+    );
+    if (context.reactComponents.length > 0) {
+      lines.push(`React: ${context.reactComponents.join(" > ")}`);
+    }
+    if (context.textContent) lines.push(`Text: ${context.textContent}`);
+    if (context.stylesSummary) lines.push(`Styles: ${context.stylesSummary}`);
+    lines.push(`HTML: ${context.outerHTML}`);
+    return lines.join("\n");
+  }
+
+  function saveScreenshotLocally(): void {
+    toolbar?.update({ capturing: true });
+    captureViewport()
+      .then((dataUrl) => fetch(dataUrl))
+      .then((response) => response.blob())
+      .then(async (blob) => {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type || "image/png"]: blob }),
+          ]);
+          toolbar?.update({ notice: "Screenshot copied" });
+        } catch {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "preview-screenshot.png";
+          link.click();
+          URL.revokeObjectURL(link.href);
+          toolbar?.update({ notice: "Screenshot downloaded" });
+        }
+      })
+      .catch((error) => {
+        toolbar?.update({
+          notice:
+            error instanceof Error
+              ? error.message
+              : "Couldn't render this page as an image",
+        });
+      })
+      .finally(() => toolbar?.update({ capturing: false }));
   }
 
   window.addEventListener("message", (event) => {
@@ -1459,12 +1650,22 @@ function evaPreviewAnnotationScript(): void {
       setMode(active);
       return;
     }
-    if (type === ("eva-preview-annotate-freeze" satisfies InboundType)) {
-      setFrozen(Reflect.get(data, "active") === true);
-      return;
-    }
     if (type === ("eva-preview-annotate-clear" satisfies InboundType)) {
       clearAll();
+      return;
+    }
+    if (type === ("eva-preview-toolbar-state" satisfies InboundType)) {
+      const theme = parseToolbarTheme(Reflect.get(data, "theme"));
+      if (theme) toolbar?.setTheme(theme);
+      const count = Reflect.get(data, "commentCount");
+      toolbar?.update({
+        selectEnabled: Reflect.get(data, "selectEnabled") === true,
+        commentsEnabled: Reflect.get(data, "commentsEnabled") === true,
+        commentsActive: Reflect.get(data, "commentsActive") === true,
+        commentCount: typeof count === "number" ? count : 0,
+        sketchEnabled: Reflect.get(data, "sketchEnabled") === true,
+        sketchActive: Reflect.get(data, "sketchActive") === true,
+      });
       return;
     }
     if (type === ("eva-preview-screenshot-capture" satisfies InboundType)) {
@@ -1572,6 +1773,71 @@ function evaPreviewAnnotationScript(): void {
   document.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("scroll", onScrollOrResize, true);
   window.addEventListener("resize", onScrollOrResize);
+
+  const ownsToolbar =
+    window === window.top ||
+    (window.parent === window.top && parentOrigin !== window.location.origin);
+  if (ownsToolbar) {
+    toolbar = mountToolbar(
+      {
+        select: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "select" });
+          } else {
+            setMode(!modeActive);
+          }
+        },
+        comments: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "comments" });
+            return;
+          }
+          if (commentsDrawer) {
+            commentsDrawer.close();
+            commentsDrawer = null;
+            toolbar?.update({ commentsActive: false });
+            return;
+          }
+          if (!evaSession) return;
+          commentsDrawer = openCommentsDrawer({
+            session: evaSession,
+            onClose: () => {
+              commentsDrawer = null;
+              toolbar?.update({ commentsActive: false });
+            },
+            onCount: (commentCount) => toolbar?.update({ commentCount }),
+          });
+          toolbar?.update({ commentsActive: true });
+        },
+        freeze: () => setFrozen(!frozen),
+        sketch: () =>
+          post({ type: "eva-preview-toolbar-action", action: "sketch" }),
+        screenshot: () => {
+          if (embedded) {
+            post({ type: "eva-preview-toolbar-action", action: "screenshot" });
+          } else {
+            saveScreenshotLocally();
+          }
+        },
+      },
+      { selectEnabled: !embedded },
+    );
+  }
+
+  if (ownsToolbar && !embedded) {
+    void loadEvaSession().then(async (session) => {
+      if (!session) return;
+      evaSession = session;
+      toolbar?.update({ commentsEnabled: true });
+      try {
+        const existing = await listComments(session);
+        toolbar?.update({
+          commentCount: existing.filter((c) => c.resolved === null).length,
+        });
+      } catch {
+      }
+    });
+  }
 
   post({ type: "eva-preview-annotate-ready" });
 }

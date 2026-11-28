@@ -1,24 +1,6 @@
 import { Bubble, Stage, Text, Thread, type Act } from '../../kit'
 import './corners.css'
 
-// Copy and art in opposite corners: a bento tile whose words sit bottom-left
-// and whose picture hangs from the top-right corner, off both those edges.
-// Beats: the replies arrive one by one. Plays once; the still is the payoff.
-//
-// What makes the corners balance:
-// - The copy takes one corner, the art the opposite one, and they never
-//   overlap: a clear diagonal of ground runs between them.
-// - The art runs off the two edges of its corner (top and right), so it
-//   reads as part of something bigger; the copy keeps the tile's full inset
-//   (24px) from its two edges. The crop takes the panel the thread sits in,
-//   never a bubble's words: the bubbles keep a margin inside the visible
-//   part of the panel.
-// - The art is the product's own surface at true size, not a shrunken
-//   screenshot: a thread of real bubbles, the newest nearest the copy.
-// - One idea per tile: a title and a single line, no button.
-//
-// Real strings: the copy and the three messages.
-
 type S = { n: number }
 
 const MESSAGES = [

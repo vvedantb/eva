@@ -1,5 +1,6 @@
+import type { ProjectAccount } from "../_projects/projectAccount";
 import type { QueryCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { resolveUserDisplayFirstName } from "./defaults";
 import { listTeammateUserIds } from "./sharing";
 
@@ -88,15 +89,15 @@ export async function listSelectableAccountsFor(
 type AccountListItem = Awaited<ReturnType<typeof listAccountsFor>>[number];
 
 /**
- * Decision 20: a project's coordinator and child tasks run on the project's
- * account (`projects.providerAccountId`, checked against the project owner),
- * so a picker for them lists it first, even when the pool owner (a child
- * task's creator) could not pick it. Unchanged without a project account.
+ * A project's account is the one Eva's chat runs on, held by the project's
+ * owner (`_projects/projectAccount.ts`), so a picker in its chats lists it
+ * first, even when the pool owner (a child task's creator) could not pick
+ * it. Unchanged without a project account.
  */
 export async function withProjectAccountFirst(
   ctx: QueryCtx,
   rows: AccountListItem[],
-  project: Pick<Doc<"projects">, "userId" | "providerAccountId"> | null,
+  project: ProjectAccount | null,
 ): Promise<AccountListItem[]> {
   const accountId = project?.providerAccountId;
   if (!project || accountId === undefined) return rows;

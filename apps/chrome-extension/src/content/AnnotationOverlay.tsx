@@ -216,6 +216,8 @@ function pinStatusColor(status: TaskStatus | undefined): {
       return { bg: "#fb923c", opacity: 1 };
     case "code_review":
       return { bg: "#c084fc", opacity: 1 };
+    case "done":
+      return { bg: "#4ade80", opacity: 1 };
     case "cancelled":
       return { bg: "#ef4444", opacity: 0.6 };
     default:

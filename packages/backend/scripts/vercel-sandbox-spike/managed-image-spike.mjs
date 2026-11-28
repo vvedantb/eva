@@ -34,7 +34,6 @@ const MARKER_PATH = "/tmp/eva-managed-image-spike.marker";
 const created = [];
 
 async function createSandbox({ image, runtime, snapshotId, timeoutMs } = {}) {
-  /** @type {Record<string, unknown>} */
   const params = {
     ...CREDS,
     timeout: timeoutMs ?? 20 * 60 * 1000,
@@ -183,7 +182,6 @@ const APT_GROUPS = {
 };
 
 async function inventory(sandbox, binaries) {
-  /** @type {Record<string, string>} */
   const found = {};
   for (const bin of binaries) {
     const r = await probe(
@@ -200,7 +198,6 @@ async function aptInstall(sandbox) {
   const update = await timed("apt-get update", () =>
     probe(sandbox, "sudo apt-get update -qq", { sudo: true, timeoutMs: 5 * 60 * 1000 }),
   );
-  /** @type {Record<string, unknown>} */
   const results = { update: { ms: update.ms, exitCode: update.value.exitCode } };
 
   for (const [group, pkgs] of Object.entries(APT_GROUPS)) {
@@ -297,7 +294,6 @@ async function legacySnapshotCompat(legacySandbox) {
   console.log("\n[4] LEGACY AL2023 snapshot → SDK v3 restore…");
   const { result } = await snapshotRoundTrip("al2023", legacySandbox);
 
-  /** @type {Record<string, unknown>} */
   const out = { selfCreated: result };
   if (CONFIG.legacySnapshotId) {
     console.log(`  restoring supplied prod snapshot ${CONFIG.legacySnapshotId}…`);

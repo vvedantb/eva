@@ -18,9 +18,6 @@ async function sequence(a: Act<State>) {
   await a.wait(1400)
 }
 
-// A real failure mode: margin travel on an overlapping inline-grid item
-// contributes to the shared baseline even after that item becomes invisible.
-// Keep this reproduction local; corrected scenes use the shared States part.
 function UnstableLabel({ added }: State) {
   return <span className="ts-unstable">{Object.entries(labels).map(([key, text]) =>
     <span className="ts-unstable__item" key={key} data-on={(added ? 'added' : 'empty') === key || undefined} aria-hidden={(added ? 'added' : 'empty') !== key || undefined}>{text}</span>

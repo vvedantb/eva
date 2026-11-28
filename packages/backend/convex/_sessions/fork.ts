@@ -7,7 +7,7 @@ import {
 } from "../functions";
 import { sessionStatusValidator } from "../validators";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
-import { findMainChat } from "../_sessionChats/helpers";
+import { findMainChat, type ChatSettingsSource } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
 import { isSessionArchived } from "./archive";
@@ -89,7 +89,8 @@ export const createForkedSession = internalAuthMutation({
     const repoGroup = source.repoGroupId
       ? await ctx.db.get(source.repoGroupId)
       : null;
-    const picks = (await findMainChat(ctx.db, source._id)) ?? source;
+    const picks: ChatSettingsSource =
+      (await findMainChat(ctx.db, source._id)) ?? {};
     const { sessionId, numId } = await createSession(
       ctx,
       {

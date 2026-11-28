@@ -1,13 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { normalizeIdOrThrow } from "./functions";
 import {
-  assertProjectNotArchived,
-  authMutation,
-  getProjectWithAccess,
-  normalizeIdOrThrow,
-} from "./functions";
-import {
-  approveTasks,
   mergeHandedTask,
   retryFailedTask,
   scheduleReadyProjectTasks,
@@ -24,26 +18,6 @@ export const scheduleReadyTasks = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await scheduleReadyProjectTasks(ctx, args.projectId);
-    return null;
-  },
-});
-
-/**
- * A person approves tasks waiting in Triage: they go to the coordinator,
- * which starts each or adds it to an open task (`approveTasks`). Nothing
- * starts here.
- */
-export const approveProjectTasks = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    taskIds: v.array(v.id("agentTasks")),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    assertProjectNotArchived(
-      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
-    );
-    await approveTasks(ctx, args.projectId, args.taskIds);
     return null;
   },
 });
@@ -72,7 +46,7 @@ export const retryFailedTaskAsCoordinator = internalMutation({
   },
 });
 
-/** The coordinator's `start_task`: starts a handed Triage item (`startHandedTask`). */
+/** The coordinator's `start_task`: starts a handed task (`startHandedTask`). */
 export const startTaskAsCoordinator = internalMutation({
   args: { projectId: v.string(), taskId: v.string() },
   returns: v.null(),
@@ -87,7 +61,7 @@ export const startTaskAsCoordinator = internalMutation({
 });
 
 /**
- * The coordinator's `merge_task_into`: closes a handed Triage item as added
+ * The coordinator's `merge_task_into`: closes a handed task as added
  * to an open task (`mergeHandedTask`). Returns the target's task number.
  */
 export const mergeTaskIntoAsCoordinator = internalMutation({

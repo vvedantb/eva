@@ -25,17 +25,29 @@ import {
   usePreviewMiniPlayer,
   type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
-import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
-import { PreviewActionBar } from "./_components/PreviewActionBar";
+import type { PreviewAnnotationTarget } from "@/lib/components/sandbox/annotationSend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useQueryState } from "nuqs";
+import { api, type Id } from "@eva/backend";
+import { messageLinkParser } from "@/lib/search-params";
+import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
+import { usePreviewScreenshot } from "./_components/usePreviewScreenshot";
+import { usePreviewToolbarBridge } from "./_components/usePreviewToolbarBridge";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
+import {
+  PreviewCommentsDrawer,
+  isResolved,
+} from "./_components/PreviewCommentsDrawer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePublishPreviewViewport } from "@/lib/contexts/PreviewViewportContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
 import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";
 import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
 import { PreviewViewportFrame } from "./_components/PreviewViewportFrame";
 import {
   FILL_PREVIEW_VIEWPORT,
+  findPreviewViewportPreset,
   framedPreviewViewport,
   parsePreviewContainSize,
   parsePreviewViewport,
@@ -70,7 +82,7 @@ interface WebPreviewPanelProps {
   onPathChange: (path: string) => void;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  onAnnotationSubmit?: AnnotationSubmit;
+  annotation?: PreviewAnnotationTarget;
   miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
   externalHrefForPath?: (path: string) => string;
 }
@@ -92,12 +104,22 @@ export function WebPreviewPanel({
   onPathChange,
   onStartSandbox,
   isSandboxStarting = false,
-  onAnnotationSubmit,
+  annotation,
   miniPlayer,
   externalHrefForPath,
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const comments =
+    useQuery(
+      api.previewComments.list,
+      isActive && annotation?.chatId ? { chatId: annotation.chatId } : "skip",
+    ) ?? [];
+  const [linkedMessageId, setLinkedMessageId] = useQueryState(
+    MESSAGE_LINK_PARAM,
+    messageLinkParser,
+  );
   const [sketchMode, setSketchMode] = useState(false);
   const canSketch = usePendingPreviewSnapshots() !== undefined;
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -108,6 +130,27 @@ export function WebPreviewPanel({
       ? { ...miniPlayer, sandboxId }
       : undefined;
   const iframeElement = usePreviewIframeElement(pathStorageKey);
+  const screenshot = usePreviewScreenshot(iframeElement);
+  usePreviewToolbarBridge({
+    iframeElement,
+    state: {
+      selectEnabled: annotation !== undefined,
+      commentsEnabled: annotation !== undefined,
+      commentsActive: commentsOpen,
+      commentCount: comments.filter((comment) => !isResolved(comment)).length,
+      sketchEnabled: canSketch,
+      sketchActive: sketchMode,
+    },
+    actions: {
+      select: () => setAnnotationMode(!annotationMode),
+      comments: () => setCommentsOpen(!commentsOpen),
+      sketch: () => {
+        setSketchMode(!sketchMode);
+        setAnnotationMode(false);
+      },
+      screenshot: screenshot.capture,
+    },
+  });
   const fullscreenElement = useFullscreenElement();
   const [fullscreenRequested, setFullscreenRequested] = useState(false);
   if (fullscreenRequested && fullscreenElement === null) {
@@ -158,6 +201,18 @@ export function WebPreviewPanel({
     contain,
     containSize,
   );
+  usePublishPreviewViewport(
+    isActive && framedViewport.mode !== "fill"
+      ? {
+          width: framedViewport.width,
+          height: framedViewport.height,
+          label:
+            framedViewport.mode === "preset"
+              ? findPreviewViewportPreset(framedViewport.id)?.label
+              : undefined,
+        }
+      : null,
+  );
   const pathLoaded = path !== undefined;
   const previewPath = normalizePreviewPath(path ?? "/");
 
@@ -178,6 +233,15 @@ export function WebPreviewPanel({
 
   function handlePathChange(next: string) {
     onPathChange(normalizePreviewPath(next));
+  }
+
+  function viewInChat(messageId: Id<"messages">) {
+    if (isFullscreen) toggleFullscreen();
+    if (linkedMessageId === messageId) {
+      void setLinkedMessageId(null).then(() => setLinkedMessageId(messageId));
+      return;
+    }
+    void setLinkedMessageId(messageId);
   }
 
   if (!isActive || !sandboxId) {
@@ -281,29 +345,6 @@ export function WebPreviewPanel({
         parentId={toolCallParentId}
         iframeElement={iframeElement}
       />
-      <PreviewActionBar
-        iframeElement={iframeElement}
-        hidden={showPlaceholder || sketchMode}
-        selectElement={
-          onAnnotationSubmit
-            ? {
-                active: annotationMode,
-                onToggle: () => setAnnotationMode(!annotationMode),
-              }
-            : undefined
-        }
-        sketch={
-          canSketch
-            ? {
-                active: sketchMode,
-                onToggle: () => {
-                  setSketchMode(!sketchMode);
-                  setAnnotationMode(false);
-                },
-              }
-            : undefined
-        }
-      />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar
           viewport={viewport}
@@ -374,11 +415,20 @@ export function WebPreviewPanel({
               onClose={() => setSketchMode(false)}
             />
           ) : null}
-          {onAnnotationSubmit ? (
+          {annotation ? (
             <PreviewAnnotationLayer
               mode={annotationMode}
               onModeChange={setAnnotationMode}
-              onSubmit={onAnnotationSubmit}
+              onSubmit={annotation.submit}
+            />
+          ) : null}
+          {annotation && commentsOpen && !sketchMode && !isFloating ? (
+            <PreviewCommentsDrawer
+              iframeElement={iframeElement}
+              comments={comments}
+              previewPath={previewPath}
+              onViewInChat={viewInChat}
+              onClose={() => setCommentsOpen(false)}
             />
           ) : null}
         </div>

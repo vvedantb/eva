@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { mentionsEva } from "@eva/shared";
 import { internal } from "../_generated/api";
 import {
@@ -16,15 +16,15 @@ import {
   aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
+  type previewAnnotationValidator,
   reasoningLevelValidator,
   usesChatDaemon,
 } from "../validators";
 import { trackSessionChatWorkflow } from "../workflowWatchdog";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { clearStreamingActivity } from "../streaming";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
-  dropComposerUserRow,
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
 import {
@@ -38,12 +38,13 @@ import {
   selectUsageLimitRetryUserMessage,
 } from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
+import { recordPersonChatPost } from "../chatReads";
 import {
   ensureOwnerChat,
   reviveCoordinatorSession,
   type OwnerEntity,
 } from "./ownedSession";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   notifyChatMentions,
@@ -53,7 +54,7 @@ import {
   bumpThreadRoot,
   threadReplyPrompt,
 } from "../_messages/replies";
-import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
+import { joinThreadOnReply } from "../_messages/threadParticipants";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
@@ -67,14 +68,14 @@ import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
   getSessionChatWithAccess,
-  listLiveSessionChats,
+  findMainChat,
   loadSessionChat,
-  sessionChatHasFreeSlot,
   sessionChatPersistenceId,
   sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
+import { userAuth } from "../_auth/currentUser";
 
 type TurnSettings = {
   model: Doc<"turns">["model"];
@@ -96,6 +97,12 @@ const turnSettingsArgs = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
 
+const sendOutcomeValidator = v.union(
+  v.literal("started"),
+  v.literal("queued"),
+  v.literal("posted"),
+);
+
 function sessionActivityRef(session: Doc<"sessions">) {
   return { kind: "session" as const, entityId: String(session._id) };
 }
@@ -109,6 +116,7 @@ async function stageAndStartChatTurn(
     message: string;
     settings: TurnSettings;
     replyTo?: Id<"messages">;
+    taskRun?: Doc<"turns">["taskRun"];
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -170,11 +178,13 @@ async function stageAndStartChatTurn(
     streamingEntityId,
     placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.actingUserId,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
     sandboxId: session.sandboxId,
     repoId: session.repoId,
+    taskRun: params.taskRun,
   });
   const pendingTurn = usesDaemonPull
     ? buildDaemonPendingTurn({
@@ -242,11 +252,13 @@ async function enqueueChatMessage(
     userId: Id<"users">;
     content: string;
     displayContent?: string;
+    annotation?: Infer<typeof previewAnnotationValidator>;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
     replyTo?: Id<"messages">;
+    taskRun?: Doc<"queuedMessages">["taskRun"];
   },
-): Promise<void> {
+): Promise<Id<"queuedMessages">> {
   const { chat, session } = params.context;
   const { settings } = params;
   const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -260,10 +272,11 @@ async function enqueueChatMessage(
     changePolicy: "owner-pool",
   });
   const now = Date.now();
-  await ctx.db.insert("queuedMessages", {
+  const queuedId = await ctx.db.insert("queuedMessages", {
     parentId: chat._id,
     content: params.content,
     displayContent: params.displayContent,
+    annotation: params.annotation,
     createdAt: now,
     order: now,
     userId: params.userId,
@@ -276,6 +289,7 @@ async function enqueueChatMessage(
     attachmentStorageIds: settings.attachmentStorageIds,
     sentViaOrchestrator: params.sentViaOrchestrator,
     replyTo: params.replyTo,
+    taskRun: params.taskRun,
   });
   await ctx.db.patch(chat._id, {
     lastModel: settings.model,
@@ -284,6 +298,7 @@ async function enqueueChatMessage(
     updatedAt: now,
   });
   await ctx.db.patch(session._id, { updatedAt: now });
+  return queuedId;
 }
 
 /**
@@ -311,7 +326,6 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;
@@ -321,6 +335,7 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       context,
       repo,
       actingUserId,
+      taskRun: turn.taskRun,
       ...(await threadTurnMessage(ctx, turn.replyTo, lastUserContent)),
       settings: {
         model: turn.model,
@@ -366,10 +381,6 @@ export const retryLastTurnWithAccount = authMutation({
     ) {
       throw new Error("A turn is already running");
     }
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
-      throw new Error("The sandbox is busy. Try again when it finishes.");
-    }
-
     const recent = await ctx.db
       .query("messages")
       .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
@@ -399,6 +410,7 @@ export const retryLastTurnWithAccount = authMutation({
       context,
       repo,
       actingUserId: ctx.userId,
+      taskRun: userMessage.taskRun,
       ...(await threadTurnMessage(ctx, failedReplyTo, userMessage.content)),
       settings: {
         model: userMessage.model ?? normalizeAIModel(chat.lastModel),
@@ -418,103 +430,7 @@ export const retryLastTurnWithAccount = authMutation({
 });
 
 /**
- * Frontend trigger to start a chat turn. When the session already has
- * `MAX_PARALLEL_CHATS` sibling chats running, the message queues on this chat
- * instead and starts when a sibling finishes; the reply says which happened
- * so the composer can show "waiting for a free slot".
- */
-export const startExecute = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    message: v.string(),
-    ...turnSettingsArgs,
-    sourceProposedPlanId: v.optional(v.id("proposedPlans")),
-  },
-  returns: v.union(
-    v.literal("started"),
-    v.literal("queued"),
-    v.literal("posted"),
-  ),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const { chat, session } = context;
-    if (chat.archived === true) throw new Error("This chat is closed");
-    await touchUserActivity(ctx, sessionActivityRef(session), {
-      source: "chat",
-      userId: ctx.userId,
-    });
-
-    await notifyChatMentions(ctx, {
-      content: args.message,
-      authorUserId: ctx.userId,
-      surface: { kind: "session", session, chat },
-    });
-
-    const repo = await ctx.db.get(session.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    const routed = await routePersonChatMessage(ctx, {
-      context,
-      userId: ctx.userId,
-      message: args.message,
-      insertUserRow: false,
-    });
-    if (routed === "answered") return "started";
-    if (routed === "posted") return "posted";
-
-    const { chatId, message, sourceProposedPlanId, ...settings } = args;
-    void chatId;
-
-    if (sourceProposedPlanId !== undefined) {
-      const plan = await ctx.db.get(sourceProposedPlanId);
-      if (plan && plan.sessionId === session._id) {
-        const now = Date.now();
-        await ctx.db.patch(sourceProposedPlanId, {
-          implementedAt: now,
-          implementationSessionId: session._id,
-          updatedAt: now,
-        });
-      }
-    }
-
-    const chatBusy =
-      (await hasOpenChatTurn(ctx.db, chat._id)) ||
-      chat.pendingTurn !== undefined;
-    if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
-      await enqueueChatMessage(ctx, {
-        context,
-        userId: ctx.userId,
-        content: message,
-        settings,
-      });
-      await dropComposerUserRow(ctx, chat._id, message);
-      return "queued";
-    }
-
-    await maybeInsertModelHandoffAlert(
-      ctx,
-      chat._id,
-      settings.model,
-      chat.provider,
-    );
-
-    await stageAndStartChatTurn(ctx, {
-      context,
-      repo,
-      actingUserId: ctx.userId,
-      message,
-      settings,
-    });
-    return "started";
-  },
-});
-
-/**
- * Fired when a chat tab opens: boot its daemon ahead of the user's first
+ * Fired when a session's chat opens: boot its daemon ahead of the user's first
  * message so that message is warm instead of paying a ~20s cold respawn.
  * No-op unless the session already has a sandbox and uses a daemon provider.
  * Best-effort and cheap to call repeatedly (the action skips if already warm).
@@ -529,7 +445,6 @@ export const prewarmDaemon = authMutation({
     const sandboxId = session.sandboxId;
     if (!sandboxId) return null;
     if (isSandboxClosingStatus(session.status)) return null;
-    if (chat.archived === true) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     const credentialOwnerUserId = await sessionAccountHolder(
@@ -618,11 +533,7 @@ export const getDaemonPrewarmData = internalQuery({
     if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      !session.sandboxId ||
-      isSandboxClosingStatus(session.status) ||
-      chat.archived === true
-    ) {
+    if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
     const normalizedModel = normalizeAIModel(chat.lastModel);
@@ -648,46 +559,40 @@ export const getDaemonPrewarmData = internalQuery({
   },
 });
 
-/** Queues a message to be processed after the chat's current turn finishes. */
-export const enqueueMessage = authMutation({
+/**
+ * MCP's send (`send_chat_message`, `send_agent_message`) to the chat it
+ * resolved: the same path as `chats.send`, so the server alone decides
+ * whether it runs now or queues. Internal because MCP names its caller by
+ * Clerk id; the access check is the one `chats.send` makes.
+ */
+export const sendFromMcp = internalMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    clerkUserId: v.string(),
+    chatId: v.string(),
     message: v.string(),
-    displayContent: v.optional(v.string()),
-    ...turnSettingsArgs,
-    sentViaOrchestrator: v.optional(v.boolean()),
+    model: aiModelValidator,
+    providerAccountId: v.optional(v.id("userProviderAccounts")),
+    sentViaOrchestrator: v.boolean(),
   },
-  returns: v.null(),
+  returns: sendOutcomeValidator,
   handler: async (ctx, args) => {
     const content = args.message.trim();
-    if (!content) return null;
-    const displayContent = args.displayContent?.trim();
-
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-
-    const {
-      chatId,
-      message,
-      displayContent: omittedDisplay,
-      sentViaOrchestrator,
-      ...settings
-    } = args;
-    void chatId;
-    void message;
-    void omittedDisplay;
-    await sendSessionChatMessage(ctx, {
+    if (!content) throw new Error("The message is empty");
+    const user = await userAuth.getUserByClerkId(ctx, args.clerkUserId);
+    if (!user) throw new Error("User not found");
+    const chatId = ctx.db.normalizeId("sessionChats", args.chatId);
+    if (!chatId) throw new Error("Chat not found");
+    const context = await getSessionChatWithAccess(ctx.db, chatId, user._id);
+    return await sendSessionChatMessage(ctx, {
       context,
-      userId: ctx.userId,
+      userId: user._id,
       content,
-      displayContent: displayContent || undefined,
-      settings,
-      sentViaOrchestrator,
+      settings: {
+        model: args.model,
+        providerAccountId: args.providerAccountId,
+      },
+      sentViaOrchestrator: args.sentViaOrchestrator,
     });
-    return null;
   },
 });
 
@@ -717,7 +622,6 @@ export const addReply = authMutation({
     if (!chatId) throw new Error("Replies work in session chats only");
     const context = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
     const { chat, session } = context;
-    if (chat.archived === true) throw new Error("This chat is closed");
 
     const replyId = await ctx.db.insert("messages", {
       parentId: root.parentId,
@@ -734,18 +638,26 @@ export const addReply = authMutation({
     });
 
     const surface = { kind: "session" as const, session, chat };
-    await notifyChatMentions(ctx, {
+    const mentionedIds = await notifyChatMentions(ctx, {
       content,
       authorUserId: ctx.userId,
       surface,
+      threadRoot: root,
+    });
+    const reply = await ctx.db.get(replyId);
+    if (!reply) throw new Error("Reply not stored");
+    await joinThreadOnReply(ctx, {
+      root,
+      reply,
+      replierId: ctx.userId,
+      mentionedIds,
+      repoId: session.repoId,
     });
     await notifyThreadReply(ctx, {
       content,
       authorUserId: ctx.userId,
-      participantIds: [
-        ...(root.role === "user" && root.userId ? [root.userId] : []),
-        ...(root.replierIds ?? []),
-      ],
+      rootId: root._id,
+      mentionedIds,
       surface,
     });
 
@@ -769,10 +681,143 @@ export const addReply = authMutation({
 
 /**
  * Queues a user message on a session chat and sends it at once when the chat
- * is idle. The caller checks repo access. Shared by `enqueueMessage` and the
- * mobile app (`mobile.sendMessage`).
+ * is idle. The caller checks repo access. Shared by `chats.send` (both apps)
+ * and MCP's `sendFromMcp`. Returns whether the message started a turn,
+ * queued, or was stored as a comment.
  */
 export async function sendSessionChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    displayContent?: string;
+    annotation?: Infer<typeof previewAnnotationValidator>;
+    settings: TurnSettings;
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<Infer<typeof sendOutcomeValidator>> {
+  const { chat } = params.context;
+  const session = await reviveCoordinatorSession(ctx, params.context.session);
+  await touchUserActivity(ctx, sessionActivityRef(session), {
+    source: "chat",
+    userId: params.userId,
+  });
+  const mentionedIds = await notifyChatMentions(ctx, {
+    content: params.displayContent ?? params.content,
+    authorUserId: params.userId,
+    surface: { kind: "session", session, chat },
+  });
+  await recordPersonChatPost(ctx, {
+    parentId: chat._id,
+    authorId: params.userId,
+    mentionedIds,
+  });
+  const routed = await routePersonChatMessage(ctx, {
+    context: params.context,
+    userId: params.userId,
+    message: params.content,
+    userRow: {
+      content: params.displayContent ?? params.content,
+      attachmentStorageIds: params.settings.attachmentStorageIds,
+      annotation: params.annotation,
+    },
+  });
+  if (routed === "answered") return "started";
+  if (routed === "posted") return "posted";
+  const queuedId = await enqueueChatMessage(ctx, params);
+  await drainChatQueueQuietly(ctx, chat._id);
+  return (await ctx.db.get(queuedId)) === null ? "started" : "queued";
+}
+
+/** A turn on the chat's sticky model, traits and account. */
+export function stickyTurnSettings(
+  chat: Doc<"sessionChats">,
+  model: Doc<"turns">["model"],
+  attachmentStorageIds?: Id<"_storage">[],
+): TurnSettings {
+  return {
+    model,
+    ...launchTraitsFromStored(model, {
+      reasoningLevel: chat.lastReasoningLevel,
+      thinkingEnabled: chat.lastThinkingEnabled,
+      use1mContext: chat.lastUse1mContext,
+      fastMode: chat.lastFastMode,
+    }),
+    providerAccountId: chat.providerAccountId,
+    attachmentStorageIds,
+  };
+}
+
+/**
+ * Queues a task's run as a chat message on the chat's sticky picks and
+ * drains the queue: it runs at once on an idle chat, after the running turn
+ * otherwise, and a sleeping sandbox wakes for it. `content` is what the agent
+ * gets; `displayContent` is what the chat shows. The caller checks access.
+ */
+export async function queueTaskRunMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    displayContent: string;
+    taskRun: NonNullable<Doc<"queuedMessages">["taskRun"]>;
+    attachmentStorageIds?: Id<"_storage">[];
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  const { chat } = params.context;
+  await enqueueChatMessage(ctx, {
+    context: params.context,
+    userId: params.userId,
+    content: params.content,
+    displayContent: params.displayContent,
+    taskRun: params.taskRun,
+    sentViaOrchestrator: params.sentViaOrchestrator,
+    settings: stickyTurnSettings(
+      chat,
+      normalizeAIModel(chat.lastModel),
+      params.attachmentStorageIds,
+    ),
+  });
+  await drainChatQueueQuietly(ctx, chat._id);
+}
+
+/**
+ * A person's message to a task's or project's chat (a new project's first
+ * message): its first send creates the owner's session chat
+ * (`ensureOwnerChat`), then it runs on that chat's sticky picks. The caller
+ * checks access.
+ */
+export async function sendOwnerChatMessage(
+  ctx: MutationCtx,
+  params: {
+    entity: OwnerEntity;
+    userId: Id<"users">;
+    content: string;
+  },
+): Promise<void> {
+  const context = await ensureOwnerChat(ctx, params.entity);
+  await sendSessionChatMessage(ctx, {
+    context,
+    userId: params.userId,
+    content: params.content,
+    settings: stickyTurnSettings(
+      context.chat,
+      normalizeAIModel(context.chat.lastModel),
+    ),
+  });
+}
+
+/**
+ * Queues a message Eva sends by itself (a project coordinator's wake-up, a
+ * routed reply) on a session chat and drains the queue: it runs at once on an
+ * idle chat, after the running turn otherwise, and a sleeping sandbox wakes
+ * for it. No user activity and no mentions: no person typed it into this
+ * chat. The caller checks the target.
+ */
+export async function queueSystemChatMessage(
   ctx: MutationCtx,
   params: {
     context: SessionChatContext;
@@ -783,102 +828,10 @@ export async function sendSessionChatMessage(
     sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
-  const { chat } = params.context;
-  const session = await reviveCoordinatorSession(ctx, params.context.session);
-  await touchUserActivity(ctx, sessionActivityRef(session), {
-    source: "chat",
-    userId: params.userId,
+  await enqueueChatMessage(ctx, {
+    ...params,
+    sentViaOrchestrator: params.sentViaOrchestrator ?? true,
   });
-  await notifyChatMentions(ctx, {
-    content: params.displayContent ?? params.content,
-    authorUserId: params.userId,
-    surface: { kind: "session", session, chat },
-  });
-  const routed = await routePersonChatMessage(ctx, {
-    context: params.context,
-    userId: params.userId,
-    message: params.content,
-    insertUserRow: true,
-  });
-  if (routed !== "continue") return;
-  await enqueueChatMessage(ctx, params);
-  await drainChatQueueQuietly(ctx, chat._id);
-}
-
-/**
- * A person's message in a session chat on the chat's sticky model, traits
- * and account (the phone reply, `chats.send`, and a new project's first
- * message). The caller checks access.
- */
-export async function sendStickyChatMessage(
-  ctx: MutationCtx,
-  params: {
-    context: SessionChatContext;
-    model: Doc<"turns">["model"];
-    userId: Id<"users">;
-    content: string;
-    attachmentStorageIds?: Id<"_storage">[];
-  },
-): Promise<void> {
-  const { chat } = params.context;
-  await sendSessionChatMessage(ctx, {
-    context: params.context,
-    userId: params.userId,
-    content: params.content,
-    settings: {
-      model: params.model,
-      ...launchTraitsFromStored(params.model, {
-        reasoningLevel: chat.lastReasoningLevel,
-        thinkingEnabled: chat.lastThinkingEnabled,
-        use1mContext: chat.lastUse1mContext,
-        fastMode: chat.lastFastMode,
-      }),
-      providerAccountId: chat.providerAccountId,
-      attachmentStorageIds: params.attachmentStorageIds,
-    },
-  });
-}
-
-/**
- * A person's message to a task's or project's chat: its first send creates
- * the owner's session chat (`ensureOwnerChat`), then it runs on that chat's
- * sticky picks. The caller checks access.
- */
-export async function sendOwnerChatMessage(
-  ctx: MutationCtx,
-  params: {
-    entity: OwnerEntity;
-    userId: Id<"users">;
-    content: string;
-    attachmentStorageIds?: Id<"_storage">[];
-  },
-): Promise<void> {
-  const context = await ensureOwnerChat(ctx, params.entity);
-  await sendStickyChatMessage(ctx, {
-    context,
-    model: normalizeAIModel(context.chat.lastModel),
-    userId: params.userId,
-    content: params.content,
-    attachmentStorageIds: params.attachmentStorageIds,
-  });
-}
-
-/**
- * Queues a message Eva sends by itself (a project coordinator's wake-up) on
- * a session chat and drains the queue: it runs at once on an idle chat, after
- * the running turn otherwise, and a sleeping sandbox wakes for it. No user
- * activity and no mentions: no person typed it. The caller checks the target.
- */
-export async function queueSystemChatMessage(
-  ctx: MutationCtx,
-  params: {
-    context: SessionChatContext;
-    userId: Id<"users">;
-    content: string;
-    settings: TurnSettings;
-  },
-): Promise<void> {
-  await enqueueChatMessage(ctx, { ...params, sentViaOrchestrator: true });
   await drainChatQueueQuietly(ctx, params.context.chat._id);
 }
 
@@ -933,7 +886,7 @@ export async function cancelChatExecution(
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }
 
-/** Stops every chat of a session at once (the fleet `stop_agent` tool). */
+/** Stops a session's chat (the fleet `stop_agent` tool). */
 export const cancelSessionExecution = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
@@ -942,7 +895,8 @@ export const cancelSessionExecution = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
+    const chat = await findMainChat(ctx.db, session._id);
+    if (chat) {
       await cancelChatExecution(ctx, { chat, session }, { holdQueue: true });
     }
     return null;

@@ -1,3 +1,4 @@
+import type { SandboxStatus } from "./sandboxStatus";
 import type { TaskStatus } from "./taskMeta";
 
 /** Task statuses whose review sandbox can be woken at any time (the preview of the work). */
@@ -32,12 +33,55 @@ export function taskCanResolveConflicts(
 /** Create PR: a task that has run, with no run going and no PR yet (the task's, or its project's). */
 export function taskCanCreatePr({
   latestPrUrl,
-  runCount,
+  hasRuns,
   hasActiveRun,
 }: {
   latestPrUrl: string | undefined;
-  runCount: number;
+  hasRuns: boolean;
   hasActiveRun: boolean;
 }): boolean {
-  return !latestPrUrl && runCount > 0 && !hasActiveRun;
+  return !latestPrUrl && hasRuns && !hasActiveRun;
+}
+
+/**
+ * Whether a host may auto-wake its sandbox (web Preview; the setting and a
+ * visible tab still gate it). Session, quick task, project and project task
+ * share this rule: the sandbox is closed with one to resume, its last start
+ * did not fail (a retry stays manual), the host would allow a Start (not
+ * read-only), and nothing owns it. `isBusy` undefined is still loading, which
+ * counts as busy: never wake under a live run or turn.
+ */
+export function sandboxAutoWakeEligible({
+  status,
+  sandboxId,
+  sandboxError,
+  canStart,
+  isBusy,
+}: {
+  status: SandboxStatus | undefined;
+  sandboxId: string | undefined;
+  sandboxError: string | undefined;
+  canStart: boolean;
+  isBusy: boolean | undefined;
+}): boolean {
+  return (
+    status === "closed" &&
+    sandboxId !== undefined &&
+    (sandboxError ?? "") === "" &&
+    canStart &&
+    isBusy === false
+  );
+}
+
+/**
+ * The PR a task links to: its own, else (an old project task that never
+ * opened one) its project's. Every task opens its own PR on its own branch,
+ * so the task's PR is the one that holds its work. One rule for the web, the
+ * phone, the backend and MCP.
+ */
+export function taskPrUrl(
+  task: { prUrl?: string },
+  projectPrUrl: string | undefined,
+): string | undefined {
+  return task.prUrl ?? projectPrUrl;
 }

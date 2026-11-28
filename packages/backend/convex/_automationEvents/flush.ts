@@ -6,10 +6,9 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { getInstallationOctokit } from "../githubAuth";
-import { buildEvaTaskUrl } from "../_taskWorkflow/urls";
+import { buildEvaTaskUrl } from "../_env/webAppUrl";
 import {
   ciPassedValidator,
-  describeRepoEvent,
   repoEventValidator,
   type RepoEvent,
 } from "./events";
@@ -120,7 +119,7 @@ export const flush = internalAction({
     if (context.action === "run") {
       await ctx.runMutation(internal.automations.startEventRun, {
         runId,
-        context: describeRepoEvent(event),
+        event,
       });
       return null;
     }

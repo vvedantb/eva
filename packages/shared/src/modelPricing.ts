@@ -75,7 +75,6 @@ export const CODEX_PRICING_PER_MILLION: Record<
   string,
   { input: number; cached: number; output: number }
 > = {
-  // GPT-6 Astra — third-party report of the OpenAI pricing page, read
   // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
   "gpt-6-astra": { input: 10.0, cached: 1.0, output: 50.0 },
   "gpt-5.6-sol": { input: 5.0, cached: 0.5, output: 30.0 },

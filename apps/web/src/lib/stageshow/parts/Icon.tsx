@@ -2,9 +2,6 @@ import type { CSSProperties } from 'react'
 import './Icon.css'
 import { IconArchive, IconArrowRight, IconArrowUpRight, IconBell, IconBolt, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconCreditCard, IconDots, IconFaceId, IconFile, IconGripVertical, IconHeart, IconHome, IconLock, IconMail, IconPlayerPause, IconPlayerPlay, IconPlus, IconSearch, IconSend, IconSettings, IconStar, IconTrash, IconUser, IconWifi, IconWorld, IconX } from '@tabler/icons-react'
 
-// Eva: glyphs come from Tabler (the app's own icon pack) instead of lucide,
-// one family at one construction, so a row of icons shares a weight. Two card-specific drawings (a chip, contactless arcs) stay
-// hand-drawn because no set has them.
 const LUCIDE = {
   check: IconCheck, plus: IconPlus, close: IconX, 'chevron-right': IconChevronRight, 'chevron-down': IconChevronDown, search: IconSearch, globe: IconWorld,
   external: IconArrowUpRight, clock: IconClock, archive: IconArchive, trash: IconTrash, more: IconDots, arrow: IconArrowRight, file: IconFile, user: IconUser,
@@ -18,8 +15,6 @@ const DRAWN = {
 type LucideName = keyof typeof LUCIDE
 export type IconName = LucideName | keyof typeof DRAWN
 
-// Solid versions, for small marks and tinted tiles where a thin outline goes
-// wiry. Cut-outs use the even-odd rule.
 const FILLED: Partial<Record<IconName, string>> = {
   bolt: 'M9.6 1.2 3.2 8.9a.6.6 0 0 0 .5 1H7.4l-1 4.9a.4.4 0 0 0 .7.3l6.4-7.7a.6.6 0 0 0-.5-1H9.3l1-4.9a.4.4 0 0 0-.7-.3Z',
   card: 'M3 3h10a1.75 1.75 0 0 1 1.75 1.75V5.6H1.25v-.85A1.75 1.75 0 0 1 3 3Zm-1.75 4.4h13.5v3.85A1.75 1.75 0 0 1 13 13H3a1.75 1.75 0 0 1-1.75-1.75Zm2.25 2.6v1h3v-1Z',
@@ -27,7 +22,6 @@ const FILLED: Partial<Record<IconName, string>> = {
   user: 'M8 1.5a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2Zm0 7.4c3.1 0 5.4 1.8 5.9 4.6a.7.7 0 0 1-.7.8H2.8a.7.7 0 0 1-.7-.8C2.6 10.7 4.9 8.9 8 8.9Z',
   clock: 'M8 1.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5Zm-.75 3v4.2l2.9 1.75.75-1.25-2.15-1.3V4.25Z',
   check: 'M8 1.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5Zm3 4.3-.95-.8-3.3 3.95-1.85-1.8-.85.9 2.8 2.75Z',
-  // SF Symbols-style solids for Apple-native demos
   lock: 'M8 1.25A3.25 3.25 0 0 0 4.75 4.5v2H4.5A1.5 1.5 0 0 0 3 8v5.25a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V8a1.5 1.5 0 0 0-1.5-1.5h-.25v-2A3.25 3.25 0 0 0 8 1.25Zm-1.75 5.25v-2a1.75 1.75 0 0 1 3.5 0v2Z',
   play: 'M4.5 2.6v10.8a.8.8 0 0 0 1.2.7l8.6-5.4a.8.8 0 0 0 0-1.4L5.7 1.9a.8.8 0 0 0-1.2.7Z',
   pause: 'M4 2.5h2.6a.6.6 0 0 1 .6.6v9.8a.6.6 0 0 1-.6.6H4a.6.6 0 0 1-.6-.6V3.1a.6.6 0 0 1 .6-.6Zm5.4 0H12a.6.6 0 0 1 .6.6v9.8a.6.6 0 0 1-.6.6H9.4a.6.6 0 0 1-.6-.6V3.1a.6.6 0 0 1 .6-.6Z',

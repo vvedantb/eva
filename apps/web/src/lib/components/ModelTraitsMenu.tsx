@@ -7,21 +7,41 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
-import { TraitsPanel } from "@vvedantb/ui";
+import { TraitsPanel, type ModelPickerTraits } from "@vvedantb/ui";
 
-interface ModelTraitsMenuProps {
-  model: AIModel;
-  traits: StoredModelTraits;
-  onChange: (partial: StoredModelTraits) => void;
-  disabled?: boolean;
-  className?: string;
+/**
+ * Eva's stored traits as the UI package's trait controls for one model:
+ * which traits the model supports, their shown values (stored, else the
+ * model's defaults) and level labels. `ModelPicker` takes this as `traits`;
+ * every picker goes through here so values and labels resolve the same way.
+ */
+export function modelPickerTraits(
+  model: AIModel,
+  traits: StoredModelTraits,
+  onChange: (partial: StoredModelTraits) => void,
+): ModelPickerTraits {
+  const config = getModelTraits(model);
+  const display = resolveTraitsForDisplay(model, traits);
+  return {
+    config,
+    effortLevel: display.effortLevel,
+    thinkingEnabled: display.thinkingEnabled,
+    use1mContext: display.use1mContext,
+    fastMode: display.fastMode,
+    getLevelLabel: getReasoningLevelLabel,
+    onEffortLevelChange: (level) => {
+      const match = config.reasoning?.levels.find((entry) => entry === level);
+      if (match) onChange({ effortLevel: match });
+    },
+    onThinkingEnabledChange: (thinkingEnabled) => onChange({ thinkingEnabled }),
+    onUse1mContextChange: (use1mContext) => onChange({ use1mContext }),
+    onFastModeChange: (fastMode) => onChange({ fastMode }),
+  };
 }
 
 /**
- * Trait controls (reasoning / Speed / context window / thinking) for one
- * model. Renders the compact panel used inside the model picker — chat
- * composers, the quick task modal, and task Properties share this so stored
- * values, model defaults and labels resolve the same way everywhere.
+ * The trait controls on their own, for menus that embed `ModelPickerContent`
+ * rather than the `ModelPicker` button.
  */
 export function ModelTraitsMenu({
   model,
@@ -29,27 +49,16 @@ export function ModelTraitsMenu({
   onChange,
   disabled,
   className,
-}: ModelTraitsMenuProps) {
-  const config = getModelTraits(model);
-  const display = resolveTraitsForDisplay(model, traits);
-
+}: {
+  model: AIModel;
+  traits: StoredModelTraits;
+  onChange: (partial: StoredModelTraits) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
   return (
     <TraitsPanel
-      config={config}
-      effortLevel={display.effortLevel}
-      thinkingEnabled={display.thinkingEnabled}
-      use1mContext={display.use1mContext}
-      fastMode={display.fastMode}
-      getLevelLabel={getReasoningLevelLabel}
-      onEffortLevelChange={(level) => {
-        const match = config.reasoning?.levels.find((entry) => entry === level);
-        if (match) onChange({ effortLevel: match });
-      }}
-      onThinkingEnabledChange={(thinkingEnabled) =>
-        onChange({ thinkingEnabled })
-      }
-      onUse1mContextChange={(use1mContext) => onChange({ use1mContext })}
-      onFastModeChange={(fastMode) => onChange({ fastMode })}
+      {...modelPickerTraits(model, traits, onChange)}
       disabled={disabled}
       className={className}
     />

@@ -1,5 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
-import type { api, Id } from "@eva/backend";
+import type { api } from "@eva/backend";
 
 export type ChatFeedbackRow = FunctionReturnType<
   typeof api.feedback.listForChat
@@ -7,27 +7,29 @@ export type ChatFeedbackRow = FunctionReturnType<
 export type FeedbackSentiment = ChatFeedbackRow["sentiment"];
 
 /**
- * One chat's feedback: the viewer's own thumbs, keyed by the turn they rate
- * (one per turn), and the agent's reports, which the transcript places as
+ * One chat's feedback: the viewer's own thumbs, keyed by the turn or recap
+ * they rate (one each), and the agent's reports, which the transcript places as
  * cards like its other inline cards.
  */
 export function groupChatFeedback(
   rows: readonly ChatFeedbackRow[],
-  viewerId: Id<"users"> | undefined,
+  viewerId: string | undefined,
 ): {
   mineByMessageId: Map<string, ChatFeedbackRow>;
+  mineByRecapId: Map<string, ChatFeedbackRow>;
   agentReports: ChatFeedbackRow[];
 } {
   const mineByMessageId = new Map<string, ChatFeedbackRow>();
+  const mineByRecapId = new Map<string, ChatFeedbackRow>();
   const agentReports: ChatFeedbackRow[] = [];
   for (const row of rows) {
     if (row.author !== "user") {
       agentReports.push(row);
       continue;
     }
-    if (row.messageId && row.userId === viewerId) {
-      mineByMessageId.set(row.messageId, row);
-    }
+    if (row.userId !== viewerId) continue;
+    if (row.messageId) mineByMessageId.set(row.messageId, row);
+    if (row.recapId) mineByRecapId.set(row.recapId, row);
   }
-  return { mineByMessageId, agentReports };
+  return { mineByMessageId, mineByRecapId, agentReports };
 }

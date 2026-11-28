@@ -20,22 +20,14 @@ import {
 import { Bar, Stage, Text, Window, type Act, type Layout } from '../../kit'
 import './pp.css'
 
-// PowerPoint for Mac: pick slide 2 in the rail, it opens in the editor, open
-// Designer and pick a suggested layout, and the slide restyles in place (the
-// rail thumbnail follows). Cmd+Z undoes it, the pane closes, slide 1 is
-// picked again, so the loop ends where it began.
-
 type Design = 'plain' | 'split' | 'band' | 'overlay'
 type S = { slide: 1 | 2; pane: boolean; design: Design; picked: number; ideas: boolean }
 
 const initial: S = { slide: 1, pane: false, design: 'plain', picked: 0, ideas: false }
 const poster: S = { slide: 2, pane: true, design: 'split', picked: 2, ideas: true }
 
-// Geometry per layout, in design px. The slide is drawn at 640 × 360 and scaled.
 const G = {
   wide: { w: 920, h: 540, win: { x: 30, y: 30, w: 860, h: 570 }, rail: 140, pane: 220, canvas: 350, thumb: 100, step: 70, idea: 188, pad: 24 },
-  // Narrow, the window keeps its size and runs off the left: the slide rail
-  // goes out of frame so the slide and Designer draw at true scale, not shrunk
   compact: { w: 358, h: 400, win: { x: -78, y: 20, w: 420, h: 432 }, rail: 72, pane: 150, canvas: 220, thumb: 48, step: 44, idea: 126, pad: 14 },
 }
 
@@ -43,12 +35,9 @@ function fit(l: Layout, pane: boolean) {
   const g = G[l]
   const editor = g.win.w - g.rail - (pane ? g.pane : 0)
   const k = Math.min((editor - g.pad * 2) / 640, (g.canvas - g.pad * 2) / 360, l === 'wide' ? 0.8 : 0.5)
-  // Compact with the pane open: top-align with the second rail thumbnail rather than land a few px off it.
   const y = l === 'compact' && pane ? 12 + g.step : (g.canvas - 360 * k) / 2
   return { k, x: (editor - 640 * k) / 2, y }
 }
-
-/* ---- The slide itself ---- */
 
 type Box = [number, number, number, number]
 const LOOK: Record<Design, { photo: Box; title: [number, number]; bullets: [number, number]; light: boolean; panel: number; shade: number; rule: boolean }> = {
@@ -62,7 +51,6 @@ function Photo() {
   const id = useId().replace(/:/g, '')
   const sky = `${id}-sky`
   const sea = `${id}-sea`
-  // A harbor at dusk: sky, sun, water, a far shore and a hill of rooftops.
   return (
     <svg viewBox="0 0 640 360" preserveAspectRatio="xMinYMid slice" className="pp-photo-svg" aria-hidden>
       <defs>
@@ -148,7 +136,6 @@ function SlideArt({ n, design }: { n: number; design: Design }) {
   )
 }
 
-/** A slide scaled into a box of the given width. */
 function Mini({ n, design, width, style }: { n: number; design: Design; width: number; style?: CSSProperties }) {
   const k = width / 640
   return (
@@ -159,8 +146,6 @@ function Mini({ n, design, width, style }: { n: number; design: Design; width: n
     </div>
   )
 }
-
-/* ---- Chrome ---- */
 
 const ICON = { size: 15, strokeWidth: 1.6 }
 
@@ -261,10 +246,7 @@ function Ribbon({ layout, open }: { layout: Layout; open: boolean }) {
 
 const IDEAS: Design[] = ['band', 'split', 'overlay']
 
-/* ---- Script ---- */
-
 async function script(a: Act<S>) {
-  // Narrow, the rail is out of frame: the story starts on slide 2
   const t = a.rect('thumb-2')
   const rail = t.x + t.width > 0
   if (!rail) a.snap({ slide: 2 })

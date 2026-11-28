@@ -11,6 +11,7 @@ type SessionChatTarget = {
 
 export type ChatDraftTarget = SessionChatTarget;
 
+/** Seed bundle passed to ChatBody. */
 export type ChatDraftSeed = {
   target: ChatDraftTarget;
   initialDisplay: string;

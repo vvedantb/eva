@@ -42,6 +42,8 @@ const TYPE_APPEARANCE: Record<
   comment_added: { icon: "Message", label: "Comment", tone: "primary" },
   changes_requested: { icon: "Pencil", label: "Changes", tone: "warning" },
   comment_reply: { icon: "MessageReply", label: "Reply", tone: "primary" },
+  thread_reply: { icon: "MessageReply", label: "Reply", tone: "primary" },
+  thread_answer: { icon: "MessageReply", label: "Answer", tone: "primary" },
   mention: { icon: "At", label: "Mention", tone: "primary" },
   system: { icon: "InfoCircle", label: "System", tone: "muted" },
   session_archived: { icon: "Archive", label: "Archived", tone: "secondary" },

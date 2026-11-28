@@ -3,22 +3,14 @@ import { useId, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { useStill } from './reduced-motion'
 import './chart.css'
 
-// Charts drawn the way product dashboards draw them: a smooth line with a
-// soft area and an end dot, or rounded bars. They draw in when shown and
-// ease between values when the data changes.
-
 export interface ChartProps {
   data: number[]
   kind?: 'line' | 'bars'
   width: number
   height: number
-  /** Draws in when it turns true. */
   show?: boolean
-  /** The soft fill under a line. */
   area?: boolean
-  /** A dot on the last point. */
   dot?: boolean
-  /** The value at the top of the chart. Defaults to the data's maximum. */
   max?: number
   className?: string
   style?: CSSProperties
@@ -42,7 +34,6 @@ export function chartPoints({ data, kind = 'line', width, height, dot = true, ma
   return data.map((v, i) => ({ x: pad + (i / Math.max(1, data.length - 1)) * (width - pad * 2), y: pad + h - (v / top) * h }))
 }
 
-/** A smooth path through the points (Catmull-Rom as cubic Béziers), never overshooting the ends. */
 function smooth(p: { x: number; y: number }[]) {
   if (!p.length) return ''
   let d = `M${p[0].x} ${p[0].y}`
@@ -56,18 +47,10 @@ function smooth(p: { x: number; y: number }[]) {
   return d
 }
 
-/**
- * The same curve as smooth(), sampled at a fixed number of points. A path
- * only eases into another with the same commands, so a line drawn from 8
- * points and one from 9 would swap in a frame while the dot traveled.
- * Sampling keeps every line the same shape of path, whatever the data's length.
- */
 const SAMPLES = 48
 
-/** The draw-in's timing: the same curve the rest of the kit's travel uses. */
 const DRAW_MS = 1200
 function ease(t: number) {
-  // cubic-bezier(0.45, 0, 0.2, 1), solved for x by bisection
   const b = (a: number, c: number, u: number) => 3 * a * u * (1 - u) ** 2 + 3 * c * u * u * (1 - u) + u ** 3
   let lo = 0
   let hi = 1
@@ -79,7 +62,6 @@ function ease(t: number) {
   return b(0, 1, (lo + hi) / 2)
 }
 
-/** The curve's height at x, from its sampled points. */
 function yAt(p: { x: number; y: number }[], x: number) {
   let i = 1
   while (i < p.length - 1 && p[i].x < x) i++
@@ -100,7 +82,6 @@ function resample(p: { x: number; y: number }[]) {
     const b = p[i]
     const c = p[i + 1]
     const e = p[i + 2] ?? c
-    // The Bézier segment smooth() draws between b and c
     const c1 = { x: b.x + (c.x - a.x) / 6, y: b.y + (c.y - a.y) / 6 }
     const c2 = { x: c.x - (e.x - b.x) / 6, y: c.y - (e.y - b.y) / 6 }
     const m = 1 - t
@@ -123,8 +104,6 @@ export function Chart({ data, kind = 'line', width, height, show = true, area = 
   const dotRef = useRef<SVGCircleElement>(null)
   const samples = useRef<{ x: number; y: number }[]>([])
   const shown = useRef(false)
-  // Draw-in: the dot leads and the line follows it. One timeline moves the
-  // wipe's edge and puts the dot on the curve at that edge, every frame.
   useLayoutEffect(() => {
     const was = shown.current
     const g = drawRef.current
@@ -137,7 +116,6 @@ export function Chart({ data, kind = 'line', width, height, show = true, area = 
     const x1 = p[p.length - 1].x
     const wipe = wipeRef.current
     if (!wipe) return
-    // The clip is a rect in the chart's own units, so its edge is exactly the dot's x
     const at = (e: number) => {
       const x = x0 + (x1 - x0) * e
       wipe.setAttribute('width', `${x + 6}`)
@@ -161,7 +139,6 @@ export function Chart({ data, kind = 'line', width, height, show = true, area = 
       if (t < 1) raf = requestAnimationFrame(step)
       else done()
     })
-    // Back to the stylesheet: the end state matches it, so nothing moves
     const done = () => {
       drawing = false
       wipe.setAttribute('width', `${width + 12}`)
@@ -170,8 +147,6 @@ export function Chart({ data, kind = 'line', width, height, show = true, area = 
     }
     return () => {
       cancelAnimationFrame(raf)
-      // An interrupted setup (including StrictMode's rehearsal) can draw
-      // again. A completed draw does not replay when motion is restored.
       if (drawing) shown.current = false
       done()
     }
@@ -209,9 +184,6 @@ export function Chart({ data, kind = 'line', width, height, show = true, area = 
           <rect ref={wipeRef} x={-6} y={-6} width={width + 12} height={height + 12} />
         </clipPath>
       </defs>
-      {/* One wipe reveals the line and its fill together, so the fill never
-          runs ahead of the line. d is also set as a style so a data change
-          eases the shape */}
       <g ref={drawRef} className="ss-chart__draw" clipPath={`url(#${id}-wipe)`}>
         {area && pts.length > 1 && <path className="ss-chart__area" d={fill} style={{ d: `path("${fill}")` } as CSSProperties} fill={`url(#${id}-fill)`} />}
         <path className="ss-chart__line" d={line} style={{ d: `path("${line}")` } as CSSProperties} />

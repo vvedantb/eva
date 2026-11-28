@@ -17,9 +17,6 @@ type Kind = 'label' | 'press' | 'space' | 'identity' | 'exit' | 'interrupt' | 'h
 const initial: State = { done: false, pressed: false, phase: 'start', count: 0 }
 const poster: State = { ...initial, done: true, phase: 'followup' }
 
-// One Stage owns both halves: the input, result and hold happen on the same
-// frame. These stationary pointers show the same comparison input twice;
-// an ordinary product demo uses Stage's cursor and a.click instead.
 async function script(a: Act<State>) {
   await a.wait(1100)
   for (const done of [true, false]) {
@@ -41,15 +38,15 @@ async function exitScript(a: Act<State>) {
 
 async function interruptScript(a: Act<State>) {
   await a.wait(1100)
-  await a.set({ phase: 'change' }) // Month
-  await a.wait(200) // A second choice before the 600ms move finishes
-  await a.set({ phase: 'followup' }) // Week
+  await a.set({ phase: 'change' })
+  await a.wait(200)
+  await a.set({ phase: 'followup' })
 }
 
 async function handoffScript(a: Act<State>) {
   await a.wait(1100)
   await a.set({ phase: 'change' })
-  await a.wait(650) // The 600ms flyer rests before the destination takes over
+  await a.wait(650)
   await a.set({ phase: 'followup' })
 }
 
@@ -99,8 +96,6 @@ function ExitScene({ good, state }: { good: boolean; state: State }) {
 function InterruptScene({ good, state }: { good: boolean; state: State }) {
   const selected = state.phase === 'start' ? 0 : state.phase === 'change' ? 2 : 1
   return <div className="tc-tabs">
-    {/* Re-keying an entrance animation is the deliberate failure. The
-        corrected highlight stays mounted and CSS retargets its live position. */}
     <span key={good ? 'persistent' : state.phase} className="tc-tabs__highlight" data-restart={!good || undefined} style={{ transform: `translateX(${selected * 100}%)` }} />
     {['Day', 'Week', 'Month'].map((label, i) => <span className="tc-tabs__label" key={label} data-selected={i === selected || undefined}>{label}</span>)}
   </div>
@@ -118,8 +113,6 @@ function HandoffFlights({ state, rect }: { state: State; rect: (target: string) 
   return <>{[false, true].map(good => {
     const destination = rect(handoffTarget(good, 'destination'))
     const slot = rect(handoffTarget(good, 'slot'))
-    // Deliberately mix the wrapper's origin with the avatar's size on the
-    // flawed side. The corrected side uses the actual destination throughout.
     const to = good ? destination : { ...destination, x: slot.x, y: slot.y }
     return <Fly key={String(good)} from={rect(handoffTarget(good, 'source'))} to={to} go={state.phase === 'change'} duration={600}><span className="tc-avatar">AT</span></Fly>
   })}</>

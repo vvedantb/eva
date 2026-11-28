@@ -622,21 +622,4 @@ describe("isChatTurnExecuting", () => {
       }),
     ).toBe(true);
   });
-
-  test("a running first run counts whatever the chat turn says", () => {
-    expect(
-      isChatTurnExecuting({
-        status: null,
-        messages: settled,
-        isFirstRunInProgress: true,
-      }),
-    ).toBe(true);
-    expect(
-      isChatTurnExecuting({
-        status: null,
-        messages: settled,
-        isFirstRunInProgress: false,
-      }),
-    ).toBe(false);
-  });
 });

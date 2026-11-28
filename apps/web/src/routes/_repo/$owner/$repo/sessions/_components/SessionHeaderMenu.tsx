@@ -125,7 +125,6 @@ export function SessionHeaderMenu({
           />
         </DropdownMenuContent>
       </DropdownMenu>
-      {/* Siblings of the menu: Radix unmounts menu content on close. */}
       <SessionDialogs
         pathname={pathname}
         renameTarget={renameTarget}

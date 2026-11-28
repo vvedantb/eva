@@ -3,15 +3,11 @@ import { useLook } from '../looks'
 import './Pin.css'
 
 export interface PinProps extends HTMLAttributes<HTMLSpanElement> {
-  /** The commenter's initial. */
   name?: string
   src?: string
   size?: number
-  /** Which corner is the point, the one that touches what the comment is about. */
   corner?: 'bl' | 'br' | 'tl' | 'tr'
-  /** accent: the pin the story is about. ink: the others. */
   tone?: 'accent' | 'ink'
-  /** The pin whose thread is open: a ring in its own color. */
   selected?: boolean
 }
 

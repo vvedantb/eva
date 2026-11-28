@@ -13,7 +13,7 @@ import {
   turnLeaseDurationMs,
   turnLeaseExpiry,
 } from "../convex/_chat/turnLease";
-import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 
 const STARTED_AT = 1_800_000_000_000;
 
@@ -51,17 +51,17 @@ describe("durable turn lifecycle", () => {
   });
 
   test("never renews beyond the absolute turn deadline", () => {
-    const nearDeadline = STARTED_AT + RUN_TIMEOUT_MS - 30_000;
+    const nearDeadline = STARTED_AT + TURN_BACKSTOP_MS - 30_000;
     expect(
       turnLeaseExpiry({
         state: "running",
         turnStartedAt: STARTED_AT,
         now: nearDeadline,
       }),
-    ).toBe(STARTED_AT + RUN_TIMEOUT_MS);
+    ).toBe(STARTED_AT + TURN_BACKSTOP_MS);
     expect(turnExceededAbsoluteLimit(STARTED_AT, nearDeadline)).toBe(false);
     expect(
-      turnExceededAbsoluteLimit(STARTED_AT, STARTED_AT + RUN_TIMEOUT_MS),
+      turnExceededAbsoluteLimit(STARTED_AT, STARTED_AT + TURN_BACKSTOP_MS),
     ).toBe(true);
   });
 
@@ -144,7 +144,7 @@ describe("expiredTurnLeaseDecision", () => {
   test("a dead process on a live sandbox finalises immediately", () => {
     expect(
       expiredTurnLeaseDecision({
-        liveness: { alive: false, reason: "pid_dead_or_exec_failed" },
+        liveness: { alive: false, reason: "pid_dead" },
         silentSince: undefined,
         now,
       }),

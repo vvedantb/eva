@@ -10,7 +10,6 @@ import {
   TooltipContent,
   TooltipTrigger,
   Markdown,
-  IconEva,
 } from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
@@ -244,6 +243,7 @@ export const ChatMessage = memo(function ChatMessage({
   const threadControl =
     onReply && (message.replyCount ?? 0) > 0 ? (
       <ThreadSummary
+        rootId={message._id}
         replyCount={message.replyCount ?? 0}
         replierIds={message.replierIds ?? []}
         onOpen={() => onReply(message._id)}
@@ -294,8 +294,6 @@ export const ChatMessage = memo(function ChatMessage({
                 showTurnMeta={showTurnMeta && !toolbarMode}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
-                joinsNext={joinsNext}
-                senderName={senderFirstName}
                 turnModel={turnModel}
                 turnReasoningLevel={turnReasoningLevel}
                 turnCredentialSourceLabel={turnCredentialSourceLabel}
@@ -509,7 +507,8 @@ function UserTurnBubble({
           isOtherUser
             ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
             : isMcpProvenance
-              ? "rounded-surface bg-muted group-[.is-user]:bg-muted"
+              ?
+                "rounded-surface bg-muted group-[.is-user]:bg-muted"
               : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
         )}
         style={
@@ -550,12 +549,10 @@ function BubbleWithToolbar({
 
 interface AssistantTurnProps {
   message: ChatBodyMessage;
-  senderName?: string;
   turnState: ReturnType<typeof getAssistantTurnState>;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
   bubble: boolean;
-  joinsNext: boolean;
   turnModel?: string;
   turnReasoningLevel?: string;
   turnCredentialSourceLabel?: string;
@@ -585,8 +582,6 @@ function AssistantTurn({
   showTurnMeta,
   showScopeCheck,
   bubble,
-  joinsNext,
-  senderName,
   turnModel,
   turnReasoningLevel,
   turnCredentialSourceLabel,
@@ -624,8 +619,6 @@ function AssistantTurn({
     <>
       <AssistantTurnContent
         bubble={bubble}
-        joinsNext={joinsNext}
-        senderName={senderName}
         toolbar={toolbar}
         message={message}
         turnState={turnState}
@@ -641,51 +634,35 @@ function AssistantTurn({
         turnErrorTitle={turnErrorTitle}
         panelTabs={panelTabs}
       />
-      <BubbleIndent bubble={bubble}>
-        {artifacts ? (
-          <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
-        ) : null}
-        {showScopeCheck && message.scopeCheck ? (
-          <div className="mt-1">
-            <ScopeCheckChip
-              check={message.scopeCheck}
-              {...(!simpleView && onViewDiff ? { onViewDiff } : {})}
-            />
-          </div>
-        ) : null}
-        {belowContent && !panelTabs ? (
-          <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
-        ) : null}
-        {showTurnMeta ? (
-          <AssistantTurnMeta
-            message={message}
-            turnModel={turnModel}
-            turnReasoningLevel={turnReasoningLevel}
-            turnCredentialSourceLabel={turnCredentialSourceLabel}
-            copyPlain={copyPlain}
-            rowActions={rowActions}
-            threadControl={threadControl}
-            canRate={canRate && !turnState.isStreamingPlaceholder}
-            feedbackSentiment={feedbackSentiment}
-            feedbackComment={feedbackComment}
+      {artifacts ? (
+        <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+      ) : null}
+      {showScopeCheck && message.scopeCheck ? (
+        <div className="mt-1">
+          <ScopeCheckChip
+            check={message.scopeCheck}
+            {...(!simpleView && onViewDiff ? { onViewDiff } : {})}
           />
-        ) : null}
-      </BubbleIndent>
+        </div>
+      ) : null}
+      {belowContent && !panelTabs ? (
+        <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+      ) : null}
+      {showTurnMeta ? (
+        <AssistantTurnMeta
+          message={message}
+          turnModel={turnModel}
+          turnReasoningLevel={turnReasoningLevel}
+          turnCredentialSourceLabel={turnCredentialSourceLabel}
+          copyPlain={copyPlain}
+          rowActions={rowActions}
+          threadControl={threadControl}
+          canRate={canRate && !turnState.isStreamingPlaceholder}
+          feedbackSentiment={feedbackSentiment}
+          feedbackComment={feedbackComment}
+        />
+      ) : null}
     </>
-  );
-}
-
-function BubbleIndent({
-  bubble,
-  children,
-}: {
-  bubble: boolean;
-  children: ReactNode;
-}) {
-  return bubble ? (
-    <div className="flex flex-col pl-6">{children}</div>
-  ) : (
-    <>{children}</>
   );
 }
 
@@ -704,8 +681,6 @@ function AssistantTurnContent({
   turnErrorTitle,
   panelTabs,
   bubble,
-  joinsNext,
-  senderName,
   toolbar,
 }: Omit<
   AssistantTurnProps,
@@ -751,13 +726,7 @@ function AssistantTurnContent({
 
   const content = (
     <MessageContent
-      className={cn(
-        "py-2",
-        bubble
-          ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
-          : "px-1",
-      )}
-      style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
+      className="px-1 py-2"
     >
       {isStreamingPlaceholder && bubble ? (
         <>
@@ -773,7 +742,9 @@ function AssistantTurnContent({
             onOpenFile={onOpenFile}
           />
           {agentSpawnRow}
-          <AssistantQuestionCards steps={streamingQuestionSteps} />
+          {simpleView ? (
+            <AssistantQuestionCards steps={streamingQuestionSteps} />
+          ) : null}
           {streamingContent && !streamingTextIsInline ? (
             <div data-assistant-cite-source={message._id}>
               <Markdown
@@ -796,12 +767,13 @@ function AssistantTurnContent({
               icon={EVA_ICON}
               startedAt={message.timestamp}
               finishedAt={message.finishedAt}
-              finalText={message.content}
               onOpenFile={onOpenFile}
             />
           )}
           {agentSpawnRow}
-          <AssistantQuestionCards steps={questionSteps} />
+          {bubble || simpleView ? (
+            <AssistantQuestionCards steps={questionSteps} />
+          ) : null}
           <AssistantTurnOutcome
             message={message}
             turnErrorTitle={turnErrorTitle}
@@ -817,27 +789,12 @@ function AssistantTurnContent({
   );
 
   return bubble ? (
-    <div
-      className={cn(
-        "flex min-w-0 flex-col items-start gap-0.5",
-        COORDINATOR_BUBBLE_MAX_WIDTH,
+    <div className="w-full min-w-0">
+      {toolbar ? (
+        <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
+      ) : (
+        content
       )}
-    >
-      {senderName ? (
-        <span className="pl-9 text-2xs font-medium text-muted-foreground">
-          {senderName}
-        </span>
-      ) : null}
-      <div className="flex min-w-0 max-w-full items-end gap-2">
-        <div className="size-4 shrink-0 text-foreground">
-          {joinsNext ? null : <IconEva size={16} />}
-        </div>
-        {toolbar ? (
-          <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
-        ) : (
-          content
-        )}
-      </div>
     </div>
   ) : (
     content

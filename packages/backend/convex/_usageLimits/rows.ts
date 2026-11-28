@@ -3,6 +3,16 @@ import type { Infer } from "convex/values";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { usageLimitProviderValidator } from "../validators";
 
+/**
+ * Row identity for `agentUsageLimits`, and the read-time trimming every reader
+ * owes a stored row.
+ *
+ * A reading measures a *credential's* plan, not a repo's: the same connected
+ * account has the same headroom whichever repo it runs on. So a row is keyed by
+ * the credential — the connected account, or, for the shared
+ * `CLAUDE_CODE_OAUTH_TOKEN` from team/repo env vars, the team that owns it.
+ */
+
 export type UsageLimitProvider = Infer<typeof usageLimitProviderValidator>;
 
 /**
@@ -69,27 +79,7 @@ export function isUsageLimitReadingFresh(
 }
 
 /**
- * The credential-keyed row in an index range that still holds legacy per-repo
- * rows, and its counterpart. Pure, and generic over the id type so plain
- * strings stand in for the `Id<"githubRepos">` a real row carries: the rule they
- * encode — a row with a `repoId` is a different question's answer — is worth
- * testing without a database.
- */
-export function pickCanonicalRow<T extends { repoId?: string }>(
-  rows: readonly T[],
-): T | null {
-  return rows.find((row) => row.repoId === undefined) ?? null;
-}
-
-export function pickLegacyRows<T extends { repoId?: string }>(
-  rows: readonly T[],
-): T[] {
-  return rows.filter((row) => row.repoId !== undefined);
-}
-
-/**
- * The one canonical row for `key`, or null when the credential has never
- * reported.
+ * The one row for `key`, or null when the credential has never reported.
  */
 export async function findUsageLimitRow(
   db: GenericDatabaseReader<DataModel>,
@@ -103,36 +93,14 @@ export async function findUsageLimitRow(
       )
       .first();
   }
-  return pickCanonicalRow(
-    await accountRangeRows(db, key.provider, key.providerAccountId),
-  );
-}
-
-/**
- * The rows for `key` that still carry a `repoId`. `report` deletes these as it
- * upserts, which is the only cleanup this migration gets — a one-off script
- * would have to race the daemon still writing rows.
- */
-export async function listLegacyUsageLimitRows(
-  db: GenericDatabaseReader<DataModel>,
-  key: UsageLimitRowKey,
-): Promise<Array<Doc<"agentUsageLimits">>> {
-  return pickLegacyRows(
-    await accountRangeRows(db, key.provider, key.providerAccountId),
-  );
-}
-
-async function accountRangeRows(
-  db: GenericDatabaseReader<DataModel>,
-  provider: UsageLimitProvider,
-  providerAccountId: Id<"userProviderAccounts"> | undefined,
-): Promise<Array<Doc<"agentUsageLimits">>> {
   return await db
     .query("agentUsageLimits")
     .withIndex("by_provider_account", (q) =>
-      q.eq("provider", provider).eq("providerAccountId", providerAccountId),
+      q
+        .eq("provider", key.provider)
+        .eq("providerAccountId", key.providerAccountId),
     )
-    .collect();
+    .first();
 }
 
 /**

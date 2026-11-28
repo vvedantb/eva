@@ -6,7 +6,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess } from "../functions";
-import { listSessionChats } from "../_sessionChats/helpers";
+import { findMainChat } from "../_sessionChats/helpers";
 import { entityVisible } from "../numId";
 import { createNotification } from "../notifications";
 import {
@@ -51,8 +51,8 @@ async function questionEntityIds(
 ): Promise<string[]> {
   const sessionId = ctx.db.normalizeId("sessions", entityId);
   if (!sessionId) return [entityId];
-  const chats = await listSessionChats(ctx.db, sessionId);
-  return chats.map((chat) => String(chat._id));
+  const chat = await findMainChat(ctx.db, sessionId);
+  return chat ? [String(chat._id)] : [];
 }
 
 async function chatRepoId(

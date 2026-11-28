@@ -69,7 +69,7 @@ export async function createEs256KeyPair(kid) {
 
 /**
  * Resolves every rule to a value. `readSource(name)` returns the source
- * deployment's value. Returns the values to set and the "eva" vars the
+ * deployment's value, or undefined when it has none. Returns the values to set and the "eva" vars the
  * sandbox does not have.
  */
 export async function resolveSandboxEnv(rules, readSource) {
@@ -94,7 +94,8 @@ export async function resolveSandboxEnv(rules, readSource) {
   const missing = [];
   for (const [name, rule] of Object.entries(rules)) {
     if (rule === "copy") {
-      values.set(name, readSource(name));
+      const value = readSource(name);
+      if (value !== undefined) values.set(name, value);
     } else if (rule === "eva") {
       const own = process.env[name];
       if (own) values.set(name, own);

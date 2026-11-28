@@ -44,7 +44,6 @@ import {
 } from "@/lib/components/chat/threadFind";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
 import {
-  EVA_SENDER_NAME,
   canForkMessage,
   collectForkPrefix,
   forkThreadTitle,
@@ -74,6 +73,7 @@ import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFram
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
+import { ChatDocCard } from "@/lib/components/docs/ChatDocCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
@@ -114,6 +114,10 @@ import {
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import {
+  ProjectChatTaskCard,
+  type ProjectChatTaskCards,
+} from "@/lib/components/projects/ProjectChatTaskCard";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
@@ -152,7 +156,7 @@ interface InlineCard {
     | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
-interface ChatBodyProps {
+export interface ChatBodyProps {
   repo?: ChatRepo;
   conversationId: string;
   chatParentId?: ChatParentId;
@@ -180,6 +184,7 @@ interface ChatBodyProps {
   placeholder: string;
   emptyStateTitle: string;
   emptyStateDescription?: string;
+  emptyState?: React.ReactNode;
   disabledReason?: string;
   onStartSandbox?: () => void;
   modelPicker?: ChatModelPicker;
@@ -200,6 +205,7 @@ interface ChatBodyProps {
   onViewDiff?: (repoRelativePath?: string) => void;
   hasPendingContext?: boolean;
   onOpenAgentsTab?: () => void;
+  projectTaskCards?: ProjectChatTaskCards;
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
   sandboxRunning?: boolean;
   turnCheckpoint?: TurnCheckpointContext;
@@ -250,6 +256,7 @@ function ChatBodyInner({
   placeholder,
   emptyStateTitle,
   emptyStateDescription = "",
+  emptyState,
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
   modelPicker,
@@ -266,6 +273,7 @@ function ChatBodyInner({
   onViewDiff,
   hasPendingContext,
   onOpenAgentsTab,
+  projectTaskCards,
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
@@ -310,7 +318,8 @@ function ChatBodyInner({
         for (const item of sentWebMcp) webmcp?.remove(item.id);
         for (const pr of sentPullRequests) pullRequests?.remove(pr.url);
       },
-      () => {},
+      () => {
+      },
     );
   };
   const hasComposerContext =
@@ -471,7 +480,7 @@ function ChatBodyInner({
         ? dayBoundaryIds
         : new Set([...dayBoundaryIds, newBoundaryId]),
   });
-  const { recap, dismiss: dismissRecap } = useChatRecap({
+  const { recap, dismiss: dismissRecap, rate: rateRecap } = useChatRecap({
     parentId: chatParentId,
     active: isRouteActive,
     messages: displayMessages,
@@ -481,7 +490,10 @@ function ChatBodyInner({
     recap && repo && displayMessages.length > 0 ? (
       <ChatRecapCard
         kind={recap.kind}
+        since={recap.since}
         text={recap.text}
+        rating={recap.rating}
+        onRate={rateRecap}
         repo={repo}
         onDismiss={dismissRecap}
       />
@@ -681,6 +693,30 @@ function ChatBodyInner({
     api.artifacts.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const chatDocs = useQuery(
+    api.docs.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const chatTaskCards = useQuery(
+    api.projects.listChatTaskCards,
+    projectTaskCards ? { projectId: projectTaskCards.projectId } : "skip",
+  );
+  const taskCardOutputs = projectTaskCards
+    ? (chatTaskCards ?? []).map((card) => ({
+        _id: card.key,
+        messageId: card.messageId,
+        createdAt: card.createdAt,
+        node: (
+          <ProjectChatTaskCard
+            key={card.key}
+            taskId={card.taskId}
+            projectId={projectTaskCards.projectId}
+            repoId={projectTaskCards.repoId}
+            onOpenTask={projectTaskCards.onOpenTask}
+          />
+        ),
+      }))
+    : [];
   const chatFeedback = useQuery(
     api.feedback.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
@@ -694,6 +730,13 @@ function ChatBodyInner({
         createdAt: artifact.createdAt,
         node: <ChatArtifactCard key={artifact._id} artifact={artifact} />,
       })),
+      ...(chatDocs ?? []).map((doc) => ({
+        _id: doc._id,
+        messageId: doc.messageId,
+        createdAt: doc.createdAt,
+        node: <ChatDocCard key={doc._id} doc={doc} basePath={repo?.basePath} />,
+      })),
+      ...taskCardOutputs,
       ...feedback.agentReports.map((report) => ({
         _id: report._id,
         messageId: report.messageId,
@@ -773,13 +816,10 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const joinsPrevious = bubbleGroups.joinsPrevious.has(message._id);
     const joinsNext = bubbleGroups.joinsNext.has(message._id);
-    const senderFirstName = joinsPrevious
-      ? undefined
-      : assistantBubbles && message.role === "assistant"
-        ? EVA_SENDER_NAME
-        : isOtherUser && message.userId
-          ? firstNames.get(message.userId)
-          : undefined;
+    const senderFirstName =
+      isOtherUser && message.userId && !joinsPrevious
+        ? firstNames.get(message.userId)
+        : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 
     return (
@@ -876,6 +916,8 @@ function ChatBodyInner({
               </div>
             ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
+            ) : emptyState ? (
+              emptyState
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}

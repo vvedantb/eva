@@ -64,15 +64,12 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       title: "Empty states",
       status: "active",
       numId: 9,
-      lastModel: "claude:sonnet",
     });
     const mainChatId = await ctx.db.insert("sessionChats", {
       sessionId,
       repoId,
       userId: ownerUserId,
-      title: "Main",
-      number: 1,
-      isMain: true,
+      lastModel: "claude:sonnet",
     });
     return {
       ownerUserId,

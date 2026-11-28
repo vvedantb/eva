@@ -14,13 +14,10 @@ import {
   aiModelValidator,
   getAIModelProvider,
   reasoningLevelValidator,
-  roleValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
-import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { sessionAccountHolder } from "../_projects/runSettings";
 import {
   assertProviderAccountUsableBy,
   resolveDefaultProviderAccountId,
@@ -29,6 +26,7 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
+import { recordPersonChatPost } from "../chatReads";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import { requestSessionSandboxStop } from "./sandbox";
 import {
@@ -43,8 +41,6 @@ import {
   getRepoGroupForSession,
 } from "../repoGroups";
 import { insertSessionRepos } from "./repos";
-import { touchUserActivity } from "../_sandbox/activity";
-import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
   assertStandaloneSession,
   isStandaloneSession,
@@ -105,8 +101,8 @@ async function joinSessionGroup(
 
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
- * (optionally) the first queued message. Used by the `create` mutation and by
- * the MCP `create_session` tool.
+ * (optionally) the first queued message. Used by `chats.start` (the apps and
+ * MCP `create_session`), forks and accepted session proposals.
  */
 export async function createSession(
   ctx: AuthMutationCtx,
@@ -171,15 +167,6 @@ export async function createSession(
     ...(args.stackOnPrNumber !== undefined
       ? { stackOnPrNumber: args.stackOnPrNumber }
       : {}),
-    providerAccountId,
-    provider: getAIModelProvider(model),
-    lastModel: model,
-    ...composerTraitFields({
-      reasoningLevel,
-      thinkingEnabled,
-      use1mContext,
-      fastMode,
-    }),
     ...(sessionGroupId ? { sessionGroupId } : {}),
     ...(fork
       ? {
@@ -193,7 +180,17 @@ export async function createSession(
   await ctx.db.patch(sessionId, { branchName });
   const created = await ctx.db.get(sessionId);
   if (!created) throw new Error("Session was not created");
-  const mainChat = await ensureMainChat(ctx, created);
+  const mainChat = await ensureMainChat(ctx, created, {
+    providerAccountId,
+    provider: getAIModelProvider(model),
+    lastModel: model,
+    ...composerTraitFields({
+      reasoningLevel,
+      thinkingEnabled,
+      use1mContext,
+      fastMode,
+    }),
+  });
 
   await insertSessionRepos(
     ctx,
@@ -244,10 +241,15 @@ export async function createSession(
     });
     const session = await ctx.db.get(sessionId);
     if (session) {
-      await notifyChatMentions(ctx, {
+      const mentionedIds = await notifyChatMentions(ctx, {
         content,
         authorUserId: ctx.userId,
         surface: { kind: "session", session },
+      });
+      await recordPersonChatPost(ctx, {
+        parentId: mainChat._id,
+        authorId: ctx.userId,
+        mentionedIds,
       });
     }
     if (title === DEFAULT_SESSION_TITLE) {
@@ -261,76 +263,37 @@ export async function createSession(
   return { sessionId, numId };
 }
 
-/** Creates a new session with a sandbox startup workflow. */
-export const create = authMutation({
-  args: createSessionArgs.fields,
-  returns: v.object({
-    sessionId: v.id("sessions"),
-    numId: v.number(),
-  }),
-  handler: async (ctx, args) => await createSession(ctx, args),
-});
-
-/** Adds a message to one chat of a session. */
-export const addMessage = authMutation({
+/**
+ * Posts the web's send-failure bubble (`annotationSend.ts`) into a chat: an
+ * assistant row whose text starts with `Error: `. Every other message goes
+ * through `chats.send`. Any other text is refused, so a repo member cannot
+ * forge an agent reply in a teammate's chat.
+ */
+export const postSendError = authMutation({
   args: {
     chatId: v.id("sessionChats"),
-    role: roleValidator,
     content: v.string(),
-    clientId: v.optional(v.string()),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    model: v.optional(aiModelValidator),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    sentViaOrchestrator: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    assertComposerMessageRole(args);
+    if (!args.content.startsWith("Error: ")) {
+      throw new Error("Only user messages can be posted to this chat");
+    }
     const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
-    const credential =
-      args.role === "user"
-        ? await resolveMessageCredential(
-            ctx.db,
-            args.providerAccountId ?? chat.providerAccountId,
-            await sessionAccountHolder(
-              ctx.db,
-              session,
-              args.providerAccountId ?? chat.providerAccountId,
-            ),
-          )
-        : undefined;
     await ctx.db.insert("messages", {
       parentId: chat._id,
-      role: args.role,
+      role: "assistant",
       content: args.content,
       timestamp: Date.now(),
-      clientId: args.clientId,
       userId: ctx.userId,
-      attachmentStorageIds: args.attachmentStorageIds,
-      ...credential,
-      ...(args.role === "user"
-        ? {
-            model: args.model,
-            reasoningLevel: args.reasoningLevel,
-            sentViaOrchestrator: args.sentViaOrchestrator,
-          }
-        : {}),
     });
     const now = Date.now();
     await ctx.db.patch(chat._id, { updatedAt: now });
     await ctx.db.patch(session._id, { updatedAt: now });
-    if (args.role === "user") {
-      await touchUserActivity(
-        ctx,
-        { kind: "session", entityId: String(session._id) },
-        { source: "chat", userId: ctx.userId },
-      );
-    }
     return null;
   },
 });

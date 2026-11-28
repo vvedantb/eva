@@ -11,6 +11,7 @@ type AssistantReply = {
   isSyntheticTurn?: boolean;
   finishedAt?: number;
   errorType?: string;
+  runId?: string;
 };
 
 export const PUBLISH_FAILURE_MARKER =
@@ -133,6 +134,7 @@ function isOwnReply(message: AssistantReply): boolean {
   return (
     message.role === "assistant" &&
     message.isSystemAlert !== true &&
-    message.isSyntheticTurn !== true
+    message.isSyntheticTurn !== true &&
+    message.runId === undefined
   );
 }

@@ -63,6 +63,39 @@ export async function findSandboxOwnerBySandboxId(
   return null;
 }
 
+/**
+ * Every row that points at `sandboxId`. A session holds it for itself, a quick
+ * task or a project; a doc holds its interview's persistent VM; an automation
+ * run holds its run's VM. The other one-shot agents (evaluation, test gen, PR
+ * recap, arena) store no sandbox id and delete their VM when they finish.
+ */
+export type SandboxOwnerRows = {
+  sessions: Doc<"sessions">[];
+  docs: Doc<"docs">[];
+  automationRuns: Doc<"automationRuns">[];
+};
+
+export async function listSandboxOwnerRows(
+  db: GenericDatabaseReader<DataModel>,
+  sandboxId: string,
+): Promise<SandboxOwnerRows> {
+  const [sessions, docs, automationRuns] = await Promise.all([
+    db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+    db
+      .query("docs")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+    db
+      .query("automationRuns")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+  ]);
+  return { sessions, docs, automationRuns };
+}
+
 /** Resolves and authorizes any sandbox owner without duplicating table policy. */
 export async function resolveSandboxOwnerForUser(
   db: GenericDatabaseReader<DataModel>,

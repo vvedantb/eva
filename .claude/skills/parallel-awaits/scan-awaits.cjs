@@ -1,21 +1,3 @@
-#!/usr/bin/env node
-/**
- * Finds sequential awaits that could run in parallel. Candidates only:
- * every hit still needs a human/agent read before it changes.
- *
- * Usage (from the repo root):
- *   node .claude/skills/parallel-awaits/scan-awaits.cjs [pathPrefix...] [--diff <ref>] [--all]
- *
- *   pathPrefix   limit to files under these prefixes (default: whole repo)
- *   --diff <ref> limit to .ts/.tsx files changed since <ref> (e.g. origin/main)
- *   --all        also report pairs that are bare `await x();` statements
- *
- * Reports:
- *   PAIR  `const a = await A; ...; const b = await B;` where B uses nothing
- *         declared since A (only guards / plain consts in between).
- *   LOOP  for/for-of/for-in loops that await reads one by one. Loops that only
- *         write, sleep/poll, `break`/`return`, or carry state are skipped.
- */
 const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");

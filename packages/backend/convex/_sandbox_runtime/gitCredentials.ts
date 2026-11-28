@@ -165,13 +165,7 @@ export async function ensureGitCredentialHelper(
     writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent),
   ]);
 
-  // Legacy snapshots and pre-helper clones embed the installation token in
   // `remote.origin.url` (e.g. `https://x-access-token:ghs_xxx@github.com/...`).
-  // Git uses URL-embedded credentials in preference to a credential helper, so
-  // any in-sandbox `git pull` would keep failing with the expired baked token.
-  // Strip embedded creds from any known repo's `.git/config` so the helper is
-  // consulted instead. The sed pattern matches `user:password@github.com` and
-  // rewrites it to bare `github.com`, regardless of token value.
   const repoCleanupSteps = KNOWN_REPO_DIRS.flatMap((dir) => [
     `if [ -f ${dir}/.git/config ]; then sed -i -E 's|(https?://)[^@/[:space:]]+:[^@/[:space:]]+@github\\.com/|\\1github.com/|g' ${dir}/.git/config; fi`,
     `if [ -d ${dir}/.git ]; then git -C ${dir} config --unset-all http.https://github.com/.extraheader 2>/dev/null || true; fi`,

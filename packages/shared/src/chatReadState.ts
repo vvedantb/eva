@@ -1,7 +1,9 @@
 import { api } from "@eva/backend";
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionArgs } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
+import { groupChatFeedback, type FeedbackSentiment } from "./chatFeedback";
+import dayjs from "./utils/dates";
 import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMessages";
 
 const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
@@ -69,6 +71,51 @@ export function useChatReadState({
   return { newSinceAt: captured !== null && captured.parentId === parentId ? captured.anchor : undefined };
 }
 
+/** A reply thread's read and follow state for the caller (`threads.readState`). */
+export type ThreadReadState = FunctionReturnType<typeof api.threads.readState>;
+
+/**
+ * Read state of an open reply thread, web and phone, as `useChatReadState`
+ * for a chat: marks the thread read when it comes on screen (`active`) and
+ * again when a reply lands while it is, which also reads its notifications.
+ * Returns the thread's `state` (null: not a participant) and `newSinceAt`,
+ * the read time from before the mark, for the "New" line: captured from the
+ * first result while active and held until it goes inactive or `rootId`
+ * changes.
+ */
+export function useThreadReadState({
+  rootId,
+  active,
+}: {
+  rootId: string;
+  active: boolean;
+}): { state: ThreadReadState | undefined; newSinceAt: number | undefined } {
+  const state = useQuery(api.threads.readState, { rootId });
+  const markRead = useMutation(api.threads.markRead);
+
+  const [captured, setCaptured] = useState<{ rootId: string; anchor: number | undefined } | null>(null);
+  if (!active) {
+    if (captured !== null) setCaptured(null);
+  } else if (state !== undefined && (captured === null || captured.rootId !== rootId)) {
+    setCaptured({ rootId, anchor: state !== null && state.unread > 0 ? (state.lastReadAt ?? 0) : undefined });
+  }
+
+  const hasUnread = (state?.unread ?? 0) > 0;
+  const loaded = state !== undefined;
+  /* eslint-disable no-effect/no-event-handler --
+     The triggers are the thread coming on screen (web panel and tab, phone
+     focus and foreground, a deep link: no single event across both apps)
+     and a reply landing, which arrives as a live-query change. Opening
+     marks even with no unread replies: it reads the thread's notifications. */
+  useEffect(() => {
+    if (!active || !loaded) return;
+    void markRead({ rootId });
+  }, [rootId, active, loaded, hasUnread, markRead]);
+  /* eslint-enable no-effect/no-event-handler */
+
+  return { state, newSinceAt: captured !== null && captured.rootId === rootId ? captured.anchor : undefined };
+}
+
 /**
  * The messages that arrived after `newSinceAt` and are someone else's (Eva's
  * replies, a teammate's turns), oldest first: the "NEW" divider goes above
@@ -106,24 +153,51 @@ export function useChatRecap({
   active: boolean;
   messages: ReadonlyArray<{ timestamp: number } & ChatUserAttribution>;
   currentUserId: string | undefined;
-}): { recap: { kind: "away" | "full"; text: string | undefined } | null; dismiss: () => void } {
+}): {
+  recap: {
+    kind: "away" | "full";
+    since: number;
+    text: string | undefined;
+    rating: { sentiment: FeedbackSentiment; comment: string | undefined } | undefined;
+  } | null;
+  dismiss: () => void;
+  rate: (sentiment: FeedbackSentiment | null, comment?: string) => Promise<null>;
+} {
   const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");
   const dismissRecap = useMutation(api.chatRecaps.dismiss);
+  const rateRecap = useMutation(api.feedback.rateRecap);
+  const feedbackRows = useQuery(api.feedback.listForChat, active && parentId !== undefined ? { parentId } : "skip");
   const answered =
     row != null &&
     messages.some(
       (message) =>
         message.role === "user" && message.timestamp > row.createdAt && !isOtherUserChatMessage(message, currentUserId),
     );
-  const recap = row == null || answered ? null : { kind: row.kind, text: row.text };
+  const mine = row ? groupChatFeedback(feedbackRows ?? [], currentUserId).mineByRecapId.get(row._id) : undefined;
+  const recap =
+    row == null || answered
+      ? null
+      : {
+          kind: row.kind,
+          since: row.since,
+          text: row.text,
+          rating: mine ? { sentiment: mine.sentiment, comment: mine.comment } : undefined,
+        };
   const dismiss = () => {
     if (row) void dismissRecap({ recapId: row._id });
   };
-  return { recap, dismiss };
+  const rate = async (sentiment: FeedbackSentiment | null, comment?: string): Promise<null> => {
+    if (row) await rateRecap({ recapId: row._id, sentiment, ...(comment !== undefined ? { comment } : {}) });
+    return null;
+  };
+  return { recap, dismiss, rate };
 }
 
-/** The recap card's title for each kind. */
-export const RECAP_TITLE: Record<"away" | "full", string> = {
-  away: "Since you've been gone",
-  full: "Recap",
-};
+/**
+ * The recap card's title. An "away" recap says when the absence began
+ * ("Since you left 3 hours ago", "Since you left a week ago"); `since` is the
+ * last time the user saw the chat.
+ */
+export function recapTitle(kind: "away" | "full", since: number): string {
+  return kind === "away" ? `Since you left ${dayjs(since).fromNow()}` : "Recap";
+}

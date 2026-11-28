@@ -10,7 +10,7 @@ import {
 } from "../convex/_sandbox_runtime/daemonPaths";
 
 describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
-  const cmd = buildKillEntityDaemonCmd("sessionId", "sess123");
+  const cmd = buildKillEntityDaemonCmd("chatId", "chat123");
 
   test("walks the tree by parent pid, never by command line", () => {
     expect(cmd).toContain('pgrep -P "$1"');
@@ -27,18 +27,10 @@ describe("buildKillEntityDaemonCmd reaps the daemon's process tree", () => {
     expect(cmd).toContain("sleep 0.2");
   });
 
-  test("reaps the scoped and legacy pidfiles and removes their markers", () => {
-    const scoped = entityDaemonPaths("sessionId", "sess123");
+  test("reaps the entity's pidfile and removes its markers", () => {
+    const scoped = entityDaemonPaths("chatId", "chat123");
     expect(cmd).toContain(`reap ${JSON.stringify(scoped.pid)}`);
     expect(cmd).toContain(`rm -f ${JSON.stringify(scoped.pid)}`);
-    expect(cmd).toContain('reap "/tmp/eva-daemon.pid"');
-    expect(cmd).toContain('rm -f "/tmp/eva-daemon.pid"');
-  });
-
-  test("only sessionId entities carry the legacy markers", () => {
-    expect(buildKillEntityDaemonCmd("agentTaskId", "t1")).not.toContain(
-      "/tmp/eva-daemon.pid",
-    );
   });
 
   test("ends with `true` so a missing daemon is not an exec failure", () => {

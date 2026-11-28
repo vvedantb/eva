@@ -1,27 +1,6 @@
 import { Badge, Bar, Row, Stage, Text, Window } from '../../kit'
 import './overlap.css'
 
-// Overlapping windows: a checkout card in front of the dashboard it reports
-// to. A still. The story is two views of one payment: the buyer's side in
-// front, the merchant's behind.
-//
-// What makes an overlap read as placed, not dropped:
-// - The front card crosses the back window's left edge and stops inside its
-//   sidebar, a clear strip of sidebar showing before the table: it covers
-//   filler, never the table. An edge that lands exactly on the sidebar's
-//   line reads as an accident (near-tangent); either clear it like this or
-//   overlap far enough to be plainly deliberate.
-// - The front card is smaller and a level above: a stronger shadow, no
-//   chrome. Only one surface has chrome; two sets of traffic lights fight.
-// - The back window is pinned top and runs off the bottom, ending before
-//   the stage's right edge so the payment's badge is whole; the card runs
-//   off nothing. The eye reads front to back: pay, then paid.
-// - The payment in the card is the top row of the table behind it, the one
-//   real row in the merchant's list, so the two surfaces tell one event.
-//
-// Real strings: the card's product, price and button; the table's title,
-// its top row and the badge. Everything else is placeholder.
-
 const SIDEBAR = 150
 
 export default function Overlap() {
@@ -47,7 +26,6 @@ export default function Overlap() {
                     title={<Text className="ov-amount">$49.00</Text>}
                     subtitle={<Text className="ov-who">{layout === 'compact' ? 'Pro plan' : 'Pro plan, maya@lumen.studio'}</Text>}
                   >
-                    {/* Narrow, the shorter word keeps the amount whole */}
                     <Badge tone="success">{layout === 'compact' ? 'Paid' : 'Succeeded'}</Badge>
                   </Row>
                   {[132, 108, 146, 96, 120].map((w, i) => (

@@ -1,5 +1,6 @@
 import { Activity, type ReactNode } from "react";
 import type { Id, SandboxOwner } from "@eva/backend";
+import { sandboxAutoWakeEligible } from "@eva/shared";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
@@ -8,9 +9,9 @@ import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
 import { ProjectChatTabs } from "@/lib/components/projects/ProjectChatTabs";
 import { ProjectTaskChat } from "@/lib/components/projects/ProjectTaskChat";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
-import {
-  useProjectTaskTabRows,
-  type ProjectTaskTabs,
+import type {
+  ProjectTaskTabRows,
+  ProjectTaskTabs,
 } from "@/lib/components/projects/useProjectTaskTabs";
 import { entityPathSegment } from "@/lib/numId";
 import {
@@ -42,6 +43,7 @@ interface ProjectDetailSandboxContentProps {
   onThreadOpen: (messageId: string) => void;
   onCloseThread: () => void;
   taskTabs: ProjectTaskTabs;
+  taskTabRows: ProjectTaskTabRows;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -61,6 +63,7 @@ export function ProjectDetailSandboxContent({
   onThreadOpen,
   onCloseThread,
   taskTabs,
+  taskTabRows,
   openFile,
   openDiffs,
   openAgentsTab,
@@ -72,15 +75,11 @@ export function ProjectDetailSandboxContent({
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
     handleStartSandbox,
-    handleStopSandbox,
+    handleSandboxToggle,
   } = sandbox;
   const isArchived = project.archivedAt !== undefined;
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
-  const { rows, selectedRow, selectedLoading } = useProjectTaskTabRows(
-    projectId,
-    repoId,
-    taskTabs,
-  );
+  const { rows, selectedRow, selectedLoading } = taskTabRows;
   const onEva = selectedRow === undefined && !selectedLoading;
 
   const projectSandboxPanel = (
@@ -109,12 +108,14 @@ export function ProjectDetailSandboxContent({
         isSandboxStopping || isArchived ? undefined : handleStartSandbox
       }
       isSandboxStarting={isSandboxStarting}
-      autoWakeEligible={
-        sandbox.sandbox.status === "closed" &&
-        projectSandboxId !== undefined &&
-        !isArchived &&
-        chatTurnOpen === false
-      }
+      autoWakeEligible={sandboxAutoWakeEligible({
+        status: sandbox.sandbox.status,
+        sandboxId: projectSandboxId,
+        sandboxError: sandbox.sandbox.sandboxError,
+        canStart: !isArchived,
+        isBusy: chatTurnOpen,
+      })}
+      isArchived={isArchived}
       collapsed={collapsed}
       onToggle={onToggle}
       onCloseThread={onCloseThread}
@@ -122,56 +123,70 @@ export function ProjectDetailSandboxContent({
       selectedTaskLoading={selectedLoading}
       openTaskIds={new Set(rows.map(({ row }) => row._id))}
       onOpenTask={taskTabs.open}
+      onAskEva={taskTabs.askEva}
     />
   );
 
+  const chatTabs = sandbox.sandbox.owner ? (
+    <ProjectChatTabs
+      rows={rows}
+      selected={onEva ? null : taskTabs.selected}
+      evaRunning={chatTurnOpen === true}
+      isArchived={isArchived}
+      onSelect={taskTabs.select}
+      onClose={taskTabs.close}
+      onAskEva={taskTabs.askEva}
+    />
+  ) : undefined;
+
   const evaChat = (
     <ProjectSandboxChatPanel
+      headerLeft={chatTabs}
       projectId={projectId}
       projectSession={sandbox.projectSession}
       isSandboxActive={isSandboxActive}
       isSandboxToggling={isSandboxStarting || isSandboxStopping}
+      isSandboxStopping={isSandboxStopping}
       sandboxStartupActivity={sandboxStartupActivity}
       onOpenFile={openFile}
       onViewDiff={openDiffs}
       onOpenAgentsTab={openAgentsTab}
+      projectTaskCards={{
+        projectId,
+        repoId,
+        onOpenTask: taskTabs.open,
+      }}
       onThreadOpen={onThreadOpen}
       isArchived={isArchived}
-      onSandboxToggle={(action) => {
-        if (action === "start") void handleStartSandbox();
-        else void handleStopSandbox();
-      }}
+      onSandboxToggle={handleSandboxToggle}
     />
   );
 
   const chatColumn = () =>
     sandbox.sandbox.owner ? (
       <div className="flex h-full min-h-0 flex-col">
-        <ProjectChatTabs
-          projectId={projectId}
-          repoId={repoId}
-          rows={rows}
-          selected={onEva ? null : taskTabs.selected}
-          evaRunning={chatTurnOpen === true}
-          isArchived={isArchived}
-          onSelect={taskTabs.select}
-          onClose={taskTabs.close}
-        />
-        {/* Eva's chat stays alive behind a task tab: back is instant. */}
+        {!onEva && selectedRow === undefined ? chatTabs : null}
         <Activity mode={onEva ? "visible" : "hidden"}>
           <div className="flex min-h-0 flex-1 flex-col">{evaChat}</div>
         </Activity>
-        {selectedRow && projectPathSegment ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <ProjectTaskChat
-              key={selectedRow._id}
-              taskId={selectedRow._id}
-              prUrl={selectedRow.prUrl}
-              fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedRow.numId}`}
-              onShowReview={() => taskTabs.showTab("task-review")}
-            />
-          </div>
-        ) : null}
+        {projectPathSegment
+          ? rows.map(({ numId, row }) => (
+              <Activity
+                key={row._id}
+                mode={row._id === selectedRow?._id ? "visible" : "hidden"}
+              >
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <ProjectTaskChat
+                    taskId={row._id}
+                    prUrl={row.prUrl}
+                    fullPageHref={`${basePath}/projects/${projectPathSegment}/${numId}`}
+                    onShowReview={() => taskTabs.showTab("task-review")}
+                    headerLeft={chatTabs}
+                  />
+                </div>
+              </Activity>
+            ))
+          : null}
       </div>
     ) : (
       evaChat
@@ -181,6 +196,7 @@ export function ProjectDetailSandboxContent({
     <ResizablePanelLayout
       key={projectId}
       storageKey="project-sandbox-panel"
+      chatPane="left"
       collapsedStorageKey={`project-sandbox-panel:${projectId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}
@@ -229,6 +245,7 @@ export function ProjectDetailSandboxContent({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
+              onAskEva={taskTabs.askEva}
             />
           </div>
         ))

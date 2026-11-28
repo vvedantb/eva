@@ -8,18 +8,17 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   authQuery,
   getProjectWithAccess,
-  hasActiveRun,
   listProjectTasksForUser,
   normalizeIdOrThrow,
 } from "../functions";
 import { projectTaskReportFields } from "../validators";
 import { isEntityArchived } from "../numId";
 import { sessionOwner, findOwnedSession } from "../_sessions/owner";
-import { ensureTaskChat } from "../_sessions/ownedSession";
 import type { SessionChatContext } from "../_sessionChats/helpers";
 import { requestCoordinatorWake } from "./coordinatorWake";
-import { startProjectTask, taskLabel } from "./scheduler";
-import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
+import { taskLabel } from "./scheduler";
+import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
+import { hasActiveTaskRun } from "../_agentTasks/taskRunStatus";
 import { chatMessageRoute, mentionsEva } from "@eva/shared";
 import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
 
@@ -41,16 +40,19 @@ export async function findOpenAsk(
 }
 
 /**
- * True when the task's run ended on an ask it filed during that run: the
- * open ask is newer than the run's start. An older open ask (a person
- * restarted the task without answering) does not count.
+ * Whether the task filed an ask (open, answered or closed) at or after
+ * `since`, a run's start: that run ended on its question.
  */
-export async function runEndedOnAsk(
+export async function askFiledDuring(
   db: DatabaseReader,
-  run: Pick<Doc<"agentRuns">, "taskId" | "startedAt">,
+  taskId: Id<"agentTasks">,
+  since: number,
 ): Promise<boolean> {
-  const ask = await findOpenAsk(db, run.taskId);
-  return ask !== null && ask.createdAt >= (run.startedAt ?? 0);
+  const rows = await db
+    .query("projectTaskReports")
+    .withIndex("by_task_and_state", (q) => q.eq("taskId", taskId))
+    .collect();
+  return rows.some((row) => row.kind === "ask" && row.createdAt >= since);
 }
 
 /**
@@ -138,8 +140,31 @@ async function canResumeAskingTask(
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
   if (isEntityArchived(task) || task.status === "cancelled") return false;
-  if (await hasActiveRun(ctx.db, task._id)) return false;
-  return !(await taskWorkSessionBusy(ctx.db, task));
+  return !(await hasActiveTaskRun(ctx.db, task));
+}
+
+async function resumeWithAnswer(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  p: {
+    userId: Id<"users">;
+    answer: string;
+    note: string;
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  try {
+    await startTaskRunTurn(ctx, task, {
+      userId: p.userId,
+      note: p.note,
+      displayContent: p.answer,
+      sentViaOrchestrator: p.sentViaOrchestrator,
+    });
+  } catch (error) {
+    console.error(
+      `[project-reports] task=${task._id} did not resume: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /**
@@ -157,7 +182,8 @@ export type PersonChatRoute = "answered" | "posted" | "continue";
  * open ask, the message is the answer: the ask closes and the task's next run
  * starts with it. In a coordinator's chat, a message for teammates only stays
  * a quiet comment (`chatMessageRoute`); any other message wakes Eva.
- * `insertUserRow`: the caller has not stored the message.
+ * `userRow`: what the chat shows for the message when it is stored here (a
+ * quiet comment).
  */
 export async function routePersonChatMessage(
   ctx: MutationCtx,
@@ -165,17 +191,19 @@ export async function routePersonChatMessage(
     context: SessionChatContext;
     userId: Id<"users">;
     message: string;
-    insertUserRow: boolean;
+    userRow: Pick<
+      Doc<"messages">,
+      "content" | "attachmentStorageIds" | "annotation"
+    >;
   },
 ): Promise<PersonChatRoute> {
   const { chat, session } = params.context;
   const owner = sessionOwner(session);
   const insertUserRow = async () => {
-    if (!params.insertUserRow) return;
     await ctx.db.insert("messages", {
       parentId: chat._id,
       role: "user",
-      content: params.message,
+      ...params.userRow,
       timestamp: Date.now(),
       userId: params.userId,
     });
@@ -201,8 +229,11 @@ export async function routePersonChatMessage(
   const ask = await findOpenAsk(ctx.db, task._id);
   if (!ask || !(await canResumeAskingTask(ctx, task))) return "continue";
   await answerOpenAsk(ctx, task._id, params.userId);
-  await insertUserRow();
-  await startProjectTask(ctx, task, answerNote(ask, "a person", params.message));
+  await resumeWithAnswer(ctx, task, {
+    userId: params.userId,
+    answer: params.message,
+    note: answerNote(ask, "a person", params.message),
+  });
   return "answered";
 }
 
@@ -242,20 +273,12 @@ export const answerAskAsCoordinator = internalMutation({
     }
     const ask = open ? await answerOpenAsk(ctx, task._id, "coordinator") : null;
     if (ask) {
-      const { chat } = await ensureTaskChat(ctx, task);
-      await ctx.db.insert("messages", {
-        parentId: chat._id,
-        role: "user",
-        content: args.message,
-        timestamp: Date.now(),
+      await resumeWithAnswer(ctx, task, {
         userId,
+        answer: args.message,
+        note: answerNote(ask, "the project coordinator", args.message),
         sentViaOrchestrator: true,
       });
-      await startProjectTask(
-        ctx,
-        task,
-        answerNote(ask, "the project coordinator", args.message),
-      );
       return "answered";
     }
     const latestAsk = (

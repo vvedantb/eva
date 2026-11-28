@@ -143,7 +143,6 @@ export const themeExtend = {
   },
 };
 
-/** @type {import('tailwindcss').Config} */
 const config = {
   darkMode: "class",
   content: [

@@ -41,6 +41,12 @@ export function FeedbackRow({ row }: { row: FeedbackListRow }) {
         <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
           <span data-pii>{from}</span>
           <span aria-hidden>·</span>
+          {row.recapId ? (
+            <>
+              <span>Recap</span>
+              <span aria-hidden>·</span>
+            </>
+          ) : null}
           {row.source && route ? (
             <Link
               to={route.to}

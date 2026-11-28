@@ -1,7 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
-  activityLogTypeValidator,
   webhookEventStatusValidator,
   messageFields,
   aveThreadFields,
@@ -10,7 +9,6 @@ import {
   automationRunFields,
   changelogVoteFields,
   agentTaskFields,
-  agentRunFields,
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
@@ -20,11 +18,11 @@ import {
   teamFields,
   projectFields,
   queuedMessageFields,
-  taskSandboxEventFields,
   taskActivityFields,
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  threadParticipantFields,
   chatReadFields,
   standupReadFields,
   chatRecapFields,
@@ -60,7 +58,6 @@ import {
   appTabFields,
   backgroundProcessFields,
   snapshotBuildFields,
-  sessionDaemonStateFields,
   sessionChatFields,
   turnFields,
   chatUiPanelFields,
@@ -75,6 +72,7 @@ import {
   workProfileFields,
   projectTaskReportFields,
   projectTaskBatchFields,
+  projectChatTaskLinkFields,
   projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
@@ -112,7 +110,6 @@ const schema = defineSchema({
     .index("by_repo_and_archived", ["repoId", "archivedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
-  // schema-narrowing-ok: deleteProjectDetails
 
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
@@ -128,11 +125,6 @@ const schema = defineSchema({
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
-
-  agentRuns: defineTable(agentRunFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_status", ["taskId", "status"])
-    .index("by_status", ["status"]),
 
   pullRequests: defineTable(pullRequestFields)
     .index("by_pr_url", ["prUrl"])
@@ -154,15 +146,6 @@ const schema = defineSchema({
   })
     .index("by_task", ["taskId"])
     .index("by_repo", ["repoId"]),
-
-  agentRunActivityLogs: defineTable({
-    runId: v.id("agentRuns"),
-    activityLog: v.string(),
-    type: v.optional(activityLogTypeValidator),
-    updatedAt: v.number(),
-  })
-    .index("by_run", ["runId"])
-    .index("by_run_and_type", ["runId", "type"]),
 
   githubRepos: defineTable(githubRepoFields)
     .index("by_github_id", ["githubId"])
@@ -186,6 +169,10 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
 
+  threadParticipants: defineTable(threadParticipantFields)
+    .index("by_root", ["rootId"])
+    .index("by_user_and_root", ["userId", "rootId"]),
+
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
@@ -204,13 +191,13 @@ const schema = defineSchema({
   projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
     "projectId",
   ]),
+  projectChatTaskLinks: defineTable(projectChatTaskLinkFields).index(
+    "by_project_and_message",
+    ["projectId", "messageId"],
+  ),
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
-  // schema-narrowing-ok: clearTaskDependencies
-  taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
-    "taskId",
-  ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
   messages: defineTable(messageFields)
     .index("by_parent", ["parentId"])
@@ -218,6 +205,7 @@ const schema = defineSchema({
     .index("by_parent_and_reply_to", ["parentId", "replyTo"])
     .index("by_reply_to", ["replyTo"])
     .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
+    .index("by_parent_and_annotation_page", ["parentId", "annotation.pagePath"])
     .searchIndex("search_content", {
       searchField: "content",
       filterFields: ["parentId"],
@@ -251,12 +239,7 @@ const schema = defineSchema({
     .index("by_owner_project", ["owner.projectId"]),
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
-    .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
-  sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
-    "by_session",
-    ["sessionId"],
-  ),
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
     .index("by_repo", ["repoId"]),
@@ -265,7 +248,7 @@ const schema = defineSchema({
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
-    .index("by_entity_open", ["entityId", "lane", "open"])
+    .index("by_entity_open", ["entityId", "open"])
     .index("by_session_open", ["sessionId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
@@ -333,8 +316,10 @@ const schema = defineSchema({
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
-    .index("by_repo_and_numId", ["repoId", "numId"]),
+    .index("by_repo_and_numId", ["repoId", "numId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   chatLogEntries: defineTable(chatLogEntryFields)
     .index("by_source_session", ["sourceSessionId"])
@@ -390,6 +375,11 @@ const schema = defineSchema({
   notifications: defineTable(notificationFields)
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
+    .index("by_user_and_thread_root_and_read", [
+      "userId",
+      "threadRootId",
+      "read",
+    ])
     .index("by_repo", ["repoId"]),
   pushTokens: defineTable({
     userId: v.id("users"),
@@ -476,7 +466,9 @@ const schema = defineSchema({
     .index("by_automation_and_status", ["automationId", "status"])
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
-    .index("by_repo", ["repoId"]),
+    .index("by_pushedSha", ["pushedSha"])
+    .index("by_repo", ["repoId"])
+    .index("by_sandbox", ["sandboxId"]),
 
   changelogVotes: defineTable(changelogVoteFields).index(
     "by_run_and_user_and_item",
@@ -494,10 +486,6 @@ const schema = defineSchema({
     "by_repo_and_type",
     ["repoId", "entityType"],
   ),
-
-  // schema-narrowing-ok: drainMcpAuthCodes
-  // schema-narrowing-ok: drainMcpClientRegistrations
-  // schema-narrowing-ok: drainMcpTokenCache
 
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])

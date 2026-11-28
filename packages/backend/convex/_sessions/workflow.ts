@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
-import { workflow } from "../workflowManager";
+import { toWorkflowId, workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
 import {
   prepareLinkedRepoSteps,
@@ -23,12 +23,8 @@ import {
   daemonClaimResultValidator,
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import {
-  recordCompletionLog,
-  sendCompletionEvent,
-  clearStreamingActivity,
-  extractFirstJsonValue,
-} from "../_taskWorkflow/helpers";
+import { parseFirstJsonValue } from "../_shared/llmJson";
+import { recordCompletionLog } from "../_agentJobs/completion";
 import {
   drainSessionChatQueues,
   scheduleQueueDrainAfterBackgroundAgents,
@@ -52,8 +48,12 @@ import {
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { MutationCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import type { Doc, Id } from "../_generated/dataModel";
+import { notifyThreadAnswer } from "../_mentions/notifyChatMentions";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
 import { agentGoalArg, agentGoalPatch } from "../_chat/agentGoal";
@@ -107,9 +107,7 @@ function parseDesignResult(
   text: string | null,
 ): z.infer<typeof designResultSchema> | null {
   if (!text) return null;
-  const raw = extractFirstJsonValue(text);
-  const parsed = designResultSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+  return parseFirstJsonValue(text, designResultSchema) ?? null;
 }
 
 async function finalizeOpenSyntheticTurn(
@@ -277,6 +275,13 @@ export const sessionExecuteWorkflow = workflow.define({
         sandboxId,
         branchName: data.branchName,
       });
+      if ((data.linkedRepoCount ?? 0) > 0) {
+        await prepareLinkedRepoSteps(step, {
+          sessionId,
+          sandboxId,
+          repoId: data.repoId,
+        });
+      }
     }
 
     if (sandboxId === null) {
@@ -633,7 +638,7 @@ export const clearStuckWorkingState = internalMutation({
 
 /**
  * Inserts an empty assistant message into the session for streaming updates.
- * Idempotent: the daemon-pull `startExecute` already inserts this placeholder
+ * Idempotent: the daemon-pull staging already inserts this placeholder
  * before starting the workflow, so if the last message is already an empty
  * assistant placeholder we skip, avoiding a duplicate.
  */
@@ -803,6 +808,27 @@ export const clearSessionClosedStatus = internalMutation({
   },
 });
 
+async function notifyAnswerInThread(
+  ctx: MutationCtx,
+  turn: Doc<"turns">,
+  success: boolean,
+  context: { session: Doc<"sessions">; chat: Doc<"sessionChats"> },
+): Promise<void> {
+  if (!success || turn.replyTo === undefined || turn.askedBy === undefined) {
+    return;
+  }
+  const answer =
+    turn.placeholderMessageId === undefined
+      ? null
+      : await ctx.db.get(turn.placeholderMessageId);
+  await notifyThreadAnswer(ctx, {
+    askerId: turn.askedBy,
+    rootId: turn.replyTo,
+    content: answer?.content ?? "",
+    surface: { kind: "session", ...context },
+  });
+}
+
 /** Saves a chat turn's result, updating the last message and starting queued messages. */
 export const saveResult = internalMutation({
   args: {
@@ -884,6 +910,7 @@ export const saveResult = internalMutation({
         args.success ? "done" : "error",
         args.error ? { error: args.error } : {},
       );
+      await notifyAnswerInThread(ctx, turn, args.success, { session, chat });
     }
     await drainSessionChatQueues(ctx, session._id, chat._id);
     return null;
@@ -892,7 +919,7 @@ export const saveResult = internalMutation({
 
 /**
  * Daemon-pull turn claim. The warm sandbox daemon polls this every ~50ms; when
- * `startExecute` has staged a prompt in `chat.pendingTurn`, this atomically
+ * a send has staged a prompt in `chat.pendingTurn`, this atomically
  * hands it over and clears the field so the same prompt is never claimed twice
  * (which would double-execute the turn). Returns `{ prompt: null }` when nothing
  * is pending. Also doubles as the interrupt-cancel channel: `cancelRequested`
@@ -1097,7 +1124,7 @@ export const requestStopBackgroundAgent = authMutation({
 });
 
 /**
- * Re-stages `pendingTurn` when a cancel raced with startExecute and wiped the
+ * Re-stages `pendingTurn` when a cancel raced with a send staging the turn and wiped the
  * prompt while the workflow is still waiting on sessionComplete. No-op when a
  * turn is already pending or the latest assistant message already finished.
  */
@@ -1480,24 +1507,26 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }
 
-    await sendCompletionEvent(ctx, sessionCompleteEvent, activeWorkflowId, {
-      success: args.success,
-      result: args.result,
-      error: args.error,
-      activityLog: args.activityLog,
-      pendingQuestion: args.pendingQuestion,
-      beforeSha: args.beforeSha,
-      afterSha: args.afterSha,
-      beforeShas: args.beforeShas,
-      afterShas: args.afterShas,
+    await workflow.sendEvent(ctx, {
+      ...sessionCompleteEvent,
+      workflowId: toWorkflowId(activeWorkflowId),
+      value: {
+        success: args.success,
+        result: args.result,
+        error: args.error,
+        activityLog: args.activityLog,
+        pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
+      },
     });
 
     await recordCompletionLog(ctx, {
       entityType: "session",
       entityId: String(chat._id),
-      entityTitle: chat.isMain
-        ? session.title
-        : `${session.title} · ${chat.title}`,
+      entityTitle: session.title,
       repoId: session.repoId,
       rawResultEvent: args.rawResultEvent,
     });

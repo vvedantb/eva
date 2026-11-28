@@ -14,10 +14,8 @@ import {
   prependModelHandoffContext,
   readHandoffHistory,
 } from "../_shared/modelHandoff";
-import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
-import { sandboxOwnerKey } from "@eva/shared";
-import { taskPrUrl } from "../_pullRequests/store";
+import { sandboxOwnerKey, taskPrUrl } from "@eva/shared";
 import { sessionOwner } from "./owner";
 import {
   formatProjectTaskTable,
@@ -31,9 +29,6 @@ import {
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
-
-const PARALLEL_CHATS_NOTE =
-  "Other chats in this session may edit this checkout at the same time. Do not revert changes you did not make.";
 
 type TaskContextFields = Pick<
   Doc<"agentTasks">,
@@ -130,7 +125,7 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 - One repo per task for unrelated work. When one change must land in several repos together (an API and its client), make it one task: its main repo in repoName, the others in linkedRepoNames. It gets one PR per repo. Write the merge order in its description ("Merge order: api first, then web"), so every PR body states it.
 - Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
 - Tasks you create start at once: the scheduler starts them all, in task-number order. Create them in the order they should run.
-- Tasks people add wait in Triage until a person approves them. You cannot approve them. An approved Triage item comes to you and never starts by itself: group the handed items by area, add each one to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task with start_task. Then reply with where each one went.
+- People's asks arrive in this chat or handed to you; group related ones into one task. A handed task never starts by itself: add it to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task with start_task. Then reply with where each one went.
 - Messages between people that @mention someone else are not for you; leave them to that person. When a message @mentions you and others, answer only your part.
 - A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
 - Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
@@ -155,7 +150,7 @@ async function ownerPromptContext(
           )
         : withTaskContext(task, message),
       planContent: task.description,
-      prUrl: taskPrUrl(task),
+      prUrl: taskPrUrl(task, project?.prUrl),
     };
   }
   const projectId = owner.kind === "project" ? owner.projectId : undefined;
@@ -180,8 +175,8 @@ async function ownerPromptContext(
 /**
  * Builds the agent prompt for a chat turn (doc `@` mentions resolved, custom
  * instructions + system prompt folded in). Shared single source of truth so
- * both the workflow's `getSessionData` query and the daemon-pull `startExecute`
- * mutation produce byte-identical prompts — the daemon must run exactly what
+ * both the workflow's `getSessionData` query and the daemon-pull staging in the queue
+ * dequeue produce byte-identical prompts — the daemon must run exactly what
  * the workflow would have handed it, never a second variant. Takes
  * already-fetched session/chat/repo/user docs so it works from either a query
  * or a mutation context (MutationCtx satisfies QueryCtx for the read-only
@@ -199,12 +194,11 @@ export async function buildSessionPrompt(
   },
 ): Promise<{ prompt: string; branchName: string }> {
   const { session, chat, repo, user } = args;
-  const [liveChats, { resolvedMessage, prefixBlock }] = await Promise.all([
-    listLiveSessionChats(ctx.db, session._id),
-    resolveMessageTokens(ctx, args.message, session.repoId),
-  ]);
-  const parallelNote =
-    liveChats.length > 1 ? `\n\n${PARALLEL_CHATS_NOTE}` : "";
+  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
+    ctx,
+    args.message,
+    session.repoId,
+  );
   const rootDirectory = repo.rootDirectory ?? "";
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
@@ -266,7 +260,6 @@ export async function buildSessionPrompt(
       prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   });
-  prompt = `${prompt}${parallelNote}`;
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
   }

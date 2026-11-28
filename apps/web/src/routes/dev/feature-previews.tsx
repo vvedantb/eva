@@ -25,7 +25,9 @@ import {
   DEMO_THREAD_FIND_MESSAGES,
   DEMO_THREAD_FIND_QUERY,
 } from "@/lib/components/chat/threadFind";
-import { RepoGate, RepoProvider } from "@/lib/contexts/RepoContext";
+import { ChatRecapCard } from "@/lib/components/chat/_components/ChatRecapCard";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
+import { RepoGate, RepoProvider, useRepo } from "@/lib/contexts/RepoContext";
 import { PreviewPanelNavBar } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPanelNavBar";
 import { FILL_PREVIEW_VIEWPORT } from "@/routes/_repo/$owner/$repo/sessions/_utils/previewViewport";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
@@ -47,6 +49,7 @@ const FEATURES = [
   "message-fork",
   "preview-tools",
   "activity-trace",
+  "recap",
 ] as const;
 
 const searchSchema = z.object({
@@ -75,6 +78,7 @@ function FeaturePreviewsPage() {
   if (feature === "message-fork") return <MessageForkPreview />;
   if (feature === "preview-tools") return <PreviewToolsPreview />;
   if (feature === "activity-trace") return <ActivityTracePreview />;
+  if (feature === "recap") return <RecapPreview />;
   return <CitePreview />;
 }
 
@@ -634,6 +638,75 @@ function PreviewToolsPreview() {
               />
             </WebPreview>
           </div>
+        </div>
+      </RepoGate>
+    </RepoProvider>
+  );
+}
+
+const DEMO_RECAP_TEXT =
+  "The agent found every place `pr_opened` is used and added a `pr_updated` trigger. Checks pass. One question waits for you: should a push to a draft PR fire it?";
+
+function RecapCards() {
+  const { repoId, basePath } = useRepo();
+  const repo = { id: repoId, basePath };
+  const [rating, setRating] = useState<{
+    sentiment: FeedbackSentiment;
+    comment: string | undefined;
+  }>();
+  const onRate = (sentiment: FeedbackSentiment | null, comment?: string) => {
+    setRating(
+      sentiment === null
+        ? undefined
+        : { sentiment, comment: comment ?? rating?.comment },
+    );
+    return Promise.resolve(null);
+  };
+  return (
+    <div className="mt-8 flex max-w-xl flex-col gap-4">
+      <ChatRecapCard
+        kind="away"
+        since={Date.now() - 3 * 60 * 60 * 1000}
+        text={DEMO_RECAP_TEXT}
+        rating={rating}
+        onRate={onRate}
+        repo={repo}
+        onDismiss={() => {}}
+      />
+      <ChatRecapCard
+        kind="away"
+        since={Date.now() - 7 * 24 * 60 * 60 * 1000}
+        text={DEMO_RECAP_TEXT}
+        rating={{ sentiment: "positive", comment: undefined }}
+        onRate={onRate}
+        repo={repo}
+        onDismiss={() => {}}
+      />
+      <ChatRecapCard
+        kind="full"
+        since={0}
+        text={undefined}
+        rating={undefined}
+        onRate={onRate}
+        repo={repo}
+        onDismiss={() => {}}
+      />
+    </div>
+  );
+}
+
+function RecapPreview() {
+  return (
+    <RepoProvider owner="vvedantb" repoParam="eva--web" passive>
+      <RepoGate>
+        <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Chat recap
+          </p>
+          <h1 className="mt-1 text-xl font-semibold">
+            Since when, and was it helpful
+          </h1>
+          <RecapCards />
         </div>
       </RepoGate>
     </RepoProvider>

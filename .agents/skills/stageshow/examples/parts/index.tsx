@@ -3,10 +3,6 @@ import { testFlight } from '../../assets/app-icons'
 import type { ReactNode } from 'react'
 import './parts.css'
 
-// A specimen sheet for the kit's newer parts, one tile each, playing in turn.
-// It is a catalog, not a composition: for framing, copy the gold examples
-// (hero-demo, static-card, story, payout-flow), not this layout.
-
 const REWRITE = 'Ship faster with a preview for every branch.'
 const CHANGED = new Set([3, 4, 5])
 

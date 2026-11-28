@@ -25,14 +25,21 @@ import {
   repoEventValidator,
   STALE_EVENT_RUN_MS,
   STALE_WAITING_RUN_MS,
+  triggerHasEvent,
   triggerMatchesEvent,
+  prEventHeadSha,
   type RepoEvent,
 } from "./events";
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
 import { isTerminalRunStatus } from "../_automations/runStatus";
+import { syncCheckRunLater } from "../_automations/checkRun";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 import { chatEntityKindValidator } from "../_validators/enums";
+
+function headShaList(headSha: string | undefined): string[] | undefined {
+  return headSha === undefined ? undefined : [headSha];
+}
 
 async function runsForTarget(
   db: DatabaseReader,
@@ -69,7 +76,17 @@ async function shouldQueue(
       q.eq("automationId", automation._id).eq("eventKey", eventKey),
     )
     .collect();
-  if (sameKey.some((run) => run.status === "queued")) return false;
+  const waiting = sameKey.find((run) => run.status === "queued");
+  if (waiting !== undefined) {
+    const headSha = prEventHeadSha(event);
+    if (headSha !== undefined) {
+      await ctx.db.patch(waiting._id, {
+        headSha,
+        headShas: [...(waiting.headShas ?? []), headSha],
+      });
+    }
+    return false;
+  }
   if (event.kind === "production_alert") {
     const since = Date.now() - ALERT_DEDUPE_WINDOW_MS;
     return !sameKey.some((run) => run.startedAt >= since);
@@ -173,6 +190,8 @@ async function queueEventRun(
     eventKind: event.kind,
     eventKey,
     targetUrl: repoEventTargetUrl(event),
+    headSha: prEventHeadSha(event),
+    headShas: headShaList(prEventHeadSha(event)),
   });
   const debounce = EVENT_DEBOUNCE_MS[event.kind];
   await ctx.scheduler.runAfter(
@@ -214,8 +233,7 @@ export const receiveAlert = internalMutation({
     const id = ctx.db.normalizeId("automations", automationId);
     const stored = id === null ? null : await ctx.db.get(id);
     if (stored === null || stored.deletedAt !== undefined) return "not_found";
-    const trigger = automationTrigger(stored);
-    if (trigger.kind !== "event" || trigger.event !== "production_alert") {
+    if (!triggerHasEvent(automationTrigger(stored), "production_alert")) {
       return "not_found";
     }
     if (
@@ -251,6 +269,7 @@ export const expireEventRun = internalMutation({
       error: "Timed out before it finished",
       finishedAt: Date.now(),
     });
+    await syncCheckRunLater(ctx, run);
     return null;
   },
 });
@@ -448,8 +467,9 @@ export const noteCiPassed = internalMutation({
         )
         .collect();
       for (const automation of automations) {
-        const trigger = automationTrigger(automation);
-        if (trigger.kind !== "event" || trigger.event !== "ci_failed") continue;
+        if (!triggerHasEvent(automationTrigger(automation), "ci_failed")) {
+          continue;
+        }
         const runs = await runsForTarget(ctx.db, automation._id, passed.prUrl);
         if (countCiAttempts(runs) === 0) continue;
         automationIds.push(automation._id);
